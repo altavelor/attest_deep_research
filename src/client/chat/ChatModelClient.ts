@@ -1,0 +1,181 @@
+import { IxplorerError } from "../../shared/errors";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  ChatResponseChunk,
+  LocalModelProvider,
+} from "../../shared/types";
+import {
+  isOllamaTagsResponse,
+  isOpenAiModelsResponse,
+  isRecord,
+  modelNamesFromOllamaTags,
+  modelNamesFromOpenAiModels,
+} from "../common/models";
+import { ProviderHttpClient } from "../common/http";
+import { parseJsonLines, parseServerSentEvents } from "../common/streams";
+
+export interface ChatModelClientOptions {
+  provider: LocalModelProvider;
+  baseUrl: string;
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+}
+
+export class ChatModelClient implements ChatModelProvider {
+  private readonly provider: LocalModelProvider;
+  private readonly http: ProviderHttpClient;
+
+  constructor(options: ChatModelClientOptions) {
+    this.provider = options.provider;
+    this.http = new ProviderHttpClient({
+      ...options,
+      unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
+      unavailableMessage: "The chat model provider is unavailable.",
+    });
+  }
+
+  async listModels(): Promise<string[]> {
+    return this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels();
+  }
+
+  streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    return this.provider === "lmStudio"
+      ? this.streamLmStudioChat(request)
+      : this.streamOllamaChat(request);
+  }
+
+  private async listLmStudioModels(): Promise<string[]> {
+    const response = await this.http.request("/models", { method: "GET" });
+    const body = await this.http.readJson(
+      response,
+      "The chat model provider returned invalid JSON.",
+    );
+
+    if (!isOpenAiModelsResponse(body)) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "LM Studio returned an invalid models response.",
+      });
+    }
+
+    return modelNamesFromOpenAiModels(body);
+  }
+
+  private async listOllamaModels(): Promise<string[]> {
+    const response = await this.http.request("/tags", { method: "GET" });
+    const body = await this.http.readJson(
+      response,
+      "The chat model provider returned invalid JSON.",
+    );
+
+    if (!isOllamaTagsResponse(body)) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "Ollama returned an invalid tags response.",
+      });
+    }
+
+    return modelNamesFromOllamaTags(body);
+  }
+
+  private async *streamLmStudioChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    const response = await this.http.request("/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...request, stream: true }),
+    });
+
+    if (!response.body) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "LM Studio returned an empty chat stream.",
+      });
+    }
+
+    for await (const event of parseServerSentEvents(response.body)) {
+      if (event === "[DONE]") {
+        yield { content: "", isComplete: true };
+        return;
+      }
+
+      const content = parseOpenAiChatDelta(event);
+      if (content) {
+        yield { content, isComplete: false };
+      }
+    }
+
+    yield { content: "", isComplete: true };
+  }
+
+  private async *streamOllamaChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    const response = await this.http.request("/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: request.model,
+        messages: request.messages,
+        stream: true,
+        options:
+          request.temperature === undefined ? undefined : { temperature: request.temperature },
+      }),
+    });
+
+    if (!response.body) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "Ollama returned an empty chat stream.",
+      });
+    }
+
+    for await (const line of parseJsonLines(response.body)) {
+      const parsed = parseOllamaChatLine(line);
+      if (parsed.content) {
+        yield { content: parsed.content, isComplete: false };
+      }
+
+      if (parsed.done) {
+        yield { content: "", isComplete: true };
+        return;
+      }
+    }
+
+    yield { content: "", isComplete: true };
+  }
+}
+
+function parseOpenAiChatDelta(event: string): string {
+  try {
+    const parsed: unknown = JSON.parse(event);
+    if (!isRecord(parsed) || !Array.isArray(parsed.choices)) {
+      return "";
+    }
+
+    const firstChoice: unknown = parsed.choices[0];
+    if (!isRecord(firstChoice) || !isRecord(firstChoice.delta)) {
+      return "";
+    }
+
+    return typeof firstChoice.delta.content === "string" ? firstChoice.delta.content : "";
+  } catch {
+    return "";
+  }
+}
+
+function parseOllamaChatLine(line: string): { content: string; done: boolean } {
+  try {
+    const parsed: unknown = JSON.parse(line);
+    if (!isRecord(parsed)) {
+      return { content: "", done: false };
+    }
+
+    const content =
+      isRecord(parsed.message) && typeof parsed.message.content === "string"
+        ? parsed.message.content
+        : "";
+
+    return { content, done: parsed.done === true };
+  } catch {
+    return { content: "", done: false };
+  }
+}
