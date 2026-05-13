@@ -1,0 +1,31 @@
+{
+  "name": "ixplorer",
+  "version": "0.1.0",
+  "description": "Local-first LM Studio research assistant for Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "format": "prettier --check ."
+  },
+  "keywords": [
+    "obsidian",
+    "lm-studio",
+    "ollama",
+    "research"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.12",
+    "prettier": "^3.3.2",
+    "tslib": "^2.6.3",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
