@@ -85,7 +85,9 @@ export interface ChatResponseChunk {
   isComplete: boolean;
 }
 
-export interface ChatModelClient {
+export type LocalModelProvider = "lmStudio" | "ollama";
+
+export interface ChatModelProvider {
   listModels(): Promise<string[]>;
   streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk>;
 }
@@ -100,7 +102,7 @@ export interface EmbeddingResponse {
   embeddings: number[][];
 }
 
-export interface EmbeddingClient {
+export interface EmbeddingProviderClient {
   listModels(): Promise<string[]>;
   embed(request: EmbeddingRequest): Promise<EmbeddingResponse>;
 }
