@@ -3,6 +3,12 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type IxplorerPlugin from "../main";
 import { testChatConnection, testEmbeddingConnection } from "./connectionTests";
 import {
+  CHAT_PROVIDER_DESCRIPTION,
+  DUCK_DUCK_GO_DESCRIPTION,
+  EMBEDDING_PROVIDER_DESCRIPTION,
+  LANCEDB_FOLDER_DESCRIPTION,
+} from "./privacyCopy";
+import {
   formatListInput,
   normalizeListInput,
   normalizeUrl,
@@ -35,7 +41,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Provider base URL")
-      .setDesc("Local chat model provider endpoint.")
+      .setDesc(CHAT_PROVIDER_DESCRIPTION)
       .addText((text) =>
         text
           .setPlaceholder("http://localhost:1234/v1")
@@ -79,7 +85,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Provider base URL")
-      .setDesc("Local embedding provider endpoint.")
+      .setDesc(EMBEDDING_PROVIDER_DESCRIPTION)
       .addText((text) =>
         text
           .setPlaceholder("http://localhost:11434")
@@ -123,7 +129,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("LanceDB folder")
-      .setDesc("Vault-local folder for Ixplorer's local vector index.")
+      .setDesc(LANCEDB_FOLDER_DESCRIPTION)
       .addText((text) =>
         text
           .setPlaceholder(".ixplorer/index")
@@ -168,7 +174,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("DuckDuckGo")
-      .setDesc("Allow user-initiated DuckDuckGo first-result search.")
+      .setDesc(DUCK_DUCK_GO_DESCRIPTION)
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.duckDuckGoEnabled).onChange(async (value) => {
           this.plugin.settings.duckDuckGoEnabled = value;
