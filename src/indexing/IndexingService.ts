@@ -142,7 +142,7 @@ export class IndexingService {
 
     const files = await this.files.listFiles();
     const pendingChunks: ExtractedChunk[] = [];
-    const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string } >= [];
+    const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string }> = [];
 
     for (const file of files) {
       if (this.state.status === "paused") {
