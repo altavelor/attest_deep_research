@@ -35,6 +35,9 @@ describe("RetrievalService", () => {
       usedFallback: false,
     });
     expect(indexStore.queries).toEqual([{ embedding: [1, 0], limit: 2 }]);
+    expect(indexStore.initializations).toEqual([
+      { embeddingModel: "nomic", embeddingDimensions: 2 },
+    ]);
   });
 
   it("uses keyword fallback when embeddings are unavailable or semantic results are empty", async () => {
@@ -185,11 +188,17 @@ class FailingEmbeddingProvider implements EmbeddingProviderClient {
 }
 
 class FakeIndexStore implements IndexStore {
+  initializations: Array<{ embeddingModel: string; embeddingDimensions: number }> = [];
   queries: Array<{ embedding: number[]; limit: number }> = [];
 
   constructor(private readonly chunks: RetrievedChunk[]) {}
 
-  async initialize(): Promise<void> {}
+  async initialize(metadata: {
+    embeddingModel: string;
+    embeddingDimensions: number;
+  }): Promise<void> {
+    this.initializations.push(metadata);
+  }
 
   async upsert(): Promise<void> {}
 
