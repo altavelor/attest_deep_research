@@ -37,6 +37,9 @@ export interface IndexingServiceOptions {
   includeFolders: string[];
   excludeGlobs: string[];
   batchSize?: number;
+  yieldEveryFiles?: number;
+  yieldToEventLoop?: () => Promise<void>;
+  onProgress?: (state: IndexingState) => void;
   now?: () => Date;
 }
 
@@ -48,6 +51,7 @@ interface IndexedFileResult {
 }
 
 const DEFAULT_BATCH_SIZE = 32;
+const DEFAULT_YIELD_EVERY_FILES = 25;
 
 export class IndexingService {
   private readonly files: VaultFileProvider;
@@ -58,6 +62,9 @@ export class IndexingService {
   private readonly includeFolders: string[];
   private readonly excludeGlobs: string[];
   private readonly batchSize: number;
+  private readonly yieldEveryFiles: number;
+  private readonly yieldToEventLoop: () => Promise<void>;
+  private readonly onProgress?: (state: IndexingState) => void;
   private readonly now: () => Date;
   private readonly snapshots = new Map<string, FileSnapshot>();
   private state: IndexingState = {
@@ -76,7 +83,13 @@ export class IndexingService {
     this.embeddingModel = options.embeddingModel;
     this.includeFolders = options.includeFolders;
     this.excludeGlobs = options.excludeGlobs;
-    this.batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+    this.batchSize = positiveIntegerOrDefault(options.batchSize, DEFAULT_BATCH_SIZE);
+    this.yieldEveryFiles = positiveIntegerOrDefault(
+      options.yieldEveryFiles,
+      DEFAULT_YIELD_EVERY_FILES,
+    );
+    this.yieldToEventLoop = options.yieldToEventLoop ?? defaultYieldToEventLoop;
+    this.onProgress = options.onProgress;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -86,6 +99,7 @@ export class IndexingService {
 
   pause(): void {
     this.state = { ...this.state, status: "paused" };
+    this.notifyProgress();
   }
 
   resume(): void {
@@ -124,41 +138,83 @@ export class IndexingService {
       skippedFiles: 0,
       embeddedChunks: 0,
     };
+    this.notifyProgress();
 
     const files = await this.files.listFiles();
-    const extractedChunks: ExtractedChunk[] = [];
-    const indexedFiles: Array<VaultFileSummary & { contentHash: string }> = [];
-    let skippedFiles = 0;
+    const pendingChunks: ExtractedChunk[] = [];
+    const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string } >= [];
 
     for (const file of files) {
+      if (this.state.status === "paused") {
+        break;
+      }
+
       const result = await this.processFile(file);
+      this.state = { ...this.state, scannedFiles: this.state.scannedFiles + 1 };
 
       if (result.skipped) {
-        skippedFiles += 1;
+        this.state = { ...this.state, skippedFiles: this.state.skippedFiles + 1 };
       }
 
       if (result.indexed && result.contentHash) {
-        indexedFiles.push({ ...file, contentHash: result.contentHash });
-        extractedChunks.push(...result.chunks);
+        this.state = { ...this.state, indexedFiles: this.state.indexedFiles + 1 };
+        pendingIndexedFiles.push({ ...file, contentHash: result.contentHash });
+        pendingChunks.push(...result.chunks);
+      }
+
+      if (pendingChunks.length >= this.batchSize || this.shouldYieldAfterFile()) {
+        await this.flushPendingChunks(pendingChunks, pendingIndexedFiles);
+      }
+
+      this.notifyProgress();
+
+      if (this.shouldYieldAfterFile()) {
+        await this.yieldToEventLoop();
       }
     }
 
-    const embeddedChunks = await this.embedAndStoreChunks(extractedChunks);
+    if (this.state.status !== "paused") {
+      await this.flushPendingChunks(pendingChunks, pendingIndexedFiles);
+    }
+
+    if (this.state.status !== "paused") {
+      this.state = {
+        ...this.state,
+        status: "idle",
+        lastIndexedAt: this.now().toISOString(),
+      };
+    }
+
+    this.notifyProgress();
+
+    return this.getState();
+  }
+
+  private shouldYieldAfterFile(): boolean {
+    return this.state.scannedFiles > 0 && this.state.scannedFiles % this.yieldEveryFiles === 0;
+  }
+
+  private async flushPendingChunks(
+    chunks: ExtractedChunk[],
+    indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
+  ): Promise<void> {
+    if (chunks.length === 0) {
+      return;
+    }
+
+    const embeddedChunks = await this.embedAndStoreChunks(chunks);
 
     for (const file of indexedFiles) {
       updateSnapshot(this.snapshots, file);
     }
 
+    chunks.length = 0;
+    indexedFiles.length = 0;
     this.state = {
-      status: "idle",
-      scannedFiles: files.length,
-      indexedFiles: indexedFiles.length,
-      skippedFiles,
-      embeddedChunks: embeddedChunks.length,
-      lastIndexedAt: this.now().toISOString(),
+      ...this.state,
+      embeddedChunks: this.state.embeddedChunks + embeddedChunks.length,
     };
-
-    return this.getState();
+    this.notifyProgress();
   }
 
   private async processFile(file: VaultFileSummary): Promise<IndexedFileResult> {
@@ -206,6 +262,10 @@ export class IndexingService {
         continue;
       }
 
+      if (this.state.status === "paused") {
+        break;
+      }
+
       const response = await this.embeddings.embed({
         model: this.embeddingModel,
         input: batch.map((chunk) => chunk.text),
@@ -221,6 +281,8 @@ export class IndexingService {
         await this.indexStore.upsert(batchEmbeddings);
         embeddedChunks.push(...batchEmbeddings);
       }
+
+      await this.yieldToEventLoop();
     }
 
     return embeddedChunks;
@@ -239,6 +301,18 @@ export class IndexingService {
       !this.excludeGlobs.some((glob) => globMatches(path, glob))
     );
   }
+
+  private notifyProgress(): void {
+    this.onProgress?.(this.getState());
+  }
+}
+
+function defaultYieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
+  return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
 }
 
 function isIncluded(path: string, includeFolders: string[]): boolean {
