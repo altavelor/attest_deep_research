@@ -107,6 +107,12 @@
   gap: 0.375rem;
 }
 
+.ixplorer-chat__save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .ixplorer-chat__form {
   display: grid;
   gap: 0.5rem;

@@ -1,6 +1,11 @@
 import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 
 import { IndexingState } from "../indexing/IndexingService";
+import {
+  formatResearchAnswerAppendBlock,
+  formatResearchAnswerNote,
+  researchAnswerNotePath,
+} from "../research/answerFormatter";
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { Citation, ResearchAnswer } from "../shared/types";
@@ -29,6 +34,7 @@ export class IxplorerChatView extends ItemView {
   private statusEl: HTMLElement | null = null;
   private citationsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
+  private saveActionsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private webSearchEl: HTMLInputElement | null = null;
@@ -82,6 +88,7 @@ export class IxplorerChatView extends ItemView {
     const results = root.createDiv({ cls: "ixplorer-chat__results" });
     this.citationsEl = results.createDiv({ cls: "ixplorer-chat__citations" });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
+    this.saveActionsEl = results.createDiv({ cls: "ixplorer-chat__save-actions" });
 
     root.createEl("form", { cls: "ixplorer-chat__form" }, (form) => {
       form.addEventListener("submit", (event) => {
@@ -147,6 +154,7 @@ export class IxplorerChatView extends ItemView {
   private renderAnswerDetails(): void {
     this.renderCitations(this.lastAnswer?.citations ?? []);
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
+    this.renderSaveActions();
   }
 
   private renderCitations(citations: Citation[]): void {
@@ -203,6 +211,34 @@ export class IxplorerChatView extends ItemView {
         }
       });
     }
+  }
+
+  private renderSaveActions(): void {
+    if (!this.saveActionsEl) {
+      return;
+    }
+
+    this.saveActionsEl.empty();
+
+    if (!this.lastAnswer) {
+      return;
+    }
+
+    const saveNewButton = this.saveActionsEl.createEl("button", {
+      text: "New note",
+      attr: { type: "button" },
+    });
+    saveNewButton.addEventListener("click", () => {
+      void this.saveAnswerToNewNote();
+    });
+
+    const appendButton = this.saveActionsEl.createEl("button", {
+      text: "Append active",
+      attr: { type: "button" },
+    });
+    appendButton.addEventListener("click", () => {
+      void this.appendAnswerToActiveNote();
+    });
   }
 
   private async submitQuestion(): Promise<void> {
@@ -278,5 +314,63 @@ export class IxplorerChatView extends ItemView {
     }
 
     await this.app.workspace.openLinkText(target.target, "", false);
+  }
+
+  private async saveAnswerToNewNote(): Promise<void> {
+    if (!this.lastAnswer) {
+      return;
+    }
+
+    const path = await this.nextAvailableNotePath(researchAnswerNotePath(this.lastAnswer));
+    await this.ensureFolder(path);
+    await this.app.vault.create(path, formatResearchAnswerNote(this.lastAnswer));
+    new Notice("Saved Ixplorer answer to a new note.");
+    await this.app.workspace.openLinkText(path, "", false);
+  }
+
+  private async appendAnswerToActiveNote(): Promise<void> {
+    if (!this.lastAnswer) {
+      return;
+    }
+
+    const activeFile = this.app.workspace.getActiveFile();
+
+    if (!activeFile) {
+      new Notice("Open a note before appending an Ixplorer answer.");
+      return;
+    }
+
+    await this.app.vault.append(activeFile, formatResearchAnswerAppendBlock(this.lastAnswer));
+    new Notice("Appended Ixplorer answer to the active note.");
+  }
+
+  private async ensureFolder(path: string): Promise<void> {
+    const folder = path.split("/").slice(0, -1).join("/");
+
+    if (!folder || this.app.vault.getFolderByPath(folder)) {
+      return;
+    }
+
+    await this.app.vault.createFolder(folder);
+  }
+
+  private async nextAvailableNotePath(path: string): Promise<string> {
+    if (!this.app.vault.getAbstractFileByPath(path)) {
+      return path;
+    }
+
+    const extensionIndex = path.lastIndexOf(".");
+    const base = extensionIndex === -1 ? path : path.slice(0, extensionIndex);
+    const extension = extensionIndex === -1 ? "" : path.slice(extensionIndex);
+
+    for (let index = 2; index < 1000; index += 1) {
+      const candidate = `${base}-${index}${extension}`;
+
+      if (!this.app.vault.getAbstractFileByPath(candidate)) {
+        return candidate;
+      }
+    }
+
+    return `${base}-${Date.now()}${extension}`;
   }
 }
