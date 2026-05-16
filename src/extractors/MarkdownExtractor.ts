@@ -60,7 +60,11 @@ function isIncluded(path: string, includeFolders: string[]): boolean {
   return includeFolders.some((folder) => {
     const normalizedFolder = normalizeFolder(folder);
 
-    return normalizedFolder === "" || path === normalizedFolder || path.startsWith(`${normalizedFolder}/`);
+    return (
+      normalizedFolder === "" ||
+      path === normalizedFolder ||
+      path.startsWith(`${normalizedFolder}/`)
+    );
   });
 }
 
