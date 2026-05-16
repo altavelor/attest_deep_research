@@ -1,5 +1,4 @@
-import * as lancedb from "@lancedb/lancedb";
-import { Connection, Table } from "@lancedb/lancedb";
+import type { Connection, Table } from "@lancedb/lancedb";
 
 import {
   LanceDbChunkRow,
@@ -14,6 +13,8 @@ type LanceDbRow = LanceDbChunkRow | LanceDbMetadataRow;
 
 export class RealLanceDbDriver implements LanceDbDriver {
   async connect(folder: string): Promise<LanceDbConnection> {
+    const lancedb = await import("@lancedb/lancedb");
+
     return new RealLanceDbConnection(await lancedb.connect(folder));
   }
 }
