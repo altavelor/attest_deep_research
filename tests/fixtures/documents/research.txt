@@ -1,0 +1,3 @@
+Local document extraction keeps notes searchable.
+
+Second paragraph gives the chunker room to preserve offsets and metadata.

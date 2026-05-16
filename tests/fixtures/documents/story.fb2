@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook>
+  <description>
+    <title-info>
+      <book-title>Fixture Story</book-title>
+    </title-info>
+  </description>
+  <body>
+    <section>
+      <title><p>Opening</p></title>
+      <p>FB2 text should be extracted from paragraphs.</p>
+      <p>Entity text like &amp; references should be decoded.</p>
+    </section>
+  </body>
+</FictionBook>
