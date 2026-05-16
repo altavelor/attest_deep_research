@@ -84,7 +84,8 @@ describe("MarkdownExtractor", () => {
     expect(chunks.every((chunk) => chunk.text.length <= 140)).toBe(true);
     expect(
       chunks.every(
-        (chunk) => chunk.source.kind === "markdown" && chunk.source.headingPath.join("/") === "Large",
+        (chunk) =>
+          chunk.source.kind === "markdown" && chunk.source.headingPath.join("/") === "Large",
       ),
     ).toBe(true);
   });
