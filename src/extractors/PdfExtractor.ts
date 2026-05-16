@@ -1,8 +1,15 @@
-import { createHash } from "crypto";
 import { inflateSync } from "zlib";
 
 import { IxplorerError } from "../shared/errors";
 import { ExtractedChunk, Extractor, ExtractorInput, PdfSourceReference } from "../shared/types";
+import {
+  DEFAULT_CHUNK_LENGTH,
+  fileNameFromPath,
+  normalizePath,
+  normalizeText,
+  splitText,
+  stableId,
+} from "./common";
 
 export interface PdfPageText {
   pageNumber: number;
@@ -18,13 +25,6 @@ export interface PdfExtractorOptions {
   maxChunkLength?: number;
 }
 
-interface TextPart {
-  text: string;
-  startOffset: number;
-  endOffset: number;
-}
-
-const DEFAULT_MAX_CHUNK_LENGTH = 1_600;
 type UnicodeMap = Map<number, string>;
 
 export class PdfExtractor implements Extractor {
@@ -33,7 +33,7 @@ export class PdfExtractor implements Extractor {
 
   constructor(options: PdfExtractorOptions = {}) {
     this.parser = options.parser ?? new SimplePdfTextParser();
-    this.maxChunkLength = options.maxChunkLength ?? DEFAULT_MAX_CHUNK_LENGTH;
+    this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
   }
 
   supports(path: string): boolean {
@@ -51,7 +51,7 @@ export class PdfExtractor implements Extractor {
 
     try {
       for await (const page of this.parser.parsePages(data)) {
-        const normalizedText = normalizeExtractedText(page.text);
+        const normalizedText = normalizeText(page.text);
 
         if (!normalizedText) {
           continue;
@@ -112,7 +112,7 @@ function chunkPdfPage(options: {
   text: string;
   maxChunkLength: number;
 }): ExtractedChunk[] {
-  const fileName = options.path.split("/").at(-1) ?? options.path;
+  const fileName = fileNameFromPath(options.path);
 
   return splitText(options.text, options.maxChunkLength).map((part, index) => {
     const sourceId = stableId(
@@ -135,93 +135,6 @@ function chunkPdfPage(options: {
       contentHash: stableId(part.text),
     };
   });
-}
-
-function splitText(text: string, maxChunkLength: number): TextPart[] {
-  const paragraphs = splitParagraphs(text);
-  const parts: TextPart[] = [];
-  let currentText = "";
-  let currentStartOffset = 0;
-  let currentEndOffset = 0;
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.text.length > maxChunkLength) {
-      flushCurrent();
-      parts.push(...splitLongText(paragraph, maxChunkLength));
-      continue;
-    }
-
-    const separator = currentText ? "\n\n" : "";
-    const nextText = `${currentText}${separator}${paragraph.text}`;
-
-    if (currentText && nextText.length > maxChunkLength) {
-      flushCurrent();
-    }
-
-    if (!currentText) {
-      currentStartOffset = paragraph.startOffset;
-    }
-
-    currentText = currentText ? `${currentText}\n\n${paragraph.text}` : paragraph.text;
-    currentEndOffset = paragraph.endOffset;
-  }
-
-  flushCurrent();
-
-  return parts;
-
-  function flushCurrent(): void {
-    if (!currentText) {
-      return;
-    }
-
-    parts.push({
-      text: currentText,
-      startOffset: currentStartOffset,
-      endOffset: currentEndOffset,
-    });
-    currentText = "";
-  }
-}
-
-function splitParagraphs(text: string): TextPart[] {
-  const paragraphs: TextPart[] = [];
-  const paragraphPattern = /\S[\s\S]*?(?=\r?\n\s*\r?\n|$)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = paragraphPattern.exec(text)) !== null) {
-    const raw = match[0];
-    const trimmed = raw.trim();
-
-    if (trimmed) {
-      const leadingWhitespaceLength = raw.length - raw.trimStart().length;
-      paragraphs.push({
-        text: trimmed,
-        startOffset: match.index + leadingWhitespaceLength,
-        endOffset: match.index + leadingWhitespaceLength + trimmed.length,
-      });
-    }
-  }
-
-  return paragraphs;
-}
-
-function splitLongText(part: TextPart, maxChunkLength: number): TextPart[] {
-  const chunks: TextPart[] = [];
-
-  for (let start = 0; start < part.text.length; start += maxChunkLength) {
-    const text = part.text.slice(start, start + maxChunkLength).trim();
-
-    if (text) {
-      chunks.push({
-        text,
-        startOffset: part.startOffset + start,
-        endOffset: part.startOffset + start + text.length,
-      });
-    }
-  }
-
-  return chunks;
 }
 
 function parsePdfObjects(source: string): Map<number, string> {
@@ -424,20 +337,4 @@ function decodePdfEscape(value: string | undefined): string {
     default:
       return value ?? "";
   }
-}
-
-function normalizeExtractedText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
-}
-
-function stableId(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }

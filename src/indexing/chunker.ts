@@ -1,6 +1,5 @@
-import { createHash } from "crypto";
-
 import { ExtractedChunk, MarkdownSourceReference } from "../shared/types";
+import { DEFAULT_CHUNK_LENGTH, splitText, stableId, TextPart } from "../extractors/common";
 
 export interface MarkdownChunkOptions {
   path: string;
@@ -15,22 +14,15 @@ interface MarkdownSection {
   text: string;
 }
 
-interface TextPart {
-  text: string;
-  startOffset: number;
-  endOffset: number;
-}
-
-const DEFAULT_MAX_CHUNK_LENGTH = 1_600;
 const BLOCK_ID_PATTERN = /\^([A-Za-z0-9_-]+)\s*$/m;
 
 export function chunkMarkdown(options: MarkdownChunkOptions): ExtractedChunk[] {
-  const maxChunkLength = options.maxChunkLength ?? DEFAULT_MAX_CHUNK_LENGTH;
+  const maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
   const content = stripFrontmatter(options.text);
   const sections = parseMarkdownSections(content.text, content.startOffset);
 
   return sections.flatMap((section) =>
-    splitSection(section, maxChunkLength).map((part, index) =>
+    splitText(section.text, maxChunkLength, section.startOffset).map((part, index) =>
       createMarkdownChunk({
         path: options.path,
         section,
@@ -114,93 +106,6 @@ function parseMarkdownSections(text: string, baseOffset: number): MarkdownSectio
   }
 }
 
-function splitSection(section: MarkdownSection, maxChunkLength: number): TextPart[] {
-  const paragraphs = splitParagraphs(section.text, section.startOffset);
-  const parts: TextPart[] = [];
-  let currentText = "";
-  let currentStartOffset = section.startOffset;
-  let currentEndOffset = section.startOffset;
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.text.length > maxChunkLength) {
-      flushCurrent();
-      parts.push(...splitLongText(paragraph, maxChunkLength));
-      continue;
-    }
-
-    const separator = currentText ? "\n\n" : "";
-    const nextText = `${currentText}${separator}${paragraph.text}`;
-
-    if (currentText && nextText.length > maxChunkLength) {
-      flushCurrent();
-    }
-
-    if (!currentText) {
-      currentStartOffset = paragraph.startOffset;
-    }
-
-    currentText = currentText ? `${currentText}\n\n${paragraph.text}` : paragraph.text;
-    currentEndOffset = paragraph.endOffset;
-  }
-
-  flushCurrent();
-
-  return parts;
-
-  function flushCurrent(): void {
-    if (!currentText) {
-      return;
-    }
-
-    parts.push({
-      text: currentText,
-      startOffset: currentStartOffset,
-      endOffset: currentEndOffset,
-    });
-    currentText = "";
-  }
-}
-
-function splitParagraphs(text: string, baseOffset: number): TextPart[] {
-  const paragraphs: TextPart[] = [];
-  const paragraphPattern = /\S[\s\S]*?(?=\r?\n\s*\r?\n|$)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = paragraphPattern.exec(text)) !== null) {
-    const raw = match[0];
-    const trimmed = raw.trim();
-
-    if (trimmed) {
-      const leadingWhitespaceLength = raw.length - raw.trimStart().length;
-      paragraphs.push({
-        text: trimmed,
-        startOffset: baseOffset + match.index + leadingWhitespaceLength,
-        endOffset: baseOffset + match.index + leadingWhitespaceLength + trimmed.length,
-      });
-    }
-  }
-
-  return paragraphs;
-}
-
-function splitLongText(part: TextPart, maxChunkLength: number): TextPart[] {
-  const chunks: TextPart[] = [];
-
-  for (let start = 0; start < part.text.length; start += maxChunkLength) {
-    const text = part.text.slice(start, start + maxChunkLength).trim();
-
-    if (text) {
-      chunks.push({
-        text,
-        startOffset: part.startOffset + start,
-        endOffset: part.startOffset + start + text.length,
-      });
-    }
-  }
-
-  return chunks;
-}
-
 function createMarkdownChunk(options: {
   path: string;
   section: MarkdownSection;
@@ -251,8 +156,4 @@ function parseHeading(line: string): { level: number; title: string } | null {
 
 function findBlockId(text: string): string | undefined {
   return BLOCK_ID_PATTERN.exec(text)?.[1];
-}
-
-function stableId(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
