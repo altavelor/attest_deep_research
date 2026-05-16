@@ -63,6 +63,11 @@ export class RetrievalService {
         return [];
       }
 
+      await this.indexStore.initialize({
+        embeddingModel: this.embeddingModel,
+        embeddingDimensions: embedding.length,
+      });
+
       return this.indexStore.query(embedding, limit);
     } catch {
       return [];
