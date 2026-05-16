@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 
 import type IxplorerPlugin from "../main";
+import { testChatConnection, testEmbeddingConnection } from "./connectionTests";
 import {
   formatListInput,
   normalizeListInput,
@@ -60,6 +61,17 @@ export class IxplorerSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Test chat connection")
+      .setDesc("Check the configured local chat provider and model.")
+      .addButton((button) =>
+        button.setButtonText("Test").onClick(async () => {
+          await this.plugin.saveSettings();
+          const result = await testChatConnection(this.plugin.settings);
+          new Notice(result.message);
+        }),
+      );
   }
 
   private renderEmbeddingSettings(containerEl: HTMLElement): void {
@@ -92,6 +104,17 @@ export class IxplorerSettingTab extends PluginSettingTab {
             this.plugin.settings.embeddingModel = value.trim();
             await this.plugin.saveSettings();
           }),
+      );
+
+    new Setting(containerEl)
+      .setName("Test embedding connection")
+      .setDesc("Check the configured local embedding provider and model.")
+      .addButton((button) =>
+        button.setButtonText("Test").onClick(async () => {
+          await this.plugin.saveSettings();
+          const result = await testEmbeddingConnection(this.plugin.settings);
+          new Notice(result.message);
+        }),
       );
   }
 
