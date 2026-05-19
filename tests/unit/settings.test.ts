@@ -14,6 +14,7 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.chatModelProviderBaseUrl).toBe("http://localhost:1234/v1");
     expect(DEFAULT_SETTINGS.embeddingProviderBaseUrl).toBe("http://localhost:11434");
     expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
+    expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
   it("migrates partial saved settings over defaults", () => {
@@ -26,6 +27,7 @@ describe("Ixplorer settings", () => {
       includeFolders: ["Research", "Papers"],
       excludeGlobs: ["Archive/**"],
       duckDuckGoEnabled: true,
+      debugMode: true,
     });
 
     expect(settings).toMatchObject({
@@ -37,6 +39,7 @@ describe("Ixplorer settings", () => {
       includeFolders: ["Research", "Papers"],
       excludeGlobs: ["Archive/**"],
       duckDuckGoEnabled: true,
+      debugMode: true,
     });
   });
 
@@ -45,6 +48,7 @@ describe("Ixplorer settings", () => {
       includeFolders: [],
       excludeGlobs: [1, false],
       duckDuckGoEnabled: "yes",
+      debugMode: "yes",
     });
 
     expect(settings.chatModelProviderBaseUrl).toBe(DEFAULT_SETTINGS.chatModelProviderBaseUrl);
@@ -52,6 +56,7 @@ describe("Ixplorer settings", () => {
     expect(settings.includeFolders).toEqual(DEFAULT_SETTINGS.includeFolders);
     expect(settings.excludeGlobs).toEqual(DEFAULT_SETTINGS.excludeGlobs);
     expect(settings.duckDuckGoEnabled).toBe(false);
+    expect(settings.debugMode).toBe(false);
   });
 
   it("normalizes editable list text", () => {

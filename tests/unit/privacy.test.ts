@@ -22,7 +22,8 @@ import {
 
 describe("privacy boundaries", () => {
   it("does not log source content or generated answers from production code by default", () => {
-    const files = sourceFiles(join(process.cwd(), "src"));
+    const allowedLogger = join(process.cwd(), "src/settings/debugLogger.ts");
+    const files = sourceFiles(join(process.cwd(), "src")).filter((file) => file !== allowedLogger);
     const consoleCallPattern = /\bconsole\.(?:debug|info|log|warn|error)\s*\(/;
     const offenders = files.filter((file) => consoleCallPattern.test(readFileSync(file, "utf8")));
 

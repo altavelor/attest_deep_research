@@ -30,10 +30,25 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Ixplorer").setHeading();
 
+    this.renderDebugSettings(containerEl);
     this.renderChatModelSettings(containerEl);
     this.renderEmbeddingSettings(containerEl);
     this.renderIndexingSettings(containerEl);
     this.renderWebSearchSettings(containerEl);
+  }
+
+  private renderDebugSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Debug mode")
+      .setDesc(
+        "Log plugin request and response details, including prompt payloads. When disabled, only errors are logged.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
+          this.plugin.settings.debugMode = value;
+          await this.plugin.saveSettings();
+        }),
+      );
   }
 
   private renderChatModelSettings(containerEl: HTMLElement): void {

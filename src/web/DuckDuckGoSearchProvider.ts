@@ -1,5 +1,6 @@
 import { IxplorerError } from "../shared/errors";
 import { SearchProvider, SearchProviderResult } from "../shared/types";
+import type { PluginRequestLogger } from "../settings/debugLogger";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -7,6 +8,7 @@ export interface DuckDuckGoSearchProviderOptions {
   timeoutMs?: number;
   maxExtractedTextLength?: number;
   now?: () => Date;
+  logger?: PluginRequestLogger;
 }
 
 interface DuckDuckGoResult {
@@ -30,6 +32,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly timeoutMs: number;
   private readonly maxExtractedTextLength: number;
   private readonly now: () => Date;
+  private readonly logger?: PluginRequestLogger;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
@@ -38,6 +41,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     this.maxExtractedTextLength =
       options.maxExtractedTextLength ?? DEFAULT_MAX_EXTRACTED_TEXT_LENGTH;
     this.now = options.now ?? (() => new Date());
+    this.logger = options.logger;
   }
 
   async searchFirstResult(query: string): Promise<SearchProviderResult | null> {
@@ -71,14 +75,17 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       };
     } catch (error) {
       if (error instanceof IxplorerError) {
+        this.logger?.logError(error);
         throw error;
       }
 
-      throw new IxplorerError({
+      const wrappedError = new IxplorerError({
         code: "WEB_SEARCH_FAILED",
         message: "DuckDuckGo search failed.",
         cause: error,
       });
+      this.logger?.logError(wrappedError);
+      throw wrappedError;
     }
   }
 
@@ -124,15 +131,30 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private async request(url: string): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const context = {
+      url,
+      method: "GET",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+      },
+    };
 
     try {
-      return await this.fetchImpl(url, {
+      this.logger?.logRequest(context);
+      const response = await this.fetchImpl(url, {
         method: "GET",
-        headers: {
-          accept: "text/html,application/xhtml+xml",
-        },
+        headers: context.headers,
         signal: controller.signal,
       });
+      this.logger?.logResponse({
+        ...context,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return response;
+    } catch (error) {
+      this.logger?.logError(error, context);
+      throw error;
     } finally {
       clearTimeout(timeout);
     }

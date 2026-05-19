@@ -7,6 +7,7 @@ export interface IxplorerSettings {
   includeFolders: string[];
   excludeGlobs: string[];
   duckDuckGoEnabled: boolean;
+  debugMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: IxplorerSettings = {
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   includeFolders: ["/"],
   excludeGlobs: [".obsidian/**", ".trash/**", ".ixplorer/**"],
   duckDuckGoEnabled: false,
+  debugMode: false,
 };
 
 export function normalizeListInput(value: string): string[] {
@@ -69,6 +71,7 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
     includeFolders: readStringList(data.includeFolders, DEFAULT_SETTINGS.includeFolders),
     excludeGlobs: readStringList(data.excludeGlobs, DEFAULT_SETTINGS.excludeGlobs),
     duckDuckGoEnabled: data.duckDuckGoEnabled === true,
+    debugMode: data.debugMode === true,
   };
 }
 

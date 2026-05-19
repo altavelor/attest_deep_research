@@ -12,6 +12,7 @@ import {
   modelNamesFromOllamaTags,
   modelNamesFromOpenAiModels,
 } from "../common/models";
+import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { parseJsonLines, parseServerSentEvents } from "../common/streams";
 
@@ -20,14 +21,17 @@ export interface ChatModelClientOptions {
   baseUrl: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  logger?: PluginRequestLogger;
 }
 
 export class ChatModelClient implements ChatModelProvider {
   private readonly provider: LocalModelProvider;
   private readonly http: ProviderHttpClient;
+  private readonly logger?: PluginRequestLogger;
 
   constructor(options: ChatModelClientOptions) {
     this.provider = options.provider;
+    this.logger = options.logger;
     this.http = new ProviderHttpClient({
       ...options,
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
@@ -36,13 +40,20 @@ export class ChatModelClient implements ChatModelProvider {
   }
 
   async listModels(): Promise<string[]> {
-    return this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels();
+    return this.withLoggedErrors(() =>
+      this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels(),
+    );
   }
 
-  streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
-    return this.provider === "lmStudio"
-      ? this.streamLmStudioChat(request)
-      : this.streamOllamaChat(request);
+  async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    try {
+      yield* this.provider === "lmStudio"
+        ? this.streamLmStudioChat(request)
+        : this.streamOllamaChat(request);
+    } catch (error) {
+      this.logger?.logError(error);
+      throw error;
+    }
   }
 
   private async listLmStudioModels(): Promise<string[]> {
@@ -141,6 +152,15 @@ export class ChatModelClient implements ChatModelProvider {
     }
 
     yield { content: "", isComplete: true };
+  }
+
+  private async withLoggedErrors<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      this.logger?.logError(error);
+      throw error;
+    }
   }
 }
 
