@@ -10,6 +10,7 @@ import { RetrievalService } from "./retrieval/RetrievalService";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { detectLocalModelProvider } from "./settings/connectionTests";
+import { PluginDebugLogger } from "./settings/debugLogger";
 import { DEFAULT_SETTINGS, IxplorerSettings, migrateSettings } from "./settings/settings";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
@@ -17,6 +18,7 @@ import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
 export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
   settings: IxplorerSettings = DEFAULT_SETTINGS;
+  private readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -67,6 +69,7 @@ export default class IxplorerPlugin extends Plugin {
     const embeddings = new EmbeddingClient({
       provider: detectLocalModelProvider(this.settings.embeddingProviderBaseUrl),
       baseUrl: this.settings.embeddingProviderBaseUrl,
+      logger: this.logger,
     });
     const retriever = new RetrievalService({
       embeddings,
@@ -83,9 +86,12 @@ export default class IxplorerPlugin extends Plugin {
       chatModel: new ChatModelClient({
         provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
         baseUrl: this.settings.chatModelProviderBaseUrl,
+        logger: this.logger,
       }),
       chatModelName: this.settings.chatModel,
-      searchProvider: this.settings.duckDuckGoEnabled ? new DuckDuckGoSearchProvider() : undefined,
+      searchProvider: this.settings.duckDuckGoEnabled
+        ? new DuckDuckGoSearchProvider({ logger: this.logger })
+        : undefined,
     });
   }
 

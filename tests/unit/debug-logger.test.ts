@@ -1,0 +1,94 @@
+import { PluginDebugLogger } from "../../src/settings/debugLogger";
+import { DEFAULT_SETTINGS, IxplorerSettings } from "../../src/settings/settings";
+import { IxplorerError } from "../../src/shared/errors";
+
+function createSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...overrides,
+  };
+}
+
+describe("PluginDebugLogger", () => {
+  it("logs requests and responses only when debug mode is enabled", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings({ debugMode: true, chatModel: "qwen3" }),
+      console: { debug, error },
+    });
+
+    logger.logRequest({
+      url: "http://localhost:1234/v1/models",
+      method: "GET",
+    });
+    logger.logResponse({
+      url: "http://localhost:1234/v1/models",
+      method: "GET",
+      status: 200,
+      statusText: "OK",
+    });
+
+    expect(debug).toHaveBeenCalledTimes(2);
+    expect(debug.mock.calls[0][1]).toMatchObject({
+      url: "http://localhost:1234/v1/models",
+      method: "GET",
+      settings: expect.objectContaining({ debugMode: true, chatModel: "qwen3" }),
+    });
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("does not log successful requests when debug mode is disabled", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings({ debugMode: false }),
+      console: { debug, error },
+    });
+
+    logger.logRequest({ url: "http://localhost:1234/v1/models", method: "GET" });
+    logger.logResponse({
+      url: "http://localhost:1234/v1/models",
+      method: "GET",
+      status: 200,
+      statusText: "OK",
+    });
+
+    expect(debug).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("always logs errors with current plugin settings", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings({ debugMode: false, embeddingModel: "nomic" }),
+      console: { debug, error },
+    });
+
+    logger.logError(
+      new IxplorerError({
+        code: "EMBEDDING_UNAVAILABLE",
+        message: "Embedding provider failed.",
+      }),
+      {
+        url: "http://localhost:11434/api/embed",
+        method: "POST",
+      },
+    );
+
+    expect(debug).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][1]).toMatchObject({
+      context: {
+        url: "http://localhost:11434/api/embed",
+        method: "POST",
+      },
+      error: {
+        code: "EMBEDDING_UNAVAILABLE",
+        message: "Embedding provider failed.",
+      },
+      settings: expect.objectContaining({ debugMode: false, embeddingModel: "nomic" }),
+    });
+  });
+});

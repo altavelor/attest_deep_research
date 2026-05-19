@@ -5,6 +5,7 @@ import {
   EmbeddingResponse,
   LocalModelProvider,
 } from "../../shared/types";
+import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import {
   isOllamaTagsResponse,
@@ -19,6 +20,7 @@ export interface EmbeddingClientOptions {
   baseUrl: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  logger?: PluginRequestLogger;
 }
 
 interface OpenAiEmbeddingsResponse {
@@ -34,9 +36,11 @@ interface OllamaEmbedResponse {
 export class EmbeddingClient implements EmbeddingProviderClient {
   private readonly provider: LocalModelProvider;
   private readonly http: ProviderHttpClient;
+  private readonly logger?: PluginRequestLogger;
 
   constructor(options: EmbeddingClientOptions) {
     this.provider = options.provider;
+    this.logger = options.logger;
     this.http = new ProviderHttpClient({
       ...options,
       unavailableCode: "EMBEDDING_UNAVAILABLE",
@@ -45,13 +49,17 @@ export class EmbeddingClient implements EmbeddingProviderClient {
   }
 
   async listModels(): Promise<string[]> {
-    return this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels();
+    return this.withLoggedErrors(() =>
+      this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels(),
+    );
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
-    return this.provider === "lmStudio"
-      ? this.embedWithLmStudio(request)
-      : this.embedWithOllama(request);
+    return this.withLoggedErrors(() =>
+      this.provider === "lmStudio"
+        ? this.embedWithLmStudio(request)
+        : this.embedWithOllama(request),
+    );
   }
 
   private async listLmStudioModels(): Promise<string[]> {
@@ -134,6 +142,15 @@ export class EmbeddingClient implements EmbeddingProviderClient {
       model: body.model ?? request.model,
       embeddings: body.embeddings,
     };
+  }
+
+  private async withLoggedErrors<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      this.logger?.logError(error);
+      throw error;
+    }
   }
 }
 
