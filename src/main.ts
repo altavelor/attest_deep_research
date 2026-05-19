@@ -18,7 +18,7 @@ import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
 export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
   settings: IxplorerSettings = DEFAULT_SETTINGS;
-  private readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
+  readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
 
   async onload(): Promise<void> {
     await this.loadSettings();

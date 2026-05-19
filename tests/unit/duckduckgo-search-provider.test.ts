@@ -72,6 +72,19 @@ describe("DuckDuckGoSearchProvider", () => {
     );
   });
 
+  it("calls fetch with the global receiver for browser compatibility", async () => {
+    const fetchMock = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      return Promise.resolve(htmlResponse("<html><body>No results</body></html>"));
+    }) as typeof fetch;
+    const provider = new DuckDuckGoSearchProvider({ fetch: fetchMock });
+
+    await expect(provider.searchFirstResult("local models")).resolves.toBeNull();
+  });
+
   it("returns an unfetched web source when the first result page cannot be fetched", async () => {
     const fetchMock = vi
       .fn()

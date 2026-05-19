@@ -1,5 +1,6 @@
 import {
   ConnectionClientFactories,
+  createConnectionClientFactories,
   detectLocalModelProvider,
   localModelProviderLabel,
   refreshChatModels,
@@ -89,6 +90,39 @@ describe("connection tests", () => {
       message: "Connected to embedding provider. Found 1 model.",
       models: ["embeddinggemma"],
     });
+  });
+
+  it("logs provider HTTP failures when connection tests create real clients", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const logger = {
+      logRequest: vi.fn(),
+      logResponse: vi.fn(),
+      logError: vi.fn(),
+    };
+
+    const result = await testChatConnection(
+      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1" }),
+      createConnectionClientFactories({ fetch: fetchMock, logger }),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: "The local model provider is unavailable.",
+      models: [],
+    });
+    expect(logger.logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "http://localhost:1234/v1/models",
+        method: "GET",
+      }),
+    );
+    expect(logger.logError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "MODEL_PROVIDER_UNAVAILABLE" }),
+      expect.objectContaining({
+        url: "http://localhost:1234/v1/models",
+        method: "GET",
+      }),
+    );
   });
 
   it("reports successful chat connection with configured model", async () => {

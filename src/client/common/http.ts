@@ -43,7 +43,7 @@ export class ProviderHttpClient {
     try {
       this.logger?.logRequest(logContext);
 
-      const response = await this.fetchImpl(url, {
+      const response = await this.fetchImpl.call(globalThis, url, {
         ...init,
         signal: controller.signal,
       });
