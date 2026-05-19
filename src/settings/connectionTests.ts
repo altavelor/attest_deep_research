@@ -35,6 +35,52 @@ export function detectLocalModelProvider(baseUrl: string): LocalModelProvider {
   return normalized.endsWith("/v1") ? "lmStudio" : "ollama";
 }
 
+export function localModelProviderLabel(provider: LocalModelProvider): string {
+  return provider === "lmStudio" ? "LM Studio" : "Ollama";
+}
+
+export async function refreshChatModels(
+  settings: IxplorerSettings,
+  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
+): Promise<ConnectionTestResult> {
+  try {
+    const models = await factories.createChatClient(settings).listModels();
+
+    return {
+      ok: true,
+      message: modelCountMessage("chat provider", models.length),
+      models,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: toUserMessage(error),
+      models: [],
+    };
+  }
+}
+
+export async function refreshEmbeddingModels(
+  settings: IxplorerSettings,
+  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
+): Promise<ConnectionTestResult> {
+  try {
+    const models = await factories.createEmbeddingClient(settings).listModels();
+
+    return {
+      ok: true,
+      message: modelCountMessage("embedding provider", models.length),
+      models,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: toUserMessage(error),
+      models: [],
+    };
+  }
+}
+
 export async function testChatConnection(
   settings: IxplorerSettings,
   factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,

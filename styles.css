@@ -8,6 +8,48 @@
   resize: vertical;
 }
 
+.ixplorer-settings__provider-row .setting-item-control,
+.ixplorer-settings__model-row .setting-item-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ixplorer-settings__text-input {
+  min-width: min(16rem, 100%);
+  flex: 1 1 16rem;
+}
+
+.ixplorer-settings__text-input::placeholder {
+  color: var(--text-faint);
+}
+
+.ixplorer-settings__provider-badge {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  padding: 0 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ixplorer-settings__provider-badge.is-hidden {
+  display: none;
+}
+
+.ixplorer-settings__icon-button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
 .ixplorer-chat-view {
   height: 100%;
 }

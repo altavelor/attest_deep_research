@@ -1,6 +1,9 @@
 import {
   ConnectionClientFactories,
   detectLocalModelProvider,
+  localModelProviderLabel,
+  refreshChatModels,
+  refreshEmbeddingModels,
   testChatConnection,
   testEmbeddingConnection,
 } from "../../src/settings/connectionTests";
@@ -52,6 +55,40 @@ describe("connection tests", () => {
   it("detects Ollama from root or /api URLs", () => {
     expect(detectLocalModelProvider("http://localhost:11434")).toBe("ollama");
     expect(detectLocalModelProvider("http://localhost:11434/api")).toBe("ollama");
+  });
+
+  it("formats provider display labels", () => {
+    expect(localModelProviderLabel("lmStudio")).toBe("LM Studio");
+    expect(localModelProviderLabel("ollama")).toBe("Ollama");
+  });
+
+  it("refreshes chat models without validating the configured model", async () => {
+    const result = await refreshChatModels(
+      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1", chatModel: "missing" }),
+      factories({ chatModels: ["qwen3"] }),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Connected to chat provider. Found 1 model.",
+      models: ["qwen3"],
+    });
+  });
+
+  it("refreshes embedding models without validating the configured model", async () => {
+    const result = await refreshEmbeddingModels(
+      settings({
+        embeddingProviderBaseUrl: "http://localhost:11434",
+        embeddingModel: "missing",
+      }),
+      factories({ embeddingModels: ["embeddinggemma"] }),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Connected to embedding provider. Found 1 model.",
+      models: ["embeddinggemma"],
+    });
   });
 
   it("reports successful chat connection with configured model", async () => {
