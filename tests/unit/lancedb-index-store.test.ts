@@ -107,6 +107,24 @@ describe("LanceDbIndexStore", () => {
     expect(driver.metadataRows()).toHaveLength(1);
   });
 
+  it("treats clear and source deletion on an uninitialized empty index as no-ops", async () => {
+    await expect(store.clear()).resolves.toBeUndefined();
+    await expect(store.deleteBySourcePath("Research/missing.md")).resolves.toBeUndefined();
+
+    expect(driver.connectedFolder).toBe(folder);
+    expect(driver.tableNames()).toEqual([]);
+  });
+
+  it("opens an existing chunks table for clear before full initialization", async () => {
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([chunk("one", "Research/a.md", [1, 0])]);
+
+    const reopenedStore = new LanceDbIndexStore({ folder, driver });
+    await reopenedStore.clear();
+
+    expect(driver.chunkRows()).toEqual([]);
+  });
+
   it("requires a rebuild when stored embedding dimensions do not match", async () => {
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 

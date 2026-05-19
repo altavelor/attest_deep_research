@@ -14,6 +14,7 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.chatModelProviderBaseUrl).toBe("http://localhost:1234/v1");
     expect(DEFAULT_SETTINGS.embeddingProviderBaseUrl).toBe("http://localhost:11434");
     expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
+    expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
@@ -27,6 +28,7 @@ describe("Ixplorer settings", () => {
       includeFolders: ["Research", "Papers"],
       excludeGlobs: ["Archive/**"],
       duckDuckGoEnabled: true,
+      showChatIndexControl: false,
       debugMode: true,
     });
 
@@ -39,6 +41,7 @@ describe("Ixplorer settings", () => {
       includeFolders: ["Research", "Papers"],
       excludeGlobs: ["Archive/**"],
       duckDuckGoEnabled: true,
+      showChatIndexControl: false,
       debugMode: true,
     });
   });
@@ -56,6 +59,7 @@ describe("Ixplorer settings", () => {
     expect(settings.includeFolders).toEqual(DEFAULT_SETTINGS.includeFolders);
     expect(settings.excludeGlobs).toEqual(DEFAULT_SETTINGS.excludeGlobs);
     expect(settings.duckDuckGoEnabled).toBe(false);
+    expect(settings.showChatIndexControl).toBe(true);
     expect(settings.debugMode).toBe(false);
   });
 

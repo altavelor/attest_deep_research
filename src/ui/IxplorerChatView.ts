@@ -1,4 +1,4 @@
-import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 
 import { IndexingState } from "../indexing/IndexingService";
 import {
@@ -9,19 +9,23 @@ import {
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { Citation, ResearchAnswer } from "../shared/types";
-import {
-  ChatDisplayMessage,
-  citationTarget,
-  formatIndexingStatus,
-  nextAssistantMessage,
-} from "./rendering";
+import { IndexControlActions, renderIndexControl } from "./IndexControl";
+import { attachModelDropdown } from "./ModelDropdown";
+import { ChatDisplayMessage, citationTarget, nextAssistantMessage } from "./rendering";
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
 export interface IxplorerChatViewServices {
   createResearchService(): ResearchService;
   getIndexingState?(): IndexingState | undefined;
+  subscribeToIndexingState?(listener: (state: IndexingState) => void): () => void;
+  indexingActions?: IndexControlActions;
   isWebSearchEnabled(): boolean;
+  getChatModel(): string;
+  setChatModel(model: string): Promise<void>;
+  getAvailableChatModels(): string[];
+  isChatIndexControlShown(): boolean;
+  setChatIndexControlShown(shown: boolean): Promise<void>;
 }
 
 export class IxplorerChatView extends ItemView {
@@ -31,13 +35,16 @@ export class IxplorerChatView extends ItemView {
   private isRunning = false;
 
   private transcriptEl: HTMLElement | null = null;
-  private statusEl: HTMLElement | null = null;
+  private indexControlEl: HTMLElement | null = null;
+  private indexRevealButtonEl: HTMLButtonElement | null = null;
   private citationsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private saveActionsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
+  private modelInputEl: HTMLInputElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private webSearchEl: HTMLInputElement | null = null;
+  private unsubscribeIndexing: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
     super(leaf);
@@ -61,6 +68,8 @@ export class IxplorerChatView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.unsubscribeIndexing?.();
+    this.unsubscribeIndexing = null;
     this.contentEl.empty();
   }
 
@@ -72,13 +81,16 @@ export class IxplorerChatView extends ItemView {
     const header = root.createDiv({ cls: "ixplorer-chat__header" });
     header.createEl("h2", { text: "Ixplorer" });
 
-    this.statusEl = header.createDiv({ cls: "ixplorer-chat__status" });
-    const refreshButton = header.createEl("button", {
-      cls: "ixplorer-chat__icon-button",
-      attr: { type: "button", "aria-label": "Refresh index status" },
+    this.indexControlEl = header.createDiv();
+    this.indexRevealButtonEl = header.createEl("button", {
+      cls: "ixplorer-chat__index-reveal",
+      text: "Show index",
+      attr: { type: "button" },
     });
-    setIcon(refreshButton, "refresh-cw");
-    refreshButton.addEventListener("click", () => this.renderStatus());
+    this.indexRevealButtonEl.addEventListener("click", async () => {
+      await this.services.setChatIndexControlShown(true);
+      this.renderIndexControl();
+    });
 
     this.transcriptEl = root.createDiv({
       cls: "ixplorer-chat__transcript",
@@ -104,6 +116,36 @@ export class IxplorerChatView extends ItemView {
           "aria-label": "Research question",
         },
       });
+      this.textareaEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+          return;
+        }
+
+        event.preventDefault();
+        void this.submitQuestion();
+      });
+
+      const modelRow = form.createDiv({ cls: "ixplorer-chat__model-row" });
+      modelRow.createEl("label", { text: "Model", attr: { for: "ixplorer-chat-model" } });
+      this.modelInputEl = modelRow.createEl("input", {
+        cls: "ixplorer-chat__model-input",
+        attr: {
+          id: "ixplorer-chat-model",
+          type: "text",
+          placeholder: "Chat model",
+        },
+      });
+      this.modelInputEl.value = this.services.getChatModel();
+      this.modelInputEl.addEventListener("change", () => {
+        void this.services.setChatModel(this.modelInputEl?.value ?? "");
+      });
+      attachModelDropdown({
+        inputEl: this.modelInputEl,
+        containerEl: modelRow,
+        getModels: () => this.services.getAvailableChatModels(),
+        emptyText: "Refresh models in settings",
+        onSelect: (model) => this.services.setChatModel(model),
+      });
 
       const actions = form.createDiv({ cls: "ixplorer-chat__actions" });
       const webLabel = actions.createEl("label", { cls: "ixplorer-chat__toggle" });
@@ -121,13 +163,44 @@ export class IxplorerChatView extends ItemView {
       });
     });
 
-    this.renderStatus();
+    this.unsubscribeIndexing?.();
+    this.unsubscribeIndexing =
+      this.services.subscribeToIndexingState?.(() => {
+        this.renderIndexControl();
+      }) ?? null;
+    this.renderIndexControl();
     this.renderMessages();
     this.renderAnswerDetails();
   }
 
-  private renderStatus(): void {
-    this.statusEl?.setText(formatIndexingStatus(this.services.getIndexingState?.()));
+  private renderIndexControl(): void {
+    if (!this.indexControlEl || !this.indexRevealButtonEl) {
+      return;
+    }
+
+    const shouldShow = this.services.isChatIndexControlShown();
+    this.indexControlEl.toggleClass("is-hidden", !shouldShow);
+    this.indexRevealButtonEl.toggleClass("is-hidden", shouldShow);
+
+    if (!shouldShow) {
+      this.indexControlEl.empty();
+      return;
+    }
+
+    renderIndexControl(this.indexControlEl, {
+      compact: true,
+      state: this.services.getIndexingState?.(),
+      actions: this.services.indexingActions ?? {
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        rebuild: () => undefined,
+      },
+      onHide: async () => {
+        await this.services.setChatIndexControlShown(false);
+        this.renderIndexControl();
+      },
+    });
   }
 
   private renderMessages(): void {
@@ -249,6 +322,7 @@ export class IxplorerChatView extends ItemView {
     }
 
     this.isRunning = true;
+    await this.services.setChatModel(this.modelInputEl?.value ?? this.services.getChatModel());
     this.setFormDisabled(true);
     this.messages = [...this.messages, { role: "user", content: question }];
     this.lastAnswer = null;
@@ -275,7 +349,7 @@ export class IxplorerChatView extends ItemView {
     } finally {
       this.isRunning = false;
       this.setFormDisabled(false);
-      this.renderStatus();
+      this.renderIndexControl();
     }
   }
 
@@ -298,6 +372,10 @@ export class IxplorerChatView extends ItemView {
 
     if (this.textareaEl) {
       this.textareaEl.disabled = disabled;
+    }
+
+    if (this.modelInputEl) {
+      this.modelInputEl.disabled = disabled;
     }
 
     if (this.webSearchEl) {

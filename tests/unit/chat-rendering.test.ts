@@ -1,4 +1,10 @@
-import { citationTarget, formatIndexingStatus, nextAssistantMessage } from "../../src/ui/rendering";
+import {
+  citationTarget,
+  formatIndexControlSummary,
+  formatIndexingStatus,
+  formatProgressPercent,
+  nextAssistantMessage,
+} from "../../src/ui/rendering";
 import { Citation, SourceReference } from "../../src/shared/types";
 
 describe("chat rendering helpers", () => {
@@ -7,21 +13,58 @@ describe("chat rendering helpers", () => {
       formatIndexingStatus({
         status: "idle",
         scannedFiles: 12,
+        totalFiles: 12,
+        progress: 1,
         indexedFiles: 3,
         skippedFiles: 9,
         embeddedChunks: 42,
         lastIndexedAt: "2026-05-16T00:00:00.000Z",
+        isStale: false,
       }),
     ).toBe("Idle · 3 indexed · 42 chunks · last run May 16, 2026");
     expect(
       formatIndexingStatus({
         status: "paused",
         scannedFiles: 0,
+        totalFiles: 0,
+        progress: 0,
         indexedFiles: 0,
         skippedFiles: 0,
         embeddedChunks: 0,
+        isStale: false,
       }),
     ).toBe("Paused · no completed index run");
+  });
+
+  it("formats index control summary and progress values", () => {
+    expect(
+      formatIndexControlSummary({
+        status: "stale",
+        scannedFiles: 12,
+        totalFiles: 12,
+        progress: 1,
+        indexedFiles: 3,
+        skippedFiles: 9,
+        embeddedChunks: 42,
+        indexSizeBytes: 42 * 1024,
+        lastIndexedAt: "2026-05-16T00:00:00.000Z",
+        isStale: true,
+      }),
+    ).toBe("Rebuild needed · 3 files · 42 KB · May 16, 2026");
+    expect(
+      formatIndexControlSummary({
+        status: "error",
+        scannedFiles: 1,
+        totalFiles: 2,
+        progress: 0.5,
+        indexedFiles: 0,
+        skippedFiles: 0,
+        embeddedChunks: 0,
+        isStale: false,
+        errorMessage: "Embedding provider unavailable",
+      }),
+    ).toBe("Indexing failed · Embedding provider unavailable");
+    expect(formatProgressPercent(0.425)).toBe("43%");
   });
 
   it("maps citations to clickable Obsidian or web targets", () => {
