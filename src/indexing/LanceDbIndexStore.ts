@@ -83,11 +83,23 @@ export class LanceDbIndexStore implements IndexStore {
   }
 
   async deleteBySourcePath(path: string): Promise<void> {
-    await this.requireChunksTable().deleteBySourcePath(path);
+    const table = await this.openExistingChunksTable();
+
+    if (!table) {
+      return;
+    }
+
+    await table.deleteBySourcePath(path);
   }
 
   async clear(): Promise<void> {
-    await this.requireChunksTable().clear();
+    const table = await this.openExistingChunksTable();
+
+    if (!table) {
+      return;
+    }
+
+    await table.clear();
   }
 
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
@@ -113,6 +125,18 @@ export class LanceDbIndexStore implements IndexStore {
     }
 
     return this.requireConnection().createTable(this.metadataTableName, [toMetadataRow(metadata)]);
+  }
+
+  private async openExistingChunksTable(): Promise<LanceDbTable | null> {
+    if (this.chunksTable) {
+      return this.chunksTable;
+    }
+
+    await mkdir(this.folder, { recursive: true });
+    this.connection = this.connection ?? (await this.driver.connect(this.folder));
+    this.chunksTable = await this.requireConnection().openTable(this.chunksTableName);
+
+    return this.chunksTable;
   }
 
   private async ensureChunksTable(): Promise<LanceDbTable> {

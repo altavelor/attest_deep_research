@@ -76,9 +76,12 @@ describe("IndexingService", () => {
 
     expect(result).toMatchObject({
       scannedFiles: 5,
+      totalFiles: 5,
+      progress: 1,
       indexedFiles: 2,
       skippedFiles: 3,
       embeddedChunks: 2,
+      isStale: false,
     });
     expect(markdownExtractor.extractedPaths).toEqual(["Research/a.md"]);
     expect(textExtractor.extractedPaths).toEqual(["Research/notes.txt"]);
@@ -149,11 +152,46 @@ describe("IndexingService", () => {
 
     await service.clear();
     expect(indexStore.clearCalls).toBe(1);
-    expect(service.getState()).toMatchObject({ status: "idle", indexedFiles: 0 });
+    expect(service.getState()).toMatchObject({
+      status: "idle",
+      scannedFiles: 0,
+      totalFiles: 0,
+      progress: 0,
+      indexedFiles: 0,
+      isStale: false,
+    });
 
     await service.rebuild();
     expect(indexStore.clearCalls).toBe(2);
     expect(indexStore.upsertCalls).toBe(2);
+  });
+
+  it("reports progress during manual reindex and can mark idle state stale", async () => {
+    const progressStates: Array<ReturnType<IndexingService["getState"]>> = [];
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "first"),
+        file("Research/b.md", 1, "second"),
+      ]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore: new FakeIndexStore(),
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      onProgress: (state) => progressStates.push(state),
+    });
+
+    const result = await service.manualReindex();
+
+    expect(progressStates.some((state) => state.status === "indexing")).toBe(true);
+    expect(progressStates.some((state) => state.totalFiles === 2 && state.progress === 0.5)).toBe(
+      true,
+    );
+    expect(result).toMatchObject({ status: "idle", totalFiles: 2, progress: 1 });
+
+    service.markStale();
+    expect(service.getState()).toMatchObject({ status: "stale", isStale: true });
   });
 });
 

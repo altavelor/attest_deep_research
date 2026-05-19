@@ -1,4 +1,5 @@
 import { IndexingState } from "../indexing/IndexingService";
+import { formatIndexSize } from "../indexing/indexSize";
 import { Citation } from "../shared/types";
 
 export interface ChatDisplayMessage {
@@ -13,7 +14,7 @@ export function formatIndexingStatus(state?: IndexingState): string {
     return "Index status unavailable";
   }
 
-  const status = state.status[0].toUpperCase() + state.status.slice(1);
+  const status = formatIndexingStateLabel(state);
   const lastRun = state.lastIndexedAt ? formatDate(state.lastIndexedAt) : "no completed index run";
 
   if (state.indexedFiles === 0 && state.embeddedChunks === 0) {
@@ -21,6 +22,41 @@ export function formatIndexingStatus(state?: IndexingState): string {
   }
 
   return `${status} · ${state.indexedFiles} indexed · ${state.embeddedChunks} chunks · last run ${lastRun}`;
+}
+
+export function formatIndexingStateLabel(state: IndexingState): string {
+  if (state.status === "error") {
+    return "Indexing failed";
+  }
+
+  if (state.isStale || state.status === "stale") {
+    return "Rebuild needed";
+  }
+
+  return state.status[0].toUpperCase() + state.status.slice(1);
+}
+
+export function formatIndexControlSummary(state?: IndexingState): string {
+  if (!state) {
+    return "Index status unavailable";
+  }
+
+  const lastRun = state.lastIndexedAt ? formatDate(state.lastIndexedAt) : "Never indexed";
+
+  if (state.status === "error") {
+    return state.errorMessage
+      ? `Indexing failed · ${state.errorMessage}`
+      : `Indexing failed · ${lastRun}`;
+  }
+
+  return `${formatIndexingStateLabel(state)} · ${state.indexedFiles} files · ${formatIndexSize(
+    state.indexSizeBytes ?? 0,
+  )} · ${lastRun}`;
+}
+
+export function formatProgressPercent(progress: number): string {
+  const bounded = Math.max(0, Math.min(1, progress));
+  return `${Math.round(bounded * 100)}%`;
 }
 
 export function citationTarget(citation: Citation): CitationTarget {

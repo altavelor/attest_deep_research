@@ -2,6 +2,8 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { ButtonComponent, TextComponent } from "obsidian";
 
 import type IxplorerPlugin from "../main";
+import { renderIndexControl } from "../ui/IndexControl";
+import { attachModelDropdown } from "../ui/ModelDropdown";
 import {
   createConnectionClientFactories,
   detectLocalModelProvider,
@@ -30,7 +32,6 @@ interface ModelSettingsSectionState {
   models: string[];
   providerLabel: string | null;
   isTestingBaseUrl: boolean;
-  isTestingModel: boolean;
   isRefreshingModels: boolean;
 }
 
@@ -49,20 +50,19 @@ interface ModelSettingsSectionConfig {
 }
 
 export class IxplorerSettingTab extends PluginSettingTab {
+  private unsubscribeIndexing: (() => void) | null = null;
   private readonly modelSectionStates: Record<ModelSettingsSectionKind, ModelSettingsSectionState> =
     {
       chat: {
         models: [],
         providerLabel: null,
         isTestingBaseUrl: false,
-        isTestingModel: false,
         isRefreshingModels: false,
       },
       embedding: {
         models: [],
         providerLabel: null,
         isTestingBaseUrl: false,
-        isTestingModel: false,
         isRefreshingModels: false,
       },
     };
@@ -76,6 +76,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this;
+    this.unsubscribeIndexing?.();
+    this.unsubscribeIndexing = null;
     containerEl.empty();
     containerEl.addClass("ixplorer-settings");
 
@@ -188,6 +190,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
                 const result = await config.testConnection();
                 state.models = result.models;
+                if (config.kind === "chat") {
+                  this.plugin.setAvailableChatModels(result.models);
+                }
                 state.providerLabel = result.ok
                   ? localModelProviderLabel(
                       detectLocalModelProvider(this.plugin.settings[config.providerSettingKey]),
@@ -201,11 +206,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
           });
       });
 
-    const dataListId = `ixplorer-${config.kind}-model-options`;
     let modelInput: TextComponent;
-    let dataListEl: HTMLDataListElement;
     let refreshButton: ButtonComponent;
-    let modelTestButton: ButtonComponent;
 
     new Setting(containerEl)
       .setName(config.modelName)
@@ -220,10 +222,18 @@ export class IxplorerSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
         modelInput.inputEl.addClass("ixplorer-settings__text-input");
-        modelInput.inputEl.setAttr("list", dataListId);
       })
       .then((setting) => {
-        dataListEl = setting.controlEl.createEl("datalist", { attr: { id: dataListId } });
+        attachModelDropdown({
+          inputEl: modelInput.inputEl,
+          containerEl: setting.controlEl,
+          getModels: () => state.models,
+          emptyText: "Refresh models first",
+          onSelect: async (model) => {
+            this.plugin.settings[config.modelSettingKey] = model.trim();
+            await this.plugin.saveSettings();
+          },
+        });
         updateModelOptions();
       })
       .addButton((button) => {
@@ -241,37 +251,15 @@ export class IxplorerSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
                 const result = await config.refreshModels();
                 state.models = result.models;
+                if (config.kind === "chat") {
+                  this.plugin.setAvailableChatModels(result.models);
+                }
                 updateModelOptions();
                 new Notice(result.message);
               },
             );
           });
         refreshButton.buttonEl.setAttr("aria-label", "Refresh model list");
-      })
-      .addButton((button) => {
-        modelTestButton = button
-          .setButtonText("Test")
-          .setDisabled(state.isTestingModel)
-          .onClick(async () => {
-            await this.runModelSectionAction(
-              state,
-              "isTestingModel",
-              [modelTestButton],
-              async () => {
-                await this.plugin.saveSettings();
-                const result = await config.testConnection();
-                state.models = result.models;
-                state.providerLabel = result.ok
-                  ? localModelProviderLabel(
-                      detectLocalModelProvider(this.plugin.settings[config.providerSettingKey]),
-                    )
-                  : null;
-                updateProviderBadge();
-                updateModelOptions();
-                new Notice(result.message);
-              },
-            );
-          });
       });
 
     function updateProviderBadge(): void {
@@ -284,14 +272,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
     }
 
     function updateModelOptions(): void {
-      if (!dataListEl) {
-        return;
-      }
-
-      dataListEl.empty();
-      for (const model of state.models) {
-        dataListEl.createEl("option", { attr: { value: model } });
-      }
+      modelInput?.inputEl.toggleClass("has-model-options", state.models.length > 0);
     }
   }
 
@@ -303,10 +284,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
   private async runModelSectionAction(
     state: ModelSettingsSectionState,
-    loadingKey: keyof Pick<
-      ModelSettingsSectionState,
-      "isTestingBaseUrl" | "isTestingModel" | "isRefreshingModels"
-    >,
+    loadingKey: keyof Pick<ModelSettingsSectionState, "isTestingBaseUrl" | "isRefreshingModels">,
     buttons: ButtonComponent[],
     action: () => Promise<void>,
   ): Promise<void> {
@@ -332,6 +310,21 @@ export class IxplorerSettingTab extends PluginSettingTab {
   private renderIndexingSettings(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Indexing").setHeading();
 
+    const indexControlEl = containerEl.createDiv({ cls: "ixplorer-settings__index-control" });
+    const renderCurrentIndexControl = () => {
+      renderIndexControl(indexControlEl, {
+        state: this.plugin.indexing.getState(),
+        actions: {
+          start: () => this.plugin.indexing.start(),
+          pause: () => this.plugin.indexing.pause(),
+          resume: () => this.plugin.indexing.resume(),
+          rebuild: () => this.plugin.indexing.rebuild(),
+        },
+      });
+    };
+    this.unsubscribeIndexing = this.plugin.indexing.subscribe(renderCurrentIndexControl);
+    renderCurrentIndexControl();
+
     new Setting(containerEl)
       .setName("LanceDB folder")
       .setDesc(LANCEDB_FOLDER_DESCRIPTION)
@@ -342,6 +335,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.lanceDbFolder = normalizeVaultFolder(value);
             await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
           }),
       );
 
@@ -356,6 +350,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
             this.plugin.settings.includeFolders =
               folders.length > 0 ? folders : [...this.plugin.defaultSettings.includeFolders];
             await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
           }),
       );
 
@@ -370,6 +365,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
             this.plugin.settings.excludeGlobs =
               globs.length > 0 ? globs : [...this.plugin.defaultSettings.excludeGlobs];
             await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
           }),
       );
   }

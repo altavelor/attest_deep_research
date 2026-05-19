@@ -17,15 +17,22 @@ export interface VaultFileProvider {
   readFile(path: string): Promise<ArrayBuffer | string>;
 }
 
-export type IndexingStatus = "idle" | "indexing" | "paused";
+export type IndexingStatus = "idle" | "indexing" | "paused" | "stale" | "error";
 
 export interface IndexingState {
   status: IndexingStatus;
+  activeOperation?: "indexing" | "rebuild";
   scannedFiles: number;
+  totalFiles: number;
+  progress: number;
   indexedFiles: number;
   skippedFiles: number;
   embeddedChunks: number;
   lastIndexedAt?: string;
+  lastUpdatedAt?: string;
+  indexSizeBytes?: number;
+  isStale: boolean;
+  errorMessage?: string;
 }
 
 export interface IndexingServiceOptions {
@@ -70,9 +77,12 @@ export class IndexingService {
   private state: IndexingState = {
     status: "idle",
     scannedFiles: 0,
+    totalFiles: 0,
+    progress: 0,
     indexedFiles: 0,
     skippedFiles: 0,
     embeddedChunks: 0,
+    isStale: false,
   };
 
   constructor(options: IndexingServiceOptions) {
@@ -98,14 +108,35 @@ export class IndexingService {
   }
 
   pause(): void {
-    this.state = { ...this.state, status: "paused" };
+    this.state = { ...this.state, status: "paused", lastUpdatedAt: this.now().toISOString() };
     this.notifyProgress();
   }
 
   resume(): void {
     if (this.state.status === "paused") {
-      this.state = { ...this.state, status: "idle" };
+      this.state = { ...this.state, status: "idle", lastUpdatedAt: this.now().toISOString() };
+      this.notifyProgress();
     }
+  }
+
+  markStale(): void {
+    if (this.state.status === "indexing" || this.state.status === "paused") {
+      this.state = { ...this.state, isStale: true, lastUpdatedAt: this.now().toISOString() };
+    } else {
+      this.state = {
+        ...this.state,
+        status: "stale",
+        isStale: true,
+        errorMessage: undefined,
+        lastUpdatedAt: this.now().toISOString(),
+      };
+    }
+    this.notifyProgress();
+  }
+
+  setIndexSizeBytes(indexSizeBytes?: number): void {
+    this.state = { ...this.state, indexSizeBytes };
+    this.notifyProgress();
   }
 
   async clear(): Promise<void> {
@@ -114,33 +145,59 @@ export class IndexingService {
     this.state = {
       status: this.state.status === "paused" ? "paused" : "idle",
       scannedFiles: 0,
+      totalFiles: 0,
+      progress: 0,
       indexedFiles: 0,
       skippedFiles: 0,
       embeddedChunks: 0,
+      indexSizeBytes: this.state.indexSizeBytes,
+      isStale: false,
+      errorMessage: undefined,
+      lastUpdatedAt: this.now().toISOString(),
     };
+    this.notifyProgress();
   }
 
   async rebuild(): Promise<IndexingState> {
     await this.indexStore.clear();
     this.snapshots.clear();
-    return this.manualReindex();
+    if (this.state.status === "paused") {
+      this.state = { ...this.state, status: "idle" };
+    }
+    return this.manualReindex("rebuild");
   }
 
-  async manualReindex(): Promise<IndexingState> {
+  async manualReindex(
+    activeOperation: "indexing" | "rebuild" = "indexing",
+  ): Promise<IndexingState> {
     if (this.state.status === "paused") {
       return this.getState();
     }
 
     this.state = {
       status: "indexing",
+      activeOperation,
       scannedFiles: 0,
+      totalFiles: 0,
+      progress: 0,
       indexedFiles: 0,
       skippedFiles: 0,
       embeddedChunks: 0,
+      indexSizeBytes: this.state.indexSizeBytes,
+      isStale: false,
+      errorMessage: undefined,
+      lastUpdatedAt: this.now().toISOString(),
     };
     this.notifyProgress();
 
     const files = await this.files.listFiles();
+    this.state = {
+      ...this.state,
+      totalFiles: files.length,
+      progress: files.length === 0 ? 1 : 0,
+      lastUpdatedAt: this.now().toISOString(),
+    };
+    this.notifyProgress();
     const pendingChunks: ExtractedChunk[] = [];
     const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string }> = [];
 
@@ -150,7 +207,12 @@ export class IndexingService {
       }
 
       const result = await this.processFile(file);
-      this.state = { ...this.state, scannedFiles: this.state.scannedFiles + 1 };
+      this.state = {
+        ...this.state,
+        scannedFiles: this.state.scannedFiles + 1,
+        progress: calculateProgress(this.state.scannedFiles + 1, this.state.totalFiles),
+        lastUpdatedAt: this.now().toISOString(),
+      };
 
       if (result.skipped) {
         this.state = { ...this.state, skippedFiles: this.state.skippedFiles + 1 };
@@ -181,7 +243,18 @@ export class IndexingService {
       this.state = {
         ...this.state,
         status: "idle",
+        activeOperation: undefined,
+        progress: 1,
+        isStale: false,
+        errorMessage: undefined,
         lastIndexedAt: this.now().toISOString(),
+        lastUpdatedAt: this.now().toISOString(),
+      };
+    } else {
+      this.state = {
+        ...this.state,
+        activeOperation: undefined,
+        lastUpdatedAt: this.now().toISOString(),
       };
     }
 
@@ -213,6 +286,7 @@ export class IndexingService {
     this.state = {
       ...this.state,
       embeddedChunks: this.state.embeddedChunks + embeddedChunks.length,
+      lastUpdatedAt: this.now().toISOString(),
     };
     this.notifyProgress();
   }
@@ -313,6 +387,14 @@ function defaultYieldToEventLoop(): Promise<void> {
 
 function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
   return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
+}
+
+function calculateProgress(scannedFiles: number, totalFiles: number): number {
+  if (totalFiles <= 0) {
+    return 0;
+  }
+
+  return Math.min(1, scannedFiles / totalFiles);
 }
 
 function isIncluded(path: string, includeFolders: string[]): boolean {
