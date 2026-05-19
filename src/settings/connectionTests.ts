@@ -2,6 +2,7 @@ import { ChatModelClient } from "../client/chat/ChatModelClient";
 import { EmbeddingClient } from "../client/embeddings/EmbeddingClient";
 import { toUserMessage } from "../shared/errors";
 import { ChatModelProvider, EmbeddingProviderClient, LocalModelProvider } from "../shared/types";
+import type { PluginRequestLogger } from "./debugLogger";
 import { IxplorerSettings } from "./settings";
 
 export interface ConnectionTestResult {
@@ -15,20 +16,38 @@ export interface ConnectionClientFactories {
   createEmbeddingClient(settings: IxplorerSettings): EmbeddingProviderClient;
 }
 
-export const DEFAULT_CONNECTION_CLIENT_FACTORIES: ConnectionClientFactories = {
-  createChatClient(settings) {
-    return new ChatModelClient({
-      provider: detectLocalModelProvider(settings.chatModelProviderBaseUrl),
-      baseUrl: settings.chatModelProviderBaseUrl,
-    });
-  },
-  createEmbeddingClient(settings) {
-    return new EmbeddingClient({
-      provider: detectLocalModelProvider(settings.embeddingProviderBaseUrl),
-      baseUrl: settings.embeddingProviderBaseUrl,
-    });
-  },
-};
+export interface ConnectionClientFactoryOptions {
+  fetch?: typeof fetch;
+  logger?: PluginRequestLogger;
+  timeoutMs?: number;
+}
+
+export const DEFAULT_CONNECTION_CLIENT_FACTORIES = createConnectionClientFactories();
+
+export function createConnectionClientFactories(
+  options: ConnectionClientFactoryOptions = {},
+): ConnectionClientFactories {
+  return {
+    createChatClient(settings) {
+      return new ChatModelClient({
+        provider: detectLocalModelProvider(settings.chatModelProviderBaseUrl),
+        baseUrl: settings.chatModelProviderBaseUrl,
+        fetch: options.fetch,
+        logger: options.logger,
+        timeoutMs: options.timeoutMs,
+      });
+    },
+    createEmbeddingClient(settings) {
+      return new EmbeddingClient({
+        provider: detectLocalModelProvider(settings.embeddingProviderBaseUrl),
+        baseUrl: settings.embeddingProviderBaseUrl,
+        fetch: options.fetch,
+        logger: options.logger,
+        timeoutMs: options.timeoutMs,
+      });
+    },
+  };
+}
 
 export function detectLocalModelProvider(baseUrl: string): LocalModelProvider {
   const normalized = baseUrl.trim().replace(/\/+$/, "");

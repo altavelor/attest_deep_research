@@ -3,6 +3,7 @@ import type { ButtonComponent, TextComponent } from "obsidian";
 
 import type IxplorerPlugin from "../main";
 import {
+  createConnectionClientFactories,
   detectLocalModelProvider,
   localModelProviderLabel,
   refreshChatModels,
@@ -102,6 +103,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderChatModelSettings(containerEl: HTMLElement): void {
+    const factories = createConnectionClientFactories({ logger: this.plugin.logger });
+
     this.renderModelSettingsSection(containerEl, {
       kind: "chat",
       heading: "Chat Model",
@@ -112,12 +115,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
       modelDescription: "Model name loaded by the local chat provider.",
       modelPlaceholder: "local-model",
       modelSettingKey: "chatModel",
-      testConnection: () => testChatConnection(this.plugin.settings),
-      refreshModels: () => refreshChatModels(this.plugin.settings),
+      testConnection: () => testChatConnection(this.plugin.settings, factories),
+      refreshModels: () => refreshChatModels(this.plugin.settings, factories),
     });
   }
 
   private renderEmbeddingSettings(containerEl: HTMLElement): void {
+    const factories = createConnectionClientFactories({ logger: this.plugin.logger });
+
     this.renderModelSettingsSection(containerEl, {
       kind: "embedding",
       heading: "Embeddings",
@@ -128,8 +133,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
       modelDescription: "Model name used by the local embedding provider.",
       modelPlaceholder: "embedding-model",
       modelSettingKey: "embeddingModel",
-      testConnection: () => testEmbeddingConnection(this.plugin.settings),
-      refreshModels: () => refreshEmbeddingModels(this.plugin.settings),
+      testConnection: () => testEmbeddingConnection(this.plugin.settings, factories),
+      refreshModels: () => refreshEmbeddingModels(this.plugin.settings, factories),
     });
   }
 

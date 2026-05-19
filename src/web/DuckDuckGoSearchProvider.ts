@@ -141,7 +141,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
 
     try {
       this.logger?.logRequest(context);
-      const response = await this.fetchImpl(url, {
+      const response = await this.fetchImpl.call(globalThis, url, {
         method: "GET",
         headers: context.headers,
         signal: controller.signal,

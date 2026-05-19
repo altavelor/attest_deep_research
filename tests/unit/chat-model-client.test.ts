@@ -59,6 +59,27 @@ describe("ChatModelClient", () => {
     });
   });
 
+  it("calls fetch with the global receiver for browser compatibility", async () => {
+    const fetchMock = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      return Promise.resolve(
+        jsonResponse({
+          data: [{ id: "qwen3" }],
+        }),
+      );
+    }) as typeof fetch;
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(client.listModels()).resolves.toEqual(["qwen3"]);
+  });
+
   it("lists Ollama model names", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
