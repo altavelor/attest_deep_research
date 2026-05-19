@@ -1,7 +1,15 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import type { ButtonComponent, TextComponent } from "obsidian";
 
 import type IxplorerPlugin from "../main";
-import { testChatConnection, testEmbeddingConnection } from "./connectionTests";
+import {
+  detectLocalModelProvider,
+  localModelProviderLabel,
+  refreshChatModels,
+  refreshEmbeddingModels,
+  testChatConnection,
+  testEmbeddingConnection,
+} from "./connectionTests";
 import {
   CHAT_PROVIDER_DESCRIPTION,
   DUCK_DUCK_GO_DESCRIPTION,
@@ -15,7 +23,49 @@ import {
   normalizeVaultFolder,
 } from "./settings";
 
+type ModelSettingsSectionKind = "chat" | "embedding";
+
+interface ModelSettingsSectionState {
+  models: string[];
+  providerLabel: string | null;
+  isTestingBaseUrl: boolean;
+  isTestingModel: boolean;
+  isRefreshingModels: boolean;
+}
+
+interface ModelSettingsSectionConfig {
+  kind: ModelSettingsSectionKind;
+  heading: string;
+  providerDescription: string;
+  providerPlaceholder: string;
+  providerSettingKey: "chatModelProviderBaseUrl" | "embeddingProviderBaseUrl";
+  modelName: string;
+  modelDescription: string;
+  modelPlaceholder: string;
+  modelSettingKey: "chatModel" | "embeddingModel";
+  testConnection: () => ReturnType<typeof testChatConnection>;
+  refreshModels: () => ReturnType<typeof refreshChatModels>;
+}
+
 export class IxplorerSettingTab extends PluginSettingTab {
+  private readonly modelSectionStates: Record<ModelSettingsSectionKind, ModelSettingsSectionState> =
+    {
+      chat: {
+        models: [],
+        providerLabel: null,
+        isTestingBaseUrl: false,
+        isTestingModel: false,
+        isRefreshingModels: false,
+      },
+      embedding: {
+        models: [],
+        providerLabel: null,
+        isTestingBaseUrl: false,
+        isTestingModel: false,
+        isRefreshingModels: false,
+      },
+    };
+
   constructor(
     app: App,
     private readonly plugin: IxplorerPlugin,
@@ -52,91 +102,226 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderChatModelSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Chat Model").setHeading();
-
-    new Setting(containerEl)
-      .setName("Provider base URL")
-      .setDesc(CHAT_PROVIDER_DESCRIPTION)
-      .addText((text) =>
-        text
-          .setPlaceholder("http://localhost:1234/v1")
-          .setValue(this.plugin.settings.chatModelProviderBaseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.chatModelProviderBaseUrl = normalizeUrl(
-              value,
-              this.plugin.defaultSettings.chatModelProviderBaseUrl,
-            );
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Chat model")
-      .setDesc("Model name loaded by the local chat provider.")
-      .addText((text) =>
-        text
-          .setPlaceholder("local-model")
-          .setValue(this.plugin.settings.chatModel)
-          .onChange(async (value) => {
-            this.plugin.settings.chatModel = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Test chat connection")
-      .setDesc("Check the configured local chat provider and model.")
-      .addButton((button) =>
-        button.setButtonText("Test").onClick(async () => {
-          await this.plugin.saveSettings();
-          const result = await testChatConnection(this.plugin.settings);
-          new Notice(result.message);
-        }),
-      );
+    this.renderModelSettingsSection(containerEl, {
+      kind: "chat",
+      heading: "Chat Model",
+      providerDescription: CHAT_PROVIDER_DESCRIPTION,
+      providerPlaceholder: "http://localhost:1234/v1",
+      providerSettingKey: "chatModelProviderBaseUrl",
+      modelName: "Chat model",
+      modelDescription: "Model name loaded by the local chat provider.",
+      modelPlaceholder: "local-model",
+      modelSettingKey: "chatModel",
+      testConnection: () => testChatConnection(this.plugin.settings),
+      refreshModels: () => refreshChatModels(this.plugin.settings),
+    });
   }
 
   private renderEmbeddingSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Embeddings").setHeading();
+    this.renderModelSettingsSection(containerEl, {
+      kind: "embedding",
+      heading: "Embeddings",
+      providerDescription: EMBEDDING_PROVIDER_DESCRIPTION,
+      providerPlaceholder: "http://localhost:11434",
+      providerSettingKey: "embeddingProviderBaseUrl",
+      modelName: "Embedding model",
+      modelDescription: "Model name used by the local embedding provider.",
+      modelPlaceholder: "embedding-model",
+      modelSettingKey: "embeddingModel",
+      testConnection: () => testEmbeddingConnection(this.plugin.settings),
+      refreshModels: () => refreshEmbeddingModels(this.plugin.settings),
+    });
+  }
+
+  private renderModelSettingsSection(
+    containerEl: HTMLElement,
+    config: ModelSettingsSectionConfig,
+  ): void {
+    const state = this.modelSectionStates[config.kind];
+
+    new Setting(containerEl).setName(config.heading).setHeading();
+
+    let providerBadgeEl: HTMLElement;
+    let providerTestButton: ButtonComponent;
 
     new Setting(containerEl)
       .setName("Provider base URL")
-      .setDesc(EMBEDDING_PROVIDER_DESCRIPTION)
-      .addText((text) =>
+      .setDesc(config.providerDescription)
+      .setClass("ixplorer-settings__provider-row")
+      .addText((text) => {
         text
-          .setPlaceholder("http://localhost:11434")
-          .setValue(this.plugin.settings.embeddingProviderBaseUrl)
+          .setPlaceholder(config.providerPlaceholder)
+          .setValue(this.plugin.settings[config.providerSettingKey])
           .onChange(async (value) => {
-            this.plugin.settings.embeddingProviderBaseUrl = normalizeUrl(
+            this.plugin.settings[config.providerSettingKey] = normalizeUrl(
               value,
-              this.plugin.defaultSettings.embeddingProviderBaseUrl,
+              this.plugin.defaultSettings[config.providerSettingKey],
             );
+            this.clearModelSectionConnectionState(config.kind);
+            updateProviderBadge();
+            updateModelOptions();
             await this.plugin.saveSettings();
-          }),
-      );
+          });
+        text.inputEl.addClass("ixplorer-settings__text-input");
+      })
+      .then((setting) => {
+        providerBadgeEl = setting.controlEl.createSpan({
+          cls: "ixplorer-settings__provider-badge",
+        });
+        updateProviderBadge();
+      })
+      .addButton((button) => {
+        providerTestButton = button
+          .setButtonText("Test")
+          .setDisabled(state.isTestingBaseUrl)
+          .onClick(async () => {
+            await this.runModelSectionAction(
+              state,
+              "isTestingBaseUrl",
+              [providerTestButton],
+              async () => {
+                await this.plugin.saveSettings();
+                const result = await config.testConnection();
+                state.models = result.models;
+                state.providerLabel = result.ok
+                  ? localModelProviderLabel(
+                      detectLocalModelProvider(this.plugin.settings[config.providerSettingKey]),
+                    )
+                  : null;
+                updateProviderBadge();
+                updateModelOptions();
+                new Notice(result.message);
+              },
+            );
+          });
+      });
+
+    const dataListId = `ixplorer-${config.kind}-model-options`;
+    let modelInput: TextComponent;
+    let dataListEl: HTMLDataListElement;
+    let refreshButton: ButtonComponent;
+    let modelTestButton: ButtonComponent;
 
     new Setting(containerEl)
-      .setName("Embedding model")
-      .setDesc("Model name used by the local embedding provider.")
-      .addText((text) =>
-        text
-          .setPlaceholder("embedding-model")
-          .setValue(this.plugin.settings.embeddingModel)
+      .setName(config.modelName)
+      .setDesc(config.modelDescription)
+      .setClass("ixplorer-settings__model-row")
+      .addText((text) => {
+        modelInput = text
+          .setPlaceholder(config.modelPlaceholder)
+          .setValue(this.plugin.settings[config.modelSettingKey])
           .onChange(async (value) => {
-            this.plugin.settings.embeddingModel = value.trim();
+            this.plugin.settings[config.modelSettingKey] = value.trim();
             await this.plugin.saveSettings();
-          }),
-      );
+          });
+        modelInput.inputEl.addClass("ixplorer-settings__text-input");
+        modelInput.inputEl.setAttr("list", dataListId);
+      })
+      .then((setting) => {
+        dataListEl = setting.controlEl.createEl("datalist", { attr: { id: dataListId } });
+        updateModelOptions();
+      })
+      .addButton((button) => {
+        refreshButton = button
+          .setIcon("rotate-cw")
+          .setTooltip("Refresh model list")
+          .setDisabled(state.isRefreshingModels)
+          .setClass("ixplorer-settings__icon-button")
+          .onClick(async () => {
+            await this.runModelSectionAction(
+              state,
+              "isRefreshingModels",
+              [refreshButton],
+              async () => {
+                await this.plugin.saveSettings();
+                const result = await config.refreshModels();
+                state.models = result.models;
+                updateModelOptions();
+                new Notice(result.message);
+              },
+            );
+          });
+        refreshButton.buttonEl.setAttr("aria-label", "Refresh model list");
+      })
+      .addButton((button) => {
+        modelTestButton = button
+          .setButtonText("Test")
+          .setDisabled(state.isTestingModel)
+          .onClick(async () => {
+            await this.runModelSectionAction(
+              state,
+              "isTestingModel",
+              [modelTestButton],
+              async () => {
+                await this.plugin.saveSettings();
+                const result = await config.testConnection();
+                state.models = result.models;
+                state.providerLabel = result.ok
+                  ? localModelProviderLabel(
+                      detectLocalModelProvider(this.plugin.settings[config.providerSettingKey]),
+                    )
+                  : null;
+                updateProviderBadge();
+                updateModelOptions();
+                new Notice(result.message);
+              },
+            );
+          });
+      });
 
-    new Setting(containerEl)
-      .setName("Test embedding connection")
-      .setDesc("Check the configured local embedding provider and model.")
-      .addButton((button) =>
-        button.setButtonText("Test").onClick(async () => {
-          await this.plugin.saveSettings();
-          const result = await testEmbeddingConnection(this.plugin.settings);
-          new Notice(result.message);
-        }),
-      );
+    function updateProviderBadge(): void {
+      if (!providerBadgeEl) {
+        return;
+      }
+
+      providerBadgeEl.setText(state.providerLabel ?? "");
+      providerBadgeEl.toggleClass("is-hidden", state.providerLabel === null);
+    }
+
+    function updateModelOptions(): void {
+      if (!dataListEl) {
+        return;
+      }
+
+      dataListEl.empty();
+      for (const model of state.models) {
+        dataListEl.createEl("option", { attr: { value: model } });
+      }
+    }
+  }
+
+  private clearModelSectionConnectionState(kind: ModelSettingsSectionKind): void {
+    const state = this.modelSectionStates[kind];
+    state.models = [];
+    state.providerLabel = null;
+  }
+
+  private async runModelSectionAction(
+    state: ModelSettingsSectionState,
+    loadingKey: keyof Pick<
+      ModelSettingsSectionState,
+      "isTestingBaseUrl" | "isTestingModel" | "isRefreshingModels"
+    >,
+    buttons: ButtonComponent[],
+    action: () => Promise<void>,
+  ): Promise<void> {
+    if (state[loadingKey]) {
+      return;
+    }
+
+    state[loadingKey] = true;
+    for (const button of buttons) {
+      button.setDisabled(true);
+    }
+
+    try {
+      await action();
+    } finally {
+      state[loadingKey] = false;
+      for (const button of buttons) {
+        button.setDisabled(false);
+      }
+    }
   }
 
   private renderIndexingSettings(containerEl: HTMLElement): void {
