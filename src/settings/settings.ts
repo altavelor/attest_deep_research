@@ -1,6 +1,10 @@
+import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "../extractors/common";
 import {
   DEFAULT_FILE_VECTOR_SHARD_COUNT,
+  DEFAULT_EMBEDDING_BATCH_SIZE,
   DEFAULT_KEYWORD_MIN_TOKEN_LENGTH,
+  DEFAULT_PDF_CHUNK_OVERLAP,
+  DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "../indexing/FileVectorIndexStore";
 
@@ -33,6 +37,11 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   embeddingProviderBaseUrl: "http://localhost:11434",
   refreshMode: "manual",
   shardCount: DEFAULT_FILE_VECTOR_SHARD_COUNT,
+  chunkSize: DEFAULT_CHUNK_LENGTH,
+  chunkOverlap: DEFAULT_CHUNK_OVERLAP,
+  pdfChunkSize: DEFAULT_PDF_CHUNK_SIZE,
+  pdfChunkOverlap: DEFAULT_PDF_CHUNK_OVERLAP,
+  embeddingBatchSize: DEFAULT_EMBEDDING_BATCH_SIZE,
   keywordIndex: {
     enabled: true,
     strategy: "source-shard",
@@ -147,6 +156,11 @@ export function updateActiveIndexProfile(
       | "excludeGlobs"
       | "embeddingModel"
       | "embeddingProviderBaseUrl"
+      | "chunkSize"
+      | "chunkOverlap"
+      | "pdfChunkSize"
+      | "pdfChunkOverlap"
+      | "embeddingBatchSize"
     >
   >,
 ): void {
@@ -156,6 +170,22 @@ export function updateActiveIndexProfile(
     ...updates,
     updatedAt: new Date().toISOString(),
   };
+  const chunkSize = readPositiveInteger(updatedProfile.chunkSize, DEFAULT_CHUNK_LENGTH);
+  updatedProfile.chunkSize = chunkSize;
+  updatedProfile.chunkOverlap = normalizeChunkOverlap(
+    readNonNegativeInteger(updatedProfile.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
+    chunkSize,
+  );
+  const pdfChunkSize = readPositiveInteger(updatedProfile.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE);
+  updatedProfile.pdfChunkSize = pdfChunkSize;
+  updatedProfile.pdfChunkOverlap = normalizeChunkOverlap(
+    readNonNegativeInteger(updatedProfile.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
+    pdfChunkSize,
+  );
+  updatedProfile.embeddingBatchSize = readPositiveInteger(
+    updatedProfile.embeddingBatchSize,
+    DEFAULT_EMBEDDING_BATCH_SIZE,
+  );
   const index = settings.indexProfiles.findIndex((candidate) => candidate.id === profile.id);
 
   if (index >= 0) {
@@ -235,6 +265,20 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
       readString(value.embeddingProviderBaseUrl),
       DEFAULT_SETTINGS.embeddingProviderBaseUrl,
     ),
+    chunkSize: readPositiveInteger(value.chunkSize, DEFAULT_CHUNK_LENGTH),
+    chunkOverlap: normalizeChunkOverlap(
+      readNonNegativeInteger(value.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
+      readPositiveInteger(value.chunkSize, DEFAULT_CHUNK_LENGTH),
+    ),
+    pdfChunkSize: readPositiveInteger(value.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE),
+    pdfChunkOverlap: normalizeChunkOverlap(
+      readNonNegativeInteger(value.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
+      readPositiveInteger(value.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE),
+    ),
+    embeddingBatchSize: readPositiveInteger(
+      value.embeddingBatchSize,
+      DEFAULT_EMBEDDING_BATCH_SIZE,
+    ),
     createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
     updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
   });
@@ -251,6 +295,9 @@ function createIndexProfile(
       | "embeddingProviderBaseUrl"
     >,
 ): IndexProfile {
+  const chunkSize = readPositiveInteger(values.chunkSize, DEFAULT_CHUNK_LENGTH);
+  const pdfChunkSize = readPositiveInteger(values.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE);
+
   return {
     ...cloneIndexProfile(DEFAULT_INDEX_PROFILE),
     ...values,
@@ -259,6 +306,20 @@ function createIndexProfile(
     indexFolder: normalizeVaultFolder(values.indexFolder),
     includeFolders: [...values.includeFolders],
     excludeGlobs: [...values.excludeGlobs],
+    chunkSize,
+    chunkOverlap: normalizeChunkOverlap(
+      readNonNegativeInteger(values.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
+      chunkSize,
+    ),
+    pdfChunkSize,
+    pdfChunkOverlap: normalizeChunkOverlap(
+      readNonNegativeInteger(values.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
+      pdfChunkSize,
+    ),
+    embeddingBatchSize: readPositiveInteger(
+      values.embeddingBatchSize,
+      DEFAULT_EMBEDDING_BATCH_SIZE,
+    ),
     shardCount: DEFAULT_FILE_VECTOR_SHARD_COUNT,
     keywordIndex: {
       enabled: true,
@@ -276,6 +337,18 @@ function readActiveIndexProfileId(value: unknown, profiles: IndexProfile[]): str
   }
 
   return profiles[0]?.id ?? DEFAULT_INDEX_PROFILE_ID;
+}
+
+function readPositiveInteger(value: unknown, fallback: number): number {
+  return Number.isInteger(value) && typeof value === "number" && value > 0 ? value : fallback;
+}
+
+function readNonNegativeInteger(value: unknown, fallback: number): number {
+  return Number.isInteger(value) && typeof value === "number" && value >= 0 ? value : fallback;
+}
+
+function normalizeChunkOverlap(value: number, chunkSize: number): number {
+  return Math.max(0, Math.min(value, chunkSize - 1));
 }
 
 function cloneIndexProfile(profile: IndexProfile): IndexProfile {

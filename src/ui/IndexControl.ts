@@ -3,8 +3,10 @@ import { setIcon } from "obsidian";
 import { IndexingState } from "../indexing/IndexingService";
 import {
   formatIndexControlSummary,
+  formatIndexingProgressLabel,
   formatIndexingStateLabel,
   formatProgressPercent,
+  indexingProgressValue,
 } from "./rendering";
 
 export interface IndexControlActions {
@@ -43,22 +45,23 @@ export function renderIndexControl(containerEl: HTMLElement, options: IndexContr
   });
 
   if (state?.status === "indexing") {
+    const progressValue = indexingProgressValue(state);
     const progress = root.createDiv({
       cls: "ixplorer-index-control__progress",
       attr: {
         role: "progressbar",
         "aria-valuemin": "0",
         "aria-valuemax": "100",
-        "aria-valuenow": String(Math.round(state.progress * 100)),
+        "aria-valuenow": String(Math.round(progressValue * 100)),
       },
     });
     progress.createDiv({
       cls: "ixplorer-index-control__progress-fill",
-      attr: { style: `width: ${formatProgressPercent(state.progress)}` },
+      attr: { style: `width: ${formatProgressPercent(progressValue)}` },
     });
     root.createDiv({
       cls: "ixplorer-index-control__progress-label",
-      text: `${state.scannedFiles} of ${state.totalFiles} files`,
+      text: formatIndexingProgressLabel(state),
     });
   }
 

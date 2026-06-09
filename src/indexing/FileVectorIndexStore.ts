@@ -4,8 +4,10 @@ import { join } from "path";
 import { IxplorerError } from "../shared/errors";
 import {
   EmbeddedChunk,
+  AdjacentChunkIndexStore,
   IndexFailedSourceSnapshot,
   IndexStore,
+  IndexStoreWriteSession,
   IndexStoreMetadata,
   IndexSourceSnapshot,
   KeywordSearchIndexStore,
@@ -29,10 +31,13 @@ import {
 } from "./LightweightKeywordIndex";
 import { shardIdForSourcePath } from "./sourcePathShard";
 
-export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 1;
+export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 2;
 export const FILE_VECTOR_INDEX_FORMAT = "ixplorer-file-vector-index";
 export const DEFAULT_FILE_VECTOR_SHARD_COUNT = 32;
 export const DEFAULT_KEYWORD_MIN_TOKEN_LENGTH = 3;
+export const DEFAULT_EMBEDDING_BATCH_SIZE = 32;
+export const DEFAULT_PDF_CHUNK_SIZE = 1400;
+export const DEFAULT_PDF_CHUNK_OVERLAP = 150;
 export const VECTOR_FLOAT_BYTES = 4;
 
 export interface IndexProfile {
@@ -46,6 +51,11 @@ export interface IndexProfile {
   sourceKinds?: Array<SourceReference["kind"]>;
   refreshMode: "manual" | "onStartup" | "onVaultChange";
   shardCount: typeof DEFAULT_FILE_VECTOR_SHARD_COUNT;
+  chunkSize: number;
+  chunkOverlap: number;
+  pdfChunkSize: number;
+  pdfChunkOverlap: number;
+  embeddingBatchSize: number;
   keywordIndex: {
     enabled: boolean;
     strategy: "source-shard";
@@ -160,11 +170,16 @@ interface FileVectorIndexState {
   chunksByShard: Map<string, StoredChunk[]>;
 }
 
+interface FileVectorIndexWriteChanges {
+  dirtyShardIds: Set<string>;
+  sourcesDirty: boolean;
+}
+
 const DEFAULT_PROFILE_ID = "default";
 const MANIFEST_FILE = "manifest.json";
 
 export class FileVectorIndexStore
-  implements IndexStore, SourceSnapshotIndexStore, KeywordSearchIndexStore
+  implements IndexStore, SourceSnapshotIndexStore, KeywordSearchIndexStore, AdjacentChunkIndexStore
 {
   private readonly folder: string;
   private readonly profileId: string;
@@ -193,7 +208,7 @@ export class FileVectorIndexStore
         shardCount: this.shardCount,
         now: this.now,
       });
-      await this.persistState(this.state);
+      await this.persistState(this.state, { dirtyShardIds: new Set(), sourcesDirty: true });
       return;
     }
 
@@ -220,57 +235,9 @@ export class FileVectorIndexStore
   }
 
   async upsert(chunks: EmbeddedChunk[]): Promise<void> {
-    if (chunks.length === 0) {
-      return;
-    }
-
-    const state = this.requireState();
-    const dimensions = state.manifest.embeddingDimensions;
-    const byId = new Map<string, EmbeddedChunk>();
-
-    for (const chunk of chunks) {
-      if (chunk.embedding.length !== dimensions) {
-        throwRebuildRequired({
-          reason: "embedding-dimensions-mismatch",
-          chunkId: chunk.id,
-          expected: dimensions,
-          actual: chunk.embedding.length,
-        });
-      }
-
-      byId.set(chunk.id, chunk);
-    }
-
-    const incomingSourcePaths = new Set(
-      Array.from(byId.values()).map((chunk) => sourcePathFromReference(chunk.source)),
-    );
-    for (const sourcePath of incomingSourcePaths) {
-      removeSourcePathFromState(state, sourcePath);
-    }
-
-    for (const chunk of byId.values()) {
-      const sourcePath = sourcePathFromReference(chunk.source);
-      const shardId = shardIdForSourcePath(sourcePath, state.manifest.shardCount);
-      const storedChunk: StoredChunk = {
-        row: {
-          id: chunk.id,
-          source: chunk.source,
-          sourcePath,
-          text: chunk.text,
-          contentHash: chunk.contentHash,
-          embeddingModel: chunk.embeddingModel,
-          vectorOffset: 0,
-          vectorLength: dimensions,
-        },
-        embedding: normalizeVector(chunk.embedding),
-      };
-      const shardChunks = state.chunksByShard.get(shardId) ?? [];
-      shardChunks.push(storedChunk);
-      state.chunksByShard.set(shardId, shardChunks);
-    }
-
-    refreshSources(state, this.now);
-    await this.persistState(state);
+    const writer = await this.beginWrite();
+    await writer.upsert(chunks);
+    await writer.commit();
   }
 
   async deleteBySourcePath(path: string): Promise<void> {
@@ -280,7 +247,8 @@ export class FileVectorIndexStore
       return;
     }
 
-    const removed = removeSourcePathFromState(state, path);
+    const changes = createWriteChanges();
+    const removed = removeSourcePathFromState(state, path, changes);
 
     if (!removed) {
       this.state = state;
@@ -288,8 +256,61 @@ export class FileVectorIndexStore
     }
 
     refreshSources(state, this.now);
-    await this.persistState(state);
+    changes.sourcesDirty = true;
+    await this.persistState(state, changes);
     this.state = state;
+  }
+
+  async beginWrite(): Promise<IndexStoreWriteSession> {
+    const state = this.requireState();
+    const changes = createWriteChanges();
+    let closed = false;
+
+    return {
+      upsert: async (chunks) => {
+        ensureWriterOpen();
+        applyUpsertChunks(state, chunks, changes, this.now);
+      },
+      deleteBySourcePath: async (path) => {
+        ensureWriterOpen();
+        if (removeSourcePathFromState(state, path, changes)) {
+          refreshSources(state, this.now);
+          changes.sourcesDirty = true;
+        }
+      },
+      updateSourceSnapshots: async (snapshots) => {
+        ensureWriterOpen();
+        applySourceSnapshotUpdates(state, snapshots);
+        if (snapshots.length > 0) {
+          changes.sourcesDirty = true;
+        }
+      },
+      recordFailedSourceSnapshots: async (snapshots) => {
+        ensureWriterOpen();
+        applyFailedSourceSnapshots(state, snapshots);
+        if (snapshots.length > 0) {
+          changes.sourcesDirty = true;
+        }
+      },
+      commit: async () => {
+        ensureWriterOpen();
+        closed = true;
+        await this.persistState(state, changes);
+        this.state = state;
+      },
+      rollback: () => {
+        closed = true;
+      },
+    };
+
+    function ensureWriterOpen(): void {
+      if (closed) {
+        throw new IxplorerError({
+          code: "INDEX_UNAVAILABLE",
+          message: "The file-backed index write session is already closed.",
+        });
+      }
+    }
   }
 
   async clear(): Promise<void> {
@@ -320,23 +341,8 @@ export class FileVectorIndexStore
     }
 
     const state = this.requireState();
-    const bySourcePath = new Map(snapshots.map((snapshot) => [snapshot.sourcePath, snapshot]));
-
-    state.sources = state.sources.map((source) => {
-      const snapshot = bySourcePath.get(source.sourcePath);
-
-      if (!snapshot) {
-        return source;
-      }
-
-      return {
-        ...source,
-        modifiedTime: snapshot.modifiedTime,
-        contentHash: snapshot.contentHash,
-      };
-    });
-
-    await this.persistState(state);
+    applySourceSnapshotUpdates(state, snapshots);
+    await this.persistState(state, { dirtyShardIds: new Set(), sourcesDirty: true });
   }
 
   async recordFailedSourceSnapshots(snapshots: IndexFailedSourceSnapshot[]): Promise<void> {
@@ -350,25 +356,8 @@ export class FileVectorIndexStore
       return;
     }
 
-    const bySourcePath = new Map(state.sources.map((source) => [source.sourcePath, source]));
-
-    for (const snapshot of snapshots) {
-      bySourcePath.set(snapshot.sourcePath, {
-        sourcePath: snapshot.sourcePath,
-        modifiedTime: snapshot.modifiedTime,
-        contentHash: "",
-        indexedAt: snapshot.indexedAt,
-        shardId: shardIdForSourcePath(snapshot.sourcePath, state.manifest.shardCount),
-        chunkCount: 0,
-        failed: true,
-        errorMessage: snapshot.errorMessage,
-      });
-    }
-
-    state.sources = Array.from(bySourcePath.values()).sort((left, right) =>
-      left.sourcePath.localeCompare(right.sourcePath),
-    );
-    await this.persistState(state);
+    applyFailedSourceSnapshots(state, snapshots);
+    await this.persistState(state, { dirtyShardIds: new Set(), sourcesDirty: true });
     this.state = state;
   }
 
@@ -474,6 +463,83 @@ export class FileVectorIndexStore
     return chunks;
   }
 
+  async expandAdjacentChunks(
+    chunks: RetrievedChunk[],
+    radius: number,
+    limit: number,
+  ): Promise<RetrievedChunk[]> {
+    if (radius <= 0 || chunks.length === 0 || limit <= 0) {
+      return chunks.slice(0, limit);
+    }
+
+    const state = this.state ?? (await this.loadExistingStateOrNull());
+
+    if (state === null) {
+      return chunks.slice(0, limit);
+    }
+
+    this.state = state;
+    const byId = new Map<string, StoredChunk>();
+    const bySourcePath = new Map<string, StoredChunk[]>();
+
+    for (const shardChunks of state.chunksByShard.values()) {
+      for (const chunk of shardChunks) {
+        const sourcePath = chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source);
+        byId.set(chunk.row.id, chunk);
+        const sourceChunks = bySourcePath.get(sourcePath) ?? [];
+        sourceChunks.push(chunk);
+        bySourcePath.set(sourcePath, sourceChunks);
+      }
+    }
+
+    for (const sourceChunks of bySourcePath.values()) {
+      sourceChunks.sort((left, right) => (left.row.chunkIndex ?? 0) - (right.row.chunkIndex ?? 0));
+    }
+
+    const expanded: RetrievedChunk[] = [];
+    const seen = new Set<string>();
+
+    for (const chunk of chunks) {
+      const stored = byId.get(chunk.id);
+
+      if (!stored) {
+        appendChunk(chunk);
+        continue;
+      }
+
+      const sourcePath = stored.row.sourcePath ?? sourcePathFromReference(stored.row.source);
+      const sourceChunks = bySourcePath.get(sourcePath) ?? [];
+      const index = sourceChunks.findIndex((candidate) => candidate.row.id === chunk.id);
+      const start = Math.max(0, index - radius);
+      const end = Math.min(sourceChunks.length, index + radius + 1);
+
+      for (const candidate of sourceChunks.slice(start, end)) {
+        appendChunk({
+          id: candidate.row.id,
+          source: candidate.row.source,
+          text: candidate.row.text,
+          contentHash: candidate.row.contentHash,
+          score: candidate.row.id === chunk.id ? chunk.score : chunk.score * 0.98,
+        });
+      }
+
+      if (expanded.length >= limit) {
+        break;
+      }
+    }
+
+    return expanded.slice(0, limit);
+
+    function appendChunk(chunk: RetrievedChunk): void {
+      if (seen.has(chunk.id) || expanded.length >= limit) {
+        return;
+      }
+
+      seen.add(chunk.id);
+      expanded.push(chunk);
+    }
+  }
+
   private async readManifest(): Promise<FileVectorManifest | null> {
     return readJsonIndexFile<FileVectorManifest | null>(
       this.pathFor(MANIFEST_FILE),
@@ -549,16 +615,22 @@ export class FileVectorIndexStore
     return { manifest, sources, chunksByShard };
   }
 
-  private async persistState(state: FileVectorIndexState): Promise<void> {
+  private async persistState(
+    state: FileVectorIndexState,
+    changes?: FileVectorIndexWriteChanges,
+  ): Promise<void> {
     const writeId = createWriteId(this.now);
     const updatedAt = this.now().toISOString();
     const shardManifests: FileVectorShardManifest[] = [];
-    const files: AtomicIndexFile[] = [
-      {
-        path: this.pathFor("sources.jsonl"),
-        data: toJsonl(state.sources),
-      },
-    ];
+    const files: AtomicIndexFile[] =
+      changes === undefined || changes.sourcesDirty
+        ? [
+            {
+              path: this.pathFor("sources.jsonl"),
+              data: toJsonl(state.sources),
+            },
+          ]
+        : [];
     let keywordIndexedChunkCount = 0;
 
     for (const shard of state.manifest.shards) {
@@ -569,6 +641,7 @@ export class FileVectorIndexStore
         chunkRows,
         state.manifest.keywordIndex.minTokenLength,
       );
+      const isDirty = changes === undefined || changes.dirtyShardIds.has(shard.id);
 
       keywordIndexedChunkCount += countIndexedKeywordChunks(keywordRows);
       shardManifests.push({
@@ -578,20 +651,22 @@ export class FileVectorIndexStore
         chunkCount: storedChunks.length,
         vectorByteLength: encoded.byteLength,
       });
-      files.push(
-        {
-          path: this.pathFor(shard.chunkMetadataFile),
-          data: toJsonl(chunkRows),
-        },
-        {
-          path: this.pathFor(shard.vectorFile),
-          data: encoded,
-        },
-        {
-          path: this.pathFor(`keywords/${shard.id}.terms.jsonl`),
-          data: toJsonl(keywordRows),
-        },
-      );
+      if (isDirty) {
+        files.push(
+          {
+            path: this.pathFor(shard.chunkMetadataFile),
+            data: toJsonl(chunkRows),
+          },
+          {
+            path: this.pathFor(shard.vectorFile),
+            data: encoded,
+          },
+          {
+            path: this.pathFor(`keywords/${shard.id}.terms.jsonl`),
+            data: toJsonl(keywordRows),
+          },
+        );
+      }
     }
 
     const manifest = createFileVectorManifest({
@@ -923,7 +998,126 @@ function createEmptyState(options: {
   };
 }
 
-function removeSourcePathFromState(state: FileVectorIndexState, sourcePath: string): boolean {
+function createWriteChanges(): FileVectorIndexWriteChanges {
+  return { dirtyShardIds: new Set(), sourcesDirty: false };
+}
+
+function applyUpsertChunks(
+  state: FileVectorIndexState,
+  chunks: EmbeddedChunk[],
+  changes: FileVectorIndexWriteChanges,
+  now: () => Date,
+): void {
+  if (chunks.length === 0) {
+    return;
+  }
+
+  const dimensions = state.manifest.embeddingDimensions;
+  const byId = new Map<string, EmbeddedChunk>();
+
+  for (const chunk of chunks) {
+    if (chunk.embedding.length !== dimensions) {
+      throwRebuildRequired({
+        reason: "embedding-dimensions-mismatch",
+        chunkId: chunk.id,
+        expected: dimensions,
+        actual: chunk.embedding.length,
+      });
+    }
+
+    byId.set(chunk.id, chunk);
+  }
+
+  removeChunkIdsFromState(state, new Set(byId.keys()), changes);
+  const chunkIndexBySourcePath = nextChunkIndexBySourcePath(state);
+
+  for (const chunk of byId.values()) {
+    const sourcePath = sourcePathFromReference(chunk.source);
+    const shardId = shardIdForSourcePath(sourcePath, state.manifest.shardCount);
+    const chunkIndex = chunkIndexBySourcePath.get(sourcePath) ?? 0;
+    chunkIndexBySourcePath.set(sourcePath, chunkIndex + 1);
+    const storedChunk: StoredChunk = {
+      row: {
+        id: chunk.id,
+        source: chunk.source,
+        sourcePath,
+        text: chunk.text,
+        contentHash: chunk.contentHash,
+        embeddingModel: chunk.embeddingModel,
+        vectorOffset: 0,
+        vectorLength: dimensions,
+        chunkIndex,
+      },
+      embedding: normalizeVector(chunk.embedding),
+    };
+    const shardChunks = state.chunksByShard.get(shardId) ?? [];
+    shardChunks.push(storedChunk);
+    state.chunksByShard.set(shardId, shardChunks);
+    changes.dirtyShardIds.add(shardId);
+  }
+
+  refreshSources(state, now);
+  changes.sourcesDirty = true;
+}
+
+function applySourceSnapshotUpdates(
+  state: FileVectorIndexState,
+  snapshots: IndexSourceSnapshot[],
+): void {
+  if (snapshots.length === 0) {
+    return;
+  }
+
+  const bySourcePath = new Map(snapshots.map((snapshot) => [snapshot.sourcePath, snapshot]));
+
+  state.sources = state.sources.map((source) => {
+    const snapshot = bySourcePath.get(source.sourcePath);
+
+    if (!snapshot) {
+      return source;
+    }
+
+    return {
+      ...source,
+      modifiedTime: snapshot.modifiedTime,
+      contentHash: snapshot.contentHash,
+    };
+  });
+}
+
+function applyFailedSourceSnapshots(
+  state: FileVectorIndexState,
+  snapshots: IndexFailedSourceSnapshot[],
+): void {
+  if (snapshots.length === 0) {
+    return;
+  }
+
+  const bySourcePath = new Map(state.sources.map((source) => [source.sourcePath, source]));
+
+  for (const snapshot of snapshots) {
+    bySourcePath.set(snapshot.sourcePath, {
+      sourcePath: snapshot.sourcePath,
+      modifiedTime: snapshot.modifiedTime,
+      contentHash: "",
+      indexedAt: snapshot.indexedAt,
+      shardId: shardIdForSourcePath(snapshot.sourcePath, state.manifest.shardCount),
+      chunkCount: 0,
+      failed: true,
+      errorMessage: snapshot.errorMessage,
+    });
+  }
+
+  state.sources = Array.from(bySourcePath.values()).sort((left, right) =>
+    left.sourcePath.localeCompare(right.sourcePath),
+  );
+}
+
+function removeSourcePathFromState(
+  state: FileVectorIndexState,
+  sourcePath: string,
+  changes?: FileVectorIndexWriteChanges,
+): boolean {
   let removed = false;
 
   for (const [shardId, chunks] of state.chunksByShard.entries()) {
@@ -931,6 +1125,7 @@ function removeSourcePathFromState(state: FileVectorIndexState, sourcePath: stri
 
     if (retained.length !== chunks.length) {
       removed = true;
+      changes?.dirtyShardIds.add(shardId);
       state.chunksByShard.set(shardId, retained);
     }
   }
@@ -940,6 +1135,40 @@ function removeSourcePathFromState(state: FileVectorIndexState, sourcePath: stri
   }
 
   return removed;
+}
+
+function removeChunkIdsFromState(
+  state: FileVectorIndexState,
+  chunkIds: Set<string>,
+  changes?: FileVectorIndexWriteChanges,
+): boolean {
+  let removed = false;
+
+  for (const [shardId, chunks] of state.chunksByShard.entries()) {
+    const retained = chunks.filter((chunk) => !chunkIds.has(chunk.row.id));
+
+    if (retained.length !== chunks.length) {
+      removed = true;
+      changes?.dirtyShardIds.add(shardId);
+      state.chunksByShard.set(shardId, retained);
+    }
+  }
+
+  return removed;
+}
+
+function nextChunkIndexBySourcePath(state: FileVectorIndexState): Map<string, number> {
+  const bySourcePath = new Map<string, number>();
+
+  for (const chunks of state.chunksByShard.values()) {
+    for (const chunk of chunks) {
+      const sourcePath = chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source);
+      const nextIndex = (chunk.row.chunkIndex ?? 0) + 1;
+      bySourcePath.set(sourcePath, Math.max(bySourcePath.get(sourcePath) ?? 0, nextIndex));
+    }
+  }
+
+  return bySourcePath;
 }
 
 function refreshSources(state: FileVectorIndexState, now: () => Date): void {

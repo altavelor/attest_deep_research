@@ -59,6 +59,42 @@ export function formatProgressPercent(progress: number): string {
   return `${Math.round(bounded * 100)}%`;
 }
 
+export function indexingProgressValue(state: IndexingState): number {
+  if (
+    state.phase === "embedding" &&
+    isPositiveCount(state.chunksTotal) &&
+    state.chunksEmbedded !== undefined
+  ) {
+    return state.chunksEmbedded / state.chunksTotal;
+  }
+
+  if (
+    isPositiveCount(state.bytesTotal) &&
+    state.bytesProcessed !== undefined &&
+    (state.phase === "scanning" || state.phase === "checking" || state.phase === "extracting")
+  ) {
+    return state.bytesProcessed / state.bytesTotal;
+  }
+
+  return state.progress;
+}
+
+export function formatIndexingProgressLabel(state: IndexingState): string {
+  if (state.phase === "embedding" && isPositiveCount(state.chunksTotal)) {
+    const chunks = `${state.chunksEmbedded ?? 0} of ${state.chunksTotal} chunks`;
+    const batches =
+      state.embeddingBatchesTotal && state.embeddingBatchesCompleted !== undefined
+        ? ` · ${state.embeddingBatchesCompleted} of ${state.embeddingBatchesTotal} batches`
+        : "";
+
+    return `${formatPhase(state.phase)} · ${chunks}${batches}${formatCurrentFile(state)}`;
+  }
+
+  return `${formatPhase(state.phase)} · ${state.scannedFiles} of ${
+    state.totalFiles
+  } files${formatCurrentFile(state)}`;
+}
+
 export function citationTarget(citation: Citation): CitationTarget {
   switch (citation.source.kind) {
     case "markdown":
@@ -111,4 +147,41 @@ function formatDate(value: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatPhase(phase: IndexingState["phase"]): string {
+  switch (phase) {
+    case "scanning":
+      return "Scanning";
+    case "checking":
+      return "Checking changes";
+    case "extracting":
+      return "Extracting";
+    case "chunking":
+      return "Chunking";
+    case "embedding":
+      return "Embedding";
+    case "writing":
+      return "Writing index";
+    case "complete":
+      return "Complete";
+    default:
+      return "Indexing";
+  }
+}
+
+function formatCurrentFile(state: IndexingState): string {
+  return state.currentFile ? ` · ${shortenPath(state.currentFile)}` : "";
+}
+
+function shortenPath(path: string): string {
+  if (path.length <= 64) {
+    return path;
+  }
+
+  return `...${path.slice(-61)}`;
+}
+
+function isPositiveCount(value: number | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }

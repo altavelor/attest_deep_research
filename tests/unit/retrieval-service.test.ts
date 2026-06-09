@@ -25,8 +25,8 @@ describe("RetrievalService", () => {
       service.search("local models", { limit: 2, includeWebResults: false }),
     ).resolves.toEqual({
       chunks: [
-        expect.objectContaining({ id: "semantic-near", score: 0.9 }),
-        expect.objectContaining({ id: "semantic-far", score: 0.4 }),
+        expect.objectContaining({ id: "semantic-near" }),
+        expect.objectContaining({ id: "semantic-far" }),
       ],
       citations: [
         expect.objectContaining({ id: "semantic-near", label: "Research/ai.md > Models" }),
@@ -34,7 +34,7 @@ describe("RetrievalService", () => {
       ],
       usedFallback: false,
     });
-    expect(indexStore.queries).toEqual([{ embedding: [1, 0], limit: 2 }]);
+    expect(indexStore.queries).toEqual([{ embedding: [1, 0], limit: 8 }]);
     expect(indexStore.initializations).toEqual([
       { embeddingModel: "nomic", embeddingDimensions: 2 },
     ]);
@@ -59,7 +59,7 @@ describe("RetrievalService", () => {
     await expect(
       service.search("local retrieval", { limit: 1, includeWebResults: false }),
     ).resolves.toEqual({
-      chunks: [expect.objectContaining({ id: "fallback-match", score: 2 })],
+      chunks: [expect.objectContaining({ id: "fallback-match" })],
       citations: [expect.objectContaining({ id: "fallback-match" })],
       usedFallback: true,
     });
@@ -123,6 +123,45 @@ describe("RetrievalService", () => {
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["store-keyword"]);
     expect(indexStore.keywordQueries).toEqual(["local"]);
+  });
+
+  it("fuses semantic and keyword candidates before applying the final limit", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("semantic", markdownSource("Research/semantic.md"), "semantic match", 0.9),
+    ]);
+    indexStore.keywordResults = [
+      retrieved("keyword", markdownSource("Research/keyword.md"), "keyword match", 3),
+    ];
+    const service = new RetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const result = await service.search("local", { limit: 2, includeWebResults: false });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["semantic", "keyword"]);
+  });
+
+  it("expands adjacent chunks when the index store supports it", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
+    ]);
+    indexStore.adjacentResults = [
+      retrieved("before", markdownSource("Research/a.md"), "before", 0.8),
+      retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
+    ];
+    const service = new RetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const result = await service.search("local", { limit: 2, includeWebResults: false });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["before", "hit"]);
   });
 });
 
@@ -236,6 +275,7 @@ class FakeIndexStore implements IndexStore {
   queries: Array<{ embedding: number[]; limit: number }> = [];
   keywordQueries: string[] = [];
   keywordResults: RetrievedChunk[] = [];
+  adjacentResults: RetrievedChunk[] = [];
 
   constructor(private readonly chunks: RetrievedChunk[]) {}
 
@@ -260,5 +300,9 @@ class FakeIndexStore implements IndexStore {
   async searchKeywords(query: string): Promise<RetrievedChunk[]> {
     this.keywordQueries.push(query);
     return this.keywordResults;
+  }
+
+  async expandAdjacentChunks(chunks: RetrievedChunk[]): Promise<RetrievedChunk[]> {
+    return this.adjacentResults.length > 0 ? this.adjacentResults : chunks;
   }
 }

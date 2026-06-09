@@ -162,12 +162,32 @@ export default class IxplorerPlugin extends Plugin {
     return new IndexingService({
       files: new ObsidianVaultFileProvider(this.app.vault),
       extractors: [
-        MarkdownExtractor.fromSettings(this.settings),
-        new TextExtractor(),
-        new PdfExtractor(),
-        new EpubExtractor(),
-        new Fb2Extractor(),
-        new DocxExtractor(),
+        new MarkdownExtractor({
+          includeFolders: indexProfile.includeFolders,
+          excludeGlobs: indexProfile.excludeGlobs,
+          maxChunkLength: indexProfile.chunkSize,
+          chunkOverlap: indexProfile.chunkOverlap,
+        }),
+        new TextExtractor({
+          maxChunkLength: indexProfile.chunkSize,
+          chunkOverlap: indexProfile.chunkOverlap,
+        }),
+        new PdfExtractor({
+          maxChunkLength: indexProfile.pdfChunkSize,
+          chunkOverlap: indexProfile.pdfChunkOverlap,
+        }),
+        new EpubExtractor({
+          maxChunkLength: indexProfile.chunkSize,
+          chunkOverlap: indexProfile.chunkOverlap,
+        }),
+        new Fb2Extractor({
+          maxChunkLength: indexProfile.chunkSize,
+          chunkOverlap: indexProfile.chunkOverlap,
+        }),
+        new DocxExtractor({
+          maxChunkLength: indexProfile.chunkSize,
+          chunkOverlap: indexProfile.chunkOverlap,
+        }),
       ],
       embeddings,
       indexStore: new FileVectorIndexStore({
@@ -178,7 +198,9 @@ export default class IxplorerPlugin extends Plugin {
       embeddingModel: indexProfile.embeddingModel,
       includeFolders: indexProfile.includeFolders,
       excludeGlobs: indexProfile.excludeGlobs,
+      batchSize: indexProfile.embeddingBatchSize,
       onProgress,
+      logger: this.logger,
     });
   }
 

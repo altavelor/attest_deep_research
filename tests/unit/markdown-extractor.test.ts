@@ -89,4 +89,16 @@ describe("MarkdownExtractor", () => {
       ),
     ).toBe(true);
   });
+
+  it("can overlap adjacent chunks to preserve boundary context", () => {
+    const chunks = chunkMarkdown({
+      path: "Research/overlap.md",
+      text: `# Overlap\n\n${["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"].join(" ")}`,
+      maxChunkLength: 22,
+      chunkOverlap: 8,
+    });
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[1].text).toContain("charlie");
+  });
 });
