@@ -66,6 +66,8 @@ class FakeIndexingService {
     indexedFiles: 0,
     skippedFiles: 0,
     embeddedChunks: 0,
+    deferredFiles: 0,
+    failedFiles: 0,
     isStale: false,
   };
 

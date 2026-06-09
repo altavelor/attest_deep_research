@@ -1,6 +1,6 @@
 # Ixplorer
 
-Local-first research assistant for Obsidian desktop. Ixplorer indexes selected vault files into a vault-local LanceDB folder, retrieves cited evidence, streams answers from a local LM Studio or Ollama-compatible chat model, and can optionally fetch the first DuckDuckGo result for a user-initiated web query.
+Local-first research assistant for Obsidian desktop. Ixplorer indexes selected vault files into a vault-local file-backed vector index, retrieves cited evidence, streams answers from a local LM Studio or Ollama-compatible chat model, and can optionally fetch the first DuckDuckGo result for a user-initiated web query.
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ Local-first research assistant for Obsidian desktop. Ixplorer indexes selected v
 | Chat model                  | empty                                       | Set this to the loaded local chat model name.              |
 | Embedding provider base URL | `http://localhost:11434`                    | Local LM Studio or Ollama embedding endpoint.              |
 | Embedding model             | empty                                       | Set this to the embedding model available at the endpoint. |
-| LanceDB folder              | `.ixplorer/index`                           | Vault-local vector index storage.                          |
+| Index folder                | `.ixplorer/index`                           | Vault-local file-backed vector index storage.              |
 | Included folders            | `/`                                         | One vault folder per line. `/` means the whole vault.      |
 | Excluded globs              | `.obsidian/**`, `.trash/**`, `.ixplorer/**` | One glob pattern per line.                                 |
 | DuckDuckGo                  | disabled                                    | External search is opt-in and user-initiated.              |
@@ -94,7 +94,7 @@ DuckDuckGo search is disabled by default. When enabled and selected in the chat 
 
 ## Privacy Notes
 
-- Vault content, embeddings, and the LanceDB index stay local by default.
+- Vault content, embeddings, chunk metadata, keyword postings, and vector files stay local by default.
 - Local chat and embedding calls go only to the configured local endpoints.
 - DuckDuckGo is external, disabled by default, and receives only the user query when the user opts in.
 - Ixplorer does not log full note, PDF, document, or generated answer content by default.
@@ -111,4 +111,4 @@ Use [docs/manual-test-checklist.md](docs/manual-test-checklist.md) before a deve
 - SearXNG is planned for later; DuckDuckGo is the only web search provider in the first release.
 - Web search fetches only the first DuckDuckGo result.
 - Cloud LLM providers are not supported in the first release.
-- Release packaging for LanceDB native dependencies needs a final manual check before distribution.
+- After upgrading from a LanceDB-backed development build, rebuild the local index so Ixplorer creates the new file-backed manifest, source snapshots, chunk metadata, keyword postings, and vector files.

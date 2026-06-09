@@ -17,13 +17,14 @@ import {
   CHAT_PROVIDER_DESCRIPTION,
   DUCK_DUCK_GO_DESCRIPTION,
   EMBEDDING_PROVIDER_DESCRIPTION,
-  LANCEDB_FOLDER_DESCRIPTION,
+  INDEX_FOLDER_DESCRIPTION,
 } from "./privacyCopy";
 import {
   formatListInput,
   normalizeListInput,
   normalizeUrl,
   normalizeVaultFolder,
+  updateActiveIndexProfile,
 } from "./settings";
 
 type ModelSettingsSectionKind = "chat" | "embedding";
@@ -164,6 +165,12 @@ export class IxplorerSettingTab extends PluginSettingTab {
               value,
               this.plugin.defaultSettings[config.providerSettingKey],
             );
+            if (config.kind === "embedding") {
+              updateActiveIndexProfile(this.plugin.settings, {
+                embeddingProviderBaseUrl: this.plugin.settings.embeddingProviderBaseUrl,
+              });
+              this.plugin.markIndexStale();
+            }
             this.clearModelSectionConnectionState(config.kind);
             updateProviderBadge();
             updateModelOptions();
@@ -218,7 +225,12 @@ export class IxplorerSettingTab extends PluginSettingTab {
           .setPlaceholder(config.modelPlaceholder)
           .setValue(this.plugin.settings[config.modelSettingKey])
           .onChange(async (value) => {
-            this.plugin.settings[config.modelSettingKey] = value.trim();
+            const model = value.trim();
+            this.plugin.settings[config.modelSettingKey] = model;
+            if (config.kind === "embedding") {
+              updateActiveIndexProfile(this.plugin.settings, { embeddingModel: model });
+              this.plugin.markIndexStale();
+            }
             await this.plugin.saveSettings();
           });
         modelInput.inputEl.addClass("ixplorer-settings__text-input");
@@ -231,6 +243,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
           emptyText: "Refresh models first",
           onSelect: async (model) => {
             this.plugin.settings[config.modelSettingKey] = model.trim();
+            if (config.kind === "embedding") {
+              updateActiveIndexProfile(this.plugin.settings, { embeddingModel: model.trim() });
+              this.plugin.markIndexStale();
+            }
             await this.plugin.saveSettings();
           },
         });
@@ -326,14 +342,16 @@ export class IxplorerSettingTab extends PluginSettingTab {
     renderCurrentIndexControl();
 
     new Setting(containerEl)
-      .setName("LanceDB folder")
-      .setDesc(LANCEDB_FOLDER_DESCRIPTION)
+      .setName("Index folder")
+      .setDesc(INDEX_FOLDER_DESCRIPTION)
       .addText((text) =>
         text
           .setPlaceholder(".ixplorer/index")
           .setValue(this.plugin.settings.lanceDbFolder)
           .onChange(async (value) => {
-            this.plugin.settings.lanceDbFolder = normalizeVaultFolder(value);
+            const indexFolder = normalizeVaultFolder(value);
+            this.plugin.settings.lanceDbFolder = indexFolder;
+            updateActiveIndexProfile(this.plugin.settings, { indexFolder });
             await this.plugin.saveSettings();
             this.plugin.markIndexStale();
           }),
@@ -349,6 +367,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
             const folders = normalizeListInput(value);
             this.plugin.settings.includeFolders =
               folders.length > 0 ? folders : [...this.plugin.defaultSettings.includeFolders];
+            updateActiveIndexProfile(this.plugin.settings, {
+              includeFolders: this.plugin.settings.includeFolders,
+            });
             await this.plugin.saveSettings();
             this.plugin.markIndexStale();
           }),
@@ -364,6 +385,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
             const globs = normalizeListInput(value);
             this.plugin.settings.excludeGlobs =
               globs.length > 0 ? globs : [...this.plugin.defaultSettings.excludeGlobs];
+            updateActiveIndexProfile(this.plugin.settings, {
+              excludeGlobs: this.plugin.settings.excludeGlobs,
+            });
             await this.plugin.saveSettings();
             this.plugin.markIndexStale();
           }),
