@@ -17,7 +17,7 @@ describe("file vector index format", () => {
     });
 
     expect(manifest).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       format: "ixplorer-file-vector-index",
       profileId: "default",
       embeddingModel: "nomic",
@@ -39,7 +39,7 @@ describe("file vector index format", () => {
       vectorByteLength: 0,
     });
     expect(manifest.keywordIndex).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       tokenizer: "simple-lowercase",
       strategy: "source-shard",
       minTokenLength: 3,

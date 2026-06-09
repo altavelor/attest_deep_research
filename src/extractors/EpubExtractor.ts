@@ -2,6 +2,7 @@ import { ExtractedChunk, Extractor, ExtractorInput } from "../shared/types";
 import {
   createDocumentChunks,
   decodeXmlEntities,
+  DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_LENGTH,
   DocumentExtractorOptions,
   extractionFailed,
@@ -16,9 +17,11 @@ interface ManifestItem {
 
 export class EpubExtractor implements Extractor {
   private readonly maxChunkLength: number;
+  private readonly chunkOverlap: number;
 
   constructor(options: DocumentExtractorOptions = {}) {
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
+    this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
 
   supports(path: string): boolean {
@@ -54,6 +57,7 @@ export class EpubExtractor implements Extractor {
         format: "epub",
         text,
         maxChunkLength: this.maxChunkLength,
+        chunkOverlap: this.chunkOverlap,
       });
     } catch (error) {
       throw extractionFailed("epub", input.path, error);

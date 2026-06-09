@@ -5,6 +5,7 @@ export interface MarkdownChunkOptions {
   path: string;
   text: string;
   maxChunkLength?: number;
+  chunkOverlap?: number;
 }
 
 interface MarkdownSection {
@@ -22,13 +23,14 @@ export function chunkMarkdown(options: MarkdownChunkOptions): ExtractedChunk[] {
   const sections = parseMarkdownSections(content.text, content.startOffset);
 
   return sections.flatMap((section) =>
-    splitText(section.text, maxChunkLength, section.startOffset).map((part, index) =>
-      createMarkdownChunk({
-        path: options.path,
-        section,
-        part,
-        chunkIndex: index,
-      }),
+    splitText(section.text, maxChunkLength, section.startOffset, options.chunkOverlap).map(
+      (part, index) =>
+        createMarkdownChunk({
+          path: options.path,
+          section,
+          part,
+          chunkIndex: index,
+        }),
     ),
   );
 }

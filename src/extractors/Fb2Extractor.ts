@@ -1,6 +1,7 @@
 import { ExtractedChunk, Extractor, ExtractorInput } from "../shared/types";
 import {
   createDocumentChunks,
+  DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_LENGTH,
   DocumentExtractorOptions,
   extractionFailed,
@@ -11,9 +12,11 @@ import {
 
 export class Fb2Extractor implements Extractor {
   private readonly maxChunkLength: number;
+  private readonly chunkOverlap: number;
 
   constructor(options: DocumentExtractorOptions = {}) {
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
+    this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
 
   supports(path: string): boolean {
@@ -38,6 +41,7 @@ export class Fb2Extractor implements Extractor {
         format: "fb2",
         text: stripXmlTags(body),
         maxChunkLength: this.maxChunkLength,
+        chunkOverlap: this.chunkOverlap,
       });
     } catch (error) {
       throw extractionFailed("fb2", input.path, error);

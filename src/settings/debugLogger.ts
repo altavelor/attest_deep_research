@@ -1,4 +1,9 @@
 import { IxplorerError } from "../shared/errors";
+import type {
+  IndexingFileLogEvent,
+  IndexingLogger,
+  IndexingPerformanceLogEvent,
+} from "../indexing/IndexingService";
 import type { IxplorerSettings } from "./settings";
 
 export interface RequestLogContext {
@@ -25,7 +30,7 @@ export interface PluginDebugLoggerOptions {
   console?: Pick<Console, "debug" | "error">;
 }
 
-export class PluginDebugLogger implements PluginRequestLogger {
+export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
   private readonly getSettings: () => IxplorerSettings;
   private readonly console: Pick<Console, "debug" | "error">;
   private readonly loggedErrors = new WeakSet<object>();
@@ -74,6 +79,32 @@ export class PluginDebugLogger implements PluginRequestLogger {
       context,
       error: serializeError(error),
       settings: this.getSettings(),
+    });
+  }
+
+  logIndexingFile(event: IndexingFileLogEvent): void {
+    const settings = this.getSettings();
+
+    if (!settings.debugMode) {
+      return;
+    }
+
+    this.console.debug("[Ixplorer] Indexing file", {
+      ...event,
+      settings,
+    });
+  }
+
+  logIndexingPerformance(event: IndexingPerformanceLogEvent): void {
+    const settings = this.getSettings();
+
+    if (!settings.debugMode) {
+      return;
+    }
+
+    this.console.debug("[Ixplorer] Indexing performance", {
+      ...event,
+      settings,
     });
   }
 }

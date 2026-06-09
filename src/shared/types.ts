@@ -129,6 +129,16 @@ export interface IndexStore {
   deleteBySourcePath(path: string): Promise<void>;
   clear(): Promise<void>;
   query(embedding: number[], limit: number): Promise<RetrievedChunk[]>;
+  beginWrite?(): Promise<IndexStoreWriteSession>;
+}
+
+export interface IndexStoreWriteSession {
+  upsert(chunks: EmbeddedChunk[]): Promise<void>;
+  deleteBySourcePath(path: string): Promise<void>;
+  updateSourceSnapshots?(snapshots: IndexSourceSnapshot[]): Promise<void>;
+  recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): void;
 }
 
 export interface IndexSourceSnapshot {
@@ -160,6 +170,14 @@ export interface RetrievalOptions {
 
 export interface KeywordSearchIndexStore {
   searchKeywords(query: string, options: RetrievalOptions): Promise<RetrievedChunk[]>;
+}
+
+export interface AdjacentChunkIndexStore {
+  expandAdjacentChunks(
+    chunks: RetrievedChunk[],
+    radius: number,
+    limit: number,
+  ): Promise<RetrievedChunk[]>;
 }
 
 export interface Retriever {

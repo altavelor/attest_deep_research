@@ -21,6 +21,7 @@ import {
 } from "./privacyCopy";
 import {
   formatListInput,
+  getActiveIndexProfile,
   normalizeListInput,
   normalizeUrl,
   normalizeVaultFolder,
@@ -376,6 +377,101 @@ export class IxplorerSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Chunk size")
+      .setDesc("Approximate characters per indexed chunk. Rebuild the index after changing it.")
+      .addText((text) =>
+        text
+          .setPlaceholder("800")
+          .setValue(String(getActiveIndexProfile(this.plugin.settings).chunkSize))
+          .onChange(async (value) => {
+            const chunkSize = positiveInteger(value);
+            if (!chunkSize) {
+              return;
+            }
+
+            updateActiveIndexProfile(this.plugin.settings, { chunkSize });
+            await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Chunk overlap")
+      .setDesc("Characters repeated into the next chunk. Rebuild the index after changing it.")
+      .addText((text) =>
+        text
+          .setPlaceholder("120")
+          .setValue(String(getActiveIndexProfile(this.plugin.settings).chunkOverlap))
+          .onChange(async (value) => {
+            const chunkOverlap = nonNegativeInteger(value);
+            if (chunkOverlap === null) {
+              return;
+            }
+
+            updateActiveIndexProfile(this.plugin.settings, { chunkOverlap });
+            await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Embedding batch size")
+      .setDesc("Texts sent per embedding request. Lower it for Ollama if requests time out.")
+      .addText((text) =>
+        text
+          .setPlaceholder("32")
+          .setValue(String(getActiveIndexProfile(this.plugin.settings).embeddingBatchSize))
+          .onChange(async (value) => {
+            const embeddingBatchSize = positiveInteger(value);
+            if (!embeddingBatchSize) {
+              return;
+            }
+
+            updateActiveIndexProfile(this.plugin.settings, { embeddingBatchSize });
+            await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("PDF chunk size")
+      .setDesc("Approximate characters per PDF chunk. Larger chunks reduce embedding requests.")
+      .addText((text) =>
+        text
+          .setPlaceholder("1400")
+          .setValue(String(getActiveIndexProfile(this.plugin.settings).pdfChunkSize))
+          .onChange(async (value) => {
+            const pdfChunkSize = positiveInteger(value);
+            if (!pdfChunkSize) {
+              return;
+            }
+
+            updateActiveIndexProfile(this.plugin.settings, { pdfChunkSize });
+            await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("PDF chunk overlap")
+      .setDesc("Characters repeated into the next PDF chunk.")
+      .addText((text) =>
+        text
+          .setPlaceholder("150")
+          .setValue(String(getActiveIndexProfile(this.plugin.settings).pdfChunkOverlap))
+          .onChange(async (value) => {
+            const pdfChunkOverlap = nonNegativeInteger(value);
+            if (pdfChunkOverlap === null) {
+              return;
+            }
+
+            updateActiveIndexProfile(this.plugin.settings, { pdfChunkOverlap });
+            await this.plugin.saveSettings();
+            this.plugin.markIndexStale();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName("Excluded globs")
       .setDesc("One glob pattern per line.")
       .addTextArea((text) =>
@@ -407,4 +503,16 @@ export class IxplorerSettingTab extends PluginSettingTab {
         }),
       );
   }
+}
+
+function positiveInteger(value: string): number | null {
+  const parsed = Number.parseInt(value.trim(), 10);
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function nonNegativeInteger(value: string): number | null {
+  const parsed = Number.parseInt(value.trim(), 10);
+
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }

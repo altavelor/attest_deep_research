@@ -6,6 +6,7 @@ import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "../shar
 
 export interface DocumentExtractorOptions {
   maxChunkLength?: number;
+  chunkOverlap?: number;
 }
 
 export interface TextPart {
@@ -14,13 +15,25 @@ export interface TextPart {
   endOffset: number;
 }
 
-export const DEFAULT_CHUNK_LENGTH = 1_600;
+export const DEFAULT_CHUNK_LENGTH = 800;
+export const DEFAULT_CHUNK_OVERLAP = 120;
+
+export function normalizeChunkOverlap(maxChunkLength: number, chunkOverlap?: number): number {
+  const requestedOverlap = chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
+
+  if (!Number.isFinite(requestedOverlap) || requestedOverlap <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.floor(requestedOverlap), Math.max(0, maxChunkLength - 1));
+}
 
 export function createDocumentChunks(options: {
   path: string;
   format: DocumentFormat;
   text: string;
   maxChunkLength: number;
+  chunkOverlap?: number;
 }): ExtractedChunk[] {
   const normalizedText = normalizeText(options.text);
 
@@ -30,27 +43,29 @@ export function createDocumentChunks(options: {
 
   const title = fileNameFromPath(options.path);
 
-  return splitText(normalizedText, options.maxChunkLength).map((part, index) => {
-    const sourceId = stableId(
-      `${options.path}:${options.format}:${part.startOffset}:${part.endOffset}:${index}`,
-    );
-    const source: DocumentSourceReference = {
-      id: sourceId,
-      kind: "document",
-      path: options.path,
-      title,
-      format: options.format,
-      startOffset: part.startOffset,
-      endOffset: part.endOffset,
-    };
+  return splitText(normalizedText, options.maxChunkLength, 0, options.chunkOverlap).map(
+    (part, index) => {
+      const sourceId = stableId(
+        `${options.path}:${options.format}:${part.startOffset}:${part.endOffset}:${index}`,
+      );
+      const source: DocumentSourceReference = {
+        id: sourceId,
+        kind: "document",
+        path: options.path,
+        title,
+        format: options.format,
+        startOffset: part.startOffset,
+        endOffset: part.endOffset,
+      };
 
-    return {
-      id: sourceId,
-      source,
-      text: part.text,
-      contentHash: stableId(part.text),
-    };
-  });
+      return {
+        id: sourceId,
+        source,
+        text: part.text,
+        contentHash: stableId(part.text),
+      };
+    },
+  );
 }
 
 export function readInputText(data: ArrayBuffer | string): string {
@@ -191,9 +206,15 @@ function inflateZipEntry(data: Buffer, method: number): Buffer {
   throw new Error(`Unsupported ZIP compression method: ${method}`);
 }
 
-export function splitText(text: string, maxChunkLength: number, baseOffset = 0): TextPart[] {
+export function splitText(
+  text: string,
+  maxChunkLength: number,
+  baseOffset = 0,
+  chunkOverlap = DEFAULT_CHUNK_OVERLAP,
+): TextPart[] {
   const paragraphs = splitParagraphs(text, baseOffset);
   const parts: TextPart[] = [];
+  const normalizedOverlap = normalizeChunkOverlap(maxChunkLength, chunkOverlap);
   let currentText = "";
   let currentStartOffset = 0;
   let currentEndOffset = 0;
@@ -201,7 +222,7 @@ export function splitText(text: string, maxChunkLength: number, baseOffset = 0):
   for (const paragraph of paragraphs) {
     if (paragraph.text.length > maxChunkLength) {
       flushCurrent();
-      parts.push(...splitLongText(paragraph, maxChunkLength));
+      parts.push(...splitLongText(paragraph, maxChunkLength, normalizedOverlap));
       continue;
     }
 
@@ -222,7 +243,7 @@ export function splitText(text: string, maxChunkLength: number, baseOffset = 0):
 
   flushCurrent();
 
-  return parts;
+  return addChunkOverlap(parts, maxChunkLength, normalizedOverlap);
 
   function flushCurrent(): void {
     if (!currentText) {
@@ -234,6 +255,7 @@ export function splitText(text: string, maxChunkLength: number, baseOffset = 0):
       startOffset: currentStartOffset,
       endOffset: currentEndOffset,
     });
+
     currentText = "";
   }
 }
@@ -260,20 +282,90 @@ function splitParagraphs(text: string, baseOffset: number): TextPart[] {
   return paragraphs;
 }
 
-function splitLongText(part: TextPart, maxChunkLength: number): TextPart[] {
+function splitLongText(part: TextPart, maxChunkLength: number, chunkOverlap = 0): TextPart[] {
   const chunks: TextPart[] = [];
+  const step = Math.max(
+    1,
+    maxChunkLength - Math.max(0, Math.min(chunkOverlap, maxChunkLength - 1)),
+  );
 
-  for (let start = 0; start < part.text.length; start += maxChunkLength) {
-    const text = part.text.slice(start, start + maxChunkLength).trim();
+  for (let start = 0; start < part.text.length; start += step) {
+    const adjustedStart = start === 0 ? 0 : alignToWordStart(part.text, start);
+    const rawText = part.text.slice(adjustedStart, adjustedStart + maxChunkLength);
+    const leadingWhitespaceLength = rawText.length - rawText.trimStart().length;
+    const text = rawText.trim();
 
     if (text) {
       chunks.push({
         text,
-        startOffset: part.startOffset + start,
-        endOffset: part.startOffset + start + text.length,
+        startOffset: part.startOffset + adjustedStart + leadingWhitespaceLength,
+        endOffset: part.startOffset + adjustedStart + leadingWhitespaceLength + text.length,
       });
     }
   }
 
   return chunks;
+}
+
+function alignToWordStart(text: string, start: number): number {
+  if (start <= 0 || /\s/.test(text[start] ?? "") || /\s/.test(text[start - 1] ?? "")) {
+    return start;
+  }
+
+  for (let index = start - 1; index >= 0; index -= 1) {
+    if (/\s/.test(text[index])) {
+      return index + 1;
+    }
+  }
+
+  return start;
+}
+
+function addChunkOverlap(
+  parts: TextPart[],
+  maxChunkLength: number,
+  chunkOverlap: number,
+): TextPart[] {
+  if (chunkOverlap <= 0 || parts.length <= 1) {
+    return parts;
+  }
+
+  return parts.map((part, index) => {
+    if (index === 0) {
+      return part;
+    }
+
+    const previous = parts[index - 1];
+    const separatorLength = 2;
+    const availableOverlap = maxChunkLength - part.text.length - separatorLength;
+
+    if (!previous || availableOverlap <= 0) {
+      return part;
+    }
+
+    const overlap = overlapSuffix(previous.text, Math.min(chunkOverlap, availableOverlap));
+
+    if (!overlap) {
+      return part;
+    }
+
+    return {
+      text: `${overlap}\n\n${part.text}`,
+      startOffset: Math.max(previous.startOffset, previous.endOffset - overlap.length),
+      endOffset: part.endOffset,
+    };
+  });
+}
+
+function overlapSuffix(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+
+  const suffix = trimmed.slice(-maxLength);
+  const boundary = suffix.search(/\s/);
+
+  return boundary >= 0 ? suffix.slice(boundary).trim() : suffix.trim();
 }

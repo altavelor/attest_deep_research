@@ -49,6 +49,50 @@ describe("FileVectorIndexStore", () => {
     expect(results[0].score).toBeGreaterThan(results[1].score);
   });
 
+  it("does not create empty shard files during initialization", async () => {
+    const store = new FileVectorIndexStore({
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+
+    expect(existsSync(join(folder, "manifest.json"))).toBe(true);
+    expect(existsSync(join(folder, "sources.jsonl"))).toBe(true);
+    expect(existsSync(join(folder, "shards"))).toBe(false);
+    expect(existsSync(join(folder, "keywords"))).toBe(false);
+  });
+
+  it("commits write sessions once and writes only changed source shards", async () => {
+    const store = new FileVectorIndexStore({
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    const writer = await store.beginWrite();
+    await writer.upsert([
+      chunk("chunk-a", "Research/a.md", "alpha project note", [1, 0], "hash-a"),
+      chunk("chunk-a-2", "Research/a.md", "alpha second note", [1, 0], "hash-a"),
+    ]);
+    await writer.upsert([chunk("chunk-a-3", "Research/a.md", "alpha third note", [1, 0], "hash-a")]);
+
+    expect(existsSync(join(folder, "shards"))).toBe(false);
+
+    await writer.commit();
+
+    const shardId = shardIdForSourcePath("Research/a.md");
+    const shardFiles = await readdir(join(folder, "shards"));
+    expect(shardFiles.sort()).toEqual([`${shardId}.chunks.jsonl`, `${shardId}.vectors.bin`]);
+    expect((await store.query([1, 0], 10)).map((result) => result.id)).toEqual([
+      "chunk-a",
+      "chunk-a-2",
+      "chunk-a-3",
+    ]);
+  });
+
   it("replaces existing source chunks and updates sources.jsonl", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 
@@ -57,6 +101,7 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-a", "Research/a.md", "old text", [1, 0], "old"),
       chunk("chunk-b", "Research/b.md", "other text", [0, 1], "other"),
     ]);
+    await store.deleteBySourcePath("Research/a.md");
     await store.upsert([chunk("chunk-a-new", "Research/a.md", "new text", [0, 1], "new")]);
 
     const results = await store.query([0, 1], 10);
@@ -112,6 +157,7 @@ describe("FileVectorIndexStore", () => {
       store.searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([expect.objectContaining({ id: "chunk-a", score: 3 })]);
 
+    await store.deleteBySourcePath("Research/a.md");
     await store.upsert([
       chunk("chunk-a-new", "Research/a.md", "remote only now", [0, 1], "hash-new"),
     ]);
@@ -119,6 +165,50 @@ describe("FileVectorIndexStore", () => {
     await expect(
       store.searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([]);
+  });
+
+  it("keeps earlier chunks when one source is upserted across embedding batches", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("chunk-a-1", "Research/a.md", "first", [1, 0], "hash-1"),
+      chunk("chunk-a-2", "Research/a.md", "second", [1, 0], "hash-2"),
+    ]);
+    await store.upsert([chunk("chunk-a-3", "Research/a.md", "third", [1, 0], "hash-3")]);
+
+    expect((await store.query([1, 0], 10)).map((result) => result.id)).toEqual([
+      "chunk-a-1",
+      "chunk-a-2",
+      "chunk-a-3",
+    ]);
+
+    const sources = readJsonl(join(folder, "sources.jsonl"));
+    expect(sources).toEqual([
+      expect.objectContaining({
+        sourcePath: "Research/a.md",
+        chunkCount: 3,
+      }),
+    ]);
+  });
+
+  it("expands adjacent chunks from the same source path", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a"),
+      chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"),
+      chunk("chunk-c", "Research/a.md", "third", [1, 0], "hash-c"),
+    ]);
+
+    const expanded = await store.expandAdjacentChunks(
+      [{ ...chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"), score: 0.9 }],
+      1,
+      3,
+    );
+
+    expect(expanded.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
   });
 
   it("deletes by source path and fully clears profile files", async () => {

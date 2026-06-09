@@ -1,3 +1,4 @@
+import { isIxplorerError, IxplorerError } from "../shared/errors";
 import {
   EmbeddedChunk,
   EmbeddingProviderClient,
@@ -5,6 +6,7 @@ import {
   Extractor,
   IndexFailedSourceSnapshot,
   IndexStore,
+  IndexStoreWriteSession,
   SourceSnapshotIndexStore,
 } from "../shared/types";
 import { FileSnapshot, hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
@@ -32,12 +34,29 @@ export interface IndexingState {
   embeddedChunks: number;
   deferredFiles: number;
   failedFiles: number;
+  phase?: IndexingProgressPhase;
+  currentFile?: string;
+  bytesTotal?: number;
+  bytesProcessed?: number;
+  chunksTotal?: number;
+  chunksEmbedded?: number;
+  embeddingBatchesTotal?: number;
+  embeddingBatchesCompleted?: number;
   lastIndexedAt?: string;
   lastUpdatedAt?: string;
   indexSizeBytes?: number;
   isStale: boolean;
   errorMessage?: string;
 }
+
+export type IndexingProgressPhase =
+  | "scanning"
+  | "checking"
+  | "extracting"
+  | "chunking"
+  | "embedding"
+  | "writing"
+  | "complete";
 
 export interface IndexingServiceOptions {
   files: VaultFileProvider;
@@ -52,6 +71,7 @@ export interface IndexingServiceOptions {
   maxChangedFilesPerRun?: number;
   yieldToEventLoop?: () => Promise<void>;
   onProgress?: (state: IndexingState) => void;
+  logger?: IndexingLogger;
   now?: () => Date;
 }
 
@@ -60,6 +80,45 @@ interface IndexedFileResult {
   skipped: boolean;
   chunks: ExtractedChunk[];
   contentHash?: string;
+  persistSnapshot?: boolean;
+}
+
+type PendingIndexedFile = VaultFileSummary & { contentHash: string; chunkCount: number };
+
+export type IndexingFileLogReason =
+  | "unsupported-file-type"
+  | "excluded-by-path"
+  | "unchanged-metadata"
+  | "unchanged-content"
+  | "no-extractable-text"
+  | "indexed"
+  | "extraction-failed";
+
+export interface IndexingFileLogEvent {
+  path: string;
+  outcome: "indexed" | "skipped" | "failed";
+  reason: IndexingFileLogReason;
+  modifiedTime: number;
+  extractor?: string;
+  chunkCount?: number;
+  contentHash?: string;
+  errorMessage?: string;
+  errorDetails?: Record<string, unknown>;
+}
+
+export interface IndexingLogger {
+  logIndexingFile(event: IndexingFileLogEvent): void;
+  logIndexingPerformance?(event: IndexingPerformanceLogEvent): void;
+}
+
+export interface IndexingPerformanceLogEvent {
+  phase: IndexingProgressPhase;
+  path?: string;
+  durationMs: number;
+  chunkCount?: number;
+  batchSize?: number;
+  batchIndex?: number;
+  batchCount?: number;
 }
 
 const DEFAULT_BATCH_SIZE = 32;
@@ -78,6 +137,7 @@ export class IndexingService {
   private readonly maxChangedFilesPerRun?: number;
   private readonly yieldToEventLoop: () => Promise<void>;
   private readonly onProgress?: (state: IndexingState) => void;
+  private readonly logger?: IndexingLogger;
   private readonly now: () => Date;
   private snapshotsLoaded = false;
   private readonly snapshots = new Map<string, FileSnapshot>();
@@ -110,6 +170,7 @@ export class IndexingService {
     this.maxChangedFilesPerRun = options.maxChangedFilesPerRun;
     this.yieldToEventLoop = options.yieldToEventLoop ?? defaultYieldToEventLoop;
     this.onProgress = options.onProgress;
+    this.logger = options.logger;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -214,72 +275,114 @@ export class IndexingService {
     };
     this.notifyProgress();
     const pendingChunks: ExtractedChunk[] = [];
-    const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string }> = [];
-
-    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-      const file = files[fileIndex];
-
-      if (this.state.status === "paused") {
-        break;
+    const pendingIndexedFiles: PendingIndexedFile[] = [];
+    let writer: IndexStoreWriteSession | undefined;
+    const getWriter = async (): Promise<IndexStoreWriteSession | undefined> => {
+      if (!supportsWriteSession(this.indexStore)) {
+        return undefined;
       }
 
-      let result: IndexedFileResult;
+      writer ??= await this.indexStore.beginWrite();
+      return writer;
+    };
 
-      try {
-        result = await this.processFile(file);
-      } catch (error) {
-        const failedSnapshot: IndexFailedSourceSnapshot = {
-          sourcePath: file.path,
-          modifiedTime: file.modifiedTime,
-          errorMessage: indexingErrorMessage(error),
-          indexedAt: this.now().toISOString(),
-        };
-        await this.persistFailedSourceSnapshots([failedSnapshot]);
-        result = { indexed: false, skipped: false, chunks: [] };
-        this.state = { ...this.state, failedFiles: this.state.failedFiles + 1 };
-      }
+    try {
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        const file = files[fileIndex];
 
-      this.state = {
-        ...this.state,
-        scannedFiles: this.state.scannedFiles + 1,
-        progress: calculateProgress(this.state.scannedFiles + 1, this.state.totalFiles),
-        lastUpdatedAt: this.now().toISOString(),
-      };
+        if (this.state.status === "paused") {
+          break;
+        }
 
-      if (result.skipped) {
-        this.state = { ...this.state, skippedFiles: this.state.skippedFiles + 1 };
-      }
+        let result: IndexedFileResult;
 
-      if (result.indexed && result.contentHash) {
-        this.state = { ...this.state, indexedFiles: this.state.indexedFiles + 1 };
-        pendingIndexedFiles.push({ ...file, contentHash: result.contentHash });
-        pendingChunks.push(...result.chunks);
-      }
+        try {
+          result = await this.processFile(file);
+        } catch (error) {
+          const errorMessage = indexingErrorMessage(error);
+          const failedSnapshot: IndexFailedSourceSnapshot = {
+            sourcePath: file.path,
+            modifiedTime: file.modifiedTime,
+            errorMessage,
+            indexedAt: this.now().toISOString(),
+          };
+          await this.persistFailedSourceSnapshots([failedSnapshot], writer);
+          result = { indexed: false, skipped: false, chunks: [] };
+          this.state = { ...this.state, failedFiles: this.state.failedFiles + 1 };
+          this.logIndexingFile({
+            path: file.path,
+            outcome: "failed",
+            reason: "extraction-failed",
+            modifiedTime: file.modifiedTime,
+            errorMessage,
+            errorDetails: indexingErrorDetails(error),
+          });
+        }
 
-      if (pendingChunks.length >= this.batchSize || this.shouldYieldAfterFile()) {
-        await this.flushPendingChunks(pendingChunks, pendingIndexedFiles);
-      }
-
-      this.notifyProgress();
-
-      if (this.hasReachedChangedFileCap()) {
-        const deferredFiles = files.length - fileIndex - 1;
         this.state = {
           ...this.state,
-          deferredFiles,
-          isStale: deferredFiles > 0,
+          scannedFiles: this.state.scannedFiles + 1,
+          phase: "checking",
+          currentFile: file.path,
+          progress: calculateProgress(this.state.scannedFiles + 1, this.state.totalFiles),
           lastUpdatedAt: this.now().toISOString(),
         };
-        break;
+
+        if (result.skipped) {
+          this.state = { ...this.state, skippedFiles: this.state.skippedFiles + 1 };
+        }
+
+        if (result.indexed && result.contentHash) {
+          this.state = { ...this.state, indexedFiles: this.state.indexedFiles + 1 };
+          pendingIndexedFiles.push({
+            ...file,
+            contentHash: result.contentHash,
+            chunkCount: result.chunks.length,
+          });
+          pendingChunks.push(...result.chunks);
+        }
+
+        if (!result.indexed && result.persistSnapshot && result.contentHash) {
+          pendingIndexedFiles.push({
+            ...file,
+            contentHash: result.contentHash,
+            chunkCount: result.chunks.length,
+          });
+        }
+
+        if (pendingChunks.length >= this.batchSize || this.shouldYieldAfterFile()) {
+          await this.flushPendingChunks(pendingChunks, pendingIndexedFiles, getWriter, () => writer);
+        }
+
+        this.notifyProgress();
+
+        if (this.hasReachedChangedFileCap()) {
+          const deferredFiles = files.length - fileIndex - 1;
+          this.state = {
+            ...this.state,
+            deferredFiles,
+            isStale: deferredFiles > 0,
+            lastUpdatedAt: this.now().toISOString(),
+          };
+          break;
+        }
+
+        if (this.shouldYieldAfterFile()) {
+          await this.yieldToEventLoop();
+        }
       }
 
-      if (this.shouldYieldAfterFile()) {
-        await this.yieldToEventLoop();
+      if (this.state.status !== "paused") {
+        await this.flushPendingChunks(pendingChunks, pendingIndexedFiles, getWriter, () => writer);
+        this.state = { ...this.state, phase: "writing", lastUpdatedAt: this.now().toISOString() };
+        this.notifyProgress();
+        await writer?.commit();
+      } else {
+        writer?.rollback();
       }
-    }
-
-    if (this.state.status !== "paused") {
-      await this.flushPendingChunks(pendingChunks, pendingIndexedFiles);
+    } catch (error) {
+      writer?.rollback();
+      throw error;
     }
 
     if (this.state.status !== "paused") {
@@ -287,6 +390,8 @@ export class IndexingService {
         ...this.state,
         status: this.state.deferredFiles > 0 ? "stale" : "idle",
         activeOperation: undefined,
+        phase: "complete",
+        currentFile: undefined,
         progress: 1,
         isStale: this.state.deferredFiles > 0,
         errorMessage: undefined,
@@ -320,18 +425,41 @@ export class IndexingService {
 
   private async flushPendingChunks(
     chunks: ExtractedChunk[],
-    indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
+    indexedFiles: PendingIndexedFile[],
+    getWriter?: () => Promise<IndexStoreWriteSession | undefined>,
+    getCurrentWriter?: () => IndexStoreWriteSession | undefined,
   ): Promise<void> {
-    if (chunks.length === 0) {
+    const startedAt = Date.now();
+    if (chunks.length === 0 && indexedFiles.length === 0) {
       return;
     }
 
-    const embeddedChunks = await this.embedAndStoreChunks(chunks);
+    const sourcePathsToReplace = indexedFiles.map((file) => file.path);
+    const embeddedChunks =
+      chunks.length > 0
+        ? await this.embedAndStoreChunks(chunks, sourcePathsToReplace, getWriter)
+        : [];
+
+    if (chunks.length === 0) {
+      for (const sourcePath of sourcePathsToReplace) {
+        await this.indexStore.deleteBySourcePath(sourcePath);
+      }
+    }
 
     for (const file of indexedFiles) {
       updateSnapshot(this.snapshots, file);
+      if (file.chunkCount > 0) {
+        this.logIndexingFile({
+          path: file.path,
+          outcome: "indexed",
+          reason: "indexed",
+          modifiedTime: file.modifiedTime,
+          contentHash: file.contentHash,
+          chunkCount: file.chunkCount,
+        });
+      }
     }
-    await this.persistSourceSnapshots(indexedFiles);
+    await this.persistSourceSnapshots(indexedFiles, getCurrentWriter?.());
 
     chunks.length = 0;
     indexedFiles.length = 0;
@@ -341,34 +469,98 @@ export class IndexingService {
       lastUpdatedAt: this.now().toISOString(),
     };
     this.notifyProgress();
+    this.logIndexingPerformance({
+      phase: "writing",
+      durationMs: Date.now() - startedAt,
+      chunkCount: embeddedChunks.length,
+    });
   }
 
   private async processFile(file: VaultFileSummary): Promise<IndexedFileResult> {
     const extractor = this.extractors.find((candidate) => candidate.supports(file.path));
 
-    if (!extractor || !this.shouldScanPath(file.path)) {
+    if (!extractor) {
+      this.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "unsupported-file-type",
+        modifiedTime: file.modifiedTime,
+      });
+      return { indexed: false, skipped: true, chunks: [] };
+    }
+
+    if (!this.shouldScanPath(file.path)) {
+      this.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "excluded-by-path",
+        modifiedTime: file.modifiedTime,
+        extractor: extractor.constructor.name,
+      });
       return { indexed: false, skipped: true, chunks: [] };
     }
 
     if (!shouldIndexFile(this.snapshots, file)) {
+      this.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "unchanged-metadata",
+        modifiedTime: file.modifiedTime,
+        extractor: extractor.constructor.name,
+      });
       return { indexed: false, skipped: true, chunks: [] };
     }
 
+    this.state = { ...this.state, phase: "extracting", currentFile: file.path };
+    this.notifyProgress();
     const data = await this.files.readFile(file.path);
     const contentHash = hashFileData(data);
 
     if (!shouldIndexFile(this.snapshots, { ...file, contentHash })) {
       updateSnapshot(this.snapshots, { ...file, contentHash });
+      this.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "unchanged-content",
+        modifiedTime: file.modifiedTime,
+        extractor: extractor.constructor.name,
+        contentHash,
+      });
       return { indexed: false, skipped: true, chunks: [] };
     }
 
+    const extractionStartedAt = Date.now();
     const chunks = await extractor.extract({
       path: file.path,
       data,
       modifiedTime: file.modifiedTime,
     });
+    this.logIndexingPerformance({
+      phase: "extracting",
+      path: file.path,
+      durationMs: Date.now() - extractionStartedAt,
+      chunkCount: chunks.length,
+    });
 
-    await this.indexStore.deleteBySourcePath(file.path);
+    if (chunks.length === 0) {
+      this.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "no-extractable-text",
+        modifiedTime: file.modifiedTime,
+        extractor: extractor.constructor.name,
+        contentHash,
+        chunkCount: 0,
+      });
+
+      return {
+        indexed: false,
+        skipped: true,
+        chunks,
+        contentHash,
+        persistSnapshot: true,
+      };
+    }
 
     return {
       indexed: true,
@@ -378,8 +570,14 @@ export class IndexingService {
     };
   }
 
-  private async embedAndStoreChunks(chunks: ExtractedChunk[]): Promise<EmbeddedChunk[]> {
+  private async embedAndStoreChunks(
+    chunks: ExtractedChunk[],
+    sourcePathsToReplace: string[],
+    getWriter?: () => Promise<IndexStoreWriteSession | undefined>,
+  ): Promise<EmbeddedChunk[]> {
     const embeddedChunks: EmbeddedChunk[] = [];
+    const embeddingBatchesTotal = Math.ceil(chunks.length / this.batchSize);
+    let deletedExistingSources = false;
 
     for (let start = 0; start < chunks.length; start += this.batchSize) {
       const batch = chunks.slice(start, start + this.batchSize);
@@ -392,9 +590,28 @@ export class IndexingService {
         break;
       }
 
+      this.state = {
+        ...this.state,
+        phase: "embedding",
+        chunksTotal: chunks.length,
+        chunksEmbedded: embeddedChunks.length,
+        embeddingBatchesTotal,
+        embeddingBatchesCompleted: Math.floor(start / this.batchSize),
+        lastUpdatedAt: this.now().toISOString(),
+      };
+      this.notifyProgress();
+      const embeddingStartedAt = Date.now();
       const response = await this.embeddings.embed({
         model: this.embeddingModel,
-        input: batch.map((chunk) => chunk.text),
+        input: batch.map(textForEmbedding),
+      });
+      this.logIndexingPerformance({
+        phase: "embedding",
+        durationMs: Date.now() - embeddingStartedAt,
+        chunkCount: batch.length,
+        batchSize: batch.length,
+        batchIndex: Math.floor(start / this.batchSize) + 1,
+        batchCount: embeddingBatchesTotal,
       });
       const batchEmbeddings = batch.map((chunk, index) => ({
         ...chunk,
@@ -404,9 +621,22 @@ export class IndexingService {
 
       if (batchEmbeddings.length > 0) {
         await this.ensureStoreInitialized(batchEmbeddings[0].embedding.length);
-        await this.indexStore.upsert(batchEmbeddings);
+        const storeWriter = (await getWriter?.()) ?? this.indexStore;
+        if (!deletedExistingSources) {
+          for (const sourcePath of sourcePathsToReplace) {
+            await storeWriter.deleteBySourcePath(sourcePath);
+          }
+          deletedExistingSources = true;
+        }
+        await storeWriter.upsert(batchEmbeddings);
         embeddedChunks.push(...batchEmbeddings);
       }
+      this.state = {
+        ...this.state,
+        chunksEmbedded: embeddedChunks.length,
+        embeddingBatchesCompleted: Math.floor(start / this.batchSize) + 1,
+        lastUpdatedAt: this.now().toISOString(),
+      };
 
       await this.yieldToEventLoop();
     }
@@ -439,22 +669,28 @@ export class IndexingService {
 
   private async persistSourceSnapshots(
     indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
+    writer?: IndexStoreWriteSession,
   ): Promise<void> {
     if (!isSourceSnapshotIndexStore(this.indexStore) || indexedFiles.length === 0) {
       return;
     }
 
-    await this.indexStore.updateSourceSnapshots(
-      indexedFiles.map((file) => ({
-        sourcePath: file.path,
-        modifiedTime: file.modifiedTime,
-        contentHash: file.contentHash,
-      })),
-    );
+    const snapshots = indexedFiles.map((file) => ({
+      sourcePath: file.path,
+      modifiedTime: file.modifiedTime,
+      contentHash: file.contentHash,
+    }));
+
+    if (writer?.updateSourceSnapshots) {
+      await writer.updateSourceSnapshots(snapshots);
+    } else {
+      await this.indexStore.updateSourceSnapshots(snapshots);
+    }
   }
 
   private async persistFailedSourceSnapshots(
     snapshots: IndexFailedSourceSnapshot[],
+    writer?: IndexStoreWriteSession,
   ): Promise<void> {
     if (
       !isSourceSnapshotIndexStore(this.indexStore) ||
@@ -463,7 +699,11 @@ export class IndexingService {
       return;
     }
 
-    await this.indexStore.recordFailedSourceSnapshots(snapshots);
+    if (writer?.recordFailedSourceSnapshots) {
+      await writer.recordFailedSourceSnapshots(snapshots);
+    } else {
+      await this.indexStore.recordFailedSourceSnapshots(snapshots);
+    }
   }
 
   private shouldScanPath(path: string): boolean {
@@ -476,6 +716,14 @@ export class IndexingService {
   private notifyProgress(): void {
     this.onProgress?.(this.getState());
   }
+
+  private logIndexingFile(event: IndexingFileLogEvent): void {
+    this.logger?.logIndexingFile(event);
+  }
+
+  private logIndexingPerformance(event: IndexingPerformanceLogEvent): void {
+    this.logger?.logIndexingPerformance?.(event);
+  }
 }
 
 function defaultYieldToEventLoop(): Promise<void> {
@@ -484,6 +732,12 @@ function defaultYieldToEventLoop(): Promise<void> {
 
 function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
   return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
+}
+
+function supportsWriteSession(
+  store: IndexStore,
+): store is IndexStore & { beginWrite(): Promise<IndexStoreWriteSession> } {
+  return typeof store.beginWrite === "function";
 }
 
 function calculateProgress(scannedFiles: number, totalFiles: number): number {
@@ -547,6 +801,14 @@ function escapeRegExp(value: string): string {
 }
 
 function indexingErrorMessage(error: unknown): string {
+  if (isIxplorerError(error)) {
+    const message = error.message.trim();
+    const causeMessage =
+      typeof error.details?.causeMessage === "string" ? error.details.causeMessage.trim() : "";
+
+    return causeMessage ? `${message} Cause: ${causeMessage}` : message;
+  }
+
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
@@ -558,6 +820,14 @@ function indexingErrorMessage(error: unknown): string {
   return "Indexing failed.";
 }
 
+function indexingErrorDetails(error: unknown): Record<string, unknown> | undefined {
+  if (error instanceof IxplorerError) {
+    return error.details;
+  }
+
+  return undefined;
+}
+
 function isSourceSnapshotIndexStore(
   indexStore: IndexStore,
 ): indexStore is IndexStore & SourceSnapshotIndexStore {
@@ -567,4 +837,26 @@ function isSourceSnapshotIndexStore(
     "updateSourceSnapshots" in indexStore &&
     typeof indexStore.updateSourceSnapshots === "function"
   );
+}
+
+function textForEmbedding(chunk: ExtractedChunk): string {
+  const source = chunk.source;
+
+  switch (source.kind) {
+    case "markdown":
+      return [
+        `File: ${source.path}`,
+        source.headingPath.length > 0 ? `Heading: ${source.headingPath.join(" > ")}` : "",
+        "",
+        chunk.text,
+      ]
+        .filter((part) => part.length > 0)
+        .join("\n");
+    case "pdf":
+      return [`File: ${source.path}`, `Page: ${source.pageNumber}`, "", chunk.text].join("\n");
+    case "document":
+      return [`File: ${source.path}`, `Format: ${source.format}`, "", chunk.text].join("\n");
+    case "web":
+      return [`Title: ${source.title}`, `URL: ${source.url}`, "", chunk.text].join("\n");
+  }
 }

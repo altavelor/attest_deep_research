@@ -3,6 +3,7 @@ import { inflateSync } from "zlib";
 import { IxplorerError } from "../shared/errors";
 import { ExtractedChunk, Extractor, ExtractorInput, PdfSourceReference } from "../shared/types";
 import {
+  DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_LENGTH,
   fileNameFromPath,
   normalizePath,
@@ -23,17 +24,24 @@ export interface PdfPageTextParser {
 export interface PdfExtractorOptions {
   parser?: PdfPageTextParser;
   maxChunkLength?: number;
+  chunkOverlap?: number;
 }
 
 type UnicodeMap = Map<number, string>;
+type PdfTextContentItem = {
+  str?: string;
+  hasEOL?: boolean;
+};
 
 export class PdfExtractor implements Extractor {
   private readonly parser: PdfPageTextParser;
   private readonly maxChunkLength: number;
+  private readonly chunkOverlap: number;
 
   constructor(options: PdfExtractorOptions = {}) {
-    this.parser = options.parser ?? new SimplePdfTextParser();
+    this.parser = options.parser ?? new PdfJsTextParser();
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
+    this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
 
   supports(path: string): boolean {
@@ -63,6 +71,7 @@ export class PdfExtractor implements Extractor {
             pageNumber: page.pageNumber,
             text: normalizedText,
             maxChunkLength: this.maxChunkLength,
+            chunkOverlap: this.chunkOverlap,
           }),
         );
       }
@@ -71,11 +80,47 @@ export class PdfExtractor implements Extractor {
         code: "EXTRACTION_FAILED",
         message: "Ixplorer could not read this PDF.",
         cause: error,
-        details: { path: input.path },
+        details: { path: input.path, causeMessage: errorMessage(error) },
       });
     }
 
     return chunks;
+  }
+}
+
+export class PdfJsTextParser implements PdfPageTextParser {
+  async *parsePages(data: ArrayBuffer): AsyncIterable<PdfPageText> {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdfWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    const workerGlobal = globalThis as typeof globalThis & {
+      pdfjsWorker?: { WorkerMessageHandler: unknown };
+    };
+    workerGlobal.pdfjsWorker = {
+      WorkerMessageHandler: pdfWorker.WorkerMessageHandler,
+    };
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(data).slice(),
+      useSystemFonts: true,
+      verbosity: pdfjs.VerbosityLevel.ERRORS,
+    });
+
+    try {
+      const document = await loadingTask.promise;
+
+      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+        const page = await document.getPage(pageNumber);
+        const textContent = await page.getTextContent({
+          disableCombineTextItems: false,
+        });
+
+        yield {
+          pageNumber,
+          text: formatPdfTextItems(textContent.items),
+        };
+      }
+    } finally {
+      await loadingTask.destroy();
+    }
   }
 }
 
@@ -111,30 +156,57 @@ function chunkPdfPage(options: {
   pageNumber: number;
   text: string;
   maxChunkLength: number;
+  chunkOverlap: number;
 }): ExtractedChunk[] {
   const fileName = fileNameFromPath(options.path);
 
-  return splitText(options.text, options.maxChunkLength).map((part, index) => {
-    const sourceId = stableId(
-      `${options.path}:page:${options.pageNumber}:${part.startOffset}:${part.endOffset}:${index}`,
-    );
-    const source: PdfSourceReference = {
-      id: sourceId,
-      kind: "pdf",
-      path: options.path,
-      title: `${fileName} p. ${options.pageNumber}`,
-      pageNumber: options.pageNumber,
-      startOffset: part.startOffset,
-      endOffset: part.endOffset,
-    };
+  return splitText(options.text, options.maxChunkLength, 0, options.chunkOverlap).map(
+    (part, index) => {
+      const sourceId = stableId(
+        `${options.path}:page:${options.pageNumber}:${part.startOffset}:${part.endOffset}:${index}`,
+      );
+      const source: PdfSourceReference = {
+        id: sourceId,
+        kind: "pdf",
+        path: options.path,
+        title: `${fileName} p. ${options.pageNumber}`,
+        pageNumber: options.pageNumber,
+        startOffset: part.startOffset,
+        endOffset: part.endOffset,
+      };
 
-    return {
-      id: sourceId,
-      source,
-      text: part.text,
-      contentHash: stableId(part.text),
-    };
-  });
+      return {
+        id: sourceId,
+        source,
+        text: part.text,
+        contentHash: stableId(part.text),
+      };
+    },
+  );
+}
+
+function formatPdfTextItems(items: PdfTextContentItem[]): string {
+  return items
+    .map((item) => {
+      if (!item.str) {
+        return "";
+      }
+
+      return item.hasEOL ? `${item.str}\n` : item.str;
+    })
+    .join(" ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return typeof error === "string" && error.trim() ? error.trim() : undefined;
 }
 
 function parsePdfObjects(source: string): Map<number, string> {

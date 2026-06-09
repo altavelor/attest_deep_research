@@ -2,6 +2,7 @@ import { ExtractedChunk, Extractor, ExtractorInput } from "../shared/types";
 import {
   createDocumentChunks,
   decodeXmlEntities,
+  DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_LENGTH,
   DocumentExtractorOptions,
   extractionFailed,
@@ -11,9 +12,11 @@ import {
 
 export class DocxExtractor implements Extractor {
   private readonly maxChunkLength: number;
+  private readonly chunkOverlap: number;
 
   constructor(options: DocumentExtractorOptions = {}) {
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
+    this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
 
   supports(path: string): boolean {
@@ -37,6 +40,7 @@ export class DocxExtractor implements Extractor {
         format: "docx",
         text: extractDocxText(documentXml),
         maxChunkLength: this.maxChunkLength,
+        chunkOverlap: this.chunkOverlap,
       });
     } catch (error) {
       throw extractionFailed("docx", input.path, error);

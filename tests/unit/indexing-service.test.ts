@@ -8,8 +8,10 @@ import {
   IndexStore,
   SourceSnapshotIndexStore,
 } from "../../src/shared/types";
+import { IxplorerError } from "../../src/shared/errors";
 import {
   IndexingService,
+  IndexingFileLogEvent,
   VaultFileProvider,
   VaultFileSummary,
 } from "../../src/indexing/IndexingService";
@@ -25,7 +27,7 @@ function markdownChunk(id: string, path: string, text = `text ${id}`): Extracted
       kind: "markdown",
       path,
       title: path,
-      headingPath: [],
+      headingPath: ["Test"],
     },
   };
 }
@@ -95,6 +97,110 @@ describe("IndexingService", () => {
     expect(
       indexStore.upserted.map((chunk) => chunk.source.kind === "markdown" && chunk.source.path),
     ).toEqual(["Research/a.md", "Research/notes.txt"]);
+  });
+
+  it("embeds chunks with source path and heading context while storing clean chunk text", async () => {
+    const embeddings = new FakeEmbeddingProvider();
+    const indexStore = new FakeIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, "body text")]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings,
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    await service.manualReindex();
+
+    expect(embeddings.inputs[0]).toContain("File: Research/a.md");
+    expect(embeddings.inputs[0]).toContain("Heading:");
+    expect(indexStore.upserted[0].text).toBe("body text");
+  });
+
+  it("logs indexing decisions for indexed, skipped, empty, and failed files", async () => {
+    const indexStore = new FakeIndexStore();
+    const logger = new FakeIndexingLogger();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "body"),
+        file("Research/empty.pdf", 1, ""),
+        file("Research/fail.md", 1, "bad"),
+        file("Research/broken.pdf", 1, "bad pdf"),
+        file("Archive/old.md", 1, "old"),
+        file("Research/image.png", 1, "png"),
+      ]),
+      extractors: [
+        new EmptyPathExtractor("Research/empty.pdf"),
+        new FailingPathExtractor("Research/fail.md"),
+        new FailingIxplorerPathExtractor("Research/broken.pdf"),
+        new FakeExtractor(".md"),
+        new FakeExtractor(".pdf"),
+      ],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: ["Archive/**"],
+      logger,
+    });
+
+    const result = await service.manualReindex();
+
+    expect(result).toMatchObject({
+      indexedFiles: 1,
+      skippedFiles: 3,
+      failedFiles: 2,
+      embeddedChunks: 1,
+    });
+    expect(logger.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "Research/a.md",
+          outcome: "indexed",
+          reason: "indexed",
+          chunkCount: 1,
+        }),
+        expect.objectContaining({
+          path: "Research/empty.pdf",
+          outcome: "skipped",
+          reason: "no-extractable-text",
+          chunkCount: 0,
+        }),
+        expect.objectContaining({
+          path: "Research/fail.md",
+          outcome: "failed",
+          reason: "extraction-failed",
+          errorMessage: "Extraction failed for Research/fail.md",
+        }),
+        expect.objectContaining({
+          path: "Research/broken.pdf",
+          outcome: "failed",
+          reason: "extraction-failed",
+          errorMessage: "Ixplorer could not read this PDF. Cause: incorrect header check",
+          errorDetails: expect.objectContaining({ causeMessage: "incorrect header check" }),
+        }),
+        expect.objectContaining({
+          path: "Archive/old.md",
+          outcome: "skipped",
+          reason: "excluded-by-path",
+        }),
+        expect.objectContaining({
+          path: "Research/image.png",
+          outcome: "skipped",
+          reason: "unsupported-file-type",
+        }),
+      ]),
+    );
+    expect(indexStore.sourceSnapshots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourcePath: "Research/empty.pdf",
+          contentHash: hashFileData(""),
+        }),
+      ]),
+    );
   });
 
   it("incremental indexing skips unchanged files and avoids upserting unchanged content", async () => {
@@ -352,7 +458,45 @@ class FailingPathExtractor implements Extractor {
   }
 }
 
+class FailingIxplorerPathExtractor implements Extractor {
+  constructor(private readonly failedPath: string) {}
+
+  supports(path: string): boolean {
+    return path === this.failedPath;
+  }
+
+  async extract(input: { path: string }): Promise<ExtractedChunk[]> {
+    throw new IxplorerError({
+      code: "EXTRACTION_FAILED",
+      message: "Ixplorer could not read this PDF.",
+      details: { path: input.path, causeMessage: "incorrect header check" },
+    });
+  }
+}
+
+class EmptyPathExtractor implements Extractor {
+  constructor(private readonly emptyPath: string) {}
+
+  supports(path: string): boolean {
+    return path === this.emptyPath;
+  }
+
+  async extract(): Promise<ExtractedChunk[]> {
+    return [];
+  }
+}
+
+class FakeIndexingLogger {
+  readonly events: IndexingFileLogEvent[] = [];
+
+  logIndexingFile(event: IndexingFileLogEvent): void {
+    this.events.push(event);
+  }
+}
+
 class FakeEmbeddingProvider implements EmbeddingProviderClient {
+  readonly inputs: string[] = [];
+
   async listModels(): Promise<string[]> {
     return ["nomic"];
   }
@@ -361,6 +505,8 @@ class FakeEmbeddingProvider implements EmbeddingProviderClient {
     model: string;
     input: string[];
   }): Promise<{ model: string; embeddings: number[][] }> {
+    this.inputs.push(...request.input);
+
     return {
       model: request.model,
       embeddings: request.input.map((text) => [text.length, 1]),

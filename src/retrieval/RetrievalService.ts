@@ -1,5 +1,6 @@
 import {
   Citation,
+  AdjacentChunkIndexStore,
   EmbeddingProviderClient,
   IndexStore,
   KeywordSearchIndexStore,
@@ -37,12 +38,17 @@ export class RetrievalService {
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
+    const candidateLimit = Math.max(options.limit, options.limit * 4);
     const semanticChunks = filterRetrievedChunks(
-      await this.searchSemantic(query, options.limit),
+      await this.searchSemantic(query, candidateLimit),
       options,
     );
-    const chunks =
-      semanticChunks.length > 0 ? semanticChunks : await this.searchKeywords(query, options);
+    const keywordChunks = await this.searchKeywords(query, { ...options, limit: candidateLimit });
+    const fusedChunks = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
+    const chunks = await this.expandAdjacentChunks(
+      fusedChunks.slice(0, options.limit),
+      options.limit,
+    );
 
     return {
       chunks,
@@ -50,7 +56,7 @@ export class RetrievalService {
         ...formatCitation(chunk.source),
         id: chunk.id,
       })),
-      usedFallback: semanticChunks.length === 0,
+      usedFallback: semanticChunks.length === 0 && keywordChunks.length > 0,
     };
   }
 
@@ -95,10 +101,63 @@ export class RetrievalService {
 
     return rankKeywordMatches(query, this.keywordCorpusForOptions(options), options.limit);
   }
+
+  private async expandAdjacentChunks(
+    chunks: RetrievedChunk[],
+    limit: number,
+  ): Promise<RetrievedChunk[]> {
+    if (!isAdjacentChunkIndexStore(this.indexStore)) {
+      return chunks.slice(0, limit);
+    }
+
+    return this.indexStore.expandAdjacentChunks(chunks, 1, limit);
+  }
 }
 
 function isKeywordSearchIndexStore(
   indexStore: IndexStore,
 ): indexStore is IndexStore & KeywordSearchIndexStore {
   return "searchKeywords" in indexStore && typeof indexStore.searchKeywords === "function";
+}
+
+function isAdjacentChunkIndexStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & AdjacentChunkIndexStore {
+  return (
+    "expandAdjacentChunks" in indexStore && typeof indexStore.expandAdjacentChunks === "function"
+  );
+}
+
+function fuseRetrievedChunks(
+  semanticChunks: RetrievedChunk[],
+  keywordChunks: RetrievedChunk[],
+  limit: number,
+): RetrievedChunk[] {
+  const scores = new Map<string, { chunk: RetrievedChunk; score: number }>();
+
+  addRanked(scores, semanticChunks, 1.0);
+  addRanked(scores, keywordChunks, 0.8);
+
+  return Array.from(scores.values())
+    .sort((left, right) => right.score - left.score || right.chunk.score - left.chunk.score)
+    .slice(0, limit)
+    .map(({ chunk, score }) => ({ ...chunk, score }));
+}
+
+function addRanked(
+  scores: Map<string, { chunk: RetrievedChunk; score: number }>,
+  chunks: RetrievedChunk[],
+  weight: number,
+): void {
+  const rankConstant = 60;
+
+  chunks.forEach((chunk, index) => {
+    const existing = scores.get(chunk.id);
+    const score = weight / (rankConstant + index + 1);
+
+    scores.set(chunk.id, {
+      chunk: existing?.chunk ?? chunk,
+      score: (existing?.score ?? 0) + score,
+    });
+  });
 }

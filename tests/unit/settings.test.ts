@@ -6,6 +6,7 @@ import {
   normalizeListInput,
   normalizeUrl,
   normalizeVaultFolder,
+  updateActiveIndexProfile,
 } from "../../src/settings/settings";
 
 describe("Ixplorer settings", () => {
@@ -20,6 +21,8 @@ describe("Ixplorer settings", () => {
       id: "default",
       indexFolder: ".ixplorer/index",
       shardCount: 32,
+      chunkSize: 800,
+      chunkOverlap: 120,
       keywordIndex: {
         enabled: true,
         strategy: "source-shard",
@@ -64,6 +67,8 @@ describe("Ixplorer settings", () => {
       excludeGlobs: ["Archive/**"],
       embeddingProviderBaseUrl: "http://localhost:11434",
       embeddingModel: "nomic-embed-text",
+      chunkSize: 800,
+      chunkOverlap: 120,
     });
   });
 
@@ -90,6 +95,8 @@ describe("Ixplorer settings", () => {
           excludeGlobs: ["Papers/Archive/**"],
           embeddingProviderBaseUrl: "http://localhost:1234/v1/",
           embeddingModel: "bge",
+          chunkSize: 600,
+          chunkOverlap: 100,
         },
       ],
     });
@@ -104,6 +111,38 @@ describe("Ixplorer settings", () => {
       embeddingProviderBaseUrl: "http://localhost:1234/v1",
       embeddingModel: "bge",
       shardCount: 32,
+      chunkSize: 600,
+      chunkOverlap: 100,
+    });
+  });
+
+  it("allows disabled chunk overlap and clamps overlap to chunk size", () => {
+    const settings = migrateSettings({
+      indexProfiles: [
+        {
+          id: "notes",
+          name: "Notes",
+          indexFolder: ".ixplorer/notes",
+          includeFolders: ["Notes"],
+          excludeGlobs: [],
+          embeddingProviderBaseUrl: "http://localhost:11434",
+          embeddingModel: "nomic",
+          chunkSize: 600,
+          chunkOverlap: 0,
+        },
+      ],
+    });
+
+    expect(getActiveIndexProfile(settings)).toMatchObject({
+      chunkSize: 600,
+      chunkOverlap: 0,
+    });
+
+    updateActiveIndexProfile(settings, { chunkSize: 100, chunkOverlap: 200 });
+
+    expect(getActiveIndexProfile(settings)).toMatchObject({
+      chunkSize: 100,
+      chunkOverlap: 99,
     });
   });
 

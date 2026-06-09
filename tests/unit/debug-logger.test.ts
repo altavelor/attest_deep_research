@@ -58,6 +58,35 @@ describe("PluginDebugLogger", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it("logs indexing file decisions only when debug mode is enabled", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings({ debugMode: true }),
+      console: { debug, error },
+    });
+
+    logger.logIndexingFile({
+      path: "Research/a.md",
+      outcome: "indexed",
+      reason: "indexed",
+      modifiedTime: 42,
+      chunkCount: 3,
+    });
+
+    expect(debug).toHaveBeenCalledWith(
+      "[Ixplorer] Indexing file",
+      expect.objectContaining({
+        path: "Research/a.md",
+        outcome: "indexed",
+        reason: "indexed",
+        chunkCount: 3,
+        settings: expect.objectContaining({ debugMode: true }),
+      }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it("always logs errors with current plugin settings", () => {
     const debug = vi.fn();
     const error = vi.fn();

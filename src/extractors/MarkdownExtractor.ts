@@ -6,17 +6,20 @@ export interface MarkdownExtractorOptions {
   includeFolders?: string[];
   excludeGlobs?: string[];
   maxChunkLength?: number;
+  chunkOverlap?: number;
 }
 
 export class MarkdownExtractor implements Extractor {
   private readonly includeFolders: string[];
   private readonly excludeGlobs: string[];
   private readonly maxChunkLength?: number;
+  private readonly chunkOverlap?: number;
 
   constructor(options: MarkdownExtractorOptions = {}) {
     this.includeFolders = options.includeFolders ?? ["/"];
     this.excludeGlobs = options.excludeGlobs ?? [];
     this.maxChunkLength = options.maxChunkLength;
+    this.chunkOverlap = options.chunkOverlap;
   }
 
   static fromSettings(settings: IxplorerSettings): MarkdownExtractor {
@@ -48,6 +51,7 @@ export class MarkdownExtractor implements Extractor {
       path: normalizePath(input.path),
       text: readText(input.data),
       maxChunkLength: this.maxChunkLength,
+      chunkOverlap: this.chunkOverlap,
     });
   }
 }
