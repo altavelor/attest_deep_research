@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
 import { IndexingState } from "../indexing/IndexingService";
 import {
@@ -8,7 +8,7 @@ import {
 } from "../research/answerFormatter";
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
-import { Citation, ResearchAnswer } from "../shared/types";
+import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import { attachModelDropdown } from "./ModelDropdown";
 import { ChatDisplayMessage, citationTarget, nextAssistantMessage } from "./rendering";
@@ -24,14 +24,30 @@ export interface IxplorerChatViewServices {
   getChatModel(): string;
   setChatModel(model: string): Promise<void>;
   getAvailableChatModels(): string[];
+  getIndexProfiles(): Array<{ id: string; name: string }>;
+  searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
   isChatIndexControlShown(): boolean;
   setChatIndexControlShown(shown: boolean): Promise<void>;
 }
+
+export interface IndexSearchOptions {
+  profileId: string;
+  query: string;
+  limit: number;
+  minScore?: number;
+  extension?: string;
+}
+
+type IxplorerPanel = "chat" | "indexSearch";
 
 export class IxplorerChatView extends ItemView {
   private readonly services: IxplorerChatViewServices;
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
+  private activePanel: IxplorerPanel = "chat";
+  private indexSearchResults: RetrievedChunk[] = [];
+  private indexSearchError: string | null = null;
+  private isSearchingIndex = false;
   private isRunning = false;
 
   private transcriptEl: HTMLElement | null = null;
@@ -44,6 +60,14 @@ export class IxplorerChatView extends ItemView {
   private modelInputEl: HTMLInputElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private webSearchEl: HTMLInputElement | null = null;
+  private indexSearchRootEl: HTMLElement | null = null;
+  private indexSearchProfileEl: HTMLSelectElement | null = null;
+  private indexSearchQueryEl: HTMLTextAreaElement | null = null;
+  private indexSearchTopKEl: HTMLInputElement | null = null;
+  private indexSearchMinScoreEl: HTMLInputElement | null = null;
+  private indexSearchExtEl: HTMLInputElement | null = null;
+  private indexSearchButtonEl: HTMLButtonElement | null = null;
+  private indexSearchResultsEl: HTMLElement | null = null;
   private unsubscribeIndexing: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
@@ -80,6 +104,7 @@ export class IxplorerChatView extends ItemView {
     const root = this.contentEl.createDiv({ cls: "ixplorer-chat" });
     const header = root.createDiv({ cls: "ixplorer-chat__header" });
     header.createEl("h2", { text: "Ixplorer" });
+    this.renderPanelTabs(header);
 
     this.indexControlEl = header.createDiv();
     this.indexRevealButtonEl = header.createEl("button", {
@@ -92,17 +117,21 @@ export class IxplorerChatView extends ItemView {
       this.renderIndexControl();
     });
 
-    this.transcriptEl = root.createDiv({
+    const chatPanel = root.createDiv({
+      cls: `ixplorer-chat__panel${this.activePanel === "chat" ? "" : " is-hidden"}`,
+    });
+
+    this.transcriptEl = chatPanel.createDiv({
       cls: "ixplorer-chat__transcript",
       attr: { role: "log", "aria-live": "polite" },
     });
 
-    const results = root.createDiv({ cls: "ixplorer-chat__results" });
+    const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
     this.citationsEl = results.createDiv({ cls: "ixplorer-chat__citations" });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
     this.saveActionsEl = results.createDiv({ cls: "ixplorer-chat__save-actions" });
 
-    root.createEl("form", { cls: "ixplorer-chat__form" }, (form) => {
+    chatPanel.createEl("form", { cls: "ixplorer-chat__form" }, (form) => {
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         void this.submitQuestion();
@@ -163,6 +192,11 @@ export class IxplorerChatView extends ItemView {
       });
     });
 
+    this.indexSearchRootEl = root.createDiv({
+      cls: `ixplorer-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
+    });
+    this.renderIndexSearchPanel();
+
     this.unsubscribeIndexing?.();
     this.unsubscribeIndexing =
       this.services.subscribeToIndexingState?.(() => {
@@ -171,6 +205,28 @@ export class IxplorerChatView extends ItemView {
     this.renderIndexControl();
     this.renderMessages();
     this.renderAnswerDetails();
+  }
+
+  private renderPanelTabs(containerEl: HTMLElement): void {
+    const tabs = containerEl.createDiv({ cls: "ixplorer-chat__tabs", attr: { role: "tablist" } });
+    this.createPanelTab(tabs, "chat", "Chat");
+    this.createPanelTab(tabs, "indexSearch", "Index search");
+  }
+
+  private createPanelTab(containerEl: HTMLElement, panel: IxplorerPanel, label: string): void {
+    const button = containerEl.createEl("button", {
+      cls: `ixplorer-chat__tab${this.activePanel === panel ? " is-active" : ""}`,
+      text: label,
+      attr: {
+        type: "button",
+        role: "tab",
+        "aria-selected": String(this.activePanel === panel),
+      },
+    });
+    button.addEventListener("click", () => {
+      this.activePanel = panel;
+      this.render();
+    });
   }
 
   private renderIndexControl(): void {
@@ -228,6 +284,144 @@ export class IxplorerChatView extends ItemView {
     this.renderCitations(this.lastAnswer?.citations ?? []);
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
     this.renderSaveActions();
+  }
+
+  private renderIndexSearchPanel(): void {
+    if (!this.indexSearchRootEl) {
+      return;
+    }
+
+    this.indexSearchRootEl.empty();
+    const profiles = this.services.getIndexProfiles();
+    const form = this.indexSearchRootEl.createEl("form", { cls: "ixplorer-index-search__form" });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.submitIndexSearch();
+    });
+
+    this.indexSearchProfileEl = form.createEl("select", {
+      cls: "ixplorer-index-search__profile",
+      attr: { "aria-label": "Index profile" },
+    });
+    for (const profile of profiles) {
+      this.indexSearchProfileEl.createEl("option", {
+        text: profile.name,
+        value: profile.id,
+      });
+    }
+
+    const filters = form.createDiv({ cls: "ixplorer-index-search__filters" });
+    this.indexSearchTopKEl = createLabeledInput(filters, {
+      label: "Top K",
+      value: "5",
+      type: "number",
+      min: "1",
+      max: "50",
+    });
+    this.indexSearchMinScoreEl = createLabeledInput(filters, {
+      label: "Min score",
+      value: "0.3",
+      type: "number",
+      min: "0",
+      max: "1",
+      step: "0.05",
+    });
+    this.indexSearchExtEl = createLabeledInput(filters, {
+      label: "Ext",
+      value: "",
+      type: "text",
+      placeholder: "pdf, md",
+    });
+
+    const queryRow = form.createDiv({ cls: "ixplorer-index-search__query-row" });
+    this.indexSearchQueryEl = queryRow.createEl("textarea", {
+      cls: "ixplorer-index-search__query",
+      attr: {
+        rows: "2",
+        placeholder: "Enter search query...",
+        "aria-label": "Index search query",
+      },
+    });
+    this.indexSearchQueryEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      void this.submitIndexSearch();
+    });
+    this.indexSearchButtonEl = queryRow.createEl("button", {
+      cls: "ixplorer-index-search__button",
+      attr: {
+        type: "submit",
+        "aria-label": "Search index",
+        title: "Search index",
+      },
+    });
+    setIcon(this.indexSearchButtonEl, "search");
+
+    this.indexSearchResultsEl = this.indexSearchRootEl.createDiv({
+      cls: "ixplorer-index-search__results",
+      attr: { role: "list" },
+    });
+    this.renderIndexSearchResults();
+  }
+
+  private renderIndexSearchResults(): void {
+    if (!this.indexSearchResultsEl) {
+      return;
+    }
+
+    this.indexSearchResultsEl.empty();
+
+    if (this.indexSearchError) {
+      this.indexSearchResultsEl.createDiv({
+        cls: "ixplorer-index-search__empty",
+        text: this.indexSearchError,
+      });
+      return;
+    }
+
+    if (this.isSearchingIndex) {
+      this.indexSearchResultsEl.createDiv({
+        cls: "ixplorer-index-search__empty",
+        text: "Searching index...",
+      });
+      return;
+    }
+
+    if (this.indexSearchResults.length === 0) {
+      this.indexSearchResultsEl.createDiv({
+        cls: "ixplorer-index-search__empty",
+        text: "No results yet.",
+      });
+      return;
+    }
+
+    for (const chunk of this.indexSearchResults) {
+      const item = this.indexSearchResultsEl.createDiv({
+        cls: "ixplorer-index-search__result",
+        attr: { role: "listitem" },
+      });
+      const header = item.createDiv({ cls: "ixplorer-index-search__result-header" });
+      const citation = formatIndexSearchCitation(chunk);
+      const openButton = header.createEl("button", {
+        cls: "ixplorer-index-search__result-title",
+        text: citation,
+        attr: { type: "button" },
+      });
+      openButton.addEventListener("click", () => {
+        void this.openRetrievedChunk(chunk);
+      });
+      header.createSpan({
+        cls: "ixplorer-index-search__score",
+        text: chunk.score.toFixed(3),
+      });
+      item.createDiv({
+        cls: "ixplorer-index-search__snippet",
+        text: chunk.text,
+      });
+    }
   }
 
   private renderCitations(citations: Citation[]): void {
@@ -353,6 +547,52 @@ export class IxplorerChatView extends ItemView {
     }
   }
 
+  private async submitIndexSearch(): Promise<void> {
+    const query = this.indexSearchQueryEl?.value.trim() ?? "";
+
+    if (!query || this.isSearchingIndex) {
+      return;
+    }
+
+    this.isSearchingIndex = true;
+    this.indexSearchError = null;
+    this.indexSearchResults = [];
+    this.setIndexSearchDisabled(true);
+    this.renderIndexSearchResults();
+
+    try {
+      this.indexSearchResults = await this.services.searchIndex({
+        profileId: this.indexSearchProfileEl?.value ?? this.services.getIndexProfiles()[0]?.id ?? "",
+        query,
+        limit: readPositiveInteger(this.indexSearchTopKEl?.value, 5),
+        minScore: readOptionalNumber(this.indexSearchMinScoreEl?.value),
+        extension: normalizeExtensionFilter(this.indexSearchExtEl?.value ?? ""),
+      });
+    } catch (error) {
+      this.indexSearchError = toUserMessage(error);
+      new Notice(toUserMessage(error));
+    } finally {
+      this.isSearchingIndex = false;
+      this.setIndexSearchDisabled(false);
+      this.renderIndexSearchResults();
+    }
+  }
+
+  private setIndexSearchDisabled(disabled: boolean): void {
+    for (const element of [
+      this.indexSearchProfileEl,
+      this.indexSearchQueryEl,
+      this.indexSearchTopKEl,
+      this.indexSearchMinScoreEl,
+      this.indexSearchExtEl,
+      this.indexSearchButtonEl,
+    ]) {
+      if (element) {
+        element.disabled = disabled;
+      }
+    }
+  }
+
   private applyResearchEvent(event: ResearchStreamEvent): void {
     if (event.type === "delta") {
       this.messages = nextAssistantMessage(this.messages, event.content);
@@ -392,6 +632,13 @@ export class IxplorerChatView extends ItemView {
     }
 
     await this.app.workspace.openLinkText(target.target, "", false);
+  }
+
+  private async openRetrievedChunk(chunk: RetrievedChunk): Promise<void> {
+    await this.openCitation({
+      ...formatCitationForChunk(chunk),
+      id: chunk.id,
+    });
   }
 
   private async saveAnswerToNewNote(): Promise<void> {
@@ -450,5 +697,96 @@ export class IxplorerChatView extends ItemView {
     }
 
     return `${base}-${Date.now()}${extension}`;
+  }
+}
+
+function createLabeledInput(
+  containerEl: HTMLElement,
+  options: {
+    label: string;
+    value: string;
+    type: string;
+    min?: string;
+    max?: string;
+    step?: string;
+    placeholder?: string;
+  },
+): HTMLInputElement {
+  const label = containerEl.createEl("label", { cls: "ixplorer-index-search__filter" });
+  label.createSpan({ text: options.label });
+  const attr: Record<string, string> = {
+    type: options.type,
+    value: options.value,
+  };
+
+  for (const key of ["min", "max", "step", "placeholder"] as const) {
+    if (options[key] !== undefined) {
+      attr[key] = options[key];
+    }
+  }
+
+  const input = label.createEl("input", {
+    attr,
+  });
+
+  return input;
+}
+
+function readPositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  const parsed = Number.parseFloat(value.replace(",", "."));
+
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeExtensionFilter(value: string): string | undefined {
+  const normalized = value.trim().replace(/^\./, "").toLowerCase();
+
+  return normalized || undefined;
+}
+
+function formatIndexSearchCitation(chunk: RetrievedChunk): string {
+  const citation = formatCitationForChunk(chunk);
+
+  return citation.label;
+}
+
+function formatCitationForChunk(chunk: RetrievedChunk): Citation {
+  switch (chunk.source.kind) {
+    case "markdown":
+      return {
+        id: chunk.id,
+        label: chunk.source.headingPath.length
+          ? `${chunk.source.path} > ${chunk.source.headingPath.join(" > ")}`
+          : chunk.source.path,
+        source: chunk.source,
+      };
+    case "pdf":
+      return {
+        id: chunk.id,
+        label: `${chunk.source.path} p. ${chunk.source.pageNumber}`,
+        source: chunk.source,
+      };
+    case "document":
+      return {
+        id: chunk.id,
+        label: chunk.source.path,
+        source: chunk.source,
+      };
+    case "web":
+      return {
+        id: chunk.id,
+        label: chunk.source.url,
+        source: chunk.source,
+      };
   }
 }

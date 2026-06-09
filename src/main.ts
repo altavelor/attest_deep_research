@@ -69,6 +69,9 @@ export default class IxplorerPlugin extends Plugin {
             await this.saveSettings();
           },
           getAvailableChatModels: () => [...this.availableChatModels],
+          getIndexProfiles: () =>
+            this.settings.indexProfiles.map((profile) => ({ id: profile.id, name: profile.name })),
+          searchIndex: (options) => this.searchIndex(options),
           isChatIndexControlShown: () => this.settings.showChatIndexControl,
           setChatIndexControlShown: async (shown) => {
             this.settings.showChatIndexControl = shown;
@@ -132,6 +135,7 @@ export default class IxplorerPlugin extends Plugin {
         folder: this.getVaultLocalPath(indexProfile.indexFolder),
         profileId: indexProfile.id,
         shardCount: indexProfile.shardCount,
+        onPerformance: (event) => this.logger.logIndexingPerformance(event),
       }),
       embeddingModel: indexProfile.embeddingModel,
       keywordCorpus: [],
@@ -149,6 +153,42 @@ export default class IxplorerPlugin extends Plugin {
         ? new DuckDuckGoSearchProvider({ logger: this.logger })
         : undefined,
     });
+  }
+
+  private async searchIndex(options: {
+    profileId: string;
+    query: string;
+    limit: number;
+    minScore?: number;
+    extension?: string;
+  }) {
+    const indexProfile =
+      this.settings.indexProfiles.find((profile) => profile.id === options.profileId) ??
+      getActiveIndexProfile(this.settings);
+    const embeddings = new EmbeddingClient({
+      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
+      baseUrl: indexProfile.embeddingProviderBaseUrl,
+      logger: this.logger,
+    });
+    const retriever = new RetrievalService({
+      embeddings,
+      indexStore: new FileVectorIndexStore({
+        folder: this.getVaultLocalPath(indexProfile.indexFolder),
+        profileId: indexProfile.id,
+        shardCount: indexProfile.shardCount,
+        onPerformance: (event) => this.logger.logIndexingPerformance(event),
+      }),
+      embeddingModel: indexProfile.embeddingModel,
+      keywordCorpus: [],
+    });
+    const result = await retriever.search(options.query, {
+      limit: options.limit,
+      includeWebResults: false,
+      minScore: options.minScore,
+      fileExtensions: options.extension ? [options.extension] : undefined,
+    });
+
+    return result.chunks;
   }
 
   private createIndexingService(onProgress: (state: IndexingState) => void): IndexingService {
@@ -194,6 +234,7 @@ export default class IxplorerPlugin extends Plugin {
         folder: this.getVaultLocalPath(indexProfile.indexFolder),
         profileId: indexProfile.id,
         shardCount: indexProfile.shardCount,
+        onPerformance: (event) => this.logger.logIndexingPerformance(event),
       }),
       embeddingModel: indexProfile.embeddingModel,
       includeFolders: indexProfile.includeFolders,

@@ -88,6 +88,7 @@ export interface FileVectorShardManifest {
   vectorFile: string;
   chunkCount: number;
   vectorByteLength: number;
+  keywordIndexedChunkCount?: number;
 }
 
 export interface FileVectorChunkRow {
@@ -157,6 +158,21 @@ export interface FileVectorIndexStoreOptions {
   profileId?: string;
   shardCount?: number;
   now?: () => Date;
+  onPerformance?: (event: FileVectorIndexStorePerformanceEvent) => void;
+}
+
+export interface FileVectorIndexStorePerformanceEvent {
+  phase:
+    | "keywordBuild"
+    | "vectorEncode"
+    | "manifestBuild"
+    | "diskWrite"
+    | "persist";
+  durationMs: number;
+  shardId?: string;
+  dirtyShardCount?: number;
+  writtenFileCount?: number;
+  chunkCount?: number;
 }
 
 interface StoredChunk {
@@ -172,6 +188,8 @@ interface FileVectorIndexState {
 
 interface FileVectorIndexWriteChanges {
   dirtyShardIds: Set<string>;
+  dirtySourcePaths: Set<string>;
+  replacedChunkIds: Set<string>;
   sourcesDirty: boolean;
 }
 
@@ -185,6 +203,7 @@ export class FileVectorIndexStore
   private readonly profileId: string;
   private readonly shardCount: number;
   private readonly now: () => Date;
+  private readonly onPerformance?: (event: FileVectorIndexStorePerformanceEvent) => void;
   private state: FileVectorIndexState | null = null;
 
   constructor(options: FileVectorIndexStoreOptions) {
@@ -192,6 +211,7 @@ export class FileVectorIndexStore
     this.profileId = options.profileId ?? DEFAULT_PROFILE_ID;
     this.shardCount = options.shardCount ?? DEFAULT_FILE_VECTOR_SHARD_COUNT;
     this.now = options.now ?? (() => new Date());
+    this.onPerformance = options.onPerformance;
   }
 
   async initialize(metadata: IndexStoreMetadata): Promise<void> {
@@ -208,7 +228,9 @@ export class FileVectorIndexStore
         shardCount: this.shardCount,
         now: this.now,
       });
-      await this.persistState(this.state, { dirtyShardIds: new Set(), sourcesDirty: true });
+      const changes = createWriteChanges();
+      changes.sourcesDirty = true;
+      await this.persistState(this.state, changes);
       return;
     }
 
@@ -342,7 +364,9 @@ export class FileVectorIndexStore
 
     const state = this.requireState();
     applySourceSnapshotUpdates(state, snapshots);
-    await this.persistState(state, { dirtyShardIds: new Set(), sourcesDirty: true });
+    const changes = createWriteChanges();
+    changes.sourcesDirty = true;
+    await this.persistState(state, changes);
   }
 
   async recordFailedSourceSnapshots(snapshots: IndexFailedSourceSnapshot[]): Promise<void> {
@@ -357,7 +381,9 @@ export class FileVectorIndexStore
     }
 
     applyFailedSourceSnapshots(state, snapshots);
-    await this.persistState(state, { dirtyShardIds: new Set(), sourcesDirty: true });
+    const changes = createWriteChanges();
+    changes.sourcesDirty = true;
+    await this.persistState(state, changes);
     this.state = state;
   }
 
@@ -619,6 +645,7 @@ export class FileVectorIndexStore
     state: FileVectorIndexState,
     changes?: FileVectorIndexWriteChanges,
   ): Promise<void> {
+    const persistStartedAt = Date.now();
     const writeId = createWriteId(this.now);
     const updatedAt = this.now().toISOString();
     const shardManifests: FileVectorShardManifest[] = [];
@@ -634,41 +661,60 @@ export class FileVectorIndexStore
     let keywordIndexedChunkCount = 0;
 
     for (const shard of state.manifest.shards) {
-      const storedChunks = state.chunksByShard.get(shard.id) ?? [];
-      const chunkRows = storedChunks.map((chunk) => chunk.row);
-      const encoded = encodeStoredChunks(storedChunks, state.manifest.embeddingDimensions);
-      const keywordRows = buildKeywordPostingRows(
-        chunkRows,
-        state.manifest.keywordIndex.minTokenLength,
-      );
       const isDirty = changes === undefined || changes.dirtyShardIds.has(shard.id);
 
-      keywordIndexedChunkCount += countIndexedKeywordChunks(keywordRows);
+      if (!isDirty) {
+        shardManifests.push(shard);
+        keywordIndexedChunkCount += shard.keywordIndexedChunkCount ?? shard.chunkCount;
+        continue;
+      }
+
+      const storedChunks = state.chunksByShard.get(shard.id) ?? [];
+      const chunkRows = storedChunks.map((chunk) => chunk.row);
+      const vectorEncodeStartedAt = Date.now();
+      const encoded = encodeStoredChunks(storedChunks, state.manifest.embeddingDimensions);
+      this.logPerformance({
+        phase: "vectorEncode",
+        durationMs: Date.now() - vectorEncodeStartedAt,
+        shardId: shard.id,
+        chunkCount: storedChunks.length,
+      });
+      const keywordBuildStartedAt = Date.now();
+      const keywordRows = await this.buildDirtyKeywordRows(state, shard, chunkRows, changes);
+      const shardKeywordIndexedChunkCount = countIndexedKeywordChunks(keywordRows);
+      this.logPerformance({
+        phase: "keywordBuild",
+        durationMs: Date.now() - keywordBuildStartedAt,
+        shardId: shard.id,
+        chunkCount: chunkRows.length,
+      });
+
+      keywordIndexedChunkCount += shardKeywordIndexedChunkCount;
       shardManifests.push({
         id: shard.id,
         chunkMetadataFile: shard.chunkMetadataFile,
         vectorFile: shard.vectorFile,
         chunkCount: storedChunks.length,
         vectorByteLength: encoded.byteLength,
+        keywordIndexedChunkCount: shardKeywordIndexedChunkCount,
       });
-      if (isDirty) {
-        files.push(
-          {
-            path: this.pathFor(shard.chunkMetadataFile),
-            data: toJsonl(chunkRows),
-          },
-          {
-            path: this.pathFor(shard.vectorFile),
-            data: encoded,
-          },
-          {
-            path: this.pathFor(`keywords/${shard.id}.terms.jsonl`),
-            data: toJsonl(keywordRows),
-          },
-        );
-      }
+      files.push(
+        {
+          path: this.pathFor(shard.chunkMetadataFile),
+          data: toJsonl(chunkRows),
+        },
+        {
+          path: this.pathFor(shard.vectorFile),
+          data: encoded,
+        },
+        {
+          path: this.pathFor(`keywords/${shard.id}.terms.jsonl`),
+          data: toJsonl(keywordRows),
+        },
+      );
     }
 
+    const manifestStartedAt = Date.now();
     const manifest = createFileVectorManifest({
       profileId: state.manifest.profileId,
       embeddingModel: state.manifest.embeddingModel,
@@ -682,9 +728,15 @@ export class FileVectorIndexStore
       keywordIndexedChunkCount,
       keywordMinTokenLength: state.manifest.keywordIndex.minTokenLength,
     });
+    this.logPerformance({
+      phase: "manifestBuild",
+      durationMs: Date.now() - manifestStartedAt,
+      dirtyShardCount: changes?.dirtyShardIds.size ?? state.manifest.shards.length,
+    });
 
     state.manifest = manifest;
 
+    const diskWriteStartedAt = Date.now();
     await atomicWriteIndexFiles({
       files,
       manifest: {
@@ -693,6 +745,48 @@ export class FileVectorIndexStore
       },
       writeId,
     });
+    this.logPerformance({
+      phase: "diskWrite",
+      durationMs: Date.now() - diskWriteStartedAt,
+      writtenFileCount: files.length + 1,
+      dirtyShardCount: changes?.dirtyShardIds.size ?? state.manifest.shards.length,
+    });
+    this.logPerformance({
+      phase: "persist",
+      durationMs: Date.now() - persistStartedAt,
+      writtenFileCount: files.length + 1,
+      dirtyShardCount: changes?.dirtyShardIds.size ?? state.manifest.shards.length,
+    });
+  }
+
+  private async buildDirtyKeywordRows(
+    state: FileVectorIndexState,
+    shard: FileVectorShardManifest,
+    chunkRows: FileVectorChunkRow[],
+    changes?: FileVectorIndexWriteChanges,
+  ): Promise<KeywordPostingRow[]> {
+    if (changes === undefined || !changes.dirtySourcePaths.size) {
+      return buildKeywordPostingRows(chunkRows, state.manifest.keywordIndex.minTokenLength);
+    }
+
+    const dirtySourceRows = chunkRows.filter((row) => {
+      const sourcePath = row.sourcePath ?? sourcePathFromReference(row.source);
+      return changes.dirtySourcePaths.has(sourcePath);
+    });
+    const existingRows = await readJsonlIndexFile(
+      this.pathFor(`keywords/${shard.id}.terms.jsonl`),
+      isKeywordPostingRow,
+    );
+    const replacementRows = buildKeywordPostingRows(
+      dirtySourceRows,
+      state.manifest.keywordIndex.minTokenLength,
+    );
+
+    return mergeKeywordRowsReplacingChunks(existingRows, replacementRows, changes.replacedChunkIds);
+  }
+
+  private logPerformance(event: FileVectorIndexStorePerformanceEvent): void {
+    this.onPerformance?.(event);
   }
 
   private pathFor(relativePath: string): string {
@@ -999,7 +1093,12 @@ function createEmptyState(options: {
 }
 
 function createWriteChanges(): FileVectorIndexWriteChanges {
-  return { dirtyShardIds: new Set(), sourcesDirty: false };
+  return {
+    dirtyShardIds: new Set(),
+    dirtySourcePaths: new Set(),
+    replacedChunkIds: new Set(),
+    sourcesDirty: false,
+  };
 }
 
 function applyUpsertChunks(
@@ -1054,6 +1153,8 @@ function applyUpsertChunks(
     shardChunks.push(storedChunk);
     state.chunksByShard.set(shardId, shardChunks);
     changes.dirtyShardIds.add(shardId);
+    changes.dirtySourcePaths.add(sourcePath);
+    changes.replacedChunkIds.add(chunk.id);
   }
 
   refreshSources(state, now);
@@ -1126,6 +1227,11 @@ function removeSourcePathFromState(
     if (retained.length !== chunks.length) {
       removed = true;
       changes?.dirtyShardIds.add(shardId);
+      for (const chunk of chunks) {
+        if (chunk.row.sourcePath === sourcePath) {
+          changes?.replacedChunkIds.add(chunk.row.id);
+        }
+      }
       state.chunksByShard.set(shardId, retained);
     }
   }
@@ -1150,6 +1256,12 @@ function removeChunkIdsFromState(
     if (retained.length !== chunks.length) {
       removed = true;
       changes?.dirtyShardIds.add(shardId);
+      for (const chunk of chunks) {
+        if (chunkIds.has(chunk.row.id)) {
+          changes?.dirtySourcePaths.add(chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source));
+          changes?.replacedChunkIds.add(chunk.row.id);
+        }
+      }
       state.chunksByShard.set(shardId, retained);
     }
   }
@@ -1272,6 +1384,54 @@ function sourcePathFromReference(source: SourceReference): string {
 
 function toJsonl(rows: unknown[]): string {
   return rows.length === 0 ? "" : `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`;
+}
+
+function mergeKeywordRowsReplacingChunks(
+  existingRows: KeywordPostingRow[],
+  replacementRows: KeywordPostingRow[],
+  replacedChunkIds: Set<string>,
+): KeywordPostingRow[] {
+  const byTerm = new Map<string, Map<string, number>>();
+
+  for (const row of existingRows) {
+    const postings = getOrCreateMap(byTerm, row.term);
+
+    for (const posting of row.postings) {
+      if (!replacedChunkIds.has(posting.chunkId)) {
+        postings.set(posting.chunkId, posting.frequency);
+      }
+    }
+  }
+
+  for (const row of replacementRows) {
+    const postings = getOrCreateMap(byTerm, row.term);
+
+    for (const posting of row.postings) {
+      postings.set(posting.chunkId, posting.frequency);
+    }
+  }
+
+  return Array.from(byTerm.entries())
+    .filter(([, postings]) => postings.size > 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([term, postings]) => ({
+      term,
+      postings: Array.from(postings.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([chunkId, frequency]) => ({ chunkId, frequency })),
+    }));
+}
+
+function getOrCreateMap(map: Map<string, Map<string, number>>, key: string): Map<string, number> {
+  const existing = map.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
+  const created = new Map<string, number>();
+  map.set(key, created);
+  return created;
 }
 
 function createWriteId(now: () => Date): string {

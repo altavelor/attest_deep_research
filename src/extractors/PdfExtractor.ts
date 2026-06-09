@@ -25,6 +25,7 @@ export interface PdfExtractorOptions {
   parser?: PdfPageTextParser;
   maxChunkLength?: number;
   chunkOverlap?: number;
+  pageConcurrency?: number;
 }
 
 type UnicodeMap = Map<number, string>;
@@ -39,7 +40,7 @@ export class PdfExtractor implements Extractor {
   private readonly chunkOverlap: number;
 
   constructor(options: PdfExtractorOptions = {}) {
-    this.parser = options.parser ?? new PdfJsTextParser();
+    this.parser = options.parser ?? new PdfJsTextParser({ pageConcurrency: options.pageConcurrency });
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
     this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
@@ -89,6 +90,12 @@ export class PdfExtractor implements Extractor {
 }
 
 export class PdfJsTextParser implements PdfPageTextParser {
+  private readonly pageConcurrency: number;
+
+  constructor(options: { pageConcurrency?: number } = {}) {
+    this.pageConcurrency = positiveIntegerOrDefault(options.pageConcurrency, 3);
+  }
+
   async *parsePages(data: ArrayBuffer): AsyncIterable<PdfPageText> {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const pdfWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
@@ -107,21 +114,42 @@ export class PdfJsTextParser implements PdfPageTextParser {
     try {
       const document = await loadingTask.promise;
 
-      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-        const page = await document.getPage(pageNumber);
-        const textContent = await page.getTextContent({
-          disableCombineTextItems: false,
-        });
+      for (let startPage = 1; startPage <= document.numPages; startPage += this.pageConcurrency) {
+        const pageNumbers = Array.from(
+          { length: Math.min(this.pageConcurrency, document.numPages - startPage + 1) },
+          (_, index) => startPage + index,
+        );
+        const pages = await Promise.all(pageNumbers.map((pageNumber) => parsePdfPage(document, pageNumber)));
 
-        yield {
-          pageNumber,
-          text: formatPdfTextItems(textContent.items),
-        };
+        for (const page of pages) {
+          yield page;
+        }
       }
     } finally {
       await loadingTask.destroy();
     }
   }
+}
+
+async function parsePdfPage(
+  document: { getPage(pageNumber: number): Promise<PdfJsPage> },
+  pageNumber: number,
+): Promise<PdfPageText> {
+  const page = await document.getPage(pageNumber);
+  const textContent = await page.getTextContent({
+    disableCombineTextItems: false,
+  });
+
+  return {
+    pageNumber,
+    text: formatPdfTextItems(textContent.items),
+  };
+}
+
+interface PdfJsPage {
+  getTextContent(options: { disableCombineTextItems: boolean }): Promise<{
+    items: PdfTextContentItem[];
+  }>;
 }
 
 export class SimplePdfTextParser implements PdfPageTextParser {
@@ -207,6 +235,10 @@ function errorMessage(error: unknown): string | undefined {
   }
 
   return typeof error === "string" && error.trim() ? error.trim() : undefined;
+}
+
+function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
+  return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
 }
 
 function parsePdfObjects(source: string): Map<number, string> {
