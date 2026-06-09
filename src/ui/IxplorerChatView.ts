@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, MarkdownRenderer, Modal, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 
 import { IndexingState } from "../indexing/IndexingService";
 import {
@@ -12,6 +12,7 @@ import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import { attachModelDropdown } from "./ModelDropdown";
 import { ChatDisplayMessage, citationTarget, nextAssistantMessage } from "./rendering";
+import { messageDisplayContent, messageMarkdownContent } from "./rendering";
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
@@ -40,26 +41,34 @@ export interface IndexSearchOptions {
 
 type IxplorerPanel = "chat" | "indexSearch";
 
+interface ChatCitationRef {
+  number: number;
+  chunk: RetrievedChunk;
+  chunkIds: Set<string>;
+  key: string;
+}
+
 export class IxplorerChatView extends ItemView {
   private readonly services: IxplorerChatViewServices;
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
+  private attachedContextPaths: string[] = [];
   private activePanel: IxplorerPanel = "chat";
   private indexSearchResults: RetrievedChunk[] = [];
   private indexSearchError: string | null = null;
   private isSearchingIndex = false;
   private isRunning = false;
+  private shouldStopRunning = false;
+  private editingMessageIndex: number | null = null;
 
   private transcriptEl: HTMLElement | null = null;
   private indexControlEl: HTMLElement | null = null;
-  private indexRevealButtonEl: HTMLButtonElement | null = null;
-  private citationsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
-  private saveActionsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private modelInputEl: HTMLInputElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private webSearchEl: HTMLInputElement | null = null;
+  private attachedContextEl: HTMLElement | null = null;
   private indexSearchRootEl: HTMLElement | null = null;
   private indexSearchProfileEl: HTMLSelectElement | null = null;
   private indexSearchQueryEl: HTMLTextAreaElement | null = null;
@@ -68,6 +77,8 @@ export class IxplorerChatView extends ItemView {
   private indexSearchExtEl: HTMLInputElement | null = null;
   private indexSearchButtonEl: HTMLButtonElement | null = null;
   private indexSearchResultsEl: HTMLElement | null = null;
+  private citationPopoverEl: HTMLElement | null = null;
+  private citationPopoverCloseTimer: number | null = null;
   private unsubscribeIndexing: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
@@ -94,6 +105,7 @@ export class IxplorerChatView extends ItemView {
   async onClose(): Promise<void> {
     this.unsubscribeIndexing?.();
     this.unsubscribeIndexing = null;
+    this.closeCitationPopover();
     this.contentEl.empty();
   }
 
@@ -106,20 +118,11 @@ export class IxplorerChatView extends ItemView {
     header.createEl("h2", { text: "Ixplorer" });
     this.renderPanelTabs(header);
 
-    this.indexControlEl = header.createDiv();
-    this.indexRevealButtonEl = header.createEl("button", {
-      cls: "ixplorer-chat__index-reveal",
-      text: "Show index",
-      attr: { type: "button" },
-    });
-    this.indexRevealButtonEl.addEventListener("click", async () => {
-      await this.services.setChatIndexControlShown(true);
-      this.renderIndexControl();
-    });
-
     const chatPanel = root.createDiv({
       cls: `ixplorer-chat__panel${this.activePanel === "chat" ? "" : " is-hidden"}`,
     });
+    const chatToolbar = chatPanel.createDiv({ cls: "ixplorer-chat__toolbar" });
+    this.renderChatWindowActions(chatToolbar);
 
     this.transcriptEl = chatPanel.createDiv({
       cls: "ixplorer-chat__transcript",
@@ -127,9 +130,7 @@ export class IxplorerChatView extends ItemView {
     });
 
     const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
-    this.citationsEl = results.createDiv({ cls: "ixplorer-chat__citations" });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
-    this.saveActionsEl = results.createDiv({ cls: "ixplorer-chat__save-actions" });
 
     chatPanel.createEl("form", { cls: "ixplorer-chat__form" }, (form) => {
       form.addEventListener("submit", (event) => {
@@ -155,6 +156,18 @@ export class IxplorerChatView extends ItemView {
       });
 
       const modelRow = form.createDiv({ cls: "ixplorer-chat__model-row" });
+      const attachButton = modelRow.createEl("button", {
+        cls: "ixplorer-chat__icon-button",
+        attr: {
+          type: "button",
+          "aria-label": "Attach context documents",
+          title: "Attach context documents",
+        },
+      });
+      setIcon(attachButton, "paperclip");
+      attachButton.addEventListener("click", () => {
+        this.openContextPicker();
+      });
       modelRow.createEl("label", { text: "Model", attr: { for: "ixplorer-chat-model" } });
       this.modelInputEl = modelRow.createEl("input", {
         cls: "ixplorer-chat__model-input",
@@ -175,9 +188,10 @@ export class IxplorerChatView extends ItemView {
         emptyText: "Refresh models in settings",
         onSelect: (model) => this.services.setChatModel(model),
       });
+      this.attachedContextEl = form.createDiv({ cls: "ixplorer-chat__attachments" });
+      this.renderAttachedContext();
 
-      const actions = form.createDiv({ cls: "ixplorer-chat__actions" });
-      const webLabel = actions.createEl("label", { cls: "ixplorer-chat__toggle" });
+      const webLabel = modelRow.createEl("label", { cls: "ixplorer-chat__toggle" });
       this.webSearchEl = webLabel.createEl("input", {
         attr: { type: "checkbox" },
       });
@@ -185,10 +199,18 @@ export class IxplorerChatView extends ItemView {
       this.webSearchEl.disabled = !this.services.isWebSearchEnabled();
       webLabel.createSpan({ text: "Web" });
 
-      this.submitButtonEl = actions.createEl("button", {
-        cls: "mod-cta",
+      this.submitButtonEl = modelRow.createEl("button", {
+        cls: "mod-cta ixplorer-chat__submit",
         text: "Ask",
-        attr: { type: "submit" },
+        attr: { type: "button" },
+      });
+      this.submitButtonEl.addEventListener("click", () => {
+        if (this.isRunning) {
+          this.stopRunningQuestion();
+          return;
+        }
+
+        void this.submitQuestion();
       });
     });
 
@@ -229,16 +251,106 @@ export class IxplorerChatView extends ItemView {
     });
   }
 
-  private renderIndexControl(): void {
-    if (!this.indexControlEl || !this.indexRevealButtonEl) {
+  private renderChatWindowActions(containerEl: HTMLElement): void {
+    const actions = containerEl.createDiv({ cls: "ixplorer-chat__window-actions" });
+    this.createHeaderIconButton(actions, {
+      icon: "message-square-plus",
+      label: "New chat",
+      disabled: false,
+      onClick: () => this.startNewChat(),
+    });
+    this.createHeaderIconButton(actions, {
+      icon: "file-plus-2",
+      label: "Save answer to new note",
+      disabled: this.lastAnswer === null,
+      onClick: () => void this.saveAnswerToNewNote(),
+    });
+    this.createHeaderIconButton(actions, {
+      icon: "file-input",
+      label: "Append answer to active note",
+      disabled: this.lastAnswer === null,
+      onClick: () => void this.appendAnswerToActiveNote(),
+    });
+  }
+
+  private createHeaderIconButton(
+    containerEl: HTMLElement,
+    options: {
+      icon: string;
+      label: string;
+      disabled: boolean;
+      onClick: () => void;
+    },
+  ): HTMLButtonElement {
+    const button = containerEl.createEl("button", {
+      cls: "ixplorer-chat__icon-button",
+      attr: {
+        type: "button",
+        "aria-label": options.label,
+        title: options.label,
+      },
+    });
+    button.disabled = options.disabled;
+    setIcon(button, options.icon);
+    button.addEventListener("click", options.onClick);
+    return button;
+  }
+
+  private startNewChat(): void {
+    this.messages = [];
+    this.lastAnswer = null;
+    this.attachedContextPaths = [];
+    this.render();
+  }
+
+  private openContextPicker(): void {
+    const files = this.app.vault
+      .getFiles()
+      .filter((file) => isContextDocumentPath(file.path))
+      .sort((left, right) => left.path.localeCompare(right.path));
+    new ContextDocumentPickerModal(this.app, {
+      files,
+      selectedPaths: this.attachedContextPaths,
+      onSubmit: (paths) => {
+        this.attachedContextPaths = paths;
+        this.renderAttachedContext();
+      },
+    }).open();
+  }
+
+  private renderAttachedContext(): void {
+    if (!this.attachedContextEl) {
       return;
     }
 
-    const shouldShow = this.services.isChatIndexControlShown();
-    this.indexControlEl.toggleClass("is-hidden", !shouldShow);
-    this.indexRevealButtonEl.toggleClass("is-hidden", shouldShow);
+    this.attachedContextEl.empty();
 
-    if (!shouldShow) {
+    for (const path of this.attachedContextPaths) {
+      const chip = this.attachedContextEl.createSpan({ cls: "ixplorer-chat__attachment" });
+      chip.createSpan({ text: path });
+      const removeButton = chip.createEl("button", {
+        attr: {
+          type: "button",
+          "aria-label": `Remove ${path}`,
+          title: `Remove ${path}`,
+        },
+      });
+      setIcon(removeButton, "x");
+      removeButton.addEventListener("click", () => {
+        this.attachedContextPaths = this.attachedContextPaths.filter(
+          (candidate) => candidate !== path,
+        );
+        this.renderAttachedContext();
+      });
+    }
+  }
+
+  private renderIndexControl(): void {
+    if (!this.indexControlEl) {
+      return;
+    }
+
+    if (this.activePanel !== "indexSearch") {
       this.indexControlEl.empty();
       return;
     }
@@ -252,10 +364,6 @@ export class IxplorerChatView extends ItemView {
         resume: () => undefined,
         rebuild: () => undefined,
       },
-      onHide: async () => {
-        await this.services.setChatIndexControlShown(false);
-        this.renderIndexControl();
-      },
     });
   }
 
@@ -264,26 +372,328 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    this.transcriptEl.empty();
+    const transcriptEl = this.transcriptEl;
+    transcriptEl.empty();
 
-    for (const message of this.messages) {
-      const messageEl = this.transcriptEl.createDiv({
+    this.messages.forEach((message, index) => {
+      const messageEl = transcriptEl.createDiv({
         cls: `ixplorer-chat__message ixplorer-chat__message--${message.role}`,
       });
-      messageEl.createDiv({
+      const header = messageEl.createDiv({ cls: "ixplorer-chat__message-header" });
+      header.createSpan({
         cls: "ixplorer-chat__message-label",
-        text: message.role === "user" ? "You" : "Ixplorer",
+        text: message.role === "user" ? "You" : this.services.getChatModel() || "Assistant",
       });
-      messageEl.createDiv({ cls: "ixplorer-chat__message-content", text: message.content });
-    }
+      header.createSpan({
+        cls: "ixplorer-chat__message-time",
+        text: formatMessageTime(message.createdAt),
+      });
+      if (message.role === "user") {
+        const editButton = header.createEl("button", {
+          cls: "ixplorer-chat__message-edit",
+          attr: {
+            type: "button",
+            "aria-label": "Edit question",
+            title: "Edit question",
+          },
+        });
+        setIcon(editButton, "pencil");
+        editButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.editingMessageIndex = index;
+          this.renderMessages();
+        });
+      }
+      const copyButton = header.createEl("button", {
+        cls: "ixplorer-chat__message-copy",
+        attr: {
+          type: "button",
+          "aria-label": "Copy message",
+          title: "Copy message",
+        },
+      });
+      setIcon(copyButton, "copy");
+      copyButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void copyToClipboard(messageDisplayContent(message));
+      });
+      const contentEl = messageEl.createDiv({
+        cls: `ixplorer-chat__message-content ixplorer-chat__message-content--${message.role}`,
+      });
+      if (message.role === "user" && this.editingMessageIndex === index) {
+        this.renderQuestionEditor(contentEl, message, index);
+      } else if (message.role === "assistant") {
+        const citationRefs = buildCitationRefs(message.evidence ?? []);
+        void MarkdownRenderer.render(
+          this.app,
+          messageMarkdownContent(message),
+          contentEl,
+          "",
+          this,
+        ).then(() => {
+          this.renderInlineCitationAnchors(contentEl, citationRefs);
+        });
+      } else {
+        contentEl.setText(messageDisplayContent(message));
+      }
 
-    this.transcriptEl.scrollTop = this.transcriptEl.scrollHeight;
+      if (message.role === "assistant" && message.evidence && message.evidence.length > 0) {
+        this.renderCitationBlocks(messageEl, buildCitationRefs(message.evidence));
+      }
+    });
+
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  private renderQuestionEditor(
+    containerEl: HTMLElement,
+    message: ChatDisplayMessage,
+    index: number,
+  ): void {
+    const textarea = containerEl.createEl("textarea", {
+      cls: "ixplorer-chat__message-editor",
+      attr: {
+        rows: "2",
+        "aria-label": "Edit question",
+      },
+    });
+    textarea.value = message.content;
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.editingMessageIndex = null;
+        this.renderMessages();
+        return;
+      }
+
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      void this.submitEditedQuestion(index, textarea.value);
+    });
   }
 
   private renderAnswerDetails(): void {
-    this.renderCitations(this.lastAnswer?.citations ?? []);
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
-    this.renderSaveActions();
+  }
+
+  private renderInlineCitationAnchors(containerEl: HTMLElement, refs: ChatCitationRef[]): void {
+    const refByChunkId = new Map<string, ChatCitationRef>();
+    for (const ref of refs) {
+      for (const chunkId of ref.chunkIds) {
+        refByChunkId.set(chunkId, ref);
+      }
+    }
+
+    const createAnchor = (ref: ChatCitationRef): HTMLElement => {
+      const button = document.createElement("button");
+      button.className = "ixplorer-chat__citation-anchor";
+      button.type = "button";
+      button.textContent = `[${ref.number}]`;
+      button.setAttr("aria-label", `Open source ${ref.number}`);
+      button.dataset.citationKey = ref.key;
+      button.addEventListener("mouseenter", () => this.openCitationPopover(button, ref));
+      button.addEventListener("mouseleave", () => this.scheduleCitationPopoverClose(ref.key));
+      button.addEventListener("focus", () => this.openCitationPopover(button, ref));
+      button.addEventListener("blur", () => this.scheduleCitationPopoverClose(ref.key));
+      button.addEventListener("click", () => {
+        this.scrollCitationBlockIntoView(ref.key);
+      });
+      return button;
+    };
+    const replacementCount = replaceCitationTextNodes(containerEl, refByChunkId, createAnchor);
+
+    if (replacementCount === 0) {
+      appendFallbackCitationAnchors(containerEl, refs, createAnchor);
+    }
+  }
+
+  private renderCitationBlocks(containerEl: HTMLElement, refs: ChatCitationRef[]): void {
+    const details = containerEl.createEl("details", {
+      cls: "ixplorer-chat__citation-blocks",
+    });
+    details.open = refs.length <= 3;
+    details.createEl("summary", {
+      cls: "ixplorer-chat__citation-summary",
+      text: `Sources used (${refs.length})`,
+    });
+
+    for (const ref of refs) {
+      const block = details.createDiv({
+        cls: "ixplorer-chat__citation-block",
+        attr: { role: "link", tabindex: "0", "data-citation-key": ref.key },
+      });
+      block.addEventListener("click", () => {
+        void this.openRetrievedChunk(ref.chunk);
+      });
+      block.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+
+        event.preventDefault();
+        void this.openRetrievedChunk(ref.chunk);
+      });
+      block.addEventListener("mouseenter", () => this.setCitationHighlight(ref.key, true));
+      block.addEventListener("mouseleave", () => this.setCitationHighlight(ref.key, false));
+      block.addEventListener("focus", () => this.setCitationHighlight(ref.key, true));
+      block.addEventListener("blur", () => this.setCitationHighlight(ref.key, false));
+      const header = block.createDiv({ cls: "ixplorer-chat__citation-block-header" });
+      header.createSpan({ cls: "ixplorer-chat__citation-number", text: String(ref.number) });
+      header.createSpan({
+        cls: "ixplorer-chat__citation-block-source",
+        text: formatIndexSearchCitation(ref.chunk),
+      });
+      const copyButton = header.createEl("button", {
+        cls: "ixplorer-chat__citation-copy",
+        attr: {
+          type: "button",
+          "aria-label": "Copy citation text",
+          title: "Copy citation text",
+        },
+      });
+      setIcon(copyButton, "copy");
+      copyButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void copyToClipboard(ref.chunk.text);
+      });
+      block.createDiv({
+        cls: "ixplorer-chat__citation-block-text",
+        text: ref.chunk.text,
+      });
+    }
+  }
+
+  private setCitationHighlight(key: string, highlighted: boolean): void {
+    this.contentEl
+      .querySelectorAll<HTMLElement>(`[data-citation-key="${cssEscape(key)}"]`)
+      .forEach((element) => element.toggleClass("is-highlighted", highlighted));
+  }
+
+  private openCitationPopover(anchorEl: HTMLElement, ref: ChatCitationRef): void {
+    this.cancelCitationPopoverClose();
+    this.setCitationHighlight(ref.key, true);
+    this.citationPopoverEl?.remove();
+    const popover = this.contentEl.createDiv({
+      cls: "ixplorer-chat__citation-popover",
+      attr: { "data-citation-key": ref.key },
+    });
+    popover.addEventListener("mouseenter", () => {
+      this.cancelCitationPopoverClose();
+      this.setCitationHighlight(ref.key, true);
+    });
+    popover.addEventListener("mouseleave", () => this.scheduleCitationPopoverClose(ref.key));
+    popover.addEventListener("focusin", () => {
+      this.cancelCitationPopoverClose();
+      this.setCitationHighlight(ref.key, true);
+    });
+    popover.addEventListener("focusout", () => this.scheduleCitationPopoverClose(ref.key));
+    this.renderCitationPopoverContent(popover, ref);
+    this.citationPopoverEl = popover;
+    this.positionCitationPopover(anchorEl, popover);
+  }
+
+  private renderCitationPopoverContent(containerEl: HTMLElement, ref: ChatCitationRef): void {
+    const block = containerEl.createDiv({
+      cls: "ixplorer-chat__citation-popover-card",
+      attr: { role: "link", tabindex: "0" },
+    });
+    block.addEventListener("click", () => {
+      void this.openRetrievedChunk(ref.chunk);
+    });
+    block.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      event.preventDefault();
+      void this.openRetrievedChunk(ref.chunk);
+    });
+    const header = block.createDiv({ cls: "ixplorer-chat__citation-block-header" });
+    header.createSpan({ cls: "ixplorer-chat__citation-number", text: String(ref.number) });
+    header.createSpan({
+      cls: "ixplorer-chat__citation-block-source",
+      text: formatIndexSearchCitation(ref.chunk),
+    });
+    const copyButton = header.createEl("button", {
+      cls: "ixplorer-chat__citation-copy",
+      attr: {
+        type: "button",
+        "aria-label": "Copy citation text",
+        title: "Copy citation text",
+      },
+    });
+    setIcon(copyButton, "copy");
+    copyButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void copyToClipboard(ref.chunk.text);
+    });
+    block.createDiv({
+      cls: "ixplorer-chat__citation-block-text",
+      text: ref.chunk.text,
+    });
+  }
+
+  private positionCitationPopover(anchorEl: HTMLElement, popoverEl: HTMLElement): void {
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const hostRect = this.contentEl.getBoundingClientRect();
+    const popoverRect = popoverEl.getBoundingClientRect();
+    const gap = 8;
+    const left = Math.min(
+      Math.max(anchorRect.left - hostRect.left, gap),
+      Math.max(gap, hostRect.width - popoverRect.width - gap),
+    );
+    const topBelow = anchorRect.bottom - hostRect.top + gap;
+    const topAbove = anchorRect.top - hostRect.top - popoverRect.height - gap;
+    const top =
+      topBelow + popoverRect.height <= hostRect.height || topAbove < gap
+        ? topBelow
+        : Math.max(gap, topAbove);
+
+    popoverEl.style.left = `${left}px`;
+    popoverEl.style.top = `${top}px`;
+  }
+
+  private scheduleCitationPopoverClose(key: string): void {
+    this.cancelCitationPopoverClose();
+    this.citationPopoverCloseTimer = window.setTimeout(() => {
+      this.setCitationHighlight(key, false);
+      this.closeCitationPopover();
+    }, 180);
+  }
+
+  private cancelCitationPopoverClose(): void {
+    if (this.citationPopoverCloseTimer !== null) {
+      window.clearTimeout(this.citationPopoverCloseTimer);
+      this.citationPopoverCloseTimer = null;
+    }
+  }
+
+  private closeCitationPopover(): void {
+    this.cancelCitationPopoverClose();
+    const key = this.citationPopoverEl?.dataset.citationKey;
+    if (key) {
+      this.setCitationHighlight(key, false);
+    }
+    this.citationPopoverEl?.remove();
+    this.citationPopoverEl = null;
+  }
+
+  private scrollCitationBlockIntoView(key: string): void {
+    const block = this.contentEl.querySelector<HTMLElement>(
+      `.ixplorer-chat__citation-block[data-citation-key="${cssEscape(key)}"]`,
+    );
+    const details = block?.closest("details");
+    if (details instanceof HTMLDetailsElement) {
+      details.open = true;
+    }
+    block?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    this.setCitationHighlight(key, true);
+    window.setTimeout(() => this.setCitationHighlight(key, false), 900);
   }
 
   private renderIndexSearchPanel(): void {
@@ -292,6 +702,10 @@ export class IxplorerChatView extends ItemView {
     }
 
     this.indexSearchRootEl.empty();
+    this.indexControlEl = this.indexSearchRootEl.createDiv({
+      cls: "ixplorer-index-search__index-control",
+    });
+    this.renderIndexControl();
     const profiles = this.services.getIndexProfiles();
     const form = this.indexSearchRootEl.createEl("form", { cls: "ixplorer-index-search__form" });
     form.addEventListener("submit", (event) => {
@@ -424,33 +838,6 @@ export class IxplorerChatView extends ItemView {
     }
   }
 
-  private renderCitations(citations: Citation[]): void {
-    if (!this.citationsEl) {
-      return;
-    }
-
-    this.citationsEl.empty();
-
-    if (citations.length === 0) {
-      return;
-    }
-
-    this.citationsEl.createEl("h3", { text: "Sources" });
-    const list = this.citationsEl.createEl("ol");
-
-    for (const citation of citations) {
-      const item = list.createEl("li");
-      const button = item.createEl("button", {
-        cls: "ixplorer-chat__citation",
-        text: citation.label,
-        attr: { type: "button" },
-      });
-      button.addEventListener("click", () => {
-        void this.openCitation(citation);
-      });
-    }
-  }
-
   private renderFollowUps(followUps: string[]): void {
     if (!this.followUpsEl) {
       return;
@@ -480,34 +867,6 @@ export class IxplorerChatView extends ItemView {
     }
   }
 
-  private renderSaveActions(): void {
-    if (!this.saveActionsEl) {
-      return;
-    }
-
-    this.saveActionsEl.empty();
-
-    if (!this.lastAnswer) {
-      return;
-    }
-
-    const saveNewButton = this.saveActionsEl.createEl("button", {
-      text: "New note",
-      attr: { type: "button" },
-    });
-    saveNewButton.addEventListener("click", () => {
-      void this.saveAnswerToNewNote();
-    });
-
-    const appendButton = this.saveActionsEl.createEl("button", {
-      text: "Append active",
-      attr: { type: "button" },
-    });
-    appendButton.addEventListener("click", () => {
-      void this.appendAnswerToActiveNote();
-    });
-  }
-
   private async submitQuestion(): Promise<void> {
     const question = this.textareaEl?.value.trim() ?? "";
 
@@ -515,17 +874,52 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    this.isRunning = true;
-    await this.services.setChatModel(this.modelInputEl?.value ?? this.services.getChatModel());
-    this.setFormDisabled(true);
-    this.messages = [...this.messages, { role: "user", content: question }];
-    this.lastAnswer = null;
-    this.renderMessages();
-    this.renderAnswerDetails();
-
     if (this.textareaEl) {
       this.textareaEl.value = "";
     }
+    await this.runQuestion(question, { appendQuestion: true });
+  }
+
+  private async submitEditedQuestion(index: number, value: string): Promise<void> {
+    const question = value.trim();
+
+    if (!question || this.isRunning) {
+      return;
+    }
+
+    const hasAnswer = this.messages[index + 1]?.role === "assistant";
+    this.editingMessageIndex = null;
+
+    if (hasAnswer) {
+      await this.runQuestion(question, { appendQuestion: true });
+      return;
+    }
+
+    this.messages = this.messages.map((message, messageIndex) =>
+      messageIndex === index ? { ...message, content: question } : message,
+    );
+    await this.runQuestion(question, { appendQuestion: false });
+  }
+
+  private async runQuestion(
+    question: string,
+    options: {
+      appendQuestion: boolean;
+    },
+  ): Promise<void> {
+    this.isRunning = true;
+    this.shouldStopRunning = false;
+    await this.services.setChatModel(this.modelInputEl?.value ?? this.services.getChatModel());
+    this.setFormRunning(true);
+    if (options.appendQuestion) {
+      this.messages = [
+        ...this.messages,
+        { role: "user", content: question, createdAt: new Date().toISOString() },
+      ];
+    }
+    this.lastAnswer = null;
+    this.renderMessages();
+    this.renderAnswerDetails();
 
     try {
       const service = this.services.createResearchService();
@@ -533,7 +927,11 @@ export class IxplorerChatView extends ItemView {
       for await (const event of service.answer({
         question,
         includeWebSearch: this.webSearchEl?.checked === true,
+        contextPaths: this.attachedContextPaths.length > 0 ? this.attachedContextPaths : undefined,
       })) {
+        if (this.shouldStopRunning) {
+          break;
+        }
         this.applyResearchEvent(event);
       }
     } catch (error) {
@@ -542,8 +940,21 @@ export class IxplorerChatView extends ItemView {
       this.renderMessages();
     } finally {
       this.isRunning = false;
-      this.setFormDisabled(false);
+      this.shouldStopRunning = false;
+      this.setFormRunning(false);
       this.renderIndexControl();
+    }
+  }
+
+  private stopRunningQuestion(): void {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.shouldStopRunning = true;
+    if (this.submitButtonEl) {
+      this.submitButtonEl.disabled = true;
+      this.submitButtonEl.setText("Stopping");
     }
   }
 
@@ -601,25 +1012,27 @@ export class IxplorerChatView extends ItemView {
     }
 
     this.lastAnswer = event.answer;
+    this.messages = attachEvidenceToLastAssistantMessage(this.messages, event.answer.evidence ?? []);
     this.renderAnswerDetails();
+    this.renderMessages();
   }
 
-  private setFormDisabled(disabled: boolean): void {
+  private setFormRunning(running: boolean): void {
     if (this.submitButtonEl) {
-      this.submitButtonEl.disabled = disabled;
-      this.submitButtonEl.setText(disabled ? "Thinking" : "Ask");
+      this.submitButtonEl.disabled = false;
+      this.submitButtonEl.setText(running ? "Stop" : "Ask");
     }
 
     if (this.textareaEl) {
-      this.textareaEl.disabled = disabled;
+      this.textareaEl.disabled = running;
     }
 
     if (this.modelInputEl) {
-      this.modelInputEl.disabled = disabled;
+      this.modelInputEl.disabled = running;
     }
 
     if (this.webSearchEl) {
-      this.webSearchEl.disabled = disabled || !this.services.isWebSearchEnabled();
+      this.webSearchEl.disabled = running || !this.services.isWebSearchEnabled();
     }
   }
 
@@ -732,6 +1145,202 @@ function createLabeledInput(
   return input;
 }
 
+function attachEvidenceToLastAssistantMessage(
+  messages: ChatDisplayMessage[],
+  evidence: RetrievedChunk[],
+): ChatDisplayMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role !== "assistant") {
+      continue;
+    }
+
+    return [
+      ...messages.slice(0, index),
+      { ...messages[index], evidence },
+      ...messages.slice(index + 1),
+    ];
+  }
+
+  return messages;
+}
+
+function buildCitationRefs(evidence: RetrievedChunk[]): ChatCitationRef[] {
+  const byKey = new Map<string, ChatCitationRef>();
+
+  for (const chunk of evidence) {
+    const key = sourceCitationKey(chunk);
+    const existing = byKey.get(key);
+
+    if (existing) {
+      existing.chunkIds.add(chunk.id);
+      continue;
+    }
+
+    byKey.set(key, {
+      number: byKey.size + 1,
+      chunk,
+      chunkIds: new Set([chunk.id]),
+      key,
+    });
+  }
+
+  return Array.from(byKey.values());
+}
+
+function sourceCitationKey(chunk: RetrievedChunk): string {
+  switch (chunk.source.kind) {
+    case "markdown":
+      return [
+        "markdown",
+        chunk.source.path,
+        chunk.source.blockId ?? "",
+        chunk.source.headingPath.join("/"),
+      ].join(":");
+    case "pdf":
+      return ["pdf", chunk.source.path, chunk.source.pageNumber].join(":");
+    case "document":
+      return ["document", chunk.source.path, chunk.source.format].join(":");
+    case "web":
+      return ["web", chunk.source.url].join(":");
+  }
+}
+
+function replaceCitationTextNodes(
+  containerEl: HTMLElement,
+  refByChunkId: Map<string, ChatCitationRef>,
+  createAnchor: (ref: ChatCitationRef) => HTMLElement,
+): number {
+  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let replacementCount = 0;
+
+  while (walker.nextNode()) {
+    if (walker.currentNode instanceof Text) {
+      textNodes.push(walker.currentNode);
+    }
+  }
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue ?? "";
+    const parts: Array<string | HTMLElement> = [];
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(/\[([^\]\n]{8,})\]/g)) {
+      const id = match[1];
+      const ref = refByChunkId.get(id);
+
+      if (match.index === undefined) {
+        continue;
+      }
+
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      if (ref) {
+        parts.push(createAnchor(ref));
+        replacementCount += 1;
+      }
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (parts.length === 0) {
+      continue;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(stripRenderedCitationIds(text.slice(lastIndex)));
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const part of parts) {
+      fragment.append(part instanceof HTMLElement ? part : document.createTextNode(part));
+    }
+    textNode.replaceWith(fragment);
+  }
+
+  return replacementCount;
+}
+
+function appendFallbackCitationAnchors(
+  containerEl: HTMLElement,
+  refs: ChatCitationRef[],
+  createAnchor: (ref: ChatCitationRef) => HTMLElement,
+): void {
+  const targets = Array.from(containerEl.querySelectorAll<HTMLElement>("p, li")).filter((element) =>
+    Boolean(element.textContent?.trim()),
+  );
+  const fallbackTarget = targets.at(-1) ?? containerEl;
+
+  for (const ref of refs) {
+    const target = bestCitationTarget(targets, ref) ?? fallbackTarget;
+    target.append(document.createTextNode(" "), createAnchor(ref));
+  }
+}
+
+function bestCitationTarget(
+  targets: HTMLElement[],
+  ref: ChatCitationRef,
+): HTMLElement | undefined {
+  let best: { element: HTMLElement; score: number } | undefined;
+  const sourceTokens = tokenSet(ref.chunk.text);
+
+  if (sourceTokens.size === 0) {
+    return undefined;
+  }
+
+  for (const target of targets) {
+    const targetTokens = tokenSet(target.textContent ?? "");
+    let score = 0;
+
+    for (const token of targetTokens) {
+      if (sourceTokens.has(token)) {
+        score += 1;
+      }
+    }
+
+    if (score > (best?.score ?? 0)) {
+      best = { element: target, score };
+    }
+  }
+
+  return best && best.score >= 2 ? best.element : undefined;
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}_]+/u)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 5),
+  );
+}
+
+function stripRenderedCitationIds(value: string): string {
+  return value.replace(/\s*\[[^\]\n]{8,}\]/g, "");
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, "\\$&");
+}
+
+async function copyToClipboard(value: string): Promise<void> {
+  await navigator.clipboard.writeText(value);
+  new Notice("Copied to clipboard.");
+}
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
 
@@ -788,5 +1397,85 @@ function formatCitationForChunk(chunk: RetrievedChunk): Citation {
         label: chunk.source.url,
         source: chunk.source,
       };
+  }
+}
+
+function isContextDocumentPath(path: string): boolean {
+  return /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
+}
+
+class ContextDocumentPickerModal extends Modal {
+  private selectedPaths: Set<string>;
+  private listEl: HTMLElement | null = null;
+  private query = "";
+
+  constructor(
+    app: ConstructorParameters<typeof Modal>[0],
+    private readonly options: {
+      files: TFile[];
+      selectedPaths: string[];
+      onSubmit: (paths: string[]) => void;
+    },
+  ) {
+    super(app);
+    this.selectedPaths = new Set(options.selectedPaths);
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Attach context documents");
+    this.contentEl.empty();
+    this.contentEl.addClass("ixplorer-context-picker");
+
+    const search = this.contentEl.createEl("input", {
+      cls: "ixplorer-context-picker__search",
+      attr: {
+        type: "search",
+        placeholder: "Filter documents",
+        "aria-label": "Filter documents",
+      },
+    });
+    search.addEventListener("input", () => {
+      this.query = search.value.trim().toLowerCase();
+      this.renderList();
+    });
+
+    this.listEl = this.contentEl.createDiv({ cls: "ixplorer-context-picker__list" });
+    this.renderList();
+
+    const actions = this.contentEl.createDiv({ cls: "ixplorer-context-picker__actions" });
+    const cancel = actions.createEl("button", { text: "Cancel", attr: { type: "button" } });
+    cancel.addEventListener("click", () => this.close());
+    const apply = actions.createEl("button", {
+      cls: "mod-cta",
+      text: "Attach",
+      attr: { type: "button" },
+    });
+    apply.addEventListener("click", () => {
+      this.options.onSubmit(Array.from(this.selectedPaths).sort());
+      this.close();
+    });
+  }
+
+  private renderList(): void {
+    if (!this.listEl) {
+      return;
+    }
+
+    this.listEl.empty();
+    const files = this.options.files.filter((file) => file.path.toLowerCase().includes(this.query));
+
+    for (const file of files.slice(0, 250)) {
+      const label = this.listEl.createEl("label", { cls: "ixplorer-context-picker__item" });
+      const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
+      checkbox.checked = this.selectedPaths.has(file.path);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          this.selectedPaths.add(file.path);
+        } else {
+          this.selectedPaths.delete(file.path);
+        }
+      });
+      label.createSpan({ text: file.path });
+    }
   }
 }

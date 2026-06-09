@@ -3,6 +3,8 @@ import {
   formatIndexControlSummary,
   formatIndexingStatus,
   formatProgressPercent,
+  messageDisplayContent,
+  messageMarkdownContent,
   nextAssistantMessage,
 } from "../../src/ui/rendering";
 import { Citation, SourceReference } from "../../src/shared/types";
@@ -98,8 +100,31 @@ describe("chat rendering helpers", () => {
       {
         role: "assistant",
         content: "First second.",
+        createdAt: expect.any(String),
+        evidence: undefined,
       },
     ]);
+  });
+
+  it("removes citation ids and follow-up sections from displayed assistant content", () => {
+    expect(
+      messageDisplayContent({
+        role: "assistant",
+        content:
+          "The answer cites local notes [1faca705800f51b4679ba10c0ec7923f].\n\n## Citations\n1. Source\n\nFollow-up questions:\n1. Next?",
+        createdAt: "2026-05-16T00:00:00.000Z",
+      }),
+    ).toBe("The answer cites local notes.");
+  });
+
+  it("keeps citation ids in markdown content so the chat can replace them with anchors", () => {
+    expect(
+      messageMarkdownContent({
+        role: "assistant",
+        content: "The answer cites local notes [1faca705800f51b4679ba10c0ec7923f].",
+        createdAt: "2026-05-16T00:00:00.000Z",
+      }),
+    ).toBe("The answer cites local notes [1faca705800f51b4679ba10c0ec7923f].");
   });
 });
 

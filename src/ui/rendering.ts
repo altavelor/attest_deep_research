@@ -1,10 +1,12 @@
 import { IndexingState } from "../indexing/IndexingService";
 import { formatIndexSize } from "../indexing/indexSize";
-import { Citation } from "../shared/types";
+import { Citation, RetrievedChunk } from "../shared/types";
 
 export interface ChatDisplayMessage {
   role: "user" | "assistant";
   content: string;
+  createdAt: string;
+  evidence?: RetrievedChunk[];
 }
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };
@@ -128,11 +130,52 @@ export function nextAssistantMessage(
       {
         role: "assistant",
         content: `${last.content}${delta}`,
+        createdAt: last.createdAt,
+        evidence: last.evidence,
       },
     ];
   }
 
-  return [...messages, { role: "assistant", content: delta }];
+  return [...messages, { role: "assistant", content: delta, createdAt: new Date().toISOString() }];
+}
+
+export function messageDisplayContent(message: ChatDisplayMessage): string {
+  if (message.role === "user") {
+    return message.content;
+  }
+
+  return stripCitationIds(messageMarkdownContent(message)).trim();
+}
+
+export function messageMarkdownContent(message: ChatDisplayMessage): string {
+  if (message.role === "user") {
+    return message.content;
+  }
+
+  return cleanupDanglingMarkdown(stripFollowUpSection(stripCitationsSection(message.content)));
+}
+
+export function stripFollowUpSection(value: string): string {
+  const sectionStart = value.search(/follow-up questions\s*:/i);
+
+  return sectionStart === -1 ? value : value.slice(0, sectionStart).trim();
+}
+
+export function stripCitationsSection(value: string): string {
+  const sectionStart = value.search(/(?:^|\n)#{1,3}\s*citations\s*$/im);
+
+  return sectionStart === -1 ? value : value.slice(0, sectionStart).trim();
+}
+
+export function stripCitationIds(value: string): string {
+  return value.replace(/\s*\[[^\]\n]{8,}\]/g, "");
+}
+
+export function cleanupDanglingMarkdown(value: string): string {
+  return value
+    .replace(/(?:\n\s*)+\*\*\s*$/g, "")
+    .replace(/\s+\*\*\s*$/g, "")
+    .trim();
 }
 
 function formatDate(value: string): string {

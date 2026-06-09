@@ -1,5 +1,5 @@
 import { formatCitationLink } from "../retrieval/citations";
-import { ResearchAnswer } from "../shared/types";
+import { Citation, ResearchAnswer } from "../shared/types";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   return [
@@ -38,13 +38,51 @@ export function formatResearchAnswerAppendBlock(answer: ResearchAnswer): string 
 }
 
 function citationsMarkdown(answer: ResearchAnswer): string {
-  if (answer.citations.length === 0) {
+  const citations = dedupeCitationsBySource(answer.citations);
+
+  if (citations.length === 0) {
     return "No citations.";
   }
 
-  return answer.citations
+  return citations
     .map((citation, index) => `${index + 1}. ${formatCitationLink(citation.source)}`)
     .join("\n");
+}
+
+function dedupeCitationsBySource(citations: Citation[]): Citation[] {
+  const seen = new Set<string>();
+  const deduped: Citation[] = [];
+
+  for (const citation of citations) {
+    const key = citationSourceKey(citation);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(citation);
+  }
+
+  return deduped;
+}
+
+function citationSourceKey(citation: Citation): string {
+  switch (citation.source.kind) {
+    case "markdown":
+      return [
+        "markdown",
+        citation.source.path,
+        citation.source.blockId ?? "",
+        citation.source.headingPath.join("/"),
+      ].join(":");
+    case "pdf":
+      return ["pdf", citation.source.path, citation.source.pageNumber].join(":");
+    case "document":
+      return ["document", citation.source.path, citation.source.format].join(":");
+    case "web":
+      return ["web", citation.source.url].join(":");
+  }
 }
 
 function followUpsMarkdown(answer: ResearchAnswer): string {

@@ -34,7 +34,19 @@ export function chunkMatchesRetrievalOptions(
     }
   }
 
+  if (options.sourcePaths && options.sourcePaths.length > 0) {
+    const path = sourcePath(chunk.source);
+
+    if (!path || !options.sourcePaths.includes(path)) {
+      return false;
+    }
+  }
+
   return true;
+}
+
+function sourcePath(source: SourceReference): string | null {
+  return source.kind === "web" ? null : source.path;
 }
 
 function sourceExtension(source: SourceReference): string | null {

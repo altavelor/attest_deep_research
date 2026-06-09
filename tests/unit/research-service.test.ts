@@ -95,6 +95,13 @@ describe("ResearchService", () => {
             expect.objectContaining({ id: "local-1" }),
             expect.objectContaining({ id: "web:https://example.com/local-models" }),
           ],
+          evidence: [
+            expect.objectContaining({ id: "local-1", text: "Local model notes" }),
+            expect.objectContaining({
+              id: "web:https://example.com/local-models",
+              text: "Web article text",
+            }),
+          ],
           followUpQuestions: ["What should I index next?"],
           createdAt: "2026-05-16T00:00:00.000Z",
         },

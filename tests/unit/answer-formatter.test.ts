@@ -47,6 +47,11 @@ function answer(): ResearchAnswer {
         source: markdownSource("Research/local.md"),
       },
       {
+        id: "local-duplicate",
+        label: "Research/local.md",
+        source: markdownSource("Research/local.md"),
+      },
+      {
         id: "web-1",
         label: "Example",
         source: webSource("https://example.com/local"),

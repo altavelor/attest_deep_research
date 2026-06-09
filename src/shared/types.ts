@@ -166,6 +166,7 @@ export interface RetrievalOptions {
   minScore?: number;
   sourceKinds?: SourceKind[];
   fileExtensions?: string[];
+  sourcePaths?: string[];
 }
 
 export interface KeywordSearchIndexStore {
@@ -197,6 +198,7 @@ export interface ResearchAnswer {
   question: string;
   answer: string;
   citations: Citation[];
+  evidence?: RetrievedChunk[];
   followUpQuestions: string[];
   createdAt: string;
 }
