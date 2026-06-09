@@ -16,6 +16,7 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     "Use the evidence below to answer the user's research question in a detailed, structured way.",
     "Synthesize all relevant facts from the evidence before concluding.",
     "Cite claims with bracketed citation IDs exactly as shown, for example [chunk-id].",
+    "Do not add a separate citations, sources, or bibliography section.",
     "If the evidence is insufficient, say what is missing instead of guessing.",
     "Prefer concrete details, definitions, examples, and relationships found in the evidence.",
     "End with a short 'Follow-up questions:' section containing 1-3 numbered questions.",

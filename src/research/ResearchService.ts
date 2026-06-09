@@ -17,6 +17,7 @@ export interface ResearchRetriever {
 export interface ResearchRequest {
   question: string;
   includeWebSearch?: boolean;
+  contextPaths?: string[];
 }
 
 export type ResearchStreamEvent =
@@ -63,6 +64,7 @@ export class ResearchService {
     const retrieval = await this.retriever.search(question, {
       limit: this.evidenceLimit,
       includeWebResults: false,
+      sourcePaths: request.contextPaths,
     });
     const webEvidence = await this.searchWebEvidence(question, request.includeWebSearch === true);
     const evidence = [...retrieval.chunks, ...webEvidence.chunks].slice(0, this.evidenceLimit);
@@ -100,6 +102,7 @@ export class ResearchService {
       question,
       answer: answerText,
       citations,
+      evidence,
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
     };
