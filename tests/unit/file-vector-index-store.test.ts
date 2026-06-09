@@ -167,6 +167,42 @@ describe("FileVectorIndexStore", () => {
     ).resolves.toEqual([]);
   });
 
+  it("updates keyword postings for dirty sources without dropping clean sources in the same shard", async () => {
+    const [leftPath, rightPath] = sameShardPaths();
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("chunk-left", leftPath, "old privacy phrase", [1, 0], "left-old"),
+      chunk("chunk-right", rightPath, "stable keyword survives", [0, 1], "right"),
+    ]);
+
+    const writer = await store.beginWrite();
+    await writer.deleteBySourcePath(leftPath);
+    await writer.upsert([chunk("chunk-left-new", leftPath, "new replacement phrase", [1, 0], "left-new")]);
+    await writer.commit();
+
+    await expect(
+      store.searchKeywords("old privacy", { limit: 5, includeWebResults: false }),
+    ).resolves.toEqual([]);
+    await expect(
+      store.searchKeywords("stable keyword", { limit: 5, includeWebResults: false }),
+    ).resolves.toEqual([expect.objectContaining({ id: "chunk-right" })]);
+  });
+
+  it("records per-shard keyword counts in the manifest for clean-shard reuse", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([chunk("chunk-a", "Research/a.md", "alpha keyword", [1, 0], "hash-a")]);
+
+    const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+    const shardId = shardIdForSourcePath("Research/a.md");
+    const shard = manifest.shards.find((candidate: { id: string }) => candidate.id === shardId);
+
+    expect(shard).toMatchObject({ keywordIndexedChunkCount: 1 });
+  });
+
   it("keeps earlier chunks when one source is upserted across embedding batches", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 
@@ -287,4 +323,18 @@ function readJsonl(path: string): unknown[] {
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function sameShardPaths(): [string, string] {
+  const first = "Research/collision-0.md";
+  const shard = shardIdForSourcePath(first);
+
+  for (let index = 1; index < 500; index += 1) {
+    const candidate = `Research/collision-${index}.md`;
+    if (shardIdForSourcePath(candidate) === shard) {
+      return [first, candidate];
+    }
+  }
+
+  throw new Error("Could not find two test paths in the same shard.");
 }

@@ -112,13 +112,24 @@ export interface IndexingLogger {
 }
 
 export interface IndexingPerformanceLogEvent {
-  phase: IndexingProgressPhase;
+  phase:
+    | IndexingProgressPhase
+    | "readFile"
+    | "hash"
+    | "keywordBuild"
+    | "vectorEncode"
+    | "manifestBuild"
+    | "diskWrite"
+    | "persist";
   path?: string;
   durationMs: number;
   chunkCount?: number;
   batchSize?: number;
   batchIndex?: number;
   batchCount?: number;
+  shardId?: string;
+  dirtyShardCount?: number;
+  writtenFileCount?: number;
 }
 
 const DEFAULT_BATCH_SIZE = 32;
@@ -513,8 +524,20 @@ export class IndexingService {
 
     this.state = { ...this.state, phase: "extracting", currentFile: file.path };
     this.notifyProgress();
+    const readStartedAt = Date.now();
     const data = await this.files.readFile(file.path);
+    this.logIndexingPerformance({
+      phase: "readFile",
+      path: file.path,
+      durationMs: Date.now() - readStartedAt,
+    });
+    const hashStartedAt = Date.now();
     const contentHash = hashFileData(data);
+    this.logIndexingPerformance({
+      phase: "hash",
+      path: file.path,
+      durationMs: Date.now() - hashStartedAt,
+    });
 
     if (!shouldIndexFile(this.snapshots, { ...file, contentHash })) {
       updateSnapshot(this.snapshots, { ...file, contentHash });
