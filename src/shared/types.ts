@@ -131,9 +131,35 @@ export interface IndexStore {
   query(embedding: number[], limit: number): Promise<RetrievedChunk[]>;
 }
 
+export interface IndexSourceSnapshot {
+  sourcePath: string;
+  modifiedTime: number;
+  contentHash: string;
+}
+
+export interface IndexFailedSourceSnapshot {
+  sourcePath: string;
+  modifiedTime: number;
+  errorMessage: string;
+  indexedAt: string;
+}
+
+export interface SourceSnapshotIndexStore {
+  loadSourceSnapshots(): Promise<IndexSourceSnapshot[]>;
+  updateSourceSnapshots(snapshots: IndexSourceSnapshot[]): Promise<void>;
+  recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
+}
+
 export interface RetrievalOptions {
   limit: number;
   includeWebResults: boolean;
+  minScore?: number;
+  sourceKinds?: SourceKind[];
+  fileExtensions?: string[];
+}
+
+export interface KeywordSearchIndexStore {
+  searchKeywords(query: string, options: RetrievalOptions): Promise<RetrievedChunk[]>;
 }
 
 export interface Retriever {

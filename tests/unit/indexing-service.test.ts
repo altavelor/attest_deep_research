@@ -3,14 +3,17 @@ import {
   EmbeddingProviderClient,
   ExtractedChunk,
   Extractor,
+  IndexFailedSourceSnapshot,
+  IndexSourceSnapshot,
   IndexStore,
+  SourceSnapshotIndexStore,
 } from "../../src/shared/types";
 import {
   IndexingService,
   VaultFileProvider,
   VaultFileSummary,
 } from "../../src/indexing/IndexingService";
-import { shouldIndexFile, updateSnapshot } from "../../src/indexing/changeDetection";
+import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/indexing/changeDetection";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {
@@ -125,6 +128,99 @@ describe("IndexingService", () => {
     await service.manualReindex();
     expect(indexStore.upsertCalls).toBe(2);
     expect(indexStore.deletedPaths).toEqual(["Research/a.md", "Research/a.md"]);
+  });
+
+  it("loads persisted source snapshots so unchanged files are skipped after service reload", async () => {
+    const files = new FakeVaultFileProvider([file("Research/a.md", 1, "same")]);
+    const indexStore = new FakeIndexStore([
+      {
+        sourcePath: "Research/a.md",
+        modifiedTime: 1,
+        contentHash: hashFileData("same"),
+      },
+    ]);
+    const service = new IndexingService({
+      files,
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const result = await service.manualReindex();
+
+    expect(result).toMatchObject({ indexedFiles: 0, skippedFiles: 1, embeddedChunks: 0 });
+    expect(files.readPaths).toEqual([]);
+    expect(indexStore.upsertCalls).toBe(0);
+  });
+
+  it("defers remaining files when the changed-file cap is reached", async () => {
+    const indexStore = new FakeIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "a"),
+        file("Research/b.md", 1, "b"),
+        file("Research/c.md", 1, "c"),
+      ]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      maxChangedFilesPerRun: 1,
+    });
+
+    const result = await service.manualReindex();
+
+    expect(result).toMatchObject({
+      status: "stale",
+      indexedFiles: 1,
+      deferredFiles: 2,
+      failedFiles: 0,
+      isStale: true,
+    });
+
+    const nextRun = await service.manualReindex();
+    expect(nextRun).toMatchObject({
+      status: "stale",
+      indexedFiles: 1,
+      skippedFiles: 1,
+      deferredFiles: 1,
+    });
+  });
+
+  it("records failed files and keeps indexing unrelated files", async () => {
+    const indexStore = new FakeIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "a"),
+        file("Research/b.md", 1, "b"),
+      ]),
+      extractors: [new FailingPathExtractor("Research/a.md"), new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const result = await service.manualReindex();
+
+    expect(result).toMatchObject({
+      status: "idle",
+      indexedFiles: 1,
+      failedFiles: 1,
+      embeddedChunks: 1,
+    });
+    expect(indexStore.failedSnapshots).toEqual([
+      expect.objectContaining({
+        sourcePath: "Research/a.md",
+        errorMessage: "Extraction failed for Research/a.md",
+      }),
+    ]);
   });
 
   it("pause, resume, clear, and rebuild update scheduler state", async () => {
@@ -244,6 +340,18 @@ class FakeExtractor implements Extractor {
   }
 }
 
+class FailingPathExtractor implements Extractor {
+  constructor(private readonly failedPath: string) {}
+
+  supports(path: string): boolean {
+    return path === this.failedPath;
+  }
+
+  async extract(input: { path: string }): Promise<ExtractedChunk[]> {
+    throw new Error(`Extraction failed for ${input.path}`);
+  }
+}
+
 class FakeEmbeddingProvider implements EmbeddingProviderClient {
   async listModels(): Promise<string[]> {
     return ["nomic"];
@@ -260,12 +368,18 @@ class FakeEmbeddingProvider implements EmbeddingProviderClient {
   }
 }
 
-class FakeIndexStore implements IndexStore {
+class FakeIndexStore implements IndexStore, SourceSnapshotIndexStore {
   initializedMetadata: { embeddingModel: string; embeddingDimensions: number } | null = null;
   upserted: EmbeddedChunk[] = [];
   deletedPaths: string[] = [];
+  sourceSnapshots: IndexSourceSnapshot[];
+  failedSnapshots: IndexFailedSourceSnapshot[] = [];
   upsertCalls = 0;
   clearCalls = 0;
+
+  constructor(sourceSnapshots: IndexSourceSnapshot[] = []) {
+    this.sourceSnapshots = sourceSnapshots;
+  }
 
   async initialize(metadata: {
     embeddingModel: string;
@@ -286,9 +400,30 @@ class FakeIndexStore implements IndexStore {
   async clear(): Promise<void> {
     this.clearCalls += 1;
     this.upserted = [];
+    this.sourceSnapshots = [];
   }
 
   async query(): Promise<never[]> {
     return [];
+  }
+
+  async loadSourceSnapshots(): Promise<IndexSourceSnapshot[]> {
+    return [...this.sourceSnapshots];
+  }
+
+  async updateSourceSnapshots(snapshots: IndexSourceSnapshot[]): Promise<void> {
+    const bySourcePath = new Map(
+      this.sourceSnapshots.map((snapshot) => [snapshot.sourcePath, snapshot]),
+    );
+
+    for (const snapshot of snapshots) {
+      bySourcePath.set(snapshot.sourcePath, snapshot);
+    }
+
+    this.sourceSnapshots = Array.from(bySourcePath.values());
+  }
+
+  async recordFailedSourceSnapshots(snapshots: IndexFailedSourceSnapshot[]): Promise<void> {
+    this.failedSnapshots.push(...snapshots);
   }
 }

@@ -3,7 +3,9 @@ import {
   EmbeddingProviderClient,
   ExtractedChunk,
   Extractor,
+  IndexFailedSourceSnapshot,
   IndexStore,
+  SourceSnapshotIndexStore,
 } from "../shared/types";
 import { FileSnapshot, hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 
@@ -28,6 +30,8 @@ export interface IndexingState {
   indexedFiles: number;
   skippedFiles: number;
   embeddedChunks: number;
+  deferredFiles: number;
+  failedFiles: number;
   lastIndexedAt?: string;
   lastUpdatedAt?: string;
   indexSizeBytes?: number;
@@ -45,6 +49,7 @@ export interface IndexingServiceOptions {
   excludeGlobs: string[];
   batchSize?: number;
   yieldEveryFiles?: number;
+  maxChangedFilesPerRun?: number;
   yieldToEventLoop?: () => Promise<void>;
   onProgress?: (state: IndexingState) => void;
   now?: () => Date;
@@ -70,9 +75,11 @@ export class IndexingService {
   private readonly excludeGlobs: string[];
   private readonly batchSize: number;
   private readonly yieldEveryFiles: number;
+  private readonly maxChangedFilesPerRun?: number;
   private readonly yieldToEventLoop: () => Promise<void>;
   private readonly onProgress?: (state: IndexingState) => void;
   private readonly now: () => Date;
+  private snapshotsLoaded = false;
   private readonly snapshots = new Map<string, FileSnapshot>();
   private state: IndexingState = {
     status: "idle",
@@ -82,6 +89,8 @@ export class IndexingService {
     indexedFiles: 0,
     skippedFiles: 0,
     embeddedChunks: 0,
+    deferredFiles: 0,
+    failedFiles: 0,
     isStale: false,
   };
 
@@ -98,6 +107,7 @@ export class IndexingService {
       options.yieldEveryFiles,
       DEFAULT_YIELD_EVERY_FILES,
     );
+    this.maxChangedFilesPerRun = options.maxChangedFilesPerRun;
     this.yieldToEventLoop = options.yieldToEventLoop ?? defaultYieldToEventLoop;
     this.onProgress = options.onProgress;
     this.now = options.now ?? (() => new Date());
@@ -150,6 +160,8 @@ export class IndexingService {
       indexedFiles: 0,
       skippedFiles: 0,
       embeddedChunks: 0,
+      deferredFiles: 0,
+      failedFiles: 0,
       indexSizeBytes: this.state.indexSizeBytes,
       isStale: false,
       errorMessage: undefined,
@@ -183,6 +195,8 @@ export class IndexingService {
       indexedFiles: 0,
       skippedFiles: 0,
       embeddedChunks: 0,
+      deferredFiles: 0,
+      failedFiles: 0,
       indexSizeBytes: this.state.indexSizeBytes,
       isStale: false,
       errorMessage: undefined,
@@ -191,6 +205,7 @@ export class IndexingService {
     this.notifyProgress();
 
     const files = await this.files.listFiles();
+    await this.loadPersistedSnapshots();
     this.state = {
       ...this.state,
       totalFiles: files.length,
@@ -201,12 +216,29 @@ export class IndexingService {
     const pendingChunks: ExtractedChunk[] = [];
     const pendingIndexedFiles: Array<VaultFileSummary & { contentHash: string }> = [];
 
-    for (const file of files) {
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+      const file = files[fileIndex];
+
       if (this.state.status === "paused") {
         break;
       }
 
-      const result = await this.processFile(file);
+      let result: IndexedFileResult;
+
+      try {
+        result = await this.processFile(file);
+      } catch (error) {
+        const failedSnapshot: IndexFailedSourceSnapshot = {
+          sourcePath: file.path,
+          modifiedTime: file.modifiedTime,
+          errorMessage: indexingErrorMessage(error),
+          indexedAt: this.now().toISOString(),
+        };
+        await this.persistFailedSourceSnapshots([failedSnapshot]);
+        result = { indexed: false, skipped: false, chunks: [] };
+        this.state = { ...this.state, failedFiles: this.state.failedFiles + 1 };
+      }
+
       this.state = {
         ...this.state,
         scannedFiles: this.state.scannedFiles + 1,
@@ -230,6 +262,17 @@ export class IndexingService {
 
       this.notifyProgress();
 
+      if (this.hasReachedChangedFileCap()) {
+        const deferredFiles = files.length - fileIndex - 1;
+        this.state = {
+          ...this.state,
+          deferredFiles,
+          isStale: deferredFiles > 0,
+          lastUpdatedAt: this.now().toISOString(),
+        };
+        break;
+      }
+
       if (this.shouldYieldAfterFile()) {
         await this.yieldToEventLoop();
       }
@@ -242,10 +285,10 @@ export class IndexingService {
     if (this.state.status !== "paused") {
       this.state = {
         ...this.state,
-        status: "idle",
+        status: this.state.deferredFiles > 0 ? "stale" : "idle",
         activeOperation: undefined,
         progress: 1,
-        isStale: false,
+        isStale: this.state.deferredFiles > 0,
         errorMessage: undefined,
         lastIndexedAt: this.now().toISOString(),
         lastUpdatedAt: this.now().toISOString(),
@@ -267,6 +310,14 @@ export class IndexingService {
     return this.state.scannedFiles > 0 && this.state.scannedFiles % this.yieldEveryFiles === 0;
   }
 
+  private hasReachedChangedFileCap(): boolean {
+    if (this.maxChangedFilesPerRun === undefined || this.maxChangedFilesPerRun <= 0) {
+      return false;
+    }
+
+    return this.state.indexedFiles + this.state.failedFiles >= this.maxChangedFilesPerRun;
+  }
+
   private async flushPendingChunks(
     chunks: ExtractedChunk[],
     indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
@@ -280,6 +331,7 @@ export class IndexingService {
     for (const file of indexedFiles) {
       updateSnapshot(this.snapshots, file);
     }
+    await this.persistSourceSnapshots(indexedFiles);
 
     chunks.length = 0;
     indexedFiles.length = 0;
@@ -369,6 +421,51 @@ export class IndexingService {
     });
   }
 
+  private async loadPersistedSnapshots(): Promise<void> {
+    if (this.snapshotsLoaded || !isSourceSnapshotIndexStore(this.indexStore)) {
+      this.snapshotsLoaded = true;
+      return;
+    }
+
+    const snapshots = await this.indexStore.loadSourceSnapshots();
+    for (const snapshot of snapshots) {
+      this.snapshots.set(snapshot.sourcePath, {
+        modifiedTime: snapshot.modifiedTime,
+        contentHash: snapshot.contentHash,
+      });
+    }
+    this.snapshotsLoaded = true;
+  }
+
+  private async persistSourceSnapshots(
+    indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
+  ): Promise<void> {
+    if (!isSourceSnapshotIndexStore(this.indexStore) || indexedFiles.length === 0) {
+      return;
+    }
+
+    await this.indexStore.updateSourceSnapshots(
+      indexedFiles.map((file) => ({
+        sourcePath: file.path,
+        modifiedTime: file.modifiedTime,
+        contentHash: file.contentHash,
+      })),
+    );
+  }
+
+  private async persistFailedSourceSnapshots(
+    snapshots: IndexFailedSourceSnapshot[],
+  ): Promise<void> {
+    if (
+      !isSourceSnapshotIndexStore(this.indexStore) ||
+      !this.indexStore.recordFailedSourceSnapshots
+    ) {
+      return;
+    }
+
+    await this.indexStore.recordFailedSourceSnapshots(snapshots);
+  }
+
   private shouldScanPath(path: string): boolean {
     return (
       isIncluded(path, this.includeFolders) &&
@@ -447,4 +544,27 @@ function globToRegExp(glob: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[\\^$+?.()|[\]{}]/g, "\\$&");
+}
+
+function indexingErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  return "Indexing failed.";
+}
+
+function isSourceSnapshotIndexStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & SourceSnapshotIndexStore {
+  return (
+    "loadSourceSnapshots" in indexStore &&
+    typeof indexStore.loadSourceSnapshots === "function" &&
+    "updateSourceSnapshots" in indexStore &&
+    typeof indexStore.updateSourceSnapshots === "function"
+  );
 }

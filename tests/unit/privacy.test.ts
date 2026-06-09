@@ -7,7 +7,7 @@ import {
   CHAT_PROVIDER_DESCRIPTION,
   DUCK_DUCK_GO_DESCRIPTION,
   EMBEDDING_PROVIDER_DESCRIPTION,
-  LANCEDB_FOLDER_DESCRIPTION,
+  INDEX_FOLDER_DESCRIPTION,
 } from "../../src/settings/privacyCopy";
 import {
   ChatModelProvider,
@@ -76,7 +76,7 @@ describe("privacy boundaries", () => {
     expect(CHAT_PROVIDER_DESCRIPTION).toContain("configured endpoint");
     expect(EMBEDDING_PROVIDER_DESCRIPTION).toContain("Local");
     expect(EMBEDDING_PROVIDER_DESCRIPTION).toContain("Vault chunks");
-    expect(LANCEDB_FOLDER_DESCRIPTION).toContain("Vault-local");
+    expect(INDEX_FOLDER_DESCRIPTION).toContain("Vault-local");
     expect(DUCK_DUCK_GO_DESCRIPTION).toContain("External");
     expect(DUCK_DUCK_GO_DESCRIPTION).toContain("only the typed question");
     expect(DUCK_DUCK_GO_DESCRIPTION).toContain("never retrieved vault content");

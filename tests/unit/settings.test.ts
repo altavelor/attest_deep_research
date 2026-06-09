@@ -1,6 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   formatListInput,
+  getActiveIndexProfile,
   migrateSettings,
   normalizeListInput,
   normalizeUrl,
@@ -14,6 +15,17 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.chatModelProviderBaseUrl).toBe("http://localhost:1234/v1");
     expect(DEFAULT_SETTINGS.embeddingProviderBaseUrl).toBe("http://localhost:11434");
     expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
+    expect(DEFAULT_SETTINGS.activeIndexProfileId).toBe("default");
+    expect(getActiveIndexProfile(DEFAULT_SETTINGS)).toMatchObject({
+      id: "default",
+      indexFolder: ".ixplorer/index",
+      shardCount: 32,
+      keywordIndex: {
+        enabled: true,
+        strategy: "source-shard",
+        minTokenLength: 3,
+      },
+    });
     expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
@@ -38,11 +50,60 @@ describe("Ixplorer settings", () => {
       embeddingProviderBaseUrl: "http://localhost:11434",
       embeddingModel: "nomic-embed-text",
       lanceDbFolder: "custom-index",
+      activeIndexProfileId: "default",
       includeFolders: ["Research", "Papers"],
       excludeGlobs: ["Archive/**"],
       duckDuckGoEnabled: true,
       showChatIndexControl: false,
       debugMode: true,
+    });
+    expect(getActiveIndexProfile(settings)).toMatchObject({
+      id: "default",
+      indexFolder: "custom-index",
+      includeFolders: ["Research", "Papers"],
+      excludeGlobs: ["Archive/**"],
+      embeddingProviderBaseUrl: "http://localhost:11434",
+      embeddingModel: "nomic-embed-text",
+    });
+  });
+
+  it("keeps valid saved index profiles and selects the requested active profile", () => {
+    const settings = migrateSettings({
+      activeIndexProfileId: "papers",
+      indexProfiles: [
+        {
+          id: "notes",
+          name: "Notes",
+          indexFolder: ".ixplorer/notes",
+          includeFolders: ["Notes"],
+          excludeGlobs: [".trash/**"],
+          embeddingProviderBaseUrl: "http://localhost:11434/",
+          embeddingModel: "nomic",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "papers",
+          name: "Papers",
+          indexFolder: "/.ixplorer/papers/",
+          includeFolders: ["Papers"],
+          excludeGlobs: ["Papers/Archive/**"],
+          embeddingProviderBaseUrl: "http://localhost:1234/v1/",
+          embeddingModel: "bge",
+        },
+      ],
+    });
+
+    expect(settings.activeIndexProfileId).toBe("papers");
+    expect(settings.indexProfiles).toHaveLength(2);
+    expect(getActiveIndexProfile(settings)).toMatchObject({
+      id: "papers",
+      indexFolder: ".ixplorer/papers",
+      includeFolders: ["Papers"],
+      excludeGlobs: ["Papers/Archive/**"],
+      embeddingProviderBaseUrl: "http://localhost:1234/v1",
+      embeddingModel: "bge",
+      shardCount: 32,
     });
   });
 

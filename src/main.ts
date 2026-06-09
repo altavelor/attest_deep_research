@@ -17,15 +17,19 @@ import {
   VaultFileProvider,
   VaultFileSummary,
 } from "./indexing/IndexingService";
-import { LanceDbIndexStore } from "./indexing/LanceDbIndexStore";
-import { RealLanceDbDriver } from "./indexing/RealLanceDbDriver";
+import { FileVectorIndexStore } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
 import { RetrievalService } from "./retrieval/RetrievalService";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { detectLocalModelProvider } from "./settings/connectionTests";
 import { PluginDebugLogger } from "./settings/debugLogger";
-import { DEFAULT_SETTINGS, IxplorerSettings, migrateSettings } from "./settings/settings";
+import {
+  DEFAULT_SETTINGS,
+  IxplorerSettings,
+  getActiveIndexProfile,
+  migrateSettings,
+} from "./settings/settings";
 import { toUserMessage } from "./shared/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
@@ -36,7 +40,8 @@ export default class IxplorerPlugin extends Plugin {
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   readonly indexing = new IndexingController({
     createService: (onProgress) => this.createIndexingService(onProgress),
-    measureIndexSize: () => measureFolderSize(this.getVaultLocalPath(this.settings.lanceDbFolder)),
+    measureIndexSize: () =>
+      measureFolderSize(this.getVaultLocalPath(getActiveIndexProfile(this.settings).indexFolder)),
     onError: (error) => new Notice(toUserMessage(error)),
   });
   private availableChatModels: string[] = [];
@@ -115,18 +120,20 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   private createResearchService(): ResearchService {
+    const indexProfile = getActiveIndexProfile(this.settings);
     const embeddings = new EmbeddingClient({
-      provider: detectLocalModelProvider(this.settings.embeddingProviderBaseUrl),
-      baseUrl: this.settings.embeddingProviderBaseUrl,
+      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
+      baseUrl: indexProfile.embeddingProviderBaseUrl,
       logger: this.logger,
     });
     const retriever = new RetrievalService({
       embeddings,
-      indexStore: new LanceDbIndexStore({
-        folder: this.getVaultLocalPath(this.settings.lanceDbFolder),
-        driver: new RealLanceDbDriver(),
+      indexStore: new FileVectorIndexStore({
+        folder: this.getVaultLocalPath(indexProfile.indexFolder),
+        profileId: indexProfile.id,
+        shardCount: indexProfile.shardCount,
       }),
-      embeddingModel: this.settings.embeddingModel,
+      embeddingModel: indexProfile.embeddingModel,
       keywordCorpus: [],
     });
 
@@ -145,9 +152,10 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   private createIndexingService(onProgress: (state: IndexingState) => void): IndexingService {
+    const indexProfile = getActiveIndexProfile(this.settings);
     const embeddings = new EmbeddingClient({
-      provider: detectLocalModelProvider(this.settings.embeddingProviderBaseUrl),
-      baseUrl: this.settings.embeddingProviderBaseUrl,
+      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
+      baseUrl: indexProfile.embeddingProviderBaseUrl,
       logger: this.logger,
     });
 
@@ -162,13 +170,14 @@ export default class IxplorerPlugin extends Plugin {
         new DocxExtractor(),
       ],
       embeddings,
-      indexStore: new LanceDbIndexStore({
-        folder: this.getVaultLocalPath(this.settings.lanceDbFolder),
-        driver: new RealLanceDbDriver(),
+      indexStore: new FileVectorIndexStore({
+        folder: this.getVaultLocalPath(indexProfile.indexFolder),
+        profileId: indexProfile.id,
+        shardCount: indexProfile.shardCount,
       }),
-      embeddingModel: this.settings.embeddingModel,
-      includeFolders: this.settings.includeFolders,
-      excludeGlobs: this.settings.excludeGlobs,
+      embeddingModel: indexProfile.embeddingModel,
+      includeFolders: indexProfile.includeFolders,
+      excludeGlobs: indexProfile.excludeGlobs,
       onProgress,
     });
   }

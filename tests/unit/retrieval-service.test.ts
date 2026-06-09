@@ -80,6 +80,50 @@ describe("RetrievalService", () => {
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["vault"]);
   });
+
+  it("applies score, source-kind, and extension filters to semantic results", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("md", markdownSource("Research/ai.md"), "markdown", 0.8),
+      retrieved("pdf", pdfSource("Papers/report.pdf", 4), "pdf", 0.7),
+      retrieved("txt", documentSource("Docs/manual.txt", "txt"), "txt", 0.2),
+    ]);
+    const service = new RetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const result = await service.search("local", {
+      limit: 10,
+      includeWebResults: false,
+      minScore: 0.5,
+      sourceKinds: ["markdown", "pdf"],
+      fileExtensions: ["md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["md"]);
+  });
+
+  it("uses store-backed keyword search before the static fallback corpus", async () => {
+    const indexStore = new FakeIndexStore([]);
+    indexStore.keywordResults = [
+      retrieved("store-keyword", markdownSource("Research/store.md"), "local keyword", 2),
+    ];
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [
+        retrieved("static-keyword", markdownSource("Research/static.md"), "local keyword", 0),
+      ],
+    });
+
+    const result = await service.search("local", { limit: 5, includeWebResults: false });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["store-keyword"]);
+    expect(indexStore.keywordQueries).toEqual(["local"]);
+  });
 });
 
 describe("rankKeywordMatches", () => {
@@ -190,6 +234,8 @@ class FailingEmbeddingProvider implements EmbeddingProviderClient {
 class FakeIndexStore implements IndexStore {
   initializations: Array<{ embeddingModel: string; embeddingDimensions: number }> = [];
   queries: Array<{ embedding: number[]; limit: number }> = [];
+  keywordQueries: string[] = [];
+  keywordResults: RetrievedChunk[] = [];
 
   constructor(private readonly chunks: RetrievedChunk[]) {}
 
@@ -209,5 +255,10 @@ class FakeIndexStore implements IndexStore {
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
     this.queries.push({ embedding, limit });
     return this.chunks.slice(0, limit);
+  }
+
+  async searchKeywords(query: string): Promise<RetrievedChunk[]> {
+    this.keywordQueries.push(query);
+    return this.keywordResults;
   }
 }

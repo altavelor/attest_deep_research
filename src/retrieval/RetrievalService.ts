@@ -2,11 +2,13 @@ import {
   Citation,
   EmbeddingProviderClient,
   IndexStore,
+  KeywordSearchIndexStore,
   RetrievedChunk,
   RetrievalOptions,
 } from "../shared/types";
 import { formatCitation } from "./citations";
 import { rankKeywordMatches } from "./ranking";
+import { filterRetrievedChunks } from "./retrievalFilters";
 
 export interface RetrievalResult {
   chunks: RetrievedChunk[];
@@ -35,11 +37,12 @@ export class RetrievalService {
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
-    const semanticChunks = await this.searchSemantic(query, options.limit);
+    const semanticChunks = filterRetrievedChunks(
+      await this.searchSemantic(query, options.limit),
+      options,
+    );
     const chunks =
-      semanticChunks.length > 0
-        ? semanticChunks
-        : rankKeywordMatches(query, this.keywordCorpusForOptions(options), options.limit);
+      semanticChunks.length > 0 ? semanticChunks : await this.searchKeywords(query, options);
 
     return {
       chunks,
@@ -75,10 +78,27 @@ export class RetrievalService {
   }
 
   private keywordCorpusForOptions(options: RetrievalOptions): RetrievedChunk[] {
-    if (options.includeWebResults) {
-      return this.keywordCorpus;
+    return filterRetrievedChunks(this.keywordCorpus, options);
+  }
+
+  private async searchKeywords(
+    query: string,
+    options: RetrievalOptions,
+  ): Promise<RetrievedChunk[]> {
+    if (isKeywordSearchIndexStore(this.indexStore)) {
+      const chunks = await this.indexStore.searchKeywords(query, options);
+
+      if (chunks.length > 0) {
+        return chunks;
+      }
     }
 
-    return this.keywordCorpus.filter((chunk) => chunk.source.kind !== "web");
+    return rankKeywordMatches(query, this.keywordCorpusForOptions(options), options.limit);
   }
+}
+
+function isKeywordSearchIndexStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & KeywordSearchIndexStore {
+  return "searchKeywords" in indexStore && typeof indexStore.searchKeywords === "function";
 }
