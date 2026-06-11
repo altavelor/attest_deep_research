@@ -9,9 +9,12 @@ export interface ModelDropdownOptions {
 }
 
 export function attachModelDropdown(options: ModelDropdownOptions): HTMLButtonElement {
-  options.containerEl.addClass("ixplorer-model-dropdown");
+  const wrapper = document.createElement("span");
+  wrapper.className = "ixplorer-model-dropdown";
+  options.inputEl.parentElement?.insertBefore(wrapper, options.inputEl);
+  wrapper.appendChild(options.inputEl);
 
-  const button = options.containerEl.createEl("button", {
+  const button = wrapper.createEl("button", {
     cls: "ixplorer-model-dropdown__button",
     attr: {
       type: "button",
@@ -23,7 +26,7 @@ export function attachModelDropdown(options: ModelDropdownOptions): HTMLButtonEl
   });
   setIcon(button, "chevron-down");
 
-  const menu = options.containerEl.createDiv({
+  const menu = wrapper.createDiv({
     cls: "ixplorer-model-dropdown__menu is-hidden",
     attr: { role: "listbox" },
   });
@@ -50,7 +53,7 @@ export function attachModelDropdown(options: ModelDropdownOptions): HTMLButtonEl
   });
 
   document.addEventListener("click", (event) => {
-    if (!options.containerEl.contains(event.target as Node)) {
+    if (!wrapper.contains(event.target as Node)) {
       closeMenu();
     }
   });
