@@ -1,8 +1,9 @@
 import { join } from "path";
 
-import { FileSystemAdapter, Notice, Plugin, TFile, Vault } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TFile, Vault, requestUrl } from "obsidian";
 
 import { ChatModelClient } from "./client/chat/ChatModelClient";
+import { FileChatStore } from "./chat/ChatStore";
 import { EmbeddingClient } from "./client/embeddings/EmbeddingClient";
 import { DocxExtractor } from "./extractors/DocxExtractor";
 import { EpubExtractor } from "./extractors/EpubExtractor";
@@ -72,6 +73,9 @@ export default class IxplorerPlugin extends Plugin {
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({ id: profile.id, name: profile.name })),
           searchIndex: (options) => this.searchIndex(options),
+          listSavedChats: () => this.createChatStore().listChats(),
+          loadSavedChat: (id) => this.createChatStore().loadChat(id),
+          saveChat: (input) => this.createChatStore().saveChat(input),
           isChatIndexControlShown: () => this.settings.showChatIndexControl,
           setChatIndexControlShown: async (shown) => {
             this.settings.showChatIndexControl = shown;
@@ -150,8 +154,14 @@ export default class IxplorerPlugin extends Plugin {
       }),
       chatModelName: this.settings.chatModel,
       searchProvider: this.settings.duckDuckGoEnabled
-        ? new DuckDuckGoSearchProvider({ logger: this.logger })
+        ? new DuckDuckGoSearchProvider({ fetch: obsidianRequestFetch, logger: this.logger })
         : undefined,
+    });
+  }
+
+  private createChatStore(): FileChatStore {
+    return new FileChatStore({
+      folder: this.getVaultLocalPath(".ixplorer/chats"),
     });
   }
 
@@ -254,6 +264,50 @@ export default class IxplorerPlugin extends Plugin {
 
     return path;
   }
+}
+
+const obsidianRequestFetch: typeof fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const response = await requestUrl({
+    url,
+    method: init?.method ?? "GET",
+    headers: normalizeFetchHeaders(init?.headers),
+    body: normalizeFetchBody(init?.body),
+    throw: false,
+  });
+
+  return new Response(response.arrayBuffer, {
+    status: response.status,
+    headers: response.headers,
+  });
+};
+
+function normalizeFetchHeaders(headers: HeadersInit | undefined): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  if (headers instanceof Headers) {
+    const entries: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      entries[key] = value;
+    });
+    return entries;
+  }
+
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers);
+  }
+
+  return headers;
+}
+
+function normalizeFetchBody(body: BodyInit | null | undefined): string | ArrayBuffer | undefined {
+  if (typeof body === "string" || body instanceof ArrayBuffer) {
+    return body;
+  }
+
+  return undefined;
 }
 
 class ObsidianVaultFileProvider implements VaultFileProvider {

@@ -162,6 +162,53 @@ describe("ResearchService", () => {
     });
     expect(persistFinalAnswer).toHaveBeenCalledTimes(1);
   });
+
+  it("skips local index retrieval when search mode is web only", async () => {
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    const webSearch = new FakeSearchProvider({
+      source: webSource("https://example.com/current-docs"),
+      extractedText: "Current web documentation",
+    });
+    const chatModel = new FakeChatModel([{ content: "Use the web citation.", isComplete: true }]);
+    const service = new ResearchService({
+      retriever,
+      searchProvider: webSearch,
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collect(
+      service.answer({
+        question: "What changed recently?",
+        searchMode: "webOnly",
+        contextPaths: ["Research/local.md"],
+      }),
+    );
+
+    expect(retriever.requests).toEqual([]);
+    expect(webSearch.queries).toEqual(["What changed recently?"]);
+    expect(events.at(-1)).toEqual({
+      type: "complete",
+      answer: expect.objectContaining({
+        citations: [expect.objectContaining({ id: "web:https://example.com/current-docs" })],
+        evidence: [
+          expect.objectContaining({
+            id: "web:https://example.com/current-docs",
+            text: "Current web documentation",
+          }),
+        ],
+      }),
+    });
+    expect(chatModel.requests[0].messages[1].content).toContain(
+      "[web:https://example.com/current-docs] Example",
+    );
+    expect(chatModel.requests[0].messages[1].content).not.toContain("Local model notes");
+  });
 });
 
 async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {

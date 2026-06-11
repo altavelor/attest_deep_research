@@ -14,9 +14,12 @@ export interface ResearchRetriever {
   search(query: string, options: RetrievalOptions): Promise<RetrievalResult>;
 }
 
+export type ResearchSearchMode = "indexOnly" | "indexAndWeb" | "webOnly";
+
 export interface ResearchRequest {
   question: string;
   includeWebSearch?: boolean;
+  searchMode?: ResearchSearchMode;
   contextPaths?: string[];
 }
 
@@ -61,12 +64,16 @@ export class ResearchService {
 
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     const question = request.question.trim();
-    const retrieval = await this.retriever.search(question, {
-      limit: this.evidenceLimit,
-      includeWebResults: false,
-      sourcePaths: request.contextPaths,
-    });
-    const webEvidence = await this.searchWebEvidence(question, request.includeWebSearch === true);
+    const searchMode = resolveSearchMode(request);
+    const retrieval =
+      searchMode === "webOnly"
+        ? emptyRetrievalResult()
+        : await this.retriever.search(question, {
+            limit: this.evidenceLimit,
+            includeWebResults: false,
+            sourcePaths: request.contextPaths,
+          });
+    const webEvidence = await this.searchWebEvidence(question, searchMode !== "indexOnly");
     const evidence = [...retrieval.chunks, ...webEvidence.chunks].slice(0, this.evidenceLimit);
     const citations = mergeCitations(retrieval.citations, webEvidence.citations);
     const prompt = buildResearchPrompt({
@@ -156,4 +163,16 @@ function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] 
   }
 
   return citations;
+}
+
+function resolveSearchMode(request: ResearchRequest): ResearchSearchMode {
+  return request.searchMode ?? (request.includeWebSearch === true ? "indexAndWeb" : "indexOnly");
+}
+
+function emptyRetrievalResult(): RetrievalResult {
+  return {
+    chunks: [],
+    citations: [],
+    usedFallback: false,
+  };
 }

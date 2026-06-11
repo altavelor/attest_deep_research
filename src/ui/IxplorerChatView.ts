@@ -1,5 +1,12 @@
 import { ItemView, MarkdownRenderer, Modal, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 
+import {
+  SaveChatInput,
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+  inferChatTitle,
+} from "../chat/ChatStore";
 import { IndexingState } from "../indexing/IndexingService";
 import {
   formatResearchAnswerAppendBlock,
@@ -7,6 +14,7 @@ import {
   researchAnswerNotePath,
 } from "../research/answerFormatter";
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
+import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
@@ -27,6 +35,9 @@ export interface IxplorerChatViewServices {
   getAvailableChatModels(): string[];
   getIndexProfiles(): Array<{ id: string; name: string }>;
   searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
+  listSavedChats(): Promise<SavedChatSummary[]>;
+  loadSavedChat(id: string): Promise<SavedChat | null>;
+  saveChat(input: SaveChatInput): Promise<SavedChat>;
   isChatIndexControlShown(): boolean;
   setChatIndexControlShown(shown: boolean): Promise<void>;
 }
@@ -53,6 +64,11 @@ export class IxplorerChatView extends ItemView {
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
   private attachedContextPaths: string[] = [];
+  private currentChatSettings: SavedChatSettings;
+  private currentChatId: string | null = null;
+  private currentChatCreatedAt: string | null = null;
+  private savedChatSummaries: SavedChatSummary[] = [];
+  private historySearchQuery = "";
   private activePanel: IxplorerPanel = "chat";
   private indexSearchResults: RetrievedChunk[] = [];
   private indexSearchError: string | null = null;
@@ -67,7 +83,8 @@ export class IxplorerChatView extends ItemView {
   private textareaEl: HTMLTextAreaElement | null = null;
   private modelInputEl: HTMLInputElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
-  private webSearchEl: HTMLInputElement | null = null;
+  private submitButtonTooltipEl: HTMLElement | null = null;
+  private searchModeEl: HTMLSelectElement | null = null;
   private attachedContextEl: HTMLElement | null = null;
   private indexSearchRootEl: HTMLElement | null = null;
   private indexSearchProfileEl: HTMLSelectElement | null = null;
@@ -79,11 +96,17 @@ export class IxplorerChatView extends ItemView {
   private indexSearchResultsEl: HTMLElement | null = null;
   private citationPopoverEl: HTMLElement | null = null;
   private citationPopoverCloseTimer: number | null = null;
+  private historyPopoverEl: HTMLElement | null = null;
+  private historyPopoverAnchorEl: HTMLElement | null = null;
+  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
+    this.closeHistoryPopoverOnOutsidePointer(event);
+  };
   private unsubscribeIndexing: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
     super(leaf);
     this.services = services;
+    this.currentChatSettings = this.createDefaultChatSettings();
   }
 
   getViewType(): string {
@@ -99,13 +122,16 @@ export class IxplorerChatView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    await this.refreshSavedChatSummaries();
     this.render();
   }
 
   async onClose(): Promise<void> {
     this.unsubscribeIndexing?.();
     this.unsubscribeIndexing = null;
+    document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
     this.closeCitationPopover();
+    this.closeHistoryPopover();
     this.contentEl.empty();
   }
 
@@ -177,29 +203,43 @@ export class IxplorerChatView extends ItemView {
           placeholder: "Chat model",
         },
       });
-      this.modelInputEl.value = this.services.getChatModel();
+      this.modelInputEl.value = this.currentChatSettings.model;
       this.modelInputEl.addEventListener("change", () => {
-        void this.services.setChatModel(this.modelInputEl?.value ?? "");
+        void this.updateChatModel(this.modelInputEl?.value ?? "");
       });
       attachModelDropdown({
         inputEl: this.modelInputEl,
         containerEl: modelRow,
         getModels: () => this.services.getAvailableChatModels(),
         emptyText: "Refresh models in settings",
-        onSelect: (model) => this.services.setChatModel(model),
+        onSelect: (model) => this.updateChatModel(model),
       });
       this.attachedContextEl = form.createDiv({ cls: "ixplorer-chat__attachments" });
       this.renderAttachedContext();
 
-      const webLabel = modelRow.createEl("label", { cls: "ixplorer-chat__toggle" });
-      this.webSearchEl = webLabel.createEl("input", {
-        attr: { type: "checkbox" },
+      const searchModeLabel = modelRow.createEl("label", {
+        cls: "ixplorer-chat__search-mode",
+        attr: { for: "ixplorer-chat-search-mode" },
       });
-      this.webSearchEl.checked = this.services.isWebSearchEnabled();
-      this.webSearchEl.disabled = !this.services.isWebSearchEnabled();
-      webLabel.createSpan({ text: "Web" });
+      searchModeLabel.createSpan({ text: "Search" });
+      this.searchModeEl = searchModeLabel.createEl("select", {
+        cls: "ixplorer-chat__search-mode-select",
+        attr: {
+          id: "ixplorer-chat-search-mode",
+          "aria-label": "Search mode",
+        },
+      });
+      createSearchModeOptions(this.searchModeEl);
+      this.searchModeEl.value = this.currentChatSettings.searchMode;
+      this.searchModeEl.addEventListener("change", () => {
+        void this.updateSearchMode(this.getSearchMode());
+        this.updateSubmitAvailability();
+      });
 
-      this.submitButtonEl = modelRow.createEl("button", {
+      this.submitButtonTooltipEl = modelRow.createSpan({
+        cls: "ixplorer-chat__submit-tooltip",
+      });
+      this.submitButtonEl = this.submitButtonTooltipEl.createEl("button", {
         cls: "mod-cta ixplorer-chat__submit",
         text: "Ask",
         attr: { type: "button" },
@@ -212,6 +252,7 @@ export class IxplorerChatView extends ItemView {
 
         void this.submitQuestion();
       });
+      this.updateSubmitAvailability();
     });
 
     this.indexSearchRootEl = root.createDiv({
@@ -253,11 +294,21 @@ export class IxplorerChatView extends ItemView {
 
   private renderChatWindowActions(containerEl: HTMLElement): void {
     const actions = containerEl.createDiv({ cls: "ixplorer-chat__window-actions" });
+    const historyButton = this.createHeaderIconButton(actions, {
+      icon: "history",
+      label: "Chats history",
+      disabled: false,
+      onClick: () => {
+        void this.toggleHistoryPopover(historyButton);
+      },
+    });
     this.createHeaderIconButton(actions, {
       icon: "message-square-plus",
       label: "New chat",
       disabled: false,
-      onClick: () => this.startNewChat(),
+      onClick: () => {
+        void this.startNewChat();
+      },
     });
     this.createHeaderIconButton(actions, {
       icon: "file-plus-2",
@@ -296,10 +347,17 @@ export class IxplorerChatView extends ItemView {
     return button;
   }
 
-  private startNewChat(): void {
+  private async startNewChat(): Promise<void> {
+    await this.saveCurrentChat();
     this.messages = [];
     this.lastAnswer = null;
     this.attachedContextPaths = [];
+    this.currentChatSettings = this.createDefaultChatSettings();
+    this.currentChatId = null;
+    this.currentChatCreatedAt = null;
+    this.editingMessageIndex = null;
+    this.closeHistoryPopover();
+    await this.refreshSavedChatSummaries();
     this.render();
   }
 
@@ -314,6 +372,7 @@ export class IxplorerChatView extends ItemView {
       onSubmit: (paths) => {
         this.attachedContextPaths = paths;
         this.renderAttachedContext();
+        void this.saveCurrentChat();
       },
     }).open();
   }
@@ -341,6 +400,7 @@ export class IxplorerChatView extends ItemView {
           (candidate) => candidate !== path,
         );
         this.renderAttachedContext();
+        void this.saveCurrentChat();
       });
     }
   }
@@ -374,6 +434,11 @@ export class IxplorerChatView extends ItemView {
 
     const transcriptEl = this.transcriptEl;
     transcriptEl.empty();
+
+    if (this.messages.length === 0) {
+      this.renderEmptyChatState(transcriptEl);
+      return;
+    }
 
     this.messages.forEach((message, index) => {
       const messageEl = transcriptEl.createDiv({
@@ -566,6 +631,63 @@ export class IxplorerChatView extends ItemView {
         text: ref.chunk.text,
       });
     }
+  }
+
+  private renderEmptyChatState(containerEl: HTMLElement): void {
+    const empty = containerEl.createDiv({ cls: "ixplorer-chat__empty-state" });
+    const header = empty.createDiv({ cls: "ixplorer-chat__empty-header" });
+    header.createEl("h3", { text: "Saved chats" });
+    header.createSpan({
+      cls: "ixplorer-chat__empty-count",
+      text: `${this.savedChatSummaries.length} saved`,
+    });
+
+    if (this.savedChatSummaries.length === 0) {
+      empty.createDiv({
+        cls: "ixplorer-chat__empty-note",
+        text: "No saved chats yet.",
+      });
+      return;
+    }
+
+    const list = empty.createDiv({ cls: "ixplorer-chat__saved-list" });
+    const visibleChats = this.savedChatSummaries.slice(0, 5);
+    for (const chat of visibleChats) {
+      this.renderSavedChatRow(list, chat, "ixplorer-chat__saved-item");
+    }
+
+    const hiddenCount = this.savedChatSummaries.length - visibleChats.length;
+    if (hiddenCount > 0) {
+      const viewAll = list.createEl("button", {
+        cls: "ixplorer-chat__saved-view-all",
+        attr: { type: "button" },
+      });
+      viewAll.createSpan({ text: "View all" });
+      viewAll.createSpan({ text: String(hiddenCount) });
+      viewAll.addEventListener("click", () => {
+        void this.toggleHistoryPopover(viewAll);
+      });
+    }
+  }
+
+  private renderSavedChatRow(
+    containerEl: HTMLElement,
+    chat: SavedChatSummary,
+    className: string,
+  ): HTMLButtonElement {
+    const button = containerEl.createEl("button", {
+      cls: className,
+      attr: { type: "button" },
+    });
+    const title = button.createSpan({ cls: "ixplorer-chat__saved-title", text: chat.title });
+    title.setAttr("title", chat.title);
+    const meta = button.createSpan({ cls: "ixplorer-chat__saved-meta" });
+    meta.createSpan({ text: formatMessageCount(chat.messageCount) });
+    meta.createSpan({ text: formatRelativeTime(chat.updatedAt) });
+    button.addEventListener("click", () => {
+      void this.loadSavedChat(chat.id);
+    });
+    return button;
   }
 
   private setCitationHighlight(key: string, highlighted: boolean): void {
@@ -867,10 +989,207 @@ export class IxplorerChatView extends ItemView {
     }
   }
 
+  private async toggleHistoryPopover(anchorEl: HTMLElement): Promise<void> {
+    if (this.historyPopoverEl) {
+      this.closeHistoryPopover();
+      return;
+    }
+
+    await this.refreshSavedChatSummaries();
+    const popover = this.contentEl.createDiv({ cls: "ixplorer-chat__history-popover" });
+    this.historyPopoverEl = popover;
+    this.historyPopoverAnchorEl = anchorEl;
+    this.renderHistoryPopoverContent(popover);
+    this.positionHistoryPopover(anchorEl, popover);
+    document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
+  }
+
+  private renderHistoryPopoverContent(containerEl: HTMLElement): void {
+    containerEl.empty();
+
+    const searchRow = containerEl.createDiv({ cls: "ixplorer-chat__history-search" });
+    setIcon(searchRow.createSpan({ cls: "ixplorer-chat__history-search-icon" }), "search");
+    const searchInput = searchRow.createEl("input", {
+      attr: {
+        type: "search",
+        placeholder: "Search saved chats",
+        "aria-label": "Search saved chats",
+      },
+    });
+    searchInput.value = this.historySearchQuery;
+    searchInput.addEventListener("input", () => {
+      this.historySearchQuery = searchInput.value;
+      this.renderHistoryPopoverContent(containerEl);
+    });
+
+    const header = containerEl.createDiv({ cls: "ixplorer-chat__history-header" });
+    header.createSpan({ text: "Recent chats" });
+    header.createSpan({ text: String(this.savedChatSummaries.length) });
+
+    const list = containerEl.createDiv({ cls: "ixplorer-chat__history-list" });
+    const filtered = this.filterSavedChatSummaries(this.historySearchQuery);
+
+    if (filtered.length === 0) {
+      list.createDiv({
+        cls: "ixplorer-chat__history-empty",
+        text: this.savedChatSummaries.length === 0 ? "No saved chats yet." : "No matching chats.",
+      });
+      return;
+    }
+
+    for (const chat of filtered) {
+      const item = this.renderSavedChatRow(list, chat, "ixplorer-chat__history-item");
+      if (chat.id === this.currentChatId) {
+        item.addClass("is-active");
+      }
+    }
+
+    if (this.historySearchQuery) {
+      window.setTimeout(() => {
+        searchInput.focus();
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      }, 0);
+    }
+  }
+
+  private filterSavedChatSummaries(query: string): SavedChatSummary[] {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return this.savedChatSummaries;
+    }
+
+    return this.savedChatSummaries.filter((chat) =>
+      chat.title.toLowerCase().includes(normalizedQuery),
+    );
+  }
+
+  private positionHistoryPopover(anchorEl: HTMLElement, popoverEl: HTMLElement): void {
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const hostRect = this.contentEl.getBoundingClientRect();
+    const popoverRect = popoverEl.getBoundingClientRect();
+    const gap = 8;
+    const left = Math.min(
+      Math.max(anchorRect.right - hostRect.left - popoverRect.width, gap),
+      Math.max(gap, hostRect.width - popoverRect.width - gap),
+    );
+    const top = anchorRect.bottom - hostRect.top + gap;
+
+    popoverEl.style.left = `${left}px`;
+    popoverEl.style.top = `${top}px`;
+  }
+
+  private closeHistoryPopover(): void {
+    document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
+    this.historyPopoverEl?.remove();
+    this.historyPopoverEl = null;
+    this.historyPopoverAnchorEl = null;
+  }
+
+  private closeHistoryPopoverOnOutsidePointer(event: PointerEvent): void {
+    if (!this.historyPopoverEl) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Node)) {
+      return;
+    }
+
+    if (
+      this.historyPopoverEl.contains(target) ||
+      this.historyPopoverAnchorEl?.contains(target)
+    ) {
+      return;
+    }
+
+    this.closeHistoryPopover();
+  }
+
+  private async loadSavedChat(id: string): Promise<void> {
+    await this.saveCurrentChat();
+    const chat = await this.services.loadSavedChat(id);
+
+    if (!chat) {
+      new Notice("Saved chat was not found.");
+      await this.refreshSavedChatSummaries();
+      this.render();
+      return;
+    }
+
+    this.currentChatId = chat.id;
+    this.currentChatCreatedAt = chat.createdAt;
+    this.messages = chat.messages;
+    this.lastAnswer = chat.lastAnswer;
+    this.attachedContextPaths = [...chat.attachedContextPaths];
+    this.currentChatSettings = this.resolveChatSettings(chat.chatSettings);
+    this.editingMessageIndex = null;
+    this.closeHistoryPopover();
+    await this.refreshSavedChatSummaries();
+    this.render();
+  }
+
+  private async saveCurrentChat(): Promise<void> {
+    if (this.messages.length === 0) {
+      return;
+    }
+
+    const saved = await this.services.saveChat({
+      id: this.currentChatId ?? undefined,
+      createdAt: this.currentChatCreatedAt ?? undefined,
+      title: inferChatTitle(this.messages),
+      messages: this.messages,
+      lastAnswer: this.lastAnswer,
+      attachedContextPaths: this.attachedContextPaths,
+      chatSettings: this.currentChatSettings,
+    });
+    this.currentChatId = saved.id;
+    this.currentChatCreatedAt = saved.createdAt;
+    await this.refreshSavedChatSummaries();
+  }
+
+  private async refreshSavedChatSummaries(): Promise<void> {
+    this.savedChatSummaries = await this.services.listSavedChats();
+  }
+
+  private async updateChatModel(model: string): Promise<void> {
+    const normalizedModel = model.trim();
+    this.currentChatSettings = {
+      ...this.currentChatSettings,
+      model: normalizedModel || this.createDefaultChatSettings().model,
+    };
+    if (this.modelInputEl && this.modelInputEl.value !== this.currentChatSettings.model) {
+      this.modelInputEl.value = this.currentChatSettings.model;
+    }
+    await this.services.setChatModel(this.currentChatSettings.model);
+    await this.saveCurrentChat();
+  }
+
+  private async updateSearchMode(searchMode: ResearchSearchMode): Promise<void> {
+    this.currentChatSettings = { ...this.currentChatSettings, searchMode };
+    await this.saveCurrentChat();
+  }
+
+  private createDefaultChatSettings(): SavedChatSettings {
+    return {
+      model: this.services.getChatModel(),
+      searchMode: "indexOnly",
+    };
+  }
+
+  private resolveChatSettings(settings: SavedChatSettings | undefined): SavedChatSettings {
+    const defaults = this.createDefaultChatSettings();
+
+    return {
+      model: settings?.model.trim() || defaults.model,
+      searchMode: settings?.searchMode ?? defaults.searchMode,
+    };
+  }
+
   private async submitQuestion(): Promise<void> {
     const question = this.textareaEl?.value.trim() ?? "";
 
-    if (!question || this.isRunning) {
+    if (!question || this.isRunning || this.getSearchUnavailableMessage() !== null) {
       return;
     }
 
@@ -883,7 +1202,7 @@ export class IxplorerChatView extends ItemView {
   private async submitEditedQuestion(index: number, value: string): Promise<void> {
     const question = value.trim();
 
-    if (!question || this.isRunning) {
+    if (!question || this.isRunning || this.getSearchUnavailableMessage() !== null) {
       return;
     }
 
@@ -898,6 +1217,7 @@ export class IxplorerChatView extends ItemView {
     this.messages = this.messages.map((message, messageIndex) =>
       messageIndex === index ? { ...message, content: question } : message,
     );
+    await this.saveCurrentChat();
     await this.runQuestion(question, { appendQuestion: false });
   }
 
@@ -909,13 +1229,14 @@ export class IxplorerChatView extends ItemView {
   ): Promise<void> {
     this.isRunning = true;
     this.shouldStopRunning = false;
-    await this.services.setChatModel(this.modelInputEl?.value ?? this.services.getChatModel());
+    await this.updateChatModel(this.modelInputEl?.value ?? this.currentChatSettings.model);
     this.setFormRunning(true);
     if (options.appendQuestion) {
       this.messages = [
         ...this.messages,
         { role: "user", content: question, createdAt: new Date().toISOString() },
       ];
+      await this.saveCurrentChat();
     }
     this.lastAnswer = null;
     this.renderMessages();
@@ -926,7 +1247,7 @@ export class IxplorerChatView extends ItemView {
 
       for await (const event of service.answer({
         question,
-        includeWebSearch: this.webSearchEl?.checked === true,
+        searchMode: this.getSearchMode(),
         contextPaths: this.attachedContextPaths.length > 0 ? this.attachedContextPaths : undefined,
       })) {
         if (this.shouldStopRunning) {
@@ -936,6 +1257,7 @@ export class IxplorerChatView extends ItemView {
       }
     } catch (error) {
       this.messages = nextAssistantMessage(this.messages, toUserMessage(error));
+      await this.saveCurrentChat();
       new Notice(toUserMessage(error));
       this.renderMessages();
     } finally {
@@ -1015,6 +1337,7 @@ export class IxplorerChatView extends ItemView {
     this.messages = attachEvidenceToLastAssistantMessage(this.messages, event.answer.evidence ?? []);
     this.renderAnswerDetails();
     this.renderMessages();
+    void this.saveCurrentChat();
   }
 
   private setFormRunning(running: boolean): void {
@@ -1031,9 +1354,52 @@ export class IxplorerChatView extends ItemView {
       this.modelInputEl.disabled = running;
     }
 
-    if (this.webSearchEl) {
-      this.webSearchEl.disabled = running || !this.services.isWebSearchEnabled();
+    if (this.searchModeEl) {
+      this.searchModeEl.disabled = running;
     }
+
+    this.updateSubmitAvailability();
+  }
+
+  private getSearchMode(): ResearchSearchMode {
+    const value = this.searchModeEl?.value;
+
+    return isResearchSearchMode(value) ? value : "indexOnly";
+  }
+
+  private updateSubmitAvailability(): void {
+    if (!this.submitButtonEl) {
+      return;
+    }
+
+    if (this.isRunning) {
+      this.submitButtonEl.disabled = false;
+      this.submitButtonEl.setAttr("title", "Stop the current answer");
+      this.submitButtonEl.setAttr("aria-label", "Stop the current answer");
+      this.submitButtonTooltipEl?.setAttr("title", "Stop the current answer");
+      return;
+    }
+
+    const unavailableMessage = this.getSearchUnavailableMessage();
+
+    if (unavailableMessage !== null) {
+      this.submitButtonEl.disabled = true;
+      this.submitButtonEl.setAttr("title", unavailableMessage);
+      this.submitButtonEl.setAttr("aria-label", `Ask unavailable: ${unavailableMessage}`);
+      this.submitButtonTooltipEl?.setAttr("title", unavailableMessage);
+      return;
+    }
+
+    this.submitButtonEl.disabled = false;
+    this.submitButtonEl.setAttr("title", "Ask");
+    this.submitButtonEl.setAttr("aria-label", "Ask");
+    this.submitButtonTooltipEl?.setAttr("title", "Ask");
+  }
+
+  private getSearchUnavailableMessage(): string | null {
+    return this.getSearchMode() !== "indexOnly" && !this.services.isWebSearchEnabled()
+      ? "Enable web search in Ixplorer settings to use this search mode."
+      : null;
   }
 
   private async openCitation(citation: Citation): Promise<void> {
@@ -1143,6 +1509,25 @@ function createLabeledInput(
   });
 
   return input;
+}
+
+function createSearchModeOptions(selectEl: HTMLSelectElement): void {
+  const options: Array<{ value: ResearchSearchMode; label: string }> = [
+    { value: "indexOnly", label: "Index only" },
+    { value: "indexAndWeb", label: "Index + Web" },
+    { value: "webOnly", label: "Web only" },
+  ];
+
+  for (const option of options) {
+    selectEl.createEl("option", {
+      text: option.label,
+      value: option.value,
+    });
+  }
+}
+
+function isResearchSearchMode(value: string | undefined): value is ResearchSearchMode {
+  return value === "indexOnly" || value === "indexAndWeb" || value === "webOnly";
 }
 
 function attachEvidenceToLastAssistantMessage(
@@ -1341,6 +1726,10 @@ function formatMessageTime(value: string): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatMessageCount(count: number): string {
+  return `${count} ${count === 1 ? "message" : "messages"}`;
+}
+
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
 
@@ -1478,4 +1867,36 @@ class ContextDocumentPickerModal extends Modal {
       label.createSpan({ text: file.path });
     }
   }
+}
+
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+
+  if (minutes < 1) {
+    return "now";
+  }
+
+  if (hours < 1) {
+    return `${minutes}m`;
+  }
+
+  if (days < 1) {
+    return `${hours}h`;
+  }
+
+  if (weeks < 1) {
+    return `${days}d`;
+  }
+
+  return `${weeks}w`;
 }
