@@ -1,4 +1,4 @@
-import type { FileVectorChunkRow, KeywordPostingRow } from "./FileVectorIndexStore";
+import type { FileVectorChunkRow, KeywordPostingRow } from "./FileVectorIndexFormat";
 
 export interface KeywordSearchMatch {
   chunkId: string;
