@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname } from "path";
 
 import { IxplorerError } from "../shared/errors";
+import { isMissingFileError } from "./FileVectorIndexErrors";
 
 export interface AtomicIndexFile {
   path: string;
@@ -114,8 +115,4 @@ function throwIndexReadError(cause: unknown, path: string): never {
     cause,
     details: { path },
   });
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }

@@ -1,4 +1,5 @@
 import { IxplorerError } from "../../shared/errors";
+import { isRecord } from "../../shared/guards";
 import {
   EmbeddingProviderClient,
   EmbeddingRequest,
@@ -10,7 +11,6 @@ import { ProviderHttpClient } from "../common/http";
 import {
   isOllamaTagsResponse,
   isOpenAiModelsResponse,
-  isRecord,
   modelNamesFromOllamaTags,
   modelNamesFromOpenAiModels,
 } from "../common/models";

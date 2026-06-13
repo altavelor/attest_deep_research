@@ -1,5 +1,7 @@
-import { IxplorerError } from "../shared/errors";
+import { isRecord } from "../shared/guards";
+import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
 import { LanguageInventoryItem, SourceReference } from "../shared/types";
+import { throwRebuildRequired } from "./FileVectorIndexErrors";
 
 export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 2;
 export const FILE_VECTOR_INDEX_FORMAT = "ixplorer-file-vector-index";
@@ -198,9 +200,7 @@ export function isFileVectorManifest(value: unknown): value is FileVectorManifes
   );
 }
 
-export function isFileVectorManifestOrNull(
-  value: unknown,
-): value is FileVectorManifest | null {
+export function isFileVectorManifestOrNull(value: unknown): value is FileVectorManifest | null {
   return value === null || isFileVectorManifest(value);
 }
 
@@ -253,11 +253,11 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
     input;
 
   if (!isFileVectorManifest(manifest)) {
-    throwInconsistentIndex({ reason: "invalid-manifest" });
+    throwRebuildRequired({ reason: "invalid-manifest" });
   }
 
   if (manifest.sourceCount !== sources.length) {
-    throwInconsistentIndex({
+    throwRebuildRequired({
       reason: "source-count-mismatch",
       expected: manifest.sourceCount,
       actual: sources.length,
@@ -265,7 +265,7 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
   }
 
   if (manifest.keywordIndex.indexedChunkCount !== keywordIndexedChunkCount) {
-    throwInconsistentIndex({
+    throwRebuildRequired({
       reason: "keyword-count-mismatch",
       expected: manifest.keywordIndex.indexedChunkCount,
       actual: keywordIndexedChunkCount,
@@ -281,7 +281,7 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
       shard.chunkCount * manifest.embeddingDimensions * VECTOR_FLOAT_BYTES;
 
     if (shard.chunkCount !== actualChunkCount) {
-      throwInconsistentIndex({
+      throwRebuildRequired({
         reason: "shard-chunk-count-mismatch",
         shardId: shard.id,
         expected: shard.chunkCount,
@@ -293,7 +293,7 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
       shard.vectorByteLength !== actualVectorByteLength ||
       shard.vectorByteLength !== expectedVectorByteLength
     ) {
-      throwInconsistentIndex({
+      throwRebuildRequired({
         reason: "shard-vector-length-mismatch",
         shardId: shard.id,
         expected: expectedVectorByteLength,
@@ -305,7 +305,7 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
   }
 
   if (manifest.chunkCount !== totalChunks) {
-    throwInconsistentIndex({
+    throwRebuildRequired({
       reason: "manifest-chunk-count-mismatch",
       expected: manifest.chunkCount,
       actual: totalChunks,
@@ -314,7 +314,7 @@ export function validateFileVectorIndexFormat(input: FileVectorFormatValidationI
 
   const sourceChunkCount = sources.reduce((total, source) => total + source.chunkCount, 0);
   if (sourceChunkCount !== manifest.chunkCount) {
-    throwInconsistentIndex({
+    throwRebuildRequired({
       reason: "source-chunk-count-mismatch",
       expected: manifest.chunkCount,
       actual: sourceChunkCount,
@@ -395,24 +395,4 @@ function isSourceReference(value: unknown): value is SourceReference {
 
 function sumShardChunks(shards: FileVectorShardManifest[]): number {
   return shards.reduce((total, shard) => total + shard.chunkCount, 0);
-}
-
-function throwInconsistentIndex(details: Record<string, unknown>): never {
-  throw new IxplorerError({
-    code: "INDEX_REBUILD_REQUIRED",
-    message: "The file-backed index format is inconsistent.",
-    details,
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === "number" && value > 0;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === "number" && value >= 0;
 }

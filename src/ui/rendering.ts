@@ -1,6 +1,7 @@
 import { IndexingState } from "../indexing/IndexingService";
 import { formatIndexSize } from "../indexing/indexSize";
 import { Citation, RetrievedChunk } from "../shared/types";
+import { stripRenderedCitationIds } from "./citationText";
 
 export interface ChatDisplayMessage {
   role: "user" | "assistant";
@@ -144,7 +145,7 @@ export function messageDisplayContent(message: ChatDisplayMessage): string {
     return message.content;
   }
 
-  return stripCitationIds(messageMarkdownContent(message)).trim();
+  return stripRenderedCitationIds(messageMarkdownContent(message)).trim();
 }
 
 export function messageMarkdownContent(message: ChatDisplayMessage): string {
@@ -165,10 +166,6 @@ export function stripCitationsSection(value: string): string {
   const sectionStart = value.search(/(?:^|\n)#{1,3}\s*citations\s*$/im);
 
   return sectionStart === -1 ? value : value.slice(0, sectionStart).trim();
-}
-
-export function stripCitationIds(value: string): string {
-  return value.replace(/\s*\[[^\]\n]{8,}\]/g, "");
 }
 
 export function cleanupDanglingMarkdown(value: string): string {

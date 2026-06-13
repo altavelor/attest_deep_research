@@ -1,11 +1,18 @@
 import { ChatModelProvider, LanguageInventoryItem, RetrievalQueryVariant } from "../shared/types";
 import { detectTextLanguages } from "../indexing/languageDetection";
+import {
+  collectChatText,
+  parseLlmJsonObject,
+  type LlmJsonParseDiagnostic,
+} from "../shared/llmOutput";
+import { normalizeInlineWhitespace } from "../shared/whitespace";
 
 export interface QueryExpansionServiceOptions {
   chatModel: ChatModelProvider;
   chatModelName: string;
   maxLanguages?: number;
   maxVariants?: number;
+  onDiagnostic?: (diagnostic: QueryExpansionDiagnostic) => void;
 }
 
 export interface BuildQueryVariantsOptions {
@@ -17,18 +24,25 @@ const DEFAULT_MAX_LANGUAGES = 4;
 const DEFAULT_MAX_VARIANTS = 8;
 const UNKNOWN_LANGUAGE = "unknown";
 const MAX_QUERY_LENGTH = 240;
+const MAX_LLM_OUTPUT_LENGTH = 20_000;
+
+export interface QueryExpansionDiagnostic extends LlmJsonParseDiagnostic {
+  source: "query-expansion";
+}
 
 export class QueryExpansionService {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly maxLanguages: number;
   private readonly maxVariants: number;
+  private readonly onDiagnostic?: (diagnostic: QueryExpansionDiagnostic) => void;
 
   constructor(options: QueryExpansionServiceOptions) {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.maxLanguages = options.maxLanguages ?? DEFAULT_MAX_LANGUAGES;
     this.maxVariants = options.maxVariants ?? DEFAULT_MAX_VARIANTS;
+    this.onDiagnostic = options.onDiagnostic;
   }
 
   async buildVariants(options: BuildQueryVariantsOptions): Promise<RetrievalQueryVariant[]> {
@@ -56,9 +70,12 @@ export class QueryExpansionService {
             },
           ],
         }),
+        { maxLength: MAX_LLM_OUTPUT_LENGTH },
       );
 
-      return parseQueryVariants(response, this.maxVariants);
+      return parseQueryVariants(response, this.maxVariants, (diagnostic) =>
+        this.onDiagnostic?.({ source: "query-expansion", ...diagnostic }),
+      );
     } catch {
       return [];
     }
@@ -94,34 +111,22 @@ export function buildQueryExpansionPrompt(
   ].join("\n");
 }
 
-export function parseQueryVariants(value: string, maxVariants: number): RetrievalQueryVariant[] {
-  const parsed = parseJsonObject(value);
-  const queries = parsed?.queries;
+export function parseQueryVariants(
+  value: string,
+  maxVariants: number,
+  onDiagnostic?: (diagnostic: LlmJsonParseDiagnostic) => void,
+): RetrievalQueryVariant[] {
+  const parsed = parseLlmJsonObject(value, {
+    fallback: { queries: [] },
+    maxInputLength: MAX_LLM_OUTPUT_LENGTH,
+    validate: isQueriesObject,
+    onDiagnostic,
+  });
 
-  if (!Array.isArray(queries)) {
-    return [];
-  }
-
-  return queries
+  return parsed.queries
     .map((item) => normalizeVariant(item))
     .filter((item): item is RetrievalQueryVariant => item !== null)
     .slice(0, maxVariants);
-}
-
-async function collectChatText(
-  chunks: AsyncIterable<{ content: string; isComplete: boolean }>,
-): Promise<string> {
-  let text = "";
-
-  for await (const chunk of chunks) {
-    text += chunk.content;
-
-    if (chunk.isComplete) {
-      break;
-    }
-  }
-
-  return text;
 }
 
 function normalizeVariant(value: unknown): RetrievalQueryVariant | null {
@@ -130,7 +135,7 @@ function normalizeVariant(value: unknown): RetrievalQueryVariant | null {
   }
 
   const item = value as Partial<RetrievalQueryVariant>;
-  const query = typeof item.query === "string" ? item.query.replace(/\s+/g, " ").trim() : "";
+  const query = typeof item.query === "string" ? normalizeInlineWhitespace(item.query) : "";
 
   if (!query || query.length > MAX_QUERY_LENGTH) {
     return null;
@@ -145,19 +150,10 @@ function normalizeVariant(value: unknown): RetrievalQueryVariant | null {
   };
 }
 
-function parseJsonObject(value: string): { queries?: unknown } | null {
-  const trimmed = value.trim();
-  const jsonStart = trimmed.indexOf("{");
-  const jsonEnd = trimmed.lastIndexOf("}");
-
-  if (jsonStart === -1 || jsonEnd <= jsonStart) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1));
-    return parsed && typeof parsed === "object" ? (parsed as { queries?: unknown }) : null;
-  } catch {
-    return null;
-  }
+function isQueriesObject(value: unknown): value is { queries: unknown[] } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { queries?: unknown }).queries)
+  );
 }

@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { ButtonComponent, TextComponent } from "obsidian";
 
 import type IxplorerPlugin from "../main";
+import { parseNonNegativeInteger, parsePositiveInteger } from "../shared/numbers";
 import { renderIndexControl } from "../ui/IndexControl";
 import { attachModelDropdown } from "../ui/ModelDropdown";
 import {
@@ -506,13 +507,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
 }
 
 function positiveInteger(value: string): number | null {
-  const parsed = Number.parseInt(value.trim(), 10);
-
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return parsePositiveInteger(value);
 }
 
 function nonNegativeInteger(value: string): number | null {
-  const parsed = Number.parseInt(value.trim(), 10);
-
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+  return parseNonNegativeInteger(value);
 }

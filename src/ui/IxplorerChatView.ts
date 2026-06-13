@@ -11,6 +11,7 @@ import { IndexingState } from "../indexing/IndexingService";
 import { ResearchService } from "../research/ResearchService";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
+import { parsePositiveInteger } from "../shared/numbers";
 import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { AnswerNoteWriter } from "./AnswerNoteWriter";
 import {
@@ -19,11 +20,7 @@ import {
   renderAttachedContext as renderComposerAttachedContext,
   renderChatComposer,
 } from "./ChatComposer";
-import {
-  IxplorerPanel,
-  renderChatWindowActions,
-  renderPanelTabs,
-} from "./ChatHeader";
+import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./ChatTranscript";
 import { CitationPopoverController } from "./CitationPopover";
 import { formatCitationForChunk } from "./citationFormatting";
@@ -307,7 +304,9 @@ export class IxplorerChatView extends ItemView {
     }
 
     renderComposerAttachedContext(this.attachedContextEl, this.attachedContextPaths, (path) => {
-      this.attachedContextPaths = this.attachedContextPaths.filter((candidate) => candidate !== path);
+      this.attachedContextPaths = this.attachedContextPaths.filter(
+        (candidate) => candidate !== path,
+      );
       this.renderAttachedContext();
       void this.saveCurrentChat();
     });
@@ -357,7 +356,8 @@ export class IxplorerChatView extends ItemView {
       onScheduleCitationPopoverClose: (key) => this.citationPopover.scheduleClose(key),
       onScrollCitationBlockIntoView: (key) => this.citationPopover.scrollBlockIntoView(key),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
-      onHighlightCitation: (key, highlighted) => this.citationPopover.setHighlight(key, highlighted),
+      onHighlightCitation: (key, highlighted) =>
+        this.citationPopover.setHighlight(key, highlighted),
     });
   }
 
@@ -735,9 +735,7 @@ export class IxplorerChatView extends ItemView {
 }
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveInteger(value) ?? fallback;
 }
 
 function readOptionalNumber(value: string | undefined): number | undefined {

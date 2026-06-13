@@ -1,6 +1,7 @@
 import { inflateSync } from "zlib";
 
 import { IxplorerError } from "../shared/errors";
+import { positiveIntegerOrDefault } from "../shared/numbers";
 import { ExtractedChunk, Extractor, ExtractorInput, PdfSourceReference } from "../shared/types";
 import {
   DEFAULT_CHUNK_OVERLAP,
@@ -40,7 +41,8 @@ export class PdfExtractor implements Extractor {
   private readonly chunkOverlap: number;
 
   constructor(options: PdfExtractorOptions = {}) {
-    this.parser = options.parser ?? new PdfJsTextParser({ pageConcurrency: options.pageConcurrency });
+    this.parser =
+      options.parser ?? new PdfJsTextParser({ pageConcurrency: options.pageConcurrency });
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
     this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
   }
@@ -119,7 +121,9 @@ export class PdfJsTextParser implements PdfPageTextParser {
           { length: Math.min(this.pageConcurrency, document.numPages - startPage + 1) },
           (_, index) => startPage + index,
         );
-        const pages = await Promise.all(pageNumbers.map((pageNumber) => parsePdfPage(document, pageNumber)));
+        const pages = await Promise.all(
+          pageNumbers.map((pageNumber) => parsePdfPage(document, pageNumber)),
+        );
 
         for (const page of pages) {
           yield page;
@@ -235,10 +239,6 @@ function errorMessage(error: unknown): string | undefined {
   }
 
   return typeof error === "string" && error.trim() ? error.trim() : undefined;
-}
-
-function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
-  return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
 }
 
 function parsePdfObjects(source: string): Map<number, string> {

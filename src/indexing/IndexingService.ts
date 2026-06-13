@@ -1,4 +1,5 @@
 import { isIxplorerError, IxplorerError } from "../shared/errors";
+import { positiveIntegerOrDefault } from "../shared/numbers";
 import type { ExtractedChunk, IndexFailedSourceSnapshot } from "../shared/types";
 import type { FileSnapshot } from "./changeDetection";
 import { EmbeddingBatcher } from "./EmbeddingBatcher";
@@ -284,10 +285,6 @@ function toPendingIndexedFile(
 
 function defaultYieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
-  return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;
 }
 
 function indexingErrorMessage(error: unknown): string {

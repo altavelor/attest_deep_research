@@ -1,11 +1,12 @@
 import { RetrievedChunk } from "../shared/types";
+import { tokenizeForSearch } from "./tokenization";
 
 export function rankKeywordMatches(
   query: string,
   chunks: RetrievedChunk[],
   limit: number,
 ): RetrievedChunk[] {
-  const terms = tokenize(query);
+  const terms = tokenizeForSearch(query);
 
   if (terms.length === 0) {
     return [];
@@ -41,12 +42,4 @@ function countOccurrences(haystack: string, needle: string): number {
   }
 
   return count;
-}
-
-function tokenize(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .map((term) => term.trim())
-    .filter(Boolean);
 }
