@@ -18,7 +18,7 @@ import {
   VaultFileProvider,
   VaultFileSummary,
 } from "./indexing/IndexingService";
-import { FileVectorIndexStore } from "./indexing/FileVectorIndexStore";
+import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
 import { RetrievalService } from "./retrieval/RetrievalService";
 import { QueryExpansionService } from "./retrieval/QueryExpansionService";
@@ -129,42 +129,13 @@ export default class IxplorerPlugin extends Plugin {
 
   private createResearchService(): ResearchService {
     const indexProfile = getActiveIndexProfile(this.settings);
-    const embeddings = new EmbeddingClient({
-      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
-      baseUrl: indexProfile.embeddingProviderBaseUrl,
-      logger: this.logger,
-    });
-    const retriever = new RetrievalService({
-      embeddings,
-      indexStore: new FileVectorIndexStore({
-        folder: this.getVaultLocalPath(indexProfile.indexFolder),
-        profileId: indexProfile.id,
-        shardCount: indexProfile.shardCount,
-        onPerformance: (event) => this.logger.logIndexingPerformance(event),
-      }),
-      embeddingModel: indexProfile.embeddingModel,
-      keywordCorpus: [],
-    });
 
     return new ResearchService({
-      retriever,
-      chatModel: new ChatModelClient({
-        provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
-        baseUrl: this.settings.chatModelProviderBaseUrl,
-        logger: this.logger,
-      }),
+      retriever: this.createRetrieverForProfile(indexProfile),
+      chatModel: this.createChatModelClient(),
       chatModelName: this.settings.chatModel,
-      queryExpansion: new QueryExpansionService({
-        chatModel: new ChatModelClient({
-          provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
-          baseUrl: this.settings.chatModelProviderBaseUrl,
-          logger: this.logger,
-        }),
-        chatModelName: this.settings.chatModel,
-      }),
-      searchProvider: this.settings.duckDuckGoEnabled
-        ? new DuckDuckGoSearchProvider({ fetch: obsidianRequestFetch, logger: this.logger })
-        : undefined,
+      queryExpansion: this.createQueryExpansionService(),
+      searchProvider: this.createSearchProvider(),
     });
   }
 
@@ -184,30 +155,8 @@ export default class IxplorerPlugin extends Plugin {
     const indexProfile =
       this.settings.indexProfiles.find((profile) => profile.id === options.profileId) ??
       getActiveIndexProfile(this.settings);
-    const embeddings = new EmbeddingClient({
-      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
-      baseUrl: indexProfile.embeddingProviderBaseUrl,
-      logger: this.logger,
-    });
-    const retriever = new RetrievalService({
-      embeddings,
-      indexStore: new FileVectorIndexStore({
-        folder: this.getVaultLocalPath(indexProfile.indexFolder),
-        profileId: indexProfile.id,
-        shardCount: indexProfile.shardCount,
-        onPerformance: (event) => this.logger.logIndexingPerformance(event),
-      }),
-      embeddingModel: indexProfile.embeddingModel,
-      keywordCorpus: [],
-    });
-    const queryExpansion = new QueryExpansionService({
-      chatModel: new ChatModelClient({
-        provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
-        baseUrl: this.settings.chatModelProviderBaseUrl,
-        logger: this.logger,
-      }),
-      chatModelName: this.settings.chatModel,
-    });
+    const retriever = this.createRetrieverForProfile(indexProfile);
+    const queryExpansion = this.createQueryExpansionService();
     const languageInventory = await retriever.getLanguageInventory();
     const queryVariants = await queryExpansion.buildVariants({
       query: options.query,
@@ -226,11 +175,6 @@ export default class IxplorerPlugin extends Plugin {
 
   private createIndexingService(onProgress: (state: IndexingState) => void): IndexingService {
     const indexProfile = getActiveIndexProfile(this.settings);
-    const embeddings = new EmbeddingClient({
-      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
-      baseUrl: indexProfile.embeddingProviderBaseUrl,
-      logger: this.logger,
-    });
 
     return new IndexingService({
       files: new ObsidianVaultFileProvider(this.app.vault),
@@ -262,13 +206,8 @@ export default class IxplorerPlugin extends Plugin {
           chunkOverlap: indexProfile.chunkOverlap,
         }),
       ],
-      embeddings,
-      indexStore: new FileVectorIndexStore({
-        folder: this.getVaultLocalPath(indexProfile.indexFolder),
-        profileId: indexProfile.id,
-        shardCount: indexProfile.shardCount,
-        onPerformance: (event) => this.logger.logIndexingPerformance(event),
-      }),
+      embeddings: this.createEmbeddingClientForProfile(indexProfile),
+      indexStore: this.createVectorIndexStoreForProfile(indexProfile),
       embeddingModel: indexProfile.embeddingModel,
       includeFolders: indexProfile.includeFolders,
       excludeGlobs: indexProfile.excludeGlobs,
@@ -276,6 +215,55 @@ export default class IxplorerPlugin extends Plugin {
       onProgress,
       logger: this.logger,
     });
+  }
+
+  private createEmbeddingClientForProfile(indexProfile: IndexProfile): EmbeddingClient {
+    return new EmbeddingClient({
+      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
+      baseUrl: indexProfile.embeddingProviderBaseUrl,
+      logger: this.logger,
+    });
+  }
+
+  private createVectorIndexStoreForProfile(indexProfile: IndexProfile): FileVectorIndexStore {
+    return new FileVectorIndexStore({
+      folder: this.getVaultLocalPath(indexProfile.indexFolder),
+      profileId: indexProfile.id,
+      shardCount: indexProfile.shardCount,
+      onPerformance: (event) => this.logger.logIndexingPerformance(event),
+    });
+  }
+
+  private createRetrieverForProfile(indexProfile: IndexProfile): RetrievalService {
+    return new RetrievalService({
+      embeddings: this.createEmbeddingClientForProfile(indexProfile),
+      indexStore: this.createVectorIndexStoreForProfile(indexProfile),
+      embeddingModel: indexProfile.embeddingModel,
+      keywordCorpus: [],
+    });
+  }
+
+  private createChatModelClient(): ChatModelClient {
+    return new ChatModelClient({
+      provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
+      baseUrl: this.settings.chatModelProviderBaseUrl,
+      logger: this.logger,
+    });
+  }
+
+  private createQueryExpansionService(): QueryExpansionService {
+    return new QueryExpansionService({
+      chatModel: this.createChatModelClient(),
+      chatModelName: this.settings.chatModel,
+    });
+  }
+
+  private createSearchProvider(): DuckDuckGoSearchProvider | undefined {
+    if (!this.settings.duckDuckGoEnabled) {
+      return undefined;
+    }
+
+    return new DuckDuckGoSearchProvider({ fetch: obsidianRequestFetch, logger: this.logger });
   }
 
   private getVaultLocalPath(path: string): string {
