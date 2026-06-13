@@ -2,11 +2,17 @@ import { formatCitation, formatCitationLink } from "../../src/retrieval/citation
 import { rankKeywordMatches } from "../../src/retrieval/ranking";
 import { RetrievalService } from "../../src/retrieval/RetrievalService";
 import {
-  EmbeddingProviderClient,
-  IndexStore,
-  RetrievedChunk,
-  SourceReference,
-} from "../../src/shared/types";
+  documentSource,
+  markdownSource,
+  pdfSource,
+  retrieved,
+  webSource,
+} from "../helpers/factories";
+import {
+  FailingEmbeddingProvider,
+  FakeEmbeddingProvider,
+  FakeIndexStore,
+} from "../helpers/retrievalFakes";
 
 describe("RetrievalService", () => {
   it("returns ranked semantic chunks with citation references", async () => {
@@ -234,106 +240,3 @@ describe("citations", () => {
     );
   });
 });
-
-function retrieved(
-  id: string,
-  source: SourceReference,
-  text: string,
-  score: number,
-): RetrievedChunk {
-  return { id, source, text, score, contentHash: `hash-${id}` };
-}
-
-function markdownSource(
-  path: string,
-  headingPath: string[] = [],
-  blockId?: string,
-): SourceReference {
-  return {
-    id: `source-${path}`,
-    kind: "markdown",
-    path,
-    title: path,
-    headingPath,
-    ...(blockId ? { blockId } : {}),
-  };
-}
-
-function pdfSource(path: string, pageNumber: number): SourceReference {
-  return { id: `source-${path}`, kind: "pdf", path, title: path, pageNumber };
-}
-
-function documentSource(path: string, format: "txt" | "fb2" | "epub" | "docx"): SourceReference {
-  return { id: `source-${path}`, kind: "document", path, title: path, format };
-}
-
-function webSource(url: string): SourceReference {
-  return {
-    id: `source-${url}`,
-    kind: "web",
-    url,
-    title: "Example",
-    snippet: "Snippet",
-    retrievedAt: "2026-05-16T00:00:00.000Z",
-    wasContentFetched: true,
-  };
-}
-
-class FakeEmbeddingProvider implements EmbeddingProviderClient {
-  constructor(private readonly embeddings: number[][]) {}
-
-  async listModels(): Promise<string[]> {
-    return ["nomic"];
-  }
-
-  async embed(): Promise<{ model: string; embeddings: number[][] }> {
-    return { model: "nomic", embeddings: this.embeddings };
-  }
-}
-
-class FailingEmbeddingProvider implements EmbeddingProviderClient {
-  async listModels(): Promise<string[]> {
-    return [];
-  }
-
-  async embed(): Promise<{ model: string; embeddings: number[][] }> {
-    throw new Error("embedding unavailable");
-  }
-}
-
-class FakeIndexStore implements IndexStore {
-  initializations: Array<{ embeddingModel: string; embeddingDimensions: number }> = [];
-  queries: Array<{ embedding: number[]; limit: number }> = [];
-  keywordQueries: string[] = [];
-  keywordResults: RetrievedChunk[] = [];
-  adjacentResults: RetrievedChunk[] = [];
-
-  constructor(private readonly chunks: RetrievedChunk[]) {}
-
-  async initialize(metadata: {
-    embeddingModel: string;
-    embeddingDimensions: number;
-  }): Promise<void> {
-    this.initializations.push(metadata);
-  }
-
-  async upsert(): Promise<void> {}
-
-  async deleteBySourcePath(): Promise<void> {}
-
-  async clear(): Promise<void> {}
-
-  async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
-    this.queries.push({ embedding, limit });
-    return this.chunks.slice(0, limit);
-  }
-
-  async searchKeywords(query: string): Promise<RetrievedChunk[]> {
-    this.keywordQueries.push(query);
-    return this.keywordResults;
-  }
-
-  async expandAdjacentChunks(chunks: RetrievedChunk[]): Promise<RetrievedChunk[]> {
-    return this.adjacentResults.length > 0 ? this.adjacentResults : chunks;
-  }
-}
