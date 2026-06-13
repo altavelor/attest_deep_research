@@ -99,6 +99,67 @@ describe("WebResearchPipeline", () => {
       { query: "public research article", options: { limit: 5, maxFetches: 5 } },
     ]);
   });
+
+  it("falls back to the typed question when deep web query planning returns invalid JSON", async () => {
+    const diagnostics: unknown[] = [];
+    const searchProvider = new FakeSearchProvider([
+      {
+        source: webSource("https://example.com/fallback"),
+        extractedText: "Fallback result",
+        rank: 1,
+        query: "What is public research?",
+      },
+    ]);
+    const chatModel = new FakeChatModel([[{ content: "not json", isComplete: true }]]);
+    const pipeline = new WebResearchPipeline({
+      searchProvider,
+      chatModel,
+      chatModelName: "qwen",
+      evidenceLimit: 4,
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+
+    await collect(pipeline.search("What is public research?", true, true));
+
+    expect(searchProvider.requests).toEqual([
+      { query: "What is public research?", options: { limit: 5, maxFetches: 5 } },
+    ]);
+    expect(diagnostics).toEqual([
+      { source: "web-research-plan", ok: false, reason: "json-not-found", inputLength: 8 },
+    ]);
+  });
+
+  it("plans deep web queries from JSON wrapped in model text", async () => {
+    const searchProvider = new FakeSearchProvider([
+      {
+        source: webSource("https://example.com/wrapped"),
+        extractedText: "Wrapped result",
+        rank: 1,
+        query: "public research article",
+      },
+    ]);
+    const chatModel = new FakeChatModel([
+      [
+        {
+          content: '```json\n{"queries":[" public   research article ","x"]}\n```',
+          isComplete: true,
+        },
+      ],
+    ]);
+    const pipeline = new WebResearchPipeline({
+      searchProvider,
+      chatModel,
+      chatModelName: "qwen",
+      evidenceLimit: 4,
+    });
+
+    await collect(pipeline.search("What is public research?", true, true));
+
+    expect(searchProvider.requests).toEqual([
+      { query: "public research article", options: { limit: 5, maxFetches: 5 } },
+      { query: "x", options: { limit: 5, maxFetches: 5 } },
+    ]);
+  });
 });
 
 describe("AnswerSynthesisService", () => {

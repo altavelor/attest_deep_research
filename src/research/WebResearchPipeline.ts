@@ -7,6 +7,13 @@ import {
   SearchProviderResult,
   WebSearchOptions,
 } from "../shared/types";
+import {
+  collectChatText,
+  parseLlmJsonObject,
+  type LlmJsonParseDiagnostic,
+} from "../shared/llmOutput";
+import { tokenSetForSearch } from "../retrieval/tokenization";
+import { normalizeInlineWhitespace } from "../shared/whitespace";
 import { buildDeepResearchPlanPrompt } from "./prompts";
 import { ResearchStreamEvent } from "./types";
 
@@ -20,6 +27,7 @@ export interface WebResearchPipelineOptions {
   chatModel: ChatModelProvider;
   chatModelName: string;
   evidenceLimit: number;
+  onDiagnostic?: (diagnostic: WebResearchDiagnostic) => void;
 }
 
 const NORMAL_WEB_SEARCH_OPTIONS: Required<Pick<WebSearchOptions, "limit" | "maxFetches">> = {
@@ -33,18 +41,25 @@ const HARD_MAX_DEEP_QUERIES = 10;
 const HARD_MAX_TOTAL_RESULTS = 50;
 const HARD_MAX_TOTAL_FETCHES = 15;
 const MAX_QUERY_LENGTH = 240;
+const MAX_LLM_OUTPUT_LENGTH = 20_000;
+
+export interface WebResearchDiagnostic extends LlmJsonParseDiagnostic {
+  source: "web-research-plan";
+}
 
 export class WebResearchPipeline {
   private readonly searchProvider?: SearchProvider;
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly evidenceLimit: number;
+  private readonly onDiagnostic?: (diagnostic: WebResearchDiagnostic) => void;
 
   constructor(options: WebResearchPipelineOptions) {
     this.searchProvider = options.searchProvider;
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.evidenceLimit = options.evidenceLimit;
+    this.onDiagnostic = options.onDiagnostic;
   }
 
   async *search(
@@ -96,8 +111,11 @@ export class WebResearchPipeline {
           { role: "user", content: buildDeepResearchPlanPrompt(question, DEEP_WEB_QUERY_LIMIT) },
         ],
       }),
+      { maxLength: MAX_LLM_OUTPUT_LENGTH },
     );
-    const queries = parseDeepResearchQueries(planText, DEEP_WEB_QUERY_LIMIT);
+    const queries = parseDeepResearchQueries(planText, DEEP_WEB_QUERY_LIMIT, (diagnostic) =>
+      this.onDiagnostic?.({ source: "web-research-plan", ...diagnostic }),
+    );
 
     return queries.length > 0 ? queries : [question];
   }
@@ -130,52 +148,31 @@ export class WebResearchPipeline {
   }
 }
 
-async function collectChatText(
-  chunks: AsyncIterable<{ content: string; isComplete: boolean }>,
-): Promise<string> {
-  let text = "";
+function parseDeepResearchQueries(
+  value: string,
+  maxQueries: number,
+  onDiagnostic?: (diagnostic: LlmJsonParseDiagnostic) => void,
+): string[] {
+  const parsed = parseLlmJsonObject(value, {
+    fallback: { queries: [] },
+    maxInputLength: MAX_LLM_OUTPUT_LENGTH,
+    validate: isQueriesObject,
+    onDiagnostic,
+  });
 
-  for await (const chunk of chunks) {
-    text += chunk.content;
-
-    if (chunk.isComplete) {
-      break;
-    }
-  }
-
-  return text;
-}
-
-function parseDeepResearchQueries(value: string, maxQueries: number): string[] {
-  const parsed = parseJsonObject(value);
-  const queries = parsed?.queries;
-
-  if (!Array.isArray(queries)) {
-    return [];
-  }
-
-  return queries
+  return parsed.queries
     .filter((query): query is string => typeof query === "string")
-    .map((query) => query.replace(/\s+/g, " ").trim())
+    .map((query) => normalizeInlineWhitespace(query))
     .filter((query) => query.length > 0 && query.length <= MAX_QUERY_LENGTH)
     .slice(0, Math.min(maxQueries, HARD_MAX_DEEP_QUERIES));
 }
 
-function parseJsonObject(value: string): { queries?: unknown } | null {
-  const trimmed = value.trim();
-  const jsonStart = trimmed.indexOf("{");
-  const jsonEnd = trimmed.lastIndexOf("}");
-
-  if (jsonStart === -1 || jsonEnd <= jsonStart) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1));
-    return parsed && typeof parsed === "object" ? (parsed as { queries?: unknown }) : null;
-  } catch {
-    return null;
-  }
+function isQueriesObject(value: unknown): value is { queries: unknown[] } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { queries?: unknown }).queries)
+  );
 }
 
 function dedupeWebResults(results: SearchProviderResult[]): SearchProviderResult[] {
@@ -194,7 +191,7 @@ function dedupeWebResults(results: SearchProviderResult[]): SearchProviderResult
 }
 
 function rankWebResults(results: SearchProviderResult[], question: string): SearchProviderResult[] {
-  const queryTokens = tokenSet(question);
+  const queryTokens = tokenSetForSearch(question, { minLength: 3 });
 
   return [...results].sort((left, right) => {
     const scoreDelta = webResultScore(right, queryTokens) - webResultScore(left, queryTokens);
@@ -209,7 +206,7 @@ function rankWebResults(results: SearchProviderResult[], question: string): Sear
 
 function webResultScore(result: SearchProviderResult, queryTokens: Set<string>): number {
   const text = [result.source.title, result.source.snippet, result.extractedText ?? ""].join(" ");
-  const resultTokens = tokenSet(text);
+  const resultTokens = tokenSetForSearch(text, { minLength: 3 });
   let overlap = 0;
 
   for (const token of queryTokens) {
@@ -228,19 +225,9 @@ function webResultToChunk(result: SearchProviderResult): RetrievedChunk {
     id: result.source.id,
     source: result.source,
     text,
-    score: webResultScore(result, tokenSet(result.query)),
+    score: webResultScore(result, tokenSetForSearch(result.query, { minLength: 3 })),
     contentHash: `web:${result.source.url}`,
   };
-}
-
-function tokenSet(value: string): Set<string> {
-  return new Set(
-    value
-      .toLowerCase()
-      .split(/[^a-z0-9]+/i)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 3),
-  );
 }
 
 function normalizedWebResultUrl(value: string): string {

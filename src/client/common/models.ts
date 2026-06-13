@@ -1,3 +1,5 @@
+import { isRecord } from "../../shared/guards";
+
 export interface OpenAiModelsResponse {
   data: Array<{ id: string }>;
 }
@@ -28,8 +30,4 @@ export function modelNamesFromOllamaTags(response: OllamaTagsResponse): string[]
   return response.models
     .map((model) => model.name ?? model.model)
     .filter((model): model is string => typeof model === "string" && model.length > 0);
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

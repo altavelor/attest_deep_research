@@ -1,4 +1,5 @@
 import { IxplorerError } from "../../shared/errors";
+import { isRecord } from "../../shared/guards";
 import {
   ChatModelProvider,
   ChatRequest,
@@ -8,7 +9,6 @@ import {
 import {
   isOllamaTagsResponse,
   isOpenAiModelsResponse,
-  isRecord,
   modelNamesFromOllamaTags,
   modelNamesFromOpenAiModels,
 } from "../common/models";

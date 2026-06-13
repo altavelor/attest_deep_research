@@ -2,11 +2,8 @@ import { App, Component, MarkdownRenderer, setIcon } from "obsidian";
 
 import { RetrievedChunk } from "../shared/types";
 import { copyToClipboard } from "./clipboard";
-import {
-  buildCitationRefs,
-  ChatCitationRef,
-  renderCitationBlocks,
-} from "./CitationPopover";
+import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./CitationPopover";
+import { stripRenderedCitationIds } from "./citationText";
 import { ChatDisplayMessage } from "./rendering";
 import { messageDisplayContent, messageMarkdownContent } from "./rendering";
 
@@ -306,10 +303,6 @@ function tokenSet(value: string): Set<string> {
       .map((token) => token.trim())
       .filter((token) => token.length >= 5),
   );
-}
-
-function stripRenderedCitationIds(value: string): string {
-  return value.replace(/\s*\[[^\]\n]{8,}\]/g, "");
 }
 
 function formatMessageTime(value: string): string {

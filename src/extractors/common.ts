@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { inflateRawSync } from "zlib";
 
 import { IxplorerError } from "../shared/errors";
+export { normalizeVaultPath as normalizePath } from "../shared/pathFilters";
 import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "../shared/types";
 
 export interface DocumentExtractorOptions {
@@ -74,10 +75,6 @@ export function readInputText(data: ArrayBuffer | string): string {
 
 export function readInputBuffer(data: ArrayBuffer | string): Buffer {
   return typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
-}
-
-export function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
 }
 
 export function fileNameFromPath(path: string): string {

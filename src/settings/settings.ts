@@ -7,6 +7,8 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "../indexing/FileVectorIndexStore";
+import { isRecord } from "../shared/guards";
+import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
 
 export interface IxplorerSettings {
   chatModelProviderBaseUrl: string;
@@ -197,7 +199,7 @@ export function updateActiveIndexProfile(
 }
 
 function isSettingsRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isRecord(value);
 }
 
 function readString(value: unknown): string {
@@ -275,10 +277,7 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
       readNonNegativeInteger(value.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
       readPositiveInteger(value.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE),
     ),
-    embeddingBatchSize: readPositiveInteger(
-      value.embeddingBatchSize,
-      DEFAULT_EMBEDDING_BATCH_SIZE,
-    ),
+    embeddingBatchSize: readPositiveInteger(value.embeddingBatchSize, DEFAULT_EMBEDDING_BATCH_SIZE),
     createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
     updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
   });
@@ -340,11 +339,11 @@ function readActiveIndexProfileId(value: unknown, profiles: IndexProfile[]): str
 }
 
 function readPositiveInteger(value: unknown, fallback: number): number {
-  return Number.isInteger(value) && typeof value === "number" && value > 0 ? value : fallback;
+  return isPositiveInteger(value) ? value : fallback;
 }
 
 function readNonNegativeInteger(value: unknown, fallback: number): number {
-  return Number.isInteger(value) && typeof value === "number" && value >= 0 ? value : fallback;
+  return isNonNegativeInteger(value) ? value : fallback;
 }
 
 function normalizeChunkOverlap(value: number, chunkSize: number): number {

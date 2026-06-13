@@ -1,6 +1,7 @@
 import { francAll } from "franc-min";
 
 import { LanguageCode, LanguageInventoryItem } from "../shared/types";
+import { normalizeInlineWhitespace } from "../shared/whitespace";
 
 const UNKNOWN_LANGUAGE = "unknown";
 const MIN_SAMPLE_LENGTH = 120;
@@ -19,7 +20,7 @@ const ISO_639_3_TO_1: Record<string, string> = {
 };
 
 export function detectTextLanguages(text: string): LanguageCode[] {
-  const sample = text.replace(/\s+/g, " ").trim().slice(0, MAX_SAMPLE_LENGTH);
+  const sample = normalizeInlineWhitespace(text).slice(0, MAX_SAMPLE_LENGTH);
 
   if (sample.length === 0) {
     return [UNKNOWN_LANGUAGE];

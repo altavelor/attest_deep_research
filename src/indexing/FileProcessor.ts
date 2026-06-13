@@ -1,4 +1,5 @@
 import type { ExtractedChunk } from "../shared/types";
+import { isPathIncluded, vaultPathMatchesGlob } from "../shared/pathFilters";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 import { detectTextLanguages } from "./languageDetection";
 import type {
@@ -129,65 +130,13 @@ export class FileProcessor {
 
   private shouldScanPath(path: string): boolean {
     return (
-      isIncluded(path, this.options.includeFolders) &&
-      !INTERNAL_EXCLUDE_GLOBS.some((glob) => globMatches(path, glob)) &&
-      !this.options.excludeGlobs.some((glob) => globMatches(path, glob))
+      isPathIncluded(path, this.options.includeFolders) &&
+      !INTERNAL_EXCLUDE_GLOBS.some((glob) => vaultPathMatchesGlob(path, glob)) &&
+      !this.options.excludeGlobs.some((glob) => vaultPathMatchesGlob(path, glob))
     );
   }
 
   private logPerformance(event: IndexingPerformanceLogEvent): void {
     this.options.logger?.logIndexingPerformance?.(event);
   }
-}
-
-function isIncluded(path: string, includeFolders: string[]): boolean {
-  return includeFolders.some((folder) => {
-    const normalizedFolder = normalizeFolder(folder);
-
-    return (
-      normalizedFolder === "" ||
-      path === normalizedFolder ||
-      path.startsWith(`${normalizedFolder}/`)
-    );
-  });
-}
-
-function normalizeFolder(folder: string): string {
-  const normalized = folder.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-
-  return normalized === "." ? "" : normalized;
-}
-
-function globMatches(path: string, glob: string): boolean {
-  const normalizedGlob = glob.replace(/\\/g, "/").replace(/^\/+/, "");
-
-  if (!normalizedGlob) {
-    return false;
-  }
-
-  return globToRegExp(normalizedGlob).test(path);
-}
-
-function globToRegExp(glob: string): RegExp {
-  let pattern = "^";
-
-  for (let index = 0; index < glob.length; index += 1) {
-    const character = glob[index];
-    const nextCharacter = glob[index + 1];
-
-    if (character === "*" && nextCharacter === "*") {
-      pattern += ".*";
-      index += 1;
-    } else if (character === "*") {
-      pattern += "[^/]*";
-    } else {
-      pattern += escapeRegExp(character);
-    }
-  }
-
-  return new RegExp(`${pattern}$`);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[\\^$+?.()|[\]{}]/g, "\\$&");
 }
