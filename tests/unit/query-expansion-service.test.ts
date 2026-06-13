@@ -2,7 +2,7 @@ import {
   parseQueryVariants,
   QueryExpansionService,
 } from "../../src/retrieval/QueryExpansionService";
-import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/shared/types";
+import { FakeChatModel } from "../helpers/researchFakes";
 
 describe("QueryExpansionService", () => {
   it("builds variants for languages present in the index but different from the query", async () => {
@@ -110,21 +110,3 @@ describe("QueryExpansionService", () => {
     ).toEqual([{ query: "alpha" }]);
   });
 });
-
-class FakeChatModel implements ChatModelProvider {
-  readonly requests: ChatRequest[] = [];
-
-  constructor(private readonly chunks: ChatResponseChunk[]) {}
-
-  async listModels(): Promise<string[]> {
-    return ["granite"];
-  }
-
-  async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
-    this.requests.push(request);
-
-    for (const chunk of this.chunks) {
-      yield chunk;
-    }
-  }
-}
