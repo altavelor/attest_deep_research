@@ -588,6 +588,13 @@
   gap: 0.5rem;
 }
 
+.ixplorer-chat__progress-status {
+  min-height: 1rem;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  opacity: 0.68;
+}
+
 .ixplorer-chat__input {
   width: 100%;
   min-height: 5rem;
@@ -680,6 +687,23 @@
   padding-inline-end: 2.25rem;
   appearance: none;
   font-size: var(--font-ui-small);
+}
+
+.ixplorer-chat__deep-research {
+  display: inline-flex;
+  gap: 0.375rem;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+
+.ixplorer-chat__deep-research input {
+  margin: 0;
+}
+
+.ixplorer-chat__deep-research:has(input:disabled) {
+  opacity: 0.45;
 }
 
 .ixplorer-chat__submit-tooltip {
@@ -821,7 +845,9 @@
 
 .ixplorer-chat__citation-popover-card:focus,
 .ixplorer-chat__citation-popover-card:hover {
-  box-shadow: 0 0 0 1px var(--interactive-accent), var(--shadow-s);
+  box-shadow:
+    0 0 0 1px var(--interactive-accent),
+    var(--shadow-s);
 }
 
 .ixplorer-chat__citation-popover-card:focus-within .ixplorer-chat__citation-copy,

@@ -21,6 +21,7 @@ import {
 import { FileVectorIndexStore } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
 import { RetrievalService } from "./retrieval/RetrievalService";
+import { QueryExpansionService } from "./retrieval/QueryExpansionService";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { detectLocalModelProvider } from "./settings/connectionTests";
@@ -153,6 +154,14 @@ export default class IxplorerPlugin extends Plugin {
         logger: this.logger,
       }),
       chatModelName: this.settings.chatModel,
+      queryExpansion: new QueryExpansionService({
+        chatModel: new ChatModelClient({
+          provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
+          baseUrl: this.settings.chatModelProviderBaseUrl,
+          logger: this.logger,
+        }),
+        chatModelName: this.settings.chatModel,
+      }),
       searchProvider: this.settings.duckDuckGoEnabled
         ? new DuckDuckGoSearchProvider({ fetch: obsidianRequestFetch, logger: this.logger })
         : undefined,
@@ -191,11 +200,25 @@ export default class IxplorerPlugin extends Plugin {
       embeddingModel: indexProfile.embeddingModel,
       keywordCorpus: [],
     });
+    const queryExpansion = new QueryExpansionService({
+      chatModel: new ChatModelClient({
+        provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
+        baseUrl: this.settings.chatModelProviderBaseUrl,
+        logger: this.logger,
+      }),
+      chatModelName: this.settings.chatModel,
+    });
+    const languageInventory = await retriever.getLanguageInventory();
+    const queryVariants = await queryExpansion.buildVariants({
+      query: options.query,
+      languageInventory,
+    });
     const result = await retriever.search(options.query, {
       limit: options.limit,
       includeWebResults: false,
       minScore: options.minScore,
       fileExtensions: options.extension ? [options.extension] : undefined,
+      queryVariants: queryVariants.length > 0 ? queryVariants : undefined,
     });
 
     return result.chunks;
@@ -267,7 +290,8 @@ export default class IxplorerPlugin extends Plugin {
 }
 
 const obsidianRequestFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const url =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const response = await requestUrl({
     url,
     method: init?.method ?? "GET",

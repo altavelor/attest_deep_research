@@ -25,10 +25,12 @@ describe("FileChatStore", () => {
     });
 
     const saved = await store.saveChat({
-      messages: [{ role: "user", content: "How do local chats persist?", createdAt: now.toISOString() }],
+      messages: [
+        { role: "user", content: "How do local chats persist?", createdAt: now.toISOString() },
+      ],
       lastAnswer: null,
       attachedContextPaths: ["Docs/source.pdf"],
-      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb" },
+      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb", deepResearch: true },
     });
 
     expect(saved).toMatchObject({
@@ -37,7 +39,7 @@ describe("FileChatStore", () => {
       createdAt: "2026-06-10T10:00:00.000Z",
       updatedAt: "2026-06-10T10:00:00.000Z",
       attachedContextPaths: ["Docs/source.pdf"],
-      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb" },
+      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb", deepResearch: true },
     });
 
     now = new Date("2026-06-10T10:05:00.000Z");

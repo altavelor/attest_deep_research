@@ -78,6 +78,7 @@ describe("file vector index format", () => {
       chunkCount: 2,
       sourceCount: 1,
       keywordIndexedChunkCount: 2,
+      languageInventory: [{ language: "en", chunkCount: 2, sourceCount: 1 }],
     });
 
     expect(() =>
@@ -91,6 +92,7 @@ describe("file vector index format", () => {
             indexedAt: "2026-06-02T00:00:00.000Z",
             shardId: "00",
             chunkCount: 2,
+            languages: ["en"],
           },
         ],
         shardChunkCounts: new Map([["00", 2]]),

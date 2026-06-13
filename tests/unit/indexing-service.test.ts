@@ -99,6 +99,31 @@ describe("IndexingService", () => {
     ).toEqual(["Research/a.md", "Research/notes.txt"]);
   });
 
+  it("never indexes saved chats from the internal Ixplorer folder", async () => {
+    const files = new FakeVaultFileProvider([
+      file(".ixplorer/chats/chat-1.json", 1, '{"messages":[{"content":"saved answer"}]}'),
+      file("Research/a.md", 1, "# A"),
+    ]);
+    const jsonExtractor = new FakeExtractor(".json");
+    const markdownExtractor = new FakeExtractor(".md");
+    const indexStore = new FakeIndexStore();
+    const service = new IndexingService({
+      files,
+      extractors: [jsonExtractor, markdownExtractor],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["/"],
+      excludeGlobs: [],
+    });
+
+    await service.manualReindex();
+
+    expect(jsonExtractor.extractedPaths).toEqual([]);
+    expect(markdownExtractor.extractedPaths).toEqual(["Research/a.md"]);
+    expect(files.readPaths).not.toContain(".ixplorer/chats/chat-1.json");
+  });
+
   it("embeds chunks with source path and heading context while storing clean chunk text", async () => {
     const embeddings = new FakeEmbeddingProvider();
     const indexStore = new FakeIndexStore();

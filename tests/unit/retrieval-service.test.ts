@@ -144,6 +144,37 @@ describe("RetrievalService", () => {
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["semantic", "keyword"]);
   });
 
+  it("uses query variants to find chunks written in a different language", async () => {
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore: new FakeIndexStore([]),
+      embeddingModel: "nomic",
+      keywordCorpus: [
+        retrieved(
+          "english-sorting",
+          markdownSource("Books/algorithms.md"),
+          "Sorting algorithms include quicksort and merge sort advantages disadvantages",
+          0,
+        ),
+      ],
+    });
+
+    const result = await service.search("методы сортировки плюсы минусы", {
+      limit: 1,
+      includeWebResults: false,
+      queryVariants: [
+        {
+          query: "sorting algorithms advantages disadvantages",
+          language: "en",
+          reason: "translated",
+        },
+      ],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["english-sorting"]);
+    expect(result.usedFallback).toBe(true);
+  });
+
   it("expands adjacent chunks when the index store supports it", async () => {
     const indexStore = new FakeIndexStore([
       retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
