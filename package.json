@@ -29,6 +29,7 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
+    "franc-min": "^6.2.0",
     "pdfjs-dist": "^6.0.227"
   }
 }

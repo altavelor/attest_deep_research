@@ -1,5 +1,5 @@
 import { IxplorerError } from "../shared/errors";
-import { SearchProvider, SearchProviderResult } from "../shared/types";
+import { SearchProvider, SearchProviderResult, WebSearchOptions } from "../shared/types";
 import type { PluginRequestLogger } from "../settings/debugLogger";
 
 export interface DuckDuckGoSearchProviderOptions {
@@ -25,6 +25,10 @@ interface HtmlAnchor {
 const DEFAULT_SEARCH_URL = "https://html.duckduckgo.com/html/";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_EXTRACTED_TEXT_LENGTH = 12_000;
+const DEFAULT_RESULT_LIMIT = 5;
+const DEFAULT_MAX_FETCHES = 3;
+const HARD_RESULT_LIMIT = 50;
+const HARD_MAX_FETCHES = 15;
 
 export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly fetchImpl: typeof fetch;
@@ -44,35 +48,44 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     this.logger = options.logger;
   }
 
-  async searchFirstResult(query: string): Promise<SearchProviderResult | null> {
+  async search(query: string, options: WebSearchOptions = {}): Promise<SearchProviderResult[]> {
     const trimmedQuery = query.trim();
 
     if (!trimmedQuery) {
-      return null;
+      return [];
     }
 
     try {
+      const limit = clampPositiveInteger(options.limit, DEFAULT_RESULT_LIMIT, HARD_RESULT_LIMIT);
+      const maxFetches = clampNonNegativeInteger(
+        options.maxFetches,
+        DEFAULT_MAX_FETCHES,
+        HARD_MAX_FETCHES,
+      );
       const searchHtml = await this.fetchSearchResults(trimmedQuery);
-      const firstResult = parseFirstDuckDuckGoResult(searchHtml);
+      const results = parseDuckDuckGoResults(searchHtml).slice(0, limit);
 
-      if (!firstResult) {
-        return null;
-      }
+      return Promise.all(
+        results.map(async (result, index) => {
+          const fetchedText =
+            index < maxFetches ? await this.fetchResultText(result.url) : undefined;
 
-      const fetchedText = await this.fetchFirstResultText(firstResult.url);
-
-      return {
-        source: {
-          id: `web:${firstResult.url}`,
-          kind: "web",
-          title: firstResult.title,
-          url: firstResult.url,
-          snippet: firstResult.snippet,
-          retrievedAt: this.now().toISOString(),
-          wasContentFetched: fetchedText !== undefined,
-        },
-        ...(fetchedText ? { extractedText: fetchedText } : {}),
-      };
+          return {
+            source: {
+              id: `web:${result.url}`,
+              kind: "web",
+              title: result.title,
+              url: result.url,
+              snippet: result.snippet,
+              retrievedAt: this.now().toISOString(),
+              wasContentFetched: fetchedText !== undefined,
+            },
+            ...(fetchedText ? { extractedText: fetchedText } : {}),
+            rank: index + 1,
+            query: trimmedQuery,
+          };
+        }),
+      );
     } catch (error) {
       if (error instanceof IxplorerError) {
         this.logger?.logError(error);
@@ -106,7 +119,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     return response.text();
   }
 
-  private async fetchFirstResultText(url: string): Promise<string | undefined> {
+  private async fetchResultText(url: string): Promise<string | undefined> {
     let response: Response;
 
     try {
@@ -161,15 +174,38 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 }
 
-function parseFirstDuckDuckGoResult(html: string): DuckDuckGoResult | null {
-  const resultAnchor = parseAnchors(html).find((anchor) =>
-    hasClass(anchor.attributes.class, "result__a"),
-  );
+function parseDuckDuckGoResults(html: string): DuckDuckGoResult[] {
+  const blockResults = parseResultBlocks(html)
+    .map((block) => parseDuckDuckGoResultBlock(block))
+    .filter((result): result is DuckDuckGoResult => result !== null);
+
+  return blockResults.length > 0 ? blockResults : parseLegacyDuckDuckGoResults(html);
+}
+
+function parseDuckDuckGoResultBlock(html: string): DuckDuckGoResult | null {
+  const anchors = parseAnchors(html);
+  const resultAnchor = anchors.find((anchor) => hasClass(anchor.attributes.class, "result__a"));
 
   if (!resultAnchor) {
     return null;
   }
 
+  return resultFromAnchor(resultAnchor, anchors);
+}
+
+function parseLegacyDuckDuckGoResults(html: string): DuckDuckGoResult[] {
+  const anchors = parseAnchors(html);
+
+  return anchors
+    .filter((anchor) => hasClass(anchor.attributes.class, "result__a"))
+    .map((anchor, index) => resultFromAnchor(anchor, anchors.slice(index + 1)))
+    .filter((result): result is DuckDuckGoResult => result !== null);
+}
+
+function resultFromAnchor(
+  resultAnchor: HtmlAnchor,
+  snippetAnchors: HtmlAnchor[],
+): DuckDuckGoResult | null {
   const href = resultAnchor.attributes.href;
   const url = href ? decodeDuckDuckGoResultUrl(href) : "";
   if (!url || !isHttpUrl(url)) {
@@ -179,12 +215,25 @@ function parseFirstDuckDuckGoResult(html: string): DuckDuckGoResult | null {
   return {
     url,
     title: normalizeWhitespace(stripHtml(resultAnchor.innerHtml)),
-    snippet: parseResultSnippet(html),
+    snippet: parseResultSnippet(snippetAnchors),
   };
 }
 
-function parseResultSnippet(html: string): string {
-  const snippetAnchor = parseAnchors(html).find((anchor) =>
+function parseResultBlocks(html: string): string[] {
+  const blocks: string[] = [];
+  const blockPattern =
+    /<div\b[^>]*class=(["'])[^"']*\bresult\b[^"']*\1[^>]*>[\s\S]*?(?=<div\b[^>]*class=(["'])[^"']*\bresult\b[^"']*\2|<\/body>|<\/html>|$)/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = blockPattern.exec(html)) !== null) {
+    blocks.push(match[0]);
+  }
+
+  return blocks;
+}
+
+function parseResultSnippet(anchors: HtmlAnchor[]): string {
+  const snippetAnchor = anchors.find((anchor) =>
     hasClass(anchor.attributes.class, "result__snippet"),
   );
 
@@ -278,4 +327,20 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(Math.floor(value), max));
+}
+
+function clampNonNegativeInteger(value: number | undefined, fallback: number, max: number): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(Math.floor(value), max));
 }

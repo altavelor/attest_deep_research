@@ -81,10 +81,12 @@ export class IxplorerChatView extends ItemView {
   private indexControlEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
+  private progressStatusEl: HTMLElement | null = null;
   private modelInputEl: HTMLInputElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private submitButtonTooltipEl: HTMLElement | null = null;
   private searchModeEl: HTMLSelectElement | null = null;
+  private deepResearchEl: HTMLInputElement | null = null;
   private attachedContextEl: HTMLElement | null = null;
   private indexSearchRootEl: HTMLElement | null = null;
   private indexSearchProfileEl: HTMLSelectElement | null = null;
@@ -164,6 +166,11 @@ export class IxplorerChatView extends ItemView {
         void this.submitQuestion();
       });
 
+      this.progressStatusEl = form.createDiv({
+        cls: "ixplorer-chat__progress-status",
+        attr: { "aria-live": "polite" },
+      });
+
       this.textareaEl = form.createEl("textarea", {
         cls: "ixplorer-chat__input",
         attr: {
@@ -234,7 +241,27 @@ export class IxplorerChatView extends ItemView {
       this.searchModeEl.addEventListener("change", () => {
         void this.updateSearchMode(this.getSearchMode());
         this.updateSubmitAvailability();
+        this.updateDeepResearchAvailability();
       });
+
+      const deepResearchLabel = modelRow.createEl("label", {
+        cls: "ixplorer-chat__deep-research",
+        attr: {
+          title: "Use deeper multi-query web research",
+        },
+      });
+      this.deepResearchEl = deepResearchLabel.createEl("input", {
+        attr: {
+          type: "checkbox",
+          "aria-label": "Deep web research",
+        },
+      });
+      this.deepResearchEl.checked = this.currentChatSettings.deepResearch === true;
+      this.deepResearchEl.addEventListener("change", () => {
+        void this.updateDeepResearch(this.deepResearchEl?.checked === true);
+      });
+      deepResearchLabel.createSpan({ text: "Deep" });
+      this.updateDeepResearchAvailability();
 
       this.submitButtonTooltipEl = modelRow.createSpan({
         cls: "ixplorer-chat__submit-tooltip",
@@ -1096,10 +1123,7 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    if (
-      this.historyPopoverEl.contains(target) ||
-      this.historyPopoverAnchorEl?.contains(target)
-    ) {
+    if (this.historyPopoverEl.contains(target) || this.historyPopoverAnchorEl?.contains(target)) {
       return;
     }
 
@@ -1170,10 +1194,16 @@ export class IxplorerChatView extends ItemView {
     await this.saveCurrentChat();
   }
 
+  private async updateDeepResearch(deepResearch: boolean): Promise<void> {
+    this.currentChatSettings = { ...this.currentChatSettings, deepResearch };
+    await this.saveCurrentChat();
+  }
+
   private createDefaultChatSettings(): SavedChatSettings {
     return {
       model: this.services.getChatModel(),
       searchMode: "indexOnly",
+      deepResearch: false,
     };
   }
 
@@ -1183,6 +1213,7 @@ export class IxplorerChatView extends ItemView {
     return {
       model: settings?.model.trim() || defaults.model,
       searchMode: settings?.searchMode ?? defaults.searchMode,
+      deepResearch: settings?.deepResearch ?? defaults.deepResearch,
     };
   }
 
@@ -1241,6 +1272,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = null;
     this.renderMessages();
     this.renderAnswerDetails();
+    this.setProgressStatus(null);
 
     try {
       const service = this.services.createResearchService();
@@ -1248,6 +1280,7 @@ export class IxplorerChatView extends ItemView {
       for await (const event of service.answer({
         question,
         searchMode: this.getSearchMode(),
+        deepResearch: this.isDeepResearchEnabled(),
         contextPaths: this.attachedContextPaths.length > 0 ? this.attachedContextPaths : undefined,
       })) {
         if (this.shouldStopRunning) {
@@ -1263,6 +1296,7 @@ export class IxplorerChatView extends ItemView {
     } finally {
       this.isRunning = false;
       this.shouldStopRunning = false;
+      this.setProgressStatus(null);
       this.setFormRunning(false);
       this.renderIndexControl();
     }
@@ -1295,7 +1329,8 @@ export class IxplorerChatView extends ItemView {
 
     try {
       this.indexSearchResults = await this.services.searchIndex({
-        profileId: this.indexSearchProfileEl?.value ?? this.services.getIndexProfiles()[0]?.id ?? "",
+        profileId:
+          this.indexSearchProfileEl?.value ?? this.services.getIndexProfiles()[0]?.id ?? "",
         query,
         limit: readPositiveInteger(this.indexSearchTopKEl?.value, 5),
         minScore: readOptionalNumber(this.indexSearchMinScoreEl?.value),
@@ -1327,6 +1362,11 @@ export class IxplorerChatView extends ItemView {
   }
 
   private applyResearchEvent(event: ResearchStreamEvent): void {
+    if (event.type === "status") {
+      this.setProgressStatus(event.message);
+      return;
+    }
+
     if (event.type === "delta") {
       this.messages = nextAssistantMessage(this.messages, event.content);
       this.renderMessages();
@@ -1334,10 +1374,21 @@ export class IxplorerChatView extends ItemView {
     }
 
     this.lastAnswer = event.answer;
-    this.messages = attachEvidenceToLastAssistantMessage(this.messages, event.answer.evidence ?? []);
+    this.messages = attachEvidenceToLastAssistantMessage(
+      this.messages,
+      event.answer.evidence ?? [],
+    );
     this.renderAnswerDetails();
     this.renderMessages();
     void this.saveCurrentChat();
+  }
+
+  private setProgressStatus(message: string | null): void {
+    if (!this.progressStatusEl) {
+      return;
+    }
+
+    this.progressStatusEl.setText(message ?? "");
   }
 
   private setFormRunning(running: boolean): void {
@@ -1358,6 +1409,10 @@ export class IxplorerChatView extends ItemView {
       this.searchModeEl.disabled = running;
     }
 
+    if (this.deepResearchEl) {
+      this.deepResearchEl.disabled = running || this.getSearchMode() === "indexOnly";
+    }
+
     this.updateSubmitAvailability();
   }
 
@@ -1365,6 +1420,18 @@ export class IxplorerChatView extends ItemView {
     const value = this.searchModeEl?.value;
 
     return isResearchSearchMode(value) ? value : "indexOnly";
+  }
+
+  private isDeepResearchEnabled(): boolean {
+    return this.getSearchMode() !== "indexOnly" && this.deepResearchEl?.checked === true;
+  }
+
+  private updateDeepResearchAvailability(): void {
+    if (!this.deepResearchEl) {
+      return;
+    }
+
+    this.deepResearchEl.disabled = this.isRunning || this.getSearchMode() === "indexOnly";
   }
 
   private updateSubmitAvailability(): void {
@@ -1662,10 +1729,7 @@ function appendFallbackCitationAnchors(
   }
 }
 
-function bestCitationTarget(
-  targets: HTMLElement[],
-  ref: ChatCitationRef,
-): HTMLElement | undefined {
+function bestCitationTarget(targets: HTMLElement[], ref: ChatCitationRef): HTMLElement | undefined {
   let best: { element: HTMLElement; score: number } | undefined;
   const sourceTokens = tokenSet(ref.chunk.text);
 

@@ -3,6 +3,8 @@ import {
   AdjacentChunkIndexStore,
   EmbeddingProviderClient,
   IndexStore,
+  LanguageInventoryIndexStore,
+  LanguageInventoryItem,
   KeywordSearchIndexStore,
   RetrievedChunk,
   RetrievalOptions,
@@ -39,11 +41,21 @@ export class RetrievalService {
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
     const candidateLimit = Math.max(options.limit, options.limit * 4);
-    const semanticChunks = filterRetrievedChunks(
-      await this.searchSemantic(query, candidateLimit),
-      options,
-    );
-    const keywordChunks = await this.searchKeywords(query, { ...options, limit: candidateLimit });
+    const queryVariants = normalizedQueryVariants(query, options.queryVariants);
+    const semanticChunksByVariant: RetrievedChunk[] = [];
+    const keywordChunksByVariant: RetrievedChunk[] = [];
+
+    for (const variant of queryVariants) {
+      semanticChunksByVariant.push(
+        ...filterRetrievedChunks(await this.searchSemantic(variant, candidateLimit), options),
+      );
+      keywordChunksByVariant.push(
+        ...(await this.searchKeywords(variant, { ...options, limit: candidateLimit })),
+      );
+    }
+
+    const semanticChunks = fuseRetrievedChunks(semanticChunksByVariant, [], candidateLimit);
+    const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
     const fusedChunks = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const chunks = await this.expandAdjacentChunks(
       fusedChunks.slice(0, options.limit),
@@ -58,6 +70,14 @@ export class RetrievalService {
       })),
       usedFallback: semanticChunks.length === 0 && keywordChunks.length > 0,
     };
+  }
+
+  async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
+    if (!isLanguageInventoryIndexStore(this.indexStore)) {
+      return [];
+    }
+
+    return this.indexStore.getLanguageInventory();
   }
 
   private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
@@ -114,6 +134,17 @@ export class RetrievalService {
   }
 }
 
+function normalizedQueryVariants(
+  query: string,
+  variants: RetrievalOptions["queryVariants"],
+): string[] {
+  const normalized = [query, ...(variants?.map((variant) => variant.query) ?? [])]
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(normalized)).slice(0, 8);
+}
+
 function isKeywordSearchIndexStore(
   indexStore: IndexStore,
 ): indexStore is IndexStore & KeywordSearchIndexStore {
@@ -125,6 +156,14 @@ function isAdjacentChunkIndexStore(
 ): indexStore is IndexStore & AdjacentChunkIndexStore {
   return (
     "expandAdjacentChunks" in indexStore && typeof indexStore.expandAdjacentChunks === "function"
+  );
+}
+
+function isLanguageInventoryIndexStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & LanguageInventoryIndexStore {
+  return (
+    "getLanguageInventory" in indexStore && typeof indexStore.getLanguageInventory === "function"
   );
 }
 

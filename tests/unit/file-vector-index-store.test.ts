@@ -77,7 +77,9 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-a", "Research/a.md", "alpha project note", [1, 0], "hash-a"),
       chunk("chunk-a-2", "Research/a.md", "alpha second note", [1, 0], "hash-a"),
     ]);
-    await writer.upsert([chunk("chunk-a-3", "Research/a.md", "alpha third note", [1, 0], "hash-a")]);
+    await writer.upsert([
+      chunk("chunk-a-3", "Research/a.md", "alpha third note", [1, 0], "hash-a"),
+    ]);
 
     expect(existsSync(join(folder, "shards"))).toBe(false);
 
@@ -129,6 +131,7 @@ describe("FileVectorIndexStore", () => {
         sourcePath: "Research/a.md",
         modifiedTime: 42,
         contentHash: "file-hash",
+        languages: ["en"],
       },
     ]);
 
@@ -140,7 +143,32 @@ describe("FileVectorIndexStore", () => {
         sourcePath: "Research/a.md",
         modifiedTime: 42,
         contentHash: "file-hash",
+        languages: ["en"],
       },
+    ]);
+    await expect(reopened.getLanguageInventory()).resolves.toEqual([
+      { language: "en", chunkCount: 1, sourceCount: 1 },
+    ]);
+  });
+
+  it("derives language inventory from stored chunks when manifest inventory is unavailable", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk(
+        "chunk-a",
+        "Books/algorithms.md",
+        "Sorting algorithms include quicksort, merge sort, heap sort, and insertion sort. Their advantages and disadvantages depend on time complexity.",
+        [1, 0],
+        "hash-a",
+      ),
+    ]);
+
+    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+
+    await expect(reopened.getLanguageInventory()).resolves.toEqual([
+      { language: "en", chunkCount: 1, sourceCount: 1 },
     ]);
   });
 
@@ -179,7 +207,9 @@ describe("FileVectorIndexStore", () => {
 
     const writer = await store.beginWrite();
     await writer.deleteBySourcePath(leftPath);
-    await writer.upsert([chunk("chunk-left-new", leftPath, "new replacement phrase", [1, 0], "left-new")]);
+    await writer.upsert([
+      chunk("chunk-left-new", leftPath, "new replacement phrase", [1, 0], "left-new"),
+    ]);
     await writer.commit();
 
     await expect(

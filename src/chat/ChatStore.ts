@@ -8,6 +8,7 @@ import type { ResearchSearchMode } from "../research/ResearchService";
 export interface SavedChatSettings {
   model: string;
   searchMode: ResearchSearchMode;
+  deepResearch?: boolean;
 }
 
 export interface SavedChat {
@@ -182,7 +183,8 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
     typeof settings.model === "string" &&
     (settings.searchMode === "indexOnly" ||
       settings.searchMode === "indexAndWeb" ||
-      settings.searchMode === "webOnly")
+      settings.searchMode === "webOnly") &&
+    (settings.deepResearch === undefined || typeof settings.deepResearch === "boolean")
   );
 }
 

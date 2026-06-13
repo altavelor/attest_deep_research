@@ -27,6 +27,18 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
   ].join("\n");
 }
 
+export function buildDeepResearchPlanPrompt(question: string, maxQueries: number): string {
+  return [
+    "Create a compact web research query plan for the user's question.",
+    `Return JSON only in this exact shape: {"queries":["query one","query two"]}.`,
+    `Use 1-${maxQueries} focused web search queries.`,
+    "Do not include private notes, vault content, citations, explanations, markdown, or prose.",
+    "Prefer precise queries with named entities, date constraints, standards, or source types when useful.",
+    "",
+    `Question: ${question}`,
+  ].join("\n");
+}
+
 export function extractFollowUpQuestions(answer: string): string[] {
   const sectionStart = answer.search(/follow-up questions\s*:/i);
 

@@ -6,10 +6,12 @@ import {
   EmbeddedChunk,
   AdjacentChunkIndexStore,
   IndexFailedSourceSnapshot,
+  LanguageInventoryIndexStore,
   IndexStore,
   IndexStoreWriteSession,
   IndexStoreMetadata,
   IndexSourceSnapshot,
+  LanguageInventoryItem,
   KeywordSearchIndexStore,
   RetrievedChunk,
   SourceReference,
@@ -29,6 +31,7 @@ import {
   mergeKeywordPostingRows,
   rankKeywordPostings,
 } from "./LightweightKeywordIndex";
+import { detectTextLanguages, languageInventoryFromSources } from "./languageDetection";
 import { shardIdForSourcePath } from "./sourcePathShard";
 
 export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 2;
@@ -76,6 +79,7 @@ export interface FileVectorManifest {
   shardCount: number;
   shards: FileVectorShardManifest[];
   keywordIndex: KeywordIndexManifest;
+  languageInventory?: LanguageInventoryItem[];
   chunkCount: number;
   sourceCount: number;
   updatedAt: string;
@@ -112,6 +116,7 @@ export interface SourceSnapshot {
   chunkCount: number;
   failed?: boolean;
   errorMessage?: string;
+  languages?: string[];
 }
 
 export interface KeywordIndexManifest {
@@ -143,6 +148,7 @@ export interface CreateFileVectorManifestOptions {
   sourceCount?: number;
   keywordIndexedChunkCount?: number;
   keywordMinTokenLength?: number;
+  languageInventory?: LanguageInventoryItem[];
 }
 
 export interface FileVectorFormatValidationInput {
@@ -162,12 +168,7 @@ export interface FileVectorIndexStoreOptions {
 }
 
 export interface FileVectorIndexStorePerformanceEvent {
-  phase:
-    | "keywordBuild"
-    | "vectorEncode"
-    | "manifestBuild"
-    | "diskWrite"
-    | "persist";
+  phase: "keywordBuild" | "vectorEncode" | "manifestBuild" | "diskWrite" | "persist";
   durationMs: number;
   shardId?: string;
   dirtyShardCount?: number;
@@ -197,7 +198,12 @@ const DEFAULT_PROFILE_ID = "default";
 const MANIFEST_FILE = "manifest.json";
 
 export class FileVectorIndexStore
-  implements IndexStore, SourceSnapshotIndexStore, KeywordSearchIndexStore, AdjacentChunkIndexStore
+  implements
+    IndexStore,
+    SourceSnapshotIndexStore,
+    KeywordSearchIndexStore,
+    AdjacentChunkIndexStore,
+    LanguageInventoryIndexStore
 {
   private readonly folder: string;
   private readonly profileId: string;
@@ -350,10 +356,11 @@ export class FileVectorIndexStore
     this.state = state;
     return state.sources
       .filter((source) => source.failed !== true)
-      .map(({ sourcePath, modifiedTime, contentHash }) => ({
+      .map(({ sourcePath, modifiedTime, contentHash, languages }) => ({
         sourcePath,
         modifiedTime,
         contentHash,
+        ...(languages ? { languages } : {}),
       }));
   }
 
@@ -385,6 +392,23 @@ export class FileVectorIndexStore
     changes.sourcesDirty = true;
     await this.persistState(state, changes);
     this.state = state;
+  }
+
+  async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
+    const state = this.state ?? (await this.loadExistingStateOrNull());
+
+    if (state === null) {
+      return [];
+    }
+
+    this.state = state;
+    const inventory = state.manifest.languageInventory ?? [];
+
+    if (inventory.length > 0 && inventory.some((item) => item.language !== "unknown")) {
+      return [...inventory];
+    }
+
+    return languageInventoryFromStoredChunks(state);
   }
 
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
@@ -727,6 +751,7 @@ export class FileVectorIndexStore
       sourceCount: state.sources.length,
       keywordIndexedChunkCount,
       keywordMinTokenLength: state.manifest.keywordIndex.minTokenLength,
+      languageInventory: languageInventoryFromSources(state.sources),
     });
     this.logPerformance({
       phase: "manifestBuild",
@@ -830,6 +855,7 @@ export function createFileVectorManifest(
       files: keywordFiles,
       indexedChunkCount: options.keywordIndexedChunkCount ?? options.chunkCount ?? 0,
     },
+    ...(options.languageInventory ? { languageInventory: options.languageInventory } : {}),
     chunkCount: options.chunkCount ?? sumShardChunks(shards),
     sourceCount: options.sourceCount ?? 0,
     updatedAt: options.updatedAt,
@@ -868,6 +894,7 @@ export function isFileVectorManifest(value: unknown): value is FileVectorManifes
     Array.isArray(value.shards) &&
     value.shards.every(isFileVectorShardManifest) &&
     isKeywordIndexManifest(value.keywordIndex) &&
+    (value.languageInventory === undefined || isLanguageInventory(value.languageInventory)) &&
     isNonNegativeInteger(value.chunkCount) &&
     isNonNegativeInteger(value.sourceCount) &&
     typeof value.updatedAt === "string" &&
@@ -900,7 +927,8 @@ export function isSourceSnapshot(value: unknown): value is SourceSnapshot {
     typeof value.shardId === "string" &&
     isNonNegativeInteger(value.chunkCount) &&
     (value.failed === undefined || typeof value.failed === "boolean") &&
-    (value.errorMessage === undefined || typeof value.errorMessage === "string")
+    (value.errorMessage === undefined || typeof value.errorMessage === "string") &&
+    (value.languages === undefined || isLanguageList(value.languages))
   );
 }
 
@@ -916,6 +944,23 @@ export function isKeywordPostingRow(value: unknown): value is KeywordPostingRow 
         isPositiveInteger(posting.frequency),
     )
   );
+}
+
+function isLanguageInventory(value: unknown): value is LanguageInventoryItem[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.language === "string" &&
+        isNonNegativeInteger(item.chunkCount) &&
+        isNonNegativeInteger(item.sourceCount),
+    )
+  );
+}
+
+function isLanguageList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 export function validateFileVectorIndexFormat(input: FileVectorFormatValidationInput): void {
@@ -1182,6 +1227,7 @@ function applySourceSnapshotUpdates(
       ...source,
       modifiedTime: snapshot.modifiedTime,
       contentHash: snapshot.contentHash,
+      ...(snapshot.languages ? { languages: snapshot.languages } : {}),
     };
   });
 }
@@ -1258,7 +1304,9 @@ function removeChunkIdsFromState(
       changes?.dirtyShardIds.add(shardId);
       for (const chunk of chunks) {
         if (chunkIds.has(chunk.row.id)) {
-          changes?.dirtySourcePaths.add(chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source));
+          changes?.dirtySourcePaths.add(
+            chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source),
+          );
           changes?.replacedChunkIds.add(chunk.row.id);
         }
       }
@@ -1285,6 +1333,7 @@ function nextChunkIndexBySourcePath(state: FileVectorIndexState): Map<string, nu
 
 function refreshSources(state: FileVectorIndexState, now: () => Date): void {
   const bySourcePath = new Map<string, StoredChunk[]>();
+  const existingSources = new Map(state.sources.map((source) => [source.sourcePath, source]));
 
   for (const chunks of state.chunksByShard.values()) {
     for (const chunk of chunks) {
@@ -1297,14 +1346,40 @@ function refreshSources(state: FileVectorIndexState, now: () => Date): void {
 
   state.sources = Array.from(bySourcePath.entries())
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([sourcePath, chunks]) => ({
-      sourcePath,
-      modifiedTime: 0,
-      contentHash: chunks[0]?.row.contentHash ?? "",
-      indexedAt: now().toISOString(),
-      shardId: shardIdForSourcePath(sourcePath, state.manifest.shardCount),
-      chunkCount: chunks.length,
-    }));
+    .map(([sourcePath, chunks]) => {
+      const existing = existingSources.get(sourcePath);
+
+      return {
+        sourcePath,
+        modifiedTime: existing?.modifiedTime ?? 0,
+        contentHash: chunks[0]?.row.contentHash ?? "",
+        indexedAt: existing?.indexedAt ?? now().toISOString(),
+        shardId: shardIdForSourcePath(sourcePath, state.manifest.shardCount),
+        chunkCount: chunks.length,
+        ...(existing?.languages ? { languages: existing.languages } : {}),
+      };
+    });
+}
+
+function languageInventoryFromStoredChunks(state: FileVectorIndexState): LanguageInventoryItem[] {
+  const bySourcePath = new Map<string, { text: string[]; chunkCount: number }>();
+
+  for (const chunks of state.chunksByShard.values()) {
+    for (const chunk of chunks) {
+      const sourcePath = chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source);
+      const source = bySourcePath.get(sourcePath) ?? { text: [], chunkCount: 0 };
+      source.text.push(chunk.row.text);
+      source.chunkCount += 1;
+      bySourcePath.set(sourcePath, source);
+    }
+  }
+
+  return languageInventoryFromSources(
+    Array.from(bySourcePath.values()).map((source) => ({
+      languages: detectTextLanguages(source.text.join("\n\n")),
+      chunkCount: source.chunkCount,
+    })),
+  );
 }
 
 function encodeStoredChunks(chunks: StoredChunk[], dimensions: number): Uint8Array {

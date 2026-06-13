@@ -69,6 +69,14 @@ export interface Citation {
   label: string;
 }
 
+export type LanguageCode = string;
+
+export interface LanguageInventoryItem {
+  language: LanguageCode;
+  chunkCount: number;
+  sourceCount: number;
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -145,6 +153,7 @@ export interface IndexSourceSnapshot {
   sourcePath: string;
   modifiedTime: number;
   contentHash: string;
+  languages?: LanguageCode[];
 }
 
 export interface IndexFailedSourceSnapshot {
@@ -160,6 +169,10 @@ export interface SourceSnapshotIndexStore {
   recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
 }
 
+export interface LanguageInventoryIndexStore {
+  getLanguageInventory(): Promise<LanguageInventoryItem[]>;
+}
+
 export interface RetrievalOptions {
   limit: number;
   includeWebResults: boolean;
@@ -167,6 +180,13 @@ export interface RetrievalOptions {
   sourceKinds?: SourceKind[];
   fileExtensions?: string[];
   sourcePaths?: string[];
+  queryVariants?: RetrievalQueryVariant[];
+}
+
+export interface RetrievalQueryVariant {
+  query: string;
+  language?: LanguageCode;
+  reason?: "original" | "expanded" | "translated";
 }
 
 export interface KeywordSearchIndexStore {
@@ -188,10 +208,18 @@ export interface Retriever {
 export interface SearchProviderResult {
   source: WebSourceReference;
   extractedText?: string;
+  rank: number;
+  query: string;
+}
+
+export interface WebSearchOptions {
+  limit?: number;
+  maxFetches?: number;
+  timeoutMs?: number;
 }
 
 export interface SearchProvider {
-  searchFirstResult(query: string): Promise<SearchProviderResult | null>;
+  search(query: string, options?: WebSearchOptions): Promise<SearchProviderResult[]>;
 }
 
 export interface ResearchAnswer {

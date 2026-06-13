@@ -10,6 +10,7 @@ import {
   SourceSnapshotIndexStore,
 } from "../shared/types";
 import { FileSnapshot, hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
+import { detectTextLanguages } from "./languageDetection";
 
 export interface VaultFileSummary {
   path: string;
@@ -81,9 +82,14 @@ interface IndexedFileResult {
   chunks: ExtractedChunk[];
   contentHash?: string;
   persistSnapshot?: boolean;
+  languages?: string[];
 }
 
-type PendingIndexedFile = VaultFileSummary & { contentHash: string; chunkCount: number };
+type PendingIndexedFile = VaultFileSummary & {
+  contentHash: string;
+  chunkCount: number;
+  languages?: string[];
+};
 
 export type IndexingFileLogReason =
   | "unsupported-file-type"
@@ -134,6 +140,7 @@ export interface IndexingPerformanceLogEvent {
 
 const DEFAULT_BATCH_SIZE = 32;
 const DEFAULT_YIELD_EVERY_FILES = 25;
+const INTERNAL_EXCLUDE_GLOBS = [".ixplorer/**"];
 
 export class IndexingService {
   private readonly files: VaultFileProvider;
@@ -349,6 +356,7 @@ export class IndexingService {
             ...file,
             contentHash: result.contentHash,
             chunkCount: result.chunks.length,
+            languages: result.languages,
           });
           pendingChunks.push(...result.chunks);
         }
@@ -358,11 +366,17 @@ export class IndexingService {
             ...file,
             contentHash: result.contentHash,
             chunkCount: result.chunks.length,
+            languages: result.languages,
           });
         }
 
         if (pendingChunks.length >= this.batchSize || this.shouldYieldAfterFile()) {
-          await this.flushPendingChunks(pendingChunks, pendingIndexedFiles, getWriter, () => writer);
+          await this.flushPendingChunks(
+            pendingChunks,
+            pendingIndexedFiles,
+            getWriter,
+            () => writer,
+          );
         }
 
         this.notifyProgress();
@@ -566,6 +580,7 @@ export class IndexingService {
     });
 
     if (chunks.length === 0) {
+      const languages = detectTextLanguages(String(data));
       this.logIndexingFile({
         path: file.path,
         outcome: "skipped",
@@ -582,14 +597,18 @@ export class IndexingService {
         chunks,
         contentHash,
         persistSnapshot: true,
+        languages,
       };
     }
+
+    const languages = detectTextLanguages(chunks.map((chunk) => chunk.text).join("\n\n"));
 
     return {
       indexed: true,
       skipped: false,
       chunks,
       contentHash,
+      languages,
     };
   }
 
@@ -691,7 +710,7 @@ export class IndexingService {
   }
 
   private async persistSourceSnapshots(
-    indexedFiles: Array<VaultFileSummary & { contentHash: string }>,
+    indexedFiles: PendingIndexedFile[],
     writer?: IndexStoreWriteSession,
   ): Promise<void> {
     if (!isSourceSnapshotIndexStore(this.indexStore) || indexedFiles.length === 0) {
@@ -702,6 +721,7 @@ export class IndexingService {
       sourcePath: file.path,
       modifiedTime: file.modifiedTime,
       contentHash: file.contentHash,
+      languages: file.languages,
     }));
 
     if (writer?.updateSourceSnapshots) {
@@ -732,6 +752,7 @@ export class IndexingService {
   private shouldScanPath(path: string): boolean {
     return (
       isIncluded(path, this.includeFolders) &&
+      !INTERNAL_EXCLUDE_GLOBS.some((glob) => globMatches(path, glob)) &&
       !this.excludeGlobs.some((glob) => globMatches(path, glob))
     );
   }

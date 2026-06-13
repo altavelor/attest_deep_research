@@ -120,9 +120,9 @@ class FakeRetriever {
 class RecordingSearchProvider implements SearchProvider {
   readonly queries: string[] = [];
 
-  async searchFirstResult(query: string): Promise<SearchProviderResult | null> {
+  async search(query: string): Promise<SearchProviderResult[]> {
     this.queries.push(query);
-    return null;
+    return [];
   }
 }
 
