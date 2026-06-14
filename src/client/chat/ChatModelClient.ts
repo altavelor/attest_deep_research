@@ -1,10 +1,10 @@
 import { IxplorerError } from "../../shared/errors";
 import { isRecord } from "../../shared/guards";
 import {
+  ApiFormat,
   ChatModelProvider,
   ChatRequest,
   ChatResponseChunk,
-  LocalModelProvider,
 } from "../../shared/types";
 import {
   isOllamaTagsResponse,
@@ -17,23 +17,26 @@ import { ProviderHttpClient } from "../common/http";
 import { parseJsonLines, parseServerSentEvents } from "../common/streams";
 
 export interface ChatModelClientOptions {
-  provider: LocalModelProvider;
+  apiFormat?: ApiFormat;
+  provider?: ApiFormat | "lmStudio";
   baseUrl: string;
+  apiKey?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
 }
 
 export class ChatModelClient implements ChatModelProvider {
-  private readonly provider: LocalModelProvider;
+  private readonly provider: ApiFormat;
   private readonly http: ProviderHttpClient;
   private readonly logger?: PluginRequestLogger;
 
   constructor(options: ChatModelClientOptions) {
-    this.provider = options.provider;
+    this.provider = normalizeApiFormat(options.apiFormat ?? options.provider);
     this.logger = options.logger;
     this.http = new ProviderHttpClient({
       ...options,
+      apiFormat: this.provider,
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
       unavailableMessage: "The chat model provider is unavailable.",
     });
@@ -41,22 +44,30 @@ export class ChatModelClient implements ChatModelProvider {
 
   async listModels(): Promise<string[]> {
     return this.withLoggedErrors(() =>
-      this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels(),
+      this.provider === "ollama"
+        ? this.listOllamaModels()
+        : this.provider === "anthropic"
+          ? this.listAnthropicModels()
+          : this.listOpenAiCompatibleModels(),
     );
   }
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     try {
-      yield* this.provider === "lmStudio"
-        ? this.streamLmStudioChat(request)
-        : this.streamOllamaChat(request);
+      if (this.provider === "ollama") {
+        yield* this.streamOllamaChat(request);
+      } else if (this.provider === "anthropic") {
+        yield* this.streamAnthropicChat(request);
+      } else {
+        yield* this.streamOpenAiCompatibleChat(request);
+      }
     } catch (error) {
       this.logger?.logError(error);
       throw error;
     }
   }
 
-  private async listLmStudioModels(): Promise<string[]> {
+  private async listOpenAiCompatibleModels(): Promise<string[]> {
     const response = await this.http.request("/models", { method: "GET" });
     const body = await this.http.readJson(
       response,
@@ -66,7 +77,24 @@ export class ChatModelClient implements ChatModelProvider {
     if (!isOpenAiModelsResponse(body)) {
       throw new IxplorerError({
         code: "MODEL_PROVIDER_UNAVAILABLE",
-        message: "LM Studio returned an invalid models response.",
+        message: "The OpenAI-compatible provider returned an invalid models response.",
+      });
+    }
+
+    return modelNamesFromOpenAiModels(body);
+  }
+
+  private async listAnthropicModels(): Promise<string[]> {
+    const response = await this.http.request("/models", {
+      method: "GET",
+      headers: { "anthropic-version": "2023-06-01" },
+    });
+    const body = await this.http.readJson(response, "The chat model provider returned invalid JSON.");
+
+    if (!isOpenAiModelsResponse(body)) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "Anthropic returned an invalid models response.",
       });
     }
 
@@ -90,17 +118,25 @@ export class ChatModelClient implements ChatModelProvider {
     return modelNamesFromOllamaTags(body);
   }
 
-  private async *streamLmStudioChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+  private async *streamOpenAiCompatibleChat(
+    request: ChatRequest,
+  ): AsyncIterable<ChatResponseChunk> {
     const response = await this.http.request("/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({
+        model: request.model,
+        messages: request.messages,
+        temperature: request.temperature,
+        max_tokens: request.maxTokens,
+        stream: true,
+      }),
     });
 
     if (!response.body) {
       throw new IxplorerError({
         code: "MODEL_PROVIDER_UNAVAILABLE",
-        message: "LM Studio returned an empty chat stream.",
+        message: "The OpenAI-compatible provider returned an empty chat stream.",
       });
     }
 
@@ -119,6 +155,39 @@ export class ChatModelClient implements ChatModelProvider {
     yield { content: "", isComplete: true };
   }
 
+  private async *streamAnthropicChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    const systemMessage = request.messages.find((message) => message.role === "system")?.content;
+    const messages = request.messages.filter((message) => message.role !== "system");
+    const response = await this.http.request("/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: request.model,
+        messages,
+        system: systemMessage || undefined,
+        temperature: request.temperature,
+        max_tokens: request.maxTokens ?? 4096,
+        stream: true,
+      }),
+    });
+
+    if (!response.body) {
+      throw new IxplorerError({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        message: "Anthropic returned an empty chat stream.",
+      });
+    }
+
+    for await (const event of parseServerSentEvents(response.body)) {
+      const content = parseAnthropicChatDelta(event);
+      if (content) {
+        yield { content, isComplete: false };
+      }
+    }
+
+    yield { content: "", isComplete: true };
+  }
+
   private async *streamOllamaChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     const response = await this.http.request("/chat", {
       method: "POST",
@@ -128,7 +197,9 @@ export class ChatModelClient implements ChatModelProvider {
         messages: request.messages,
         stream: true,
         options:
-          request.temperature === undefined ? undefined : { temperature: request.temperature },
+          request.temperature === undefined && request.maxTokens === undefined
+            ? undefined
+            : { temperature: request.temperature, num_predict: request.maxTokens },
       }),
     });
 
@@ -177,6 +248,25 @@ function parseOpenAiChatDelta(event: string): string {
     }
 
     return typeof firstChoice.delta.content === "string" ? firstChoice.delta.content : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeApiFormat(value: ApiFormat | "lmStudio" | undefined): ApiFormat {
+  return value === "lmStudio" || value === undefined ? "openai-compatible" : value;
+}
+
+function parseAnthropicChatDelta(event: string): string {
+  try {
+    const parsed: unknown = JSON.parse(event);
+    if (!isRecord(parsed) || parsed.type !== "content_block_delta" || !isRecord(parsed.delta)) {
+      return "";
+    }
+
+    return parsed.delta.type === "text_delta" && typeof parsed.delta.text === "string"
+      ? parsed.delta.text
+      : "";
   } catch {
     return "";
   }

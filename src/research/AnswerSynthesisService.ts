@@ -1,11 +1,11 @@
-import { ChatModelProvider, Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
+import { ChatModelProvider, ChatRequest, Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { buildResearchPrompt, extractFollowUpQuestions } from "./prompts";
 import { ResearchStreamEvent } from "./types";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
   chatModelName: string;
-  temperature: number;
+  chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
   now: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
 }
@@ -20,14 +20,14 @@ export interface AnswerSynthesisInput {
 export class AnswerSynthesisService {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
-  private readonly temperature: number;
+  private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
   private readonly now: () => Date;
   private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
 
   constructor(options: AnswerSynthesisServiceOptions) {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
-    this.temperature = options.temperature;
+    this.chatOptions = options.chatOptions;
     this.now = options.now;
     this.persistFinalAnswer = options.persistFinalAnswer;
   }
@@ -44,7 +44,8 @@ export class AnswerSynthesisService {
 
     for await (const chunk of this.chatModel.streamChat({
       model: this.chatModelName,
-      temperature: this.temperature,
+      temperature: this.chatOptions.temperature,
+      maxTokens: this.chatOptions.maxTokens,
       messages: [
         {
           role: "system",

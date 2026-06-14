@@ -48,8 +48,8 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
     }
 
     this.console.debug("[Ixplorer] Request", {
-      ...context,
-      settings,
+      ...(redactLogValue(context) as RequestLogContext),
+      settings: redactLogValue(settings),
     });
   }
 
@@ -61,8 +61,8 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
     }
 
     this.console.debug("[Ixplorer] Response", {
-      ...context,
-      settings,
+      ...(redactLogValue(context) as ResponseLogContext),
+      settings: redactLogValue(settings),
     });
   }
 
@@ -78,7 +78,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
     this.console.error("[Ixplorer] Error", {
       context,
       error: serializeError(error),
-      settings: this.getSettings(),
+      settings: redactLogValue(this.getSettings()),
     });
   }
 
@@ -91,7 +91,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
 
     this.console.debug("[Ixplorer] Indexing file", {
       ...event,
-      settings,
+      settings: redactLogValue(settings),
     });
   }
 
@@ -104,7 +104,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
 
     this.console.debug("[Ixplorer] Indexing performance", {
       ...event,
-      settings,
+      settings: redactLogValue(settings),
     });
   }
 }
@@ -131,4 +131,27 @@ function serializeError(error: unknown): unknown {
 
 function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
+}
+
+function redactLogValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redactLogValue);
+  }
+
+  if (!isObject(value)) {
+    return value;
+  }
+
+  const redacted: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
+    redacted[key] =
+      normalizedKey === "apikey" ||
+      normalizedKey === "api_key" ||
+      normalizedKey === "authorization" ||
+      normalizedKey.includes("api-key")
+        ? "[redacted]"
+        : redactLogValue(item);
+  }
+  return redacted;
 }

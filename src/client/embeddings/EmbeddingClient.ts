@@ -1,10 +1,10 @@
 import { IxplorerError } from "../../shared/errors";
 import { isRecord } from "../../shared/guards";
 import {
+  ApiFormat,
   EmbeddingProviderClient,
   EmbeddingRequest,
   EmbeddingResponse,
-  LocalModelProvider,
 } from "../../shared/types";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
@@ -16,8 +16,10 @@ import {
 } from "../common/models";
 
 export interface EmbeddingClientOptions {
-  provider: LocalModelProvider;
+  apiFormat?: ApiFormat;
+  provider?: ApiFormat | "lmStudio";
   baseUrl: string;
+  apiKey?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
@@ -34,15 +36,16 @@ interface OllamaEmbedResponse {
 }
 
 export class EmbeddingClient implements EmbeddingProviderClient {
-  private readonly provider: LocalModelProvider;
+  private readonly provider: ApiFormat;
   private readonly http: ProviderHttpClient;
   private readonly logger?: PluginRequestLogger;
 
   constructor(options: EmbeddingClientOptions) {
-    this.provider = options.provider;
+    this.provider = normalizeApiFormat(options.apiFormat ?? options.provider);
     this.logger = options.logger;
     this.http = new ProviderHttpClient({
       ...options,
+      apiFormat: this.provider,
       unavailableCode: "EMBEDDING_UNAVAILABLE",
       unavailableMessage: "The embedding provider is unavailable.",
     });
@@ -50,19 +53,26 @@ export class EmbeddingClient implements EmbeddingProviderClient {
 
   async listModels(): Promise<string[]> {
     return this.withLoggedErrors(() =>
-      this.provider === "lmStudio" ? this.listLmStudioModels() : this.listOllamaModels(),
+      this.provider === "ollama" ? this.listOllamaModels() : this.listOpenAiCompatibleModels(),
     );
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    if (this.provider === "anthropic") {
+      throw new IxplorerError({
+        code: "EMBEDDING_UNAVAILABLE",
+        message: "Anthropic embeddings are not supported.",
+      });
+    }
+
     return this.withLoggedErrors(() =>
-      this.provider === "lmStudio"
-        ? this.embedWithLmStudio(request)
-        : this.embedWithOllama(request),
+      this.provider === "ollama"
+        ? this.embedWithOllama(request)
+        : this.embedWithOpenAiCompatible(request),
     );
   }
 
-  private async listLmStudioModels(): Promise<string[]> {
+  private async listOpenAiCompatibleModels(): Promise<string[]> {
     const response = await this.http.request("/models", { method: "GET" });
     const body = await this.http.readJson(
       response,
@@ -72,7 +82,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     if (!isOpenAiModelsResponse(body)) {
       throw new IxplorerError({
         code: "EMBEDDING_UNAVAILABLE",
-        message: "LM Studio returned an invalid models response.",
+        message: "The OpenAI-compatible provider returned an invalid models response.",
       });
     }
 
@@ -96,7 +106,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     return modelNamesFromOllamaTags(body);
   }
 
-  private async embedWithLmStudio(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+  private async embedWithOpenAiCompatible(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     const response = await this.http.request("/embeddings", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -110,7 +120,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     if (!isOpenAiEmbeddingsResponse(body)) {
       throw new IxplorerError({
         code: "EMBEDDING_UNAVAILABLE",
-        message: "LM Studio returned an invalid embeddings response.",
+        message: "The OpenAI-compatible provider returned an invalid embeddings response.",
       });
     }
 
@@ -165,6 +175,10 @@ function isOpenAiEmbeddingsResponse(value: unknown): value is OpenAiEmbeddingsRe
         item.embedding.every((dimension) => typeof dimension === "number"),
     )
   );
+}
+
+function normalizeApiFormat(value: ApiFormat | "lmStudio" | undefined): ApiFormat {
+  return value === "lmStudio" || value === undefined ? "openai-compatible" : value;
 }
 
 function isOllamaEmbedResponse(value: unknown): value is OllamaEmbedResponse {

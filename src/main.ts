@@ -24,13 +24,19 @@ import { RetrievalService } from "./retrieval/RetrievalService";
 import { QueryExpansionService } from "./retrieval/QueryExpansionService";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
-import { detectLocalModelProvider } from "./settings/connectionTests";
 import { PluginDebugLogger } from "./settings/debugLogger";
 import {
   DEFAULT_SETTINGS,
+  ChatModelProfile,
+  EmbeddingModelProfile,
   IxplorerSettings,
+  ServerProfile,
   getActiveIndexProfile,
   migrateSettings,
+  normalizeSettingsState,
+  resolveChatModelProfile,
+  resolveEmbeddingModelProfile,
+  resolveServerProfile,
 } from "./settings/settings";
 import { toUserMessage } from "./shared/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
@@ -46,8 +52,6 @@ export default class IxplorerPlugin extends Plugin {
       measureFolderSize(this.getVaultLocalPath(getActiveIndexProfile(this.settings).indexFolder)),
     onError: (error) => new Notice(toUserMessage(error)),
   });
-  private availableChatModels: string[] = [];
-
   async onload(): Promise<void> {
     await this.loadSettings();
     void this.indexing.refreshIndexSize();
@@ -55,7 +59,8 @@ export default class IxplorerPlugin extends Plugin {
       IXPLORER_CHAT_VIEW_TYPE,
       (leaf) =>
         new IxplorerChatView(leaf, {
-          createResearchService: () => this.createResearchService(),
+          createResearchService: (chatModelProfileId) =>
+            this.createResearchService(chatModelProfileId),
           getIndexingState: () => this.indexing.getState(),
           subscribeToIndexingState: (listener) => this.indexing.subscribe(listener),
           indexingActions: {
@@ -65,12 +70,24 @@ export default class IxplorerPlugin extends Plugin {
             rebuild: () => this.indexing.rebuild(),
           },
           isWebSearchEnabled: () => this.settings.duckDuckGoEnabled,
-          getChatModel: () => this.settings.chatModel,
-          setChatModel: async (model) => {
-            this.settings.chatModel = model.trim();
+          getChatModel: () =>
+            resolveChatModelProfile(this.settings, this.settings.activeChatModelProfileId)?.name ??
+            "",
+          setChatModel: async (modelProfileId) => {
+            this.settings.activeChatModelProfileId = modelProfileId.trim();
+            normalizeSettingsState(this.settings);
             await this.saveSettings();
           },
-          getAvailableChatModels: () => [...this.availableChatModels],
+          getAvailableChatModels: () =>
+            this.settings.chatModelProfiles
+              .filter((profile) => profile.isSuspended !== true)
+              .map((profile) => profile.name),
+          getChatModelProfiles: () =>
+            this.settings.chatModelProfiles.map((profile) => ({
+              id: profile.id,
+              name: profile.name,
+              isSuspended: profile.isSuspended === true,
+            })),
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({ id: profile.id, name: profile.name })),
           searchIndex: (options) => this.searchIndex(options),
@@ -104,11 +121,8 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    normalizeSettingsState(this.settings);
     await this.saveData(this.settings);
-  }
-
-  setAvailableChatModels(models: string[]): void {
-    this.availableChatModels = [...models];
   }
 
   markIndexStale(): void {
@@ -127,14 +141,20 @@ export default class IxplorerPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
-  private createResearchService(): ResearchService {
+  private createResearchService(chatModelProfileId?: string): ResearchService {
     const indexProfile = getActiveIndexProfile(this.settings);
+    const chatProfile = this.requireChatModelProfile(chatModelProfileId);
+    const chatServer = this.requireServerProfile(chatProfile.serverProfileId);
 
     return new ResearchService({
       retriever: this.createRetrieverForProfile(indexProfile),
-      chatModel: this.createChatModelClient(),
-      chatModelName: this.settings.chatModel,
-      queryExpansion: this.createQueryExpansionService(),
+      chatModel: this.createChatModelClient(chatServer),
+      chatModelName: chatProfile.modelName,
+      chatOptions: {
+        temperature: chatProfile.temperature,
+        maxTokens: chatProfile.maxTokens,
+      },
+      queryExpansion: this.createQueryExpansionService(chatProfile, chatServer),
       searchProvider: this.createSearchProvider(),
     });
   }
@@ -156,12 +176,24 @@ export default class IxplorerPlugin extends Plugin {
       this.settings.indexProfiles.find((profile) => profile.id === options.profileId) ??
       getActiveIndexProfile(this.settings);
     const retriever = this.createRetrieverForProfile(indexProfile);
-    const queryExpansion = this.createQueryExpansionService();
+    const chatProfile = resolveChatModelProfile(
+      this.settings,
+      this.settings.activeChatModelProfileId,
+    );
+    const chatServer = chatProfile
+      ? resolveServerProfile(this.settings, chatProfile.serverProfileId)
+      : undefined;
+    const queryExpansion =
+      chatProfile && chatServer
+        ? this.createQueryExpansionService(chatProfile, chatServer)
+        : undefined;
     const languageInventory = await retriever.getLanguageInventory();
-    const queryVariants = await queryExpansion.buildVariants({
-      query: options.query,
-      languageInventory,
-    });
+    const queryVariants = queryExpansion
+      ? await queryExpansion.buildVariants({
+        query: options.query,
+        languageInventory,
+      })
+      : [];
     const result = await retriever.search(options.query, {
       limit: options.limit,
       includeWebResults: false,
@@ -175,6 +207,7 @@ export default class IxplorerPlugin extends Plugin {
 
   private createIndexingService(onProgress: (state: IndexingState) => void): IndexingService {
     const indexProfile = getActiveIndexProfile(this.settings);
+    const embeddingProfile = this.requireEmbeddingModelProfile(indexProfile.embeddingModelProfileId);
 
     return new IndexingService({
       files: new ObsidianVaultFileProvider(this.app.vault),
@@ -206,9 +239,9 @@ export default class IxplorerPlugin extends Plugin {
           chunkOverlap: indexProfile.chunkOverlap,
         }),
       ],
-      embeddings: this.createEmbeddingClientForProfile(indexProfile),
+      embeddings: this.createEmbeddingClientForProfile(embeddingProfile),
       indexStore: this.createVectorIndexStoreForProfile(indexProfile),
-      embeddingModel: indexProfile.embeddingModel,
+      embeddingModel: embeddingProfile.modelName,
       includeFolders: indexProfile.includeFolders,
       excludeGlobs: indexProfile.excludeGlobs,
       batchSize: indexProfile.embeddingBatchSize,
@@ -217,10 +250,12 @@ export default class IxplorerPlugin extends Plugin {
     });
   }
 
-  private createEmbeddingClientForProfile(indexProfile: IndexProfile): EmbeddingClient {
+  private createEmbeddingClientForProfile(embeddingProfile: EmbeddingModelProfile): EmbeddingClient {
+    const server = this.requireServerProfile(embeddingProfile.serverProfileId);
     return new EmbeddingClient({
-      provider: detectLocalModelProvider(indexProfile.embeddingProviderBaseUrl),
-      baseUrl: indexProfile.embeddingProviderBaseUrl,
+      apiFormat: server.apiFormat,
+      baseUrl: server.baseUrl,
+      apiKey: server.apiKey,
       logger: this.logger,
     });
   }
@@ -235,27 +270,60 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   private createRetrieverForProfile(indexProfile: IndexProfile): RetrievalService {
+    const embeddingProfile = this.requireEmbeddingModelProfile(indexProfile.embeddingModelProfileId);
     return new RetrievalService({
-      embeddings: this.createEmbeddingClientForProfile(indexProfile),
+      embeddings: this.createEmbeddingClientForProfile(embeddingProfile),
       indexStore: this.createVectorIndexStoreForProfile(indexProfile),
-      embeddingModel: indexProfile.embeddingModel,
+      embeddingModel: embeddingProfile.modelName,
       keywordCorpus: [],
     });
   }
 
-  private createChatModelClient(): ChatModelClient {
+  private createChatModelClient(server: ServerProfile): ChatModelClient {
     return new ChatModelClient({
-      provider: detectLocalModelProvider(this.settings.chatModelProviderBaseUrl),
-      baseUrl: this.settings.chatModelProviderBaseUrl,
+      apiFormat: server.apiFormat,
+      baseUrl: server.baseUrl,
+      apiKey: server.apiKey,
       logger: this.logger,
     });
   }
 
-  private createQueryExpansionService(): QueryExpansionService {
+  private createQueryExpansionService(
+    chatProfile: ChatModelProfile,
+    server: ServerProfile,
+  ): QueryExpansionService {
     return new QueryExpansionService({
-      chatModel: this.createChatModelClient(),
-      chatModelName: this.settings.chatModel,
+      chatModel: this.createChatModelClient(server),
+      chatModelName: chatProfile.modelName,
+      chatOptions: {
+        temperature: chatProfile.temperature,
+        maxTokens: chatProfile.maxTokens,
+      },
     });
+  }
+
+  private requireChatModelProfile(profileId?: string): ChatModelProfile {
+    const profile = resolveChatModelProfile(this.settings, profileId);
+    if (!profile) {
+      throw new Error("Select a chat model profile before asking a question.");
+    }
+    return profile;
+  }
+
+  private requireEmbeddingModelProfile(profileId?: string): EmbeddingModelProfile {
+    const profile = resolveEmbeddingModelProfile(this.settings, profileId);
+    if (!profile) {
+      throw new Error("Select an embedding model profile before using this index.");
+    }
+    return profile;
+  }
+
+  private requireServerProfile(profileId: string): ServerProfile {
+    const profile = resolveServerProfile(this.settings, profileId);
+    if (!profile) {
+      throw new Error("The selected server profile is unavailable.");
+    }
+    return profile;
   }
 
   private createSearchProvider(): DuckDuckGoSearchProvider | undefined {

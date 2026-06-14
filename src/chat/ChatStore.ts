@@ -6,7 +6,7 @@ import { ChatDisplayMessage } from "../ui/rendering";
 import type { ResearchSearchMode } from "../research/ResearchService";
 
 export interface SavedChatSettings {
-  model: string;
+  chatModelProfileId: string;
   searchMode: ResearchSearchMode;
   deepResearch?: boolean;
 }
@@ -180,7 +180,7 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
 
   const settings = value as Partial<SavedChatSettings>;
   return (
-    typeof settings.model === "string" &&
+    typeof settings.chatModelProfileId === "string" &&
     (settings.searchMode === "indexOnly" ||
       settings.searchMode === "indexAndWeb" ||
       settings.searchMode === "webOnly") &&

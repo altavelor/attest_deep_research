@@ -4,119 +4,100 @@ import {
   getActiveIndexProfile,
   migrateSettings,
   normalizeListInput,
+  normalizeSettingsState,
   normalizeUrl,
   normalizeVaultFolder,
+  resolveChatModelProfile,
   updateActiveIndexProfile,
 } from "../../src/settings/settings";
 
 describe("Ixplorer settings", () => {
   it("uses local-first safe defaults", () => {
     expect(migrateSettings(null)).toEqual(DEFAULT_SETTINGS);
-    expect(DEFAULT_SETTINGS.duckDuckGoEnabled).toBe(false);
-    expect(DEFAULT_SETTINGS.chatModelProviderBaseUrl).toBe("http://localhost:1234/v1");
-    expect(DEFAULT_SETTINGS.embeddingProviderBaseUrl).toBe("http://localhost:11434");
+    expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.activeChatModelProfileId).toBe("");
     expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
-    expect(DEFAULT_SETTINGS.activeIndexProfileId).toBe("default");
     expect(getActiveIndexProfile(DEFAULT_SETTINGS)).toMatchObject({
       id: "default",
       indexFolder: ".ixplorer/index",
+      embeddingModelProfileId: "",
+      isSuspended: true,
       shardCount: 32,
       chunkSize: 800,
       chunkOverlap: 120,
-      keywordIndex: {
-        enabled: true,
-        strategy: "source-shard",
-        minTokenLength: 3,
-      },
     });
     expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
-  it("migrates partial saved settings over defaults", () => {
+  it("keeps new profile settings and selects the active chat model", () => {
     const settings = migrateSettings({
-      chatModelProviderBaseUrl: "http://localhost:1234/v1/",
-      chatModel: "qwen3",
-      embeddingProviderBaseUrl: "http://localhost:11434/",
-      embeddingModel: "nomic-embed-text",
-      lanceDbFolder: "/custom-index/",
-      includeFolders: ["Research", "Papers"],
-      excludeGlobs: ["Archive/**"],
-      duckDuckGoEnabled: true,
-      showChatIndexControl: false,
-      debugMode: true,
-    });
-
-    expect(settings).toMatchObject({
-      chatModelProviderBaseUrl: "http://localhost:1234/v1",
-      chatModel: "qwen3",
-      embeddingProviderBaseUrl: "http://localhost:11434",
-      embeddingModel: "nomic-embed-text",
-      lanceDbFolder: "custom-index",
-      activeIndexProfileId: "default",
-      includeFolders: ["Research", "Papers"],
-      excludeGlobs: ["Archive/**"],
-      duckDuckGoEnabled: true,
-      showChatIndexControl: false,
-      debugMode: true,
-    });
-    expect(getActiveIndexProfile(settings)).toMatchObject({
-      id: "default",
-      indexFolder: "custom-index",
-      includeFolders: ["Research", "Papers"],
-      excludeGlobs: ["Archive/**"],
-      embeddingProviderBaseUrl: "http://localhost:11434",
-      embeddingModel: "nomic-embed-text",
-      chunkSize: 800,
-      chunkOverlap: 120,
-    });
-  });
-
-  it("keeps valid saved index profiles and selects the requested active profile", () => {
-    const settings = migrateSettings({
-      activeIndexProfileId: "papers",
-      indexProfiles: [
+      serverProfiles: [
         {
-          id: "notes",
-          name: "Notes",
-          indexFolder: ".ixplorer/notes",
-          includeFolders: ["Notes"],
-          excludeGlobs: [".trash/**"],
-          embeddingProviderBaseUrl: "http://localhost:11434/",
-          embeddingModel: "nomic",
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-        {
-          id: "papers",
-          name: "Papers",
-          indexFolder: "/.ixplorer/papers/",
-          includeFolders: ["Papers"],
-          excludeGlobs: ["Papers/Archive/**"],
-          embeddingProviderBaseUrl: "http://localhost:1234/v1/",
-          embeddingModel: "bge",
-          chunkSize: 600,
-          chunkOverlap: 100,
+          id: "server-openrouter",
+          name: "OpenRouter",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://openrouter.ai/api/v1/",
         },
       ],
+      chatModelProfiles: [
+        {
+          id: "chat-a",
+          name: "Main chat",
+          serverProfileId: "server-openrouter",
+          modelName: "openai/gpt-4.1",
+        },
+      ],
+      activeChatModelProfileId: "chat-a",
+      duckDuckGoEnabled: true,
+      showChatIndexControl: false,
+      debugMode: true,
     });
 
-    expect(settings.activeIndexProfileId).toBe("papers");
-    expect(settings.indexProfiles).toHaveLength(2);
-    expect(getActiveIndexProfile(settings)).toMatchObject({
-      id: "papers",
-      indexFolder: ".ixplorer/papers",
-      includeFolders: ["Papers"],
-      excludeGlobs: ["Papers/Archive/**"],
-      embeddingProviderBaseUrl: "http://localhost:1234/v1",
-      embeddingModel: "bge",
-      shardCount: 32,
-      chunkSize: 600,
-      chunkOverlap: 100,
+    expect(settings.serverProfiles[0]).toMatchObject({
+      id: "server-openrouter",
+      name: "OpenRouter",
+      apiFormat: "openai-compatible",
+      baseUrl: "https://openrouter.ai/api/v1",
     });
+    expect(resolveChatModelProfile(settings, "chat-a")).toMatchObject({
+      id: "chat-a",
+      isSuspended: false,
+    });
+    expect(settings.activeChatModelProfileId).toBe("chat-a");
+    expect(settings.duckDuckGoEnabled).toBe(true);
+    expect(settings.showChatIndexControl).toBe(false);
+    expect(settings.debugMode).toBe(true);
   });
 
-  it("allows disabled chunk overlap and clamps overlap to chunk size", () => {
+  it("marks dependent profiles suspended when server is missing or suspended", () => {
+    const settings = migrateSettings({
+      serverProfiles: [
+        {
+          id: "server-a",
+          name: "Server A",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://example.com/v1",
+          isSuspended: true,
+        },
+      ],
+      chatModelProfiles: [
+        { id: "chat-a", name: "Chat A", serverProfileId: "server-a", modelName: "model-a" },
+        { id: "chat-b", name: "Chat B", serverProfileId: "missing", modelName: "model-b" },
+      ],
+      activeChatModelProfileId: "chat-a",
+    });
+
+    expect(settings.chatModelProfiles).toMatchObject([
+      { id: "chat-a", isSuspended: true, suspendedReason: "Server profile is suspended." },
+      { id: "chat-b", isSuspended: true, suspendedReason: "Server profile was deleted." },
+    ]);
+    expect(settings.activeChatModelProfileId).toBe("");
+  });
+
+  it("suspends index profiles without a valid embedding model profile", () => {
     const settings = migrateSettings({
       indexProfiles: [
         {
@@ -125,18 +106,40 @@ describe("Ixplorer settings", () => {
           indexFolder: ".ixplorer/notes",
           includeFolders: ["Notes"],
           excludeGlobs: [],
-          embeddingProviderBaseUrl: "http://localhost:11434",
-          embeddingModel: "nomic",
-          chunkSize: 600,
-          chunkOverlap: 0,
+          embeddingModelProfileId: "missing",
         },
       ],
     });
 
     expect(getActiveIndexProfile(settings)).toMatchObject({
-      chunkSize: 600,
-      chunkOverlap: 0,
+      id: "notes",
+      isSuspended: true,
+      suspendedReason: "Select an embedding model profile.",
     });
+  });
+
+  it("activates the first non-suspended chat model when active is invalid", () => {
+    const settings = migrateSettings({
+      serverProfiles: [
+        {
+          id: "server-a",
+          name: "Server A",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://example.com/v1",
+        },
+      ],
+      chatModelProfiles: [
+        { id: "chat-a", name: "Chat A", serverProfileId: "missing", modelName: "model-a" },
+        { id: "chat-b", name: "Chat B", serverProfileId: "server-a", modelName: "model-b" },
+      ],
+      activeChatModelProfileId: "chat-a",
+    });
+
+    expect(settings.activeChatModelProfileId).toBe("chat-b");
+  });
+
+  it("allows disabled chunk overlap and clamps overlap to chunk size", () => {
+    const settings = migrateSettings({});
 
     updateActiveIndexProfile(settings, { chunkSize: 100, chunkOverlap: 200 });
 
@@ -146,21 +149,28 @@ describe("Ixplorer settings", () => {
     });
   });
 
-  it("falls back when saved settings are malformed", () => {
+  it("normalizes state when an embedding model becomes available", () => {
     const settings = migrateSettings({
-      includeFolders: [],
-      excludeGlobs: [1, false],
-      duckDuckGoEnabled: "yes",
-      debugMode: "yes",
+      serverProfiles: [
+        {
+          id: "server-a",
+          name: "Server A",
+          apiFormat: "ollama",
+          baseUrl: "http://localhost:11434",
+        },
+      ],
+      embeddingModelProfiles: [
+        { id: "embed-a", name: "Embed A", serverProfileId: "server-a", modelName: "nomic" },
+      ],
     });
 
-    expect(settings.chatModelProviderBaseUrl).toBe(DEFAULT_SETTINGS.chatModelProviderBaseUrl);
-    expect(settings.embeddingProviderBaseUrl).toBe(DEFAULT_SETTINGS.embeddingProviderBaseUrl);
-    expect(settings.includeFolders).toEqual(DEFAULT_SETTINGS.includeFolders);
-    expect(settings.excludeGlobs).toEqual(DEFAULT_SETTINGS.excludeGlobs);
-    expect(settings.duckDuckGoEnabled).toBe(false);
-    expect(settings.showChatIndexControl).toBe(true);
-    expect(settings.debugMode).toBe(false);
+    updateActiveIndexProfile(settings, { embeddingModelProfileId: "embed-a" });
+    normalizeSettingsState(settings);
+
+    expect(getActiveIndexProfile(settings)).toMatchObject({
+      embeddingModelProfileId: "embed-a",
+      isSuspended: false,
+    });
   });
 
   it("normalizes editable list text", () => {

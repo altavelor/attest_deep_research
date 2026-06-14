@@ -1,6 +1,7 @@
 import { formatCitation } from "../retrieval/citations";
 import {
   ChatModelProvider,
+  ChatRequest,
   Citation,
   RetrievedChunk,
   SearchProvider,
@@ -26,6 +27,7 @@ export interface WebResearchPipelineOptions {
   searchProvider?: SearchProvider;
   chatModel: ChatModelProvider;
   chatModelName: string;
+  chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   evidenceLimit: number;
   onDiagnostic?: (diagnostic: WebResearchDiagnostic) => void;
 }
@@ -52,12 +54,14 @@ export class WebResearchPipeline {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly evidenceLimit: number;
+  private readonly chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   private readonly onDiagnostic?: (diagnostic: WebResearchDiagnostic) => void;
 
   constructor(options: WebResearchPipelineOptions) {
     this.searchProvider = options.searchProvider;
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
+    this.chatOptions = options.chatOptions;
     this.evidenceLimit = options.evidenceLimit;
     this.onDiagnostic = options.onDiagnostic;
   }
@@ -102,6 +106,7 @@ export class WebResearchPipeline {
       this.chatModel.streamChat({
         model: this.chatModelName,
         temperature: 0,
+        maxTokens: this.chatOptions?.maxTokens,
         messages: [
           {
             role: "system",

@@ -23,6 +23,7 @@ import {
 import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./ChatTranscript";
 import { CitationPopoverController } from "./CitationPopover";
+import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
@@ -42,14 +43,15 @@ import {
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
 export interface IxplorerChatViewServices {
-  createResearchService(): ResearchService;
+  createResearchService(chatModelProfileId?: string): ResearchService;
   getIndexingState?(): IndexingState | undefined;
   subscribeToIndexingState?(listener: (state: IndexingState) => void): () => void;
   indexingActions?: IndexControlActions;
   isWebSearchEnabled(): boolean;
   getChatModel(): string;
-  setChatModel(model: string): Promise<void>;
+  setChatModel(modelProfileId: string): Promise<void>;
   getAvailableChatModels(): string[];
+  getChatModelProfiles(): ChatModelSelectOption[];
   getIndexProfiles(): Array<{ id: string; name: string }>;
   searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
   listSavedChats(): Promise<SavedChatSummary[]>;
@@ -92,7 +94,7 @@ export class IxplorerChatView extends ItemView {
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
-  private modelInputEl: HTMLInputElement | null = null;
+  private modelInputEl: HTMLSelectElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private submitButtonTooltipEl: HTMLElement | null = null;
   private searchModeEl: HTMLSelectElement | null = null;
@@ -133,10 +135,11 @@ export class IxplorerChatView extends ItemView {
         this.lastAnswer = answer;
       },
       getModelInputValue: () => this.modelInputEl?.value ?? "",
-      getCurrentModel: () => this.currentChatSettings.model,
+      getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
       updateChatModel: (model) => this.updateChatModel(model),
       saveCurrentChat: () => this.saveCurrentChat(),
-      createResearchService: () => this.services.createResearchService(),
+      createResearchService: () =>
+        this.services.createResearchService(this.currentChatSettings.chatModelProfileId),
       getSearchMode: () => this.getSearchMode(),
       isDeepResearchEnabled: () => this.isDeepResearchEnabled(),
       getContextPaths: () => this.attachedContextPaths,
@@ -207,7 +210,7 @@ export class IxplorerChatView extends ItemView {
 
     this.composerRefs = renderChatComposer(chatPanel, {
       settings: this.currentChatSettings,
-      availableModels: this.services.getAvailableChatModels(),
+      availableModels: this.services.getChatModelProfiles(),
       onSubmit: () => void this.researchController.submitQuestion(),
       onStop: () => {
         this.researchController.stopRunningQuestion();
@@ -517,15 +520,17 @@ export class IxplorerChatView extends ItemView {
   }
 
   private async updateChatModel(model: string): Promise<void> {
-    const normalizedModel = model.trim();
+    const normalizedModel = model.trim() || this.createDefaultChatSettings().chatModelProfileId;
     this.currentChatSettings = {
       ...this.currentChatSettings,
-      model: normalizedModel || this.createDefaultChatSettings().model,
+      chatModelProfileId: normalizedModel,
     };
-    if (this.modelInputEl && this.modelInputEl.value !== this.currentChatSettings.model) {
-      this.modelInputEl.value = this.currentChatSettings.model;
+    if (
+      this.modelInputEl &&
+      this.modelInputEl.value !== this.currentChatSettings.chatModelProfileId
+    ) {
+      this.modelInputEl.value = this.currentChatSettings.chatModelProfileId;
     }
-    await this.services.setChatModel(this.currentChatSettings.model);
     await this.saveCurrentChat();
   }
 
@@ -541,7 +546,8 @@ export class IxplorerChatView extends ItemView {
 
   private createDefaultChatSettings(): SavedChatSettings {
     return {
-      model: this.services.getChatModel(),
+      chatModelProfileId:
+        this.services.getChatModelProfiles().find((profile) => !profile.isSuspended)?.id ?? "",
       searchMode: "indexOnly",
       deepResearch: false,
     };
@@ -551,7 +557,11 @@ export class IxplorerChatView extends ItemView {
     const defaults = this.createDefaultChatSettings();
 
     return {
-      model: settings?.model.trim() || defaults.model,
+      chatModelProfileId: resolveAvailableChatModelProfileId(
+        this.services.getChatModelProfiles(),
+        settings?.chatModelProfileId,
+        defaults.chatModelProfileId,
+      ),
       searchMode: settings?.searchMode ?? defaults.searchMode,
       deepResearch: settings?.deepResearch ?? defaults.deepResearch,
     };
@@ -694,6 +704,10 @@ export class IxplorerChatView extends ItemView {
   }
 
   private getSearchUnavailableMessage(): string | null {
+    if (!this.currentChatSettings.chatModelProfileId) {
+      return "Create and select a chat model profile in Ixplorer settings.";
+    }
+
     return this.getSearchMode() !== "indexOnly" && !this.services.isWebSearchEnabled()
       ? "Enable web search in Ixplorer settings to use this search mode."
       : null;
@@ -746,6 +760,22 @@ function readOptionalNumber(value: string | undefined): number | undefined {
   const parsed = Number.parseFloat(value.replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function resolveAvailableChatModelProfileId(
+  profiles: ChatModelSelectOption[],
+  requestedId: string | undefined,
+  fallbackId: string,
+): string {
+  if (requestedId && profiles.some((profile) => profile.id === requestedId && !profile.isSuspended)) {
+    return requestedId;
+  }
+
+  if (fallbackId && profiles.some((profile) => profile.id === fallbackId && !profile.isSuspended)) {
+    return fallbackId;
+  }
+
+  return profiles.find((profile) => !profile.isSuspended)?.id ?? "";
 }
 
 function normalizeExtensionFilter(value: string): string | undefined {

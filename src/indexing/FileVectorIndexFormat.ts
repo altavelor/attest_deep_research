@@ -18,8 +18,9 @@ export interface IndexProfile {
   indexFolder: string;
   includeFolders: string[];
   excludeGlobs: string[];
-  embeddingModel: string;
-  embeddingProviderBaseUrl: string;
+  embeddingModelProfileId: string;
+  isSuspended?: boolean;
+  suspendedReason?: string;
   sourceKinds?: Array<SourceReference["kind"]>;
   refreshMode: "manual" | "onStartup" | "onVaultChange";
   shardCount: typeof DEFAULT_FILE_VECTOR_SHARD_COUNT;
