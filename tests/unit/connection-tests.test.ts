@@ -1,184 +1,138 @@
 import {
-  ConnectionClientFactories,
-  createConnectionClientFactories,
-  detectLocalModelProvider,
-  localModelProviderLabel,
-  refreshChatModels,
-  refreshEmbeddingModels,
-  testChatConnection,
-  testEmbeddingConnection,
+  apiFormatLabel,
+  fetchAvailableModels,
+  verifyEmbeddingCapability,
 } from "../../src/settings/connectionTests";
-import { DEFAULT_SETTINGS, IxplorerSettings } from "../../src/settings/settings";
-import { IxplorerError } from "../../src/shared/errors";
+import { ServerProfile } from "../../src/settings/settings";
 
-function settings(overrides: Partial<IxplorerSettings>): IxplorerSettings {
-  return { ...DEFAULT_SETTINGS, ...overrides };
+function jsonResponse(body: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status: 200,
+    ...init,
+  });
 }
 
-function factories(options: {
-  chatModels?: string[];
-  embeddingModels?: string[];
-  chatError?: unknown;
-  embeddingError?: unknown;
-}): ConnectionClientFactories {
+function server(overrides: Partial<ServerProfile>): ServerProfile {
   return {
-    createChatClient: () => ({
-      listModels: async () => {
-        if (options.chatError) {
-          throw options.chatError;
-        }
-        return options.chatModels ?? [];
-      },
-      streamChat: () => {
-        throw new Error("streamChat is not used by connection tests");
-      },
-    }),
-    createEmbeddingClient: () => ({
-      listModels: async () => {
-        if (options.embeddingError) {
-          throw options.embeddingError;
-        }
-        return options.embeddingModels ?? [];
-      },
-      embed: async () => {
-        throw new Error("embed is not used by connection tests");
-      },
-    }),
+    id: "server-a",
+    name: "Server A",
+    apiFormat: "openai-compatible",
+    baseUrl: "http://localhost:1234/v1",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
   };
 }
 
-describe("connection tests", () => {
-  it("detects LM Studio from OpenAI-compatible /v1 URLs", () => {
-    expect(detectLocalModelProvider("http://localhost:1234/v1")).toBe("lmStudio");
-    expect(detectLocalModelProvider("http://localhost:1234/v1/")).toBe("lmStudio");
+describe("model discovery", () => {
+  it("formats API format labels", () => {
+    expect(apiFormatLabel("openai-compatible")).toBe("OpenAI-compatible");
+    expect(apiFormatLabel("ollama")).toBe("Ollama");
+    expect(apiFormatLabel("anthropic")).toBe("Anthropic");
   });
 
-  it("detects Ollama from root or /api URLs", () => {
-    expect(detectLocalModelProvider("http://localhost:11434")).toBe("ollama");
-    expect(detectLocalModelProvider("http://localhost:11434/api")).toBe("ollama");
-  });
+  it("fetches OpenAI-compatible chat models with default capabilities", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "qwen3" }] }));
 
-  it("formats provider display labels", () => {
-    expect(localModelProviderLabel("lmStudio")).toBe("LM Studio");
-    expect(localModelProviderLabel("ollama")).toBe("Ollama");
-  });
-
-  it("refreshes chat models without validating the configured model", async () => {
-    const result = await refreshChatModels(
-      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1", chatModel: "missing" }),
-      factories({ chatModels: ["qwen3"] }),
-    );
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
 
     expect(result).toEqual({
       ok: true,
-      message: "Connected to chat provider. Found 1 model.",
-      models: ["qwen3"],
+      message: "Connected to OpenAI-compatible. Found 1 model.",
+      models: [
+        {
+          id: "qwen3",
+          name: "qwen3",
+          capabilities: {
+            chat: true,
+            embeddings: false,
+            temperature: true,
+            maxTokens: true,
+            detectionSource: "format-default",
+          },
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:1234/v1/models", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
     });
   });
 
-  it("refreshes embedding models without validating the configured model", async () => {
-    const result = await refreshEmbeddingModels(
-      settings({
-        embeddingProviderBaseUrl: "http://localhost:11434",
-        embeddingModel: "missing",
-      }),
-      factories({ embeddingModels: ["embeddinggemma"] }),
+  it("fetches Ollama models as chat and embedding capable by default", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ models: [{ name: "embeddinggemma" }] }));
+
+    const result = await fetchAvailableModels(
+      server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
+      { fetch: fetchMock },
     );
 
-    expect(result).toEqual({
-      ok: true,
-      message: "Connected to embedding provider. Found 1 model.",
-      models: ["embeddinggemma"],
+    expect(result.models[0]).toMatchObject({
+      id: "embeddinggemma",
+      capabilities: { chat: true, embeddings: true },
+    });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
     });
   });
 
-  it("logs provider HTTP failures when connection tests create real clients", async () => {
+  it("fetches Anthropic models as chat-only", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "claude-sonnet" }] }));
+
+    const result = await fetchAvailableModels(
+      server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
+      { fetch: fetchMock },
+    );
+
+    expect(result.models[0]).toMatchObject({
+      id: "claude-sonnet",
+      capabilities: { chat: true, embeddings: false, maxTokens: true },
+    });
+  });
+
+  it("reports fetch failures without returning models", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-    const logger = {
-      logRequest: vi.fn(),
-      logResponse: vi.fn(),
-      logError: vi.fn(),
-    };
 
-    const result = await testChatConnection(
-      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1" }),
-      createConnectionClientFactories({ fetch: fetchMock, logger }),
-    );
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
 
     expect(result).toMatchObject({
       ok: false,
       message: "The local model provider is unavailable.",
       models: [],
     });
-    expect(logger.logRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "http://localhost:1234/v1/models",
-        method: "GET",
-      }),
-    );
-    expect(logger.logError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "MODEL_PROVIDER_UNAVAILABLE" }),
-      expect.objectContaining({
-        url: "http://localhost:1234/v1/models",
-        method: "GET",
-      }),
-    );
   });
 
-  it("reports successful chat connection with configured model", async () => {
-    const result = await testChatConnection(
-      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1", chatModel: "qwen3" }),
-      factories({ chatModels: ["qwen3", "gemma"] }),
-    );
-
-    expect(result).toEqual({
-      ok: true,
-      message: "Connected to chat provider. Found 2 models.",
-      models: ["qwen3", "gemma"],
-    });
-  });
-
-  it("reports missing configured chat model", async () => {
-    const result = await testChatConnection(
-      settings({ chatModelProviderBaseUrl: "http://localhost:1234/v1", chatModel: "missing" }),
-      factories({ chatModels: ["qwen3"] }),
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      message: "The configured model is not available.",
-      models: ["qwen3"],
-    });
-  });
-
-  it("reports successful embedding connection with configured model", async () => {
-    const result = await testEmbeddingConnection(
-      settings({
-        embeddingProviderBaseUrl: "http://localhost:11434",
-        embeddingModel: "embeddinggemma",
-      }),
-      factories({ embeddingModels: ["embeddinggemma"] }),
-    );
-
-    expect(result).toEqual({
-      ok: true,
-      message: "Connected to embedding provider. Found 1 model.",
-      models: ["embeddinggemma"],
-    });
-  });
-
-  it("maps provider failures to user-safe messages", async () => {
-    const result = await testEmbeddingConnection(
-      settings({ embeddingProviderBaseUrl: "http://localhost:11434" }),
-      factories({
-        embeddingError: new IxplorerError({ code: "EMBEDDING_UNAVAILABLE" }),
+  it("verifies embedding capability with a smoke embedding request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        model: "text-embedding",
+        data: [{ embedding: [0.1, 0.2] }],
       }),
     );
 
-    expect(result).toEqual({
-      ok: false,
-      message: "The embedding provider is unavailable.",
-      models: [],
-    });
+    await expect(
+      verifyEmbeddingCapability(server({}), "text-embedding", { fetch: fetchMock }),
+    ).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:1234/v1/embeddings",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("does not verify Anthropic embedding capability", async () => {
+    const fetchMock = vi.fn();
+
+    await expect(
+      verifyEmbeddingCapability(
+        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
+        "claude-sonnet",
+        { fetch: fetchMock },
+      ),
+    ).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

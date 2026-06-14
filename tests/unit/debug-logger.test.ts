@@ -14,7 +14,20 @@ describe("PluginDebugLogger", () => {
     const debug = vi.fn();
     const error = vi.fn();
     const logger = new PluginDebugLogger({
-      getSettings: () => createSettings({ debugMode: true, chatModel: "qwen3" }),
+      getSettings: () =>
+        createSettings({
+          debugMode: true,
+          chatModelProfiles: [
+            {
+              id: "chat-qwen",
+              name: "Qwen",
+              serverProfileId: "server-a",
+              modelName: "qwen3",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        }),
       console: { debug, error },
     });
 
@@ -33,7 +46,7 @@ describe("PluginDebugLogger", () => {
     expect(debug.mock.calls[0][1]).toMatchObject({
       url: "http://localhost:1234/v1/models",
       method: "GET",
-      settings: expect.objectContaining({ debugMode: true, chatModel: "qwen3" }),
+      settings: expect.objectContaining({ debugMode: true }),
     });
     expect(error).not.toHaveBeenCalled();
   });
@@ -91,7 +104,20 @@ describe("PluginDebugLogger", () => {
     const debug = vi.fn();
     const error = vi.fn();
     const logger = new PluginDebugLogger({
-      getSettings: () => createSettings({ debugMode: false, embeddingModel: "nomic" }),
+      getSettings: () =>
+        createSettings({
+          debugMode: false,
+          embeddingModelProfiles: [
+            {
+              id: "embed-nomic",
+              name: "Nomic",
+              serverProfileId: "server-a",
+              modelName: "nomic",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        }),
       console: { debug, error },
     });
 
@@ -117,7 +143,7 @@ describe("PluginDebugLogger", () => {
         code: "EMBEDDING_UNAVAILABLE",
         message: "Embedding provider failed.",
       },
-      settings: expect.objectContaining({ debugMode: false, embeddingModel: "nomic" }),
+      settings: expect.objectContaining({ debugMode: false }),
     });
   });
 });

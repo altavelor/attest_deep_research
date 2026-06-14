@@ -2,6 +2,7 @@ import { RetrievalResult } from "../retrieval/RetrievalService";
 import { QueryExpansionService } from "../retrieval/QueryExpansionService";
 import {
   ChatModelProvider,
+  ChatRequest,
   Citation,
   ResearchAnswer,
   RetrievedChunk,
@@ -23,6 +24,7 @@ export interface ResearchServiceOptions {
   retriever: ResearchRetriever;
   chatModel: ChatModelProvider;
   chatModelName: string;
+  chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   searchProvider?: SearchProvider;
   queryExpansion?: QueryExpansionService;
   evidenceLimit?: number;
@@ -41,7 +43,10 @@ export class ResearchService {
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
-    const temperature = options.temperature ?? DEFAULT_TEMPERATURE;
+    const chatOptions = {
+      temperature: options.chatOptions?.temperature ?? options.temperature ?? DEFAULT_TEMPERATURE,
+      maxTokens: options.chatOptions?.maxTokens,
+    };
     const now = options.now ?? (() => new Date());
 
     this.vaultPipeline = new VaultResearchPipeline({
@@ -53,12 +58,13 @@ export class ResearchService {
       searchProvider: options.searchProvider,
       chatModel: options.chatModel,
       chatModelName: options.chatModelName,
+      chatOptions,
       evidenceLimit: this.evidenceLimit,
     });
     this.answerSynthesis = new AnswerSynthesisService({
       chatModel: options.chatModel,
       chatModelName: options.chatModelName,
-      temperature,
+      chatOptions,
       now,
       persistFinalAnswer: options.persistFinalAnswer,
     });

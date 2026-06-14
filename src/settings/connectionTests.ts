@@ -1,176 +1,192 @@
-import { ChatModelClient } from "../client/chat/ChatModelClient";
 import { EmbeddingClient } from "../client/embeddings/EmbeddingClient";
+import { ProviderHttpClient } from "../client/common/http";
+import {
+  isOllamaTagsResponse,
+  isOpenAiModelsResponse,
+  modelNamesFromOllamaTags,
+  modelNamesFromOpenAiModels,
+} from "../client/common/models";
 import { toUserMessage } from "../shared/errors";
-import { ChatModelProvider, EmbeddingProviderClient, LocalModelProvider } from "../shared/types";
+import { ApiFormat } from "../shared/types";
 import type { PluginRequestLogger } from "./debugLogger";
-import { IxplorerSettings } from "./settings";
+import { ModelCapability, ServerProfile } from "./settings";
 
-export interface ConnectionTestResult {
+export interface DiscoveredModel {
+  id: string;
+  name: string;
+  capabilities: ModelCapability;
+}
+
+export interface ModelDiscoveryResult {
   ok: boolean;
   message: string;
-  models: string[];
+  models: DiscoveredModel[];
 }
 
-export interface ConnectionClientFactories {
-  createChatClient(settings: IxplorerSettings): ChatModelProvider;
-  createEmbeddingClient(settings: IxplorerSettings): EmbeddingProviderClient;
-}
-
-export interface ConnectionClientFactoryOptions {
+export interface ModelDiscoveryOptions {
   fetch?: typeof fetch;
   logger?: PluginRequestLogger;
   timeoutMs?: number;
 }
 
-export const DEFAULT_CONNECTION_CLIENT_FACTORIES = createConnectionClientFactories();
+export function apiFormatLabel(apiFormat: ApiFormat): string {
+  switch (apiFormat) {
+    case "anthropic":
+      return "Anthropic";
+    case "ollama":
+      return "Ollama";
+    case "openai-compatible":
+      return "OpenAI-compatible";
+  }
+}
 
-export function createConnectionClientFactories(
-  options: ConnectionClientFactoryOptions = {},
-): ConnectionClientFactories {
+export async function fetchAvailableModels(
+  serverProfile: ServerProfile,
+  options: ModelDiscoveryOptions = {},
+): Promise<ModelDiscoveryResult> {
+  try {
+    const models =
+      serverProfile.apiFormat === "ollama"
+        ? await fetchOllamaModels(serverProfile, options)
+        : serverProfile.apiFormat === "anthropic"
+          ? await fetchAnthropicModels(serverProfile, options)
+          : await fetchOpenAiCompatibleModels(serverProfile, options);
+
+    return {
+      ok: true,
+      message: modelCountMessage(apiFormatLabel(serverProfile.apiFormat), models.length),
+      models,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: toUserMessage(error),
+      models: [],
+    };
+  }
+}
+
+export async function verifyEmbeddingCapability(
+  serverProfile: ServerProfile,
+  modelName: string,
+  options: ModelDiscoveryOptions = {},
+): Promise<boolean> {
+  if (serverProfile.apiFormat === "anthropic") {
+    return false;
+  }
+
+  try {
+    const client = new EmbeddingClient({
+      apiFormat: serverProfile.apiFormat,
+      baseUrl: serverProfile.baseUrl,
+      apiKey: serverProfile.apiKey,
+      fetch: options.fetch,
+      logger: options.logger,
+      timeoutMs: options.timeoutMs,
+    });
+    await client.embed({ model: modelName, input: ["capability probe"] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchOpenAiCompatibleModels(
+  serverProfile: ServerProfile,
+  options: ModelDiscoveryOptions,
+): Promise<DiscoveredModel[]> {
+  const http = createDiscoveryHttp(serverProfile, options);
+  const response = await http.request("/models", { method: "GET" });
+  const body = await http.readJson(response, "The model provider returned invalid JSON.");
+
+  if (!isOpenAiModelsResponse(body)) {
+    throw new Error("The model provider returned an invalid models response.");
+  }
+
+  return modelNamesFromOpenAiModels(body).map((name) => ({
+    id: name,
+    name,
+    capabilities: openAiCompatibleDefaultCapability(),
+  }));
+}
+
+async function fetchAnthropicModels(
+  serverProfile: ServerProfile,
+  options: ModelDiscoveryOptions,
+): Promise<DiscoveredModel[]> {
+  const http = createDiscoveryHttp(serverProfile, options);
+  const response = await http.request("/models", {
+    method: "GET",
+    headers: { "anthropic-version": "2023-06-01" },
+  });
+  const body = await http.readJson(response, "Anthropic returned invalid JSON.");
+
+  if (!isOpenAiModelsResponse(body)) {
+    throw new Error("Anthropic returned an invalid models response.");
+  }
+
+  return modelNamesFromOpenAiModels(body).map((name) => ({
+    id: name,
+    name,
+    capabilities: {
+      chat: true,
+      embeddings: false,
+      temperature: true,
+      maxTokens: true,
+      detectionSource: "format-default",
+    },
+  }));
+}
+
+async function fetchOllamaModels(
+  serverProfile: ServerProfile,
+  options: ModelDiscoveryOptions,
+): Promise<DiscoveredModel[]> {
+  const http = createDiscoveryHttp(serverProfile, options);
+  const response = await http.request("/tags", { method: "GET" });
+  const body = await http.readJson(response, "Ollama returned invalid JSON.");
+
+  if (!isOllamaTagsResponse(body)) {
+    throw new Error("Ollama returned an invalid tags response.");
+  }
+
+  return modelNamesFromOllamaTags(body).map((name) => ({
+    id: name,
+    name,
+    capabilities: {
+      chat: true,
+      embeddings: true,
+      temperature: true,
+      maxTokens: true,
+      detectionSource: "format-default",
+    },
+  }));
+}
+
+function createDiscoveryHttp(
+  serverProfile: ServerProfile,
+  options: ModelDiscoveryOptions,
+): ProviderHttpClient {
+  return new ProviderHttpClient({
+    apiFormat: serverProfile.apiFormat,
+    baseUrl: serverProfile.baseUrl,
+    apiKey: serverProfile.apiKey,
+    fetch: options.fetch,
+    logger: options.logger,
+    timeoutMs: options.timeoutMs,
+    unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
+    unavailableMessage: "The model provider is unavailable.",
+  });
+}
+
+function openAiCompatibleDefaultCapability(): ModelCapability {
   return {
-    createChatClient(settings) {
-      return new ChatModelClient({
-        provider: detectLocalModelProvider(settings.chatModelProviderBaseUrl),
-        baseUrl: settings.chatModelProviderBaseUrl,
-        fetch: options.fetch,
-        logger: options.logger,
-        timeoutMs: options.timeoutMs,
-      });
-    },
-    createEmbeddingClient(settings) {
-      return new EmbeddingClient({
-        provider: detectLocalModelProvider(settings.embeddingProviderBaseUrl),
-        baseUrl: settings.embeddingProviderBaseUrl,
-        fetch: options.fetch,
-        logger: options.logger,
-        timeoutMs: options.timeoutMs,
-      });
-    },
+    chat: true,
+    embeddings: false,
+    temperature: true,
+    maxTokens: true,
+    detectionSource: "format-default",
   };
-}
-
-export function detectLocalModelProvider(baseUrl: string): LocalModelProvider {
-  const normalized = baseUrl.trim().replace(/\/+$/, "");
-  return normalized.endsWith("/v1") ? "lmStudio" : "ollama";
-}
-
-export function localModelProviderLabel(provider: LocalModelProvider): string {
-  return provider === "lmStudio" ? "LM Studio" : "Ollama";
-}
-
-export async function refreshChatModels(
-  settings: IxplorerSettings,
-  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
-): Promise<ConnectionTestResult> {
-  try {
-    const models = await factories.createChatClient(settings).listModels();
-
-    return {
-      ok: true,
-      message: modelCountMessage("chat provider", models.length),
-      models,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: toUserMessage(error),
-      models: [],
-    };
-  }
-}
-
-export async function refreshEmbeddingModels(
-  settings: IxplorerSettings,
-  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
-): Promise<ConnectionTestResult> {
-  try {
-    const models = await factories.createEmbeddingClient(settings).listModels();
-
-    return {
-      ok: true,
-      message: modelCountMessage("embedding provider", models.length),
-      models,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: toUserMessage(error),
-      models: [],
-    };
-  }
-}
-
-export async function testChatConnection(
-  settings: IxplorerSettings,
-  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
-): Promise<ConnectionTestResult> {
-  try {
-    const models = await factories.createChatClient(settings).listModels();
-    const missingModel = getMissingConfiguredModel(settings.chatModel, models);
-
-    if (missingModel) {
-      return {
-        ok: false,
-        message: "The configured model is not available.",
-        models,
-      };
-    }
-
-    return {
-      ok: true,
-      message: modelCountMessage("chat provider", models.length),
-      models,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: toUserMessage(error),
-      models: [],
-    };
-  }
-}
-
-export async function testEmbeddingConnection(
-  settings: IxplorerSettings,
-  factories: ConnectionClientFactories = DEFAULT_CONNECTION_CLIENT_FACTORIES,
-): Promise<ConnectionTestResult> {
-  try {
-    const models = await factories.createEmbeddingClient(settings).listModels();
-    const missingModel = getMissingConfiguredModel(settings.embeddingModel, models);
-
-    if (missingModel) {
-      return {
-        ok: false,
-        message: "The configured model is not available.",
-        models,
-      };
-    }
-
-    return {
-      ok: true,
-      message: modelCountMessage("embedding provider", models.length),
-      models,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: toUserMessage(error),
-      models: [],
-    };
-  }
-}
-
-function getMissingConfiguredModel(
-  configuredModel: string,
-  availableModels: string[],
-): string | null {
-  const model = configuredModel.trim();
-
-  if (!model) {
-    return null;
-  }
-
-  return availableModels.includes(model) ? null : model;
 }
 
 function modelCountMessage(providerLabel: string, count: number): string {

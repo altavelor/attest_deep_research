@@ -1,10 +1,11 @@
 import { IxplorerError, IxplorerErrorCode } from "../../shared/errors";
-import { LocalModelProvider } from "../../shared/types";
+import { ApiFormat } from "../../shared/types";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 
 export interface ProviderHttpClientOptions {
-  provider: LocalModelProvider;
+  apiFormat: ApiFormat;
   baseUrl: string;
+  apiKey?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
@@ -23,9 +24,11 @@ export class ProviderHttpClient {
   private readonly responseContexts = new WeakMap<Response, ReturnType<typeof createLogContext>>();
   private readonly unavailableCode: ProviderHttpClientOptions["unavailableCode"];
   private readonly unavailableMessage: string;
+  private readonly apiKey?: string;
 
   constructor(options: ProviderHttpClientOptions) {
-    this.baseUrl = normalizeProviderBaseUrl(options.provider, options.baseUrl);
+    this.baseUrl = normalizeProviderBaseUrl(options.apiFormat, options.baseUrl);
+    this.apiKey = options.apiKey;
     this.fetchImpl = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.logger = options.logger;
@@ -38,13 +41,14 @@ export class ProviderHttpClient {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
-    const logContext = createLogContext(url, method, init);
+    const requestInit = withAuthorization(init, this.apiKey);
+    const logContext = createLogContext(url, method, requestInit);
 
     try {
       this.logger?.logRequest(logContext);
 
       const response = await this.fetchImpl.call(globalThis, url, {
-        ...init,
+        ...requestInit,
         signal: controller.signal,
       });
       this.responseContexts.set(response, logContext);
@@ -114,23 +118,54 @@ export class ProviderHttpClient {
   }
 }
 
-function normalizeProviderBaseUrl(provider: LocalModelProvider, baseUrl: string): string {
+function normalizeProviderBaseUrl(apiFormat: ApiFormat, baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, "");
 
-  if (provider === "ollama" && !trimmed.endsWith("/api")) {
+  if (apiFormat === "ollama" && !trimmed.endsWith("/api")) {
     return `${trimmed}/api`;
   }
 
   return trimmed;
 }
 
+function withAuthorization(init: RequestInit, apiKey: string | undefined): RequestInit {
+  if (!apiKey) {
+    return init;
+  }
+
+  return {
+    ...init,
+    headers: {
+      ...headersToRecord(init.headers),
+      Authorization: `Bearer ${apiKey}`,
+    },
+  };
+}
+
 function createLogContext(url: string, method: string, init: RequestInit) {
   return {
     url,
     method,
-    headers: headersToRecord(init.headers),
+    headers: redactHeaders(headersToRecord(init.headers)),
     requestBody: summarizeBody(init.body),
   };
+}
+
+function redactHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      key.toLowerCase() === "authorization" || key.toLowerCase().includes("api-key")
+        ? "[redacted]"
+        : value,
+    ]),
+  );
 }
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {

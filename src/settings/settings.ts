@@ -1,20 +1,71 @@
 import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "../extractors/common";
 import {
-  DEFAULT_FILE_VECTOR_SHARD_COUNT,
   DEFAULT_EMBEDDING_BATCH_SIZE,
+  DEFAULT_FILE_VECTOR_SHARD_COUNT,
   DEFAULT_KEYWORD_MIN_TOKEN_LENGTH,
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "../indexing/FileVectorIndexStore";
+import { ApiFormat } from "../shared/types";
 import { isRecord } from "../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
 
+export interface ServerProfile {
+  id: string;
+  name: string;
+  apiFormat: ApiFormat;
+  baseUrl: string;
+  apiKey?: string;
+  isSuspended?: boolean;
+  suspendedReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModelCapability {
+  chat: boolean;
+  embeddings: boolean;
+  vision?: boolean;
+  tools?: boolean;
+  temperature?: boolean;
+  maxTokens?: boolean;
+  contextLength?: number;
+  maxOutputTokens?: number;
+  detectionSource: "metadata" | "probe" | "format-default";
+}
+
+export interface ChatModelProfile {
+  id: string;
+  name: string;
+  serverProfileId: string;
+  modelName: string;
+  temperature?: number;
+  maxTokens?: number;
+  capabilities?: ModelCapability;
+  isSuspended?: boolean;
+  suspendedReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmbeddingModelProfile {
+  id: string;
+  name: string;
+  serverProfileId: string;
+  modelName: string;
+  capabilities?: ModelCapability;
+  isSuspended?: boolean;
+  suspendedReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IxplorerSettings {
-  chatModelProviderBaseUrl: string;
-  chatModel: string;
-  embeddingProviderBaseUrl: string;
-  embeddingModel: string;
+  serverProfiles: ServerProfile[];
+  chatModelProfiles: ChatModelProfile[];
+  embeddingModelProfiles: EmbeddingModelProfile[];
+  activeChatModelProfileId: string;
   lanceDbFolder: string;
   activeIndexProfileId: string;
   indexProfiles: IndexProfile[];
@@ -27,6 +78,7 @@ export interface IxplorerSettings {
 
 export const DEFAULT_INDEX_PROFILE_ID = "default";
 export const DEFAULT_INDEX_FOLDER = ".ixplorer/index";
+export const DEFAULT_ANTHROPIC_MAX_TOKENS = 4096;
 const DEFAULT_PROFILE_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
@@ -35,8 +87,9 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   indexFolder: DEFAULT_INDEX_FOLDER,
   includeFolders: ["/"],
   excludeGlobs: [".obsidian/**", ".trash/**", ".ixplorer/**"],
-  embeddingModel: "",
-  embeddingProviderBaseUrl: "http://localhost:11434",
+  embeddingModelProfileId: "",
+  isSuspended: true,
+  suspendedReason: "Select an embedding model profile.",
   refreshMode: "manual",
   shardCount: DEFAULT_FILE_VECTOR_SHARD_COUNT,
   chunkSize: DEFAULT_CHUNK_LENGTH,
@@ -54,10 +107,10 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
 };
 
 export const DEFAULT_SETTINGS: IxplorerSettings = {
-  chatModelProviderBaseUrl: "http://localhost:1234/v1",
-  chatModel: "",
-  embeddingProviderBaseUrl: DEFAULT_INDEX_PROFILE.embeddingProviderBaseUrl,
-  embeddingModel: "",
+  serverProfiles: [],
+  chatModelProfiles: [],
+  embeddingModelProfiles: [],
+  activeChatModelProfileId: "",
   lanceDbFolder: DEFAULT_INDEX_FOLDER,
   activeIndexProfileId: DEFAULT_INDEX_PROFILE_ID,
   indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
@@ -101,34 +154,21 @@ export function normalizeVaultFolder(value: string): string {
 
 export function migrateSettings(savedData: unknown): IxplorerSettings {
   const data = isSettingsRecord(savedData) ? savedData : {};
-  const embeddingProviderBaseUrl = normalizeUrl(
-    readString(data.embeddingProviderBaseUrl),
-    DEFAULT_SETTINGS.embeddingProviderBaseUrl,
-  );
-  const embeddingModel = readString(data.embeddingModel);
   const lanceDbFolder = normalizeVaultFolder(readString(data.lanceDbFolder));
   const includeFolders = readStringList(data.includeFolders, DEFAULT_SETTINGS.includeFolders);
   const excludeGlobs = readStringList(data.excludeGlobs, DEFAULT_SETTINGS.excludeGlobs);
-  const indexProfiles = readIndexProfiles(data.indexProfiles, {
-    embeddingProviderBaseUrl,
-    embeddingModel,
-    indexFolder: lanceDbFolder,
-    includeFolders,
-    excludeGlobs,
-  });
-  const activeIndexProfileId = readActiveIndexProfileId(data.activeIndexProfileId, indexProfiles);
-
-  return {
-    chatModelProviderBaseUrl: normalizeUrl(
-      readString(data.chatModelProviderBaseUrl),
-      DEFAULT_SETTINGS.chatModelProviderBaseUrl,
-    ),
-    chatModel: readString(data.chatModel),
-    embeddingProviderBaseUrl,
-    embeddingModel,
+  const settings: IxplorerSettings = {
+    serverProfiles: readServerProfiles(data.serverProfiles),
+    chatModelProfiles: readChatModelProfiles(data.chatModelProfiles),
+    embeddingModelProfiles: readEmbeddingModelProfiles(data.embeddingModelProfiles),
+    activeChatModelProfileId: readString(data.activeChatModelProfileId),
     lanceDbFolder,
-    activeIndexProfileId,
-    indexProfiles,
+    activeIndexProfileId: readString(data.activeIndexProfileId),
+    indexProfiles: readIndexProfiles(data.indexProfiles, {
+      indexFolder: lanceDbFolder,
+      includeFolders,
+      excludeGlobs,
+    }),
     includeFolders,
     excludeGlobs,
     duckDuckGoEnabled: data.duckDuckGoEnabled === true,
@@ -138,6 +178,19 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
         : DEFAULT_SETTINGS.showChatIndexControl,
     debugMode: data.debugMode === true,
   };
+
+  settings.activeIndexProfileId = readActiveIndexProfileId(
+    settings.activeIndexProfileId,
+    settings.indexProfiles,
+  );
+  normalizeSettingsState(settings);
+  return settings;
+}
+
+export function normalizeSettingsState(settings: IxplorerSettings): void {
+  markInvalidProfilesSuspended(settings);
+  normalizeActiveChatModel(settings);
+  normalizeIndexProfiles(settings);
 }
 
 export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile {
@@ -156,8 +209,7 @@ export function updateActiveIndexProfile(
       | "indexFolder"
       | "includeFolders"
       | "excludeGlobs"
-      | "embeddingModel"
-      | "embeddingProviderBaseUrl"
+      | "embeddingModelProfileId"
       | "chunkSize"
       | "chunkOverlap"
       | "pdfChunkSize"
@@ -172,22 +224,7 @@ export function updateActiveIndexProfile(
     ...updates,
     updatedAt: new Date().toISOString(),
   };
-  const chunkSize = readPositiveInteger(updatedProfile.chunkSize, DEFAULT_CHUNK_LENGTH);
-  updatedProfile.chunkSize = chunkSize;
-  updatedProfile.chunkOverlap = normalizeChunkOverlap(
-    readNonNegativeInteger(updatedProfile.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
-    chunkSize,
-  );
-  const pdfChunkSize = readPositiveInteger(updatedProfile.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE);
-  updatedProfile.pdfChunkSize = pdfChunkSize;
-  updatedProfile.pdfChunkOverlap = normalizeChunkOverlap(
-    readNonNegativeInteger(updatedProfile.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
-    pdfChunkSize,
-  );
-  updatedProfile.embeddingBatchSize = readPositiveInteger(
-    updatedProfile.embeddingBatchSize,
-    DEFAULT_EMBEDDING_BATCH_SIZE,
-  );
+  normalizeIndexProfileNumbers(updatedProfile);
   const index = settings.indexProfiles.findIndex((candidate) => candidate.id === profile.id);
 
   if (index >= 0) {
@@ -196,54 +233,312 @@ export function updateActiveIndexProfile(
     settings.indexProfiles = [updatedProfile];
     settings.activeIndexProfileId = updatedProfile.id;
   }
+
+  normalizeSettingsState(settings);
 }
 
-function isSettingsRecord(value: unknown): value is Record<string, unknown> {
-  return isRecord(value);
+export function getActiveChatModelProfile(
+  settings: IxplorerSettings,
+): ChatModelProfile | undefined {
+  return settings.chatModelProfiles.find(
+    (profile) => profile.id === settings.activeChatModelProfileId && !isProfileSuspended(profile),
+  );
 }
 
-function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+export function resolveChatModelProfile(
+  settings: IxplorerSettings,
+  profileId: string | undefined,
+): ChatModelProfile | undefined {
+  const requested = profileId
+    ? settings.chatModelProfiles.find((profile) => profile.id === profileId)
+    : undefined;
 
-function readStringList(value: unknown, fallback: string[]): string[] {
-  if (!Array.isArray(value)) {
-    return [...fallback];
+  if (requested && !isProfileSuspended(requested)) {
+    return requested;
   }
 
-  const items = value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim());
+  return getActiveChatModelProfile(settings) ?? settings.chatModelProfiles.find(isProfileActive);
+}
 
-  return items.length > 0 ? items.filter(Boolean) : [...fallback];
+export function resolveEmbeddingModelProfile(
+  settings: IxplorerSettings,
+  profileId: string | undefined,
+): EmbeddingModelProfile | undefined {
+  return settings.embeddingModelProfiles.find(
+    (profile) => profile.id === profileId && !isProfileSuspended(profile),
+  );
+}
+
+export function resolveServerProfile(
+  settings: IxplorerSettings,
+  profileId: string | undefined,
+): ServerProfile | undefined {
+  return settings.serverProfiles.find(
+    (profile) => profile.id === profileId && !isProfileSuspended(profile),
+  );
+}
+
+export function canDeleteServerProfile(settings: IxplorerSettings, serverProfileId: string): boolean {
+  return (
+    !settings.chatModelProfiles.some((profile) => profile.serverProfileId === serverProfileId) &&
+    !settings.embeddingModelProfiles.some((profile) => profile.serverProfileId === serverProfileId)
+  );
+}
+
+export function canDeleteEmbeddingModelProfile(
+  settings: IxplorerSettings,
+  embeddingModelProfileId: string,
+): boolean {
+  return !settings.indexProfiles.some(
+    (profile) => profile.embeddingModelProfileId === embeddingModelProfileId,
+  );
+}
+
+export function hasDuplicateProfileName<T extends { id: string; name: string }>(
+  profiles: T[],
+  name: string,
+  currentId?: string,
+): boolean {
+  const normalized = normalizeProfileName(name).toLocaleLowerCase();
+  return profiles.some(
+    (profile) => profile.id !== currentId && profile.name.toLocaleLowerCase() === normalized,
+  );
+}
+
+export function isProfileSuspended(profile: { isSuspended?: boolean }): boolean {
+  return profile.isSuspended === true;
+}
+
+export function createProfileId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
+  for (const server of settings.serverProfiles) {
+    server.isSuspended = server.isSuspended === true;
+    server.suspendedReason = server.isSuspended
+      ? server.suspendedReason || "Server profile is suspended."
+      : undefined;
+  }
+
+  for (const profile of settings.chatModelProfiles) {
+    const server = settings.serverProfiles.find((candidate) => candidate.id === profile.serverProfileId);
+    if (!server) {
+      suspend(profile, "Server profile was deleted.");
+    } else if (isProfileSuspended(server)) {
+      suspend(profile, "Server profile is suspended.");
+    } else {
+      unsuspend(profile);
+    }
+  }
+
+  for (const profile of settings.embeddingModelProfiles) {
+    const server = settings.serverProfiles.find((candidate) => candidate.id === profile.serverProfileId);
+    if (!server) {
+      suspend(profile, "Server profile was deleted.");
+    } else if (isProfileSuspended(server)) {
+      suspend(profile, "Server profile is suspended.");
+    } else {
+      unsuspend(profile);
+    }
+  }
+}
+
+function normalizeActiveChatModel(settings: IxplorerSettings): void {
+  if (
+    settings.activeChatModelProfileId &&
+    settings.chatModelProfiles.some(
+      (profile) => profile.id === settings.activeChatModelProfileId && !isProfileSuspended(profile),
+    )
+  ) {
+    return;
+  }
+
+  settings.activeChatModelProfileId = settings.chatModelProfiles.find(isProfileActive)?.id ?? "";
+}
+
+function normalizeIndexProfiles(settings: IxplorerSettings): void {
+  for (const profile of settings.indexProfiles) {
+    normalizeIndexProfileNumbers(profile);
+    const embedding = profile.embeddingModelProfileId
+      ? settings.embeddingModelProfiles.find(
+          (candidate) => candidate.id === profile.embeddingModelProfileId,
+        )
+      : undefined;
+
+    if (!embedding) {
+      suspend(profile, "Select an embedding model profile.");
+    } else if (isProfileSuspended(embedding)) {
+      suspend(profile, "Embedding model profile is suspended.");
+    } else {
+      unsuspend(profile);
+    }
+  }
+}
+
+function isProfileActive<T extends { isSuspended?: boolean }>(profile: T): boolean {
+  return !isProfileSuspended(profile);
+}
+
+function suspend(profile: { isSuspended?: boolean; suspendedReason?: string }, reason: string): void {
+  profile.isSuspended = true;
+  profile.suspendedReason = reason;
+}
+
+function unsuspend(profile: { isSuspended?: boolean; suspendedReason?: string }): void {
+  profile.isSuspended = false;
+  profile.suspendedReason = undefined;
+}
+
+function readServerProfiles(value: unknown): ServerProfile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(normalizeServerProfile).filter((profile): profile is ServerProfile => profile !== null);
+}
+
+function normalizeServerProfile(value: unknown): ServerProfile | null {
+  if (!isSettingsRecord(value)) {
+    return null;
+  }
+
+  const id = readString(value.id);
+  const name = normalizeProfileName(readString(value.name));
+  const apiFormat = readApiFormat(value.apiFormat);
+  const baseUrl = normalizeUrl(readString(value.baseUrl), "");
+
+  if (!id || !name || !apiFormat || !baseUrl) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    apiFormat,
+    baseUrl,
+    ...(readString(value.apiKey) ? { apiKey: readString(value.apiKey) } : {}),
+    isSuspended: value.isSuspended === true,
+    suspendedReason: readString(value.suspendedReason) || undefined,
+    createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
+    updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
+  };
+}
+
+function readChatModelProfiles(value: unknown): ChatModelProfile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeChatModelProfile)
+    .filter((profile): profile is ChatModelProfile => profile !== null);
+}
+
+function normalizeChatModelProfile(value: unknown): ChatModelProfile | null {
+  if (!isSettingsRecord(value)) {
+    return null;
+  }
+
+  const id = readString(value.id);
+  const name = normalizeProfileName(readString(value.name));
+  const serverProfileId = readString(value.serverProfileId);
+  const modelName = readString(value.modelName);
+
+  if (!id || !name || !serverProfileId || !modelName) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    serverProfileId,
+    modelName,
+    temperature: readOptionalNumber(value.temperature),
+    maxTokens: readOptionalPositiveInteger(value.maxTokens),
+    capabilities: normalizeCapability(value.capabilities),
+    isSuspended: value.isSuspended === true,
+    suspendedReason: readString(value.suspendedReason) || undefined,
+    createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
+    updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
+  };
+}
+
+function readEmbeddingModelProfiles(value: unknown): EmbeddingModelProfile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeEmbeddingModelProfile)
+    .filter((profile): profile is EmbeddingModelProfile => profile !== null);
+}
+
+function normalizeEmbeddingModelProfile(value: unknown): EmbeddingModelProfile | null {
+  if (!isSettingsRecord(value)) {
+    return null;
+  }
+
+  const id = readString(value.id);
+  const name = normalizeProfileName(readString(value.name));
+  const serverProfileId = readString(value.serverProfileId);
+  const modelName = readString(value.modelName);
+
+  if (!id || !name || !serverProfileId || !modelName) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    serverProfileId,
+    modelName,
+    capabilities: normalizeCapability(value.capabilities),
+    isSuspended: value.isSuspended === true,
+    suspendedReason: readString(value.suspendedReason) || undefined,
+    createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
+    updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
+  };
+}
+
+function normalizeCapability(value: unknown): ModelCapability | undefined {
+  if (!isSettingsRecord(value) || typeof value.chat !== "boolean" || typeof value.embeddings !== "boolean") {
+    return undefined;
+  }
+
+  const detectionSource =
+    value.detectionSource === "metadata" ||
+    value.detectionSource === "probe" ||
+    value.detectionSource === "format-default"
+      ? value.detectionSource
+      : "format-default";
+
+  return {
+    chat: value.chat,
+    embeddings: value.embeddings,
+    vision: typeof value.vision === "boolean" ? value.vision : undefined,
+    tools: typeof value.tools === "boolean" ? value.tools : undefined,
+    temperature: typeof value.temperature === "boolean" ? value.temperature : undefined,
+    maxTokens: typeof value.maxTokens === "boolean" ? value.maxTokens : undefined,
+    contextLength: isPositiveInteger(value.contextLength) ? value.contextLength : undefined,
+    maxOutputTokens: isPositiveInteger(value.maxOutputTokens) ? value.maxOutputTokens : undefined,
+    detectionSource,
+  };
 }
 
 function readIndexProfiles(
   value: unknown,
-  legacy: Pick<
-    IndexProfile,
-    | "embeddingProviderBaseUrl"
-    | "embeddingModel"
-    | "indexFolder"
-    | "includeFolders"
-    | "excludeGlobs"
-  >,
+  fallback: Pick<IndexProfile, "indexFolder" | "includeFolders" | "excludeGlobs">,
 ): IndexProfile[] {
   if (!Array.isArray(value)) {
-    return [
-      createIndexProfile({
-        id: DEFAULT_INDEX_PROFILE_ID,
-        name: "Default index",
-        ...legacy,
-      }),
-    ];
+    return [createIndexProfile({ id: DEFAULT_INDEX_PROFILE_ID, name: "Default index", ...fallback })];
   }
 
   const profiles = value
     .map((item) => normalizeIndexProfile(item))
     .filter((item): item is IndexProfile => item !== null);
 
-  return profiles.length > 0 ? profiles : [createIndexProfile({ ...legacy })];
+  return profiles.length > 0 ? profiles : [createIndexProfile({ ...fallback })];
 }
 
 function normalizeIndexProfile(value: unknown): IndexProfile | null {
@@ -262,11 +557,7 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
     indexFolder: normalizeVaultFolder(readString(value.indexFolder)),
     includeFolders: readStringList(value.includeFolders, DEFAULT_SETTINGS.includeFolders),
     excludeGlobs: readStringList(value.excludeGlobs, DEFAULT_SETTINGS.excludeGlobs),
-    embeddingModel: readString(value.embeddingModel),
-    embeddingProviderBaseUrl: normalizeUrl(
-      readString(value.embeddingProviderBaseUrl),
-      DEFAULT_SETTINGS.embeddingProviderBaseUrl,
-    ),
+    embeddingModelProfileId: readString(value.embeddingModelProfileId),
     chunkSize: readPositiveInteger(value.chunkSize, DEFAULT_CHUNK_LENGTH),
     chunkOverlap: normalizeChunkOverlap(
       readNonNegativeInteger(value.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
@@ -285,19 +576,9 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
 
 function createIndexProfile(
   values: Partial<IndexProfile> &
-    Pick<
-      IndexProfile,
-      | "indexFolder"
-      | "includeFolders"
-      | "excludeGlobs"
-      | "embeddingModel"
-      | "embeddingProviderBaseUrl"
-    >,
+    Pick<IndexProfile, "indexFolder" | "includeFolders" | "excludeGlobs">,
 ): IndexProfile {
-  const chunkSize = readPositiveInteger(values.chunkSize, DEFAULT_CHUNK_LENGTH);
-  const pdfChunkSize = readPositiveInteger(values.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE);
-
-  return {
+  const profile: IndexProfile = {
     ...cloneIndexProfile(DEFAULT_INDEX_PROFILE),
     ...values,
     id: values.id ?? DEFAULT_INDEX_PROFILE_ID,
@@ -305,20 +586,7 @@ function createIndexProfile(
     indexFolder: normalizeVaultFolder(values.indexFolder),
     includeFolders: [...values.includeFolders],
     excludeGlobs: [...values.excludeGlobs],
-    chunkSize,
-    chunkOverlap: normalizeChunkOverlap(
-      readNonNegativeInteger(values.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
-      chunkSize,
-    ),
-    pdfChunkSize,
-    pdfChunkOverlap: normalizeChunkOverlap(
-      readNonNegativeInteger(values.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
-      pdfChunkSize,
-    ),
-    embeddingBatchSize: readPositiveInteger(
-      values.embeddingBatchSize,
-      DEFAULT_EMBEDDING_BATCH_SIZE,
-    ),
+    embeddingModelProfileId: values.embeddingModelProfileId ?? "",
     shardCount: DEFAULT_FILE_VECTOR_SHARD_COUNT,
     keywordIndex: {
       enabled: true,
@@ -326,6 +594,58 @@ function createIndexProfile(
       minTokenLength: DEFAULT_KEYWORD_MIN_TOKEN_LENGTH,
     },
   };
+  normalizeIndexProfileNumbers(profile);
+  return profile;
+}
+
+function normalizeIndexProfileNumbers(profile: IndexProfile): void {
+  const chunkSize = readPositiveInteger(profile.chunkSize, DEFAULT_CHUNK_LENGTH);
+  profile.chunkSize = chunkSize;
+  profile.chunkOverlap = normalizeChunkOverlap(
+    readNonNegativeInteger(profile.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
+    chunkSize,
+  );
+  const pdfChunkSize = readPositiveInteger(profile.pdfChunkSize, DEFAULT_PDF_CHUNK_SIZE);
+  profile.pdfChunkSize = pdfChunkSize;
+  profile.pdfChunkOverlap = normalizeChunkOverlap(
+    readNonNegativeInteger(profile.pdfChunkOverlap, DEFAULT_PDF_CHUNK_OVERLAP),
+    pdfChunkSize,
+  );
+  profile.embeddingBatchSize = readPositiveInteger(
+    profile.embeddingBatchSize,
+    DEFAULT_EMBEDDING_BATCH_SIZE,
+  );
+}
+
+function isSettingsRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value);
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeProfileName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function readStringList(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+
+  const items = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : [...fallback];
+}
+
+function readApiFormat(value: unknown): ApiFormat | null {
+  return value === "openai-compatible" || value === "ollama" || value === "anthropic"
+    ? value
+    : null;
 }
 
 function readActiveIndexProfileId(value: unknown, profiles: IndexProfile[]): string {
@@ -340,6 +660,14 @@ function readActiveIndexProfileId(value: unknown, profiles: IndexProfile[]): str
 
 function readPositiveInteger(value: unknown, fallback: number): number {
   return isPositiveInteger(value) ? value : fallback;
+}
+
+function readOptionalPositiveInteger(value: unknown): number | undefined {
+  return isPositiveInteger(value) ? value : undefined;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function readNonNegativeInteger(value: unknown, fallback: number): number {

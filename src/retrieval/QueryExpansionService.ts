@@ -1,4 +1,9 @@
-import { ChatModelProvider, LanguageInventoryItem, RetrievalQueryVariant } from "../shared/types";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  LanguageInventoryItem,
+  RetrievalQueryVariant,
+} from "../shared/types";
 import { detectTextLanguages } from "../indexing/languageDetection";
 import {
   collectChatText,
@@ -10,6 +15,7 @@ import { normalizeInlineWhitespace } from "../shared/whitespace";
 export interface QueryExpansionServiceOptions {
   chatModel: ChatModelProvider;
   chatModelName: string;
+  chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   maxLanguages?: number;
   maxVariants?: number;
   onDiagnostic?: (diagnostic: QueryExpansionDiagnostic) => void;
@@ -34,12 +40,14 @@ export class QueryExpansionService {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly maxLanguages: number;
+  private readonly chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   private readonly maxVariants: number;
   private readonly onDiagnostic?: (diagnostic: QueryExpansionDiagnostic) => void;
 
   constructor(options: QueryExpansionServiceOptions) {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
+    this.chatOptions = options.chatOptions;
     this.maxLanguages = options.maxLanguages ?? DEFAULT_MAX_LANGUAGES;
     this.maxVariants = options.maxVariants ?? DEFAULT_MAX_VARIANTS;
     this.onDiagnostic = options.onDiagnostic;
@@ -58,6 +66,7 @@ export class QueryExpansionService {
         this.chatModel.streamChat({
           model: this.chatModelName,
           temperature: 0,
+          maxTokens: this.chatOptions?.maxTokens,
           messages: [
             {
               role: "system",

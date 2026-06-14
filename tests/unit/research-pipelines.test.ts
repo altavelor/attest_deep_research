@@ -164,7 +164,7 @@ describe("AnswerSynthesisService", () => {
     const service = new AnswerSynthesisService({
       chatModel,
       chatModelName: "qwen",
-      temperature: 0.2,
+      chatOptions: { temperature: 0.2 },
       now: fixedNow,
       persistFinalAnswer: (answer) => {
         persisted.push(answer);

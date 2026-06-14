@@ -30,7 +30,11 @@ describe("FileChatStore", () => {
       ],
       lastAnswer: null,
       attachedContextPaths: ["Docs/source.pdf"],
-      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb", deepResearch: true },
+      chatSettings: {
+        chatModelProfileId: "chat-granite",
+        searchMode: "indexAndWeb",
+        deepResearch: true,
+      },
     });
 
     expect(saved).toMatchObject({
@@ -39,7 +43,11 @@ describe("FileChatStore", () => {
       createdAt: "2026-06-10T10:00:00.000Z",
       updatedAt: "2026-06-10T10:00:00.000Z",
       attachedContextPaths: ["Docs/source.pdf"],
-      chatSettings: { model: "granite4.1:8b", searchMode: "indexAndWeb", deepResearch: true },
+      chatSettings: {
+        chatModelProfileId: "chat-granite",
+        searchMode: "indexAndWeb",
+        deepResearch: true,
+      },
     });
 
     now = new Date("2026-06-10T10:05:00.000Z");

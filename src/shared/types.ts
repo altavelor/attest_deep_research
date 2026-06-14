@@ -86,6 +86,7 @@ export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
   temperature?: number;
+  maxTokens?: number;
 }
 
 export interface ChatResponseChunk {
@@ -93,7 +94,8 @@ export interface ChatResponseChunk {
   isComplete: boolean;
 }
 
-export type LocalModelProvider = "lmStudio" | "ollama";
+export type ApiFormat = "openai-compatible" | "ollama" | "anthropic";
+export type LocalModelProvider = ApiFormat;
 
 export interface ChatModelProvider {
   listModels(): Promise<string[]>;

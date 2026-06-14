@@ -2,13 +2,18 @@ import { setIcon } from "obsidian";
 
 import { SavedChatSettings } from "../chat/ChatStore";
 import type { ResearchSearchMode } from "../research/ResearchService";
-import { attachModelDropdown } from "./ModelDropdown";
+
+export interface ChatModelSelectOption {
+  id: string;
+  name: string;
+  isSuspended?: boolean;
+}
 
 export interface ChatComposerRefs {
   formEl: HTMLFormElement;
   progressStatusEl: HTMLElement;
   textareaEl: HTMLTextAreaElement;
-  modelInputEl: HTMLInputElement;
+  modelInputEl: HTMLSelectElement;
   submitButtonEl: HTMLButtonElement;
   submitButtonTooltipEl: HTMLElement;
   searchModeEl: HTMLSelectElement;
@@ -18,7 +23,7 @@ export interface ChatComposerRefs {
 
 export interface ChatComposerOptions {
   settings: SavedChatSettings;
-  availableModels: string[];
+  availableModels: ChatModelSelectOption[];
   onSubmit(): void;
   onStop(): void;
   onOpenContextPicker(): void;
@@ -71,24 +76,21 @@ export function renderChatComposer(
   setIcon(attachButton, "paperclip");
   attachButton.addEventListener("click", options.onOpenContextPicker);
   modelRow.createEl("label", { text: "Model", attr: { for: "ixplorer-chat-model" } });
-  const modelInputEl = modelRow.createEl("input", {
+  const modelInputEl = modelRow.createEl("select", {
     cls: "ixplorer-chat__model-input",
     attr: {
       id: "ixplorer-chat-model",
-      type: "text",
-      placeholder: "Chat model",
     },
   });
-  modelInputEl.value = options.settings.model;
+  for (const model of options.availableModels) {
+    if (model.isSuspended) {
+      continue;
+    }
+    modelInputEl.createEl("option", { text: model.name, value: model.id });
+  }
+  modelInputEl.value = options.settings.chatModelProfileId;
   modelInputEl.addEventListener("change", () => {
     options.onUpdateModel(modelInputEl.value);
-  });
-  attachModelDropdown({
-    inputEl: modelInputEl,
-    containerEl: modelRow,
-    getModels: () => options.availableModels,
-    emptyText: "Refresh models in settings",
-    onSelect: options.onUpdateModel,
   });
   const attachedContextEl = formEl.createDiv({ cls: "ixplorer-chat__attachments" });
 
