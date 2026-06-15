@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
 import {
   SaveChatInput,
@@ -100,6 +100,7 @@ export class IxplorerChatView extends ItemView {
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
+  private contextIndicatorEl: HTMLElement | null = null;
   private modelInputEl: HTMLSelectElement | null = null;
   private indexInputEl: HTMLSelectElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
@@ -131,6 +132,7 @@ export class IxplorerChatView extends ItemView {
       clearQuestionInput: () => {
         if (this.textareaEl) {
           this.textareaEl.value = "";
+          this.textareaEl.dispatchEvent(new Event("input"));
         }
       },
       getMessages: () => this.messages,
@@ -241,6 +243,7 @@ export class IxplorerChatView extends ItemView {
       onUpdateDeepResearch: (deepResearch) => void this.updateDeepResearch(deepResearch),
     });
     this.progressStatusEl = this.composerRefs.progressStatusEl;
+    this.contextIndicatorEl = this.composerRefs.contextIndicatorEl;
     this.textareaEl = this.composerRefs.textareaEl;
     this.modelInputEl = this.composerRefs.modelInputEl;
     this.indexInputEl = this.composerRefs.indexInputEl;
@@ -435,6 +438,7 @@ export class IxplorerChatView extends ItemView {
     renderChatFollowUps(this.followUpsEl, followUps, (question) => {
       if (this.textareaEl) {
         this.textareaEl.value = question;
+        this.textareaEl.dispatchEvent(new Event("input"));
         this.textareaEl.focus();
       }
     });
@@ -620,7 +624,9 @@ export class IxplorerChatView extends ItemView {
 
     if (this.submitButtonEl) {
       this.submitButtonEl.disabled = true;
-      this.submitButtonEl.setText("Stopping");
+      this.submitButtonEl.dataset.mode = "stop";
+      this.submitButtonEl.empty();
+      setIcon(this.submitButtonEl, "loader");
     }
   }
 
@@ -682,7 +688,9 @@ export class IxplorerChatView extends ItemView {
   private setFormRunning(running: boolean): void {
     if (this.submitButtonEl) {
       this.submitButtonEl.disabled = false;
-      this.submitButtonEl.setText(running ? "Stop" : "Ask");
+      this.submitButtonEl.dataset.mode = running ? "stop" : "ask";
+      this.submitButtonEl.empty();
+      setIcon(this.submitButtonEl, running ? "square" : "arrow-up");
     }
 
     if (this.textareaEl) {
@@ -728,6 +736,7 @@ export class IxplorerChatView extends ItemView {
     if (!this.submitButtonEl) {
       return;
     }
+    this.updateContextWindowIndicator();
 
     if (this.isRunning) {
       this.submitButtonEl.disabled = false;
@@ -768,15 +777,52 @@ export class IxplorerChatView extends ItemView {
   }
 
   private getContextWindowUnavailableMessage(): string | null {
-    const question = this.textareaEl?.value.trim() ?? "";
-    const limit = this.getContextLimitTokens();
+    const usage = this.getContextWindowUsage();
 
-    if (!question || !limit) {
+    if (!usage || usage.estimatedTokens <= usage.limitTokens) {
       return null;
     }
 
+    return "The current chat is too long for the selected model context window.";
+  }
+
+  private updateContextWindowIndicator(): void {
+    if (!this.contextIndicatorEl) {
+      return;
+    }
+
+    const usage = this.getContextWindowUsage();
+    if (!usage) {
+      this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", "0%");
+      this.contextIndicatorEl.setAttr("title", "Unknown model context window size");
+      this.contextIndicatorEl.setAttr("aria-label", "Unknown model context window size");
+      return;
+    }
+
+    const usedPercent = Math.max(
+      0,
+      Math.min(100, Math.round((usage.estimatedTokens / usage.limitTokens) * 100)),
+    );
+    const leftPercent = Math.max(0, 100 - usedPercent);
+    const title = [
+      "Context window:",
+      `${usedPercent}% used (${leftPercent}% left)`,
+      `Estimated ${usage.estimatedTokens} of ${usage.limitTokens} tokens`,
+    ].join("\n");
+
+    this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${usedPercent}%`);
+    this.contextIndicatorEl.setAttr("title", title);
+    this.contextIndicatorEl.setAttr(
+      "aria-label",
+      `Context window: ${usedPercent}% used, ${leftPercent}% left`,
+    );
+  }
+
+  private getContextWindowUsage():
+    | { estimatedTokens: number; limitTokens: number }
+    | null {
     const estimatedTokens = estimateResearchRequestTokens({
-      question,
+      question: this.textareaEl?.value.trim() ?? "",
       chatHistory: this.messages.map((message) => ({
         role: message.role,
         content: message.content,
@@ -785,10 +831,9 @@ export class IxplorerChatView extends ItemView {
       maxEvidenceItems: 0,
       reservedOutputTokens: this.getReservedOutputTokens(),
     });
+    const limitTokens = this.getContextLimitTokens();
 
-    return estimatedTokens > limit
-      ? "The current chat is too long for the selected model context window."
-      : null;
+    return limitTokens ? { estimatedTokens, limitTokens } : null;
   }
 
   private getContextLimitTokens(): number | undefined {
