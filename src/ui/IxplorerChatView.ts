@@ -13,7 +13,13 @@ import { ResearchService } from "../research/ResearchService";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { parsePositiveInteger } from "../shared/numbers";
-import { Citation, ContextDiagnostics, ResearchAnswer, RetrievedChunk } from "../shared/types";
+import {
+  Citation,
+  ContextDiagnostics,
+  ContextGraphCandidateDiagnostic,
+  ResearchAnswer,
+  RetrievedChunk,
+} from "../shared/types";
 import { AnswerNoteWriter } from "./AnswerNoteWriter";
 import {
   ChatComposerRefs,
@@ -430,6 +436,15 @@ export class IxplorerChatView extends ItemView {
       text: `Mode: ${diagnostics.contextMode === "include" ? "include attached files" : "filter retrieval"}`,
     });
     list.createEl("li", { text: `${includedExplicit.length} explicit source(s) included` });
+    if (shouldShowGraphDiagnostics(diagnostics)) {
+      list.createEl("li", {
+        text: `${diagnostics.graph.included.length} linked note(s) used`,
+      });
+      const skipped = diagnostics.graph.dropped.length + diagnostics.graph.unresolved.length;
+      if (skipped > 0) {
+        list.createEl("li", { text: `${skipped} linked note(s) skipped` });
+      }
+    }
     list.createEl("li", {
       text: `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
     });
@@ -445,6 +460,13 @@ export class IxplorerChatView extends ItemView {
     }
     for (const warning of diagnostics.warnings) {
       list.createEl("li", { text: `Warning: ${warning}` });
+    }
+
+    if (shouldShowGraphDiagnostics(diagnostics)) {
+      const graphList = panel.createEl("ul", { cls: "ixplorer-chat__context-graph-list" });
+      for (const item of diagnostics.graph.included.slice(0, 6)) {
+        graphList.createEl("li", { text: graphDiagnosticLabel(item) });
+      }
     }
 
     const details = panel.createEl("details", { cls: "ixplorer-chat__context-debug" });
@@ -968,6 +990,32 @@ function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer 
 
   const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
   return rest;
+}
+
+function shouldShowGraphDiagnostics(diagnostics: ContextDiagnostics): boolean {
+  return (
+    diagnostics.graph.enabled &&
+    (diagnostics.graph.included.length > 0 ||
+      diagnostics.graph.dropped.length > 0 ||
+      diagnostics.graph.unresolved.length > 0)
+  );
+}
+
+function graphDiagnosticLabel(item: ContextGraphCandidateDiagnostic): string {
+  const edge = item.edges[0];
+
+  if (!edge) {
+    return item.path;
+  }
+
+  const relation =
+    edge.type === "embed"
+      ? `embedded in ${edge.from}`
+      : edge.type === "backlink"
+        ? `backlink from ${edge.from}`
+        : `linked from ${edge.from}`;
+
+  return `${item.path} - ${relation}`;
 }
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {

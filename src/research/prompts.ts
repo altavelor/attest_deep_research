@@ -13,7 +13,9 @@ export interface BuildResearchPromptOptions {
   chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
   explicitEvidence?: RetrievedChunk[];
+  graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
+  webEvidence?: RetrievedChunk[];
   maxEvidenceItems: number;
 }
 
@@ -30,7 +32,15 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     .slice(0, options.maxEvidenceItems)
     .map((chunk) => formatEvidenceItem(chunk))
     .join("\n\n");
+  const graphEvidence = (options.graphEvidence ?? [])
+    .slice(0, options.maxEvidenceItems)
+    .map((chunk) => formatEvidenceItem(chunk))
+    .join("\n\n");
   const retrievedEvidence = (options.retrievedEvidence ?? options.evidence)
+    .slice(0, options.maxEvidenceItems)
+    .map((chunk) => formatEvidenceItem(chunk))
+    .join("\n\n");
+  const webEvidence = (options.webEvidence ?? [])
     .slice(0, options.maxEvidenceItems)
     .map((chunk) => formatEvidenceItem(chunk))
     .join("\n\n");
@@ -52,9 +62,13 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     "",
     explicitEvidence ? `Explicit context:\n${explicitEvidence}` : "Explicit context: None.",
     "",
+    graphEvidence ? `Graph context:\n${graphEvidence}` : "Graph context: None.",
+    "",
     retrievedEvidence
       ? `Retrieved evidence:\n${retrievedEvidence}`
       : "Retrieved evidence: No relevant evidence was found.",
+    "",
+    webEvidence ? `Web evidence:\n${webEvidence}` : "Web evidence: None.",
   ].join("\n");
 }
 

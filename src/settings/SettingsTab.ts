@@ -59,12 +59,11 @@ export class IxplorerSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("ixplorer-settings");
 
-    new Setting(containerEl).setName("Ixplorer").setHeading();
+    renderCategoryHeading(containerEl, "Ixplorer");
     this.renderDebugSettings(containerEl);
-    this.renderChatBehaviorSettings(containerEl);
+    this.renderSearchEngineSettings(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
-    this.renderWebSearchSettings(containerEl);
   }
 
   private renderDebugSettings(containerEl: HTMLElement): void {
@@ -79,7 +78,15 @@ export class IxplorerSettingTab extends PluginSettingTab {
       );
   }
 
-  private renderChatBehaviorSettings(containerEl: HTMLElement): void {
+  private renderSearchEngineSettings(containerEl: HTMLElement): void {
+    renderCategoryHeading(
+      containerEl,
+      "Search engine",
+      "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
+    );
+
+    renderSubcategoryHeading(containerEl, "Local context");
+
     new Setting(containerEl)
       .setName("Include active file as context")
       .setDesc("Automatically include the currently open supported file as explicit chat context.")
@@ -89,13 +96,64 @@ export class IxplorerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }),
       );
+
+    renderSubcategoryHeading(containerEl, "Obsidian graph");
+
+    new Setting(containerEl)
+      .setName("Use linked notes")
+      .setDesc("Discover linked notes from @mentions, active files, and included attachments before retrieval.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.useLinkedNotes).onChange(async (value) => {
+          this.plugin.settings.useLinkedNotes = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Include backlinks")
+      .setDesc("Use one-hop backlinks as graph candidates. Backlink notes are not traversed further.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.includeBacklinks).onChange(async (value) => {
+          this.plugin.settings.includeBacklinks = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Expand filtered files through links")
+      .setDesc("When attached files are in Filter mode, also search their linked graph neighbors.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.expandFilteredContextThroughLinks)
+          .onChange(async (value) => {
+            this.plugin.settings.expandFilteredContextThroughLinks = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Graph depth")
+      .setDesc("Depth 1 follows direct links, embeds, and backlinks. Depth 2 is reserved for advanced debugging.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("1", "1")
+          .addOption("2", "2")
+          .setValue(String(this.plugin.settings.graphContextDepth))
+          .onChange(async (value) => {
+            this.plugin.settings.graphContextDepth = value === "2" ? 2 : 1;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    this.renderWebSearchSettings(containerEl);
   }
 
   private renderProfileSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName("Model profiles")
-      .setDesc("Configure provider endpoints and the chat or embedding models that use them.")
-      .setHeading();
+    renderCategoryHeading(
+      containerEl,
+      "Model profiles",
+      "Configure provider endpoints and the chat or embedding models that use them.",
+    );
 
     this.renderServerProfiles(containerEl);
     this.renderChatModelProfiles(containerEl);
@@ -594,7 +652,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderWebSearchSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Web Search").setHeading();
+    renderSubcategoryHeading(containerEl, "Web");
 
     new Setting(containerEl)
       .setName("DuckDuckGo")
@@ -612,6 +670,27 @@ interface ProfileStatus {
   kind: "is-default" | "is-suspended";
   label: string;
   title: string;
+}
+
+function renderCategoryHeading(
+  containerEl: HTMLElement,
+  name: string,
+  description?: string,
+): void {
+  const setting = new Setting(containerEl).setName(name).setHeading();
+
+  if (description) {
+    setting.setDesc(description);
+  }
+
+  setting.settingEl.addClass("ixplorer-settings__category-heading");
+}
+
+function renderSubcategoryHeading(containerEl: HTMLElement, name: string): void {
+  new Setting(containerEl)
+    .setName(name)
+    .setHeading()
+    .settingEl.addClass("ixplorer-settings__subcategory-heading");
 }
 
 function statusForProfile(profile: {

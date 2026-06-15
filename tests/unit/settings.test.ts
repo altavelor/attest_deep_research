@@ -34,6 +34,10 @@ describe("Ixplorer settings", () => {
     });
     expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
     expect(DEFAULT_SETTINGS.includeActiveFileContext).toBe(true);
+    expect(DEFAULT_SETTINGS.useLinkedNotes).toBe(true);
+    expect(DEFAULT_SETTINGS.includeBacklinks).toBe(true);
+    expect(DEFAULT_SETTINGS.expandFilteredContextThroughLinks).toBe(false);
+    expect(DEFAULT_SETTINGS.graphContextDepth).toBe(1);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
@@ -65,6 +69,10 @@ describe("Ixplorer settings", () => {
       duckDuckGoEnabled: true,
       showChatIndexControl: false,
       includeActiveFileContext: false,
+      useLinkedNotes: false,
+      includeBacklinks: false,
+      expandFilteredContextThroughLinks: true,
+      graphContextDepth: 2,
       debugMode: true,
     });
 
@@ -83,6 +91,10 @@ describe("Ixplorer settings", () => {
     expect(settings.duckDuckGoEnabled).toBe(true);
     expect(settings.showChatIndexControl).toBe(false);
     expect(settings.includeActiveFileContext).toBe(false);
+    expect(settings.useLinkedNotes).toBe(false);
+    expect(settings.includeBacklinks).toBe(false);
+    expect(settings.expandFilteredContextThroughLinks).toBe(true);
+    expect(settings.graphContextDepth).toBe(2);
     expect(settings.debugMode).toBe(true);
   });
 

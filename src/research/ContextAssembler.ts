@@ -9,6 +9,13 @@ import {
   RetrievedChunk,
   RetrievalOptions,
 } from "../shared/types";
+import {
+  createDisabledGraphDiagnostics,
+  DEFAULT_GRAPH_CONTEXT_LIMITS,
+  GraphContextProvider,
+  GraphContextLimits,
+  GraphRoot,
+} from "./GraphContext";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "./prompts";
 
 export interface ContextFileProvider {
@@ -20,6 +27,7 @@ export interface ContextFileProvider {
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
   extractors: Extractor[];
+  graph?: GraphContextProvider;
   retrieve(
     query: string,
     options: RetrievalOptions,
@@ -37,6 +45,13 @@ export interface ContextAssembleRequest {
   contextLimitTokens?: number;
   reservedOutputTokens?: number;
   smallMarkdownCharLimit?: number;
+  graph?: {
+    enabled: boolean;
+    includeBacklinks: boolean;
+    expandFilteredContextThroughLinks: boolean;
+    depth: 1 | 2;
+    limits?: Partial<GraphContextLimits>;
+  };
 }
 
 export interface AssembledContext {
@@ -44,6 +59,8 @@ export interface AssembledContext {
   retrievalEvidence: RetrievedChunk[];
   evidence: RetrievedChunk[];
   retrievalSourcePaths?: string[];
+  boostedSourcePaths?: string[];
+  graphSourcePaths: string[];
   diagnostics: ContextDiagnostics;
 }
 
@@ -60,11 +77,13 @@ const FALLBACK_TOKENS_PER_EVIDENCE_ITEM = 500;
 export class ContextAssembler {
   private readonly files: ContextFileProvider;
   private readonly extractors: Extractor[];
+  private readonly graph?: GraphContextProvider;
   private readonly retrieve: ContextAssemblerOptions["retrieve"];
 
   constructor(options: ContextAssemblerOptions) {
     this.files = options.files;
     this.extractors = options.extractors;
+    this.graph = options.graph;
     this.retrieve = options.retrieve;
   }
 
@@ -73,6 +92,8 @@ export class ContextAssembler {
     const mentionPaths = findMentionedPaths(request.question, availablePaths);
     const explicitCandidates = this.explicitCandidates(request, mentionPaths);
     const diagnostics = createEmptyDiagnostics(request.contextMode);
+    const graph = await this.discoverGraphContext(request, availablePaths, mentionPaths);
+    diagnostics.graph = graph.diagnostics;
     for (const path of request.contextMode === "filter" ? request.contextPaths : []) {
       addDiagnosticSource(diagnostics, {
         path,
@@ -124,11 +145,14 @@ export class ContextAssembler {
       explicitTokens += candidateTokens;
     }
 
-    const retrievalSourcePaths = this.retrievalSourcePaths(request, mentionPaths);
+    const retrievalSourcePaths = this.retrievalSourcePaths(request, mentionPaths, graph.sourcePaths);
+    const boostedSourcePaths =
+      request.contextMode === "filter" ? [] : uniquePaths(graph.sourcePaths);
     const retrievalResult = await this.retrieve(request.question, {
       limit: request.evidenceLimit,
       includeWebResults: false,
       ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
+      ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
     });
     const retrievalChunks = Array.isArray(retrievalResult)
       ? retrievalResult
@@ -159,6 +183,11 @@ export class ContextAssembler {
             .length,
         },
         {
+          name: "graph",
+          usedTokens: 0,
+          droppedItems: diagnostics.graph.dropped.length,
+        },
+        {
           name: "retrieval",
           usedTokens: estimateChunksTokens(retrievalEvidence),
           droppedItems: droppedRetrieval.length,
@@ -176,6 +205,8 @@ export class ContextAssembler {
       retrievalEvidence,
       evidence: [...explicitEvidence, ...retrievalEvidence],
       retrievalSourcePaths: retrievalSourcePaths.length > 0 ? retrievalSourcePaths : undefined,
+      boostedSourcePaths: boostedSourcePaths.length > 0 ? boostedSourcePaths : undefined,
+      graphSourcePaths: graph.sourcePaths,
       diagnostics,
     };
   }
@@ -211,12 +242,75 @@ export class ContextAssembler {
     return candidates;
   }
 
-  private retrievalSourcePaths(request: ContextAssembleRequest, mentionPaths: string[]): string[] {
+  private retrievalSourcePaths(
+    request: ContextAssembleRequest,
+    mentionPaths: string[],
+    graphSourcePaths: string[],
+  ): string[] {
     if (request.contextMode !== "filter") {
       return [];
     }
 
-    return Array.from(new Set([...request.contextPaths, ...mentionPaths]));
+    return uniquePaths([
+      ...request.contextPaths,
+      ...mentionPaths,
+      ...(request.graph?.expandFilteredContextThroughLinks ? graphSourcePaths : []),
+    ]);
+  }
+
+  private async discoverGraphContext(
+    request: ContextAssembleRequest,
+    availablePaths: string[],
+    mentionPaths: string[],
+  ): Promise<{ sourcePaths: string[]; diagnostics: ContextDiagnostics["graph"] }> {
+    const graphOptions = request.graph;
+    const limits = { ...DEFAULT_GRAPH_CONTEXT_LIMITS, ...(graphOptions?.limits ?? {}) };
+
+    if (!this.graph || graphOptions?.enabled !== true) {
+      return { sourcePaths: [], diagnostics: createDisabledGraphDiagnostics(limits) };
+    }
+
+    const roots = this.graphRoots(request, mentionPaths);
+    const discovery = await this.graph.discover({
+      question: request.question,
+      roots,
+      availablePaths,
+      includeBacklinks: graphOptions.includeBacklinks,
+      maxDepth: graphOptions.depth,
+      limits,
+    });
+
+    return {
+      sourcePaths: discovery.sourcePaths,
+      diagnostics: discovery.diagnostics,
+    };
+  }
+
+  private graphRoots(request: ContextAssembleRequest, mentionPaths: string[]): GraphRoot[] {
+    const roots: GraphRoot[] = [];
+    const add = (path: string | undefined, role: ContextSourceRole): void => {
+      if (!path || roots.some((root) => root.path === path)) {
+        return;
+      }
+
+      roots.push({ path, role });
+    };
+
+    for (const path of mentionPaths) {
+      add(path, "mention");
+    }
+
+    if (request.includeActiveFile) {
+      add(request.activeFilePath, "active");
+    }
+
+    if (request.contextMode === "include" || request.graph?.expandFilteredContextThroughLinks) {
+      for (const path of request.contextPaths) {
+        add(path, "attached");
+      }
+    }
+
+    return roots;
   }
 
   private async buildExplicitSource(
@@ -421,6 +515,7 @@ function createEmptyDiagnostics(contextMode: ContextMode): ContextDiagnostics {
     explicitSources: [],
     mentionSources: [],
     activeSources: [],
+    graph: createDisabledGraphDiagnostics(),
     retrieval: {
       queryVariants: [],
       includedChunkIds: [],
@@ -478,4 +573,8 @@ function findMentionedPaths(text: string, paths: string[]): string[] {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function uniquePaths(paths: string[]): string[] {
+  return Array.from(new Set(paths.filter(Boolean)));
 }

@@ -11,7 +11,7 @@ import {
   SearchProvider,
 } from "../shared/types";
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
-import { ContextAssembler } from "./ContextAssembler";
+import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {
@@ -31,6 +31,7 @@ export interface ResearchServiceOptions {
   searchProvider?: SearchProvider;
   queryExpansion?: QueryExpansionService;
   contextAssembler?: ContextAssembler;
+  graphContext?: ContextAssembleRequest["graph"];
   evidenceLimit?: number;
   contextLimitTokens?: number;
   temperature?: number;
@@ -48,12 +49,14 @@ export class ResearchService {
   private readonly contextAssembler?: ContextAssembler;
   private readonly contextLimitTokens?: number;
   private readonly reservedOutputTokens?: number;
+  private readonly graphContext?: ContextAssembleRequest["graph"];
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
     this.contextAssembler = options.contextAssembler;
     this.contextLimitTokens = options.contextLimitTokens;
     this.reservedOutputTokens = options.chatOptions?.maxTokens;
+    this.graphContext = options.graphContext;
     const chatOptions = {
       temperature: options.chatOptions?.temperature ?? options.temperature ?? DEFAULT_TEMPERATURE,
       maxTokens: options.chatOptions?.maxTokens,
@@ -99,6 +102,7 @@ export class ResearchService {
             contextLimitTokens: this.contextLimitTokens,
             reservedOutputTokens: this.reservedOutputTokens,
             evidenceLimit: this.evidenceLimit,
+            graph: this.graphContext,
           });
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
@@ -106,7 +110,11 @@ export class ResearchService {
     const retrieval =
       searchMode === "webOnly"
         ? emptyRetrievalResult()
-        : yield* this.vaultPipeline.search(question, assembled?.retrievalSourcePaths ?? request.contextPaths);
+        : yield* this.vaultPipeline.search(
+            question,
+            assembled?.retrievalSourcePaths ?? request.contextPaths,
+            assembled?.boostedSourcePaths,
+          );
     const webEvidence = yield* this.webPipeline.search(
       question,
       searchMode !== "indexOnly",
@@ -126,6 +134,15 @@ export class ResearchService {
       this.evidenceLimit,
       deepResearch,
     );
+    const graphEvidence = graphEvidenceFromRetrieval(
+      evidence,
+      assembled?.graphSourcePaths ?? [],
+    );
+    const webPromptEvidence = evidence.filter((chunk) => chunk.source.kind === "web");
+    const retrievedEvidence = nonExplicitEvidence(
+      evidence,
+      [...(assembled?.explicitEvidence ?? []), ...graphEvidence, ...webPromptEvidence],
+    );
     const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
       ...formatCitation(chunk.source),
       id: chunk.id,
@@ -140,12 +157,27 @@ export class ResearchService {
       chatHistory: request.chatHistory,
       evidence,
       explicitEvidence: assembled?.explicitEvidence,
-      retrievedEvidence: nonExplicitEvidence(evidence, assembled?.explicitEvidence ?? []),
+      graphEvidence,
+      retrievedEvidence,
+      webEvidence: webPromptEvidence,
       citations,
       contextDiagnostics: diagnostics,
       evidenceLimit: this.evidenceLimit,
     });
   }
+}
+
+function graphEvidenceFromRetrieval(
+  chunks: RetrievedChunk[],
+  graphSourcePaths: string[],
+): RetrievedChunk[] {
+  if (graphSourcePaths.length === 0) {
+    return [];
+  }
+
+  const graphPaths = new Set(graphSourcePaths);
+
+  return chunks.filter((chunk) => "path" in chunk.source && graphPaths.has(chunk.source.path));
 }
 
 function nonExplicitEvidence(

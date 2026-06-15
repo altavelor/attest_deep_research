@@ -1,6 +1,6 @@
 import { join } from "path";
 
-import { FileSystemAdapter, Notice, Plugin, TFile, Vault, requestUrl } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, requestUrl } from "obsidian";
 
 import { ChatModelClient } from "./client/chat/ChatModelClient";
 import { FileChatStore } from "./chat/ChatStore";
@@ -15,19 +15,20 @@ import {
   IndexingService,
   IndexingState,
   IndexSourceReportItem,
-  VaultFileProvider,
-  VaultFileSummary,
 } from "./indexing/IndexingService";
 import { IndexingProfileController } from "./indexing/IndexingProfileController";
 import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
+import { ObsidianVaultFileProvider } from "./indexing/ObsidianVaultFileProvider";
 import { RetrievalService } from "./retrieval/RetrievalService";
 import { QueryExpansionService } from "./retrieval/QueryExpansionService";
 import { ContextAssembler } from "./research/ContextAssembler";
+import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "./research/GraphContext";
+import { ObsidianContextFileProvider } from "./research/ObsidianContextFileProvider";
+import { ObsidianGraphContextProvider } from "./research/ObsidianGraphContextProvider";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
-import { normalizeVaultPath, vaultPathMatchesGlob } from "./shared/pathFilters";
 import {
   DEFAULT_SETTINGS,
   ChatModelProfile,
@@ -202,8 +203,16 @@ export default class IxplorerPlugin extends Plugin {
       contextAssembler: new ContextAssembler({
         files: new ObsidianContextFileProvider(this.app.vault),
         extractors: this.createContextExtractorsForProfile(indexProfile),
+        graph: new ObsidianGraphContextProvider(this.app.vault, this.app.metadataCache),
         retrieve: async () => [],
       }),
+      graphContext: {
+        enabled: this.settings.useLinkedNotes,
+        includeBacklinks: this.settings.includeBacklinks,
+        expandFilteredContextThroughLinks: this.settings.expandFilteredContextThroughLinks,
+        depth: this.settings.graphContextDepth === 2 ? 2 : 1,
+        limits: DEFAULT_GRAPH_CONTEXT_LIMITS,
+      },
       searchProvider: this.createSearchProvider(),
     });
   }
@@ -510,78 +519,4 @@ function normalizeFetchBody(body: BodyInit | null | undefined): string | ArrayBu
   }
 
   return undefined;
-}
-
-class ObsidianVaultFileProvider implements VaultFileProvider {
-  constructor(private readonly vault: Vault) {}
-
-  async listFiles(): Promise<VaultFileSummary[]> {
-    const ignoredGlobs = this.getIgnoredGlobs();
-    return this.vault
-      .getFiles()
-      .filter((file) => !isHiddenOrIgnoredVaultPath(file.path, ignoredGlobs))
-      .map((file) => ({
-        path: file.path,
-        modifiedTime: file.stat.mtime,
-      }));
-  }
-
-  async readFile(path: string): Promise<ArrayBuffer | string> {
-    const file = this.vault.getAbstractFileByPath(path);
-
-    if (!(file instanceof TFile)) {
-      return "";
-    }
-
-    return this.vault.readBinary(file);
-  }
-
-  private getIgnoredGlobs(): string[] {
-    const vaultWithConfig = this.vault as Vault & { getConfig?(key: string): unknown };
-    const value = vaultWithConfig.getConfig?.("userIgnoreFilters");
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string")
-      : [];
-  }
-}
-
-class ObsidianContextFileProvider {
-  constructor(private readonly vault: Vault) {}
-
-  async listPaths(): Promise<string[]> {
-    return this.vault
-      .getFiles()
-      .filter((file) => isSupportedContextPath(file.path))
-      .map((file) => normalizeVaultPath(file.path))
-      .sort();
-  }
-
-  async readFile(path: string): Promise<ArrayBuffer | string> {
-    const file = this.vault.getAbstractFileByPath(path);
-
-    if (!(file instanceof TFile)) {
-      return "";
-    }
-
-    return this.vault.readBinary(file);
-  }
-
-  async getModifiedTime(path: string): Promise<number> {
-    const file = this.vault.getAbstractFileByPath(path);
-
-    return file instanceof TFile ? file.stat.mtime : 0;
-  }
-}
-
-function isSupportedContextPath(path: string): boolean {
-  return /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
-}
-
-function isHiddenOrIgnoredVaultPath(path: string, ignoredGlobs: string[]): boolean {
-  const normalized = normalizeVaultPath(path);
-  if (normalized.split("/").some((segment) => segment.startsWith("."))) {
-    return true;
-  }
-
-  return ignoredGlobs.some((glob) => vaultPathMatchesGlob(normalized, glob));
 }

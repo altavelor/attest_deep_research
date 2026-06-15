@@ -74,6 +74,10 @@ export interface IxplorerSettings {
   duckDuckGoEnabled: boolean;
   showChatIndexControl: boolean;
   includeActiveFileContext: boolean;
+  useLinkedNotes: boolean;
+  includeBacklinks: boolean;
+  expandFilteredContextThroughLinks: boolean;
+  graphContextDepth: number;
   debugMode: boolean;
 }
 
@@ -123,6 +127,10 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   duckDuckGoEnabled: false,
   showChatIndexControl: true,
   includeActiveFileContext: true,
+  useLinkedNotes: true,
+  includeBacklinks: true,
+  expandFilteredContextThroughLinks: false,
+  graphContextDepth: 1,
   debugMode: false,
 };
 
@@ -185,6 +193,19 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
       typeof data.includeActiveFileContext === "boolean"
         ? data.includeActiveFileContext
         : DEFAULT_SETTINGS.includeActiveFileContext,
+    useLinkedNotes:
+      typeof data.useLinkedNotes === "boolean"
+        ? data.useLinkedNotes
+        : DEFAULT_SETTINGS.useLinkedNotes,
+    includeBacklinks:
+      typeof data.includeBacklinks === "boolean"
+        ? data.includeBacklinks
+        : DEFAULT_SETTINGS.includeBacklinks,
+    expandFilteredContextThroughLinks:
+      typeof data.expandFilteredContextThroughLinks === "boolean"
+        ? data.expandFilteredContextThroughLinks
+        : DEFAULT_SETTINGS.expandFilteredContextThroughLinks,
+    graphContextDepth: readGraphContextDepth(data.graphContextDepth),
     debugMode: data.debugMode === true,
   };
 
@@ -739,6 +760,10 @@ function readNonNegativeInteger(value: unknown, fallback: number): number {
 
 function readNonNegativeIntegerOrUndefined(value: unknown): number | undefined {
   return isNonNegativeInteger(value) ? value : undefined;
+}
+
+function readGraphContextDepth(value: unknown): number {
+  return value === 2 ? 2 : DEFAULT_SETTINGS.graphContextDepth;
 }
 
 function readIndexMode(value: unknown): IndexProfile["mode"] {

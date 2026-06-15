@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
 import { ContextAssembler } from "../../src/research/ContextAssembler";
+import { GraphContextProvider } from "../../src/research/GraphContext";
 import { RetrievedChunk } from "../../src/shared/types";
 
 describe("ContextAssembler", () => {
@@ -129,13 +130,87 @@ describe("ContextAssembler", () => {
     expect(result.diagnostics.explicitSources.filter((source) => source.status === "dropped"))
       .toHaveLength(1);
   });
+
+  it("adds include-mode graph candidates as boosted retrieval paths", async () => {
+    const assembler = createAssembler(
+      {
+        "Root.md": "# Root\n\n[[Linked]]",
+        "Linked.md": "# Linked\n\nGraph answer.",
+      },
+      fakeGraphProvider(["Linked.md"]),
+    );
+
+    const result = await assembler.assemble({
+      question: "What linked context matters?",
+      contextMode: "include",
+      contextPaths: ["Root.md"],
+      evidenceLimit: 4,
+      graph: {
+        enabled: true,
+        includeBacklinks: true,
+        expandFilteredContextThroughLinks: false,
+        depth: 1,
+      },
+    });
+
+    expect(result.graphSourcePaths).toEqual(["Linked.md"]);
+    expect(result.retrievalSourcePaths).toBeUndefined();
+    expect(result.boostedSourcePaths).toEqual(["Linked.md"]);
+    expect(result.diagnostics.graph.included[0]).toMatchObject({
+      path: "Linked.md",
+      status: "included",
+    });
+  });
+
+  it("keeps filter mode strict unless graph expansion is enabled", async () => {
+    const assembler = createAssembler(
+      {
+        "Root.md": "# Root\n\n[[Linked]]",
+        "Linked.md": "# Linked\n\nGraph answer.",
+      },
+      fakeGraphProvider(["Linked.md"]),
+    );
+
+    const strict = await assembler.assemble({
+      question: "What linked context matters?",
+      contextMode: "filter",
+      contextPaths: ["Root.md"],
+      evidenceLimit: 4,
+      graph: {
+        enabled: true,
+        includeBacklinks: true,
+        expandFilteredContextThroughLinks: false,
+        depth: 1,
+      },
+    });
+    const expanded = await assembler.assemble({
+      question: "What linked context matters?",
+      contextMode: "filter",
+      contextPaths: ["Root.md"],
+      evidenceLimit: 4,
+      graph: {
+        enabled: true,
+        includeBacklinks: true,
+        expandFilteredContextThroughLinks: true,
+        depth: 1,
+      },
+    });
+
+    expect(strict.retrievalSourcePaths).toEqual(["Root.md"]);
+    expect(strict.boostedSourcePaths).toBeUndefined();
+    expect(expanded.retrievalSourcePaths).toEqual(["Root.md", "Linked.md"]);
+  });
 });
 
-function createAssembler(files: Record<string, string>): ContextAssembler {
+function createAssembler(
+  files: Record<string, string>,
+  graph?: GraphContextProvider,
+): ContextAssembler {
   const availablePaths = Object.keys(files);
 
   return new ContextAssembler({
     extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 80 })],
+    graph,
     files: {
       listPaths: async () => availablePaths,
       readFile: async (path) => files[path] ?? "",
@@ -160,4 +235,34 @@ function createAssembler(files: Record<string, string>): ContextAssembler {
       );
     },
   });
+}
+
+function fakeGraphProvider(paths: string[]): GraphContextProvider {
+  return {
+    discover: async (request) => ({
+      sourcePaths: paths,
+      diagnostics: {
+        enabled: true,
+        source: "metadataCache",
+        depth: request.maxDepth,
+        rootPaths: request.roots.map((root) => root.path),
+        included: paths.map((path) => ({
+          path,
+          status: "included",
+          score: 1,
+          edges: [
+            {
+              from: request.roots[0]?.path ?? "question",
+              to: path,
+              type: "forward_link",
+              depth: 1,
+            },
+          ],
+        })),
+        dropped: [],
+        unresolved: [],
+        limits: request.limits,
+      },
+    }),
+  };
 }
