@@ -65,7 +65,14 @@ export interface RetrievedChunk extends ExtractedChunk {
 
 export type ContextMode = "include" | "filter";
 
-export type ContextSourceRole = "attached" | "mention" | "active" | "retrieval" | "web";
+export type ContextSourceRole =
+  | "attached"
+  | "mention"
+  | "active"
+  | "question"
+  | "retrieval"
+  | "graph"
+  | "web";
 
 export interface ContextDiagnosticSource {
   path: string;
@@ -78,9 +85,42 @@ export interface ContextDiagnosticSource {
 }
 
 export interface ContextBudgetGroup {
-  name: "history" | "explicit" | "retrieval" | "web" | "reserved-output";
+  name: "history" | "explicit" | "graph" | "retrieval" | "web" | "reserved-output";
   usedTokens: number;
   droppedItems: number;
+}
+
+export type GraphEdgeType = "forward_link" | "embed" | "backlink" | "question_link";
+
+export interface ContextGraphEdgeDiagnostic {
+  from: string;
+  to: string;
+  type: GraphEdgeType;
+  depth: number;
+}
+
+export interface ContextGraphCandidateDiagnostic {
+  path: string;
+  status: "included" | "dropped" | "unresolved" | "unsupported";
+  reason?: string;
+  score?: number;
+  edges: ContextGraphEdgeDiagnostic[];
+}
+
+export interface ContextGraphDiagnostics {
+  enabled: boolean;
+  source: "metadataCache" | "parserFallback" | "mixed" | "none";
+  depth: number;
+  rootPaths: string[];
+  included: ContextGraphCandidateDiagnostic[];
+  dropped: ContextGraphCandidateDiagnostic[];
+  unresolved: ContextGraphCandidateDiagnostic[];
+  limits: {
+    maxForwardLinksPerRoot: number;
+    maxEmbedsPerRoot: number;
+    maxBacklinksPerRoot: number;
+    maxGraphCandidatesTotal: number;
+  };
 }
 
 export interface ContextDiagnostics {
@@ -88,6 +128,7 @@ export interface ContextDiagnostics {
   explicitSources: ContextDiagnosticSource[];
   mentionSources: ContextDiagnosticSource[];
   activeSources: ContextDiagnosticSource[];
+  graph: ContextGraphDiagnostics;
   retrieval: {
     queryVariants: string[];
     includedChunkIds: string[];
@@ -222,6 +263,7 @@ export interface RetrievalOptions {
   sourceKinds?: SourceKind[];
   fileExtensions?: string[];
   sourcePaths?: string[];
+  boostedSourcePaths?: string[];
   queryVariants?: RetrievalQueryVariant[];
 }
 

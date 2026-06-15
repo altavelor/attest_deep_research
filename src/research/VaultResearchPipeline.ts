@@ -23,16 +23,30 @@ export class VaultResearchPipeline {
   async *search(
     question: string,
     contextPaths: string[] | undefined,
+    boostedSourcePaths: string[] | undefined = undefined,
   ): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
     yield { type: "status", message: "Reading vault context..." };
     const queryVariants = yield* this.buildQueryVariants(question);
-
-    return this.retriever.search(question, {
+    const primary = await this.retriever.search(question, {
       limit: this.evidenceLimit,
       includeWebResults: false,
       queryVariants,
       ...(contextPaths ? { sourcePaths: contextPaths } : {}),
     });
+
+    if (!boostedSourcePaths || boostedSourcePaths.length === 0) {
+      return primary;
+    }
+
+    yield { type: "status", message: "Searching linked notes..." };
+    const graph = await this.retriever.search(question, {
+      limit: this.evidenceLimit,
+      includeWebResults: false,
+      queryVariants,
+      sourcePaths: boostedSourcePaths,
+    });
+
+    return mergeRetrievalResults(primary, graph, this.evidenceLimit);
   }
 
   private async *buildQueryVariants(
@@ -56,4 +70,59 @@ export class VaultResearchPipeline {
 
     return variants.length > 0 ? variants : undefined;
   }
+}
+
+function mergeRetrievalResults(
+  primary: RetrievalResult,
+  graph: RetrievalResult,
+  limit: number,
+): RetrievalResult {
+  const graphLimit = Math.min(graph.chunks.length, Math.max(1, Math.ceil(limit * 0.25)));
+  const chunks = uniqueChunks([
+    ...graph.chunks.slice(0, graphLimit),
+    ...primary.chunks,
+    ...graph.chunks.slice(graphLimit),
+  ]).slice(0, limit);
+  const citationIds = new Set(chunks.map((chunk) => chunk.id));
+  const citations = uniqueCitations([...graph.citations, ...primary.citations]).filter((citation) =>
+    citationIds.has(citation.id),
+  );
+
+  return {
+    chunks,
+    citations,
+    usedFallback: primary.usedFallback && graph.usedFallback,
+  };
+}
+
+function uniqueChunks(chunks: RetrievalResult["chunks"]): RetrievalResult["chunks"] {
+  const seen = new Set<string>();
+  const unique: RetrievalResult["chunks"] = [];
+
+  for (const chunk of chunks) {
+    if (seen.has(chunk.id)) {
+      continue;
+    }
+
+    seen.add(chunk.id);
+    unique.push(chunk);
+  }
+
+  return unique;
+}
+
+function uniqueCitations(citations: RetrievalResult["citations"]): RetrievalResult["citations"] {
+  const seen = new Set<string>();
+  const unique: RetrievalResult["citations"] = [];
+
+  for (const citation of citations) {
+    if (seen.has(citation.id)) {
+      continue;
+    }
+
+    seen.add(citation.id);
+    unique.push(citation);
+  }
+
+  return unique;
 }

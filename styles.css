@@ -13,6 +13,41 @@
   resize: vertical;
 }
 
+.ixplorer-settings__category-heading {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.ixplorer-settings__category-heading:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ixplorer-settings__category-heading .setting-item-name {
+  color: var(--text-normal);
+  font-size: 1.15rem;
+  font-weight: var(--font-bold);
+}
+
+.ixplorer-settings__category-heading .setting-item-description {
+  max-width: 54rem;
+  color: var(--text-muted);
+}
+
+.ixplorer-settings__subcategory-heading {
+  margin-top: 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.ixplorer-settings__subcategory-heading .setting-item-name {
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+}
+
 .ixplorer-settings__provider-row .setting-item-control,
 .ixplorer-settings__model-row .setting-item-control {
   display: flex;
@@ -934,6 +969,11 @@
 .ixplorer-chat__context-summary ul {
   margin: 0;
   padding-inline-start: 1.125rem;
+}
+
+.ixplorer-chat__context-graph-list {
+  margin-top: 0.5rem !important;
+  color: var(--text-faint);
 }
 
 .ixplorer-chat__context-debug {

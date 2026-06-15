@@ -30,7 +30,9 @@ export interface AnswerSynthesisInput {
   chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
   explicitEvidence?: RetrievedChunk[];
+  graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
+  webEvidence?: RetrievedChunk[];
   citations: Citation[];
   contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
@@ -60,7 +62,9 @@ export class AnswerSynthesisService {
       chatHistory: input.chatHistory,
       evidence: input.evidence,
       explicitEvidence: input.explicitEvidence,
+      graphEvidence: input.graphEvidence,
       retrievedEvidence: input.retrievedEvidence,
+      webEvidence: input.webEvidence,
       maxEvidenceItems: input.evidenceLimit,
     });
     let answerText = "";
@@ -116,7 +120,9 @@ export class AnswerSynthesisService {
       chatHistory: input.chatHistory,
       evidence: input.evidence,
       explicitEvidence: input.explicitEvidence,
+      graphEvidence: input.graphEvidence,
       retrievedEvidence: input.retrievedEvidence,
+      webEvidence: input.webEvidence,
       maxEvidenceItems: input.evidenceLimit,
       reservedOutputTokens: this.chatOptions.maxTokens,
     });
