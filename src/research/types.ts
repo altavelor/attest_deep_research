@@ -5,6 +5,7 @@ import {
   RetrievalOptions,
   RetrievalQueryVariant,
 } from "../shared/types";
+import { ResearchChatHistoryMessage } from "./prompts";
 
 export interface ResearchRetriever {
   search(query: string, options: RetrievalOptions): Promise<RetrievalResult>;
@@ -19,6 +20,7 @@ export interface ResearchRequest {
   searchMode?: ResearchSearchMode;
   contextPaths?: string[];
   deepResearch?: boolean;
+  chatHistory?: ResearchChatHistoryMessage[];
 }
 
 export type ResearchStreamEvent =

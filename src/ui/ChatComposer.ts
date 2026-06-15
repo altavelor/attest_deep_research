@@ -6,7 +6,16 @@ import type { ResearchSearchMode } from "../research/ResearchService";
 export interface ChatModelSelectOption {
   id: string;
   name: string;
+  contextLength?: number;
+  maxTokens?: number;
   isSuspended?: boolean;
+}
+
+export interface IndexProfileSelectOption {
+  id: string;
+  name: string;
+  isSuspended?: boolean;
+  isIndexed?: boolean;
 }
 
 export interface ChatComposerRefs {
@@ -14,6 +23,7 @@ export interface ChatComposerRefs {
   progressStatusEl: HTMLElement;
   textareaEl: HTMLTextAreaElement;
   modelInputEl: HTMLSelectElement;
+  indexInputEl: HTMLSelectElement;
   submitButtonEl: HTMLButtonElement;
   submitButtonTooltipEl: HTMLElement;
   searchModeEl: HTMLSelectElement;
@@ -24,10 +34,13 @@ export interface ChatComposerRefs {
 export interface ChatComposerOptions {
   settings: SavedChatSettings;
   availableModels: ChatModelSelectOption[];
+  availableIndexes: IndexProfileSelectOption[];
   onSubmit(): void;
   onStop(): void;
+  onQuestionInput?(): void;
   onOpenContextPicker(): void;
   onUpdateModel(model: string): void;
+  onUpdateIndex(indexProfileId: string): void;
   onUpdateSearchMode(searchMode: ResearchSearchMode): void;
   onUpdateDeepResearch(deepResearch: boolean): void;
 }
@@ -54,6 +67,9 @@ export function renderChatComposer(
       placeholder: "Ask across your vault",
       "aria-label": "Research question",
     },
+  });
+  textareaEl.addEventListener("input", () => {
+    options.onQuestionInput?.();
   });
   textareaEl.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
@@ -91,6 +107,25 @@ export function renderChatComposer(
   modelInputEl.value = options.settings.chatModelProfileId;
   modelInputEl.addEventListener("change", () => {
     options.onUpdateModel(modelInputEl.value);
+  });
+
+  modelRow.createEl("label", { text: "Index", attr: { for: "ixplorer-chat-index" } });
+  const indexInputEl = modelRow.createEl("select", {
+    cls: "ixplorer-chat__model-input",
+    attr: {
+      id: "ixplorer-chat-index",
+      "aria-label": "Index profile",
+    },
+  });
+  for (const index of options.availableIndexes) {
+    if (index.isSuspended || !index.isIndexed) {
+      continue;
+    }
+    indexInputEl.createEl("option", { text: index.name, value: index.id });
+  }
+  indexInputEl.value = options.settings.indexProfileId ?? "";
+  indexInputEl.addEventListener("change", () => {
+    options.onUpdateIndex(indexInputEl.value);
   });
   const attachedContextEl = formEl.createDiv({ cls: "ixplorer-chat__attachments" });
 
@@ -152,6 +187,7 @@ export function renderChatComposer(
     progressStatusEl,
     textareaEl,
     modelInputEl,
+    indexInputEl,
     submitButtonEl,
     submitButtonTooltipEl,
     searchModeEl,

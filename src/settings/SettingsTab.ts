@@ -1,26 +1,43 @@
-import { App, Modal, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
+import {
+  App,
+  Modal,
+  Notice,
+  PluginSettingTab,
+  Setting,
+  TAbstractFile,
+  TFile,
+  TFolder,
+  setIcon,
+} from "obsidian";
 
 import type IxplorerPlugin from "../main";
+import { IndexingState, IndexSourceReportItem } from "../indexing/IndexingService";
+import { IndexProfile } from "../indexing/FileVectorIndexStore";
+import { formatIndexSize } from "../indexing/indexSize";
 import { parseNonNegativeInteger, parsePositiveInteger } from "../shared/numbers";
+import { normalizeVaultPath, vaultPathMatchesGlob } from "../shared/pathFilters";
 import { ApiFormat } from "../shared/types";
-import { renderIndexControl } from "../ui/IndexControl";
-import { fetchAvailableModels, verifyEmbeddingCapability, DiscoveredModel } from "./connectionTests";
-import { DUCK_DUCK_GO_DESCRIPTION, INDEX_FOLDER_DESCRIPTION } from "./privacyCopy";
+import {
+  fetchAvailableModels,
+  verifyEmbeddingCapability,
+  DiscoveredModel,
+} from "./connectionTests";
+import { DUCK_DUCK_GO_DESCRIPTION } from "./privacyCopy";
 import {
   ChatModelProfile,
+  DEFAULT_INDEX_PROFILE,
   EmbeddingModelProfile,
   ServerProfile,
+  MAX_INDEX_PROFILE_COUNT,
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
+  createIndexProfile,
   createProfileId,
-  formatListInput,
   getActiveIndexProfile,
   hasDuplicateProfileName,
-  normalizeListInput,
+  isValidIndexProfileName,
   normalizeSettingsState,
   normalizeUrl,
-  normalizeVaultFolder,
-  updateActiveIndexProfile,
 } from "./settings";
 
 export class IxplorerSettingTab extends PluginSettingTab {
@@ -221,7 +238,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
             profiles: this.plugin.settings.embeddingModelProfiles,
             fetchedModelsByServerId: this.fetchedModelsByServerId,
             fetchModels: (server) => this.fetchModelsForServer(server),
-            verifyEmbedding: (server, modelName) => this.verifyEmbeddingForServer(server, modelName),
+            verifyEmbedding: (server, modelName) =>
+              this.verifyEmbeddingForServer(server, modelName),
             onSave: async (updatedProfile) => {
               Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
               await this.plugin.saveSettings();
@@ -358,118 +376,208 @@ export class IxplorerSettingTab extends PluginSettingTab {
   private renderIndexingSettings(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Indexing").setHeading();
 
-    const indexControlEl = containerEl.createDiv({ cls: "ixplorer-settings__index-control" });
-    const renderCurrentIndexControl = () => {
-      renderIndexControl(indexControlEl, {
-        state: this.plugin.indexing.getState(),
-        actions: {
-          start: () => this.plugin.indexing.start(),
-          pause: () => this.plugin.indexing.pause(),
-          resume: () => this.plugin.indexing.resume(),
-          rebuild: () => this.plugin.indexing.rebuild(),
-        },
-      });
+    const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
+    const header = section.createDiv({ cls: "ixplorer-settings-profile-section__header" });
+    header.createEl("h3", { text: "Index profiles" });
+    createIconButton(header, {
+      icon: "plus",
+      label: "Add index profile",
+      disabled: this.plugin.settings.indexProfiles.length >= MAX_INDEX_PROFILE_COUNT,
+      onClick: () => this.openAddIndexProfileModal(),
+    });
+
+    const table = section.createDiv({
+      cls: "ixplorer-settings-profile-table ixplorer-settings-index-table",
+    });
+    const tableHeader = table.createDiv({
+      cls: "ixplorer-settings-profile-table__header ixplorer-settings-index-table__header",
+      attr: { role: "row" },
+    });
+    tableHeader.createSpan({ text: "Index" });
+    tableHeader.createSpan({ text: "Size" });
+    tableHeader.createSpan({ text: "Status" });
+    tableHeader.createSpan({ text: "Actions" });
+    const listEl = table.createDiv({ cls: "ixplorer-settings-profile-list" });
+
+    const renderRows = () => {
+      listEl.empty();
+      this.renderIndexProfileRows(listEl);
     };
-    this.unsubscribeIndexing = this.plugin.indexing.subscribe(renderCurrentIndexControl);
-    renderCurrentIndexControl();
-
-    const activeProfile = getActiveIndexProfile(this.plugin.settings);
-    new Setting(containerEl).setName("Embedding model").addDropdown((dropdown) => {
-      dropdown.addOption("", "Suspended: select embedding model");
-      for (const profile of this.plugin.settings.embeddingModelProfiles.filter(
-        (candidate) => candidate.isSuspended !== true,
-      )) {
-        dropdown.addOption(profile.id, profile.name);
-      }
-      dropdown.setValue(activeProfile.embeddingModelProfileId).onChange(async (value) => {
-        updateActiveIndexProfile(this.plugin.settings, { embeddingModelProfileId: value });
-        await this.plugin.saveSettings();
-        this.plugin.markIndexStale();
-        this.display();
-      });
-    });
-
-    new Setting(containerEl)
-      .setName("Index folder")
-      .setDesc(INDEX_FOLDER_DESCRIPTION)
-      .addText((text) =>
-        text.setPlaceholder(".ixplorer/index").setValue(this.plugin.settings.lanceDbFolder).onChange(async (value) => {
-          const indexFolder = normalizeVaultFolder(value);
-          this.plugin.settings.lanceDbFolder = indexFolder;
-          updateActiveIndexProfile(this.plugin.settings, { indexFolder });
-          await this.plugin.saveSettings();
-          this.plugin.markIndexStale();
-        }),
-      );
-
-    new Setting(containerEl).setName("Included folders").addTextArea((text) =>
-      text.setValue(formatListInput(this.plugin.settings.includeFolders)).onChange(async (value) => {
-        const folders = normalizeListInput(value);
-        this.plugin.settings.includeFolders =
-          folders.length > 0 ? folders : [...this.plugin.defaultSettings.includeFolders];
-        updateActiveIndexProfile(this.plugin.settings, {
-          includeFolders: this.plugin.settings.includeFolders,
-        });
-        await this.plugin.saveSettings();
-        this.plugin.markIndexStale();
-      }),
-    );
-
-    this.renderIndexNumberSetting(containerEl, "Chunk size", activeProfile.chunkSize, (value) => {
-      updateActiveIndexProfile(this.plugin.settings, { chunkSize: value });
-    });
-    this.renderIndexNumberSetting(containerEl, "Chunk overlap", activeProfile.chunkOverlap, (value) => {
-      updateActiveIndexProfile(this.plugin.settings, { chunkOverlap: value });
-    }, true);
-    this.renderIndexNumberSetting(
-      containerEl,
-      "Embedding batch size",
-      activeProfile.embeddingBatchSize,
-      (value) => updateActiveIndexProfile(this.plugin.settings, { embeddingBatchSize: value }),
-    );
-    this.renderIndexNumberSetting(containerEl, "PDF chunk size", activeProfile.pdfChunkSize, (value) => {
-      updateActiveIndexProfile(this.plugin.settings, { pdfChunkSize: value });
-    });
-    this.renderIndexNumberSetting(
-      containerEl,
-      "PDF chunk overlap",
-      activeProfile.pdfChunkOverlap,
-      (value) => updateActiveIndexProfile(this.plugin.settings, { pdfChunkOverlap: value }),
-      true,
-    );
-
-    new Setting(containerEl).setName("Excluded globs").addTextArea((text) =>
-      text.setValue(formatListInput(this.plugin.settings.excludeGlobs)).onChange(async (value) => {
-        const globs = normalizeListInput(value);
-        this.plugin.settings.excludeGlobs =
-          globs.length > 0 ? globs : [...this.plugin.defaultSettings.excludeGlobs];
-        updateActiveIndexProfile(this.plugin.settings, {
-          excludeGlobs: this.plugin.settings.excludeGlobs,
-        });
-        await this.plugin.saveSettings();
-        this.plugin.markIndexStale();
-      }),
-    );
+    renderRows();
+    this.unsubscribeIndexing = this.plugin.indexing.subscribeAll(renderRows);
   }
 
-  private renderIndexNumberSetting(
-    containerEl: HTMLElement,
-    name: string,
-    value: number,
-    update: (value: number) => void,
-    allowZero = false,
-  ): void {
-    new Setting(containerEl).setName(name).addText((text) =>
-      text.setValue(String(value)).onChange(async (rawValue) => {
-        const parsed = allowZero ? parseNonNegativeInteger(rawValue) : parsePositiveInteger(rawValue);
-        if (parsed === null) {
-          return;
-        }
-        update(parsed);
-        await this.plugin.saveSettings();
-        this.plugin.markIndexStale();
-      }),
+  private renderIndexProfileRows(containerEl: HTMLElement): void {
+    const busyProfileId = this.plugin.indexing.getBusyProfileId();
+
+    for (const profile of this.plugin.settings.indexProfiles) {
+      const state = this.plugin.indexing.getState(profile.id);
+      const isDefault = this.plugin.settings.activeIndexProfileId === profile.id;
+      const row = containerEl.createDiv({
+        cls: "ixplorer-settings-profile-list__item ixplorer-settings-index-list__item",
+      });
+      const nameEl = row.createDiv({ cls: "ixplorer-settings-profile-list__name" });
+      nameEl.createDiv({ text: profile.name });
+      const pathCount =
+        profile.mode === "wholeVault" ? profile.excludeGlobs.length : profile.includeFolders.length;
+      const progressText =
+        state.status === "indexing" || state.status === "paused"
+          ? formatIndexRowProgress(state)
+          : "";
+      nameEl.createDiv({
+        cls: "ixplorer-settings-index-list__meta",
+        text: `${profile.mode === "wholeVault" ? "Whole vault" : "Selected"} · ${pathCount} paths${progressText}`,
+      });
+      row.createDiv({
+        cls: "ixplorer-settings-index-list__size",
+        text: `${formatIndexSize(state.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${
+          state.indexedFiles || profile.indexedFileCount || 0
+        } files`,
+      });
+      const status = profile.isSuspended
+        ? statusForProfile(profile)
+        : isDefault
+          ? { kind: "is-default", label: "Default", title: "Default index" }
+          : state.status === "error"
+            ? {
+                kind: "is-suspended",
+                label: "Error",
+                title: state.errorMessage ?? "Indexing failed",
+              }
+            : null;
+      if (status) {
+        row.createSpan({
+          cls: `ixplorer-settings-profile-list__status ${status.kind}`,
+          text: status.label,
+          attr: { title: status.title },
+        });
+      } else {
+        row.createSpan({ cls: "ixplorer-settings-profile-list__status-placeholder" });
+      }
+
+      const actions = row.createDiv({ cls: "ixplorer-settings-profile-list__actions" });
+      const isBusyElsewhere = busyProfileId !== undefined && busyProfileId !== profile.id;
+      const isRunning = state.status === "indexing";
+      const isPaused = state.status === "paused";
+      const canRun = profile.isSuspended !== true && !isBusyElsewhere;
+
+      if (isRunning || isPaused) {
+        createIconButton(actions, {
+          icon: isPaused ? "play" : "pause",
+          label: isPaused ? "Continue indexing" : "Pause indexing",
+          disabled: isBusyElsewhere,
+          onClick: () =>
+            isPaused
+              ? void this.plugin.indexing.resume(profile.id)
+              : this.plugin.indexing.pause(profile.id),
+        });
+      } else {
+        createIconButton(actions, {
+          icon: "play",
+          label: profile.lastIndexedAt ? "Update index" : "Start indexing",
+          disabled: !canRun,
+          onClick: () => void this.plugin.indexing.start(profile.id),
+        });
+      }
+
+      if (profile.lastIndexedAt) {
+        createIconButton(actions, {
+          icon: "refresh-cw",
+          label: "Rebuild index",
+          disabled: !canRun || isRunning,
+          onClick: () => void this.plugin.indexing.rebuild(profile.id),
+        });
+      }
+
+      createIconButton(actions, {
+        icon: "star",
+        className: "ixplorer-settings__default-action",
+        label: isDefault ? "Default index" : "Set as default index",
+        disabled: isDefault || profile.isSuspended === true || !profile.lastIndexedAt,
+        onClick: async () => {
+          this.plugin.settings.activeIndexProfileId = profile.id;
+          await this.plugin.saveSettings();
+          this.display();
+        },
+      });
+      createIconButton(actions, {
+        icon: "file-text",
+        label: "Show index report",
+        onClick: () => void this.openIndexReportModal(profile),
+      });
+      createIconButton(actions, {
+        icon: "pencil",
+        label: "Edit index profile",
+        onClick: () => this.openEditIndexProfileModal(profile),
+      });
+      createIconButton(actions, {
+        icon: "trash",
+        label: "Delete index profile",
+        onClick: () => void this.deleteIndexProfile(profile.id),
+      });
+    }
+  }
+
+  private openAddIndexProfileModal(): void {
+    if (this.plugin.settings.indexProfiles.length >= MAX_INDEX_PROFILE_COUNT) {
+      new Notice(`You can create up to ${MAX_INDEX_PROFILE_COUNT} index profiles.`);
+      return;
+    }
+
+    const embeddingModel = this.plugin.settings.embeddingModelProfiles.find(
+      (profile) => profile.isSuspended !== true,
     );
+    if (!embeddingModel) {
+      new Notice("Create an active embedding model before adding an index.");
+      return;
+    }
+
+    new IndexProfileModal(this.app, {
+      profiles: this.plugin.settings.indexProfiles,
+      embeddingModels: this.plugin.settings.embeddingModelProfiles,
+      onSave: async (profile) => {
+        this.plugin.settings.indexProfiles.push(profile);
+        if (
+          !this.plugin.settings.activeIndexProfileId ||
+          getActiveIndexProfile(this.plugin.settings).isSuspended
+        ) {
+          this.plugin.settings.activeIndexProfileId = profile.id;
+        }
+        await this.plugin.saveSettings();
+        this.display();
+      },
+    }).open();
+  }
+
+  private openEditIndexProfileModal(profile: IndexProfile): void {
+    new IndexProfileModal(this.app, {
+      profile,
+      profiles: this.plugin.settings.indexProfiles,
+      embeddingModels: this.plugin.settings.embeddingModelProfiles,
+      onSave: async (updatedProfile) => {
+        Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
+        await this.plugin.saveSettings();
+        this.plugin.markIndexStale(profile.id);
+        this.display();
+      },
+    }).open();
+  }
+
+  private async deleteIndexProfile(profileId: string): Promise<void> {
+    this.plugin.settings.indexProfiles = this.plugin.settings.indexProfiles.filter(
+      (profile) => profile.id !== profileId,
+    );
+    await this.plugin.saveSettings();
+    this.display();
+  }
+
+  private async openIndexReportModal(profile: IndexProfile): Promise<void> {
+    try {
+      const report = await this.plugin.loadIndexReport(profile.id);
+      new IndexReportModal(this.app, { profile, report }).open();
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not load index report.");
+    }
   }
 
   private renderWebSearchSettings(containerEl: HTMLElement): void {
@@ -493,9 +601,10 @@ interface ProfileStatus {
   title: string;
 }
 
-function statusForProfile(
-  profile: { isSuspended?: boolean; suspendedReason?: string },
-): ProfileStatus | null {
+function statusForProfile(profile: {
+  isSuspended?: boolean;
+  suspendedReason?: string;
+}): ProfileStatus | null {
   if (profile.isSuspended) {
     return {
       kind: "is-suspended",
@@ -505,6 +614,657 @@ function statusForProfile(
   }
 
   return null;
+}
+
+function formatIndexRowProgress(state: IndexingState): string {
+  if (state.chunksTotal !== undefined && state.chunksTotal > 0) {
+    return ` · ${state.chunksEmbedded ?? 0}/${state.chunksTotal} chunks`;
+  }
+
+  return ` · ${Math.round(state.progress * 100)}% · ${state.scannedFiles}/${state.totalFiles} files`;
+}
+
+interface IndexReportModalOptions {
+  profile: IndexProfile;
+  report: IndexSourceReportItem[];
+}
+
+class IndexReportModal extends Modal {
+  constructor(
+    app: App,
+    private readonly options: IndexReportModalOptions,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.createEl("h2", { text: `${this.options.profile.name} report` });
+
+    const indexed = this.options.report.filter((item) => item.status === "indexed");
+    const failed = this.options.report.filter((item) => item.status === "failed");
+    const totalChunks = indexed.reduce((total, item) => total + item.chunkCount, 0);
+    const summary = contentEl.createDiv({ cls: "ixplorer-index-report__summary" });
+    summary.createDiv({ text: `${indexed.length} indexed files` });
+    summary.createDiv({ text: `${failed.length} failed files` });
+    summary.createDiv({ text: `${totalChunks} chunks` });
+
+    const list = contentEl.createDiv({ cls: "ixplorer-index-report__list" });
+    if (this.options.report.length === 0) {
+      list.createDiv({
+        cls: "ixplorer-index-report__empty",
+        text: "No indexing report is available yet.",
+      });
+    } else {
+      for (const item of this.options.report) {
+        const row = list.createDiv({
+          cls: `ixplorer-index-report__row is-${item.status}`,
+        });
+        const title = row.createDiv({ cls: "ixplorer-index-report__path" });
+        title.setText(item.sourcePath);
+        title.setAttr("title", item.sourcePath);
+        row.createDiv({
+          cls: "ixplorer-index-report__status",
+          text: item.status === "indexed" ? `${item.chunkCount} chunks` : "Failed",
+        });
+        row.createDiv({
+          cls: "ixplorer-index-report__detail",
+          text:
+            item.status === "failed"
+              ? (item.errorMessage ?? "Indexing failed.")
+              : formatReportTimestamp(item.indexedAt),
+        });
+      }
+    }
+
+    new Setting(contentEl).setClass("ixplorer-profile-modal__actions").addButton((button) =>
+      button
+        .setCta()
+        .setButtonText("Close")
+        .onClick(() => this.close()),
+    );
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+interface IndexProfileModalOptions {
+  profile?: IndexProfile;
+  profiles: IndexProfile[];
+  embeddingModels: EmbeddingModelProfile[];
+  onSave(profile: IndexProfile): Promise<void>;
+}
+
+class IndexProfileModal extends Modal {
+  private name = this.options.profile?.name ?? "";
+  private mode: IndexProfile["mode"] = this.options.profile?.mode ?? "wholeVault";
+  private includeFolders = [...(this.options.profile?.includeFolders ?? [])];
+  private excludeGlobs = [...(this.options.profile?.excludeGlobs ?? [])];
+  private embeddingModelProfileId =
+    this.options.profile?.embeddingModelProfileId ??
+    this.options.embeddingModels.find((profile) => profile.isSuspended !== true)?.id ??
+    "";
+  private chunkSize = String(this.options.profile?.chunkSize ?? DEFAULT_INDEX_PROFILE.chunkSize);
+  private chunkOverlap = String(
+    this.options.profile?.chunkOverlap ?? DEFAULT_INDEX_PROFILE.chunkOverlap,
+  );
+  private embeddingBatchSize = String(
+    this.options.profile?.embeddingBatchSize ?? DEFAULT_INDEX_PROFILE.embeddingBatchSize,
+  );
+  private pdfChunkSize = String(
+    this.options.profile?.pdfChunkSize ?? DEFAULT_INDEX_PROFILE.pdfChunkSize,
+  );
+  private pdfChunkOverlap = String(
+    this.options.profile?.pdfChunkOverlap ?? DEFAULT_INDEX_PROFILE.pdfChunkOverlap,
+  );
+
+  constructor(
+    app: App,
+    private readonly options: IndexProfileModalOptions,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.createEl("h2", {
+      text: this.options.profile ? "Edit index profile" : "Add index profile",
+    });
+
+    new Setting(contentEl)
+      .setName("Name")
+      .setDesc("Unique index name shown in settings, chat, and search selectors.")
+      .addText((text) =>
+        text.setValue(this.name).onChange((value) => {
+          this.name = value.trim();
+        }),
+      );
+
+    new Setting(contentEl)
+      .setName("Mode")
+      .setDesc(
+        "Whole vault indexes every supported visible file except excluded paths; selected indexes only chosen paths.",
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("wholeVault", "Whole vault")
+          .addOption("selected", "Selected")
+          .setValue(this.mode)
+          .onChange((value) => {
+            this.mode = value === "selected" ? "selected" : "wholeVault";
+            if (this.mode === "wholeVault") {
+              this.includeFolders = ["/"];
+            } else {
+              this.excludeGlobs = [];
+            }
+            this.onOpen();
+          }),
+      );
+
+    if (this.mode === "selected") {
+      this.renderPathSetting(
+        contentEl,
+        "Included",
+        "Files and folders that should be included in this index.",
+        this.includeFolders,
+        (paths) => {
+          this.includeFolders = paths;
+          this.onOpen();
+        },
+      );
+    } else {
+      this.renderPathSetting(
+        contentEl,
+        "Excluded",
+        "Files and folders that should be excluded from this whole-vault index.",
+        this.excludeGlobs,
+        (paths) => {
+          this.excludeGlobs = paths;
+          this.onOpen();
+        },
+      );
+    }
+
+    new Setting(contentEl)
+      .setName("Embedding model")
+      .setDesc("Embedding model used to generate vectors for this index.")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "Select embedding model");
+        for (const profile of this.options.embeddingModels.filter(
+          (candidate) => candidate.isSuspended !== true,
+        )) {
+          dropdown.addOption(profile.id, profile.name);
+        }
+        dropdown.setValue(this.embeddingModelProfileId).onChange((value) => {
+          this.embeddingModelProfileId = value;
+        });
+      });
+
+    this.renderNumberSetting(
+      contentEl,
+      "Chunk size",
+      "Maximum text chunk size for non-PDF files.",
+      this.chunkSize,
+      (value) => {
+        this.chunkSize = value;
+      },
+    );
+    this.renderNumberSetting(
+      contentEl,
+      "Chunk overlap",
+      "Number of characters shared between adjacent non-PDF chunks.",
+      this.chunkOverlap,
+      (value) => {
+        this.chunkOverlap = value;
+      },
+    );
+    this.renderNumberSetting(
+      contentEl,
+      "Embedding batch size",
+      "Number of chunks sent in one embedding request.",
+      this.embeddingBatchSize,
+      (value) => {
+        this.embeddingBatchSize = value;
+      },
+    );
+    this.renderNumberSetting(
+      contentEl,
+      "PDF chunk size",
+      "Maximum text chunk size for PDF files.",
+      this.pdfChunkSize,
+      (value) => {
+        this.pdfChunkSize = value;
+      },
+    );
+    this.renderNumberSetting(
+      contentEl,
+      "PDF chunk overlap",
+      "Number of characters shared between adjacent PDF chunks.",
+      this.pdfChunkOverlap,
+      (value) => {
+        this.pdfChunkOverlap = value;
+      },
+    );
+
+    renderModalActions(contentEl, {
+      onCancel: () => this.close(),
+      onSave: () => void this.save(),
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+
+  private renderPathSetting(
+    containerEl: HTMLElement,
+    name: string,
+    description: string,
+    paths: string[],
+    onChange: (paths: string[]) => void,
+  ): void {
+    new Setting(containerEl)
+      .setName(name)
+      .setDesc(description)
+      .addButton((button) =>
+        button.setButtonText("Choose").onClick(() => {
+          new IndexPathPickerModal(this.app, {
+            selectedPaths: paths,
+            onSubmit: onChange,
+          }).open();
+        }),
+      );
+    const selectedEl = containerEl.createDiv({ cls: "ixplorer-index-path-summary" });
+    if (paths.length === 0) {
+      selectedEl.createDiv({
+        cls: "ixplorer-index-path-summary__empty",
+        text: "No paths selected",
+      });
+      return;
+    }
+
+    for (const path of paths) {
+      selectedEl.createDiv({
+        cls: "ixplorer-index-path-summary__item",
+        text: path,
+        attr: { title: path },
+      });
+    }
+  }
+
+  private renderNumberSetting(
+    containerEl: HTMLElement,
+    name: string,
+    description: string,
+    value: string,
+    onChange: (value: string) => void,
+  ): void {
+    new Setting(containerEl)
+      .setName(name)
+      .setDesc(description)
+      .addText((text) => text.setValue(value).onChange((nextValue) => onChange(nextValue.trim())));
+  }
+
+  private async save(): Promise<void> {
+    const chunkSize = parsePositiveInteger(this.chunkSize);
+    const chunkOverlap = parseNonNegativeInteger(this.chunkOverlap);
+    const embeddingBatchSize = parsePositiveInteger(this.embeddingBatchSize);
+    const pdfChunkSize = parsePositiveInteger(this.pdfChunkSize);
+    const pdfChunkOverlap = parseNonNegativeInteger(this.pdfChunkOverlap);
+
+    if (!isValidIndexProfileName(this.name)) {
+      new Notice(
+        "Use a unique name up to 60 characters with letters, numbers, spaces, _, -, ., (, ), [, ].",
+      );
+      return;
+    }
+
+    if (hasDuplicateProfileName(this.options.profiles, this.name, this.options.profile?.id)) {
+      new Notice("Name must be unique.");
+      return;
+    }
+
+    if (!this.embeddingModelProfileId) {
+      new Notice("Select an embedding model.");
+      return;
+    }
+
+    if (this.mode === "selected" && this.includeFolders.length === 0) {
+      new Notice("Select at least one included path.");
+      return;
+    }
+
+    if (
+      chunkSize === null ||
+      chunkOverlap === null ||
+      embeddingBatchSize === null ||
+      pdfChunkSize === null ||
+      pdfChunkOverlap === null
+    ) {
+      new Notice("Numeric index settings must be valid whole numbers.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const id = this.options.profile?.id ?? createProfileId("index");
+    const profile = createIndexProfile({
+      ...this.options.profile,
+      id,
+      name: this.name,
+      mode: this.mode,
+      indexFolder: this.options.profile?.indexFolder ?? `.ixplorer/indexes/${id}`,
+      includeFolders: this.mode === "wholeVault" ? ["/"] : this.includeFolders,
+      excludeGlobs: this.mode === "wholeVault" ? this.excludeGlobs : [],
+      embeddingModelProfileId: this.embeddingModelProfileId,
+      chunkSize,
+      chunkOverlap,
+      embeddingBatchSize,
+      pdfChunkSize,
+      pdfChunkOverlap,
+      createdAt: this.options.profile?.createdAt ?? now,
+      updatedAt: now,
+    });
+
+    if (
+      this.options.profile?.lastIndexedAt &&
+      hasIndexingConfigChanged(this.options.profile, profile)
+    ) {
+      new Notice("Index settings changed. Rebuild this index to apply the new configuration.");
+    }
+
+    await this.options.onSave(profile);
+    this.close();
+  }
+}
+
+interface IndexPathPickerModalOptions {
+  selectedPaths: string[];
+  onSubmit(paths: string[]): void;
+}
+
+class IndexPathPickerModal extends Modal {
+  private selectedPaths = new Set(this.options.selectedPaths.map(normalizePickerPath));
+  private expandedFolders = new Set<string>();
+  private query = "";
+  private treeEl: HTMLElement | null = null;
+
+  constructor(
+    app: App,
+    private readonly options: IndexPathPickerModalOptions,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.createEl("h2", { text: "Choose files and folders" });
+
+    new Setting(contentEl).setName("Search").addSearch((search) =>
+      search.setPlaceholder("Filter files and folders").onChange((value) => {
+        this.query = value.trim().toLocaleLowerCase();
+        this.renderTree();
+      }),
+    );
+
+    this.treeEl = contentEl.createDiv({ cls: "ixplorer-index-path-picker" });
+    this.renderTree();
+
+    renderModalActions(contentEl, {
+      onCancel: () => this.close(),
+      onSave: () => {
+        this.options.onSubmit(Array.from(this.selectedPaths).sort());
+        this.close();
+      },
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+
+  private renderTree(): void {
+    if (!this.treeEl) {
+      return;
+    }
+
+    this.treeEl.empty();
+    if (this.query) {
+      this.renderSearchResults(this.treeEl);
+      return;
+    }
+
+    this.renderFolderChildren(this.treeEl, this.app.vault.getRoot(), 0);
+  }
+
+  private renderSearchResults(containerEl: HTMLElement): void {
+    const matches = this.app.vault
+      .getAllLoadedFiles()
+      .filter(
+        (file) => this.shouldShowPath(file) && file.path.toLocaleLowerCase().includes(this.query),
+      )
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .slice(0, 200);
+
+    if (matches.length === 0) {
+      containerEl.createDiv({
+        cls: "ixplorer-profile-modal__model-empty",
+        text: "No matching paths",
+      });
+      return;
+    }
+
+    for (const file of matches) {
+      this.renderPathRow(containerEl, file, 0);
+    }
+  }
+
+  private renderFolderChildren(containerEl: HTMLElement, folder: TFolder, depth: number): void {
+    const children = folder.children
+      .filter((child) => this.shouldShowPath(child))
+      .sort((left, right) => {
+        const leftFolder = left instanceof TFolder ? 0 : 1;
+        const rightFolder = right instanceof TFolder ? 0 : 1;
+        return leftFolder - rightFolder || left.name.localeCompare(right.name);
+      });
+
+    for (const child of children) {
+      this.renderPathRow(containerEl, child, depth);
+    }
+  }
+
+  private renderPathRow(containerEl: HTMLElement, file: TAbstractFile, depth: number): void {
+    const path = normalizePickerPath(file.path);
+    const row = containerEl.createDiv({
+      cls: "ixplorer-index-path-picker__row",
+      attr: { style: `padding-left: ${depth * 1.25}rem` },
+    });
+
+    if (file instanceof TFolder) {
+      const expandButton = row.createEl("button", {
+        cls: "clickable-icon ixplorer-index-path-picker__expand",
+        attr: { type: "button", "aria-label": `Toggle ${file.path || "vault root"}` },
+      });
+      setIcon(expandButton, this.expandedFolders.has(path) ? "chevron-down" : "chevron-right");
+      expandButton.addEventListener("click", () => {
+        if (this.expandedFolders.has(path)) {
+          this.expandedFolders.delete(path);
+        } else {
+          this.expandedFolders.add(path);
+        }
+        this.renderTree();
+      });
+    } else {
+      row.createSpan({ cls: "ixplorer-index-path-picker__spacer" });
+    }
+
+    const checkbox = row.createEl("input", {
+      attr: {
+        type: "checkbox",
+        "aria-label": `Select ${file.path}`,
+      },
+    });
+    checkbox.checked = this.isSelected(file);
+    checkbox.addEventListener("change", () => {
+      this.togglePath(file, checkbox.checked);
+      this.renderTree();
+    });
+    row.createSpan({ text: file.path || "/" });
+
+    if (file instanceof TFolder && this.expandedFolders.has(path)) {
+      this.renderFolderChildren(containerEl, file, depth + 1);
+    }
+  }
+
+  private togglePath(file: TAbstractFile, selected: boolean): void {
+    const path = normalizePickerPath(file.path);
+    if (!selected) {
+      const selectedAncestor = this.findSelectedAncestor(path);
+      if (selectedAncestor) {
+        this.selectedPaths.delete(selectedAncestor);
+        const ancestor = this.app.vault.getAbstractFileByPath(selectedAncestor);
+        if (ancestor instanceof TFolder) {
+          for (const descendantPath of this.collectSupportedFilePaths(ancestor)) {
+            if (descendantPath !== path && !descendantPath.startsWith(`${path}/`)) {
+              this.selectedPaths.add(descendantPath);
+            }
+          }
+        }
+      }
+      this.removePathAndDescendants(path);
+      return;
+    }
+
+    this.removeDescendants(path);
+    this.selectedPaths.add(path);
+  }
+
+  private isSelected(file: TAbstractFile): boolean {
+    const path = normalizePickerPath(file.path);
+    return (
+      this.selectedPaths.has(path) ||
+      Array.from(this.selectedPaths).some((selectedPath) => path.startsWith(`${selectedPath}/`))
+    );
+  }
+
+  private removePathAndDescendants(path: string): void {
+    for (const selectedPath of Array.from(this.selectedPaths)) {
+      if (
+        selectedPath === path ||
+        selectedPath.startsWith(`${path}/`) ||
+        path.startsWith(`${selectedPath}/`)
+      ) {
+        this.selectedPaths.delete(selectedPath);
+      }
+    }
+  }
+
+  private removeDescendants(path: string): void {
+    for (const selectedPath of Array.from(this.selectedPaths)) {
+      if (selectedPath.startsWith(`${path}/`)) {
+        this.selectedPaths.delete(selectedPath);
+      }
+    }
+  }
+
+  private findSelectedAncestor(path: string): string | undefined {
+    return Array.from(this.selectedPaths).find(
+      (selectedPath) => path !== selectedPath && path.startsWith(`${selectedPath}/`),
+    );
+  }
+
+  private collectSupportedFilePaths(folder: TFolder): string[] {
+    const paths: string[] = [];
+    for (const child of folder.children) {
+      if (!this.shouldShowPath(child)) {
+        continue;
+      }
+
+      if (child instanceof TFolder) {
+        paths.push(...this.collectSupportedFilePaths(child));
+      } else if (child instanceof TFile) {
+        paths.push(normalizePickerPath(child.path));
+      }
+    }
+    return paths;
+  }
+
+  private shouldShowPath(file: TAbstractFile): boolean {
+    if (isHiddenOrIgnoredPath(file.path, this.getIgnoredGlobs())) {
+      return false;
+    }
+
+    if (file instanceof TFolder) {
+      return true;
+    }
+
+    return file instanceof TFile && isSupportedIndexFile(file.path);
+  }
+
+  private getIgnoredGlobs(): string[] {
+    const vaultWithConfig = this.app.vault as typeof this.app.vault & {
+      getConfig?(key: string): unknown;
+    };
+    const value = vaultWithConfig.getConfig?.("userIgnoreFilters");
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  }
+}
+
+function hasIndexingConfigChanged(left: IndexProfile, right: IndexProfile): boolean {
+  return (
+    left.mode !== right.mode ||
+    left.embeddingModelProfileId !== right.embeddingModelProfileId ||
+    left.chunkSize !== right.chunkSize ||
+    left.chunkOverlap !== right.chunkOverlap ||
+    left.embeddingBatchSize !== right.embeddingBatchSize ||
+    left.pdfChunkSize !== right.pdfChunkSize ||
+    left.pdfChunkOverlap !== right.pdfChunkOverlap ||
+    left.includeFolders.join("\n") !== right.includeFolders.join("\n") ||
+    left.excludeGlobs.join("\n") !== right.excludeGlobs.join("\n")
+  );
+}
+
+function normalizePickerPath(path: string): string {
+  return normalizeVaultPath(path).replace(/\/+$/, "");
+}
+
+function isSupportedIndexFile(path: string): boolean {
+  const lower = path.toLocaleLowerCase();
+  return (
+    lower.endsWith(".md") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".pdf") ||
+    lower.endsWith(".docx") ||
+    lower.endsWith(".epub") ||
+    lower.endsWith(".fb2")
+  );
+}
+
+function isHiddenOrIgnoredPath(path: string, ignoredGlobs: string[]): boolean {
+  const normalized = normalizePickerPath(path);
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.split("/").some((segment) => segment.startsWith("."))) {
+    return true;
+  }
+
+  return ignoredGlobs.some((glob) => vaultPathMatchesGlob(normalized, glob));
+}
+
+function formatReportTimestamp(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 interface ServerProfileModalOptions {
@@ -635,11 +1395,15 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   private modelName = this.options.profile?.modelName ?? "";
   private temperature =
     this.options.kind === "chat" && this.options.profile && "temperature" in this.options.profile
-      ? this.options.profile.temperature?.toString() ?? ""
+      ? (this.options.profile.temperature?.toString() ?? "")
       : "";
   private maxTokens =
     this.options.kind === "chat" && this.options.profile && "maxTokens" in this.options.profile
-      ? this.options.profile.maxTokens?.toString() ?? ""
+      ? (this.options.profile.maxTokens?.toString() ?? "")
+      : "";
+  private contextLength =
+    this.options.kind === "chat"
+      ? (this.options.profile?.capabilities?.contextLength?.toString() ?? "")
       : "";
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
@@ -677,7 +1441,9 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       .setName("Server")
       .setDesc("Provider endpoint used to call this model.")
       .addDropdown((dropdown) => {
-        for (const server of this.options.servers.filter((profile) => profile.isSuspended !== true)) {
+        for (const server of this.options.servers.filter(
+          (profile) => profile.isSuspended !== true,
+        )) {
           dropdown.addOption(server.id, server.name);
         }
         dropdown.setValue(this.serverProfileId).onChange((value) => {
@@ -700,10 +1466,11 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             this.renderModelMenu();
           });
         text.inputEl.addClass("ixplorer-profile-modal__model-input");
-        this.modelMenuEl = text.inputEl.parentElement?.createDiv({
-          cls: "ixplorer-profile-modal__model-menu is-hidden",
-          attr: { role: "listbox" },
-        }) ?? null;
+        this.modelMenuEl =
+          text.inputEl.parentElement?.createDiv({
+            cls: "ixplorer-profile-modal__model-menu is-hidden",
+            attr: { role: "listbox" },
+          }) ?? null;
         text.inputEl.addEventListener("focus", () => this.renderModelMenu());
         text.inputEl.addEventListener("keydown", (event) => {
           if (event.key === "Escape") {
@@ -735,10 +1502,20 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         );
       new Setting(contentEl)
         .setName("Max tokens")
-        .setDesc("Optional. Limits response length; blank uses provider/model default or 4096 for Anthropic.")
+        .setDesc(
+          "Optional. Limits response length; blank uses provider/model default or 4096 for Anthropic.",
+        )
         .addText((text) =>
           text.setValue(this.maxTokens).onChange((value) => {
             this.maxTokens = value.trim();
+          }),
+        );
+      new Setting(contentEl)
+        .setName("Context window tokens")
+        .setDesc("Optional. Used to block chat submits when the conversation no longer fits.")
+        .addText((text) =>
+          text.setValue(this.contextLength).onChange((value) => {
+            this.contextLength = value.trim();
           }),
         );
     }
@@ -871,7 +1648,9 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       return;
     }
 
-    const model = this.modelsForSelectedServer().find((candidate) => candidate.name === this.modelName);
+    const model = this.modelsForSelectedServer().find(
+      (candidate) => candidate.name === this.modelName,
+    );
     if (!model && !this.options.profile) {
       new Notice("Fetch models before creating a model profile.");
       return;
@@ -891,7 +1670,7 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       name: this.name,
       serverProfileId: this.serverProfileId,
       modelName: this.modelName,
-      capabilities: model?.capabilities ?? this.options.profile?.capabilities,
+      capabilities: this.resolveCapabilities(model),
       isSuspended: this.options.profile?.isSuspended,
       suspendedReason: this.options.profile?.suspendedReason,
       createdAt: this.options.profile?.createdAt ?? now,
@@ -909,6 +1688,25 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     await this.options.onSave(profile as TProfile);
     this.close();
+  }
+
+  private resolveCapabilities(model: DiscoveredModel | undefined) {
+    const capabilities = model?.capabilities ?? this.options.profile?.capabilities;
+    const contextLength =
+      this.options.kind === "chat" ? parsePositiveInteger(this.contextLength) : undefined;
+
+    if (!contextLength) {
+      return capabilities;
+    }
+
+    return {
+      ...(capabilities ?? {
+        chat: this.options.kind === "chat",
+        embeddings: this.options.kind === "embedding",
+        detectionSource: "format-default" as const,
+      }),
+      contextLength,
+    };
   }
 }
 

@@ -6,6 +6,7 @@ export type IxplorerErrorCode =
   | "INDEX_UNAVAILABLE"
   | "INDEX_REBUILD_REQUIRED"
   | "EXTRACTION_FAILED"
+  | "CONTEXT_WINDOW_EXCEEDED"
   | "WEB_SEARCH_DISABLED"
   | "WEB_SEARCH_FAILED"
   | "UNKNOWN";
@@ -18,6 +19,7 @@ const USER_MESSAGES: Record<IxplorerErrorCode, string> = {
   INDEX_UNAVAILABLE: "The local search index is unavailable.",
   INDEX_REBUILD_REQUIRED: "The local search index needs to be rebuilt.",
   EXTRACTION_FAILED: "Ixplorer could not read this file.",
+  CONTEXT_WINDOW_EXCEEDED: "The current chat is too long for the selected model context window.",
   WEB_SEARCH_DISABLED: "Web search is disabled in Ixplorer settings.",
   WEB_SEARCH_FAILED: "Web search failed.",
   UNKNOWN: "Something went wrong in Ixplorer.",

@@ -24,6 +24,7 @@ export type {
   IndexingServiceOptions,
   IndexingState,
   IndexingStatus,
+  IndexSourceReportItem,
   PendingIndexedFile,
   VaultFileProvider,
   VaultFileSummary,
@@ -130,7 +131,9 @@ export class IndexingService {
 
     this.progress.start(activeOperation);
 
-    const files = await this.files.listFiles();
+    const files = (await this.files.listFiles()).filter((file) =>
+      this.fileProcessor.canProcessPath(file.path),
+    );
     await this.writer.loadPersistedSnapshots();
     this.progress.setTotalFiles(files.length);
     await this.writer.begin();
@@ -181,12 +184,10 @@ export class IndexingService {
       this.progress.markFileScanned(file.path);
       this.updateCountersAndPending(file, result, pendingChunks, pendingIndexedFiles);
 
-      if (pendingChunks.length >= this.batchSize || this.shouldYieldAfterFile()) {
-        await this.writer.flushPending({
-          chunks: pendingChunks,
-          indexedFiles: pendingIndexedFiles,
-        });
-      }
+      await this.writer.flushPending({
+        chunks: pendingChunks,
+        indexedFiles: pendingIndexedFiles,
+      });
 
       this.progress.notify();
 

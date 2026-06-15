@@ -1,17 +1,32 @@
-import { ChatModelProvider, ChatRequest, Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
-import { buildResearchPrompt, extractFollowUpQuestions } from "./prompts";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  Citation,
+  ResearchAnswer,
+  RetrievedChunk,
+} from "../shared/types";
+import { IxplorerError } from "../shared/errors";
+import {
+  buildResearchPrompt,
+  estimateResearchRequestTokens,
+  extractFollowUpQuestions,
+  RESEARCH_SYSTEM_PROMPT,
+  ResearchChatHistoryMessage,
+} from "./prompts";
 import { ResearchStreamEvent } from "./types";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
   chatModelName: string;
   chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
+  contextLimitTokens?: number;
   now: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
 }
 
 export interface AnswerSynthesisInput {
   question: string;
+  chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
   citations: Citation[];
   evidenceLimit: number;
@@ -21,6 +36,7 @@ export class AnswerSynthesisService {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
+  private readonly contextLimitTokens?: number;
   private readonly now: () => Date;
   private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
 
@@ -28,13 +44,16 @@ export class AnswerSynthesisService {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.chatOptions = options.chatOptions;
+    this.contextLimitTokens = options.contextLimitTokens;
     this.now = options.now;
     this.persistFinalAnswer = options.persistFinalAnswer;
   }
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
+    this.assertWithinContextWindow(input);
     const prompt = buildResearchPrompt({
       question: input.question,
+      chatHistory: input.chatHistory,
       evidence: input.evidence,
       maxEvidenceItems: input.evidenceLimit,
     });
@@ -49,8 +68,7 @@ export class AnswerSynthesisService {
       messages: [
         {
           role: "system",
-          content:
-            "You are Ixplorer, a local-first Obsidian research assistant. Answer only from provided evidence and preserve citation IDs.",
+          content: RESEARCH_SYSTEM_PROMPT,
         },
         { role: "user", content: prompt },
       ],
@@ -79,5 +97,31 @@ export class AnswerSynthesisService {
     }
 
     yield { type: "complete", answer: finalAnswer };
+  }
+
+  private assertWithinContextWindow(input: AnswerSynthesisInput): void {
+    if (!this.contextLimitTokens) {
+      return;
+    }
+
+    const estimatedTokens = estimateResearchRequestTokens({
+      question: input.question,
+      chatHistory: input.chatHistory,
+      evidence: input.evidence,
+      maxEvidenceItems: input.evidenceLimit,
+      reservedOutputTokens: this.chatOptions.maxTokens,
+    });
+
+    if (estimatedTokens <= this.contextLimitTokens) {
+      return;
+    }
+
+    throw new IxplorerError({
+      code: "CONTEXT_WINDOW_EXCEEDED",
+      details: {
+        contextLimitTokens: this.contextLimitTokens,
+        estimatedTokens,
+      },
+    });
   }
 }

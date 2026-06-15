@@ -1,7 +1,10 @@
 import {
   DEFAULT_SETTINGS,
+  MAX_INDEX_PROFILE_COUNT,
   formatListInput,
   getActiveIndexProfile,
+  isValidIndexProfileName,
+  isIndexProfileSelectable,
   migrateSettings,
   normalizeListInput,
   normalizeSettingsState,
@@ -25,6 +28,7 @@ describe("Ixplorer settings", () => {
       embeddingModelProfileId: "",
       isSuspended: true,
       shardCount: 32,
+      mode: "wholeVault",
       chunkSize: 800,
       chunkOverlap: 120,
     });
@@ -48,6 +52,12 @@ describe("Ixplorer settings", () => {
           name: "Main chat",
           serverProfileId: "server-openrouter",
           modelName: "openai/gpt-4.1",
+          capabilities: {
+            chat: true,
+            embeddings: false,
+            contextLength: 128000,
+            detectionSource: "metadata",
+          },
         },
       ],
       activeChatModelProfileId: "chat-a",
@@ -65,6 +75,7 @@ describe("Ixplorer settings", () => {
     expect(resolveChatModelProfile(settings, "chat-a")).toMatchObject({
       id: "chat-a",
       isSuspended: false,
+      capabilities: expect.objectContaining({ contextLength: 128000 }),
     });
     expect(settings.activeChatModelProfileId).toBe("chat-a");
     expect(settings.duckDuckGoEnabled).toBe(true);
@@ -113,9 +124,122 @@ describe("Ixplorer settings", () => {
 
     expect(getActiveIndexProfile(settings)).toMatchObject({
       id: "notes",
+      mode: "wholeVault",
       isSuspended: true,
       suspendedReason: "Select an embedding model profile.",
     });
+  });
+
+  it("limits saved index profiles to the configured maximum", () => {
+    const indexProfiles = Array.from({ length: MAX_INDEX_PROFILE_COUNT + 3 }, (_, index) => ({
+      id: `index-${index}`,
+      name: `Index ${index}`,
+      indexFolder: `.ixplorer/indexes/index-${index}`,
+      includeFolders: ["/"],
+      excludeGlobs: [],
+      embeddingModelProfileId: "embed-a",
+    }));
+
+    const settings = migrateSettings({ indexProfiles });
+
+    expect(settings.indexProfiles).toHaveLength(MAX_INDEX_PROFILE_COUNT);
+    expect(settings.indexProfiles.at(-1)?.id).toBe(`index-${MAX_INDEX_PROFILE_COUNT - 1}`);
+  });
+
+  it("uses the first non-suspended index as default when the current default is unavailable", () => {
+    const settings = migrateSettings({
+      serverProfiles: [
+        {
+          id: "server-a",
+          name: "Server A",
+          apiFormat: "ollama",
+          baseUrl: "http://localhost:11434",
+        },
+      ],
+      embeddingModelProfiles: [
+        { id: "embed-a", name: "Embed A", serverProfileId: "server-a", modelName: "nomic" },
+      ],
+      activeIndexProfileId: "broken",
+      indexProfiles: [
+        {
+          id: "broken",
+          name: "Broken",
+          indexFolder: ".ixplorer/indexes/broken",
+          includeFolders: ["/"],
+          excludeGlobs: [],
+          embeddingModelProfileId: "missing",
+        },
+        {
+          id: "active",
+          name: "Active",
+          indexFolder: ".ixplorer/indexes/active",
+          includeFolders: ["/"],
+          excludeGlobs: [],
+          embeddingModelProfileId: "embed-a",
+        },
+      ],
+    });
+
+    expect(settings.activeIndexProfileId).toBe("active");
+    expect(getActiveIndexProfile(settings).id).toBe("active");
+  });
+
+  it("normalizes index profile mode and persisted summary fields", () => {
+    const settings = migrateSettings({
+      indexProfiles: [
+        {
+          id: "selected",
+          name: "Selected",
+          mode: "selected",
+          indexFolder: ".ixplorer/indexes/selected",
+          includeFolders: ["Notes", "Paper.pdf"],
+          excludeGlobs: [],
+          embeddingModelProfileId: "",
+          lastIndexedAt: "2026-06-14T10:00:00.000Z",
+          indexedFileCount: 12,
+          indexSizeBytes: 3456,
+        },
+      ],
+    });
+
+    expect(settings.indexProfiles[0]).toMatchObject({
+      mode: "selected",
+      includeFolders: ["Notes", "Paper.pdf"],
+      lastIndexedAt: "2026-06-14T10:00:00.000Z",
+      indexedFileCount: 12,
+      indexSizeBytes: 3456,
+    });
+  });
+
+  it("treats only active indexed profiles as selectable", () => {
+    expect(
+      isIndexProfileSelectable({
+        ...DEFAULT_SETTINGS.indexProfiles[0],
+        isSuspended: false,
+        lastIndexedAt: "2026-06-14T10:00:00.000Z",
+      }),
+    ).toBe(true);
+    expect(
+      isIndexProfileSelectable({
+        ...DEFAULT_SETTINGS.indexProfiles[0],
+        isSuspended: false,
+        lastIndexedAt: undefined,
+      }),
+    ).toBe(false);
+    expect(
+      isIndexProfileSelectable({
+        ...DEFAULT_SETTINGS.indexProfiles[0],
+        isSuspended: true,
+        lastIndexedAt: "2026-06-14T10:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
+  it("validates index profile names for UI input", () => {
+    expect(isValidIndexProfileName("Research index [A]")).toBe(true);
+    expect(isValidIndexProfileName("")).toBe(false);
+    expect(isValidIndexProfileName("A".repeat(61))).toBe(false);
+    expect(isValidIndexProfileName("Bad/name")).toBe(false);
   });
 
   it("activates the first non-suspended chat model when active is invalid", () => {

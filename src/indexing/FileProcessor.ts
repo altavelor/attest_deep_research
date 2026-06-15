@@ -94,6 +94,7 @@ export class FileProcessor {
       durationMs: Date.now() - extractionStartedAt,
       chunkCount: chunks.length,
     });
+    this.options.progress.setFileChunkProgress(file.path, 0, chunks.length);
 
     if (chunks.length === 0) {
       const languages = detectTextLanguages(String(data));
@@ -128,15 +129,35 @@ export class FileProcessor {
     };
   }
 
+  canProcessPath(path: string): boolean {
+    return (
+      this.options.extractors.some((candidate) => candidate.supports(path)) &&
+      this.shouldScanPath(path)
+    );
+  }
+
   private shouldScanPath(path: string): boolean {
     return (
       isPathIncluded(path, this.options.includeFolders) &&
       !INTERNAL_EXCLUDE_GLOBS.some((glob) => vaultPathMatchesGlob(path, glob)) &&
-      !this.options.excludeGlobs.some((glob) => vaultPathMatchesGlob(path, glob))
+      !this.options.excludeGlobs.some((glob) => isPathExcluded(path, glob))
     );
   }
 
   private logPerformance(event: IndexingPerformanceLogEvent): void {
     this.options.logger?.logIndexingPerformance?.(event);
   }
+}
+
+function isPathExcluded(path: string, excludedPathOrGlob: string): boolean {
+  const normalized = excludedPathOrGlob.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    path === normalized ||
+    path.startsWith(`${normalized}/`) ||
+    vaultPathMatchesGlob(path, excludedPathOrGlob)
+  );
 }

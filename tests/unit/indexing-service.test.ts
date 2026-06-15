@@ -80,11 +80,11 @@ describe("IndexingService", () => {
     const result = await service.manualReindex();
 
     expect(result).toMatchObject({
-      scannedFiles: 5,
-      totalFiles: 5,
+      scannedFiles: 2,
+      totalFiles: 2,
       progress: 1,
       indexedFiles: 2,
-      skippedFiles: 3,
+      skippedFiles: 0,
       embeddedChunks: 2,
       isStale: false,
     });
@@ -175,7 +175,7 @@ describe("IndexingService", () => {
 
     expect(result).toMatchObject({
       indexedFiles: 1,
-      skippedFiles: 3,
+      skippedFiles: 1,
       failedFiles: 2,
       embeddedChunks: 1,
     });
@@ -205,16 +205,6 @@ describe("IndexingService", () => {
           reason: "extraction-failed",
           errorMessage: "Ixplorer could not read this PDF. Cause: incorrect header check",
           errorDetails: expect.objectContaining({ causeMessage: "incorrect header check" }),
-        }),
-        expect.objectContaining({
-          path: "Archive/old.md",
-          outcome: "skipped",
-          reason: "excluded-by-path",
-        }),
-        expect.objectContaining({
-          path: "Research/image.png",
-          outcome: "skipped",
-          reason: "unsupported-file-type",
         }),
       ]),
     );
@@ -420,6 +410,40 @@ describe("IndexingService", () => {
     service.markStale();
     expect(service.getState()).toMatchObject({ status: "stale", isStale: true });
   });
+
+  it("reports current file progress in chunks", async () => {
+    const progressStates: Array<{
+      currentFile?: string;
+      chunksTotal?: number;
+      chunksEmbedded?: number;
+    }> = [];
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/long.md", 1, "long")]),
+      extractors: [new MultiChunkExtractor(".md", 3)],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore: new FakeIndexStore(),
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      batchSize: 2,
+      onProgress: (state) =>
+        progressStates.push({
+          currentFile: state.currentFile,
+          chunksTotal: state.chunksTotal,
+          chunksEmbedded: state.chunksEmbedded,
+        }),
+    });
+
+    await service.manualReindex();
+
+    expect(progressStates).toEqual(
+      expect.arrayContaining([
+        { currentFile: "Research/long.md", chunksTotal: 3, chunksEmbedded: 0 },
+        { currentFile: "Research/long.md", chunksTotal: 3, chunksEmbedded: 2 },
+        { currentFile: "Research/long.md", chunksTotal: 3, chunksEmbedded: 3 },
+      ]),
+    );
+  });
 });
 
 function file(
@@ -468,6 +492,27 @@ class FakeExtractor implements Extractor {
   }): Promise<ExtractedChunk[]> {
     this.extractedPaths.push(input.path);
     return [markdownChunk(input.path, input.path, String(input.data))];
+  }
+}
+
+class MultiChunkExtractor implements Extractor {
+  constructor(
+    private readonly extension: string,
+    private readonly chunkCount: number,
+  ) {}
+
+  supports(path: string): boolean {
+    return path.endsWith(this.extension);
+  }
+
+  async extract(input: {
+    path: string;
+    data: ArrayBuffer | string;
+    modifiedTime: number;
+  }): Promise<ExtractedChunk[]> {
+    return Array.from({ length: this.chunkCount }, (_, index) =>
+      markdownChunk(`${input.path}-${index}`, input.path, `chunk ${index}`),
+    );
   }
 }
 

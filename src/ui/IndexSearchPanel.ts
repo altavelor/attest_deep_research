@@ -14,11 +14,13 @@ export interface IndexSearchPanelRefs {
 }
 
 export interface IndexSearchPanelOptions {
-  profiles: Array<{ id: string; name: string }>;
+  profiles: Array<{ id: string; name: string; isSuspended?: boolean; isIndexed?: boolean }>;
+  selectedProfileId?: string;
   results: RetrievedChunk[];
   error: string | null;
   isSearching: boolean;
   onSubmit(): void;
+  onProfileChange?(): void;
   onOpenResult(chunk: RetrievedChunk): void;
 }
 
@@ -42,11 +44,23 @@ export function renderIndexSearchPanel(
     attr: { "aria-label": "Index profile" },
   });
   for (const profile of options.profiles) {
-    profileEl.createEl("option", {
+    const option = profileEl.createEl("option", {
       text: profile.name,
       value: profile.id,
     });
+    option.disabled = profile.isSuspended === true || profile.isIndexed !== true;
   }
+  const selectedProfile = options.profiles.find(
+    (profile) =>
+      profile.id === options.selectedProfileId &&
+      !profile.isSuspended &&
+      profile.isIndexed === true,
+  );
+  profileEl.value =
+    selectedProfile?.id ??
+    options.profiles.find((profile) => !profile.isSuspended && profile.isIndexed)?.id ??
+    "";
+  profileEl.addEventListener("change", () => options.onProfileChange?.());
 
   const filters = form.createDiv({ cls: "ixplorer-index-search__filters" });
   const topKEl = createLabeledInput(filters, {

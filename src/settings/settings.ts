@@ -79,11 +79,14 @@ export interface IxplorerSettings {
 export const DEFAULT_INDEX_PROFILE_ID = "default";
 export const DEFAULT_INDEX_FOLDER = ".ixplorer/index";
 export const DEFAULT_ANTHROPIC_MAX_TOKENS = 4096;
+export const MAX_INDEX_PROFILE_COUNT = 30;
 const DEFAULT_PROFILE_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   id: DEFAULT_INDEX_PROFILE_ID,
   name: "Default index",
+  mode: "wholeVault",
   indexFolder: DEFAULT_INDEX_FOLDER,
   includeFolders: ["/"],
   excludeGlobs: [".obsidian/**", ".trash/**", ".ixplorer/**"],
@@ -191,6 +194,7 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
   markInvalidProfilesSuspended(settings);
   normalizeActiveChatModel(settings);
   normalizeIndexProfiles(settings);
+  normalizeActiveIndexProfile(settings);
 }
 
 export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile {
@@ -237,6 +241,13 @@ export function updateActiveIndexProfile(
   normalizeSettingsState(settings);
 }
 
+export function isValidIndexProfileName(value: string): boolean {
+  const normalized = normalizeProfileName(value);
+  return (
+    normalized.length > 0 && normalized.length <= 60 && INDEX_PROFILE_NAME_PATTERN.test(normalized)
+  );
+}
+
 export function getActiveChatModelProfile(
   settings: IxplorerSettings,
 ): ChatModelProfile | undefined {
@@ -278,7 +289,10 @@ export function resolveServerProfile(
   );
 }
 
-export function canDeleteServerProfile(settings: IxplorerSettings, serverProfileId: string): boolean {
+export function canDeleteServerProfile(
+  settings: IxplorerSettings,
+  serverProfileId: string,
+): boolean {
   return (
     !settings.chatModelProfiles.some((profile) => profile.serverProfileId === serverProfileId) &&
     !settings.embeddingModelProfiles.some((profile) => profile.serverProfileId === serverProfileId)
@@ -309,6 +323,12 @@ export function isProfileSuspended(profile: { isSuspended?: boolean }): boolean 
   return profile.isSuspended === true;
 }
 
+export function isIndexProfileSelectable(
+  profile: Pick<IndexProfile, "isSuspended" | "lastIndexedAt">,
+): boolean {
+  return !isProfileSuspended(profile) && Boolean(profile.lastIndexedAt);
+}
+
 export function createProfileId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -322,7 +342,9 @@ function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
   }
 
   for (const profile of settings.chatModelProfiles) {
-    const server = settings.serverProfiles.find((candidate) => candidate.id === profile.serverProfileId);
+    const server = settings.serverProfiles.find(
+      (candidate) => candidate.id === profile.serverProfileId,
+    );
     if (!server) {
       suspend(profile, "Server profile was deleted.");
     } else if (isProfileSuspended(server)) {
@@ -333,7 +355,9 @@ function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
   }
 
   for (const profile of settings.embeddingModelProfiles) {
-    const server = settings.serverProfiles.find((candidate) => candidate.id === profile.serverProfileId);
+    const server = settings.serverProfiles.find(
+      (candidate) => candidate.id === profile.serverProfileId,
+    );
     if (!server) {
       suspend(profile, "Server profile was deleted.");
     } else if (isProfileSuspended(server)) {
@@ -380,7 +404,10 @@ function isProfileActive<T extends { isSuspended?: boolean }>(profile: T): boole
   return !isProfileSuspended(profile);
 }
 
-function suspend(profile: { isSuspended?: boolean; suspendedReason?: string }, reason: string): void {
+function suspend(
+  profile: { isSuspended?: boolean; suspendedReason?: string },
+  reason: string,
+): void {
   profile.isSuspended = true;
   profile.suspendedReason = reason;
 }
@@ -395,7 +422,9 @@ function readServerProfiles(value: unknown): ServerProfile[] {
     return [];
   }
 
-  return value.map(normalizeServerProfile).filter((profile): profile is ServerProfile => profile !== null);
+  return value
+    .map(normalizeServerProfile)
+    .filter((profile): profile is ServerProfile => profile !== null);
 }
 
 function normalizeServerProfile(value: unknown): ServerProfile | null {
@@ -502,7 +531,11 @@ function normalizeEmbeddingModelProfile(value: unknown): EmbeddingModelProfile |
 }
 
 function normalizeCapability(value: unknown): ModelCapability | undefined {
-  if (!isSettingsRecord(value) || typeof value.chat !== "boolean" || typeof value.embeddings !== "boolean") {
+  if (
+    !isSettingsRecord(value) ||
+    typeof value.chat !== "boolean" ||
+    typeof value.embeddings !== "boolean"
+  ) {
     return undefined;
   }
 
@@ -531,10 +564,13 @@ function readIndexProfiles(
   fallback: Pick<IndexProfile, "indexFolder" | "includeFolders" | "excludeGlobs">,
 ): IndexProfile[] {
   if (!Array.isArray(value)) {
-    return [createIndexProfile({ id: DEFAULT_INDEX_PROFILE_ID, name: "Default index", ...fallback })];
+    return [
+      createIndexProfile({ id: DEFAULT_INDEX_PROFILE_ID, name: "Default index", ...fallback }),
+    ];
   }
 
   const profiles = value
+    .slice(0, MAX_INDEX_PROFILE_COUNT)
     .map((item) => normalizeIndexProfile(item))
     .filter((item): item is IndexProfile => item !== null);
 
@@ -554,10 +590,14 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
   return createIndexProfile({
     id,
     name: readString(value.name) || "Index",
+    mode: readIndexMode(value.mode),
     indexFolder: normalizeVaultFolder(readString(value.indexFolder)),
     includeFolders: readStringList(value.includeFolders, DEFAULT_SETTINGS.includeFolders),
     excludeGlobs: readStringList(value.excludeGlobs, DEFAULT_SETTINGS.excludeGlobs),
     embeddingModelProfileId: readString(value.embeddingModelProfileId),
+    lastIndexedAt: readString(value.lastIndexedAt) || undefined,
+    indexedFileCount: readNonNegativeIntegerOrUndefined(value.indexedFileCount),
+    indexSizeBytes: readNonNegativeIntegerOrUndefined(value.indexSizeBytes),
     chunkSize: readPositiveInteger(value.chunkSize, DEFAULT_CHUNK_LENGTH),
     chunkOverlap: normalizeChunkOverlap(
       readNonNegativeInteger(value.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
@@ -574,7 +614,7 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
   });
 }
 
-function createIndexProfile(
+export function createIndexProfile(
   values: Partial<IndexProfile> &
     Pick<IndexProfile, "indexFolder" | "includeFolders" | "excludeGlobs">,
 ): IndexProfile {
@@ -583,6 +623,7 @@ function createIndexProfile(
     ...values,
     id: values.id ?? DEFAULT_INDEX_PROFILE_ID,
     name: values.name ?? "Default index",
+    mode: values.mode ?? "wholeVault",
     indexFolder: normalizeVaultFolder(values.indexFolder),
     includeFolders: [...values.includeFolders],
     excludeGlobs: [...values.excludeGlobs],
@@ -596,6 +637,22 @@ function createIndexProfile(
   };
   normalizeIndexProfileNumbers(profile);
   return profile;
+}
+
+function normalizeActiveIndexProfile(settings: IxplorerSettings): void {
+  const active = settings.indexProfiles.find(
+    (profile) => profile.id === settings.activeIndexProfileId,
+  );
+
+  if (active && isIndexProfileSelectable(active)) {
+    return;
+  }
+
+  settings.activeIndexProfileId =
+    settings.indexProfiles.find(isIndexProfileSelectable)?.id ??
+    settings.indexProfiles.find(isProfileActive)?.id ??
+    settings.indexProfiles[0]?.id ??
+    DEFAULT_INDEX_PROFILE_ID;
 }
 
 function normalizeIndexProfileNumbers(profile: IndexProfile): void {
@@ -672,6 +729,14 @@ function readOptionalNumber(value: unknown): number | undefined {
 
 function readNonNegativeInteger(value: unknown, fallback: number): number {
   return isNonNegativeInteger(value) ? value : fallback;
+}
+
+function readNonNegativeIntegerOrUndefined(value: unknown): number | undefined {
+  return isNonNegativeInteger(value) ? value : undefined;
+}
+
+function readIndexMode(value: unknown): IndexProfile["mode"] {
+  return value === "selected" ? "selected" : "wholeVault";
 }
 
 function normalizeChunkOverlap(value: number, chunkSize: number): number {

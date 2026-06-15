@@ -28,6 +28,7 @@ export interface ResearchServiceOptions {
   searchProvider?: SearchProvider;
   queryExpansion?: QueryExpansionService;
   evidenceLimit?: number;
+  contextLimitTokens?: number;
   temperature?: number;
   now?: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
@@ -65,6 +66,7 @@ export class ResearchService {
       chatModel: options.chatModel,
       chatModelName: options.chatModelName,
       chatOptions,
+      contextLimitTokens: options.contextLimitTokens,
       now,
       persistFinalAnswer: options.persistFinalAnswer,
     });
@@ -93,6 +95,7 @@ export class ResearchService {
 
     yield* this.answerSynthesis.synthesize({
       question,
+      chatHistory: request.chatHistory,
       evidence,
       citations,
       evidenceLimit: this.evidenceLimit,
