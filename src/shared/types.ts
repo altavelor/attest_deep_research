@@ -63,6 +63,46 @@ export interface RetrievedChunk extends ExtractedChunk {
   score: number;
 }
 
+export type ContextMode = "include" | "filter";
+
+export type ContextSourceRole = "attached" | "mention" | "active" | "retrieval" | "web";
+
+export interface ContextDiagnosticSource {
+  path: string;
+  role: ContextSourceRole;
+  status: "included" | "filtered" | "dropped" | "missing" | "unsupported" | "failed";
+  chunkCount?: number;
+  includedTokens?: number;
+  droppedTokens?: number;
+  reason?: string;
+}
+
+export interface ContextBudgetGroup {
+  name: "history" | "explicit" | "retrieval" | "web" | "reserved-output";
+  usedTokens: number;
+  droppedItems: number;
+}
+
+export interface ContextDiagnostics {
+  contextMode: ContextMode;
+  explicitSources: ContextDiagnosticSource[];
+  mentionSources: ContextDiagnosticSource[];
+  activeSources: ContextDiagnosticSource[];
+  retrieval: {
+    queryVariants: string[];
+    includedChunkIds: string[];
+    droppedChunkIds: string[];
+    filteredSourcePaths: string[];
+  };
+  budget: {
+    limitTokens?: number;
+    usedTokens: number;
+    reservedOutputTokens?: number;
+    groups: ContextBudgetGroup[];
+  };
+  warnings: string[];
+}
+
 export interface Citation {
   id: string;
   source: SourceReference;
@@ -229,6 +269,7 @@ export interface ResearchAnswer {
   answer: string;
   citations: Citation[];
   evidence?: RetrievedChunk[];
+  contextDiagnostics?: ContextDiagnostics;
   followUpQuestions: string[];
   createdAt: string;
 }

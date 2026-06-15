@@ -33,6 +33,7 @@ describe("Ixplorer settings", () => {
       chunkOverlap: 120,
     });
     expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
+    expect(DEFAULT_SETTINGS.includeActiveFileContext).toBe(true);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
@@ -63,6 +64,7 @@ describe("Ixplorer settings", () => {
       activeChatModelProfileId: "chat-a",
       duckDuckGoEnabled: true,
       showChatIndexControl: false,
+      includeActiveFileContext: false,
       debugMode: true,
     });
 
@@ -80,6 +82,7 @@ describe("Ixplorer settings", () => {
     expect(settings.activeChatModelProfileId).toBe("chat-a");
     expect(settings.duckDuckGoEnabled).toBe(true);
     expect(settings.showChatIndexControl).toBe(false);
+    expect(settings.includeActiveFileContext).toBe(false);
     expect(settings.debugMode).toBe(true);
   });
 

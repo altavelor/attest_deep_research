@@ -1,5 +1,7 @@
 import { RetrievalResult } from "../retrieval/RetrievalService";
 import {
+  ContextDiagnostics,
+  ContextMode,
   LanguageInventoryItem,
   ResearchAnswer,
   RetrievalOptions,
@@ -19,6 +21,10 @@ export interface ResearchRequest {
   includeWebSearch?: boolean;
   searchMode?: ResearchSearchMode;
   contextPaths?: string[];
+  contextMode?: ContextMode;
+  activeFilePath?: string;
+  includeActiveFile?: boolean;
+  includeContextDiagnostics?: boolean;
   deepResearch?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
 }
@@ -26,6 +32,7 @@ export interface ResearchRequest {
 export type ResearchStreamEvent =
   | { type: "status"; message: string }
   | { type: "delta"; content: string }
+  | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };
 
 export type VaultQueryVariants = RetrievalQueryVariant[] | undefined;

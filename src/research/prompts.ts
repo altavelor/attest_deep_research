@@ -12,6 +12,8 @@ export interface BuildResearchPromptOptions {
   question: string;
   chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
+  explicitEvidence?: RetrievedChunk[];
+  retrievedEvidence?: RetrievedChunk[];
   maxEvidenceItems: number;
 }
 
@@ -24,14 +26,19 @@ const CHAT_MESSAGE_OVERHEAD_TOKENS = 4;
 const CHAT_REQUEST_OVERHEAD_TOKENS = 8;
 
 export function buildResearchPrompt(options: BuildResearchPromptOptions): string {
-  const evidence = options.evidence
+  const explicitEvidence = (options.explicitEvidence ?? [])
+    .slice(0, options.maxEvidenceItems)
+    .map((chunk) => formatEvidenceItem(chunk))
+    .join("\n\n");
+  const retrievedEvidence = (options.retrievedEvidence ?? options.evidence)
     .slice(0, options.maxEvidenceItems)
     .map((chunk) => formatEvidenceItem(chunk))
     .join("\n\n");
   const history = formatChatHistory(options.chatHistory ?? []);
 
   return [
-    "Use the evidence below to answer the user's research question in a detailed, structured way.",
+    "Use the context below to answer the user's research question in a detailed, structured way.",
+    "Treat explicit context as authoritative when it conflicts with retrieved evidence.",
     "Synthesize all relevant facts from the evidence before concluding.",
     "Cite claims with bracketed citation IDs exactly as shown, for example [chunk-id].",
     "Do not add a separate citations, sources, or bibliography section.",
@@ -43,7 +50,11 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     ...(history ? ["Previous chat:", history, ""] : []),
     `Question: ${options.question}`,
     "",
-    evidence ? `Evidence:\n${evidence}` : "Evidence: No relevant evidence was found.",
+    explicitEvidence ? `Explicit context:\n${explicitEvidence}` : "Explicit context: None.",
+    "",
+    retrievedEvidence
+      ? `Retrieved evidence:\n${retrievedEvidence}`
+      : "Retrieved evidence: No relevant evidence was found.",
   ].join("\n");
 }
 
@@ -131,5 +142,5 @@ function sourceLabel(chunk: RetrievedChunk): string {
 }
 
 function truncateEvidenceText(text: string): string {
-  return text.replace(/\s+/g, " ").trim().slice(0, 2_000);
+  return text.replace(/\s+/g, " ").trim();
 }

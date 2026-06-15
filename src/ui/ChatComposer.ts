@@ -2,6 +2,7 @@ import { setIcon } from "obsidian";
 
 import { SavedChatSettings } from "../chat/ChatStore";
 import type { ResearchSearchMode } from "../research/ResearchService";
+import type { ContextMode } from "../shared/types";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 
 export interface ChatModelSelectOption {
@@ -37,12 +38,14 @@ export interface ChatComposerOptions {
   settings: SavedChatSettings;
   availableModels: ChatModelSelectOption[];
   availableIndexes: IndexProfileSelectOption[];
+  contextFilePaths: string[];
   onSubmit(): void;
   onStop(): void;
   onQuestionInput?(): void;
   onOpenContextPicker(): void;
   onUpdateModel(model: string): void;
   onUpdateIndex(indexProfileId: string): void;
+  onUpdateContextMode(contextMode: ContextMode): void;
   onUpdateSearchMode(searchMode: ResearchSearchMode): void;
   onUpdateDeepResearch(deepResearch: boolean): void;
 }
@@ -75,11 +78,17 @@ export function renderChatComposer(
     },
   });
   const resizeQuestionInput = createTextareaAutoGrow(textareaEl);
+  const mentionState = createMentionAutocomplete(composerPanelEl, textareaEl, options);
   textareaEl.addEventListener("input", () => {
     resizeQuestionInput();
+    mentionState.update();
     options.onQuestionInput?.();
   });
   textareaEl.addEventListener("keydown", (event) => {
+    if (mentionState.handleKeydown(event)) {
+      return;
+    }
+
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
       return;
     }
@@ -205,6 +214,30 @@ export function renderChatComposer(
     options.onUpdateIndex(indexInputEl.value);
   });
 
+  const contextModeControlEl = modelRow.createSpan({
+    cls: "ixplorer-chat__select-control ixplorer-chat__select-control--context-mode",
+  });
+  const contextModeDisplayEl = contextModeControlEl.createSpan({
+    cls: "ixplorer-chat__select-value",
+  });
+  const contextModeEl = contextModeControlEl.createEl("select", {
+    cls: "ixplorer-chat__model-input",
+    attr: {
+      id: "ixplorer-chat-context-mode",
+      "aria-label": "Attached context mode",
+      title: "Attached context mode",
+    },
+  });
+  contextModeEl.createEl("option", { text: "Include", value: "include" });
+  contextModeEl.createEl("option", { text: "Filter", value: "filter" });
+  contextModeEl.value = options.settings.contextMode ?? "include";
+  updateSelectControlLabel(contextModeControlEl, contextModeDisplayEl, contextModeEl);
+  contextModeEl.addEventListener("change", () => {
+    const contextMode = contextModeEl.value === "filter" ? "filter" : "include";
+    updateSelectControlLabel(contextModeControlEl, contextModeDisplayEl, contextModeEl);
+    options.onUpdateContextMode(contextMode);
+  });
+
   const submitButtonTooltipEl = modelRow.createSpan({
     cls: "ixplorer-chat__submit-tooltip",
   });
@@ -237,6 +270,129 @@ export function renderChatComposer(
     deepResearchEl,
     attachedContextEl,
   };
+}
+
+function createMentionAutocomplete(
+  containerEl: HTMLElement,
+  textareaEl: HTMLTextAreaElement,
+  options: ChatComposerOptions,
+): {
+  update(): void;
+  handleKeydown(event: KeyboardEvent): boolean;
+} {
+  const autocompleteEl = containerEl.createDiv({
+    cls: "ixplorer-chat__mention-autocomplete is-hidden",
+    attr: { role: "listbox" },
+  });
+  let candidates: string[] = [];
+  let activeIndex = 0;
+  let mentionStart = -1;
+
+  const hide = (): void => {
+    autocompleteEl.addClass("is-hidden");
+    candidates = [];
+    mentionStart = -1;
+    activeIndex = 0;
+  };
+
+  const insert = (path: string): void => {
+    const cursor = textareaEl.selectionStart ?? textareaEl.value.length;
+    const before = textareaEl.value.slice(0, mentionStart);
+    const after = textareaEl.value.slice(cursor);
+    const inserted = `@${path}`;
+    textareaEl.value = `${before}${inserted} ${after}`;
+    const nextCursor = before.length + inserted.length + 1;
+    textareaEl.setSelectionRange(nextCursor, nextCursor);
+    textareaEl.dispatchEvent(new Event("input"));
+    textareaEl.focus();
+    hide();
+  };
+
+  const render = (): void => {
+    autocompleteEl.empty();
+    if (candidates.length === 0) {
+      hide();
+      return;
+    }
+
+    autocompleteEl.removeClass("is-hidden");
+    candidates.forEach((path, index) => {
+      const item = autocompleteEl.createEl("button", {
+        cls: `ixplorer-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
+        text: path,
+        attr: {
+          type: "button",
+          role: "option",
+          "aria-selected": String(index === activeIndex),
+        },
+      });
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        insert(path);
+      });
+    });
+  };
+
+  const update = (): void => {
+    const cursor = textareaEl.selectionStart ?? textareaEl.value.length;
+    const beforeCursor = textareaEl.value.slice(0, cursor);
+    const atIndex = beforeCursor.lastIndexOf("@");
+
+    if (atIndex === -1) {
+      hide();
+      return;
+    }
+
+    const token = beforeCursor.slice(atIndex + 1);
+    if (/\n/.test(token) || /\s/.test(token)) {
+      hide();
+      return;
+    }
+
+    mentionStart = atIndex;
+    const query = token.toLowerCase();
+    candidates = options.contextFilePaths
+      .filter((path) => path.toLowerCase().includes(query))
+      .slice(0, 12);
+    activeIndex = 0;
+    render();
+  };
+
+  const handleKeydown = (event: KeyboardEvent): boolean => {
+    if (autocompleteEl.hasClass("is-hidden") || candidates.length === 0) {
+      return false;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      hide();
+      return true;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeIndex = Math.min(candidates.length - 1, activeIndex + 1);
+      render();
+      return true;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeIndex = Math.max(0, activeIndex - 1);
+      render();
+      return true;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      insert(candidates[activeIndex]);
+      return true;
+    }
+
+    return false;
+  };
+
+  return { update, handleKeydown };
 }
 
 function updateSelectControlLabel(

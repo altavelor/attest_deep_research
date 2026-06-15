@@ -61,6 +61,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Ixplorer").setHeading();
     this.renderDebugSettings(containerEl);
+    this.renderChatBehaviorSettings(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
     this.renderWebSearchSettings(containerEl);
@@ -73,6 +74,18 @@ export class IxplorerSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
           this.plugin.settings.debugMode = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+  }
+
+  private renderChatBehaviorSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Include active file as context")
+      .setDesc("Automatically include the currently open supported file as explicit chat context.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.includeActiveFileContext).onChange(async (value) => {
+          this.plugin.settings.includeActiveFileContext = value;
           await this.plugin.saveSettings();
         }),
       );

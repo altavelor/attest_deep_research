@@ -1,14 +1,17 @@
 import { RetrievalResult } from "../retrieval/RetrievalService";
+import { formatCitation } from "../retrieval/citations";
 import { QueryExpansionService } from "../retrieval/QueryExpansionService";
 import {
   ChatModelProvider,
   ChatRequest,
   Citation,
+  ContextDiagnostics,
   ResearchAnswer,
   RetrievedChunk,
   SearchProvider,
 } from "../shared/types";
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
+import { ContextAssembler } from "./ContextAssembler";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {
@@ -27,6 +30,7 @@ export interface ResearchServiceOptions {
   chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   searchProvider?: SearchProvider;
   queryExpansion?: QueryExpansionService;
+  contextAssembler?: ContextAssembler;
   evidenceLimit?: number;
   contextLimitTokens?: number;
   temperature?: number;
@@ -41,9 +45,15 @@ export class ResearchService {
   private readonly webPipeline: WebResearchPipeline;
   private readonly answerSynthesis: AnswerSynthesisService;
   private readonly evidenceLimit: number;
+  private readonly contextAssembler?: ContextAssembler;
+  private readonly contextLimitTokens?: number;
+  private readonly reservedOutputTokens?: number;
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
+    this.contextAssembler = options.contextAssembler;
+    this.contextLimitTokens = options.contextLimitTokens;
+    this.reservedOutputTokens = options.chatOptions?.maxTokens;
     const chatOptions = {
       temperature: options.chatOptions?.temperature ?? options.temperature ?? DEFAULT_TEMPERATURE,
       maxTokens: options.chatOptions?.maxTokens,
@@ -76,31 +86,109 @@ export class ResearchService {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
     const deepResearch = request.deepResearch === true;
+    const assembled =
+      searchMode === "webOnly" || !this.contextAssembler
+        ? undefined
+        : await this.contextAssembler.assemble({
+            question,
+            contextMode: request.contextMode ?? "include",
+            contextPaths: request.contextPaths ?? [],
+            activeFilePath: request.activeFilePath,
+            includeActiveFile: request.includeActiveFile === true,
+            chatHistory: request.chatHistory,
+            contextLimitTokens: this.contextLimitTokens,
+            reservedOutputTokens: this.reservedOutputTokens,
+            evidenceLimit: this.evidenceLimit,
+          });
+    if (assembled) {
+      yield { type: "context", diagnostics: assembled.diagnostics };
+    }
     const retrieval =
       searchMode === "webOnly"
         ? emptyRetrievalResult()
-        : yield* this.vaultPipeline.search(question, request.contextPaths);
+        : yield* this.vaultPipeline.search(question, assembled?.retrievalSourcePaths ?? request.contextPaths);
     const webEvidence = yield* this.webPipeline.search(
       question,
       searchMode !== "indexOnly",
       deepResearch,
     );
-    const evidence = mergeEvidenceChunks(
+    const diagnostics = assembled
+      ? withRetrievalDiagnostics(assembled.diagnostics, retrieval)
+      : undefined;
+    const localEvidence = mergeLocalEvidence(
+      assembled?.explicitEvidence ?? [],
       retrieval.chunks,
+      this.evidenceLimit,
+    );
+    const evidence = mergeEvidenceChunks(
+      localEvidence,
       webEvidence.chunks,
       this.evidenceLimit,
       deepResearch,
     );
-    const citations = mergeCitations(retrieval.citations, webEvidence.citations);
+    const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
+      ...formatCitation(chunk.source),
+      id: chunk.id,
+    }));
+    const citations = mergeCitations(
+      mergeCitations(explicitCitations, retrieval.citations),
+      webEvidence.citations,
+    );
 
     yield* this.answerSynthesis.synthesize({
       question,
       chatHistory: request.chatHistory,
       evidence,
+      explicitEvidence: assembled?.explicitEvidence,
+      retrievedEvidence: nonExplicitEvidence(evidence, assembled?.explicitEvidence ?? []),
       citations,
+      contextDiagnostics: diagnostics,
       evidenceLimit: this.evidenceLimit,
     });
   }
+}
+
+function nonExplicitEvidence(
+  evidence: RetrievedChunk[],
+  explicitEvidence: RetrievedChunk[],
+): RetrievedChunk[] {
+  const explicitIds = new Set(explicitEvidence.map((chunk) => chunk.id));
+  return evidence.filter((chunk) => !explicitIds.has(chunk.id));
+}
+
+function mergeLocalEvidence(
+  explicitChunks: RetrievedChunk[],
+  retrievedChunks: RetrievedChunk[],
+  limit: number,
+): RetrievedChunk[] {
+  const seen = new Set<string>();
+  const chunks: RetrievedChunk[] = [];
+
+  for (const chunk of [...explicitChunks, ...retrievedChunks]) {
+    if (seen.has(chunk.id)) {
+      continue;
+    }
+    chunks.push(chunk);
+    seen.add(chunk.id);
+    if (chunks.length >= limit) {
+      break;
+    }
+  }
+
+  return chunks;
+}
+
+function withRetrievalDiagnostics(
+  diagnostics: ContextDiagnostics,
+  retrieval: RetrievalResult,
+): ContextDiagnostics {
+  return {
+    ...diagnostics,
+    retrieval: {
+      ...diagnostics.retrieval,
+      includedChunkIds: retrieval.chunks.map((chunk) => chunk.id),
+    },
+  };
 }
 
 function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {

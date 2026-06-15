@@ -6,6 +6,7 @@ import {
   ResearchChatHistoryMessage,
 } from "../research/prompts";
 import type { ResearchSearchMode } from "../research/ResearchService";
+import type { ContextMode } from "../shared/types";
 import { toUserMessage } from "../shared/errors";
 import { ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { ChatDisplayMessage, nextAssistantMessage } from "./rendering";
@@ -25,6 +26,10 @@ export interface ResearchQuestionControllerOptions {
   saveCurrentChat(): Promise<void>;
   createResearchService(): ResearchService;
   getSearchMode(): ResearchSearchMode;
+  getContextMode(): ContextMode;
+  getActiveFilePath(): string | undefined;
+  shouldIncludeActiveFileContext(): boolean;
+  shouldIncludeContextDiagnostics(): boolean;
   isDeepResearchEnabled(): boolean;
   getContextPaths(): string[];
   getSearchUnavailableMessage(): string | null;
@@ -137,8 +142,12 @@ export class ResearchQuestionController {
       for await (const event of service.answer({
         question,
         searchMode: this.options.getSearchMode(),
+        contextMode: this.options.getContextMode(),
         deepResearch: this.options.isDeepResearchEnabled(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,
+        activeFilePath: this.options.getActiveFilePath(),
+        includeActiveFile: this.options.shouldIncludeActiveFileContext(),
+        includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
         chatHistory: toResearchChatHistory(options.chatHistory),
       })) {
         if (this.shouldStopRunning) {
@@ -165,6 +174,10 @@ export class ResearchQuestionController {
   private applyResearchEvent(event: ResearchStreamEvent): void {
     if (event.type === "status") {
       this.options.setProgressStatus(event.message);
+      return;
+    }
+
+    if (event.type === "context") {
       return;
     }
 

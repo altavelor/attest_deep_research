@@ -23,6 +23,7 @@ import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexSt
 import { measureFolderSize } from "./indexing/indexSize";
 import { RetrievalService } from "./retrieval/RetrievalService";
 import { QueryExpansionService } from "./retrieval/QueryExpansionService";
+import { ContextAssembler } from "./research/ContextAssembler";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
@@ -126,6 +127,8 @@ export default class IxplorerPlugin extends Plugin {
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
           saveChat: (input) => this.createChatStore().saveChat(input),
           isChatIndexControlShown: () => this.settings.showChatIndexControl,
+          isDebugMode: () => this.settings.debugMode,
+          shouldIncludeActiveFileContext: () => this.settings.includeActiveFileContext,
           setChatIndexControlShown: async (shown) => {
             this.settings.showChatIndexControl = shown;
             await this.saveSettings();
@@ -196,6 +199,11 @@ export default class IxplorerPlugin extends Plugin {
       },
       contextLimitTokens: chatProfile.capabilities?.contextLength,
       queryExpansion: this.createQueryExpansionService(chatProfile, chatServer),
+      contextAssembler: new ContextAssembler({
+        files: new ObsidianContextFileProvider(this.app.vault),
+        extractors: this.createContextExtractorsForProfile(indexProfile),
+        retrieve: async () => [],
+      }),
       searchProvider: this.createSearchProvider(),
     });
   }
@@ -255,34 +263,7 @@ export default class IxplorerPlugin extends Plugin {
 
     return new IndexingService({
       files: new ObsidianVaultFileProvider(this.app.vault),
-      extractors: [
-        new MarkdownExtractor({
-          includeFolders: indexProfile.includeFolders,
-          excludeGlobs: indexProfile.excludeGlobs,
-          maxChunkLength: indexProfile.chunkSize,
-          chunkOverlap: indexProfile.chunkOverlap,
-        }),
-        new TextExtractor({
-          maxChunkLength: indexProfile.chunkSize,
-          chunkOverlap: indexProfile.chunkOverlap,
-        }),
-        new PdfExtractor({
-          maxChunkLength: indexProfile.pdfChunkSize,
-          chunkOverlap: indexProfile.pdfChunkOverlap,
-        }),
-        new EpubExtractor({
-          maxChunkLength: indexProfile.chunkSize,
-          chunkOverlap: indexProfile.chunkOverlap,
-        }),
-        new Fb2Extractor({
-          maxChunkLength: indexProfile.chunkSize,
-          chunkOverlap: indexProfile.chunkOverlap,
-        }),
-        new DocxExtractor({
-          maxChunkLength: indexProfile.chunkSize,
-          chunkOverlap: indexProfile.chunkOverlap,
-        }),
-      ],
+      extractors: this.createExtractorsForProfile(indexProfile),
       embeddings: this.createEmbeddingClientForProfile(embeddingProfile),
       indexStore: this.createVectorIndexStoreForProfile(indexProfile),
       embeddingModel: embeddingProfile.modelName,
@@ -313,6 +294,66 @@ export default class IxplorerPlugin extends Plugin {
       shardCount: indexProfile.shardCount,
       onPerformance: (event) => this.logger.logIndexingPerformance(event),
     });
+  }
+
+  private createExtractorsForProfile(indexProfile: IndexProfile) {
+    return [
+      new MarkdownExtractor({
+        includeFolders: indexProfile.includeFolders,
+        excludeGlobs: indexProfile.excludeGlobs,
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new TextExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new PdfExtractor({
+        maxChunkLength: indexProfile.pdfChunkSize,
+        chunkOverlap: indexProfile.pdfChunkOverlap,
+      }),
+      new EpubExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new Fb2Extractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new DocxExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+    ];
+  }
+
+  private createContextExtractorsForProfile(indexProfile: IndexProfile) {
+    return [
+      new MarkdownExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new TextExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new PdfExtractor({
+        maxChunkLength: indexProfile.pdfChunkSize,
+        chunkOverlap: indexProfile.pdfChunkOverlap,
+      }),
+      new EpubExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new Fb2Extractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+      new DocxExtractor({
+        maxChunkLength: indexProfile.chunkSize,
+        chunkOverlap: indexProfile.chunkOverlap,
+      }),
+    ];
   }
 
   private createRetrieverForProfile(indexProfile: IndexProfile): RetrievalService {
@@ -502,6 +543,38 @@ class ObsidianVaultFileProvider implements VaultFileProvider {
       ? value.filter((item): item is string => typeof item === "string")
       : [];
   }
+}
+
+class ObsidianContextFileProvider {
+  constructor(private readonly vault: Vault) {}
+
+  async listPaths(): Promise<string[]> {
+    return this.vault
+      .getFiles()
+      .filter((file) => isSupportedContextPath(file.path))
+      .map((file) => normalizeVaultPath(file.path))
+      .sort();
+  }
+
+  async readFile(path: string): Promise<ArrayBuffer | string> {
+    const file = this.vault.getAbstractFileByPath(path);
+
+    if (!(file instanceof TFile)) {
+      return "";
+    }
+
+    return this.vault.readBinary(file);
+  }
+
+  async getModifiedTime(path: string): Promise<number> {
+    const file = this.vault.getAbstractFileByPath(path);
+
+    return file instanceof TFile ? file.stat.mtime : 0;
+  }
+}
+
+function isSupportedContextPath(path: string): boolean {
+  return /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
 }
 
 function isHiddenOrIgnoredVaultPath(path: string, ignoredGlobs: string[]): boolean {
