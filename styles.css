@@ -916,6 +916,40 @@
   gap: 0.75rem;
 }
 
+.ixplorer-chat__context-summary {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.ixplorer-chat__context-summary h3 {
+  margin: 0 0 0.375rem;
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+}
+
+.ixplorer-chat__context-summary ul {
+  margin: 0;
+  padding-inline-start: 1.125rem;
+}
+
+.ixplorer-chat__context-debug {
+  margin-top: 0.5rem;
+}
+
+.ixplorer-chat__context-debug pre {
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  font-size: var(--font-monospace-smaller);
+}
+
 .ixplorer-chat__followups h3 {
   margin: 0 0 0.375rem;
   font-size: var(--font-ui-medium);
@@ -950,6 +984,7 @@
 }
 
 .ixplorer-chat__composer-panel {
+  position: relative;
   display: flex;
   min-height: 7rem;
   min-width: 0;
@@ -998,6 +1033,40 @@
 .ixplorer-chat__input::placeholder {
   color: var(--text-faint);
   opacity: 0.95;
+}
+
+.ixplorer-chat__mention-autocomplete {
+  position: absolute;
+  z-index: 20;
+  top: 2.75rem;
+  left: 0.875rem;
+  right: 0.75rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: 0 8px 24px var(--background-modifier-box-shadow);
+}
+
+.ixplorer-chat__mention-option {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  text-align: start;
+  white-space: normal;
+}
+
+.ixplorer-chat__mention-option.is-active,
+.ixplorer-chat__mention-option:hover,
+.ixplorer-chat__mention-option:focus {
+  background: var(--background-modifier-hover);
 }
 
 .ixplorer-chat__model-row {
@@ -1055,6 +1124,10 @@
 
 .ixplorer-chat__select-control--search-mode {
   --ixplorer-select-max-width: 12.75rem;
+}
+
+.ixplorer-chat__select-control--context-mode {
+  --ixplorer-select-max-width: 6.75rem;
 }
 
 .ixplorer-chat__select-value {

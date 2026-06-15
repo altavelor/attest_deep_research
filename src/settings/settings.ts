@@ -73,6 +73,7 @@ export interface IxplorerSettings {
   excludeGlobs: string[];
   duckDuckGoEnabled: boolean;
   showChatIndexControl: boolean;
+  includeActiveFileContext: boolean;
   debugMode: boolean;
 }
 
@@ -121,6 +122,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   duckDuckGoEnabled: false,
   showChatIndexControl: true,
+  includeActiveFileContext: true,
   debugMode: false,
 };
 
@@ -179,6 +181,10 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
       typeof data.showChatIndexControl === "boolean"
         ? data.showChatIndexControl
         : DEFAULT_SETTINGS.showChatIndexControl,
+    includeActiveFileContext:
+      typeof data.includeActiveFileContext === "boolean"
+        ? data.includeActiveFileContext
+        : DEFAULT_SETTINGS.includeActiveFileContext,
     debugMode: data.debugMode === true,
   };
 

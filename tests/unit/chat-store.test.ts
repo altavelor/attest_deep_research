@@ -34,6 +34,7 @@ describe("FileChatStore", () => {
         chatModelProfileId: "chat-granite",
         indexProfileId: "index-research",
         searchMode: "indexAndWeb",
+        contextMode: "filter",
         deepResearch: true,
       },
     });
@@ -48,6 +49,7 @@ describe("FileChatStore", () => {
         chatModelProfileId: "chat-granite",
         indexProfileId: "index-research",
         searchMode: "indexAndWeb",
+        contextMode: "filter",
         deepResearch: true,
       },
     });

@@ -2,6 +2,7 @@ import {
   ChatModelProvider,
   ChatRequest,
   Citation,
+  ContextDiagnostics,
   ResearchAnswer,
   RetrievedChunk,
 } from "../shared/types";
@@ -28,7 +29,10 @@ export interface AnswerSynthesisInput {
   question: string;
   chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
+  explicitEvidence?: RetrievedChunk[];
+  retrievedEvidence?: RetrievedChunk[];
   citations: Citation[];
+  contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
 }
 
@@ -55,6 +59,8 @@ export class AnswerSynthesisService {
       question: input.question,
       chatHistory: input.chatHistory,
       evidence: input.evidence,
+      explicitEvidence: input.explicitEvidence,
+      retrievedEvidence: input.retrievedEvidence,
       maxEvidenceItems: input.evidenceLimit,
     });
     let answerText = "";
@@ -88,6 +94,7 @@ export class AnswerSynthesisService {
       answer: answerText,
       citations: input.citations,
       evidence: input.evidence,
+      ...(input.contextDiagnostics ? { contextDiagnostics: input.contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
     };
@@ -108,6 +115,8 @@ export class AnswerSynthesisService {
       question: input.question,
       chatHistory: input.chatHistory,
       evidence: input.evidence,
+      explicitEvidence: input.explicitEvidence,
+      retrievedEvidence: input.retrievedEvidence,
       maxEvidenceItems: input.evidenceLimit,
       reservedOutputTokens: this.chatOptions.maxTokens,
     });

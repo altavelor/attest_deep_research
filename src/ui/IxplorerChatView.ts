@@ -13,7 +13,7 @@ import { ResearchService } from "../research/ResearchService";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { parsePositiveInteger } from "../shared/numbers";
-import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
+import { Citation, ContextDiagnostics, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { AnswerNoteWriter } from "./AnswerNoteWriter";
 import {
   ChatComposerRefs,
@@ -64,6 +64,8 @@ export interface IxplorerChatViewServices {
   loadSavedChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
   isChatIndexControlShown(): boolean;
+  isDebugMode(): boolean;
+  shouldIncludeActiveFileContext(): boolean;
   setChatIndexControlShown(shown: boolean): Promise<void>;
 }
 
@@ -97,6 +99,7 @@ export class IxplorerChatView extends ItemView {
 
   private transcriptEl: HTMLElement | null = null;
   private indexControlEl: HTMLElement | null = null;
+  private diagnosticsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
@@ -155,6 +158,10 @@ export class IxplorerChatView extends ItemView {
           this.currentChatSettings.indexProfileId,
         ),
       getSearchMode: () => this.getSearchMode(),
+      getContextMode: () => this.currentChatSettings.contextMode ?? "include",
+      getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+      shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
+      shouldIncludeContextDiagnostics: () => true,
       isDeepResearchEnabled: () => this.isDeepResearchEnabled(),
       getContextPaths: () => this.attachedContextPaths,
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
@@ -220,12 +227,18 @@ export class IxplorerChatView extends ItemView {
     });
 
     const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
+    this.diagnosticsEl = results.createDiv({ cls: "ixplorer-chat__context-diagnostics" });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
 
     this.composerRefs = renderChatComposer(chatPanel, {
       settings: this.currentChatSettings,
       availableModels: this.services.getChatModelProfiles(),
       availableIndexes: this.services.getIndexProfiles(),
+      contextFilePaths: this.app.vault
+        .getFiles()
+        .filter((file) => isContextDocumentPath(file.path))
+        .map((file) => file.path)
+        .sort(),
       onSubmit: () => void this.researchController.submitQuestion(),
       onStop: () => {
         this.researchController.stopRunningQuestion();
@@ -235,6 +248,7 @@ export class IxplorerChatView extends ItemView {
       onOpenContextPicker: () => this.openContextPicker(),
       onUpdateModel: (model) => void this.updateChatModel(model),
       onUpdateIndex: (indexProfileId) => void this.updateIndexProfile(indexProfileId),
+      onUpdateContextMode: (contextMode) => void this.updateContextMode(contextMode),
       onUpdateSearchMode: (searchMode) => {
         void this.updateSearchMode(searchMode);
         this.updateSubmitAvailability();
@@ -385,7 +399,57 @@ export class IxplorerChatView extends ItemView {
   }
 
   private renderAnswerDetails(): void {
+    this.renderContextDiagnostics(this.lastAnswer?.contextDiagnostics);
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
+  }
+
+  private renderContextDiagnostics(diagnostics: ContextDiagnostics | undefined): void {
+    if (!this.diagnosticsEl) {
+      return;
+    }
+
+    this.diagnosticsEl.empty();
+    if (!diagnostics) {
+      return;
+    }
+
+    const includedExplicit = [
+      ...diagnostics.explicitSources,
+      ...diagnostics.mentionSources,
+      ...diagnostics.activeSources,
+    ].filter((source) => source.status === "included");
+    const dropped = [
+      ...diagnostics.explicitSources,
+      ...diagnostics.mentionSources,
+      ...diagnostics.activeSources,
+    ].filter((source) => source.status === "dropped");
+    const panel = this.diagnosticsEl.createDiv({ cls: "ixplorer-chat__context-summary" });
+    panel.createEl("h3", { text: "Context used" });
+    const list = panel.createEl("ul");
+    list.createEl("li", {
+      text: `Mode: ${diagnostics.contextMode === "include" ? "include attached files" : "filter retrieval"}`,
+    });
+    list.createEl("li", { text: `${includedExplicit.length} explicit source(s) included` });
+    list.createEl("li", {
+      text: `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
+    });
+    if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
+      list.createEl("li", {
+        text: `${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`,
+      });
+    }
+    if (dropped.length > 0 || diagnostics.retrieval.droppedChunkIds.length > 0) {
+      list.createEl("li", {
+        text: `${dropped.length + diagnostics.retrieval.droppedChunkIds.length} item(s) dropped by limits`,
+      });
+    }
+    for (const warning of diagnostics.warnings) {
+      list.createEl("li", { text: `Warning: ${warning}` });
+    }
+
+    const details = panel.createEl("details", { cls: "ixplorer-chat__context-debug" });
+    details.createEl("summary", { text: "Debug details" });
+    details.createEl("pre", { text: JSON.stringify(diagnostics, null, 2) });
   }
 
   private renderEmptyChatState(containerEl: HTMLElement): void {
@@ -529,7 +593,9 @@ export class IxplorerChatView extends ItemView {
       createdAt: this.currentChatCreatedAt ?? undefined,
       title: inferChatTitle(this.messages),
       messages: this.messages,
-      lastAnswer: this.lastAnswer,
+      lastAnswer: this.services.isDebugMode()
+        ? this.lastAnswer
+        : stripContextDiagnostics(this.lastAnswer),
       attachedContextPaths: this.attachedContextPaths,
       chatSettings: this.currentChatSettings,
     });
@@ -573,6 +639,14 @@ export class IxplorerChatView extends ItemView {
     await this.saveCurrentChat();
   }
 
+  private async updateContextMode(contextMode: "include" | "filter"): Promise<void> {
+    this.currentChatSettings = {
+      ...this.currentChatSettings,
+      contextMode,
+    };
+    await this.saveCurrentChat();
+  }
+
   private async updateSearchMode(searchMode: ResearchSearchMode): Promise<void> {
     this.currentChatSettings = { ...this.currentChatSettings, searchMode };
     await this.saveCurrentChat();
@@ -594,6 +668,7 @@ export class IxplorerChatView extends ItemView {
         indexProfiles.find((profile) => !profile.isSuspended)?.id ?? "",
       ),
       searchMode: "indexOnly",
+      contextMode: "include",
       deepResearch: false,
     };
   }
@@ -613,6 +688,7 @@ export class IxplorerChatView extends ItemView {
         defaults.indexProfileId ?? "",
       ),
       searchMode: settings?.searchMode ?? defaults.searchMode,
+      contextMode: settings?.contextMode ?? defaults.contextMode,
       deepResearch: settings?.deepResearch ?? defaults.deepResearch,
     };
   }
@@ -883,6 +959,15 @@ export class IxplorerChatView extends ItemView {
 
     await this.answerNoteWriter.appendAnswerToActiveNote(this.lastAnswer);
   }
+}
+
+function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
+  if (!answer?.contextDiagnostics) {
+    return answer;
+  }
+
+  const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
+  return rest;
 }
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {

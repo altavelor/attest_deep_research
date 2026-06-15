@@ -4,11 +4,13 @@ import { basename, join } from "path";
 import { ResearchAnswer } from "../shared/types";
 import { ChatDisplayMessage } from "../ui/rendering";
 import type { ResearchSearchMode } from "../research/ResearchService";
+import type { ContextMode } from "../shared/types";
 
 export interface SavedChatSettings {
   chatModelProfileId: string;
   indexProfileId?: string;
   searchMode: ResearchSearchMode;
+  contextMode?: ContextMode;
   deepResearch?: boolean;
 }
 
@@ -186,6 +188,9 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
     (settings.searchMode === "indexOnly" ||
       settings.searchMode === "indexAndWeb" ||
       settings.searchMode === "webOnly") &&
+    (settings.contextMode === undefined ||
+      settings.contextMode === "include" ||
+      settings.contextMode === "filter") &&
     (settings.deepResearch === undefined || typeof settings.deepResearch === "boolean")
   );
 }
