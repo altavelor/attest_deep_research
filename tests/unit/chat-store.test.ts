@@ -32,6 +32,7 @@ describe("FileChatStore", () => {
       attachedContextPaths: ["Docs/source.pdf"],
       chatSettings: {
         chatModelProfileId: "chat-granite",
+        indexProfileId: "index-research",
         searchMode: "indexAndWeb",
         deepResearch: true,
       },
@@ -45,6 +46,7 @@ describe("FileChatStore", () => {
       attachedContextPaths: ["Docs/source.pdf"],
       chatSettings: {
         chatModelProfileId: "chat-granite",
+        indexProfileId: "index-research",
         searchMode: "indexAndWeb",
         deepResearch: true,
       },

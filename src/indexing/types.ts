@@ -46,6 +46,16 @@ export interface IndexingState {
   errorMessage?: string;
 }
 
+export interface IndexSourceReportItem {
+  sourcePath: string;
+  status: "indexed" | "failed";
+  modifiedTime: number;
+  indexedAt: string;
+  chunkCount: number;
+  errorMessage?: string;
+  languages?: string[];
+}
+
 export type IndexingProgressPhase =
   | "scanning"
   | "checking"

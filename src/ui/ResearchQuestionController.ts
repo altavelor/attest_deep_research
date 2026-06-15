@@ -1,6 +1,10 @@
 import { Notice } from "obsidian";
 
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
+import {
+  estimateResearchRequestTokens,
+  ResearchChatHistoryMessage,
+} from "../research/prompts";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { ResearchAnswer, RetrievedChunk } from "../shared/types";
@@ -15,6 +19,8 @@ export interface ResearchQuestionControllerOptions {
   setLastAnswer(answer: ResearchAnswer | null): void;
   getModelInputValue(): string;
   getCurrentModel(): string;
+  getContextLimitTokens(): number | undefined;
+  getReservedOutputTokens(): number | undefined;
   updateChatModel(model: string): Promise<void>;
   saveCurrentChat(): Promise<void>;
   createResearchService(): ResearchService;
@@ -51,8 +57,13 @@ export class ResearchQuestionController {
       return;
     }
 
+    const chatHistory = this.options.getMessages();
+    if (this.rejectIfContextWindowExceeded(question, chatHistory)) {
+      return;
+    }
+
     this.options.clearQuestionInput();
-    await this.runQuestion(question, { appendQuestion: true });
+    await this.runQuestion(question, { appendQuestion: true, chatHistory });
   }
 
   async submitEditedQuestion(index: number, value: string): Promise<void> {
@@ -64,10 +75,16 @@ export class ResearchQuestionController {
 
     const messages = this.options.getMessages();
     const hasAnswer = messages[index + 1]?.role === "assistant";
+    const chatHistory = hasAnswer ? messages : messages.slice(0, Math.max(0, index));
+
+    if (this.rejectIfContextWindowExceeded(question, chatHistory)) {
+      return;
+    }
+
     this.options.setEditingMessageIndex(null);
 
     if (hasAnswer) {
-      await this.runQuestion(question, { appendQuestion: true });
+      await this.runQuestion(question, { appendQuestion: true, chatHistory });
       return;
     }
 
@@ -77,7 +94,7 @@ export class ResearchQuestionController {
       ),
     );
     await this.options.saveCurrentChat();
-    await this.runQuestion(question, { appendQuestion: false });
+    await this.runQuestion(question, { appendQuestion: false, chatHistory });
   }
 
   stopRunningQuestion(): void {
@@ -92,6 +109,7 @@ export class ResearchQuestionController {
     question: string,
     options: {
       appendQuestion: boolean;
+      chatHistory: ChatDisplayMessage[];
     },
   ): Promise<void> {
     this.setRunning(true);
@@ -121,6 +139,7 @@ export class ResearchQuestionController {
         searchMode: this.options.getSearchMode(),
         deepResearch: this.options.isDeepResearchEnabled(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,
+        chatHistory: toResearchChatHistory(options.chatHistory),
       })) {
         if (this.shouldStopRunning) {
           break;
@@ -171,6 +190,38 @@ export class ResearchQuestionController {
     this.running = running;
     this.options.setRunningState(running);
   }
+
+  private rejectIfContextWindowExceeded(
+    question: string,
+    chatHistory: ChatDisplayMessage[],
+  ): boolean {
+    const limit = this.options.getContextLimitTokens();
+
+    if (!limit) {
+      return false;
+    }
+
+    const estimatedTokens = estimateResearchRequestTokens({
+      question,
+      chatHistory: toResearchChatHistory(chatHistory),
+      evidence: [],
+      maxEvidenceItems: 0,
+      reservedOutputTokens: this.options.getReservedOutputTokens(),
+    });
+
+    if (estimatedTokens <= limit) {
+      return false;
+    }
+
+    const message = "The current chat is too long for the selected model context window.";
+    this.options.setProgressStatus(message);
+    new Notice(message);
+    return true;
+  }
+}
+
+function toResearchChatHistory(messages: ChatDisplayMessage[]): ResearchChatHistoryMessage[] {
+  return messages.map((message) => ({ role: message.role, content: message.content }));
 }
 
 function attachEvidenceToLastAssistantMessage(

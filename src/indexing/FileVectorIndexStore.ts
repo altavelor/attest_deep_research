@@ -38,6 +38,7 @@ import {
   FileVectorIndexState,
   removeSourcePathFromState,
 } from "./FileVectorIndexState";
+import type { IndexSourceReportItem } from "./types";
 
 export {
   createFileVectorManifest,
@@ -226,6 +227,27 @@ export class FileVectorIndexStore
         contentHash,
         ...(languages ? { languages } : {}),
       }));
+  }
+
+  async loadSourceReport(): Promise<IndexSourceReportItem[]> {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return [];
+    }
+
+    this.state = state;
+    return state.sources
+      .map((source) => ({
+        sourcePath: source.sourcePath,
+        status: source.failed === true ? ("failed" as const) : ("indexed" as const),
+        modifiedTime: source.modifiedTime,
+        indexedAt: source.indexedAt,
+        chunkCount: source.chunkCount,
+        errorMessage: source.errorMessage,
+        languages: source.languages,
+      }))
+      .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }
 
   async updateSourceSnapshots(snapshots: IndexSourceSnapshot[]): Promise<void> {

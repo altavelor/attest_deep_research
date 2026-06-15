@@ -45,6 +45,7 @@ export class EmbeddingBatcher {
         chunksEmbedded: embeddedChunks.length,
         embeddingBatchesTotal,
         embeddingBatchesCompleted: Math.floor(start / this.batchSize),
+        currentFile: sourcePathForChunk(batch[0]),
       });
       const embeddingStartedAt = Date.now();
       const response = await this.embeddings.embed({
@@ -82,6 +83,7 @@ export class EmbeddingBatcher {
         chunksEmbedded: embeddedChunks.length,
         embeddingBatchesTotal,
         embeddingBatchesCompleted: Math.floor(start / this.batchSize) + 1,
+        currentFile: sourcePathForChunk(batch[0]),
       });
 
       await this.yieldToEventLoop();
@@ -99,6 +101,22 @@ export class EmbeddingBatcher {
 
   private logPerformance(event: IndexingPerformanceLogEvent): void {
     this.logger?.logIndexingPerformance?.(event);
+  }
+}
+
+function sourcePathForChunk(chunk: ExtractedChunk | undefined): string | undefined {
+  const source = chunk?.source;
+  if (!source) {
+    return undefined;
+  }
+
+  switch (source.kind) {
+    case "markdown":
+    case "pdf":
+    case "document":
+      return source.path;
+    case "web":
+      return source.url;
   }
 }
 

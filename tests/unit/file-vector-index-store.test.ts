@@ -151,6 +151,39 @@ describe("FileVectorIndexStore", () => {
     ]);
   });
 
+  it("loads per-source report with chunk counts and failed reasons", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("chunk-a", "Research/a.md", "first chunk", [1, 0], "hash-a"),
+      chunk("chunk-b", "Research/a.md", "second chunk", [1, 0], "hash-a"),
+    ]);
+    await store.recordFailedSourceSnapshots([
+      {
+        sourcePath: "Research/broken.pdf",
+        modifiedTime: 42,
+        indexedAt: "2026-06-14T12:00:00.000Z",
+        errorMessage: "PDF text extraction failed.",
+      },
+    ]);
+
+    await expect(store.loadSourceReport()).resolves.toEqual([
+      expect.objectContaining({
+        sourcePath: "Research/a.md",
+        status: "indexed",
+        chunkCount: 2,
+        errorMessage: undefined,
+      }),
+      expect.objectContaining({
+        sourcePath: "Research/broken.pdf",
+        status: "failed",
+        chunkCount: 0,
+        errorMessage: "PDF text extraction failed.",
+      }),
+    ]);
+  });
+
   it("derives language inventory from stored chunks when manifest inventory is unavailable", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 

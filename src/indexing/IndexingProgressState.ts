@@ -142,14 +142,30 @@ export class IndexingProgressState {
     chunksEmbedded: number;
     embeddingBatchesTotal: number;
     embeddingBatchesCompleted: number;
+    currentFile?: string;
   }): void {
     this.state = {
       ...this.state,
       phase: "embedding",
+      currentFile: input.currentFile ?? this.state.currentFile,
       chunksTotal: input.chunksTotal,
       chunksEmbedded: input.chunksEmbedded,
       embeddingBatchesTotal: input.embeddingBatchesTotal,
       embeddingBatchesCompleted: input.embeddingBatchesCompleted,
+      lastUpdatedAt: this.timestamp(),
+    };
+    this.notify();
+  }
+
+  setFileChunkProgress(path: string, chunksEmbedded: number, chunksTotal: number): void {
+    this.state = {
+      ...this.state,
+      phase: "embedding",
+      currentFile: path,
+      chunksTotal,
+      chunksEmbedded,
+      embeddingBatchesTotal: undefined,
+      embeddingBatchesCompleted: undefined,
       lastUpdatedAt: this.timestamp(),
     };
     this.notify();

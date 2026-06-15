@@ -10,13 +10,14 @@ import {
 } from "./rendering";
 
 export interface IndexControlActions {
-  start(): void | Promise<unknown>;
-  pause(): void | Promise<unknown>;
-  resume(): void | Promise<unknown>;
-  rebuild(): void | Promise<unknown>;
+  start(indexProfileId?: string): void | Promise<unknown>;
+  pause(indexProfileId?: string): void | Promise<unknown>;
+  resume(indexProfileId?: string): void | Promise<unknown>;
+  rebuild(indexProfileId?: string): void | Promise<unknown>;
 }
 
 export interface IndexControlOptions {
+  profileId?: string;
   state?: IndexingState;
   actions: IndexControlActions;
   compact?: boolean;
@@ -72,10 +73,10 @@ export function renderIndexControl(containerEl: HTMLElement, options: IndexContr
   if (!isIndexing && !isPaused && !isError) {
     createIconButton(actions, {
       icon: "play",
-      label: "Start indexing",
-      text: "Start",
+      label: state?.lastIndexedAt ? "Update index" : "Start indexing",
+      text: state?.lastIndexedAt ? "Update" : "Start",
       disabled: false,
-      onClick: options.actions.start,
+      onClick: () => options.actions.start(options.profileId),
     });
   }
 
@@ -85,17 +86,22 @@ export function renderIndexControl(containerEl: HTMLElement, options: IndexContr
       label: isPaused ? "Continue indexing" : "Pause indexing",
       text: isPaused ? "Continue" : "Pause",
       disabled: false,
-      onClick: isPaused ? options.actions.resume : options.actions.pause,
+      onClick: () =>
+        isPaused
+          ? options.actions.resume(options.profileId)
+          : options.actions.pause(options.profileId),
     });
   }
 
-  createIconButton(actions, {
-    icon: "refresh-cw",
-    label: "Rebuild index",
-    text: "Rebuild",
-    disabled: isIndexing,
-    onClick: options.actions.rebuild,
-  });
+  if (state?.lastIndexedAt) {
+    createIconButton(actions, {
+      icon: "refresh-cw",
+      label: "Rebuild index",
+      text: "Rebuild",
+      disabled: isIndexing,
+      onClick: () => options.actions.rebuild(options.profileId),
+    });
+  }
 
   if (options.onHide && !isError) {
     createIconButton(actions, {

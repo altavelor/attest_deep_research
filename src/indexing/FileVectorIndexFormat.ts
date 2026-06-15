@@ -15,12 +15,16 @@ export const VECTOR_FLOAT_BYTES = 4;
 export interface IndexProfile {
   id: string;
   name: string;
+  mode: "wholeVault" | "selected";
   indexFolder: string;
   includeFolders: string[];
   excludeGlobs: string[];
   embeddingModelProfileId: string;
   isSuspended?: boolean;
   suspendedReason?: string;
+  lastIndexedAt?: string;
+  indexedFileCount?: number;
+  indexSizeBytes?: number;
   sourceKinds?: Array<SourceReference["kind"]>;
   refreshMode: "manual" | "onStartup" | "onVaultChange";
   shardCount: typeof DEFAULT_FILE_VECTOR_SHARD_COUNT;

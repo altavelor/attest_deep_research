@@ -11,13 +11,14 @@ import { Fb2Extractor } from "./extractors/Fb2Extractor";
 import { MarkdownExtractor } from "./extractors/MarkdownExtractor";
 import { PdfExtractor } from "./extractors/PdfExtractor";
 import { TextExtractor } from "./extractors/TextExtractor";
-import { IndexingController } from "./indexing/IndexingController";
 import {
   IndexingService,
   IndexingState,
+  IndexSourceReportItem,
   VaultFileProvider,
   VaultFileSummary,
 } from "./indexing/IndexingService";
+import { IndexingProfileController } from "./indexing/IndexingProfileController";
 import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
 import { RetrievalService } from "./retrieval/RetrievalService";
@@ -25,6 +26,7 @@ import { QueryExpansionService } from "./retrieval/QueryExpansionService";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
+import { normalizeVaultPath, vaultPathMatchesGlob } from "./shared/pathFilters";
 import {
   DEFAULT_SETTINGS,
   ChatModelProfile,
@@ -46,28 +48,49 @@ export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
-  readonly indexing = new IndexingController({
-    createService: (onProgress) => this.createIndexingService(onProgress),
-    measureIndexSize: () =>
-      measureFolderSize(this.getVaultLocalPath(getActiveIndexProfile(this.settings).indexFolder)),
+  readonly indexing = new IndexingProfileController({
+    getProfile: (profileId) =>
+      this.settings.indexProfiles.find((profile) => profile.id === profileId),
+    createService: (profileId, onProgress) => this.createIndexingService(profileId, onProgress),
+    measureIndexSize: (profileId) =>
+      measureFolderSize(this.getVaultLocalPath(this.requireIndexProfile(profileId).indexFolder)),
     onError: (error) => new Notice(toUserMessage(error)),
+    onComplete: async (profileId, state) => {
+      const profile = this.settings.indexProfiles.find((candidate) => candidate.id === profileId);
+      if (!profile) {
+        return;
+      }
+      profile.lastIndexedAt = state.lastIndexedAt;
+      profile.indexedFileCount = state.indexedFiles;
+      profile.indexSizeBytes = state.indexSizeBytes;
+      profile.updatedAt = new Date().toISOString();
+      await this.saveSettings();
+    },
   });
   async onload(): Promise<void> {
     await this.loadSettings();
-    void this.indexing.refreshIndexSize();
+    if (getActiveIndexProfile(this.settings).isSuspended !== true) {
+      void this.indexing.refreshIndexSize(this.settings.activeIndexProfileId);
+    }
     this.registerView(
       IXPLORER_CHAT_VIEW_TYPE,
       (leaf) =>
         new IxplorerChatView(leaf, {
-          createResearchService: (chatModelProfileId) =>
-            this.createResearchService(chatModelProfileId),
-          getIndexingState: () => this.indexing.getState(),
-          subscribeToIndexingState: (listener) => this.indexing.subscribe(listener),
+          createResearchService: (chatModelProfileId, indexProfileId) =>
+            this.createResearchService(chatModelProfileId, indexProfileId),
+          getIndexingState: (indexProfileId) =>
+            this.indexing.getState(indexProfileId ?? this.settings.activeIndexProfileId),
+          subscribeToIndexingState: (indexProfileId, listener) =>
+            this.indexing.subscribe(indexProfileId ?? this.settings.activeIndexProfileId, listener),
           indexingActions: {
-            start: () => this.indexing.start(),
-            pause: () => this.indexing.pause(),
-            resume: () => this.indexing.resume(),
-            rebuild: () => this.indexing.rebuild(),
+            start: (indexProfileId) =>
+              this.indexing.start(indexProfileId ?? this.settings.activeIndexProfileId),
+            pause: (indexProfileId) =>
+              this.indexing.pause(indexProfileId ?? this.settings.activeIndexProfileId),
+            resume: (indexProfileId) =>
+              this.indexing.resume(indexProfileId ?? this.settings.activeIndexProfileId),
+            rebuild: (indexProfileId) =>
+              this.indexing.rebuild(indexProfileId ?? this.settings.activeIndexProfileId),
           },
           isWebSearchEnabled: () => this.settings.duckDuckGoEnabled,
           getChatModel: () =>
@@ -86,10 +109,18 @@ export default class IxplorerPlugin extends Plugin {
             this.settings.chatModelProfiles.map((profile) => ({
               id: profile.id,
               name: profile.name,
+              contextLength: profile.capabilities?.contextLength,
+              maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
             })),
+          getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,
           getIndexProfiles: () =>
-            this.settings.indexProfiles.map((profile) => ({ id: profile.id, name: profile.name })),
+            this.settings.indexProfiles.map((profile) => ({
+              id: profile.id,
+              name: profile.name,
+              isSuspended: profile.isSuspended === true,
+              isIndexed: Boolean(profile.lastIndexedAt),
+            })),
           searchIndex: (options) => this.searchIndex(options),
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
@@ -125,8 +156,14 @@ export default class IxplorerPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  markIndexStale(): void {
-    this.indexing.markStale();
+  markIndexStale(profileId = this.settings.activeIndexProfileId): void {
+    this.indexing.markStale(profileId);
+  }
+
+  async loadIndexReport(profileId: string): Promise<IndexSourceReportItem[]> {
+    return this.createVectorIndexStoreForProfile(
+      this.requireIndexProfile(profileId),
+    ).loadSourceReport();
   }
 
   async activateChatView(): Promise<void> {
@@ -141,8 +178,11 @@ export default class IxplorerPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
-  private createResearchService(chatModelProfileId?: string): ResearchService {
-    const indexProfile = getActiveIndexProfile(this.settings);
+  private createResearchService(
+    chatModelProfileId?: string,
+    indexProfileId?: string,
+  ): ResearchService {
+    const indexProfile = this.resolveIndexProfile(indexProfileId);
     const chatProfile = this.requireChatModelProfile(chatModelProfileId);
     const chatServer = this.requireServerProfile(chatProfile.serverProfileId);
 
@@ -154,6 +194,7 @@ export default class IxplorerPlugin extends Plugin {
         temperature: chatProfile.temperature,
         maxTokens: chatProfile.maxTokens,
       },
+      contextLimitTokens: chatProfile.capabilities?.contextLength,
       queryExpansion: this.createQueryExpansionService(chatProfile, chatServer),
       searchProvider: this.createSearchProvider(),
     });
@@ -172,9 +213,7 @@ export default class IxplorerPlugin extends Plugin {
     minScore?: number;
     extension?: string;
   }) {
-    const indexProfile =
-      this.settings.indexProfiles.find((profile) => profile.id === options.profileId) ??
-      getActiveIndexProfile(this.settings);
+    const indexProfile = this.resolveIndexProfile(options.profileId);
     const retriever = this.createRetrieverForProfile(indexProfile);
     const chatProfile = resolveChatModelProfile(
       this.settings,
@@ -190,9 +229,9 @@ export default class IxplorerPlugin extends Plugin {
     const languageInventory = await retriever.getLanguageInventory();
     const queryVariants = queryExpansion
       ? await queryExpansion.buildVariants({
-        query: options.query,
-        languageInventory,
-      })
+          query: options.query,
+          languageInventory,
+        })
       : [];
     const result = await retriever.search(options.query, {
       limit: options.limit,
@@ -205,9 +244,14 @@ export default class IxplorerPlugin extends Plugin {
     return result.chunks;
   }
 
-  private createIndexingService(onProgress: (state: IndexingState) => void): IndexingService {
-    const indexProfile = getActiveIndexProfile(this.settings);
-    const embeddingProfile = this.requireEmbeddingModelProfile(indexProfile.embeddingModelProfileId);
+  private createIndexingService(
+    profileId: string,
+    onProgress: (state: IndexingState) => void,
+  ): IndexingService {
+    const indexProfile = this.requireIndexProfile(profileId);
+    const embeddingProfile = this.requireEmbeddingModelProfile(
+      indexProfile.embeddingModelProfileId,
+    );
 
     return new IndexingService({
       files: new ObsidianVaultFileProvider(this.app.vault),
@@ -250,7 +294,9 @@ export default class IxplorerPlugin extends Plugin {
     });
   }
 
-  private createEmbeddingClientForProfile(embeddingProfile: EmbeddingModelProfile): EmbeddingClient {
+  private createEmbeddingClientForProfile(
+    embeddingProfile: EmbeddingModelProfile,
+  ): EmbeddingClient {
     const server = this.requireServerProfile(embeddingProfile.serverProfileId);
     return new EmbeddingClient({
       apiFormat: server.apiFormat,
@@ -270,7 +316,9 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   private createRetrieverForProfile(indexProfile: IndexProfile): RetrievalService {
-    const embeddingProfile = this.requireEmbeddingModelProfile(indexProfile.embeddingModelProfileId);
+    const embeddingProfile = this.requireEmbeddingModelProfile(
+      indexProfile.embeddingModelProfileId,
+    );
     return new RetrievalService({
       embeddings: this.createEmbeddingClientForProfile(embeddingProfile),
       indexStore: this.createVectorIndexStoreForProfile(indexProfile),
@@ -322,6 +370,39 @@ export default class IxplorerPlugin extends Plugin {
     const profile = resolveServerProfile(this.settings, profileId);
     if (!profile) {
       throw new Error("The selected server profile is unavailable.");
+    }
+    return profile;
+  }
+
+  private resolveIndexProfile(profileId?: string): IndexProfile {
+    const requested = profileId
+      ? this.settings.indexProfiles.find(
+          (profile) =>
+            profile.id === profileId &&
+            profile.isSuspended !== true &&
+            Boolean(profile.lastIndexedAt),
+        )
+      : undefined;
+
+    const active = getActiveIndexProfile(this.settings);
+    if (active.isSuspended !== true && active.lastIndexedAt) {
+      return requested ?? active;
+    }
+
+    const firstIndexed = this.settings.indexProfiles.find(
+      (profile) => profile.isSuspended !== true && Boolean(profile.lastIndexedAt),
+    );
+    if (!requested && !firstIndexed) {
+      throw new Error("Index this profile before using it in chat or search.");
+    }
+
+    return requested ?? firstIndexed!;
+  }
+
+  private requireIndexProfile(profileId: string): IndexProfile {
+    const profile = this.settings.indexProfiles.find((candidate) => candidate.id === profileId);
+    if (!profile || profile.isSuspended) {
+      throw new Error("The selected index profile is unavailable.");
     }
     return profile;
   }
@@ -394,10 +475,14 @@ class ObsidianVaultFileProvider implements VaultFileProvider {
   constructor(private readonly vault: Vault) {}
 
   async listFiles(): Promise<VaultFileSummary[]> {
-    return this.vault.getFiles().map((file) => ({
-      path: file.path,
-      modifiedTime: file.stat.mtime,
-    }));
+    const ignoredGlobs = this.getIgnoredGlobs();
+    return this.vault
+      .getFiles()
+      .filter((file) => !isHiddenOrIgnoredVaultPath(file.path, ignoredGlobs))
+      .map((file) => ({
+        path: file.path,
+        modifiedTime: file.stat.mtime,
+      }));
   }
 
   async readFile(path: string): Promise<ArrayBuffer | string> {
@@ -409,4 +494,21 @@ class ObsidianVaultFileProvider implements VaultFileProvider {
 
     return this.vault.readBinary(file);
   }
+
+  private getIgnoredGlobs(): string[] {
+    const vaultWithConfig = this.vault as Vault & { getConfig?(key: string): unknown };
+    const value = vaultWithConfig.getConfig?.("userIgnoreFilters");
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  }
+}
+
+function isHiddenOrIgnoredVaultPath(path: string, ignoredGlobs: string[]): boolean {
+  const normalized = normalizeVaultPath(path);
+  if (normalized.split("/").some((segment) => segment.startsWith("."))) {
+    return true;
+  }
+
+  return ignoredGlobs.some((glob) => vaultPathMatchesGlob(normalized, glob));
 }

@@ -31,6 +31,23 @@ describe("buildResearchPrompt", () => {
     expect(prompt).toContain("[pdf-1] Papers/model.pdf p. 3");
     expect(prompt).not.toContain("[extra]");
   });
+
+  it("includes previous chat messages before the current question", () => {
+    const prompt = buildResearchPrompt({
+      question: "How should I configure it now?",
+      chatHistory: [
+        { role: "user", content: "I use Ollama with a small context model." },
+        { role: "assistant", content: "Use shorter answers and cite local notes." },
+      ],
+      evidence: [],
+      maxEvidenceItems: 2,
+    });
+
+    expect(prompt).toContain("Previous chat:");
+    expect(prompt).toContain("User: I use Ollama with a small context model.");
+    expect(prompt).toContain("Assistant: Use shorter answers and cite local notes.");
+    expect(prompt).toContain("Question: How should I configure it now?");
+  });
 });
 
 describe("extractFollowUpQuestions", () => {
@@ -188,6 +205,30 @@ describe("ResearchService", () => {
       answer: expect.objectContaining({ answer: "First second" }),
     });
     expect(persistFinalAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to call the model when chat history exceeds the configured context window", async () => {
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      contextLimitTokens: 20,
+      now: fixedNow,
+    });
+
+    await expect(
+      collectAsync(
+        service.answer({
+          question: "Continue with the same plan.",
+          chatHistory: [
+            { role: "user", content: "A long prior message ".repeat(20) },
+            { role: "assistant", content: "A long prior answer ".repeat(20) },
+          ],
+        }),
+      ),
+    ).rejects.toThrow("The current chat is too long for the selected model context window.");
+    expect(chatModel.requests).toEqual([]);
   });
 
   it("uses language-aware query variants for vault retrieval without sending vault evidence to expansion", async () => {

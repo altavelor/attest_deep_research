@@ -1,16 +1,34 @@
-import { RetrievedChunk } from "../shared/types";
+import { ChatMessage, RetrievedChunk } from "../shared/types";
+
+export const RESEARCH_SYSTEM_PROMPT =
+  "You are Ixplorer, a local-first Obsidian research assistant. Answer only from provided evidence and preserve citation IDs.";
+
+export interface ResearchChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export interface BuildResearchPromptOptions {
   question: string;
+  chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
   maxEvidenceItems: number;
 }
+
+export interface EstimateResearchRequestTokensOptions extends BuildResearchPromptOptions {
+  reservedOutputTokens?: number;
+}
+
+const APPROX_CHARS_PER_TOKEN = 4;
+const CHAT_MESSAGE_OVERHEAD_TOKENS = 4;
+const CHAT_REQUEST_OVERHEAD_TOKENS = 8;
 
 export function buildResearchPrompt(options: BuildResearchPromptOptions): string {
   const evidence = options.evidence
     .slice(0, options.maxEvidenceItems)
     .map((chunk) => formatEvidenceItem(chunk))
     .join("\n\n");
+  const history = formatChatHistory(options.chatHistory ?? []);
 
   return [
     "Use the evidence below to answer the user's research question in a detailed, structured way.",
@@ -18,13 +36,44 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     "Cite claims with bracketed citation IDs exactly as shown, for example [chunk-id].",
     "Do not add a separate citations, sources, or bibliography section.",
     "If the evidence is insufficient, say what is missing instead of guessing.",
+    "Use the previous chat to resolve references and continue the conversation.",
     "Prefer concrete details, definitions, examples, and relationships found in the evidence.",
     "End with a short 'Follow-up questions:' section containing 1-3 numbered questions.",
     "",
+    ...(history ? ["Previous chat:", history, ""] : []),
     `Question: ${options.question}`,
     "",
     evidence ? `Evidence:\n${evidence}` : "Evidence: No relevant evidence was found.",
   ].join("\n");
+}
+
+export function estimateResearchRequestTokens(
+  options: EstimateResearchRequestTokensOptions,
+): number {
+  return (
+    estimateChatMessagesTokens([
+      { role: "system", content: RESEARCH_SYSTEM_PROMPT },
+      { role: "user", content: buildResearchPrompt(options) },
+    ]) + (options.reservedOutputTokens ?? 0)
+  );
+}
+
+export function estimateChatMessagesTokens(messages: ChatMessage[]): number {
+  return (
+    CHAT_REQUEST_OVERHEAD_TOKENS +
+    messages.reduce(
+      (total, message) =>
+        total +
+        CHAT_MESSAGE_OVERHEAD_TOKENS +
+        estimateTextTokens(message.role) +
+        estimateTextTokens(message.content),
+      0,
+    )
+  );
+}
+
+export function estimateTextTokens(text: string): number {
+  return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
 }
 
 export function buildDeepResearchPlanPrompt(question: string, maxQueries: number): string {
@@ -57,6 +106,13 @@ export function extractFollowUpQuestions(answer: string): string[] {
 
 function formatEvidenceItem(chunk: RetrievedChunk): string {
   return [`[${chunk.id}] ${sourceLabel(chunk)}`, truncateEvidenceText(chunk.text)].join("\n");
+}
+
+function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {
+  return messages
+    .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`)
+    .join("\n\n")
+    .trim();
 }
 
 function sourceLabel(chunk: RetrievedChunk): string {
