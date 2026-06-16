@@ -59,6 +59,7 @@ export class RetrievalService {
     const fusedChunks = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const chunks = await this.expandAdjacentChunks(
       fusedChunks.slice(0, options.limit),
+      1,
       options.limit,
     );
 
@@ -78,6 +79,14 @@ export class RetrievalService {
     }
 
     return this.indexStore.getLanguageInventory();
+  }
+
+  async expandAdjacentEvidence(
+    chunks: RetrievedChunk[],
+    radius: number,
+    limit: number,
+  ): Promise<RetrievedChunk[]> {
+    return this.expandAdjacentChunks(chunks, radius, limit);
   }
 
   private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
@@ -124,13 +133,14 @@ export class RetrievalService {
 
   private async expandAdjacentChunks(
     chunks: RetrievedChunk[],
+    radius: number,
     limit: number,
   ): Promise<RetrievedChunk[]> {
     if (!isAdjacentChunkIndexStore(this.indexStore)) {
       return chunks.slice(0, limit);
     }
 
-    return this.indexStore.expandAdjacentChunks(chunks, 1, limit);
+    return this.indexStore.expandAdjacentChunks(chunks, radius, limit);
   }
 }
 

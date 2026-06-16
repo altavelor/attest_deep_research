@@ -12,6 +12,11 @@ import { ResearchChatHistoryMessage } from "./prompts";
 export interface ResearchRetriever {
   search(query: string, options: RetrievalOptions): Promise<RetrievalResult>;
   getLanguageInventory?(): Promise<LanguageInventoryItem[]>;
+  expandAdjacentEvidence?(
+    chunks: RetrievalResult["chunks"],
+    radius: number,
+    limit: number,
+  ): Promise<RetrievalResult["chunks"]>;
 }
 
 export type ResearchSearchMode = "indexOnly" | "indexAndWeb" | "webOnly";
@@ -25,6 +30,8 @@ export interface ResearchRequest {
   activeFilePath?: string;
   includeActiveFile?: boolean;
   includeContextDiagnostics?: boolean;
+  expandedEvidence?: RetrievalResult["chunks"];
+  expandedCitationKeys?: string[];
   deepResearch?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
 }

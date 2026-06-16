@@ -1,0 +1,168 @@
+import { describe, expect, it } from "vitest";
+
+import { EvidencePlanner } from "../../src/research/EvidencePlanner";
+import { markdownSource, retrieved, webSource } from "../helpers/factories";
+
+describe("EvidencePlanner", () => {
+  it("uses a local-first budget by default while keeping at least one web item", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "How does the project work?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+      graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1"),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2"),
+      ],
+      webEvidence: [
+        retrieved("web-1", webSource("https://example.com/1"), "Web 1"),
+        retrieved("web-2", webSource("https://example.com/2"), "Web 2"),
+      ],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual([
+      "explicit-1",
+      "graph-1",
+      "retrieval-1",
+      "retrieval-2",
+      "web-1",
+    ]);
+    expect(output.webEvidence.map((chunk) => chunk.id)).toEqual(["web-1"]);
+    expect(output.diagnostics.budget.policy).toBe("local-first");
+  });
+
+  it("raises web priority for freshness questions when web search is enabled", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "What is the latest API changelog?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+      graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1"),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2"),
+      ],
+      webEvidence: [
+        retrieved("web-1", webSource("https://example.com/1"), "Web 1"),
+        retrieved("web-2", webSource("https://example.com/2"), "Web 2"),
+      ],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual([
+      "explicit-1",
+      "web-1",
+      "web-2",
+      "graph-1",
+      "retrieval-1",
+    ]);
+    expect(output.diagnostics.webIntent).toMatchObject({
+      detected: true,
+      reason: "freshness-keyword",
+      matchedTerms: ["latest", "changelog"],
+    });
+    expect(output.diagnostics.budget.policy).toBe("freshness");
+  });
+
+  it("keeps local-first policy for freshness questions when freshness web boost is disabled", () => {
+    const planner = new EvidencePlanner({ useWebWhenFreshnessNeeded: false });
+    const output = planner.plan({
+      question: "What is the latest API changelog?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+      graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1"),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2"),
+      ],
+      webEvidence: [
+        retrieved("web-1", webSource("https://example.com/1"), "Web 1"),
+        retrieved("web-2", webSource("https://example.com/2"), "Web 2"),
+      ],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual([
+      "explicit-1",
+      "graph-1",
+      "retrieval-1",
+      "retrieval-2",
+      "web-1",
+    ]);
+    expect(output.diagnostics.webIntent.detected).toBe(false);
+    expect(output.diagnostics.budget.policy).toBe("local-first");
+  });
+
+
+  it("lets web fill budget when local evidence is weak", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "How should I configure this?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 4,
+      explicitEvidence: [],
+      graphEvidence: [],
+      retrievalEvidence: [retrieved("retrieval-1", markdownSource("R1.md"), "Weak", 0.1)],
+      webEvidence: [
+        retrieved("web-1", webSource("https://example.com/1"), "Web 1"),
+        retrieved("web-2", webSource("https://example.com/2"), "Web 2"),
+        retrieved("web-3", webSource("https://example.com/3"), "Web 3"),
+      ],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual([
+      "retrieval-1",
+      "web-1",
+      "web-2",
+      "web-3",
+    ]);
+    expect(output.diagnostics.localEvidenceQuality.weak).toBe(true);
+    expect(output.diagnostics.budget.policy).toBe("weak-local");
+  });
+
+  it("uses only web evidence for web-only mode", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "Search the web",
+      searchMode: "webOnly",
+      evidenceLimit: 2,
+      explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+      graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+      retrievalEvidence: [retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval")],
+      webEvidence: [
+        retrieved("web-1", webSource("https://example.com/1"), "Web 1"),
+        retrieved("web-2", webSource("https://example.com/2"), "Web 2"),
+        retrieved("web-3", webSource("https://example.com/3"), "Web 3"),
+      ],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual(["web-1", "web-2"]);
+    expect(output.explicitEvidence).toEqual([]);
+    expect(output.retrievedEvidence).toEqual([]);
+    expect(output.diagnostics.budget.policy).toBe("web-only");
+  });
+
+  it("deduplicates chunks across groups and records dropped ids", () => {
+    const planner = new EvidencePlanner();
+    const duplicate = retrieved("same", markdownSource("A.md"), "Same");
+    const output = planner.plan({
+      question: "Explain",
+      searchMode: "indexOnly",
+      evidenceLimit: 2,
+      explicitEvidence: [duplicate],
+      graphEvidence: [duplicate],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1"),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2"),
+      ],
+      webEvidence: [retrieved("web-1", webSource("https://example.com/1"), "Web 1")],
+    });
+
+    expect(output.finalEvidence.map((chunk) => chunk.id)).toEqual(["same", "retrieval-1"]);
+    expect(output.graphEvidence).toEqual([]);
+    expect(output.diagnostics.dropped.retrievalChunkIds).toEqual(["retrieval-2"]);
+    expect(output.diagnostics.dropped.webChunkIds).toEqual(["web-1"]);
+  });
+});

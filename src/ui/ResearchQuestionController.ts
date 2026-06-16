@@ -30,6 +30,9 @@ export interface ResearchQuestionControllerOptions {
   getActiveFilePath(): string | undefined;
   shouldIncludeActiveFileContext(): boolean;
   shouldIncludeContextDiagnostics(): boolean;
+  getExpandedEvidence(): RetrievedChunk[];
+  getExpandedCitationKeys(): string[];
+  clearExpandedCitationContexts(): Promise<void>;
   isDeepResearchEnabled(): boolean;
   getContextPaths(): string[];
   getSearchUnavailableMessage(): string | null;
@@ -110,6 +113,22 @@ export class ResearchQuestionController {
     this.shouldStopRunning = true;
   }
 
+  async regenerateWithExpandedContext(): Promise<void> {
+    if (this.running || this.options.getExpandedEvidence().length === 0) {
+      return;
+    }
+
+    const messages = this.options.getMessages();
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+    const question = lastUserMessage?.content.trim() ?? "";
+
+    if (!question || this.rejectIfContextWindowExceeded(question, messages)) {
+      return;
+    }
+
+    await this.runQuestion(question, { appendQuestion: true, chatHistory: messages });
+  }
+
   private async runQuestion(
     question: string,
     options: {
@@ -138,6 +157,9 @@ export class ResearchQuestionController {
     try {
       const service = this.options.createResearchService();
       const contextPaths = this.options.getContextPaths();
+      const expandedEvidence = this.options.getExpandedEvidence();
+      const expandedCitationKeys = this.options.getExpandedCitationKeys();
+      let completed = false;
 
       for await (const event of service.answer({
         question,
@@ -148,12 +170,21 @@ export class ResearchQuestionController {
         activeFilePath: this.options.getActiveFilePath(),
         includeActiveFile: this.options.shouldIncludeActiveFileContext(),
         includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
+        expandedEvidence: expandedEvidence.length > 0 ? expandedEvidence : undefined,
+        expandedCitationKeys:
+          expandedCitationKeys.length > 0 ? expandedCitationKeys : undefined,
         chatHistory: toResearchChatHistory(options.chatHistory),
       })) {
         if (this.shouldStopRunning) {
           break;
         }
         this.applyResearchEvent(event);
+        if (event.type === "complete") {
+          completed = true;
+        }
+      }
+      if (completed && expandedEvidence.length > 0) {
+        await this.options.clearExpandedCitationContexts();
       }
     } catch (error) {
       this.options.setMessages(

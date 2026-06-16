@@ -200,6 +200,26 @@ describe("RetrievalService", () => {
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["before", "hit"]);
   });
+
+  it("expands adjacent evidence on demand", async () => {
+    const hit = retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9);
+    const indexStore = new FakeIndexStore([hit]);
+    indexStore.adjacentResults = [
+      retrieved("before", markdownSource("Research/a.md"), "before", 0.8),
+      hit,
+      retrieved("after", markdownSource("Research/a.md"), "after", 0.7),
+    ];
+    const service = new RetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const expanded = await service.expandAdjacentEvidence([hit], 2, 3);
+
+    expect(expanded.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
+  });
 });
 
 describe("rankKeywordMatches", () => {
