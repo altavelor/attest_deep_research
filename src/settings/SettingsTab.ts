@@ -663,6 +663,18 @@ export class IxplorerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }),
       );
+
+    new Setting(containerEl)
+      .setName("Use web for freshness questions")
+      .setDesc("Give web evidence more budget when a question asks for current, latest, price, or release information.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useWebWhenFreshnessNeeded)
+          .onChange(async (value) => {
+            this.plugin.settings.useWebWhenFreshnessNeeded = value;
+            await this.plugin.saveSettings();
+          }),
+      );
   }
 }
 

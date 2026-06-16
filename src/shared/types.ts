@@ -88,6 +88,41 @@ export interface ContextBudgetGroup {
   name: "history" | "explicit" | "graph" | "retrieval" | "web" | "reserved-output";
   usedTokens: number;
   droppedItems: number;
+  allocatedTokens?: number;
+  includedItems?: number;
+}
+
+export interface EvidencePlannerDiagnostics {
+  webIntent: {
+    detected: boolean;
+    reason: "explicit-web" | "web-only" | "freshness-keyword" | "none";
+    matchedTerms: string[];
+  };
+  localEvidenceQuality: {
+    weak: boolean;
+    explicitChunks: number;
+    graphChunks: number;
+    retrievalChunks: number;
+    averageRetrievalScore?: number;
+    reasons: string[];
+  };
+  budget: {
+    policy: "local-first" | "freshness" | "weak-local" | "web-only" | "index-only";
+    evidenceLimit: number;
+    contextLimitTokens?: number;
+    reservedOutputTokens?: number;
+    groups: ContextBudgetGroup[];
+  };
+  dropped: {
+    explicitChunkIds: string[];
+    graphChunkIds: string[];
+    retrievalChunkIds: string[];
+    webChunkIds: string[];
+  };
+  expandedCitations: {
+    citationKeys: string[];
+    addedChunkIds: string[];
+  };
 }
 
 export type GraphEdgeType = "forward_link" | "embed" | "backlink" | "question_link";
@@ -141,6 +176,7 @@ export interface ContextDiagnostics {
     reservedOutputTokens?: number;
     groups: ContextBudgetGroup[];
   };
+  evidencePlanner?: EvidencePlannerDiagnostics;
   warnings: string[];
 }
 

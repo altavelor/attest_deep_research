@@ -6,12 +6,14 @@ import {
   ChatRequest,
   Citation,
   ContextDiagnostics,
+  ContextMode,
   ResearchAnswer,
   RetrievedChunk,
   SearchProvider,
 } from "../shared/types";
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
+import { EvidencePlanner, EvidencePlannerOptions } from "./EvidencePlanner";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {
@@ -33,6 +35,7 @@ export interface ResearchServiceOptions {
   contextAssembler?: ContextAssembler;
   graphContext?: ContextAssembleRequest["graph"];
   evidenceLimit?: number;
+  evidencePlanner?: EvidencePlannerOptions;
   contextLimitTokens?: number;
   temperature?: number;
   now?: () => Date;
@@ -47,6 +50,7 @@ export class ResearchService {
   private readonly answerSynthesis: AnswerSynthesisService;
   private readonly evidenceLimit: number;
   private readonly contextAssembler?: ContextAssembler;
+  private readonly evidencePlanner: EvidencePlanner;
   private readonly contextLimitTokens?: number;
   private readonly reservedOutputTokens?: number;
   private readonly graphContext?: ContextAssembleRequest["graph"];
@@ -54,6 +58,7 @@ export class ResearchService {
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
     this.contextAssembler = options.contextAssembler;
+    this.evidencePlanner = new EvidencePlanner(options.evidencePlanner);
     this.contextLimitTokens = options.contextLimitTokens;
     this.reservedOutputTokens = options.chatOptions?.maxTokens;
     this.graphContext = options.graphContext;
@@ -120,50 +125,68 @@ export class ResearchService {
       searchMode !== "indexOnly",
       deepResearch,
     );
-    const diagnostics = assembled
+    const contextDiagnostics = assembled
       ? withRetrievalDiagnostics(assembled.diagnostics, retrieval)
       : undefined;
-    const localEvidence = mergeLocalEvidence(
-      assembled?.explicitEvidence ?? [],
+    const rawGraphEvidence = graphEvidenceFromRetrieval(
       retrieval.chunks,
-      this.evidenceLimit,
-    );
-    const evidence = mergeEvidenceChunks(
-      localEvidence,
-      webEvidence.chunks,
-      this.evidenceLimit,
-      deepResearch,
-    );
-    const graphEvidence = graphEvidenceFromRetrieval(
-      evidence,
       assembled?.graphSourcePaths ?? [],
     );
-    const webPromptEvidence = evidence.filter((chunk) => chunk.source.kind === "web");
-    const retrievedEvidence = nonExplicitEvidence(
-      evidence,
-      [...(assembled?.explicitEvidence ?? []), ...graphEvidence, ...webPromptEvidence],
-    );
+    const rawRetrievalEvidence = nonExplicitEvidence(retrieval.chunks, rawGraphEvidence);
+    const planned = this.evidencePlanner.plan({
+      question,
+      chatHistory: request.chatHistory,
+      contextLimitTokens: this.contextLimitTokens,
+      reservedOutputTokens: this.reservedOutputTokens,
+      evidenceLimit: this.evidenceLimit,
+      searchMode,
+      explicitEvidence: assembled?.explicitEvidence ?? [],
+      graphEvidence: rawGraphEvidence,
+      retrievalEvidence: rawRetrievalEvidence,
+      webEvidence: webEvidence.chunks,
+      expandedEvidence: request.expandedEvidence,
+      expandedCitationKeys: request.expandedCitationKeys,
+    });
     const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
       ...formatCitation(chunk.source),
       id: chunk.id,
     }));
-    const citations = mergeCitations(
-      mergeCitations(explicitCitations, retrieval.citations),
-      webEvidence.citations,
+    const citations = citationsForEvidence(
+      planned.finalEvidence,
+      mergeCitations(
+        mergeCitations(explicitCitations, retrieval.citations),
+        webEvidence.citations,
+      ),
+    );
+    const diagnostics = withPlannerDiagnostics(
+      contextDiagnostics ?? createEmptyContextDiagnostics(request.contextMode ?? "include"),
+      planned.diagnostics,
     );
 
     yield* this.answerSynthesis.synthesize({
       question,
       chatHistory: request.chatHistory,
-      evidence,
-      explicitEvidence: assembled?.explicitEvidence,
-      graphEvidence,
-      retrievedEvidence,
-      webEvidence: webPromptEvidence,
+      evidence: planned.finalEvidence,
+      explicitEvidence: planned.explicitEvidence,
+      graphEvidence: planned.graphEvidence,
+      retrievedEvidence: planned.retrievedEvidence,
+      webEvidence: planned.webEvidence,
       citations,
-      contextDiagnostics: diagnostics,
+      contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit: this.evidenceLimit,
     });
+  }
+
+  async expandAdjacentEvidence(
+    chunks: RetrievedChunk[],
+    radius: number,
+    limit: number,
+  ): Promise<RetrievedChunk[]> {
+    if (!this.vaultPipeline.expandAdjacentEvidence) {
+      return chunks.slice(0, limit);
+    }
+
+    return this.vaultPipeline.expandAdjacentEvidence(chunks, radius, limit);
   }
 }
 
@@ -188,28 +211,6 @@ function nonExplicitEvidence(
   return evidence.filter((chunk) => !explicitIds.has(chunk.id));
 }
 
-function mergeLocalEvidence(
-  explicitChunks: RetrievedChunk[],
-  retrievedChunks: RetrievedChunk[],
-  limit: number,
-): RetrievedChunk[] {
-  const seen = new Set<string>();
-  const chunks: RetrievedChunk[] = [];
-
-  for (const chunk of [...explicitChunks, ...retrievedChunks]) {
-    if (seen.has(chunk.id)) {
-      continue;
-    }
-    chunks.push(chunk);
-    seen.add(chunk.id);
-    if (chunks.length >= limit) {
-      break;
-    }
-  }
-
-  return chunks;
-}
-
 function withRetrievalDiagnostics(
   diagnostics: ContextDiagnostics,
   retrieval: RetrievalResult,
@@ -219,6 +220,20 @@ function withRetrievalDiagnostics(
     retrieval: {
       ...diagnostics.retrieval,
       includedChunkIds: retrieval.chunks.map((chunk) => chunk.id),
+    },
+  };
+}
+
+function withPlannerDiagnostics(
+  diagnostics: ContextDiagnostics,
+  plannerDiagnostics: ContextDiagnostics["evidencePlanner"],
+): ContextDiagnostics {
+  return {
+    ...diagnostics,
+    evidencePlanner: plannerDiagnostics,
+    budget: {
+      ...diagnostics.budget,
+      groups: plannerDiagnostics?.budget.groups ?? diagnostics.budget.groups,
     },
   };
 }
@@ -237,28 +252,10 @@ function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] 
   return citations;
 }
 
-function mergeEvidenceChunks(
-  localChunks: RetrievedChunk[],
-  webChunks: RetrievedChunk[],
-  limit: number,
-  preferWeb: boolean,
-): RetrievedChunk[] {
-  if (webChunks.length === 0) {
-    return localChunks.slice(0, limit);
-  }
+function citationsForEvidence(evidence: RetrievedChunk[], citations: Citation[]): Citation[] {
+  const evidenceIds = new Set(evidence.map((chunk) => chunk.id));
 
-  if (localChunks.length === 0) {
-    return webChunks.slice(0, limit);
-  }
-
-  const webLimit = preferWeb
-    ? Math.min(webChunks.length, Math.max(1, Math.ceil(limit / 2)))
-    : Math.min(webChunks.length, Math.max(1, Math.floor(limit / 3)));
-  const localLimit = Math.max(0, limit - webLimit);
-  const primary = preferWeb ? webChunks.slice(0, webLimit) : localChunks.slice(0, localLimit);
-  const secondary = preferWeb ? localChunks.slice(0, localLimit) : webChunks.slice(0, webLimit);
-
-  return [...primary, ...secondary].slice(0, limit);
+  return citations.filter((citation) => evidenceIds.has(citation.id));
 }
 
 function resolveSearchMode(request: ResearchRequest): ResearchSearchMode {
@@ -270,5 +267,40 @@ function emptyRetrievalResult(): RetrievalResult {
     chunks: [],
     citations: [],
     usedFallback: false,
+  };
+}
+
+function createEmptyContextDiagnostics(contextMode: ContextMode): ContextDiagnostics {
+  return {
+    contextMode,
+    explicitSources: [],
+    mentionSources: [],
+    activeSources: [],
+    graph: {
+      enabled: false,
+      source: "none",
+      depth: 0,
+      rootPaths: [],
+      included: [],
+      dropped: [],
+      unresolved: [],
+      limits: {
+        maxForwardLinksPerRoot: 0,
+        maxEmbedsPerRoot: 0,
+        maxBacklinksPerRoot: 0,
+        maxGraphCandidatesTotal: 0,
+      },
+    },
+    retrieval: {
+      queryVariants: [],
+      includedChunkIds: [],
+      droppedChunkIds: [],
+      filteredSourcePaths: [],
+    },
+    budget: {
+      usedTokens: 0,
+      groups: [],
+    },
+    warnings: [],
   };
 }

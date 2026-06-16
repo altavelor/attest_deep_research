@@ -2,6 +2,7 @@ import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
 import {
   SaveChatInput,
+  ExpandedCitationContext,
   SavedChat,
   SavedChatSettings,
   SavedChatSummary,
@@ -30,7 +31,7 @@ import {
 } from "./ChatComposer";
 import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./ChatTranscript";
-import { CitationPopoverController } from "./CitationPopover";
+import { ChatCitationRef, CitationPopoverController } from "./CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
@@ -91,6 +92,7 @@ export class IxplorerChatView extends ItemView {
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
   private attachedContextPaths: string[] = [];
+  private expandedCitationContexts: ExpandedCitationContext[] = [];
   private currentChatSettings: SavedChatSettings;
   private currentChatId: string | null = null;
   private currentChatCreatedAt: string | null = null;
@@ -134,6 +136,8 @@ export class IxplorerChatView extends ItemView {
     this.citationPopover = new CitationPopoverController({
       hostEl: this.contentEl,
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
+      onExpandCitation: (ref) => void this.expandCitationContext(ref),
+      getExpansionStatus: (ref) => this.expansionStatus(ref.key),
     });
     this.answerNoteWriter = new AnswerNoteWriter(this.app);
     this.researchController = new ResearchQuestionController({
@@ -168,6 +172,14 @@ export class IxplorerChatView extends ItemView {
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => true,
+      getExpandedEvidence: () => this.expandedCitationContexts.flatMap((context) => context.chunks),
+      getExpandedCitationKeys: () =>
+        this.expandedCitationContexts.map((context) => context.citationKey),
+      clearExpandedCitationContexts: async () => {
+        this.expandedCitationContexts = [];
+        await this.saveCurrentChat();
+        this.renderAnswerDetails();
+      },
       isDeepResearchEnabled: () => this.isDeepResearchEnabled(),
       getContextPaths: () => this.attachedContextPaths,
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
@@ -315,6 +327,7 @@ export class IxplorerChatView extends ItemView {
     this.messages = [];
     this.lastAnswer = null;
     this.attachedContextPaths = [];
+    this.expandedCitationContexts = [];
     this.currentChatSettings = this.createDefaultChatSettings();
     this.currentChatId = null;
     this.currentChatCreatedAt = null;
@@ -406,7 +419,30 @@ export class IxplorerChatView extends ItemView {
 
   private renderAnswerDetails(): void {
     this.renderContextDiagnostics(this.lastAnswer?.contextDiagnostics);
+    this.renderExpandedCitationActions();
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
+  }
+
+  private renderExpandedCitationActions(): void {
+    if (!this.diagnosticsEl || this.expandedCitationContexts.length === 0) {
+      return;
+    }
+
+    const totalChunks = uniqueChunks(
+      this.expandedCitationContexts.flatMap((context) => context.chunks),
+    ).length;
+    const panel = this.diagnosticsEl.createDiv({ cls: "ixplorer-chat__expanded-context" });
+    panel.createSpan({
+      text: `${this.expandedCitationContexts.length} expanded citation(s), ${totalChunks} added chunk(s)`,
+    });
+    const regenerateButton = panel.createEl("button", {
+      cls: "ixplorer-chat__expanded-context-action",
+      text: "Regenerate with expanded context",
+      attr: { type: "button" },
+    });
+    regenerateButton.addEventListener("click", () => {
+      void this.researchController.regenerateWithExpandedContext();
+    });
   }
 
   private renderContextDiagnostics(diagnostics: ContextDiagnostics | undefined): void {
@@ -453,9 +489,37 @@ export class IxplorerChatView extends ItemView {
         text: `${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`,
       });
     }
-    if (dropped.length > 0 || diagnostics.retrieval.droppedChunkIds.length > 0) {
+    if (diagnostics.evidencePlanner) {
+      const planner = diagnostics.evidencePlanner;
+      const webGroup = planner.budget.groups.find((group) => group.name === "web");
+      const expandedCount = planner.expandedCitations.addedChunkIds.length;
       list.createEl("li", {
-        text: `${dropped.length + diagnostics.retrieval.droppedChunkIds.length} item(s) dropped by limits`,
+        text: `Planner policy: ${formatPlannerPolicy(planner.budget.policy)}`,
+      });
+      if (planner.webIntent.detected) {
+        const matchedTerms =
+          planner.webIntent.matchedTerms.length > 0
+            ? ` (${planner.webIntent.matchedTerms.join(", ")})`
+            : "";
+        list.createEl("li", {
+          text: `Web intent: ${planner.webIntent.reason}${matchedTerms}`,
+        });
+      }
+      if (webGroup) {
+        list.createEl("li", {
+          text: `${webGroup.includedItems ?? 0} web chunk(s) used, ${planner.dropped.webChunkIds.length} dropped`,
+        });
+      }
+      if (expandedCount > 0) {
+        list.createEl("li", {
+          text: `${expandedCount} expanded citation chunk(s) added`,
+        });
+      }
+    }
+    const droppedByLimits = countDroppedByLimits(diagnostics, dropped.length);
+    if (droppedByLimits > 0) {
+      list.createEl("li", {
+        text: `${droppedByLimits} item(s) dropped by limits`,
       });
     }
     for (const warning of diagnostics.warnings) {
@@ -598,6 +662,7 @@ export class IxplorerChatView extends ItemView {
     this.messages = chat.messages;
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
+    this.expandedCitationContexts = [...(chat.expandedCitationContexts ?? [])];
     this.currentChatSettings = this.resolveChatSettings(chat.chatSettings);
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
@@ -619,6 +684,7 @@ export class IxplorerChatView extends ItemView {
         ? this.lastAnswer
         : stripContextDiagnostics(this.lastAnswer),
       attachedContextPaths: this.attachedContextPaths,
+      expandedCitationContexts: this.expandedCitationContexts,
       chatSettings: this.currentChatSettings,
     });
     this.currentChatId = saved.id;
@@ -966,6 +1032,67 @@ export class IxplorerChatView extends ItemView {
     });
   }
 
+  private async expandCitationContext(ref: ChatCitationRef): Promise<void> {
+    if (ref.chunk.source.kind === "web") {
+      new Notice("Adjacent expansion is unavailable for web citations.");
+      return;
+    }
+
+    const currentEvidence = this.currentEvidence();
+    const sourceChunks = currentEvidence.filter((chunk) => ref.chunkIds.has(chunk.id));
+    const existing = this.expandedCitationContexts.find(
+      (context) => context.citationKey === ref.key,
+    );
+    const nextRadius = Math.min(3, (existing?.radius ?? 0) + 1);
+
+    if (existing?.radius === nextRadius) {
+      new Notice("This citation is already expanded to the maximum radius.");
+      return;
+    }
+
+    const expanded = await this.services
+      .createResearchService(
+        this.currentChatSettings.chatModelProfileId,
+        this.currentChatSettings.indexProfileId,
+      )
+      .expandAdjacentEvidence(sourceChunks.length > 0 ? sourceChunks : [ref.chunk], nextRadius, 16);
+    const baseIds = new Set([...currentEvidence, ...(existing?.chunks ?? [])].map((chunk) => chunk.id));
+    const added = expanded.filter((chunk) => !baseIds.has(chunk.id));
+
+    if (added.length === 0) {
+      new Notice("No adjacent chunks were found for this citation.");
+      return;
+    }
+
+    const nextContext: ExpandedCitationContext = {
+      citationKey: ref.key,
+      radius: nextRadius,
+      chunks: uniqueChunks([...(existing?.chunks ?? []), ...added]),
+    };
+    this.expandedCitationContexts = [
+      ...this.expandedCitationContexts.filter((context) => context.citationKey !== ref.key),
+      nextContext,
+    ];
+    await this.saveCurrentChat();
+    this.renderAnswerDetails();
+    new Notice(`Added ${added.length} adjacent chunk(s).`);
+  }
+
+  private currentEvidence(): RetrievedChunk[] {
+    return uniqueChunks([
+      ...(this.lastAnswer?.evidence ?? []),
+      ...this.messages.flatMap((message) => message.evidence ?? []),
+    ]);
+  }
+
+  private expansionStatus(citationKey: string): string | undefined {
+    const context = this.expandedCitationContexts.find(
+      (candidate) => candidate.citationKey === citationKey,
+    );
+
+    return context ? `Expanded +${context.chunks.length} chunks` : undefined;
+  }
+
   private async saveAnswerToNewNote(): Promise<void> {
     if (!this.lastAnswer) {
       return;
@@ -992,12 +1119,61 @@ function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer 
   return rest;
 }
 
+function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
+  const seen = new Set<string>();
+  const unique: RetrievedChunk[] = [];
+
+  for (const chunk of chunks) {
+    if (seen.has(chunk.id)) {
+      continue;
+    }
+
+    seen.add(chunk.id);
+    unique.push(chunk);
+  }
+
+  return unique;
+}
+
 function shouldShowGraphDiagnostics(diagnostics: ContextDiagnostics): boolean {
   return (
     diagnostics.graph.enabled &&
     (diagnostics.graph.included.length > 0 ||
       diagnostics.graph.dropped.length > 0 ||
       diagnostics.graph.unresolved.length > 0)
+  );
+}
+
+function formatPlannerPolicy(
+  policy: NonNullable<ContextDiagnostics["evidencePlanner"]>["budget"]["policy"],
+): string {
+  switch (policy) {
+    case "local-first":
+      return "local first";
+    case "freshness":
+      return "freshness";
+    case "weak-local":
+      return "weak local fallback";
+    case "web-only":
+      return "web only";
+    case "index-only":
+      return "index only";
+  }
+}
+
+function countDroppedByLimits(diagnostics: ContextDiagnostics, explicitDropped: number): number {
+  const planner = diagnostics.evidencePlanner;
+
+  if (!planner) {
+    return explicitDropped + diagnostics.retrieval.droppedChunkIds.length;
+  }
+
+  return (
+    explicitDropped +
+    planner.dropped.explicitChunkIds.length +
+    planner.dropped.graphChunkIds.length +
+    planner.dropped.retrievalChunkIds.length +
+    planner.dropped.webChunkIds.length
   );
 }
 

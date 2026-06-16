@@ -213,6 +213,9 @@ export default class IxplorerPlugin extends Plugin {
         depth: this.settings.graphContextDepth === 2 ? 2 : 1,
         limits: DEFAULT_GRAPH_CONTEXT_LIMITS,
       },
+      evidencePlanner: {
+        useWebWhenFreshnessNeeded: this.settings.useWebWhenFreshnessNeeded,
+      },
       searchProvider: this.createSearchProvider(),
     });
   }

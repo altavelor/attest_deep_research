@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "fs/promises";
 import { basename, join } from "path";
 
-import { ResearchAnswer } from "../shared/types";
+import { ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { ChatDisplayMessage } from "../ui/rendering";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import type { ContextMode } from "../shared/types";
@@ -14,6 +14,12 @@ export interface SavedChatSettings {
   deepResearch?: boolean;
 }
 
+export interface ExpandedCitationContext {
+  citationKey: string;
+  radius: number;
+  chunks: RetrievedChunk[];
+}
+
 export interface SavedChat {
   schemaVersion: 1;
   id: string;
@@ -23,6 +29,7 @@ export interface SavedChat {
   messages: ChatDisplayMessage[];
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
+  expandedCitationContexts?: ExpandedCitationContext[];
   chatSettings?: SavedChatSettings;
 }
 
@@ -40,6 +47,7 @@ export interface SaveChatInput {
   messages: ChatDisplayMessage[];
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
+  expandedCitationContexts?: ExpandedCitationContext[];
   chatSettings?: SavedChatSettings;
 }
 
@@ -118,6 +126,9 @@ export class FileChatStore {
       messages: input.messages,
       lastAnswer: input.lastAnswer,
       attachedContextPaths: [...input.attachedContextPaths],
+      ...(input.expandedCitationContexts && input.expandedCitationContexts.length > 0
+        ? { expandedCitationContexts: input.expandedCitationContexts }
+        : {}),
       ...(input.chatSettings ? { chatSettings: input.chatSettings } : {}),
     };
 
@@ -171,6 +182,8 @@ export function isSavedChat(value: unknown): value is SavedChat {
     typeof chat.updatedAt === "string" &&
     Array.isArray(chat.messages) &&
     Array.isArray(chat.attachedContextPaths) &&
+    (chat.expandedCitationContexts === undefined ||
+      Array.isArray(chat.expandedCitationContexts)) &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
     (chat.chatSettings === undefined || isSavedChatSettings(chat.chatSettings))
   );

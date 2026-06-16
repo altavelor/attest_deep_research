@@ -38,6 +38,7 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.includeBacklinks).toBe(true);
     expect(DEFAULT_SETTINGS.expandFilteredContextThroughLinks).toBe(false);
     expect(DEFAULT_SETTINGS.graphContextDepth).toBe(1);
+    expect(DEFAULT_SETTINGS.useWebWhenFreshnessNeeded).toBe(true);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
@@ -73,6 +74,7 @@ describe("Ixplorer settings", () => {
       includeBacklinks: false,
       expandFilteredContextThroughLinks: true,
       graphContextDepth: 2,
+      useWebWhenFreshnessNeeded: false,
       debugMode: true,
     });
 
@@ -95,6 +97,7 @@ describe("Ixplorer settings", () => {
     expect(settings.includeBacklinks).toBe(false);
     expect(settings.expandFilteredContextThroughLinks).toBe(true);
     expect(settings.graphContextDepth).toBe(2);
+    expect(settings.useWebWhenFreshnessNeeded).toBe(false);
     expect(settings.debugMode).toBe(true);
   });
 

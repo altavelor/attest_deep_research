@@ -78,6 +78,7 @@ export interface IxplorerSettings {
   includeBacklinks: boolean;
   expandFilteredContextThroughLinks: boolean;
   graphContextDepth: number;
+  useWebWhenFreshnessNeeded: boolean;
   debugMode: boolean;
 }
 
@@ -131,6 +132,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   includeBacklinks: true,
   expandFilteredContextThroughLinks: false,
   graphContextDepth: 1,
+  useWebWhenFreshnessNeeded: true,
   debugMode: false,
 };
 
@@ -206,6 +208,10 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
         ? data.expandFilteredContextThroughLinks
         : DEFAULT_SETTINGS.expandFilteredContextThroughLinks,
     graphContextDepth: readGraphContextDepth(data.graphContextDepth),
+    useWebWhenFreshnessNeeded:
+      typeof data.useWebWhenFreshnessNeeded === "boolean"
+        ? data.useWebWhenFreshnessNeeded
+        : DEFAULT_SETTINGS.useWebWhenFreshnessNeeded,
     debugMode: data.debugMode === true,
   };
 
