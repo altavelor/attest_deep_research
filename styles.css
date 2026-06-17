@@ -1238,6 +1238,13 @@
   );
 }
 
+.ixplorer-chat__context-indicator.is-warning {
+  background: conic-gradient(
+    var(--text-warning) var(--ixplorer-context-used, 0%),
+    var(--background-modifier-border) var(--ixplorer-context-used, 0%)
+  );
+}
+
 .ixplorer-chat__context-indicator::after {
   position: absolute;
   inset: 0.1875rem;

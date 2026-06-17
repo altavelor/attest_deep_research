@@ -141,7 +141,49 @@ describe("FileChatStore", () => {
 
     expect(existsSync(join(folder, "atomic.json.tmp"))).toBe(false);
     const raw = await readFile(join(folder, "atomic.json"), "utf8");
-    expect(JSON.parse(raw)).toMatchObject({ id: "atomic", schemaVersion: 1 });
+    expect(JSON.parse(raw)).toMatchObject({ id: "atomic", schemaVersion: 2 });
+  });
+
+  it("saves compact summary markers while counting only visible messages", async () => {
+    const store = new FileChatStore({
+      folder,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+      createId: () => "compacted",
+    });
+
+    await store.saveChat({
+      messages: [
+        {
+          role: "assistant",
+          kind: "compact-summary",
+          compacted: true,
+          content: "Compacted previous chat summary",
+          createdAt: "2026-06-10T10:00:00.000Z",
+          compactSummary: {
+            userGoals: ["Goal"],
+            decisions: ["Decision"],
+            unresolvedQuestions: [],
+            citedSourcesAlreadyUsed: ["Notes/Plan.md"],
+          },
+        },
+        {
+          role: "user",
+          content: "Visible question",
+          createdAt: "2026-06-10T10:01:00.000Z",
+        },
+      ],
+      lastAnswer: null,
+      attachedContextPaths: [],
+    });
+
+    const [summary] = await store.listChats();
+    const loaded = await store.loadChat("compacted");
+
+    expect(summary.messageCount).toBe(1);
+    expect(loaded?.messages[0]).toMatchObject({
+      kind: "compact-summary",
+      compactSummary: { citedSourcesAlreadyUsed: ["Notes/Plan.md"] },
+    });
   });
 
   it("loads legacy chats without saved chat settings", async () => {

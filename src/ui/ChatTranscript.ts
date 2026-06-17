@@ -28,13 +28,16 @@ export function renderChatTranscript(
   options: ChatTranscriptOptions,
 ): void {
   transcriptEl.empty();
+  const visibleMessages = options.messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => message.kind !== "compact-summary");
 
-  if (options.messages.length === 0) {
+  if (visibleMessages.length === 0) {
     options.renderEmptyState(transcriptEl);
     return;
   }
 
-  options.messages.forEach((message, index) => {
+  visibleMessages.forEach(({ message, index }) => {
     const messageEl = transcriptEl.createDiv({
       cls: `ixplorer-chat__message ixplorer-chat__message--${message.role}`,
     });

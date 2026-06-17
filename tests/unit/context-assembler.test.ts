@@ -4,6 +4,7 @@ import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
 import { PdfExtractor, PdfPageTextParser } from "../../src/extractors/PdfExtractor";
 import { PdfTextCache } from "../../src/extractors/PdfTextCache";
 import { ContextAssembler } from "../../src/research/ContextAssembler";
+import { chatHistoryForPrompt, compactChatMessages } from "../../src/chat/ChatCompaction";
 import { GraphContextProvider } from "../../src/research/GraphContext";
 import { Extractor, RetrievedChunk } from "../../src/shared/types";
 
@@ -129,8 +130,74 @@ describe("ContextAssembler", () => {
     });
 
     expect(result.explicitEvidence).toHaveLength(2);
-    expect(result.diagnostics.explicitSources.filter((source) => source.status === "dropped"))
-      .toHaveLength(1);
+    expect(
+      result.diagnostics.explicitSources.filter((source) => source.status === "dropped"),
+    ).toHaveLength(1);
+  });
+
+  it("increases available evidence budget after history compaction", async () => {
+    const assembler = createAssembler({
+      "Evidence.md": `# Evidence\n\n${"Evidence answer. ".repeat(40)}`,
+    });
+    const longHistory = [
+      {
+        role: "user" as const,
+        content: "Long user context. ".repeat(120),
+        createdAt: "2026-06-10T10:00:00.000Z",
+      },
+      {
+        role: "assistant" as const,
+        content: "Long assistant context. ".repeat(120),
+        createdAt: "2026-06-10T10:00:00.000Z",
+      },
+      { role: "user" as const, content: "Recent question", createdAt: "2026-06-10T10:00:00.000Z" },
+      {
+        role: "assistant" as const,
+        content: "Recent answer",
+        createdAt: "2026-06-10T10:00:00.000Z",
+      },
+      { role: "user" as const, content: "Newest question", createdAt: "2026-06-10T10:00:00.000Z" },
+    ];
+    const compacted = compactChatMessages(longHistory, {
+      summary: {
+        userGoals: ["Understand the evidence"],
+        decisions: [],
+        unresolvedQuestions: [],
+        citedSourcesAlreadyUsed: ["Evidence.md"],
+      },
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+    }).messages;
+
+    const before = await assembler.assemble({
+      question: "What is the evidence answer?",
+      contextMode: "include",
+      contextPaths: ["Evidence.md"],
+      evidenceLimit: 4,
+      contextLimitTokens: 1200,
+      reservedOutputTokens: 100,
+      chatHistory: longHistory.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    });
+    const after = await assembler.assemble({
+      question: "What is the evidence answer?",
+      contextMode: "include",
+      contextPaths: ["Evidence.md"],
+      evidenceLimit: 4,
+      contextLimitTokens: 1200,
+      reservedOutputTokens: 100,
+      chatHistory: chatHistoryForPrompt(compacted),
+    });
+
+    const beforeHistory = before.diagnostics.budget.groups.find(
+      (group) => group.name === "history",
+    );
+    const afterHistory = after.diagnostics.budget.groups.find((group) => group.name === "history");
+
+    expect(beforeHistory?.usedTokens).toBeGreaterThan(afterHistory?.usedTokens ?? 0);
+    expect(before.explicitEvidence).toHaveLength(0);
+    expect(after.explicitEvidence.length).toBeGreaterThan(0);
   });
 
   it("adds include-mode graph candidates as boosted retrieval paths", async () => {
