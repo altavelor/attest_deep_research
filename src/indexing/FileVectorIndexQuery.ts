@@ -173,3 +173,51 @@ export function expandAdjacentFileVectorChunks(
     expanded.push(chunk);
   }
 }
+
+export function getAdjacentFileVectorChunks(
+  state: FileVectorIndexState,
+  source: SourceReference,
+  chunkId: string,
+  radius: number,
+): RetrievedChunk[] {
+  if (radius < 0) {
+    return [];
+  }
+
+  const sourcePath = sourcePathFromReference(source);
+  const sourceChunks = storedChunksForSource(state, sourcePath);
+  const index = sourceChunks.findIndex((candidate) => candidate.row.id === chunkId);
+
+  if (index === -1) {
+    return [];
+  }
+
+  const start = Math.max(0, index - radius);
+  const end = Math.min(sourceChunks.length, index + radius + 1);
+
+  return sourceChunks.slice(start, end).map((chunk) => ({
+    id: chunk.row.id,
+    source: chunk.row.source,
+    text: chunk.row.text,
+    contentHash: chunk.row.contentHash,
+    score: 0,
+  }));
+}
+
+function storedChunksForSource(
+  state: FileVectorIndexState,
+  sourcePath: string,
+): StoredChunk[] {
+  const chunks: StoredChunk[] = [];
+
+  for (const shardChunks of state.chunksByShard.values()) {
+    for (const chunk of shardChunks) {
+      const chunkSourcePath = chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source);
+      if (chunkSourcePath === sourcePath) {
+        chunks.push(chunk);
+      }
+    }
+  }
+
+  return chunks.sort((left, right) => (left.row.chunkIndex ?? 0) - (right.row.chunkIndex ?? 0));
+}

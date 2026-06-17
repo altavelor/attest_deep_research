@@ -238,6 +238,7 @@ export interface ExtractorInput {
   path: string;
   data: ArrayBuffer | string;
   modifiedTime: number;
+  size?: number;
 }
 
 export interface Extractor {
@@ -318,6 +319,11 @@ export interface AdjacentChunkIndexStore {
     chunks: RetrievedChunk[],
     radius: number,
     limit: number,
+  ): Promise<RetrievedChunk[]>;
+  getAdjacentChunks(
+    source: SourceReference,
+    chunkId: string,
+    radius: number,
   ): Promise<RetrievedChunk[]>;
 }
 

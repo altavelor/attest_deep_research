@@ -26,6 +26,7 @@ import {
 } from "./FileVectorIndexPersistence";
 import {
   expandAdjacentFileVectorChunks,
+  getAdjacentFileVectorChunks,
   queryFileVectorState,
   searchFileVectorKeywords,
 } from "./FileVectorIndexQuery";
@@ -340,6 +341,25 @@ export class FileVectorIndexStore
 
     this.state = state;
     return expandAdjacentFileVectorChunks(state, chunks, radius, limit);
+  }
+
+  async getAdjacentChunks(
+    source: SourceReference,
+    chunkId: string,
+    radius: number,
+  ): Promise<RetrievedChunk[]> {
+    if (radius < 0) {
+      return [];
+    }
+
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return [];
+    }
+
+    this.state = state;
+    return getAdjacentFileVectorChunks(state, source, chunkId, radius);
   }
 
   private async hasLegacyOrUnknownFiles(): Promise<boolean> {

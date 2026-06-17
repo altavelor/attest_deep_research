@@ -8,6 +8,7 @@ import {
   KeywordSearchIndexStore,
   RetrievedChunk,
   RetrievalOptions,
+  SourceReference,
 } from "../shared/types";
 import { formatCitation } from "./citations";
 import { rankKeywordMatches } from "./ranking";
@@ -89,6 +90,18 @@ export class RetrievalService {
     return this.expandAdjacentChunks(chunks, radius, limit);
   }
 
+  async getAdjacentChunks(
+    source: SourceReference,
+    chunkId: string,
+    radius: number,
+  ): Promise<RetrievedChunk[]> {
+    if (!isDirectAdjacentChunkIndexStore(this.indexStore)) {
+      return [];
+    }
+
+    return this.indexStore.getAdjacentChunks(source, chunkId, radius);
+  }
+
   private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
     try {
       const response = await this.embeddings.embed({
@@ -167,6 +180,12 @@ function isAdjacentChunkIndexStore(
   return (
     "expandAdjacentChunks" in indexStore && typeof indexStore.expandAdjacentChunks === "function"
   );
+}
+
+function isDirectAdjacentChunkIndexStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & AdjacentChunkIndexStore {
+  return "getAdjacentChunks" in indexStore && typeof indexStore.getAdjacentChunks === "function";
 }
 
 function isLanguageInventoryIndexStore(

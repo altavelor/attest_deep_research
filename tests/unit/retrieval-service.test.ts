@@ -220,6 +220,27 @@ describe("RetrievalService", () => {
 
     expect(expanded.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
   });
+
+  it("loads adjacent chunks by source and chunk id on demand", async () => {
+    const source = markdownSource("Research/a.md");
+    const indexStore = new FakeIndexStore([]);
+    indexStore.directAdjacentResults = [
+      retrieved("before", source, "before", 0),
+      retrieved("hit", source, "hit", 0),
+      retrieved("after", source, "after", 0),
+    ];
+    const service = new RetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const adjacent = await service.getAdjacentChunks(source, "hit", 2);
+
+    expect(adjacent.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
+    expect(indexStore.directAdjacentRequests).toEqual([{ source, chunkId: "hit", radius: 2 }]);
+  });
 });
 
 describe("rankKeywordMatches", () => {

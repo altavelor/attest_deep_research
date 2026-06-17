@@ -22,6 +22,7 @@ export interface ContextFileProvider {
   listPaths(): Promise<string[]>;
   readFile(path: string): Promise<ArrayBuffer | string>;
   getModifiedTime?(path: string): Promise<number>;
+  getSize?(path: string): Promise<number>;
 }
 
 export interface ContextAssemblerOptions {
@@ -349,10 +350,12 @@ export class ContextAssembler {
 
     try {
       const modifiedTime = (await this.files.getModifiedTime?.(candidate.path)) ?? 0;
+      const size = await this.files.getSize?.(candidate.path);
       const chunks = await extractor.extract({
         path: candidate.path,
         data,
         modifiedTime,
+        size,
       });
       const selectedChunks = selectExplicitChunks(chunks, request, remainingTokens);
 
