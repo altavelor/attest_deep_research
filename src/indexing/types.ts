@@ -11,6 +11,7 @@ import type { IndexingProgressState } from "./IndexingProgressState";
 export interface VaultFileSummary {
   path: string;
   modifiedTime: number;
+  size?: number;
 }
 
 export interface VaultFileProvider {

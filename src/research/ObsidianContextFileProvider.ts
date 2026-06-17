@@ -29,6 +29,12 @@ export class ObsidianContextFileProvider implements ContextFileProvider {
 
     return file instanceof TFile ? file.stat.mtime : 0;
   }
+
+  async getSize(path: string): Promise<number> {
+    const file = this.vault.getAbstractFileByPath(path);
+
+    return file instanceof TFile ? file.stat.size : 0;
+  }
 }
 
 function isSupportedContextPath(path: string): boolean {

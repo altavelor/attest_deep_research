@@ -17,6 +17,7 @@ export class ObsidianVaultFileProvider implements VaultFileProvider {
       .map((file) => ({
         path: file.path,
         modifiedTime: file.stat.mtime,
+        size: file.stat.size,
       }));
   }
 

@@ -3,6 +3,7 @@ import { inflateSync } from "zlib";
 import { IxplorerError } from "../shared/errors";
 import { positiveIntegerOrDefault } from "../shared/numbers";
 import { ExtractedChunk, Extractor, ExtractorInput, PdfSourceReference } from "../shared/types";
+import { PdfTextCache } from "./PdfTextCache";
 import {
   DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_LENGTH,
@@ -27,6 +28,7 @@ export interface PdfExtractorOptions {
   maxChunkLength?: number;
   chunkOverlap?: number;
   pageConcurrency?: number;
+  cache?: PdfTextCache;
 }
 
 type UnicodeMap = Map<number, string>;
@@ -39,12 +41,14 @@ export class PdfExtractor implements Extractor {
   private readonly parser: PdfPageTextParser;
   private readonly maxChunkLength: number;
   private readonly chunkOverlap: number;
+  private readonly cache?: PdfTextCache;
 
   constructor(options: PdfExtractorOptions = {}) {
     this.parser =
       options.parser ?? new PdfJsTextParser({ pageConcurrency: options.pageConcurrency });
     this.maxChunkLength = options.maxChunkLength ?? DEFAULT_CHUNK_LENGTH;
     this.chunkOverlap = options.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
+    this.cache = options.cache;
   }
 
   supports(path: string): boolean {
@@ -58,10 +62,17 @@ export class PdfExtractor implements Extractor {
 
     const data =
       typeof input.data === "string" ? new TextEncoder().encode(input.data).buffer : input.data;
+    const size = input.size ?? byteLength(data);
+    const cached = this.cache?.get(input.path, { mtime: input.modifiedTime, size });
     const chunks: ExtractedChunk[] = [];
 
     try {
-      for await (const page of this.parser.parsePages(data)) {
+      const pages = cached?.content ?? (await this.parseAndCachePages(input.path, data, {
+        mtime: input.modifiedTime,
+        size,
+      }));
+
+      for (const page of pages) {
         const normalizedText = normalizeText(page.text);
 
         if (!normalizedText) {
@@ -88,6 +99,24 @@ export class PdfExtractor implements Extractor {
     }
 
     return chunks;
+  }
+
+  private async parseAndCachePages(
+    path: string,
+    data: ArrayBuffer,
+    cacheKey: { mtime: number; size: number },
+  ): Promise<PdfPageText[]> {
+    const pages: PdfPageText[] = [];
+
+    for await (const page of this.parser.parsePages(data)) {
+      pages.push({
+        pageNumber: page.pageNumber,
+        text: normalizeText(page.text),
+      });
+    }
+
+    this.cache?.set(path, cacheKey, pages);
+    return pages;
   }
 }
 
@@ -239,6 +268,10 @@ function errorMessage(error: unknown): string | undefined {
   }
 
   return typeof error === "string" && error.trim() ? error.trim() : undefined;
+}
+
+function byteLength(data: ArrayBuffer): number {
+  return data.byteLength;
 }
 
 function parsePdfObjects(source: string): Map<number, string> {

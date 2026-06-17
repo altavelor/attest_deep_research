@@ -87,6 +87,7 @@ export class FileProcessor {
       path: file.path,
       data,
       modifiedTime: file.modifiedTime,
+      size: file.size,
     });
     this.logPerformance({
       phase: "extracting",

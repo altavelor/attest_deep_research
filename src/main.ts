@@ -10,6 +10,7 @@ import { EpubExtractor } from "./extractors/EpubExtractor";
 import { Fb2Extractor } from "./extractors/Fb2Extractor";
 import { MarkdownExtractor } from "./extractors/MarkdownExtractor";
 import { PdfExtractor } from "./extractors/PdfExtractor";
+import { PdfTextCache } from "./extractors/PdfTextCache";
 import { TextExtractor } from "./extractors/TextExtractor";
 import {
   IndexingService,
@@ -50,6 +51,7 @@ export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
+  private readonly pdfTextCache = new PdfTextCache();
   readonly indexing = new IndexingProfileController({
     getProfile: (profileId) =>
       this.settings.indexProfiles.find((profile) => profile.id === profileId),
@@ -323,6 +325,7 @@ export default class IxplorerPlugin extends Plugin {
       new PdfExtractor({
         maxChunkLength: indexProfile.pdfChunkSize,
         chunkOverlap: indexProfile.pdfChunkOverlap,
+        cache: this.pdfTextCache,
       }),
       new EpubExtractor({
         maxChunkLength: indexProfile.chunkSize,
@@ -352,6 +355,7 @@ export default class IxplorerPlugin extends Plugin {
       new PdfExtractor({
         maxChunkLength: indexProfile.pdfChunkSize,
         chunkOverlap: indexProfile.pdfChunkOverlap,
+        cache: this.pdfTextCache,
       }),
       new EpubExtractor({
         maxChunkLength: indexProfile.chunkSize,

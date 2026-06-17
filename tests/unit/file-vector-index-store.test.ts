@@ -310,6 +310,37 @@ describe("FileVectorIndexStore", () => {
     expect(expanded.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
   });
 
+  it("returns adjacent chunks by source and chunk id", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a"),
+      chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"),
+      chunk("chunk-c", "Research/a.md", "third", [1, 0], "hash-c"),
+      chunk("chunk-d", "Research/other.md", "other", [1, 0], "hash-d"),
+    ]);
+
+    const adjacent = await store.getAdjacentChunks(markdownSource("Research/a.md"), "chunk-b", 1);
+
+    expect(adjacent.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
+    expect(adjacent.map((chunk) => chunk.text)).toEqual(["first", "second", "third"]);
+  });
+
+  it("returns no adjacent chunks when the source or chunk id is missing", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a")]);
+
+    await expect(
+      store.getAdjacentChunks(markdownSource("Research/a.md"), "missing", 1),
+    ).resolves.toEqual([]);
+    await expect(
+      store.getAdjacentChunks(markdownSource("Research/other.md"), "chunk-a", 1),
+    ).resolves.toEqual([]);
+  });
+
   it("deletes by source path and fully clears profile files", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 

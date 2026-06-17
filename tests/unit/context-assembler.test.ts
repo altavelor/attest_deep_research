@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
+import { PdfExtractor, PdfPageTextParser } from "../../src/extractors/PdfExtractor";
+import { PdfTextCache } from "../../src/extractors/PdfTextCache";
 import { ContextAssembler } from "../../src/research/ContextAssembler";
 import { GraphContextProvider } from "../../src/research/GraphContext";
-import { RetrievedChunk } from "../../src/shared/types";
+import { Extractor, RetrievedChunk } from "../../src/shared/types";
 
 describe("ContextAssembler", () => {
   it("hard-includes selected markdown files in include mode", async () => {
@@ -200,21 +202,58 @@ describe("ContextAssembler", () => {
     expect(strict.boostedSourcePaths).toBeUndefined();
     expect(expanded.retrievalSourcePaths).toEqual(["Root.md", "Linked.md"]);
   });
+
+  it("reuses cached PDF text for repeated explicit context assembly", async () => {
+    let parseCalls = 0;
+    const parser: PdfPageTextParser = {
+      async *parsePages() {
+        parseCalls += 1;
+        yield { pageNumber: 1, text: "Explicit PDF answer." };
+      },
+    };
+    const assembler = createAssembler(
+      {
+        "Spec.pdf": "pdf-bytes",
+      },
+      undefined,
+      [new PdfExtractor({ parser, cache: new PdfTextCache() })],
+      { "Spec.pdf": 9 },
+    );
+
+    await assembler.assemble({
+      question: "What is in the PDF?",
+      contextMode: "include",
+      contextPaths: ["Spec.pdf"],
+      evidenceLimit: 4,
+    });
+    const second = await assembler.assemble({
+      question: "What is in the PDF?",
+      contextMode: "include",
+      contextPaths: ["Spec.pdf"],
+      evidenceLimit: 4,
+    });
+
+    expect(parseCalls).toBe(1);
+    expect(second.explicitEvidence[0].text).toBe("Explicit PDF answer.");
+  });
 });
 
 function createAssembler(
   files: Record<string, string>,
   graph?: GraphContextProvider,
+  extractors: Extractor[] = [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 80 })],
+  sizes: Record<string, number> = {},
 ): ContextAssembler {
   const availablePaths = Object.keys(files);
 
   return new ContextAssembler({
-    extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 80 })],
+    extractors,
     graph,
     files: {
       listPaths: async () => availablePaths,
       readFile: async (path) => files[path] ?? "",
       getModifiedTime: async () => 1,
+      getSize: async (path) => sizes[path] ?? files[path]?.length ?? 0,
     },
     retrieve: async (_query, options) => {
       const sourcePaths = options.sourcePaths ?? [];

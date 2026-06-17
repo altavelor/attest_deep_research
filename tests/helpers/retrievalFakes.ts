@@ -1,4 +1,9 @@
-import { EmbeddingProviderClient, IndexStore, RetrievedChunk } from "../../src/shared/types";
+import {
+  EmbeddingProviderClient,
+  IndexStore,
+  RetrievedChunk,
+  SourceReference,
+} from "../../src/shared/types";
 
 export class FakeEmbeddingProvider implements EmbeddingProviderClient {
   constructor(private readonly embeddings: number[][]) {}
@@ -28,6 +33,8 @@ export class FakeIndexStore implements IndexStore {
   keywordQueries: string[] = [];
   keywordResults: RetrievedChunk[] = [];
   adjacentResults: RetrievedChunk[] = [];
+  directAdjacentResults: RetrievedChunk[] = [];
+  directAdjacentRequests: Array<{ source: SourceReference; chunkId: string; radius: number }> = [];
 
   constructor(private readonly chunks: RetrievedChunk[]) {}
 
@@ -56,5 +63,14 @@ export class FakeIndexStore implements IndexStore {
 
   async expandAdjacentChunks(chunks: RetrievedChunk[]): Promise<RetrievedChunk[]> {
     return this.adjacentResults.length > 0 ? this.adjacentResults : chunks;
+  }
+
+  async getAdjacentChunks(
+    source: SourceReference,
+    chunkId: string,
+    radius: number,
+  ): Promise<RetrievedChunk[]> {
+    this.directAdjacentRequests.push({ source, chunkId, radius });
+    return this.directAdjacentResults;
   }
 }

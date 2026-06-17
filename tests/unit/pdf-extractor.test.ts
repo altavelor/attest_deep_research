@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import { PdfExtractor, PdfPageTextParser } from "../../src/extractors/PdfExtractor";
+import { PdfTextCache } from "../../src/extractors/PdfTextCache";
 
 const fixturePath = join(__dirname, "../fixtures/pdf/simple-text.pdf");
 const plainTextFixturePath = join(__dirname, "../fixtures/pdf/plain-text.pdf");
@@ -161,6 +162,66 @@ describe("PdfExtractor", () => {
 
     expect(chunks).toHaveLength(1);
     expect(chunks[0].source).toMatchObject({ kind: "pdf", pageNumber: 1 });
+  });
+
+  it("uses cached PDF text when path, mtime, and size are unchanged", async () => {
+    let parseCalls = 0;
+    const parser: PdfPageTextParser = {
+      async *parsePages() {
+        parseCalls += 1;
+        yield { pageNumber: 1, text: "Cached page text" };
+      },
+    };
+    const cache = new PdfTextCache();
+    const extractor = new PdfExtractor({ parser, cache });
+
+    const first = await extractor.extract({
+      path: "Papers/cached.pdf",
+      data: new ArrayBuffer(10),
+      modifiedTime: 1,
+      size: 10,
+    });
+    const second = await extractor.extract({
+      path: "Papers/cached.pdf",
+      data: new ArrayBuffer(10),
+      modifiedTime: 1,
+      size: 10,
+    });
+
+    expect(parseCalls).toBe(1);
+    expect(second).toEqual(first);
+    expect(cache.get("Papers/cached.pdf", { mtime: 1, size: 10 })).toMatchObject({
+      mtime: 1,
+      size: 10,
+      content: [{ pageNumber: 1, text: "Cached page text" }],
+    });
+  });
+
+  it("reparses PDFs when cache metadata changes", async () => {
+    let parseCalls = 0;
+    const parser: PdfPageTextParser = {
+      async *parsePages() {
+        parseCalls += 1;
+        yield { pageNumber: 1, text: `Run ${parseCalls}` };
+      },
+    };
+    const extractor = new PdfExtractor({ parser, cache: new PdfTextCache() });
+
+    await extractor.extract({
+      path: "Papers/cached.pdf",
+      data: new ArrayBuffer(10),
+      modifiedTime: 1,
+      size: 10,
+    });
+    const changed = await extractor.extract({
+      path: "Papers/cached.pdf",
+      data: new ArrayBuffer(11),
+      modifiedTime: 1,
+      size: 11,
+    });
+
+    expect(parseCalls).toBe(2);
+    expect(changed[0].text).toBe("Run 2");
   });
 
   it("processes large PDFs page by page in bounded batches", async () => {
