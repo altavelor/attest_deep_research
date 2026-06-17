@@ -8,6 +8,7 @@ import {
   SavedChatSummary,
   inferChatTitle,
 } from "../chat/ChatStore";
+import { chatHistoryForPrompt } from "../chat/ChatCompaction";
 import { IndexingState } from "../indexing/IndexingService";
 import { estimateResearchRequestTokens } from "../research/prompts";
 import { ResearchService } from "../research/ResearchService";
@@ -937,17 +938,7 @@ export class IxplorerChatView extends ItemView {
 
     return this.getSearchMode() !== "indexOnly" && !this.services.isWebSearchEnabled()
       ? "Enable web search in Ixplorer settings to use this search mode."
-      : this.getContextWindowUnavailableMessage();
-  }
-
-  private getContextWindowUnavailableMessage(): string | null {
-    const usage = this.getContextWindowUsage();
-
-    if (!usage || usage.estimatedTokens <= usage.limitTokens) {
-      return null;
-    }
-
-    return "The current chat is too long for the selected model context window.";
+      : null;
   }
 
   private updateContextWindowIndicator(): void {
@@ -968,29 +959,27 @@ export class IxplorerChatView extends ItemView {
       Math.min(100, Math.round((usage.estimatedTokens / usage.limitTokens) * 100)),
     );
     const leftPercent = Math.max(0, 100 - usedPercent);
+    const isWarning = usedPercent >= 80;
     const title = [
-      "Context window:",
+      isWarning ? "Context window warning:" : "Context window:",
       `${usedPercent}% used (${leftPercent}% left)`,
       `Estimated ${usage.estimatedTokens} of ${usage.limitTokens} tokens`,
+      ...(isWarning ? ["Long history may reduce retrieved evidence budget."] : []),
     ].join("\n");
 
     this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${usedPercent}%`);
+    this.contextIndicatorEl.toggleClass("is-warning", isWarning);
     this.contextIndicatorEl.setAttr("title", title);
     this.contextIndicatorEl.setAttr(
       "aria-label",
-      `Context window: ${usedPercent}% used, ${leftPercent}% left`,
+      `${isWarning ? "Context window warning" : "Context window"}: ${usedPercent}% used, ${leftPercent}% left`,
     );
   }
 
-  private getContextWindowUsage():
-    | { estimatedTokens: number; limitTokens: number }
-    | null {
+  private getContextWindowUsage(): { estimatedTokens: number; limitTokens: number } | null {
     const estimatedTokens = estimateResearchRequestTokens({
       question: this.textareaEl?.value.trim() ?? "",
-      chatHistory: this.messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
+      chatHistory: chatHistoryForPrompt(this.messages),
       evidence: [],
       maxEvidenceItems: 0,
       reservedOutputTokens: this.getReservedOutputTokens(),
@@ -1056,7 +1045,9 @@ export class IxplorerChatView extends ItemView {
         this.currentChatSettings.indexProfileId,
       )
       .expandAdjacentEvidence(sourceChunks.length > 0 ? sourceChunks : [ref.chunk], nextRadius, 16);
-    const baseIds = new Set([...currentEvidence, ...(existing?.chunks ?? [])].map((chunk) => chunk.id));
+    const baseIds = new Set(
+      [...currentEvidence, ...(existing?.chunks ?? [])].map((chunk) => chunk.id),
+    );
     const added = expanded.filter((chunk) => !baseIds.has(chunk.id));
 
     if (added.length === 0) {

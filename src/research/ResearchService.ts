@@ -1,6 +1,7 @@
 import { RetrievalResult } from "../retrieval/RetrievalService";
 import { formatCitation } from "../retrieval/citations";
 import { QueryExpansionService } from "../retrieval/QueryExpansionService";
+import { summarizeCompactionWithModel } from "../chat/ChatCompaction";
 import {
   ChatModelProvider,
   ChatRequest,
@@ -22,6 +23,7 @@ import {
   ResearchSearchMode,
   ResearchStreamEvent,
 } from "./types";
+import { ChatDisplayMessage, ConversationCompactionSummary } from "../ui/rendering";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 
@@ -54,6 +56,9 @@ export class ResearchService {
   private readonly contextLimitTokens?: number;
   private readonly reservedOutputTokens?: number;
   private readonly graphContext?: ContextAssembleRequest["graph"];
+  private readonly chatModel: ChatModelProvider;
+  private readonly chatModelName: string;
+  private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -66,6 +71,9 @@ export class ResearchService {
       temperature: options.chatOptions?.temperature ?? options.temperature ?? DEFAULT_TEMPERATURE,
       maxTokens: options.chatOptions?.maxTokens,
     };
+    this.chatModel = options.chatModel;
+    this.chatModelName = options.chatModelName;
+    this.chatOptions = chatOptions;
     const now = options.now ?? (() => new Date());
 
     this.vaultPipeline = new VaultResearchPipeline({
@@ -153,10 +161,7 @@ export class ResearchService {
     }));
     const citations = citationsForEvidence(
       planned.finalEvidence,
-      mergeCitations(
-        mergeCitations(explicitCitations, retrieval.citations),
-        webEvidence.citations,
-      ),
+      mergeCitations(mergeCitations(explicitCitations, retrieval.citations), webEvidence.citations),
     );
     const diagnostics = withPlannerDiagnostics(
       contextDiagnostics ?? createEmptyContextDiagnostics(request.contextMode ?? "include"),
@@ -187,6 +192,20 @@ export class ResearchService {
     }
 
     return this.vaultPipeline.expandAdjacentEvidence(chunks, radius, limit);
+  }
+
+  async summarizeChatHistoryForCompaction(
+    messages: ChatDisplayMessage[],
+    existingSummary?: ConversationCompactionSummary,
+  ): Promise<ConversationCompactionSummary> {
+    return summarizeCompactionWithModel({
+      chatModel: this.chatModel,
+      model: this.chatModelName,
+      messages,
+      existingSummary,
+      temperature: 0,
+      maxTokens: this.chatOptions.maxTokens,
+    });
   }
 }
 

@@ -3,10 +3,20 @@ import { formatIndexSize } from "../indexing/indexSize";
 import { Citation, RetrievedChunk } from "../shared/types";
 import { stripRenderedCitationIds } from "./citationText";
 
+export interface ConversationCompactionSummary {
+  userGoals: string[];
+  decisions: string[];
+  unresolvedQuestions: string[];
+  citedSourcesAlreadyUsed: string[];
+}
+
 export interface ChatDisplayMessage {
   role: "user" | "assistant";
+  kind?: "message" | "compact-summary";
   content: string;
   createdAt: string;
+  compacted?: boolean;
+  compactSummary?: ConversationCompactionSummary;
   evidence?: RetrievedChunk[];
 }
 

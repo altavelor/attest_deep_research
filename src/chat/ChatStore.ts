@@ -21,7 +21,7 @@ export interface ExpandedCitationContext {
 }
 
 export interface SavedChat {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   id: string;
   title: string;
   createdAt: string;
@@ -57,7 +57,7 @@ export interface FileChatStoreOptions {
   createId?: () => string;
 }
 
-const CHAT_SCHEMA_VERSION = 1;
+const CHAT_SCHEMA_VERSION = 2;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
 
 export class FileChatStore {
@@ -97,7 +97,7 @@ export class FileChatStore {
         id: chat.id,
         title: chat.title,
         updatedAt: chat.updatedAt,
-        messageCount: chat.messages.length,
+        messageCount: chat.messages.filter((message) => message.kind !== "compact-summary").length,
       });
     }
 
@@ -174,7 +174,7 @@ export function isSavedChat(value: unknown): value is SavedChat {
   const chat = value as Partial<SavedChat>;
 
   return (
-    chat.schemaVersion === CHAT_SCHEMA_VERSION &&
+    (chat.schemaVersion === 1 || chat.schemaVersion === CHAT_SCHEMA_VERSION) &&
     typeof chat.id === "string" &&
     isSafeChatId(chat.id) &&
     typeof chat.title === "string" &&
@@ -182,8 +182,7 @@ export function isSavedChat(value: unknown): value is SavedChat {
     typeof chat.updatedAt === "string" &&
     Array.isArray(chat.messages) &&
     Array.isArray(chat.attachedContextPaths) &&
-    (chat.expandedCitationContexts === undefined ||
-      Array.isArray(chat.expandedCitationContexts)) &&
+    (chat.expandedCitationContexts === undefined || Array.isArray(chat.expandedCitationContexts)) &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
     (chat.chatSettings === undefined || isSavedChatSettings(chat.chatSettings))
   );
