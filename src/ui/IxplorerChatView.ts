@@ -490,6 +490,14 @@ export class IxplorerChatView extends ItemView {
         text: `${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`,
       });
     }
+    const toolDiagnostics = diagnostics.tools ?? [];
+    if (toolDiagnostics.length > 0) {
+      const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;
+      const skipped = toolDiagnostics.filter((tool) => tool.status === "skipped").length;
+      list.createEl("li", {
+        text: `${succeeded} tool call(s) completed${skipped > 0 ? `, ${skipped} skipped` : ""}`,
+      });
+    }
     if (diagnostics.evidencePlanner) {
       const planner = diagnostics.evidencePlanner;
       const webGroup = planner.budget.groups.find((group) => group.name === "web");

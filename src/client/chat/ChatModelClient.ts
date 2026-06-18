@@ -2,9 +2,11 @@ import { IxplorerError } from "../../shared/errors";
 import { isRecord } from "../../shared/guards";
 import {
   ApiFormat,
+  ChatMessage,
   ChatModelProvider,
   ChatRequest,
   ChatResponseChunk,
+  ChatToolCall,
 } from "../../shared/types";
 import {
   isOllamaTagsResponse,
@@ -126,10 +128,11 @@ export class ChatModelClient implements ChatModelProvider {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: request.model,
-        messages: request.messages,
+        messages: request.messages.map(mapOpenAiMessage),
         temperature: request.temperature,
         max_tokens: request.maxTokens,
         stream: true,
+        ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
       }),
     });
 
@@ -140,15 +143,24 @@ export class ChatModelClient implements ChatModelProvider {
       });
     }
 
+    const toolCallBuilder = new ToolCallBuilder();
+
     for await (const event of parseServerSentEvents(response.body)) {
       if (event === "[DONE]") {
         yield { content: "", isComplete: true };
         return;
       }
 
-      const content = parseOpenAiChatDelta(event);
-      if (content) {
-        yield { content, isComplete: false };
+      const parsed = parseOpenAiChatEvent(event);
+      if (parsed.content) {
+        yield { content: parsed.content, isComplete: false };
+      }
+      for (const delta of parsed.toolCallDeltas) {
+        toolCallBuilder.add(delta);
+      }
+      if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
+        yield { content: "", isComplete: true, toolCalls: toolCallBuilder.build() };
+        return;
       }
     }
 
@@ -157,7 +169,9 @@ export class ChatModelClient implements ChatModelProvider {
 
   private async *streamAnthropicChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     const systemMessage = request.messages.find((message) => message.role === "system")?.content;
-    const messages = request.messages.filter((message) => message.role !== "system");
+    const messages = request.messages
+      .filter((message) => message.role !== "system")
+      .map(mapAnthropicMessage);
     const response = await this.http.request("/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "anthropic-version": "2023-06-01" },
@@ -168,6 +182,16 @@ export class ChatModelClient implements ChatModelProvider {
         temperature: request.temperature,
         max_tokens: request.maxTokens ?? 4096,
         stream: true,
+        ...(request.tools && request.tools.length > 0
+          ? {
+              tools: request.tools.map((tool) => ({
+                name: tool.function.name,
+                description: tool.function.description,
+                input_schema: tool.function.parameters,
+              })),
+              tool_choice: { type: "auto" },
+            }
+          : {}),
       }),
     });
 
@@ -178,10 +202,24 @@ export class ChatModelClient implements ChatModelProvider {
       });
     }
 
+    const toolCallBuilder = new ToolCallBuilder();
+
     for await (const event of parseServerSentEvents(response.body)) {
-      const content = parseAnthropicChatDelta(event);
-      if (content) {
-        yield { content, isComplete: false };
+      const parsed = parseAnthropicChatEvent(event);
+      if (parsed.content) {
+        yield { content: parsed.content, isComplete: false };
+      }
+      for (const delta of parsed.toolCallDeltas) {
+        toolCallBuilder.add(delta);
+      }
+      if (parsed.isComplete) {
+        const toolCalls = toolCallBuilder.build();
+        yield {
+          content: "",
+          isComplete: true,
+          ...(toolCalls.length > 0 ? { toolCalls } : {}),
+        };
+        return;
       }
     }
 
@@ -194,8 +232,9 @@ export class ChatModelClient implements ChatModelProvider {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: request.model,
-        messages: request.messages,
+        messages: request.messages.map(mapOllamaMessage),
         stream: true,
+        ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
         options:
           request.temperature === undefined && request.maxTokens === undefined
             ? undefined
@@ -210,14 +249,28 @@ export class ChatModelClient implements ChatModelProvider {
       });
     }
 
+    const toolCallBuilder = new ToolCallBuilder();
+
     for await (const line of parseJsonLines(response.body)) {
       const parsed = parseOllamaChatLine(line);
       if (parsed.content) {
         yield { content: parsed.content, isComplete: false };
       }
+      for (const toolCall of parsed.toolCalls) {
+        toolCallBuilder.add({
+          id: toolCall.id,
+          name: toolCall.name,
+          argumentsText: JSON.stringify(toolCall.arguments),
+        });
+      }
 
       if (parsed.done) {
-        yield { content: "", isComplete: true };
+        const toolCalls = toolCallBuilder.build();
+        yield {
+          content: "",
+          isComplete: true,
+          ...(toolCalls.length > 0 ? { toolCalls } : {}),
+        };
         return;
       }
     }
@@ -235,21 +288,64 @@ export class ChatModelClient implements ChatModelProvider {
   }
 }
 
-function parseOpenAiChatDelta(event: string): string {
+interface ToolCallDelta {
+  index?: number;
+  id?: string;
+  name?: string;
+  argumentsText?: string;
+}
+
+class ToolCallBuilder {
+  private readonly items = new Map<number, { id?: string; name?: string; argumentsText: string }>();
+  private nextIndex = 0;
+
+  add(delta: ToolCallDelta): void {
+    const index = delta.index ?? this.nextIndex++;
+    const current = this.items.get(index) ?? { argumentsText: "" };
+    this.items.set(index, {
+      id: delta.id ?? current.id,
+      name: delta.name ?? current.name,
+      argumentsText: `${current.argumentsText}${delta.argumentsText ?? ""}`,
+    });
+  }
+
+  build(): ChatToolCall[] {
+    return [...this.items.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([index, item]) => ({
+        id: item.id ?? `call_${index}`,
+        name: item.name ?? "",
+        arguments: parseToolArguments(item.argumentsText),
+      }))
+      .filter((item) => item.name.length > 0);
+  }
+}
+
+function parseOpenAiChatEvent(event: string): {
+  content: string;
+  toolCallDeltas: ToolCallDelta[];
+  finishReason?: string;
+} {
   try {
     const parsed: unknown = JSON.parse(event);
     if (!isRecord(parsed) || !Array.isArray(parsed.choices)) {
-      return "";
+      return { content: "", toolCallDeltas: [] };
     }
 
     const firstChoice: unknown = parsed.choices[0];
     if (!isRecord(firstChoice) || !isRecord(firstChoice.delta)) {
-      return "";
+      return { content: "", toolCallDeltas: [] };
     }
 
-    return typeof firstChoice.delta.content === "string" ? firstChoice.delta.content : "";
+    const delta = firstChoice.delta;
+    return {
+      content: typeof delta.content === "string" ? delta.content : "",
+      finishReason:
+        typeof firstChoice.finish_reason === "string" ? firstChoice.finish_reason : undefined,
+      toolCallDeltas: parseOpenAiToolCallDeltas(delta.tool_calls),
+    };
   } catch {
-    return "";
+    return { content: "", toolCallDeltas: [] };
   }
 }
 
@@ -257,26 +353,99 @@ function normalizeApiFormat(value: ApiFormat | "lmStudio" | undefined): ApiForma
   return value === "lmStudio" || value === undefined ? "openai-compatible" : value;
 }
 
-function parseAnthropicChatDelta(event: string): string {
+function parseOpenAiToolCallDeltas(value: unknown): ToolCallDelta[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isRecord)
+    .map((toolCall) => ({
+      index: typeof toolCall.index === "number" ? toolCall.index : undefined,
+      id: typeof toolCall.id === "string" ? toolCall.id : undefined,
+      name:
+        isRecord(toolCall.function) && typeof toolCall.function.name === "string"
+          ? toolCall.function.name
+          : undefined,
+      argumentsText:
+        isRecord(toolCall.function) && typeof toolCall.function.arguments === "string"
+          ? toolCall.function.arguments
+          : undefined,
+    }));
+}
+
+function parseAnthropicChatEvent(event: string): {
+  content: string;
+  toolCallDeltas: ToolCallDelta[];
+  isComplete: boolean;
+} {
   try {
     const parsed: unknown = JSON.parse(event);
-    if (!isRecord(parsed) || parsed.type !== "content_block_delta" || !isRecord(parsed.delta)) {
-      return "";
+    if (!isRecord(parsed)) {
+      return { content: "", toolCallDeltas: [], isComplete: false };
     }
 
-    return parsed.delta.type === "text_delta" && typeof parsed.delta.text === "string"
-      ? parsed.delta.text
-      : "";
+    if (parsed.type === "message_stop") {
+      return { content: "", toolCallDeltas: [], isComplete: true };
+    }
+
+    if (parsed.type === "content_block_start" && isRecord(parsed.content_block)) {
+      const block = parsed.content_block;
+      if (block.type === "tool_use") {
+        return {
+          content: "",
+          isComplete: false,
+          toolCallDeltas: [
+            {
+              index: typeof parsed.index === "number" ? parsed.index : undefined,
+              id: typeof block.id === "string" ? block.id : undefined,
+              name: typeof block.name === "string" ? block.name : undefined,
+              argumentsText:
+                isRecord(block.input) && Object.keys(block.input).length > 0
+                  ? JSON.stringify(block.input)
+                  : "",
+            },
+          ],
+        };
+      }
+    }
+
+    if (parsed.type !== "content_block_delta" || !isRecord(parsed.delta)) {
+      return { content: "", toolCallDeltas: [], isComplete: false };
+    }
+
+    if (parsed.delta.type === "text_delta" && typeof parsed.delta.text === "string") {
+      return { content: parsed.delta.text, toolCallDeltas: [], isComplete: false };
+    }
+
+    if (parsed.delta.type === "input_json_delta" && typeof parsed.delta.partial_json === "string") {
+      return {
+        content: "",
+        isComplete: false,
+        toolCallDeltas: [
+          {
+            index: typeof parsed.index === "number" ? parsed.index : undefined,
+            argumentsText: parsed.delta.partial_json,
+          },
+        ],
+      };
+    }
+
+    return { content: "", toolCallDeltas: [], isComplete: false };
   } catch {
-    return "";
+    return { content: "", toolCallDeltas: [], isComplete: false };
   }
 }
 
-function parseOllamaChatLine(line: string): { content: string; done: boolean } {
+function parseOllamaChatLine(line: string): {
+  content: string;
+  done: boolean;
+  toolCalls: ChatToolCall[];
+} {
   try {
     const parsed: unknown = JSON.parse(line);
     if (!isRecord(parsed)) {
-      return { content: "", done: false };
+      return { content: "", done: false, toolCalls: [] };
     }
 
     const content =
@@ -284,8 +453,128 @@ function parseOllamaChatLine(line: string): { content: string; done: boolean } {
         ? parsed.message.content
         : "";
 
-    return { content, done: parsed.done === true };
+    return {
+      content,
+      done: parsed.done === true,
+      toolCalls: isRecord(parsed.message) ? parseOllamaToolCalls(parsed.message.tool_calls) : [],
+    };
   } catch {
-    return { content: "", done: false };
+    return { content: "", done: false, toolCalls: [] };
   }
+}
+
+function parseOllamaToolCalls(value: unknown): ChatToolCall[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isRecord).flatMap((toolCall, index) => {
+    if (!isRecord(toolCall.function) || typeof toolCall.function.name !== "string") {
+      return [];
+    }
+
+    return [
+      {
+        id: typeof toolCall.id === "string" ? toolCall.id : `call_${index}`,
+        name: toolCall.function.name,
+        arguments:
+          isRecord(toolCall.function.arguments) ? toolCall.function.arguments : {},
+      },
+    ];
+  });
+}
+
+function parseToolArguments(value: string): Record<string, unknown> {
+  if (!value.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return { raw: value };
+  }
+}
+
+function mapOpenAiMessage(message: ChatMessage): Record<string, unknown> {
+  if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
+    return {
+      role: "assistant",
+      content: message.content || null,
+      tool_calls: message.toolCalls.map((toolCall) => ({
+        id: toolCall.id,
+        type: "function",
+        function: {
+          name: toolCall.name,
+          arguments: JSON.stringify(toolCall.arguments),
+        },
+      })),
+    };
+  }
+
+  if (message.role === "tool") {
+    return {
+      role: "tool",
+      content: message.content,
+      tool_call_id: message.toolCallId,
+    };
+  }
+
+  return { role: message.role, content: message.content };
+}
+
+function mapOllamaMessage(message: ChatMessage): Record<string, unknown> {
+  if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
+    return {
+      role: "assistant",
+      content: message.content,
+      tool_calls: message.toolCalls.map((toolCall) => ({
+        function: {
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        },
+      })),
+    };
+  }
+
+  if (message.role === "tool") {
+    return {
+      role: "tool",
+      content: message.content,
+      tool_call_id: message.toolCallId,
+    };
+  }
+
+  return { role: message.role, content: message.content };
+}
+
+function mapAnthropicMessage(message: ChatMessage): Record<string, unknown> {
+  if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
+    const content = [
+      ...(message.content ? [{ type: "text", text: message.content }] : []),
+      ...message.toolCalls.map((toolCall) => ({
+        type: "tool_use",
+        id: toolCall.id,
+        name: toolCall.name,
+        input: toolCall.arguments,
+      })),
+    ];
+    return { role: "assistant", content };
+  }
+
+  if (message.role === "tool") {
+    return {
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: message.toolCallId,
+          content: message.content,
+        },
+      ],
+    };
+  }
+
+  return { role: message.role === "assistant" ? "assistant" : "user", content: message.content };
 }

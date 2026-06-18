@@ -177,7 +177,19 @@ export interface ContextDiagnostics {
     groups: ContextBudgetGroup[];
   };
   evidencePlanner?: EvidencePlannerDiagnostics;
+  tools: ToolCallDiagnostic[];
   warnings: string[];
+}
+
+export interface ToolCallDiagnostic {
+  id: string;
+  name: string;
+  status: "success" | "failed" | "skipped";
+  arguments: Record<string, unknown>;
+  resultPreview?: string;
+  resultBytes?: number;
+  round: number;
+  reason?: string;
 }
 
 export interface Citation {
@@ -194,9 +206,26 @@ export interface LanguageInventoryItem {
   sourceCount: number;
 }
 
+export interface ChatToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  toolCallId?: string;
+  toolCalls?: ChatToolCall[];
 }
 
 export interface ChatRequest {
@@ -204,11 +233,13 @@ export interface ChatRequest {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  tools?: ChatToolDefinition[];
 }
 
 export interface ChatResponseChunk {
   content: string;
   isComplete: boolean;
+  toolCalls?: ChatToolCall[];
 }
 
 export type ApiFormat = "openai-compatible" | "ollama" | "anthropic";

@@ -122,6 +122,62 @@ describe("ChatModelClient", () => {
     );
   });
 
+  it("streams OpenAI-compatible tool calls and sends tool definitions", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_note","arguments":"{\\"path\\""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":":\\"Research/Note.md\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    const chunks = [];
+    for await (const chunk of client.streamChat({
+      model: "local-chat",
+      messages: [{ role: "user", content: "Read note" }],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "read_note",
+            description: "Read a note",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ],
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      {
+        content: "",
+        isComplete: true,
+        toolCalls: [
+          {
+            id: "call_1",
+            name: "read_note",
+            arguments: { path: "Research/Note.md" },
+          },
+        ],
+      },
+    ]);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.tools).toEqual([
+      expect.objectContaining({
+        type: "function",
+        function: expect.objectContaining({ name: "read_note" }),
+      }),
+    ]);
+  });
+
   it("streams Ollama chat JSON lines", async () => {
     const fetchMock = vi
       .fn()

@@ -19,9 +19,11 @@ import { normalizeVaultPath, vaultPathMatchesGlob } from "../shared/pathFilters"
 import { ApiFormat } from "../shared/types";
 import {
   fetchAvailableModels,
+  fetchModelContextLength,
   verifyEmbeddingCapability,
   DiscoveredModel,
 } from "./connectionTests";
+import { contextLengthInputAfterDiscovery } from "./modelContext";
 import { DUCK_DUCK_GO_DESCRIPTION } from "./privacyCopy";
 import {
   ChatModelProfile,
@@ -215,6 +217,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
         profiles: this.plugin.settings.chatModelProfiles,
         fetchedModelsByServerId: this.fetchedModelsByServerId,
         fetchModels: (server) => this.fetchModelsForServer(server),
+        fetchContextLength: (server, modelName) =>
+          this.fetchContextLengthForModel(server, modelName),
         onSave: async (profile) => {
           this.plugin.settings.chatModelProfiles.push(profile);
           if (this.plugin.settings.chatModelProfiles.length === 1) {
@@ -241,6 +245,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
             profiles: this.plugin.settings.chatModelProfiles,
             fetchedModelsByServerId: this.fetchedModelsByServerId,
             fetchModels: (server) => this.fetchModelsForServer(server),
+            fetchContextLength: (server, modelName) =>
+              this.fetchContextLengthForModel(server, modelName),
             onSave: async (updatedProfile) => {
               Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
               await this.plugin.saveSettings();
@@ -442,6 +448,13 @@ export class IxplorerSettingTab extends PluginSettingTab {
     modelName: string,
   ): Promise<boolean> {
     return verifyEmbeddingCapability(server, modelName, { logger: this.plugin.logger });
+  }
+
+  private async fetchContextLengthForModel(
+    server: ServerProfile,
+    modelName: string,
+  ): Promise<number | undefined> {
+    return fetchModelContextLength(server, modelName, { logger: this.plugin.logger });
   }
 
   private renderIndexingSettings(containerEl: HTMLElement): void {
@@ -1486,6 +1499,10 @@ interface ModelProfileModalOptions<TProfile extends ModelProfile> {
   profiles: TProfile[];
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   fetchModels(server: ServerProfile): Promise<DiscoveredModel[]>;
+  fetchContextLength?: (
+    server: ServerProfile,
+    modelName: string,
+  ) => Promise<number | undefined>;
   verifyEmbedding?: (server: ServerProfile, modelName: string) => Promise<boolean>;
   onSave(profile: TProfile): Promise<void>;
 }
@@ -1509,6 +1526,12 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.kind === "chat"
       ? (this.options.profile?.capabilities?.contextLength?.toString() ?? "")
       : "";
+  private contextLengthInputEl: HTMLInputElement | null = null;
+  private capabilityChat = this.options.profile?.capabilities?.chat ?? this.options.kind === "chat";
+  private capabilityEmbeddings =
+    this.options.profile?.capabilities?.embeddings ?? this.options.kind === "embedding";
+  private capabilityVision = this.options.profile?.capabilities?.vision ?? false;
+  private capabilityTools = this.options.profile?.capabilities?.tools ?? false;
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
@@ -1595,6 +1618,8 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         }),
       );
 
+    this.renderCapabilityControls(contentEl);
+
     if (this.options.kind === "chat") {
       new Setting(contentEl)
         .setName("Temperature")
@@ -1615,13 +1640,16 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           }),
         );
       new Setting(contentEl)
-        .setName("Context window tokens")
-        .setDesc("Optional. Used to block chat submits when the conversation no longer fits.")
-        .addText((text) =>
+        .setName("Context size")
+        .setDesc(
+          "Optional token limit. Filled from model metadata when available and used to enforce the chat context window.",
+        )
+        .addText((text) => {
+          this.contextLengthInputEl = text.inputEl;
           text.setValue(this.contextLength).onChange((value) => {
             this.contextLength = value.trim();
-          }),
-        );
+          });
+        });
     }
 
     renderModalActions(contentEl, {
@@ -1698,6 +1726,7 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         this.modelName = model.name;
         this.modelInputEl!.value = model.name;
         this.closeModelMenu();
+        void this.populateContextLength(model);
       });
     }
 
@@ -1733,6 +1762,34 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
   private selectedServer(): ServerProfile | undefined {
     return this.options.servers.find((server) => server.id === this.serverProfileId);
+  }
+
+  private async populateContextLength(model: DiscoveredModel): Promise<void> {
+    if (this.options.kind !== "chat") {
+      return;
+    }
+
+    const selectedServerId = this.serverProfileId;
+    let discoveredValue = model.capabilities.contextLength;
+    if (discoveredValue === undefined) {
+      const server = this.selectedServer();
+      if (server) {
+        discoveredValue = await this.options.fetchContextLength?.(server, model.name);
+      }
+    }
+
+    if (this.serverProfileId !== selectedServerId || this.modelName !== model.name) {
+      return;
+    }
+
+    if (discoveredValue !== undefined) {
+      model.capabilities.contextLength = discoveredValue;
+      model.capabilities.detectionSource = "metadata";
+    }
+    this.contextLength = contextLengthInputAfterDiscovery(this.contextLength, discoveredValue);
+    if (this.contextLengthInputEl) {
+      this.contextLengthInputEl.value = this.contextLength;
+    }
   }
 
   private async save(): Promise<void> {
@@ -1795,22 +1852,63 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   }
 
   private resolveCapabilities(model: DiscoveredModel | undefined) {
-    const capabilities = model?.capabilities ?? this.options.profile?.capabilities;
     const contextLength =
       this.options.kind === "chat" ? parsePositiveInteger(this.contextLength) : undefined;
 
-    if (!contextLength) {
-      return capabilities;
-    }
-
     return {
-      ...(capabilities ?? {
-        chat: this.options.kind === "chat",
-        embeddings: this.options.kind === "embedding",
-        detectionSource: "format-default" as const,
-      }),
+      chat: this.capabilityChat,
+      embeddings: this.capabilityEmbeddings,
+      vision: this.capabilityVision,
+      tools: this.capabilityTools,
+      temperature: model?.capabilities.temperature ?? this.options.profile?.capabilities?.temperature,
+      maxTokens: model?.capabilities.maxTokens ?? this.options.profile?.capabilities?.maxTokens,
       contextLength,
+      maxOutputTokens: model?.capabilities.maxOutputTokens ?? this.options.profile?.capabilities?.maxOutputTokens,
+      detectionSource:
+        model?.capabilities.detectionSource ??
+        this.options.profile?.capabilities?.detectionSource ??
+        ("format-default" as const),
     };
+  }
+
+  private renderCapabilityControls(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Chat")
+      .setDesc(
+        "The model can answer chat requests. Capabilities are set manually for this profile.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.capabilityChat).onChange((value) => {
+          this.capabilityChat = value;
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Embeddings")
+      .setDesc("The model can create embeddings.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.capabilityEmbeddings).onChange((value) => {
+          this.capabilityEmbeddings = value;
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Vision")
+      .setDesc("The model accepts image inputs.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.capabilityVision).onChange((value) => {
+          this.capabilityVision = value;
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Tools")
+      .setDesc("The model supports function/tool calling. Note tools are enabled only when this is on.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.capabilityTools).onChange((value) => {
+          this.capabilityTools = value;
+        }),
+      );
   }
 }
 

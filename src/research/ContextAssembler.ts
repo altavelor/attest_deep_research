@@ -529,6 +529,7 @@ function createEmptyDiagnostics(contextMode: ContextMode): ContextDiagnostics {
       usedTokens: 0,
       groups: [],
     },
+    tools: [],
     warnings: [],
   };
 }

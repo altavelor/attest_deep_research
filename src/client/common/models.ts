@@ -31,3 +31,41 @@ export function modelNamesFromOllamaTags(response: OllamaTagsResponse): string[]
     .map((model) => model.name ?? model.model)
     .filter((model): model is string => typeof model === "string" && model.length > 0);
 }
+
+export function contextLengthFromModelMetadata(value: unknown): number | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const directValue = firstPositiveInteger(
+    value.max_context_length,
+    value.context_length,
+    value.context_window,
+    value.maxContextLength,
+    value.contextLength,
+  );
+  if (directValue !== undefined) {
+    return directValue;
+  }
+
+  const nestedValue = contextLengthFromModelMetadata(value.capabilities);
+  if (nestedValue !== undefined) {
+    return nestedValue;
+  }
+
+  if (!isRecord(value.model_info)) {
+    return undefined;
+  }
+
+  return firstPositiveInteger(
+    ...Object.entries(value.model_info)
+      .filter(([key]) => key.endsWith(".context_length"))
+      .map(([, metadataValue]) => metadataValue),
+  );
+}
+
+function firstPositiveInteger(...values: unknown[]): number | undefined {
+  return values.find(
+    (value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0,
+  );
+}

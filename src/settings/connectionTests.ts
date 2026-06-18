@@ -1,6 +1,7 @@
 import { EmbeddingClient } from "../client/embeddings/EmbeddingClient";
 import { ProviderHttpClient } from "../client/common/http";
 import {
+  contextLengthFromModelMetadata,
   isOllamaTagsResponse,
   isOpenAiModelsResponse,
   modelNamesFromOllamaTags,
@@ -91,6 +92,71 @@ export async function verifyEmbeddingCapability(
   }
 }
 
+export async function fetchModelContextLength(
+  serverProfile: ServerProfile,
+  modelName: string,
+  options: ModelDiscoveryOptions = {},
+): Promise<number | undefined> {
+  if (serverProfile.apiFormat === "anthropic") {
+    return undefined;
+  }
+
+  if (serverProfile.apiFormat === "ollama") {
+    return tryFetchContextLength(serverProfile, "/show", options, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: modelName }),
+    });
+  }
+
+  const encodedModelName = encodeURIComponent(modelName);
+  const standardMetadata = await tryFetchContextLength(
+    serverProfile,
+    `/models/${encodedModelName}`,
+    options,
+    { method: "GET" },
+  );
+  if (standardMetadata !== undefined) {
+    return standardMetadata;
+  }
+
+  const lmStudioBaseUrl = lmStudioMetadataBaseUrl(serverProfile.baseUrl);
+  if (!lmStudioBaseUrl) {
+    return undefined;
+  }
+
+  return tryFetchContextLength(
+    { ...serverProfile, baseUrl: lmStudioBaseUrl },
+    `/models/${encodedModelName}`,
+    options,
+    { method: "GET" },
+  );
+}
+
+async function tryFetchContextLength(
+  serverProfile: ServerProfile,
+  path: string,
+  options: ModelDiscoveryOptions,
+  init: RequestInit,
+): Promise<number | undefined> {
+  try {
+    const http = createDiscoveryHttp(serverProfile, options);
+    const response = await http.request(path, init);
+    const body = await http.readJson(
+      response,
+      "The model provider returned invalid metadata JSON.",
+    );
+    return contextLengthFromModelMetadata(body);
+  } catch {
+    return undefined;
+  }
+}
+
+function lmStudioMetadataBaseUrl(baseUrl: string): string | undefined {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? `${trimmed.slice(0, -3)}/api/v0` : undefined;
+}
+
 async function fetchOpenAiCompatibleModels(
   serverProfile: ServerProfile,
   options: ModelDiscoveryOptions,
@@ -103,11 +169,19 @@ async function fetchOpenAiCompatibleModels(
     throw new Error("The model provider returned an invalid models response.");
   }
 
-  return modelNamesFromOpenAiModels(body).map((name) => ({
-    id: name,
-    name,
-    capabilities: openAiCompatibleDefaultCapability(),
-  }));
+  return body.data.map((model) => {
+    const contextLength = contextLengthFromModelMetadata(model);
+    return {
+      id: model.id,
+      name: model.id,
+      capabilities: {
+        ...openAiCompatibleDefaultCapability(),
+        ...(contextLength !== undefined
+          ? { contextLength, detectionSource: "metadata" as const }
+          : {}),
+      },
+    };
+  });
 }
 
 async function fetchAnthropicModels(

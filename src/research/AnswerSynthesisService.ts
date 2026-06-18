@@ -5,6 +5,7 @@ import {
   ContextDiagnostics,
   ResearchAnswer,
   RetrievedChunk,
+  ToolCallDiagnostic,
 } from "../shared/types";
 import { IxplorerError } from "../shared/errors";
 import {
@@ -15,6 +16,8 @@ import {
   ResearchChatHistoryMessage,
 } from "./prompts";
 import { ResearchStreamEvent } from "./types";
+import { NoteToolService } from "./NoteTools";
+import { runToolLoop } from "./ToolLoopRunner";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -23,6 +26,7 @@ export interface AnswerSynthesisServiceOptions {
   contextLimitTokens?: number;
   now: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
+  noteTools?: NoteToolService;
 }
 
 export interface AnswerSynthesisInput {
@@ -36,6 +40,7 @@ export interface AnswerSynthesisInput {
   citations: Citation[];
   contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
+  toolsEnabled?: boolean;
 }
 
 export class AnswerSynthesisService {
@@ -45,6 +50,7 @@ export class AnswerSynthesisService {
   private readonly contextLimitTokens?: number;
   private readonly now: () => Date;
   private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
+  private readonly noteTools?: NoteToolService;
 
   constructor(options: AnswerSynthesisServiceOptions) {
     this.chatModel = options.chatModel;
@@ -53,6 +59,7 @@ export class AnswerSynthesisService {
     this.contextLimitTokens = options.contextLimitTokens;
     this.now = options.now;
     this.persistFinalAnswer = options.persistFinalAnswer;
+    this.noteTools = options.noteTools;
   }
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
@@ -68,37 +75,63 @@ export class AnswerSynthesisService {
       maxEvidenceItems: input.evidenceLimit,
     });
     let answerText = "";
+    let toolDiagnostics: ToolCallDiagnostic[] = [];
 
     yield { type: "status", message: "Synthesizing answer..." };
 
-    for await (const chunk of this.chatModel.streamChat({
-      model: this.chatModelName,
-      temperature: this.chatOptions.temperature,
-      maxTokens: this.chatOptions.maxTokens,
-      messages: [
-        {
-          role: "system",
-          content: RESEARCH_SYSTEM_PROMPT,
-        },
-        { role: "user", content: prompt },
-      ],
-    })) {
-      if (chunk.content) {
-        answerText += chunk.content;
-        yield { type: "delta", content: chunk.content };
-      }
+    const messages = [
+      {
+        role: "system" as const,
+        content: RESEARCH_SYSTEM_PROMPT,
+      },
+      { role: "user" as const, content: prompt },
+    ];
 
-      if (chunk.isComplete) {
-        break;
+    if (input.toolsEnabled === true && this.noteTools) {
+      const result = await runToolLoop({
+        chatModel: this.chatModel,
+        model: this.chatModelName,
+        temperature: this.chatOptions.temperature,
+        maxTokens: this.chatOptions.maxTokens,
+        messages,
+        tools: this.noteTools.definitions(),
+        executeTool: (toolCall) => this.noteTools!.execute(toolCall),
+      });
+      answerText = result.answerText;
+      toolDiagnostics = result.diagnostics;
+      for (const event of result.events) {
+        if (event.type === "delta" && event.content) {
+          yield { type: "delta", content: event.content };
+        }
+      }
+    } else {
+      for await (const chunk of this.chatModel.streamChat({
+        model: this.chatModelName,
+        temperature: this.chatOptions.temperature,
+        maxTokens: this.chatOptions.maxTokens,
+        messages,
+      })) {
+        if (chunk.content) {
+          answerText += chunk.content;
+          yield { type: "delta", content: chunk.content };
+        }
+
+        if (chunk.isComplete) {
+          break;
+        }
       }
     }
 
+    const contextDiagnostics = appendToolDiagnostics(
+      input.contextDiagnostics,
+      toolDiagnostics,
+    );
     const finalAnswer: ResearchAnswer = {
       question: input.question,
       answer: answerText,
       citations: input.citations,
       evidence: input.evidence,
-      ...(input.contextDiagnostics ? { contextDiagnostics: input.contextDiagnostics } : {}),
+      ...(contextDiagnostics ? { contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
     };
@@ -139,4 +172,18 @@ export class AnswerSynthesisService {
       },
     });
   }
+}
+
+function appendToolDiagnostics(
+  diagnostics: ContextDiagnostics | undefined,
+  tools: ToolCallDiagnostic[],
+): ContextDiagnostics | undefined {
+  if (!diagnostics) {
+    return undefined;
+  }
+
+  return {
+    ...diagnostics,
+    tools: [...(diagnostics.tools ?? []), ...tools],
+  };
 }
