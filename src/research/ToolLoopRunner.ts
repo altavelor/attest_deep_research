@@ -12,7 +12,9 @@ export interface ToolLoopRunnerOptions {
   model: string;
   messages: ChatMessage[];
   tools: ChatToolDefinition[];
-  executeTool(toolCall: ChatToolCall): Promise<{ ok: boolean; result: string }>;
+  executeTool(
+    toolCall: ChatToolCall,
+  ): Promise<{ ok: boolean; result: string; diagnostic?: Record<string, unknown> }>;
   temperature?: number;
   maxTokens?: number;
   maxRounds?: number;
@@ -101,6 +103,7 @@ export async function runToolLoop(options: ToolLoopRunnerOptions): Promise<ToolL
         resultBytes: result.length,
         round,
         reason: result.length < execution.result.length ? "tool-output-truncated" : undefined,
+        metadata: execution.diagnostic,
       });
       messages.push({
         role: "tool",

@@ -7,6 +7,7 @@ import {
   LanguageInventoryItem,
   KeywordSearchIndexStore,
   RetrievedChunk,
+  RetrievalQueryVariant,
   RetrievalOptions,
   SourceReference,
 } from "../shared/types";
@@ -18,6 +19,7 @@ export interface RetrievalResult {
   chunks: RetrievedChunk[];
   citations: Citation[];
   usedFallback: boolean;
+  queryVariants?: RetrievalQueryVariant[];
 }
 
 export interface RetrievalServiceOptions {

@@ -71,7 +71,7 @@ export type ExplicitSkillResolution =
   | {
       kind: "error";
       normalizedQuestion: string;
-      reason: "multiple-skills" | "ambiguous-skill";
+      reason: "multiple-skills" | "ambiguous-skill" | "unknown-skill";
       mentions: string[];
     };
 
@@ -84,6 +84,7 @@ export class SkillRegistry {
   private readonly store: SkillFileStore;
   private readonly defaults: DefaultSkillFile[];
   private snapshot: SkillCatalogSnapshot = { skills: [], warnings: [] };
+  private readonly estimatedTokensById = new Map<string, number>();
   private dirty = true;
 
   constructor(options: SkillRegistryOptions) {
@@ -111,6 +112,7 @@ export class SkillRegistry {
   async refresh(): Promise<SkillCatalogSnapshot> {
     const warnings: SkillCatalogWarning[] = [];
     const parsed: SkillDefinition[] = [];
+    this.estimatedTokensById.clear();
 
     if (!(await this.store.exists(SKILL_ROOT))) {
       this.snapshot = { skills: [], warnings: [] };
@@ -141,6 +143,7 @@ export class SkillRegistry {
           warnings.push(result.warning);
         } else {
           parsed.push(result.skill);
+          this.estimatedTokensById.set(result.skill.id, estimateTokens(content));
         }
       } catch {
         warnings.push({ path, reason: "read-failed" });
@@ -160,12 +163,20 @@ export class SkillRegistry {
 
     this.snapshot = {
       skills: parsed.filter((skill) => !collisions.has(skill.id)).sort(compareSkills),
-      warnings: warnings.sort((left, right) =>
-        left.path.localeCompare(right.path) || left.reason.localeCompare(right.reason),
+      warnings: warnings.sort(
+        (left, right) =>
+          left.path.localeCompare(right.path) || left.reason.localeCompare(right.reason),
       ),
     };
     this.dirty = false;
     return this.snapshot;
+  }
+
+  maxDiscoveredSkillTokens(): number {
+    return Math.max(
+      0,
+      ...this.snapshot.skills.map((skill) => this.estimatedTokensById.get(skill.id) ?? 0),
+    );
   }
 
   async load(skill: SkillDefinition, options?: { maxTokens?: number }): Promise<LoadedSkill> {
@@ -235,9 +246,7 @@ export function buildSkillCatalogPrompt(skills: SkillDefinition[]): string {
 
   return [
     "Available skills (load at most one only when it clearly applies):",
-    ...skills.map(
-      (skill) => `- ${skill.name}: ${skill.description}\n  Path: ${skill.path}`,
-    ),
+    ...skills.map((skill) => `- ${skill.name}: ${skill.description}\n  Path: ${skill.path}`),
   ].join("\n");
 }
 
@@ -257,6 +266,14 @@ export function resolveExplicitSkill(
   const recognized: Array<{ raw: string; skill: SkillDefinition }> = [];
   for (const match of matches) {
     const candidates = identifiers.get(match[2].toLowerCase()) ?? [];
+    if (candidates.length === 0) {
+      return {
+        kind: "error",
+        normalizedQuestion: question.trim(),
+        reason: "unknown-skill",
+        mentions: [match[2]],
+      };
+    }
     if (candidates.length > 1) {
       return {
         kind: "error",
@@ -274,7 +291,10 @@ export function resolveExplicitSkill(
   if (distinctSkills.size > 1) {
     return {
       kind: "error",
-      normalizedQuestion: removeMentions(question, recognized.map((item) => item.raw)),
+      normalizedQuestion: removeMentions(
+        question,
+        recognized.map((item) => item.raw),
+      ),
       reason: "multiple-skills",
       mentions: [...distinctSkills.keys()],
     };
@@ -285,7 +305,10 @@ export function resolveExplicitSkill(
 
   return {
     kind: "selected",
-    normalizedQuestion: removeMentions(question, recognized.map((item) => item.raw)),
+    normalizedQuestion: removeMentions(
+      question,
+      recognized.map((item) => item.raw),
+    ),
     skill: [...distinctSkills.values()][0],
   };
 }

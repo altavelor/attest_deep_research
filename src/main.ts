@@ -12,11 +12,7 @@ import { MarkdownExtractor } from "./extractors/MarkdownExtractor";
 import { PdfExtractor } from "./extractors/PdfExtractor";
 import { PdfTextCache } from "./extractors/PdfTextCache";
 import { TextExtractor } from "./extractors/TextExtractor";
-import {
-  IndexingService,
-  IndexingState,
-  IndexSourceReportItem,
-} from "./indexing/IndexingService";
+import { IndexingService, IndexingState, IndexSourceReportItem } from "./indexing/IndexingService";
 import { IndexingProfileController } from "./indexing/IndexingProfileController";
 import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
@@ -47,12 +43,17 @@ import {
 import { toUserMessage } from "./shared/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
+import { SkillRegistry } from "./skills/SkillRegistry";
+import { DEFAULT_SKILLS } from "./skills/defaultSkills";
+import { ObsidianSkillFileStore } from "./skills/ObsidianSkillFileStore";
+import { isInternalSkillPath } from "./shared/pathFilters";
 
 export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
+  private skillRegistry?: SkillRegistry;
   readonly indexing = new IndexingProfileController({
     getProfile: (profileId) =>
       this.settings.indexProfiles.find((profile) => profile.id === profileId),
@@ -74,6 +75,30 @@ export default class IxplorerPlugin extends Plugin {
   });
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.skillRegistry = new SkillRegistry({
+      store: new ObsidianSkillFileStore(this.app.vault.adapter),
+      defaults: DEFAULT_SKILLS,
+    });
+    try {
+      await this.skillRegistry.initialize();
+    } catch (error) {
+      this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "initialize" });
+      new Notice("Ixplorer could not initialize its default skills.");
+    }
+    const invalidateSkills = (path: string): void => {
+      if (isInternalSkillPath(path)) {
+        this.skillRegistry?.markDirty();
+      }
+    };
+    this.registerEvent(this.app.vault.on("create", (file) => invalidateSkills(file.path)));
+    this.registerEvent(this.app.vault.on("modify", (file) => invalidateSkills(file.path)));
+    this.registerEvent(this.app.vault.on("delete", (file) => invalidateSkills(file.path)));
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        invalidateSkills(oldPath);
+        invalidateSkills(file.path);
+      }),
+    );
     if (getActiveIndexProfile(this.settings).isSuspended !== true) {
       void this.indexing.refreshIndexSize(this.settings.activeIndexProfileId);
     }
@@ -225,12 +250,27 @@ export default class IxplorerPlugin extends Plugin {
       },
       searchProvider: this.createSearchProvider(),
       toolsEnabled,
+      skillRegistry: this.skillRegistry,
+      getIndexStatus: () => {
+        const state = this.indexing.getState(indexProfile.id);
+        return {
+          status: state.status,
+          available: Boolean(indexProfile.lastIndexedAt || state.indexedFiles > 0),
+          isStale: state.isStale,
+          indexedFiles: state.indexedFiles,
+          ...(state.errorMessage ? { errorMessage: state.errorMessage } : {}),
+        };
+      },
       noteTools: toolsEnabled
         ? new NoteToolService({
             files: contextFiles,
             extractors: contextExtractors,
             retriever,
             getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+            skillRegistry: this.skillRegistry,
+            skillMaxTokens: chatProfile.capabilities?.contextLength
+              ? Math.max(0, chatProfile.capabilities.contextLength - (chatProfile.maxTokens ?? 0))
+              : undefined,
           })
         : undefined,
     });
@@ -277,7 +317,9 @@ export default class IxplorerPlugin extends Plugin {
       queryVariants: queryVariants.length > 0 ? queryVariants : undefined,
     });
 
-    return result.chunks;
+    return result.chunks.filter(
+      (chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)),
+    );
   }
 
   private createIndexingService(

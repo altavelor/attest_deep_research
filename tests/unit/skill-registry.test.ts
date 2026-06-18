@@ -84,9 +84,9 @@ describe("SkillRegistry", () => {
 
     expect(snapshot.skills.map((skill) => skill.id)).toEqual(expectedIds);
     expect(snapshot.warnings).toEqual([]);
-    expect(
-      snapshot.skills.find((skill) => skill.id === "literature-review")?.aliases,
-    ).toContain("research-review");
+    expect(snapshot.skills.find((skill) => skill.id === "literature-review")?.aliases).toContain(
+      "research-review",
+    );
   });
 
   it("discovers only one-level SKILL.md files and builds a body-free catalog", async () => {
@@ -181,6 +181,9 @@ describe("SkillRegistry", () => {
     );
     expect(resolveExplicitSkill("@note-synthesis @rag-debugger inspect", skills)).toEqual(
       expect.objectContaining({ kind: "error", reason: "multiple-skills" }),
+    );
+    expect(resolveExplicitSkill("@missing-skill inspect", skills)).toEqual(
+      expect.objectContaining({ kind: "error", reason: "unknown-skill" }),
     );
   });
 

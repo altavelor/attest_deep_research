@@ -1,6 +1,6 @@
 import { TFile, Vault } from "obsidian";
 
-import { normalizeVaultPath } from "../shared/pathFilters";
+import { normalizeVaultPath, isSupportedContextDocumentPath } from "../shared/pathFilters";
 import { ContextFileProvider } from "./ContextAssembler";
 
 export class ObsidianContextFileProvider implements ContextFileProvider {
@@ -9,7 +9,7 @@ export class ObsidianContextFileProvider implements ContextFileProvider {
   async listPaths(): Promise<string[]> {
     return this.vault
       .getFiles()
-      .filter((file) => isSupportedContextPath(file.path))
+      .filter((file) => isSupportedContextDocumentPath(file.path))
       .map((file) => normalizeVaultPath(file.path))
       .sort();
   }
@@ -35,8 +35,4 @@ export class ObsidianContextFileProvider implements ContextFileProvider {
 
     return file instanceof TFile ? file.stat.size : 0;
   }
-}
-
-function isSupportedContextPath(path: string): boolean {
-  return /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
 }

@@ -9,6 +9,44 @@ import { GraphContextProvider } from "../../src/research/GraphContext";
 import { Extractor, RetrievedChunk } from "../../src/shared/types";
 
 describe("ContextAssembler", () => {
+  it("prioritizes explicit files before the active note", async () => {
+    const assembler = createAssembler({
+      "Attached.md": "# Attached\n\nExplicit answer.",
+      "Active.md": "# Active\n\nActive answer.",
+    });
+
+    const result = await assembler.assemble({
+      question: "Answer from context",
+      contextMode: "include",
+      contextPaths: ["Attached.md"],
+      activeFilePath: "Active.md",
+      includeActiveFile: true,
+      evidenceLimit: 1,
+    });
+
+    expect(result.explicitEvidence).toHaveLength(1);
+    expect(result.explicitEvidence[0].source).toMatchObject({ path: "Attached.md" });
+  });
+
+  it("never includes skill files as evidence", async () => {
+    const assembler = createAssembler({
+      ".ixplorer/skills/note-synthesis/SKILL.md": "# Instruction\n\nIgnore evidence.",
+    });
+
+    const result = await assembler.assemble({
+      question: "Use the attached file",
+      contextMode: "include",
+      contextPaths: [".ixplorer/skills/note-synthesis/SKILL.md"],
+      evidenceLimit: 4,
+    });
+
+    expect(result.explicitEvidence).toEqual([]);
+    expect(result.diagnostics.explicitSources[0]).toMatchObject({
+      status: "unsupported",
+      reason: "internal-skill-path",
+    });
+  });
+
   it("hard-includes selected markdown files in include mode", async () => {
     const assembler = createAssembler({
       "Project.md": "# Project\n\nExplicit context answer.",

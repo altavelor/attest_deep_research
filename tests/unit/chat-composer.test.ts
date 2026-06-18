@@ -1,6 +1,12 @@
 import { nextHorizontalWheelScrollLeft } from "../../src/ui/horizontalWheelScroll";
+import { isSupportedContextDocumentPath } from "../../src/shared/pathFilters";
 
 describe("chat composer", () => {
+  it("does not offer internal skill files as context documents", () => {
+    expect(isSupportedContextDocumentPath("Notes/Research.md")).toBe(true);
+    expect(isSupportedContextDocumentPath(".ixplorer/skills/rag-debugger/SKILL.md")).toBe(false);
+  });
+
   it("maps vertical wheel movement to horizontal attachment carousel scrolling", () => {
     expect(
       nextHorizontalWheelScrollLeft({
