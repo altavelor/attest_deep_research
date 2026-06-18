@@ -89,6 +89,18 @@ describe("SkillRegistry", () => {
     );
   });
 
+  it("ships enforceable output contracts for the three foundational skills", () => {
+    const content = (id: string) => DEFAULT_SKILLS.find((skill) => skill.id === id)?.content ?? "";
+
+    expect(content("vault-context-assembly")).toContain("Explicitly attached or named files.");
+    expect(content("vault-context-assembly")).toContain("Retrieved RAG chunks.");
+    expect(content("citation-grounded-answer")).toContain("### Used sources");
+    expect(content("citation-grounded-answer")).toContain("### Missing evidence");
+    expect(content("citation-grounded-answer")).toContain("### Ambiguities");
+    expect(content("rag-debugger")).toContain("**Ranked chunks**");
+    expect(content("rag-debugger")).toContain("path, chunk ID, rank, and score");
+  });
+
   it("discovers only one-level SKILL.md files and builds a body-free catalog", async () => {
     const store = new MemorySkillStore();
     await store.mkdir(".ixplorer/skills/note-synthesis");
@@ -138,6 +150,24 @@ describe("SkillRegistry", () => {
     expect(snapshot.warnings.map((warning) => warning.reason)).toEqual(
       expect.arrayContaining(["duplicate-name", "missing-description"]),
     );
+  });
+
+  it("refreshes cached metadata after a vault event marks the catalog dirty", async () => {
+    const store = new MemorySkillStore();
+    const path = ".ixplorer/skills/note-synthesis/SKILL.md";
+    await store.mkdir(".ixplorer/skills/note-synthesis");
+    await store.write(path, skillFile("Old Name", "Old description."));
+    const registry = new SkillRegistry({ store, defaults: [] });
+    await registry.refresh();
+
+    await store.write(path, skillFile("New Name", "New description."));
+    expect((await registry.getSnapshot()).skills[0].name).toBe("Old Name");
+    registry.markDirty();
+
+    expect((await registry.getSnapshot()).skills[0]).toMatchObject({
+      name: "New Name",
+      description: "New description.",
+    });
   });
 
   it("installs defaults once, preserves edits, and does not restore deleted defaults", async () => {

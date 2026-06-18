@@ -41,6 +41,9 @@ export function retrievalDiagnosticLines(diagnostics: ContextDiagnostics): strin
   if (diagnostics.retrieval.queryVariants.length > 0) {
     lines.push(`Query variants: ${diagnostics.retrieval.queryVariants.join("; ")}`);
   }
+  for (const path of diagnostics.retrieval.filteredSourcePaths) {
+    lines.push(`Filter: ${path} · source-path-filter`);
+  }
   for (const chunk of diagnostics.retrieval.rankedChunks?.slice(0, 10) ?? []) {
     lines.push(
       [`#${chunk.rank} ${chunk.path}`, chunk.id, chunk.score.toFixed(3), chunk.status, chunk.reason]
