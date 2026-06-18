@@ -180,7 +180,7 @@ export class NoteToolService {
       return jsonResult(false, { ok: false, reason: "invalid-skill", path });
     }
 
-    const snapshot = await this.skillRegistry.getSnapshot({ refresh: true });
+    const snapshot = await this.skillRegistry.getSnapshot();
     const skill = snapshot.skills.find((candidate) => candidate.path === path);
     if (!skill) {
       return jsonResult(false, { ok: false, reason: "invalid-skill", path });

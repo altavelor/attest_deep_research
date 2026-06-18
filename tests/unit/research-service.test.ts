@@ -328,6 +328,33 @@ describe("ResearchService", () => {
     });
   });
 
+  it("uses inline skill loading in web-only mode without exposing vault note tools", async () => {
+    const registry = await createSkillRegistry();
+    const chatModel = new FakeChatModel([
+      [
+        { content: '{"skill":"note-synthesis"}', isComplete: false },
+        { content: "", isComplete: true },
+      ],
+      [{ content: "Web-only skill answer.", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolsEnabled: true,
+      skillRegistry: registry,
+      now: fixedNow,
+    });
+
+    await collectAsync(
+      service.answer({ question: "Summarize these sources", searchMode: "webOnly" }),
+    );
+
+    expect(chatModel.requests).toHaveLength(2);
+    expect(chatModel.requests[1].tools).toBeUndefined();
+    expect(chatModel.requests[1].messages[0].content).toContain("SKILL BODY");
+  });
+
   it("lets compatible models read notes through the optional tool loop", async () => {
     const chatModel = new FakeChatModel([
       [
@@ -706,10 +733,11 @@ describe("ResearchService", () => {
       now: fixedNow,
     });
 
-    await collectAsync(
+    const events = await collectAsync(
       service.answer({
         question: "методы сортировки плюсы минусы",
         searchMode: "indexOnly",
+        includeContextDiagnostics: true,
       }),
     );
 
@@ -721,6 +749,16 @@ describe("ResearchService", () => {
       },
     ]);
     expect(chatModel.requests[0].messages[1].content).not.toContain(privateVaultText);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: {
+        contextDiagnostics: {
+          retrieval: {
+            queryVariants: ["sorting algorithms advantages disadvantages"],
+          },
+        },
+      },
+    });
   });
 
   it("skips local index retrieval when search mode is web only", async () => {

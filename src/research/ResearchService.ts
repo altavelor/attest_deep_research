@@ -96,7 +96,7 @@ export class ResearchService {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.chatOptions = chatOptions;
-    this.toolsEnabled = options.toolsEnabled === true;
+    this.toolsEnabled = options.toolsEnabled === true && options.noteTools !== undefined;
     this.skillRegistry = options.skillRegistry;
     this.getIndexStatus = options.getIndexStatus;
     const now = options.now ?? (() => new Date());
@@ -126,6 +126,8 @@ export class ResearchService {
 
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     let question = request.question.trim();
+    const searchMode = resolveSearchMode(request);
+    const skillToolsEnabled = this.toolsEnabled && searchMode !== "webOnly";
     let skillSnapshot: SkillCatalogSnapshot | undefined;
     let selectedSkill: SkillDefinition | undefined;
     let inlineSkill: LoadedSkill | undefined;
@@ -133,7 +135,7 @@ export class ResearchService {
     let selectorWarning: string | undefined;
 
     if (this.skillRegistry) {
-      skillSnapshot = await this.skillRegistry.getSnapshot({ refresh: true });
+      skillSnapshot = await this.skillRegistry.getSnapshot();
       const explicit = resolveExplicitSkill(question, skillSnapshot.skills);
       if (explicit.kind === "error") {
         throw new IxplorerError({
@@ -145,7 +147,7 @@ export class ResearchService {
       if (explicit.kind === "selected") {
         selectedSkill = explicit.skill;
         skillSelectionMode = "manual";
-      } else if (!this.toolsEnabled) {
+      } else if (!skillToolsEnabled) {
         yield { type: "status", message: "Selecting skill..." };
         const selection = await new SkillSelectionService({
           chatModel: this.chatModel,
@@ -158,7 +160,7 @@ export class ResearchService {
         }
       }
 
-      if (selectedSkill && !this.toolsEnabled) {
+      if (selectedSkill && !skillToolsEnabled) {
         const catalogTokens = estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot.skills));
         const maxSkillTokens = this.contextLimitTokens
           ? Math.max(0, this.contextLimitTokens - (this.reservedOutputTokens ?? 0) - catalogTokens)
@@ -180,12 +182,11 @@ export class ResearchService {
       }
     }
 
-    const searchMode = resolveSearchMode(request);
     const deepResearch = request.deepResearch === true;
     const skillReservedTokens = skillSnapshot
       ? estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot.skills)) +
         (inlineSkill?.estimatedTokens ??
-          (this.toolsEnabled ? (this.skillRegistry?.maxDiscoveredSkillTokens() ?? 0) : 0))
+          (skillToolsEnabled ? (this.skillRegistry?.maxDiscoveredSkillTokens() ?? 0) : 0))
       : 0;
     const totalReservedTokens = (this.reservedOutputTokens ?? 0) + skillReservedTokens;
     const assembled =
@@ -292,7 +293,7 @@ export class ResearchService {
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit: this.evidenceLimit,
-      toolsEnabled: this.toolsEnabled && searchMode !== "webOnly",
+      toolsEnabled: skillToolsEnabled,
       skillCatalog: skillSnapshot?.skills,
       selectedSkill,
       inlineSkill,
@@ -508,7 +509,10 @@ function buildRagDiagnosticSnapshot(diagnostics: ContextDiagnostics): string {
     queryVariants: diagnostics.retrieval.queryVariants,
     rankedChunks: diagnostics.retrieval.rankedChunks?.slice(0, 20) ?? [],
     droppedChunkIds: diagnostics.retrieval.droppedChunkIds,
-    filteredSourcePaths: diagnostics.retrieval.filteredSourcePaths,
+    filteredFiles: diagnostics.retrieval.filteredSourcePaths.map((path) => ({
+      path,
+      reason: "source-path-filter",
+    })),
     budget: diagnostics.budget,
     tools: diagnostics.tools,
     index: diagnostics.index ?? { status: "unknown", available: false },
