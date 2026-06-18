@@ -27,6 +27,7 @@ import { ContextAssembler } from "./research/ContextAssembler";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "./research/GraphContext";
 import { ObsidianContextFileProvider } from "./research/ObsidianContextFileProvider";
 import { ObsidianGraphContextProvider } from "./research/ObsidianGraphContextProvider";
+import { NoteToolService } from "./research/NoteTools";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
@@ -191,9 +192,13 @@ export default class IxplorerPlugin extends Plugin {
     const indexProfile = this.resolveIndexProfile(indexProfileId);
     const chatProfile = this.requireChatModelProfile(chatModelProfileId);
     const chatServer = this.requireServerProfile(chatProfile.serverProfileId);
+    const retriever = this.createRetrieverForProfile(indexProfile);
+    const contextFiles = new ObsidianContextFileProvider(this.app.vault);
+    const contextExtractors = this.createContextExtractorsForProfile(indexProfile);
+    const toolsEnabled = chatProfile.capabilities?.tools === true;
 
     return new ResearchService({
-      retriever: this.createRetrieverForProfile(indexProfile),
+      retriever,
       chatModel: this.createChatModelClient(chatServer),
       chatModelName: chatProfile.modelName,
       chatOptions: {
@@ -203,8 +208,8 @@ export default class IxplorerPlugin extends Plugin {
       contextLimitTokens: chatProfile.capabilities?.contextLength,
       queryExpansion: this.createQueryExpansionService(chatProfile, chatServer),
       contextAssembler: new ContextAssembler({
-        files: new ObsidianContextFileProvider(this.app.vault),
-        extractors: this.createContextExtractorsForProfile(indexProfile),
+        files: contextFiles,
+        extractors: contextExtractors,
         graph: new ObsidianGraphContextProvider(this.app.vault, this.app.metadataCache),
         retrieve: async () => [],
       }),
@@ -219,6 +224,15 @@ export default class IxplorerPlugin extends Plugin {
         useWebWhenFreshnessNeeded: this.settings.useWebWhenFreshnessNeeded,
       },
       searchProvider: this.createSearchProvider(),
+      toolsEnabled,
+      noteTools: toolsEnabled
+        ? new NoteToolService({
+            files: contextFiles,
+            extractors: contextExtractors,
+            retriever,
+            getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+          })
+        : undefined,
     });
   }
 

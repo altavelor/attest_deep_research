@@ -1,6 +1,7 @@
 import {
   apiFormatLabel,
   fetchAvailableModels,
+  fetchModelContextLength,
   verifyEmbeddingCapability,
 } from "../../src/settings/connectionTests";
 import { ServerProfile } from "../../src/settings/settings";
@@ -57,6 +58,19 @@ describe("model discovery", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:1234/v1/models", {
       method: "GET",
       signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("uses context metadata returned by an OpenAI-compatible models endpoint", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: [{ id: "qwen3", max_context_length: 32768 }] }));
+
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
+
+    expect(result.models[0]?.capabilities).toMatchObject({
+      contextLength: 32768,
+      detectionSource: "metadata",
     });
   });
 
@@ -134,5 +148,64 @@ describe("model discovery", () => {
       ),
     ).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fetches context metadata for a selected Ollama model", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ model_info: { "llama.context_length": 131072 } }));
+
+    await expect(
+      fetchModelContextLength(
+        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
+        "qwen3:latest",
+        { fetch: fetchMock },
+      ),
+    ).resolves.toBe(131072);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/show", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "qwen3:latest" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("fetches context metadata from an OpenAI-compatible model resource", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ context_window: 65536 }));
+
+    await expect(fetchModelContextLength(server({}), "qwen3", { fetch: fetchMock })).resolves.toBe(
+      65536,
+    );
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:1234/v1/models/qwen3", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("falls back to LM Studio native model metadata", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ max_context_length: 32768 }));
+
+    await expect(fetchModelContextLength(server({}), "qwen3", { fetch: fetchMock })).resolves.toBe(
+      32768,
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith("http://localhost:1234/api/v0/models/qwen3", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("returns no context metadata when an Ollama detail request fails", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(
+      fetchModelContextLength(
+        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
+        "qwen3:latest",
+        { fetch: fetchMock },
+      ),
+    ).resolves.toBeUndefined();
   });
 });

@@ -1,4 +1,7 @@
 import { ResearchService } from "../../src/research/ResearchService";
+import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
+import { NoteToolService } from "../../src/research/NoteTools";
+import { ContextFileProvider } from "../../src/research/ContextAssembler";
 import { QueryExpansionService } from "../../src/retrieval/QueryExpansionService";
 import { buildResearchPrompt, extractFollowUpQuestions } from "../../src/research/prompts";
 import {
@@ -12,6 +15,18 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+
+class MemoryContextFiles implements ContextFileProvider {
+  constructor(private readonly files: Record<string, string>) {}
+
+  async listPaths(): Promise<string[]> {
+    return Object.keys(this.files).sort();
+  }
+
+  async readFile(path: string): Promise<string> {
+    return this.files[path] ?? "";
+  }
+}
 
 describe("buildResearchPrompt", () => {
   it("includes retrieved evidence and citation ids within the evidence limit", () => {
@@ -65,6 +80,80 @@ describe("extractFollowUpQuestions", () => {
 });
 
 describe("ResearchService", () => {
+  it("lets compatible models read notes through the optional tool loop", async () => {
+    const chatModel = new FakeChatModel([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            {
+              id: "call-1",
+              name: "read_note",
+              arguments: { path: "Research/Tool.md" },
+            },
+          ],
+        },
+      ],
+      [
+        {
+          content: "Tool answer uses note context.",
+          isComplete: false,
+        },
+        { content: "", isComplete: true },
+      ],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolsEnabled: true,
+      noteTools: new NoteToolService({
+        files: new MemoryContextFiles({
+          "Research/Tool.md": "# Tool\n\nPrivate tool context.",
+        }),
+        extractors: [new MarkdownExtractor()],
+      }),
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "Read the tool note.",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      "status",
+      "status",
+      "delta",
+      "complete",
+    ]);
+    expect(chatModel.requests).toHaveLength(2);
+    expect(chatModel.requests[0].tools?.map((tool) => tool.function.name)).toContain("read_note");
+    expect(chatModel.requests[1].messages.at(-1)).toMatchObject({
+      role: "tool",
+      toolCallId: "call-1",
+    });
+    expect(chatModel.requests[1].messages.at(-1)?.content).toContain("Private tool context");
+    expect(events.at(-1)).toEqual({
+      type: "complete",
+      answer: expect.objectContaining({
+        answer: "Tool answer uses note context.",
+        contextDiagnostics: expect.objectContaining({
+          tools: [
+            expect.objectContaining({
+              id: "call-1",
+              name: "read_note",
+              status: "success",
+            }),
+          ],
+        }),
+      }),
+    });
+  });
+
   it("retrieves evidence, adds optional multi-result web evidence, reports status, and streams the answer", async () => {
     const retriever = new FakeRetriever({
       chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],

@@ -15,6 +15,7 @@ import {
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
 import { EvidencePlanner, EvidencePlannerOptions } from "./EvidencePlanner";
+import { NoteToolService } from "./NoteTools";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {
@@ -42,6 +43,8 @@ export interface ResearchServiceOptions {
   temperature?: number;
   now?: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
+  noteTools?: NoteToolService;
+  toolsEnabled?: boolean;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -59,6 +62,7 @@ export class ResearchService {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
+  private readonly toolsEnabled: boolean;
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -74,6 +78,7 @@ export class ResearchService {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.chatOptions = chatOptions;
+    this.toolsEnabled = options.toolsEnabled === true;
     const now = options.now ?? (() => new Date());
 
     this.vaultPipeline = new VaultResearchPipeline({
@@ -95,6 +100,7 @@ export class ResearchService {
       contextLimitTokens: options.contextLimitTokens,
       now,
       persistFinalAnswer: options.persistFinalAnswer,
+      noteTools: options.noteTools,
     });
   }
 
@@ -179,6 +185,7 @@ export class ResearchService {
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit: this.evidenceLimit,
+      toolsEnabled: this.toolsEnabled && searchMode !== "webOnly",
     });
   }
 
@@ -320,6 +327,7 @@ function createEmptyContextDiagnostics(contextMode: ContextMode): ContextDiagnos
       usedTokens: 0,
       groups: [],
     },
+    tools: [],
     warnings: [],
   };
 }
