@@ -8,6 +8,15 @@ export function normalizeVaultFolder(folder: string): string {
   return normalized === "." ? "" : normalized;
 }
 
+export function isInternalSkillPath(path: string): boolean {
+  const normalized = normalizeVaultPath(path);
+  return normalized === ".ixplorer/skills" || normalized.startsWith(".ixplorer/skills/");
+}
+
+export function isSupportedContextDocumentPath(path: string): boolean {
+  return !isInternalSkillPath(path) && /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
+}
+
 export function isPathIncluded(path: string, includeFolders: string[]): boolean {
   return includeFolders.some((folder) => {
     const normalizedFolder = normalizeVaultFolder(folder);

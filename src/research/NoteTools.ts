@@ -1,5 +1,5 @@
 import { stableId } from "../extractors/common";
-import { normalizeVaultPath } from "../shared/pathFilters";
+import { isInternalSkillPath, normalizeVaultPath } from "../shared/pathFilters";
 import {
   ChatToolCall,
   ChatToolDefinition,
@@ -10,6 +10,7 @@ import {
 import { ContextFileProvider } from "./ContextAssembler";
 import { estimateTextTokens } from "./prompts";
 import { ResearchRetriever } from "./types";
+import { SKILL_ROOT, SkillRegistry } from "../skills/SkillRegistry";
 
 export interface NoteToolServiceOptions {
   files: ContextFileProvider;
@@ -20,11 +21,14 @@ export interface NoteToolServiceOptions {
   searchResultLimit?: number;
   searchSnippetChars?: number;
   listLimit?: number;
+  skillRegistry?: SkillRegistry;
+  skillMaxTokens?: number;
 }
 
 export interface NoteToolExecution {
   ok: boolean;
   result: string;
+  diagnostic?: Record<string, unknown>;
 }
 
 type NoteToolName = "read_note" | "search_notes" | "list_notes" | "get_active_note";
@@ -117,6 +121,8 @@ export class NoteToolService {
   private readonly searchResultLimit: number;
   private readonly searchSnippetChars: number;
   private readonly listLimit: number;
+  private readonly skillRegistry?: SkillRegistry;
+  private readonly skillMaxTokens?: number;
 
   constructor(options: NoteToolServiceOptions) {
     this.files = options.files;
@@ -127,6 +133,8 @@ export class NoteToolService {
     this.searchResultLimit = options.searchResultLimit ?? DEFAULT_SEARCH_RESULT_LIMIT;
     this.searchSnippetChars = options.searchSnippetChars ?? DEFAULT_SEARCH_SNIPPET_CHARS;
     this.listLimit = options.listLimit ?? DEFAULT_LIST_LIMIT;
+    this.skillRegistry = options.skillRegistry;
+    this.skillMaxTokens = options.skillMaxTokens;
   }
 
   definitions(): ChatToolDefinition[] {
@@ -160,7 +168,58 @@ export class NoteToolService {
       return jsonResult(false, { ok: false, reason: "missing-path" });
     }
 
+    if (path.startsWith(`${SKILL_ROOT}/`)) {
+      return this.readSkill(path);
+    }
+
     return this.readSupportedPath(path, readPositiveNumber(args.maxChars) ?? this.readNoteMaxChars);
+  }
+
+  private async readSkill(path: string): Promise<NoteToolExecution> {
+    if (!this.skillRegistry) {
+      return jsonResult(false, { ok: false, reason: "invalid-skill", path });
+    }
+
+    const snapshot = await this.skillRegistry.getSnapshot({ refresh: true });
+    const skill = snapshot.skills.find((candidate) => candidate.path === path);
+    if (!skill) {
+      return jsonResult(false, { ok: false, reason: "invalid-skill", path });
+    }
+
+    try {
+      const loaded = await this.skillRegistry.load(skill, { maxTokens: this.skillMaxTokens });
+      const result = jsonResult(true, {
+        ok: true,
+        skill: true,
+        id: skill.id,
+        name: skill.name,
+        path,
+        content: loaded.content,
+        includedTokens: loaded.estimatedTokens,
+        characters: loaded.characters,
+        truncated: false,
+      });
+      return {
+        ...result,
+        diagnostic: {
+          skillId: skill.id,
+          skillName: skill.name,
+          skillPath: path,
+          loadedCharacters: loaded.characters,
+          loadedTokens: loaded.estimatedTokens,
+          truncated: false,
+        },
+      };
+    } catch (error) {
+      return jsonResult(false, {
+        ok: false,
+        path,
+        reason:
+          typeof error === "object" && error !== null && "code" in error
+            ? String(error.code)
+            : "skill-read-failed",
+      });
+    }
   }
 
   private async getActiveNote(): Promise<NoteToolExecution> {
@@ -209,7 +268,11 @@ export class NoteToolService {
           tokens: estimateTextTokens(chunk.text),
         })),
         includedTokens: estimateTextTokens(packed.content),
-        droppedTokens: Math.max(0, estimateTextTokens(chunks.map((chunk) => chunk.text).join("\n\n")) - estimateTextTokens(packed.content)),
+        droppedTokens: Math.max(
+          0,
+          estimateTextTokens(chunks.map((chunk) => chunk.text).join("\n\n")) -
+            estimateTextTokens(packed.content),
+        ),
         truncated: packed.truncated,
         maxChars,
       });
@@ -257,7 +320,9 @@ export class NoteToolService {
 
     try {
       const result = await this.retriever.search(query, { limit, includeWebResults: false });
-      return result.chunks.slice(0, limit);
+      return result.chunks
+        .filter((chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)))
+        .slice(0, limit);
     } catch {
       return [];
     }

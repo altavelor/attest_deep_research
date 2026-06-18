@@ -169,6 +169,7 @@ export interface ContextDiagnostics {
     includedChunkIds: string[];
     droppedChunkIds: string[];
     filteredSourcePaths: string[];
+    rankedChunks?: RetrievalChunkDiagnostic[];
   };
   budget: {
     limitTokens?: number;
@@ -177,8 +178,43 @@ export interface ContextDiagnostics {
     groups: ContextBudgetGroup[];
   };
   evidencePlanner?: EvidencePlannerDiagnostics;
+  index?: ContextIndexDiagnostics;
+  skills?: SkillContextDiagnostics;
   tools: ToolCallDiagnostic[];
   warnings: string[];
+}
+
+export interface RetrievalChunkDiagnostic {
+  id: string;
+  path: string;
+  rank: number;
+  score: number;
+  status: "included" | "dropped" | "filtered";
+  reason?: string;
+}
+
+export interface ContextIndexDiagnostics {
+  status: string;
+  available: boolean;
+  isStale?: boolean;
+  indexedFiles?: number;
+  errorMessage?: string;
+}
+
+export interface SkillContextDiagnostics {
+  discoveredCount: number;
+  warnings: Array<{ path: string; reason: string }>;
+  selectedId?: string;
+  selectedName?: string;
+  selectedPath?: string;
+  selectionMode: "automatic" | "manual" | "none";
+  loadMode: "read_note" | "inline" | "none";
+  loadStatus: "not-selected" | "selected" | "loaded" | "failed";
+  loadedCharacters?: number;
+  loadedTokens?: number;
+  loadError?: string;
+  truncated?: false;
+  selectorWarning?: string;
 }
 
 export interface ToolCallDiagnostic {
@@ -190,6 +226,7 @@ export interface ToolCallDiagnostic {
   resultBytes?: number;
   round: number;
   reason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Citation {

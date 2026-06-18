@@ -35,6 +35,7 @@ import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./
 import { ChatCitationRef, CitationPopoverController } from "./CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
+import { retrievalDiagnosticLines, skillDiagnosticLines } from "./diagnosticFormatting";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import {
@@ -490,6 +491,9 @@ export class IxplorerChatView extends ItemView {
         text: `${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`,
       });
     }
+    for (const line of skillDiagnosticLines(diagnostics)) {
+      list.createEl("li", { text: line });
+    }
     const toolDiagnostics = diagnostics.tools ?? [];
     if (toolDiagnostics.length > 0) {
       const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;
@@ -539,6 +543,18 @@ export class IxplorerChatView extends ItemView {
       const graphList = panel.createEl("ul", { cls: "ixplorer-chat__context-graph-list" });
       for (const item of diagnostics.graph.included.slice(0, 6)) {
         graphList.createEl("li", { text: graphDiagnosticLabel(item) });
+      }
+    }
+
+    const retrievalLines = retrievalDiagnosticLines(diagnostics);
+    if (retrievalLines.length > 0) {
+      const retrievalDetails = panel.createEl("details", {
+        cls: "ixplorer-chat__context-debug",
+      });
+      retrievalDetails.createEl("summary", { text: "Retrieval diagnostics" });
+      const retrievalList = retrievalDetails.createEl("ul");
+      for (const line of retrievalLines) {
+        retrievalList.createEl("li", { text: line });
       }
     }
 

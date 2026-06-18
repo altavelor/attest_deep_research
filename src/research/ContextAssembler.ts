@@ -17,6 +17,7 @@ import {
   GraphRoot,
 } from "./GraphContext";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "./prompts";
+import { isInternalSkillPath } from "../shared/pathFilters";
 
 export interface ContextFileProvider {
   listPaths(): Promise<string[]>;
@@ -146,7 +147,11 @@ export class ContextAssembler {
       explicitTokens += candidateTokens;
     }
 
-    const retrievalSourcePaths = this.retrievalSourcePaths(request, mentionPaths, graph.sourcePaths);
+    const retrievalSourcePaths = this.retrievalSourcePaths(
+      request,
+      mentionPaths,
+      graph.sourcePaths,
+    );
     const boostedSourcePaths =
       request.contextMode === "filter" ? [] : uniquePaths(graph.sourcePaths);
     const retrievalResult = await this.retrieve(request.question, {
@@ -230,14 +235,14 @@ export class ContextAssembler {
       add(path, "mention");
     }
 
-    if (request.includeActiveFile) {
-      add(request.activeFilePath, "active");
-    }
-
     if (request.contextMode === "include") {
       for (const path of request.contextPaths) {
         add(path, "attached");
       }
+    }
+
+    if (request.includeActiveFile) {
+      add(request.activeFilePath, "active");
     }
 
     return candidates;
@@ -319,6 +324,17 @@ export class ContextAssembler {
     request: ContextAssembleRequest,
     remainingTokens: number,
   ): Promise<{ chunks: RetrievedChunk[]; diagnostic: ContextDiagnosticSource }> {
+    if (isInternalSkillPath(candidate.path)) {
+      return {
+        chunks: [],
+        diagnostic: {
+          path: candidate.path,
+          role: candidate.role,
+          status: "unsupported",
+          reason: "internal-skill-path",
+        },
+      };
+    }
     const extractor = this.extractors.find((item) => item.supports(candidate.path));
 
     if (!extractor) {
@@ -367,7 +383,10 @@ export class ContextAssembler {
           status: selectedChunks.length > 0 ? "included" : "dropped",
           chunkCount: selectedChunks.length,
           includedTokens: estimateChunksTokens(selectedChunks),
-          droppedTokens: Math.max(0, estimateChunksTokens(chunks) - estimateChunksTokens(selectedChunks)),
+          droppedTokens: Math.max(
+            0,
+            estimateChunksTokens(chunks) - estimateChunksTokens(selectedChunks),
+          ),
           reason: selectedChunks.length > 0 ? undefined : "context-budget-exceeded",
         },
       };
@@ -428,13 +447,18 @@ function selectExplicitChunks(
   return packChunksByBudget(ranked, remainingTokens);
 }
 
-function isSingleSmallMarkdownFile(chunks: ExtractedChunk[], smallMarkdownCharLimit?: number): boolean {
+function isSingleSmallMarkdownFile(
+  chunks: ExtractedChunk[],
+  smallMarkdownCharLimit?: number,
+): boolean {
   if (!chunks.every((chunk) => chunk.source.kind === "markdown")) {
     return false;
   }
 
-  return chunks.reduce((total, chunk) => total + chunk.text.length, 0) <=
-    (smallMarkdownCharLimit ?? DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT);
+  return (
+    chunks.reduce((total, chunk) => total + chunk.text.length, 0) <=
+    (smallMarkdownCharLimit ?? DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT)
+  );
 }
 
 function combineMarkdownChunks(chunks: ExtractedChunk[]): RetrievedChunk {

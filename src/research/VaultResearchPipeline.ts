@@ -35,7 +35,7 @@ export class VaultResearchPipeline {
     });
 
     if (!boostedSourcePaths || boostedSourcePaths.length === 0) {
-      return primary;
+      return { ...primary, queryVariants };
     }
 
     yield { type: "status", message: "Searching linked notes..." };
@@ -46,7 +46,7 @@ export class VaultResearchPipeline {
       sourcePaths: boostedSourcePaths,
     });
 
-    return mergeRetrievalResults(primary, graph, this.evidenceLimit);
+    return { ...mergeRetrievalResults(primary, graph, this.evidenceLimit), queryVariants };
   }
 
   async expandAdjacentEvidence(

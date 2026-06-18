@@ -1,7 +1,8 @@
 import { Modal, TFile } from "obsidian";
+import { isSupportedContextDocumentPath } from "../shared/pathFilters";
 
 export function isContextDocumentPath(path: string): boolean {
-  return /\.(md|pdf|txt|docx|epub|fb2)$/i.test(path);
+  return isSupportedContextDocumentPath(path);
 }
 
 export class ContextDocumentPickerModal extends Modal {
