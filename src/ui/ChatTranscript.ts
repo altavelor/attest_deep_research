@@ -22,7 +22,7 @@ export interface ChatTranscriptOptions {
   onScrollCitationBlockIntoView(key: string): void;
   onOpenChunk(chunk: RetrievedChunk): void;
   onHighlightCitation(key: string, highlighted: boolean): void;
-  onOpenDiagnosticReport(anchorEl: HTMLElement, diagnostics: ContextDiagnostics): void;
+  onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
 }
 
 export function renderChatTranscript(
@@ -92,7 +92,7 @@ export function renderChatTranscript(
       setIcon(diagnosticButton, "bug");
       diagnosticButton.addEventListener("click", (event) => {
         event.stopPropagation();
-        options.onOpenDiagnosticReport(diagnosticButton, message.contextDiagnostics!);
+        options.onOpenDiagnosticReport(message.contextDiagnostics!);
       });
     }
     const contentEl = messageEl.createDiv({

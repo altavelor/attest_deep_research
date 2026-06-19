@@ -4,7 +4,7 @@
 
 Move context diagnostics out of the standalone panel above Follow-ups and make them available from the assistant response they describe.
 
-Each completed assistant response that has diagnostics receives a diagnostic icon immediately to the left of the existing copy button (visually, the new icon is directly adjacent to it). The icon is rendered only while Debug mode is enabled. Activating it opens a popup containing the complete diagnostic report and a copy-to-clipboard action. The popup closes from its top-right close button or any pointer click outside both the popup and its trigger.
+Each completed assistant response that has diagnostics receives a diagnostic icon immediately to the left of the existing copy button (visually, the new icon is directly adjacent to it). The icon is rendered only while Debug mode is enabled. Activating it opens an app-level Obsidian modal containing the complete diagnostic report and a copy-to-clipboard action. The modal closes from its top-right close button or any pointer click on the overlay, stays above the full application, supports width/height resizing, and always provides visible report scrollbars.
 
 Diagnostics are attached to the corresponding assistant message so multiple generated responses and saved chat history retain the correct report. This is an additive optional field and remains compatible with existing saved chats.
 
@@ -27,12 +27,12 @@ The existing “Regenerate with expanded context” action is not part of the di
 ## Project Structure
 
 - `src/ui/ChatTranscript.ts` — assistant response actions and diagnostic trigger
-- `src/ui/DiagnosticPopover.ts` — popup lifecycle, report rendering, and copy action
+- `src/ui/DiagnosticReportModal.ts` — app-level modal lifecycle, report rendering, and copy action
 - `src/ui/diagnosticFormatting.ts` — deterministic full-report text formatting
 - `src/ui/rendering.ts` — optional per-message diagnostics contract
 - `src/ui/ResearchQuestionController.ts` — attach completed diagnostics to the matching assistant message
-- `src/ui/IxplorerChatView.ts` — popup controller integration and removal of the old report panel
-- `styles.css` — trigger and popup presentation using Obsidian tokens
+- `src/ui/IxplorerChatView.ts` — modal controller integration and removal of the old report panel
+- `styles.css` — trigger and resizable modal presentation using Obsidian tokens
 - `tests/unit/` — regression tests for message attachment and report formatting
 
 ## Code Style
@@ -47,7 +47,7 @@ export interface ChatDisplayMessage {
 }
 ```
 
-UI actions use native `button` elements with `type`, `aria-label`, and `title`. Popup state is owned by a focused controller rather than global document state in the transcript renderer.
+UI actions use native `button` elements with `type`, `aria-label`, and `title`. Modal state is owned by a focused controller rather than global document state in the transcript renderer.
 
 ## Testing Strategy
 
@@ -55,7 +55,7 @@ UI actions use native `button` elements with `type`, `aria-label`, and `title`. 
 - Unit-test that report text includes the complete serialized diagnostics and is exactly what the copy action receives.
 - Preserve existing transcript/rendering and saved-chat tests.
 - Verify full tests and production build.
-- Manually verify in Obsidian: Debug on/off visibility, placement, open, copy, close button, outside click, and multiple responses.
+- Manually verify in Obsidian: Debug on/off visibility, app-level stacking, resize, persistent scrollbars, copy, close button, overlay click, and multiple responses.
 
 ## Boundaries
 
@@ -68,10 +68,11 @@ UI actions use native `button` elements with `type`, `aria-label`, and `title`. 
 1. No standalone diagnostic report is rendered above Follow-ups.
 2. Every completed assistant response with diagnostics has a diagnostic icon next to the copy icon when Debug mode is enabled.
 3. No diagnostic icon is rendered when Debug mode is disabled or a response has no diagnostics.
-4. The popup displays the complete report and includes a copy button that copies the entire report text.
-5. The popup closes via its top-right close button and on any pointer click outside the popup and trigger.
-6. Diagnostics remain associated with the correct response after saving and reopening a debug-mode chat; existing chats continue to load.
-7. Automated tests and production build pass.
+4. The modal displays the complete report and includes a copy button that copies the entire report text.
+5. The modal closes via its top-right close button and on any pointer click on its overlay.
+6. The modal is rendered above the full Obsidian application, can be resized in both dimensions, and exposes persistent vertical/horizontal scrollbars for overflowing reports.
+7. Diagnostics remain associated with the correct response after saving and reopening a debug-mode chat; existing chats continue to load.
+8. Automated tests and production build pass.
 
 ## Open Questions
 
@@ -82,7 +83,7 @@ None. “debut mode” is interpreted as Debug mode, and “любом книг�
 ## Architecture Decisions
 
 - Add optional `contextDiagnostics` to `ChatDisplayMessage`; this is backward-compatible and avoids using the single latest `lastAnswer` for every response.
-- Use a dedicated `DiagnosticPopoverController`, mirroring existing popover ownership patterns while implementing explicit outside-click and close-button behavior.
+- Use a dedicated `DiagnosticReportModalController` backed by Obsidian `Modal`, so stacking, overlay close, Escape, and application-level placement follow native behavior.
 - Generate one canonical report string and use it for both popup display and clipboard contents, preventing display/copy divergence.
 
 ## Task List
@@ -94,11 +95,11 @@ None. “debut mode” is interpreted as Debug mode, and “любом книг�
 - Files: `src/ui/rendering.ts`, `src/ui/ResearchQuestionController.ts`, related unit tests.
 - Dependencies: none.
 
-### Task 2: Diagnostic report popup and transcript action
+### Task 2: Diagnostic report modal and transcript action
 
 - Acceptance: debug-only assistant action opens the complete report; copy uses the canonical full text; close button and outside pointer close it.
 - Verify: formatting/controller tests pass and keyboard labels are present.
-- Files: `src/ui/DiagnosticPopover.ts`, `src/ui/ChatTranscript.ts`, `src/ui/diagnosticFormatting.ts`, related tests.
+- Files: `src/ui/DiagnosticReportModal.ts`, `src/ui/ChatTranscript.ts`, `src/ui/diagnosticFormatting.ts`, related tests.
 - Dependencies: Task 1.
 
 ### Task 3: View integration and old panel removal
@@ -117,5 +118,5 @@ None. “debut mode” is interpreted as Debug mode, and “любом книг�
 ## Risks and Mitigations
 
 - Old saved chats have diagnostics only in `lastAnswer`: keep loading compatible; only newly completed responses gain per-message reports.
-- Multiple popup/document listeners could leak: controller owns one listener and removes it on every close and view teardown.
-- Large JSON reports could overflow: constrain popup dimensions and make the report body scrollable.
+- Multiple modal instances could conflict: controller closes the previous modal before opening another and on view teardown.
+- Large JSON reports could overflow: constrain modal dimensions, keep the report body scrollable, and expose stable scrollbars.
