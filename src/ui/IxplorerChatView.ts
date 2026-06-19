@@ -33,7 +33,7 @@ import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./
 import { ChatCitationRef, CitationPopoverController } from "./CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
-import { DiagnosticPopoverController } from "./DiagnosticPopover";
+import { DiagnosticReportModalController } from "./DiagnosticReportModal";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import {
@@ -89,7 +89,7 @@ export interface IndexSearchOptions {
 export class IxplorerChatView extends ItemView {
   private readonly services: IxplorerChatViewServices;
   private readonly citationPopover: CitationPopoverController;
-  private readonly diagnosticPopover: DiagnosticPopoverController;
+  private readonly diagnosticModal: DiagnosticReportModalController;
   private readonly answerNoteWriter: AnswerNoteWriter;
   private readonly researchController: ResearchQuestionController;
   private messages: ChatDisplayMessage[] = [];
@@ -143,7 +143,7 @@ export class IxplorerChatView extends ItemView {
       onExpandCitation: (ref) => void this.expandCitationContext(ref),
       getExpansionStatus: (ref) => this.expansionStatus(ref.key),
     });
-    this.diagnosticPopover = new DiagnosticPopoverController({ hostEl: this.contentEl });
+    this.diagnosticModal = new DiagnosticReportModalController(this.app);
     this.answerNoteWriter = new AnswerNoteWriter(this.app);
     this.researchController = new ResearchQuestionController({
       getQuestionInput: () => this.textareaEl?.value ?? "",
@@ -229,13 +229,13 @@ export class IxplorerChatView extends ItemView {
     this.unsubscribeIndexing = null;
     document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
     this.citationPopover.close();
-    this.diagnosticPopover.close();
+    this.diagnosticModal.close();
     this.closeHistoryPopover();
     this.contentEl.empty();
   }
 
   private render(): void {
-    this.diagnosticPopover.close();
+    this.diagnosticModal.close();
     this.contentEl.empty();
     this.contentEl.addClass("ixplorer-chat-view");
 
@@ -429,8 +429,7 @@ export class IxplorerChatView extends ItemView {
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
-      onOpenDiagnosticReport: (anchorEl, diagnostics) =>
-        this.diagnosticPopover.open(anchorEl, diagnostics),
+      onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
     });
   }
 
