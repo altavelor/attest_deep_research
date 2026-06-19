@@ -4,7 +4,7 @@
 
 Move context diagnostics out of the standalone panel above Follow-ups and make them available from the assistant response they describe.
 
-Each completed assistant response that has diagnostics receives a diagnostic icon immediately to the left of the existing copy button (visually, the new icon is directly adjacent to it). The icon is rendered only while Debug mode is enabled. Activating it opens an app-level Obsidian modal containing the complete diagnostic report and a copy-to-clipboard action. The modal closes from its top-right close button or any pointer click on the overlay, stays above the full application, supports width/height resizing, and always provides visible report scrollbars.
+Each completed assistant response that has diagnostics receives a diagnostic icon immediately to the left of the existing copy button (visually, the new icon is directly adjacent to it). The icon is rendered only while Debug mode is enabled. Activating it opens an app-level Obsidian modal containing the complete diagnostic report and a copy-to-clipboard action. The modal closes from its top-right close button or any pointer click on the overlay, stays above the full application, supports width/height resizing, and shows report scrollbars only when content overflows.
 
 Diagnostics are attached to the corresponding assistant message so multiple generated responses and saved chat history retain the correct report. This is an additive optional field and remains compatible with existing saved chats.
 
@@ -55,7 +55,7 @@ UI actions use native `button` elements with `type`, `aria-label`, and `title`. 
 - Unit-test that report text includes the complete serialized diagnostics and is exactly what the copy action receives.
 - Preserve existing transcript/rendering and saved-chat tests.
 - Verify full tests and production build.
-- Manually verify in Obsidian: Debug on/off visibility, app-level stacking, resize, persistent scrollbars, copy, close button, overlay click, and multiple responses.
+- Manually verify in Obsidian: Debug on/off visibility, app-level stacking, resize, conditional scrollbars, copy, close button, overlay click, and multiple responses.
 
 ## Boundaries
 
@@ -70,7 +70,7 @@ UI actions use native `button` elements with `type`, `aria-label`, and `title`. 
 3. No diagnostic icon is rendered when Debug mode is disabled or a response has no diagnostics.
 4. The modal displays the complete report and includes a copy button that copies the entire report text.
 5. The modal closes via its top-right close button and on any pointer click on its overlay.
-6. The modal is rendered above the full Obsidian application, can be resized in both dimensions, and exposes persistent vertical/horizontal scrollbars for overflowing reports.
+6. The modal is rendered above the full Obsidian application, can be resized in both dimensions, and exposes vertical/horizontal scrollbars only when the report overflows.
 7. Diagnostics remain associated with the correct response after saving and reopening a debug-mode chat; existing chats continue to load.
 8. Automated tests and production build pass.
 

@@ -7,10 +7,10 @@ describe("diagnostic report modal styles", () => {
     expect(cssRule(".modal.ixplorer-chat__diagnostic-modal")).toContain("resize: both");
   });
 
-  it("keeps the complete report scrollable with stable visible scrollbars", () => {
+  it("shows report scrollbars only when the content overflows", () => {
     const reportRule = cssRule(".ixplorer-chat__diagnostic-modal-report");
 
-    expect(reportRule).toContain("overflow: scroll");
+    expect(reportRule).toContain("overflow: auto");
     expect(reportRule).toContain("scrollbar-gutter: stable");
     expect(styles).toContain(".ixplorer-chat__diagnostic-modal-report::-webkit-scrollbar");
   });

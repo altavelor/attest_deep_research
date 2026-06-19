@@ -939,7 +939,7 @@
   flex: 1 1 auto;
   margin: 0;
   padding: 0.75rem;
-  overflow: scroll;
+  overflow: auto;
   color: var(--text-normal);
   font-size: var(--font-ui-smaller);
   line-height: 1.45;
