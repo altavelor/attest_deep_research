@@ -164,7 +164,7 @@ export function attachAnswerDetailsToLastAssistantMessage(
       ...messages.slice(0, index),
       {
         ...messages[index],
-        evidence: answer.evidence,
+        evidence: answer.evidence ?? [],
         contextDiagnostics: answer.contextDiagnostics,
       },
       ...messages.slice(index + 1),

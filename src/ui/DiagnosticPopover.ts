@@ -22,6 +22,14 @@ export class DiagnosticPopoverController {
     }
     this.close();
   };
+  private readonly handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape" || !this.popoverEl) {
+      return;
+    }
+
+    event.preventDefault();
+    this.closeAndRestoreFocus();
+  };
 
   constructor(options: DiagnosticPopoverControllerOptions) {
     this.hostEl = options.hostEl;
@@ -65,8 +73,7 @@ export class DiagnosticPopoverController {
     setIcon(closeButton, "x");
     closeButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.close();
-      anchorEl.focus();
+      this.closeAndRestoreFocus();
     });
     popover.createEl("pre", {
       cls: "ixplorer-chat__diagnostic-popover-report",
@@ -76,13 +83,22 @@ export class DiagnosticPopoverController {
     this.popoverEl = popover;
     this.position(anchorEl, popover);
     document.addEventListener("pointerdown", this.handleOutsidePointer, true);
+    document.addEventListener("keydown", this.handleKeydown, true);
+    closeButton.focus();
   }
 
   close(): void {
     document.removeEventListener("pointerdown", this.handleOutsidePointer, true);
+    document.removeEventListener("keydown", this.handleKeydown, true);
     this.popoverEl?.remove();
     this.popoverEl = null;
     this.anchorEl = null;
+  }
+
+  private closeAndRestoreFocus(): void {
+    const anchorEl = this.anchorEl;
+    this.close();
+    anchorEl?.focus();
   }
 
   private position(anchorEl: HTMLElement, popoverEl: HTMLElement): void {
