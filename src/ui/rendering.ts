@@ -181,6 +181,17 @@ export function shouldShowDiagnosticAction(
   return isDebugMode && message.role === "assistant" && message.contextDiagnostics !== undefined;
 }
 
+export function stripMessageDiagnostics(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
+  return messages.map((message) => {
+    if (message.contextDiagnostics === undefined) {
+      return message;
+    }
+
+    const { contextDiagnostics: _contextDiagnostics, ...rest } = message;
+    return rest;
+  });
+}
+
 export function messageDisplayContent(message: ChatDisplayMessage): string {
   if (message.role === "user") {
     return message.content;

@@ -17,8 +17,6 @@ import { toUserMessage } from "../shared/errors";
 import { parsePositiveInteger } from "../shared/numbers";
 import {
   Citation,
-  ContextDiagnostics,
-  ContextGraphCandidateDiagnostic,
   ResearchAnswer,
   RetrievedChunk,
 } from "../shared/types";
@@ -35,7 +33,6 @@ import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./
 import { ChatCitationRef, CitationPopoverController } from "./CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
-import { retrievalDiagnosticLines, skillDiagnosticLines } from "./diagnosticFormatting";
 import { DiagnosticPopoverController } from "./DiagnosticPopover";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
@@ -45,7 +42,7 @@ import {
   renderIndexSearchResults,
 } from "./IndexSearchPanel";
 import { ResearchQuestionController } from "./ResearchQuestionController";
-import { ChatDisplayMessage, citationTarget } from "./rendering";
+import { ChatDisplayMessage, citationTarget, stripMessageDiagnostics } from "./rendering";
 import type { SkillMentionOption } from "./mentionAutocomplete";
 import {
   positionSavedChatsPopover,
@@ -114,7 +111,7 @@ export class IxplorerChatView extends ItemView {
 
   private transcriptEl: HTMLElement | null = null;
   private indexControlEl: HTMLElement | null = null;
-  private diagnosticsEl: HTMLElement | null = null;
+  private answerActionsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
@@ -179,7 +176,7 @@ export class IxplorerChatView extends ItemView {
       getContextMode: () => this.currentChatSettings.contextMode ?? "include",
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
-      shouldIncludeContextDiagnostics: () => true,
+      shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
       getExpandedEvidence: () => this.expandedCitationContexts.flatMap((context) => context.chunks),
       getExpandedCitationKeys: () =>
         this.expandedCitationContexts.map((context) => context.citationKey),
@@ -259,7 +256,9 @@ export class IxplorerChatView extends ItemView {
     });
 
     const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
-    this.diagnosticsEl = results.createDiv({ cls: "ixplorer-chat__context-diagnostics" });
+    this.answerActionsEl = results.createDiv({
+      cls: "ixplorer-chat__answer-actions is-hidden",
+    });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
 
     this.composerRefs = renderChatComposer(chatPanel, {
@@ -436,20 +435,25 @@ export class IxplorerChatView extends ItemView {
   }
 
   private renderAnswerDetails(): void {
-    this.renderContextDiagnostics(this.lastAnswer?.contextDiagnostics);
     this.renderExpandedCitationActions();
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
   }
 
   private renderExpandedCitationActions(): void {
-    if (!this.diagnosticsEl || this.expandedCitationContexts.length === 0) {
+    if (!this.answerActionsEl) {
+      return;
+    }
+
+    this.answerActionsEl.empty();
+    this.answerActionsEl.toggleClass("is-hidden", this.expandedCitationContexts.length === 0);
+    if (this.expandedCitationContexts.length === 0) {
       return;
     }
 
     const totalChunks = uniqueChunks(
       this.expandedCitationContexts.flatMap((context) => context.chunks),
     ).length;
-    const panel = this.diagnosticsEl.createDiv({ cls: "ixplorer-chat__expanded-context" });
+    const panel = this.answerActionsEl.createDiv({ cls: "ixplorer-chat__expanded-context" });
     panel.createSpan({
       text: `${this.expandedCitationContexts.length} expanded citation(s), ${totalChunks} added chunk(s)`,
     });
@@ -461,122 +465,6 @@ export class IxplorerChatView extends ItemView {
     regenerateButton.addEventListener("click", () => {
       void this.researchController.regenerateWithExpandedContext();
     });
-  }
-
-  private renderContextDiagnostics(diagnostics: ContextDiagnostics | undefined): void {
-    if (!this.diagnosticsEl) {
-      return;
-    }
-
-    this.diagnosticsEl.empty();
-    if (!diagnostics) {
-      return;
-    }
-
-    const includedExplicit = [
-      ...diagnostics.explicitSources,
-      ...diagnostics.mentionSources,
-      ...diagnostics.activeSources,
-    ].filter((source) => source.status === "included");
-    const dropped = [
-      ...diagnostics.explicitSources,
-      ...diagnostics.mentionSources,
-      ...diagnostics.activeSources,
-    ].filter((source) => source.status === "dropped");
-    const panel = this.diagnosticsEl.createDiv({ cls: "ixplorer-chat__context-summary" });
-    panel.createEl("h3", { text: "Context used" });
-    const list = panel.createEl("ul");
-    list.createEl("li", {
-      text: `Mode: ${diagnostics.contextMode === "include" ? "include attached files" : "filter retrieval"}`,
-    });
-    list.createEl("li", { text: `${includedExplicit.length} explicit source(s) included` });
-    if (shouldShowGraphDiagnostics(diagnostics)) {
-      list.createEl("li", {
-        text: `${diagnostics.graph.included.length} linked note(s) used`,
-      });
-      const skipped = diagnostics.graph.dropped.length + diagnostics.graph.unresolved.length;
-      if (skipped > 0) {
-        list.createEl("li", { text: `${skipped} linked note(s) skipped` });
-      }
-    }
-    list.createEl("li", {
-      text: `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
-    });
-    if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
-      list.createEl("li", {
-        text: `${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`,
-      });
-    }
-    for (const line of skillDiagnosticLines(diagnostics)) {
-      list.createEl("li", { text: line });
-    }
-    const toolDiagnostics = diagnostics.tools ?? [];
-    if (toolDiagnostics.length > 0) {
-      const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;
-      const skipped = toolDiagnostics.filter((tool) => tool.status === "skipped").length;
-      list.createEl("li", {
-        text: `${succeeded} tool call(s) completed${skipped > 0 ? `, ${skipped} skipped` : ""}`,
-      });
-    }
-    if (diagnostics.evidencePlanner) {
-      const planner = diagnostics.evidencePlanner;
-      const webGroup = planner.budget.groups.find((group) => group.name === "web");
-      const expandedCount = planner.expandedCitations.addedChunkIds.length;
-      list.createEl("li", {
-        text: `Planner policy: ${formatPlannerPolicy(planner.budget.policy)}`,
-      });
-      if (planner.webIntent.detected) {
-        const matchedTerms =
-          planner.webIntent.matchedTerms.length > 0
-            ? ` (${planner.webIntent.matchedTerms.join(", ")})`
-            : "";
-        list.createEl("li", {
-          text: `Web intent: ${planner.webIntent.reason}${matchedTerms}`,
-        });
-      }
-      if (webGroup) {
-        list.createEl("li", {
-          text: `${webGroup.includedItems ?? 0} web chunk(s) used, ${planner.dropped.webChunkIds.length} dropped`,
-        });
-      }
-      if (expandedCount > 0) {
-        list.createEl("li", {
-          text: `${expandedCount} expanded citation chunk(s) added`,
-        });
-      }
-    }
-    const droppedByLimits = countDroppedByLimits(diagnostics, dropped.length);
-    if (droppedByLimits > 0) {
-      list.createEl("li", {
-        text: `${droppedByLimits} item(s) dropped by limits`,
-      });
-    }
-    for (const warning of diagnostics.warnings) {
-      list.createEl("li", { text: `Warning: ${warning}` });
-    }
-
-    if (shouldShowGraphDiagnostics(diagnostics)) {
-      const graphList = panel.createEl("ul", { cls: "ixplorer-chat__context-graph-list" });
-      for (const item of diagnostics.graph.included.slice(0, 6)) {
-        graphList.createEl("li", { text: graphDiagnosticLabel(item) });
-      }
-    }
-
-    const retrievalLines = retrievalDiagnosticLines(diagnostics);
-    if (retrievalLines.length > 0) {
-      const retrievalDetails = panel.createEl("details", {
-        cls: "ixplorer-chat__context-debug",
-      });
-      retrievalDetails.createEl("summary", { text: "Retrieval diagnostics" });
-      const retrievalList = retrievalDetails.createEl("ul");
-      for (const line of retrievalLines) {
-        retrievalList.createEl("li", { text: line });
-      }
-    }
-
-    const details = panel.createEl("details", { cls: "ixplorer-chat__context-debug" });
-    details.createEl("summary", { text: "Debug details" });
-    details.createEl("pre", { text: JSON.stringify(diagnostics, null, 2) });
   }
 
   private renderEmptyChatState(containerEl: HTMLElement): void {
@@ -720,7 +608,9 @@ export class IxplorerChatView extends ItemView {
       id: this.currentChatId ?? undefined,
       createdAt: this.currentChatCreatedAt ?? undefined,
       title: inferChatTitle(this.messages),
-      messages: this.messages,
+      messages: this.services.isDebugMode()
+        ? this.messages
+        : stripMessageDiagnostics(this.messages),
       lastAnswer: this.services.isDebugMode()
         ? this.lastAnswer
         : stripContextDiagnostics(this.lastAnswer),
@@ -1166,64 +1056,6 @@ function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
   return unique;
 }
 
-function shouldShowGraphDiagnostics(diagnostics: ContextDiagnostics): boolean {
-  return (
-    diagnostics.graph.enabled &&
-    (diagnostics.graph.included.length > 0 ||
-      diagnostics.graph.dropped.length > 0 ||
-      diagnostics.graph.unresolved.length > 0)
-  );
-}
-
-function formatPlannerPolicy(
-  policy: NonNullable<ContextDiagnostics["evidencePlanner"]>["budget"]["policy"],
-): string {
-  switch (policy) {
-    case "local-first":
-      return "local first";
-    case "freshness":
-      return "freshness";
-    case "weak-local":
-      return "weak local fallback";
-    case "web-only":
-      return "web only";
-    case "index-only":
-      return "index only";
-  }
-}
-
-function countDroppedByLimits(diagnostics: ContextDiagnostics, explicitDropped: number): number {
-  const planner = diagnostics.evidencePlanner;
-
-  if (!planner) {
-    return explicitDropped + diagnostics.retrieval.droppedChunkIds.length;
-  }
-
-  return (
-    explicitDropped +
-    planner.dropped.explicitChunkIds.length +
-    planner.dropped.graphChunkIds.length +
-    planner.dropped.retrievalChunkIds.length +
-    planner.dropped.webChunkIds.length
-  );
-}
-
-function graphDiagnosticLabel(item: ContextGraphCandidateDiagnostic): string {
-  const edge = item.edges[0];
-
-  if (!edge) {
-    return item.path;
-  }
-
-  const relation =
-    edge.type === "embed"
-      ? `embedded in ${edge.from}`
-      : edge.type === "backlink"
-        ? `backlink from ${edge.from}`
-        : `linked from ${edge.from}`;
-
-  return `${item.path} - ${relation}`;
-}
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value) ?? fallback;
