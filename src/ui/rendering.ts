@@ -1,6 +1,6 @@
 import { IndexingState } from "../indexing/IndexingService";
 import { formatIndexSize } from "../indexing/indexSize";
-import { Citation, RetrievedChunk } from "../shared/types";
+import { Citation, ContextDiagnostics, RetrievedChunk } from "../shared/types";
 import { stripRenderedCitationIds } from "./citationText";
 
 export interface ConversationCompactionSummary {
@@ -18,6 +18,7 @@ export interface ChatDisplayMessage {
   compacted?: boolean;
   compactSummary?: ConversationCompactionSummary;
   evidence?: RetrievedChunk[];
+  contextDiagnostics?: ContextDiagnostics;
 }
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };
@@ -148,6 +149,29 @@ export function nextAssistantMessage(
   }
 
   return [...messages, { role: "assistant", content: delta, createdAt: new Date().toISOString() }];
+}
+
+export function attachAnswerDetailsToLastAssistantMessage(
+  messages: ChatDisplayMessage[],
+  answer: { evidence?: RetrievedChunk[]; contextDiagnostics?: ContextDiagnostics },
+): ChatDisplayMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role !== "assistant") {
+      continue;
+    }
+
+    return [
+      ...messages.slice(0, index),
+      {
+        ...messages[index],
+        evidence: answer.evidence,
+        contextDiagnostics: answer.contextDiagnostics,
+      },
+      ...messages.slice(index + 1),
+    ];
+  }
+
+  return messages;
 }
 
 export function messageDisplayContent(message: ChatDisplayMessage): string {

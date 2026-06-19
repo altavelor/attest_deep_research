@@ -1,4 +1,5 @@
 import {
+  attachAnswerDetailsToLastAssistantMessage,
   citationTarget,
   formatIndexControlSummary,
   formatIndexingStatus,
@@ -7,7 +8,7 @@ import {
   messageMarkdownContent,
   nextAssistantMessage,
 } from "../../src/ui/rendering";
-import { Citation, SourceReference } from "../../src/shared/types";
+import { Citation, ContextDiagnostics, SourceReference } from "../../src/shared/types";
 
 describe("chat rendering helpers", () => {
   it("formats indexing status for the chat pane toolbar", () => {
@@ -103,6 +104,26 @@ describe("chat rendering helpers", () => {
         createdAt: expect.any(String),
         evidence: undefined,
       },
+    ]);
+  });
+
+  it("attaches completed diagnostics to the corresponding last assistant message", () => {
+    const diagnostics = { contextMode: "include" } as ContextDiagnostics;
+    const messages = [
+      { role: "assistant" as const, content: "First", createdAt: "2026-05-16T10:00:00.000Z" },
+      { role: "user" as const, content: "Next", createdAt: "2026-05-16T10:01:00.000Z" },
+      { role: "assistant" as const, content: "Second", createdAt: "2026-05-16T10:02:00.000Z" },
+    ];
+
+    expect(
+      attachAnswerDetailsToLastAssistantMessage(messages, {
+        evidence: [],
+        contextDiagnostics: diagnostics,
+      }),
+    ).toEqual([
+      messages[0],
+      messages[1],
+      { ...messages[2], evidence: [], contextDiagnostics: diagnostics },
     ]);
   });
 

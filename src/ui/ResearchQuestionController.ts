@@ -13,7 +13,11 @@ import type { ResearchSearchMode } from "../research/ResearchService";
 import type { ContextMode } from "../shared/types";
 import { toUserMessage } from "../shared/errors";
 import { ResearchAnswer, RetrievedChunk } from "../shared/types";
-import { ChatDisplayMessage, nextAssistantMessage } from "./rendering";
+import {
+  attachAnswerDetailsToLastAssistantMessage,
+  ChatDisplayMessage,
+  nextAssistantMessage,
+} from "./rendering";
 
 export interface ResearchQuestionControllerOptions {
   getQuestionInput(): string;
@@ -245,7 +249,7 @@ export class ResearchQuestionController {
 
     this.options.setLastAnswer(event.answer);
     this.options.setMessages(
-      attachEvidenceToLastAssistantMessage(this.options.getMessages(), event.answer.evidence ?? []),
+      attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), event.answer),
     );
     this.options.renderAnswerDetails();
     this.options.renderMessages();
@@ -358,23 +362,4 @@ export class ResearchQuestionController {
       return false;
     }
   }
-}
-
-function attachEvidenceToLastAssistantMessage(
-  messages: ChatDisplayMessage[],
-  evidence: RetrievedChunk[],
-): ChatDisplayMessage[] {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role !== "assistant") {
-      continue;
-    }
-
-    return [
-      ...messages.slice(0, index),
-      { ...messages[index], evidence },
-      ...messages.slice(index + 1),
-    ];
-  }
-
-  return messages;
 }
