@@ -8,6 +8,7 @@ import {
   messageMarkdownContent,
   nextAssistantMessage,
   shouldShowDiagnosticAction,
+  stripMessageDiagnostics,
 } from "../../src/ui/rendering";
 import { Citation, ContextDiagnostics, SourceReference } from "../../src/shared/types";
 
@@ -142,6 +143,24 @@ describe("chat rendering helpers", () => {
       false,
     );
     expect(shouldShowDiagnosticAction({ ...assistantMessage, role: "user" }, true)).toBe(false);
+  });
+
+  it("removes per-message diagnostics before non-debug chat persistence", () => {
+    const diagnostics = { contextMode: "include" } as ContextDiagnostics;
+    const messages = [
+      {
+        role: "assistant" as const,
+        content: "Answer",
+        createdAt: "2026-05-16T10:00:00.000Z",
+        contextDiagnostics: diagnostics,
+      },
+      { role: "user" as const, content: "Next", createdAt: "2026-05-16T10:01:00.000Z" },
+    ];
+
+    expect(stripMessageDiagnostics(messages)).toEqual([
+      { role: "assistant", content: "Answer", createdAt: "2026-05-16T10:00:00.000Z" },
+      messages[1],
+    ]);
   });
 
   it("removes citation ids and follow-up sections from displayed assistant content", () => {

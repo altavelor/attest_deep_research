@@ -1012,45 +1012,6 @@
   gap: 0.75rem;
 }
 
-.ixplorer-chat__context-summary {
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  background: var(--background-secondary);
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-}
-
-.ixplorer-chat__context-summary h3 {
-  margin: 0 0 0.375rem;
-  color: var(--text-normal);
-  font-size: var(--font-ui-medium);
-}
-
-.ixplorer-chat__context-summary ul {
-  margin: 0;
-  padding-inline-start: 1.125rem;
-}
-
-.ixplorer-chat__context-graph-list {
-  margin-top: 0.5rem !important;
-  color: var(--text-faint);
-}
-
-.ixplorer-chat__context-debug {
-  margin-top: 0.5rem;
-}
-
-.ixplorer-chat__context-debug pre {
-  max-height: 18rem;
-  overflow: auto;
-  padding: 0.5rem;
-  border-radius: 6px;
-  background: var(--background-primary);
-  color: var(--text-muted);
-  font-size: var(--font-monospace-smaller);
-}
-
 .ixplorer-chat__expanded-context {
   display: flex;
   flex-wrap: wrap;
