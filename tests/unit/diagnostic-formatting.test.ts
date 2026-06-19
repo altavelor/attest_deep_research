@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { retrievalDiagnosticLines, skillDiagnosticLines } from "../../src/ui/diagnosticFormatting";
+import {
+  formatDiagnosticReport,
+  retrievalDiagnosticLines,
+  skillDiagnosticLines,
+} from "../../src/ui/diagnosticFormatting";
 import { ContextDiagnostics } from "../../src/shared/types";
 
 const diagnostics = {
@@ -53,5 +57,14 @@ describe("diagnostic formatting", () => {
       "#1 A.md · a · 0.900 · included",
       "#2 B.md · b · 0.200 · dropped · evidence-planner",
     ]);
+  });
+
+  it("formats one complete report for display and clipboard copy", () => {
+    const report = formatDiagnosticReport(diagnostics);
+
+    expect(report).toContain("Diagnostic report");
+    expect(report).toContain("Skill: RAG Debugger (manual, inline, loaded)");
+    expect(report).toContain("#2 B.md · b · 0.200 · dropped · evidence-planner");
+    expect(report).toContain(JSON.stringify(diagnostics, null, 2));
   });
 });

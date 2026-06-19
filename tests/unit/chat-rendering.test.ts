@@ -7,6 +7,7 @@ import {
   messageDisplayContent,
   messageMarkdownContent,
   nextAssistantMessage,
+  shouldShowDiagnosticAction,
 } from "../../src/ui/rendering";
 import { Citation, ContextDiagnostics, SourceReference } from "../../src/shared/types";
 
@@ -125,6 +126,22 @@ describe("chat rendering helpers", () => {
       messages[1],
       { ...messages[2], evidence: [], contextDiagnostics: diagnostics },
     ]);
+  });
+
+  it("shows the diagnostic action only for debug assistant messages with a report", () => {
+    const assistantMessage = {
+      role: "assistant" as const,
+      content: "Answer",
+      createdAt: "2026-05-16T10:00:00.000Z",
+      contextDiagnostics: { contextMode: "include" } as ContextDiagnostics,
+    };
+
+    expect(shouldShowDiagnosticAction(assistantMessage, true)).toBe(true);
+    expect(shouldShowDiagnosticAction(assistantMessage, false)).toBe(false);
+    expect(shouldShowDiagnosticAction({ ...assistantMessage, contextDiagnostics: undefined }, true)).toBe(
+      false,
+    );
+    expect(shouldShowDiagnosticAction({ ...assistantMessage, role: "user" }, true)).toBe(false);
   });
 
   it("removes citation ids and follow-up sections from displayed assistant content", () => {

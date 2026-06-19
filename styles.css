@@ -860,7 +860,8 @@
 }
 
 .ixplorer-chat__message-copy,
-.ixplorer-chat__message-edit {
+.ixplorer-chat__message-edit,
+.ixplorer-chat__message-diagnostic {
   position: absolute;
   top: 0.75rem;
   width: 2rem;
@@ -878,11 +879,71 @@
   right: 3rem;
 }
 
+.ixplorer-chat__message-diagnostic {
+  right: 0.75rem;
+}
+
+.ixplorer-chat__message--assistant:has(.ixplorer-chat__message-diagnostic)
+  .ixplorer-chat__message-copy {
+  right: 3rem;
+}
+
 .ixplorer-chat__message:focus-within .ixplorer-chat__message-copy,
 .ixplorer-chat__message:hover .ixplorer-chat__message-copy,
 .ixplorer-chat__message:focus-within .ixplorer-chat__message-edit,
-.ixplorer-chat__message:hover .ixplorer-chat__message-edit {
+.ixplorer-chat__message:hover .ixplorer-chat__message-edit,
+.ixplorer-chat__message:focus-within .ixplorer-chat__message-diagnostic,
+.ixplorer-chat__message:hover .ixplorer-chat__message-diagnostic {
   opacity: 1;
+}
+
+.ixplorer-chat__diagnostic-popover {
+  position: absolute;
+  z-index: 40;
+  display: grid;
+  width: min(42rem, calc(100% - 1rem));
+  max-height: min(40rem, calc(100% - 1rem));
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.ixplorer-chat__diagnostic-popover-header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ixplorer-chat__diagnostic-popover-header h3 {
+  margin: 0;
+  font-size: var(--font-ui-small);
+}
+
+.ixplorer-chat__diagnostic-popover-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.ixplorer-chat__diagnostic-popover-copy,
+.ixplorer-chat__diagnostic-popover-close {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.ixplorer-chat__diagnostic-popover-report {
+  margin: 0;
+  padding: 0.75rem;
+  overflow: auto;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .ixplorer-chat__message-editor {

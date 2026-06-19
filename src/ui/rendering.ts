@@ -174,6 +174,13 @@ export function attachAnswerDetailsToLastAssistantMessage(
   return messages;
 }
 
+export function shouldShowDiagnosticAction(
+  message: ChatDisplayMessage,
+  isDebugMode: boolean,
+): boolean {
+  return isDebugMode && message.role === "assistant" && message.contextDiagnostics !== undefined;
+}
+
 export function messageDisplayContent(message: ChatDisplayMessage): string {
   if (message.role === "user") {
     return message.content;
