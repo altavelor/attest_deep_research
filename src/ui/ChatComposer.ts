@@ -4,6 +4,11 @@ import { SavedChatSettings } from "../chat/ChatStore";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import type { ContextMode } from "../shared/types";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
+import {
+  getMentionCandidates,
+  MentionCandidate,
+  SkillMentionOption,
+} from "./mentionAutocomplete";
 
 export interface ChatModelSelectOption {
   id: string;
@@ -38,6 +43,7 @@ export interface ChatComposerOptions {
   settings: SavedChatSettings;
   availableModels: ChatModelSelectOption[];
   availableIndexes: IndexProfileSelectOption[];
+  availableSkills: SkillMentionOption[];
   contextFilePaths: string[];
   onSubmit(): void;
   onStop(): void;
@@ -284,7 +290,7 @@ function createMentionAutocomplete(
     cls: "ixplorer-chat__mention-autocomplete is-hidden",
     attr: { role: "listbox" },
   });
-  let candidates: string[] = [];
+  let candidates: MentionCandidate[] = [];
   let activeIndex = 0;
   let mentionStart = -1;
 
@@ -295,11 +301,11 @@ function createMentionAutocomplete(
     activeIndex = 0;
   };
 
-  const insert = (path: string): void => {
+  const insert = (candidate: MentionCandidate): void => {
     const cursor = textareaEl.selectionStart ?? textareaEl.value.length;
     const before = textareaEl.value.slice(0, mentionStart);
     const after = textareaEl.value.slice(cursor);
-    const inserted = `@${path}`;
+    const inserted = `@${candidate.insertText}`;
     textareaEl.value = `${before}${inserted} ${after}`;
     const nextCursor = before.length + inserted.length + 1;
     textareaEl.setSelectionRange(nextCursor, nextCursor);
@@ -316,10 +322,13 @@ function createMentionAutocomplete(
     }
 
     autocompleteEl.removeClass("is-hidden");
-    candidates.forEach((path, index) => {
+    candidates.forEach((candidate, index) => {
       const item = autocompleteEl.createEl("button", {
         cls: `ixplorer-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
-        text: path,
+        text:
+          candidate.detail === "Skill"
+            ? `@${candidate.insertText} — ${candidate.label}`
+            : candidate.label,
         attr: {
           type: "button",
           role: "option",
@@ -328,7 +337,7 @@ function createMentionAutocomplete(
       });
       item.addEventListener("mousedown", (event) => {
         event.preventDefault();
-        insert(path);
+        insert(candidate);
       });
     });
   };
@@ -351,9 +360,7 @@ function createMentionAutocomplete(
 
     mentionStart = atIndex;
     const query = token.toLowerCase();
-    candidates = options.contextFilePaths
-      .filter((path) => path.toLowerCase().includes(query))
-      .slice(0, 12);
+    candidates = getMentionCandidates(query, options.contextFilePaths, options.availableSkills);
     activeIndex = 0;
     render();
   };

@@ -143,6 +143,14 @@ export default class IxplorerPlugin extends Plugin {
               maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
             })),
+          getAvailableSkills: async () => {
+            try {
+              return (await this.skillRegistry?.getSnapshot())?.skills ?? [];
+            } catch (error) {
+              this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "list" });
+              return [];
+            }
+          },
           getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
