@@ -1,10 +1,10 @@
 import { App, Component, MarkdownRenderer, setIcon } from "obsidian";
 
-import { RetrievedChunk } from "../shared/types";
+import { ContextDiagnostics, RetrievedChunk } from "../shared/types";
 import { copyToClipboard } from "./clipboard";
 import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./CitationPopover";
 import { stripRenderedCitationIds } from "./citationText";
-import { ChatDisplayMessage } from "./rendering";
+import { ChatDisplayMessage, shouldShowDiagnosticAction } from "./rendering";
 import { messageDisplayContent, messageMarkdownContent } from "./rendering";
 
 export interface ChatTranscriptOptions {
@@ -13,6 +13,7 @@ export interface ChatTranscriptOptions {
   messages: ChatDisplayMessage[];
   editingMessageIndex: number | null;
   assistantLabel: string;
+  isDebugMode: boolean;
   renderEmptyState(containerEl: HTMLElement): void;
   onEditQuestion(index: number): void;
   onSubmitEditedQuestion(index: number, value: string): void;
@@ -21,6 +22,7 @@ export interface ChatTranscriptOptions {
   onScrollCitationBlockIntoView(key: string): void;
   onOpenChunk(chunk: RetrievedChunk): void;
   onHighlightCitation(key: string, highlighted: boolean): void;
+  onOpenDiagnosticReport(anchorEl: HTMLElement, diagnostics: ContextDiagnostics): void;
 }
 
 export function renderChatTranscript(
@@ -78,6 +80,21 @@ export function renderChatTranscript(
       event.stopPropagation();
       void copyToClipboard(messageDisplayContent(message));
     });
+    if (shouldShowDiagnosticAction(message, options.isDebugMode)) {
+      const diagnosticButton = header.createEl("button", {
+        cls: "ixplorer-chat__message-diagnostic",
+        attr: {
+          type: "button",
+          "aria-label": "Open diagnostic report",
+          title: "Open diagnostic report",
+        },
+      });
+      setIcon(diagnosticButton, "bug");
+      diagnosticButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        options.onOpenDiagnosticReport(diagnosticButton, message.contextDiagnostics!);
+      });
+    }
     const contentEl = messageEl.createDiv({
       cls: `ixplorer-chat__message-content ixplorer-chat__message-content--${message.role}`,
     });

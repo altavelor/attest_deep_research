@@ -53,3 +53,52 @@ export function retrievalDiagnosticLines(diagnostics: ContextDiagnostics): strin
   }
   return lines;
 }
+
+export function formatDiagnosticReport(diagnostics: ContextDiagnostics): string {
+  const summaryLines = diagnosticSummaryLines(diagnostics);
+  const retrievalLines = retrievalDiagnosticLines(diagnostics);
+  const sections = ["Diagnostic report", "", "Context used", ...summaryLines];
+
+  if (retrievalLines.length > 0) {
+    sections.push("", "Retrieval diagnostics", ...retrievalLines);
+  }
+
+  sections.push("", "Debug details", JSON.stringify(diagnostics, null, 2));
+  return sections.join("\n");
+}
+
+function diagnosticSummaryLines(diagnostics: ContextDiagnostics): string[] {
+  const explicitSources = [
+    ...(diagnostics.explicitSources ?? []),
+    ...(diagnostics.mentionSources ?? []),
+    ...(diagnostics.activeSources ?? []),
+  ];
+  const includedExplicit = explicitSources.filter((source) => source.status === "included").length;
+  const lines = [
+    `Mode: ${diagnostics.contextMode === "filter" ? "filter retrieval" : "include attached files"}`,
+    `${includedExplicit} explicit source(s) included`,
+    `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
+  ];
+
+  if (diagnostics.graph?.included.length > 0) {
+    lines.push(`${diagnostics.graph.included.length} linked note(s) used`);
+  }
+  if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
+    lines.push(`${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`);
+  }
+  lines.push(...skillDiagnosticLines(diagnostics));
+
+  const toolDiagnostics = diagnostics.tools ?? [];
+  if (toolDiagnostics.length > 0) {
+    const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;
+    const skipped = toolDiagnostics.filter((tool) => tool.status === "skipped").length;
+    lines.push(
+      `${succeeded} tool call(s) completed${skipped > 0 ? `, ${skipped} skipped` : ""}`,
+    );
+  }
+  for (const warning of diagnostics.warnings ?? []) {
+    lines.push(`Warning: ${warning}`);
+  }
+
+  return lines;
+}
