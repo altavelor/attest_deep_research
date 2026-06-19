@@ -119,7 +119,6 @@ describe("chat rendering helpers", () => {
 
     expect(
       attachAnswerDetailsToLastAssistantMessage(messages, {
-        evidence: [],
         contextDiagnostics: diagnostics,
       }),
     ).toEqual([
