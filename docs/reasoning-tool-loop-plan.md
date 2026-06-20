@@ -373,49 +373,494 @@ The implementation uses these resolutions for details that were not explicit eno
 
 ## Iteration 3: Policy-controlled agentic loop
 
-### Task 14: Add tool-choice mappings and capability validation
+### Iteration 3 provider constraints
 
-Implement provider-neutral choice mapping for providers that can prove required/specific behavior. Unsupported mappings fail closed.
+The implementation must follow these documented provider semantics:
 
-### Task 15: Implement bootstrap policy and repair state machine
+- OpenAI Chat Completions supports `auto`, `none`, `required`, a forced function object, and `parallel_tool_calls`. Forced-function wire shape is `{ "type": "function", "function": { "name": "..." } }`. Source: https://platform.openai.com/docs/api-reference/chat/create-chat-completion
+- OpenAI recommends strict schemas; iteration-2 schemas already use `additionalProperties: false`, but optional properties prevent blindly adding `strict: true` until schemas are normalized. Source: https://developers.openai.com/api/docs/guides/function-calling
+- Anthropic maps neutral choices to `auto`, `none`, `any`, and `{ type: "tool", name }`. Forced `any/tool` choices are incompatible with extended thinking, so iteration 3 may use them only while reasoning is disabled. Source: https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools
+- Ollama documents tool calling and tool-result loops but does not document `tool_choice`; required/specific choice must be treated as unsupported in iteration 3. Source: https://docs.ollama.com/capabilities/tool-calling
 
-Compute mandatory tools from search mode and active-file setting, validate first-round calls, allow one repair round, and enforce budgets and duplicate caching.
+### Iteration 3 decisions
 
-### Task 16: Add clean deterministic fallback
+1. **Strategy precedence.** `forceEagerResearch: true` always selects `eager-forced`. `deepResearch: true` remains on the existing eager path. Otherwise agentic execution requires tools plus every choice capability needed by the request policy; ineligible profiles select `deterministic-fallback` before making an agentic request.
+2. **Conservative migration.** Existing `capabilities.tools` migrates to `toolCalling.calls`; `choiceRequired`, `choiceSpecific`, and `parallelCalls` default to `false`. No existing OpenAI-compatible profile is optimistically upgraded.
+3. **Capability provenance.** Persist effective tool-control flags with per-group source `format-default | probe | manual`. A manual override wins over probe, and probe wins over format default. Unsupported mappings fail before network execution.
+4. **Provider defaults.** Ollama required/specific are false. Anthropic and OpenAI-compatible wire mappings exist, but a profile becomes agentic only after verified probe or explicit manual enablement. This avoids assuming every compatible server/model implements the documented upstream API.
+5. **Bootstrap choice.** With one mandatory tool, the first request uses `specific`. With multiple mandatory tools, it uses `required` and requests parallel calls when supported. With no mandatory tools, it uses `auto`.
+6. **One repair round.** After the bootstrap response, exactly one missing or retryable-failed mandatory tool may be forced with `specific`. More than one unresolved mandatory tool, an unavailable specific choice, or a failed repair triggers clean fallback.
+7. **Satisfaction semantics.** Successful empty `search_index`/`search_web` results satisfy policy. `get_active_note` returning `no-active-note` satisfies policy with a warning. A tool call request alone never satisfies policy; execution must complete with an accepted result.
+8. **Buffered text.** Text from bootstrap, repair, or any round containing tool calls is buffered and discarded. Only a terminal round produced after policy satisfaction may emit user-visible deltas.
+9. **Agentic context.** Explicitly attached files remain eager context. Active-file content, index retrieval, web retrieval, and graph expansion are absent from the initial agentic prompt. Index description remains system retrieval-scope metadata in index-backed modes.
+10. **Tool availability.** Registry definitions are computed once per answer from search mode and available dependencies. `search_index` is absent outside index modes; web tools are absent outside web modes; `get_active_note` is available when active access exists; skill loading is available in every mode.
+11. **Evidence ownership.** Agentic success combines explicit attached evidence with the answer-scoped registry snapshot. Citations are built only from those sources. Unknown citation IDs in model text produce diagnostics and never create citation objects.
+12. **Clean fallback.** Agentic failure emits no text delta and discards its registry. The eager pipeline restarts from the original request. Final diagnostics use `deterministic-fallback` and retain a bounded agentic-attempt summary without copying tool content.
+13. **Legacy loop isolation.** The current note/skill `ToolLoopRunner` remains the eager compatibility path. Agentic execution gets a separate state-machine runner; do not expand the legacy runner into two incompatible responsibilities.
+14. **Budgets.** Five model rounds, one repair round, five calls per round, ten calls total, 50,000 cumulative serialized result characters, one retry per retryable mandatory call, and duplicate-call result caching by normalized tool name+arguments.
 
-Restart from a clean eager state on unsupported capabilities, malformed calls, mandatory failures, or exhausted limits. Record fallback and duplicated-cost diagnostics.
+### Iteration 3 clarification review and recommendations
 
-### Task 17: Activate automatic agentic selection when eager is not forced
+The following implementation details were still ambiguous after comparing the plan with the current code and provider documentation. Iteration 3 uses these resolutions:
 
-Keep the existing setting editable. When it is `false`, select agentic execution if capabilities suffice and deterministic eager fallback otherwise. When it is `true`, bypass capability-based selection and use eager execution for every model.
+1. **Per-capability provenance.** Required-choice, specific-choice, and parallel-call values are resolved independently. Each effective flag records its own `format-default | probe | manual` source; manual values override probe results, and probe results override conservative format defaults.
+2. **Parallel bootstrap eligibility.** Policies with two or more mandatory tools require verified or manually enabled parallel-call support. Without it the bounded bootstrap/repair contract cannot guarantee all mandatory independent calls, so the request selects deterministic fallback before an agentic network call.
+3. **Probe isolation.** Capability probing is an explicit action on a saved chat profile. It uses only synthetic tool definitions and a synthetic prompt, never vault, index, web, note, attachment, history, or skill content. Probe updates detected values only and does not overwrite manual values.
+4. **Cooperative cancellation.** User cancellation is propagated with `AbortSignal` through research, model, HTTP, and tool boundaries. The existing UI-only loop break is insufficient because it leaves requests running.
+5. **No-source eligibility.** A policy with no mandatory source still requires verified tool-calling support because the agentic path may expose skill/note tools. Profiles without verified calls use deterministic fallback.
+6. **Cancellation terminal behavior.** Explicit user cancellation terminates the answer without starting eager fallback. Other terminal agentic failures restart the clean eager path. This prevents a stop action from triggering a second model request.
 
-### Checkpoint: Agentic loop
+### Task 14: Persist tool-control capabilities and manual overrides
 
-- [ ] Mandatory-source matrix passes for every search mode and active-file combination.
-- [ ] Missing calls are repaired once or trigger fallback.
-- [ ] Final citations refer only to registered tool evidence.
-- [ ] Re-enabling forced eager immediately restores the original pipeline.
+**Description:** Extend chat model capability persistence and settings UI with required, specific, and parallel tool-control flags plus provenance. Preserve the existing Tools toggle as the top-level `calls` switch and migrate all new flags conservatively to false.
+
+**Acceptance criteria:**
+
+- [ ] Existing profiles retain their current `tools` behavior while new required/specific/parallel flags default to false.
+- [ ] Settings explain that required and specific choice are necessary for agentic research; users can explicitly override detected values.
+- [ ] Effective capability resolution is deterministic and records `format-default`, `probe`, or `manual` provenance.
+
+**Verification:**
+
+- [ ] Targeted settings migration, profile modal, and capability-resolution tests pass.
+- [ ] `npm run lint`
+
+**Dependencies:** Iteration 2 checkpoint.
+
+**Files likely touched:** `src/settings/settings.ts`, `src/settings/SettingsTab.ts`, `src/settings/toolCapabilities.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 15: Add explicit tool-control capability probes
+
+**Description:** Add an opt-in profile action that probes harmless synthetic tools for required and specific choice. Probe results update detected capability state but never override explicit manual settings. Parallel calls remain manual/format-derived because model output cannot reliably prove them.
+
+**Acceptance criteria:**
+
+- [ ] Required probe succeeds only when the provider accepts the mapped request and returns at least one valid synthetic tool call.
+- [ ] Specific probe succeeds only when the requested synthetic tool name is returned; ordinary text or another tool fails the probe.
+- [ ] Probe errors, malformed arguments, refusal, timeout, and unsupported provider mapping fail closed without changing manual overrides.
+
+**Verification:**
+
+- [ ] Targeted probe tests cover OpenAI-compatible and Anthropic request/response fixtures plus Ollama unsupported behavior.
+- [ ] No probe invokes vault, index, web, or note tools.
+
+**Dependencies:** Task 14.
+
+**Files likely touched:** `src/settings/toolCapabilityProbe.ts`, `src/settings/SettingsTab.ts`, `src/client/chat/ChatModelClient.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 16: Map neutral `toolChoice` into provider payloads
+
+**Description:** Activate additive `toolChoice` and `parallelToolCalls` request fields and map them in each provider adapter. Validate a specific tool name against definitions before sending. Do not add reasoning continuation in this iteration.
+
+**Acceptance criteria:**
+
+- [ ] OpenAI-compatible emits documented Chat Completions shapes for auto/none/required/specific and `parallel_tool_calls` only when supplied.
+- [ ] Anthropic emits auto/none/any/tool shapes and rejects forced choices when effective reasoning is enabled.
+- [ ] Ollama accepts only auto/none behavior needed by legacy calls; required/specific mapping returns a local unsupported-capability error before HTTP.
+
+**Verification:**
+
+- [ ] Provider payload contract tests cover every neutral choice and prove unsupported values are not silently dropped.
+- [ ] Existing requests with no `toolChoice` remain byte-shape compatible apart from intentional JSON property ordering.
+
+**Dependencies:** Tasks 14 and 15.
+
+**Files likely touched:** `src/shared/types.ts`, `src/client/chat/ChatModelClient.ts`, `tests/unit/chat-model-client.test.ts`, provider contract tests.
+
+**Estimated scope:** Medium.
+
+### Checkpoint: Provider control
+
+- [ ] Profile capabilities are conservative, explainable, and user-overridable.
+- [ ] Required/specific probes cannot touch user data.
+- [ ] Every supported neutral choice has exact request-fixture coverage.
+- [ ] Ollama and unverified compatible servers fail closed to eager fallback.
+
+### Task 17: Implement strategy eligibility and mandatory-source policy
+
+**Description:** Replace the iteration-1 binary selector with a pure strategy/policy resolver. Inputs include forced eager, deep research, search mode, active-file inclusion, dependency availability, effective tool capabilities, and selected model/provider.
+
+**Acceptance criteria:**
+
+- [ ] It computes exact mandatory tool names for every search-mode/active-file combination.
+- [ ] Forced eager wins unconditionally; deep research remains eager; missing tools or choice capabilities resolve to bounded `deterministic-fallback` reasons.
+- [ ] One mandatory tool requires specific choice; multiple require required choice; no mandatory tools allow auto.
+
+**Verification:**
+
+- [ ] Table-driven tests cover every mode, active-file flag, capability combination, and missing dependency.
+- [ ] Resolver performs no I/O and returns immutable policy data.
+
+**Dependencies:** Task 16.
+
+**Files likely touched:** `src/research/ResearchExecutionPolicy.ts`, `src/shared/types.ts`, `tests/unit/research-execution-policy.test.ts`.
+
+**Estimated scope:** Medium.
+
+### Task 18: Build the agentic prompt and explicit-context preparation
+
+**Description:** Add a separate agentic prompt path. Assemble explicitly attached/mentioned context within budget, but omit active-file content, eager index/web retrieval, graph expansion, and “no evidence found” wording. Include index description and mandatory-tool policy as trusted system instructions.
+
+**Acceptance criteria:**
+
+- [ ] Initial agentic messages contain question/history, bounded explicit context, skill catalog, index description when applicable, and exact mandatory source names.
+- [ ] Active-note text and eager index/web/graph evidence are absent before tool execution.
+- [ ] Explicit evidence retains citation IDs and prompt-injection delimiters; agentic token estimation includes tools, policy, skill catalog, and index description.
+
+**Verification:**
+
+- [ ] Prompt snapshot tests cover all modes, active-file flag, attachments, skills, and malicious delimited content.
+- [ ] Existing eager prompt snapshots remain unchanged.
+
+**Dependencies:** Task 17.
+
+**Files likely touched:** `src/research/agenticPrompts.ts`, `src/research/ContextAssembler.ts`, `src/research/prompts.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 19: Implement the agentic state-machine runner
+
+**Description:** Create a new runner with bootstrap, repair, research, complete, and fallback phases. It owns the answer-scoped tool/evidence registry, buffers non-terminal text, executes bounded tool calls, caches duplicates, and validates mandatory execution outcomes.
+
+**Acceptance criteria:**
+
+- [ ] Bootstrap uses policy-selected choice; unresolved policy follows the one-repair rule exactly.
+- [ ] Only a policy-satisfied terminal round can return final text; intermediate text is never emitted or appended to the final answer.
+- [ ] Round/call/result budgets, cancellation, duplicate caching, retryable failure, malformed calls, and model stop reasons produce deterministic terminal outcomes.
+
+**Verification:**
+
+- [ ] State-transition tests cover success, parallel calls, empty results, no-active-note, one repair, multiple missing calls, retries, duplicates, limits, cancellation, and premature text.
+- [ ] The existing eager `ToolLoopRunner` tests remain unchanged.
+
+**Dependencies:** Tasks 17 and 18.
+
+**Files likely touched:** `src/research/AgenticResearchRunner.ts`, `src/research/ResearchExecutionPolicy.ts`, `src/research/tools/ResearchToolRegistry.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Checkpoint: Agentic state machine
+
+- [ ] Source policy cannot be satisfied by prompt compliance or an unexecuted call.
+- [ ] No partial agentic answer text reaches the transcript.
+- [ ] Exactly one repair round is enforced.
+- [ ] Budgets and fallback reasons are machine-readable.
+
+### Task 20: Finalize agentic evidence, citations, skills, and diagnostics
+
+**Description:** Convert explicit evidence plus the registry snapshot into a `ResearchAnswer`. Preserve the one-skill contract, audit model citation IDs against registered evidence, and add bounded agentic diagnostics without persisting private tool content.
+
+**Acceptance criteria:**
+
+- [ ] Evidence/citations are deduplicated, deterministic, and contain no unregistered model-supplied source.
+- [ ] Explicit or automatic skill selection still permits at most one successfully loaded skill in every search mode.
+- [ ] Diagnostics record policy, phases, tool outcomes, repairs, budgets, unknown citation IDs, and capability provenance without full page/note contents.
+
+**Verification:**
+
+- [ ] Tests cover citation hallucination, repeated evidence, skill success/failure/multiple-skill rejection, and diagnostic redaction.
+- [ ] Chat persistence and answer-note formatting remain backward compatible.
+
+**Dependencies:** Task 19.
+
+**Files likely touched:** `src/research/AgenticAnswerFinalizer.ts`, `src/shared/types.ts`, `src/research/AnswerSynthesisService.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 21: Add clean eager fallback orchestration
+
+**Description:** Add an answer-level coordinator that selects eager or agentic before retrieval. On agentic terminal failure, discard its registry and buffered text, then restart the existing eager pipeline from the original request while retaining only a bounded attempt summary.
+
+**Acceptance criteria:**
+
+- [ ] Capability-ineligible requests enter eager without an agentic network call; attempted agentic failures restart from clean request state.
+- [ ] Partial agentic evidence, citations, messages, and text never enter fallback synthesis.
+- [ ] Final strategy is `eager-forced`, `eager-default`, `agentic`, or `deterministic-fallback` with a stable reason and duplicated-cost indicator.
+
+**Verification:**
+
+- [ ] Tests prove clean fallback after malformed calls, missing mandatory calls, tool failure, context limit, cancellation boundary, and provider error.
+- [ ] Eager-only regression fixtures remain unchanged when forced eager is enabled.
+
+**Dependencies:** Tasks 19 and 20.
+
+**Files likely touched:** `src/research/ResearchAnswerCoordinator.ts`, `src/research/ResearchService.ts`, `src/research/AnswerSynthesisService.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 22: Activate agentic routing and complete end-to-end verification
+
+**Description:** Wire the iteration-2 registry factory into the coordinator. When eager is not forced and policy/capabilities are eligible, execute agentic research; otherwise preserve the current eager behavior. Add status/diagnostic presentation without exposing intermediate text.
+
+**Acceptance criteria:**
+
+- [ ] Eligible profiles use agentic execution in all supported search modes; toggling forced eager immediately bypasses it.
+- [ ] Index/web/active mandatory matrix is enforced end-to-end and index description reaches the first index-backed agentic request.
+- [ ] Provider payloads, chat UI, cancellation, persisted answers, citations, and fallback diagnostics behave consistently.
+
+**Verification:**
+
+- [ ] End-to-end fake-provider fixtures cover OpenAI-compatible and Anthropic agentic success/fallback; Ollama remains eager fallback.
+- [ ] `npm test`, `npm run lint`, `npm run build`, and `npm run format` pass.
+
+**Dependencies:** Task 21.
+
+**Files likely touched:** `src/main.ts`, `src/research/ResearchService.ts`, `src/ui/diagnosticFormatting.ts`, integration tests.
+
+**Estimated scope:** Medium.
+
+### Checkpoint: Iteration 3 complete
+
+- [ ] Tool-control support is verified or manually declared; unsupported providers fail closed.
+- [ ] Mandatory-source policy is enforced by executed outcomes, not prompt instructions.
+- [ ] Agentic success produces only registered evidence/citations and one terminal streamed answer.
+- [ ] Agentic failure cleanly restarts eager without leaking partial text/evidence.
+- [ ] Forced eager remains an immediate global override.
+- [ ] Deep research remains on the existing eager path.
+- [ ] Full test suite, type check, build, and format check pass.
+- [ ] Human review approves reasoning-continuation work in iteration 4.
 
 ## Iteration 4: OpenAI Responses reasoning reference
 
-### Task 18: Implement ordered Responses output and continuation
+### Iteration 4 decisions
 
-Parse text, reasoning, and function-call items in order. Preserve opaque response continuation within one answer loop.
+1. **Provider scope.** OpenAI Responses is the only reasoning-continuation implementation activated in this iteration. Anthropic and Ollama retain their iteration-3 behavior.
+2. **Protocol is model-profile data.** Add `apiProtocol: "chat-completions" | "responses"` to OpenAI-compatible chat profiles instead of adding another `ApiFormat`. Existing and malformed profiles migrate to `chat-completions`; Responses is opt-in or probe-confirmed and is never inferred solely from an OpenAI-compatible base URL.
+3. **Separate model-round boundary.** Introduce a provider-neutral ordered round interface beside `ChatModelProvider`. Do not flatten Responses reasoning/function-call items into `ChatMessage`, and do not make the agentic runner parse provider SSE.
+4. **Stateless continuation.** Responses requests use `store: false` and request `reasoning.encrypted_content`. The adapter passes the provider output items required for continuation back unchanged with `function_call_output` items. `previous_response_id` and server-side stored conversation state are deferred.
+5. **Answer-scoped opaque state.** Response IDs, encrypted reasoning, and provider output items exist only in memory for one answer attempt. They are cleared on completion, fallback, error, or cancellation and are never written to chat history, answer notes, settings, logs, or diagnostics.
+6. **Reasoning settings.** A Responses profile may enable reasoning, choose an effort from the profile's verified/manual allowed set, and request provider summary `off | auto`. Defaults are reasoning disabled, provider-default effort, and summary off.
+7. **Effort is capability constrained.** The application does not assume one universal effort enum. The UI exposes only values declared by trusted metadata, a successful probe, or an explicit manual override; an unavailable value fails closed before a request.
+8. **Eager is orthogonal to reasoning.** `forceEagerResearch` still forces deterministic evidence collection, but it does not disable the selected Responses protocol or reasoning during synthesis. Both eager synthesis and agentic research therefore use the same round abstraction.
+9. **No raw chain-of-thought.** Only provider-generated summaries may produce ephemeral UI status events. Raw reasoning text and encrypted content never become assistant text. Only terminal output text is eligible for persistence.
+10. **Fallback boundary.** A Responses parse, continuation, capability, or budget failure discards the entire answer-scoped continuation. Research fallback remains clean; it may make a fresh Responses synthesis request when the profile is otherwise usable.
 
-### Task 19: Add reasoning profile controls and capability probing
+### Task 23: Add protocol and reasoning profile contracts
 
-Add per-profile reasoning effort, combined metadata/probe/manual capability resolution, and conservative migration defaults.
+**Description:** Add the profile-level API protocol and reasoning configuration/capability contracts with conservative migration. Keep all existing profiles on Chat Completions until Responses is explicitly selected and supported.
 
-### Task 20: Add reasoning-safe streaming and diagnostics
+**Acceptance criteria:**
 
-Render tool statuses and optional summaries while excluding raw reasoning from transcript, history, exports, and persisted answers.
+- [ ] OpenAI-compatible chat profiles distinguish `chat-completions` from `responses`; Anthropic and Ollama cannot select Responses.
+- [ ] Existing profiles migrate without changing request URLs or payloads.
+- [ ] Reasoning configuration represents enabled state, provider-default or selected effort, and summary `off | auto` separately from verified/manual capabilities.
+- [ ] Unsupported protocol/effort combinations fail validation and never silently downgrade a live request.
+
+**Verification:**
+
+- [ ] Settings migration and validation tests cover absent, malformed, unsupported, and manually overridden fields.
+- [ ] Existing Chat Completions/Anthropic/Ollama payload snapshots remain unchanged.
+
+**Dependencies:** Iteration 3 checkpoint.
+
+**Files likely touched:** `src/settings/settings.ts`, `src/shared/types.ts`, `src/client/chat/ChatModelCapabilities.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 24: Introduce the ordered model-round interface
+
+**Description:** Define `ModelRoundProvider` and ordered delta/result contracts for visible text, provider summaries, tool calls, usage, and opaque continuation. Add a Chat Completions adapter over the existing stream so current callers can migrate without behavior change.
+
+**Acceptance criteria:**
+
+- [ ] A round result preserves output-item and tool-call ordering and returns continuation separately from visible content.
+- [ ] Only the provider adapter can inspect opaque continuation; orchestration can retain, return, or dispose it.
+- [ ] The Chat Completions adapter reproduces current text/tool behavior and never claims reasoning continuation.
+- [ ] Cancellation disposes incomplete round state and produces no terminal assistant text.
+
+**Verification:**
+
+- [ ] Contract tests cover interleaved text/tool deltas, parallel tool calls, malformed sequences, usage, and abort.
+- [ ] Existing `streamChat` tests remain valid during the compatibility transition.
+
+**Dependencies:** Task 23.
+
+**Files likely touched:** `src/client/chat/ModelRoundProvider.ts`, `src/client/chat/ChatCompletionsRoundAdapter.ts`, `src/shared/types.ts`, related tests.
+
+**Estimated scope:** Medium.
+
+### Task 25: Implement the Responses HTTP and SSE adapter
+
+**Description:** Implement `/responses` request mapping and ordered SSE parsing for messages/instructions, function tools, tool choice, parallel calls, output text, reasoning summaries, usage, incomplete status, and provider errors. Keep routing inactive until continuation tests pass.
+
+**Acceptance criteria:**
+
+- [ ] Requests use Responses-native tool and `tool_choice` shapes rather than Chat Completions nesting.
+- [ ] The parser assembles `function_call` items by `call_id`, preserves provider order, and rejects missing IDs, invalid arguments, unknown terminal states, and truncated streams.
+- [ ] Requests use `store: false`; reasoning requests include `reasoning.encrypted_content` and send configured effort/summary only when supported.
+- [ ] Raw SSE events, encrypted content, and response bodies are excluded from normal logging and diagnostic previews.
+
+**Verification:**
+
+- [ ] Recorded contract fixtures cover text-only, one/parallel function calls, reasoning summary, incomplete response, provider error, disconnect, and cancellation.
+- [ ] URL/base-path and authentication behavior matches the existing OpenAI-compatible client.
+
+**Dependencies:** Tasks 23 and 24.
+
+**Files likely touched:** `src/client/chat/OpenAiResponsesClient.ts`, `src/client/chat/OpenAiResponsesStreamParser.ts`, `src/client/http/ProviderHttpClient.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Checkpoint: Responses transport
+
+- [ ] Existing protocols are byte-for-byte compatible at their payload boundary.
+- [ ] Responses text and tool calls are parsed in provider order.
+- [ ] No live profile routes through Responses yet.
+- [ ] Redaction tests prove opaque continuation cannot enter logs or persistence.
+
+### Task 26: Implement stateless encrypted reasoning continuation
+
+**Description:** Build answer-scoped Responses continuation from ordered provider output items. On a tool round, return required reasoning/function-call items unchanged and append matching `function_call_output` items without using `previous_response_id`.
+
+**Acceptance criteria:**
+
+- [ ] Every continuation request includes the prior output items required by the provider and exactly one output per executed `call_id`.
+- [ ] Parallel outputs retain stable association regardless of tool completion order.
+- [ ] Continuation cannot cross answer attempts, retries that start clean, persisted turns, or provider/profile changes.
+- [ ] Missing encrypted reasoning for a reasoning tool round fails closed instead of flattening or omitting state.
+
+**Verification:**
+
+- [ ] Multi-round fixtures cover reasoning + function call + output + final text, parallel calls, repair rounds, duplicate-cache results, cancellation, and clean restart.
+- [ ] Serialization guards reject continuation data in persisted chat/answer/settings structures.
+
+**Dependencies:** Task 25.
+
+**Files likely touched:** `src/client/chat/OpenAiResponsesContinuation.ts`, `src/client/chat/OpenAiResponsesClient.ts`, `src/shared/types.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Task 27: Move the agentic loop to the model-round boundary
+
+**Description:** Replace provider-stream parsing inside `AgenticResearchRunner` with `ModelRoundProvider`. Preserve iteration-3 bootstrap, repair, mandatory-source, retry, duplicate, budget, citation, and fallback semantics.
+
+**Acceptance criteria:**
+
+- [ ] Chat Completions agentic fixtures produce the same calls, answers, and fallback reasons as before the refactor.
+- [ ] Responses continuation survives bootstrap, repair, research, and final rounds without entering the runner's message transcript.
+- [ ] Only terminal visible text is released after source/citation validation; intermediate text remains buffered and discardable.
+- [ ] Reasoning usage counts toward output/context budget diagnostics and incomplete responses trigger a stable fallback reason.
+
+**Verification:**
+
+- [ ] Run the complete iteration-3 state-machine suite against both the Chat Completions adapter and Responses fixtures.
+- [ ] Tests cover forced/specific tool choice under reasoning, malformed continuation, budget exhaustion, abort, and clean eager fallback.
+
+**Dependencies:** Tasks 24 and 26.
+
+**Files likely touched:** `src/research/AgenticResearchRunner.ts`, `src/research/ResearchService.ts`, `src/client/chat/ModelRoundProvider.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Task 28: Move eager synthesis and the legacy note/skill loop to model rounds
+
+**Description:** Adapt `AnswerSynthesisService` and its existing note/skill tool loop to the same round boundary so forced eager and deterministic fallback can still use Responses reasoning safely.
+
+**Acceptance criteria:**
+
+- [ ] `forceEagerResearch` changes evidence acquisition only; a Responses profile can reason during eager synthesis.
+- [ ] Existing note/skill contracts, one-skill rule, active/explicit context, citations, and streaming behavior remain unchanged.
+- [ ] A fallback after an agentic failure creates a new continuation scope and never reuses agentic output items.
+- [ ] Chat Completions eager regression fixtures remain unchanged.
+
+**Verification:**
+
+- [ ] Tests cover Responses eager text-only synthesis, note/skill tool rounds, forced eager, agentic-to-eager fallback, and abort.
+- [ ] Persistence tests confirm only final visible output and existing evidence/citation data are stored.
+
+**Dependencies:** Tasks 24 and 26.
+
+**Files likely touched:** `src/research/AnswerSynthesisService.ts`, `src/research/tools/ToolLoopRunner.ts`, `src/research/ResearchService.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Checkpoint: Unified reasoning loop
+
+- [ ] Agentic and eager strategies share one ordered round contract.
+- [ ] Forced eager does not disable reasoning.
+- [ ] Chat Completions behavior is unchanged.
+- [ ] Every failed/cancelled attempt destroys opaque continuation.
+
+### Task 29: Add safe Responses capability probing and resolution
+
+**Description:** Extend capability resolution with a harmless Responses probe that verifies endpoint support, requested reasoning controls, encrypted continuation, and a synthetic function-call round trip. The probe must not access vault, index, active note, or web tools.
+
+**Acceptance criteria:**
+
+- [ ] Manual override remains authoritative; otherwise a successful probe is required before automatic Responses/reasoning activation.
+- [ ] Probe results are cached with provenance/freshness and invalidated by base URL, auth identity, model, or protocol changes.
+- [ ] Probe failures distinguish endpoint, auth, model, effort, summary, tools, and continuation failures without storing response content.
+- [ ] Unsupported or ambiguous profiles fail closed to their configured compatibility path or deterministic research fallback.
+
+**Verification:**
+
+- [ ] Tests cover success, each partial capability, stale cache, manual override, timeout, cancellation, and malicious compatible endpoints.
+- [ ] Probe fixtures assert that no real application tool handler runs.
+
+**Dependencies:** Tasks 23, 25, and 26.
+
+**Files likely touched:** `src/client/chat/ChatModelCapabilityProbe.ts`, `src/client/chat/ChatModelCapabilities.ts`, `src/settings/settings.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Task 30: Add profile UI, safe summary events, and reasoning diagnostics
+
+**Description:** Expose protocol, reasoning enablement, verified/manual effort values, and summary mode in model settings. Add ephemeral provider-summary status events and bounded diagnostics without exposing raw or encrypted reasoning.
+
+**Acceptance criteria:**
+
+- [ ] UI explains that Responses is opt-in, effort support is model-specific, and summaries are provider-generated rather than raw chain-of-thought.
+- [ ] Unsupported controls are disabled with capability provenance and a precise reason.
+- [ ] Diagnostics include protocol, capability source, configured effort, summary requested/available, reasoning item count, continuation rounds, and provider usage counts only.
+- [ ] Summary events are visually separate from assistant content and are not persisted or exported in iteration 4.
+
+**Verification:**
+
+- [ ] UI/settings tests cover migration, protocol switching, override, unsupported effort, summary off/auto, and forced eager combinations.
+- [ ] Snapshot/redaction tests search transcript, exports, notes, logs, diagnostics, and settings for sentinel raw/encrypted reasoning values.
+
+**Dependencies:** Tasks 23 and 29.
+
+**Files likely touched:** `src/settings/SettingsTab.ts`, `src/ui/ChatView.ts`, `src/ui/diagnosticFormatting.ts`, `src/shared/types.ts`, related tests.
+
+**Estimated scope:** Large.
+
+### Task 31: Activate Responses routing and complete end-to-end verification
+
+**Description:** Route only eligible Responses profiles through the new adapter, retain Chat Completions as the migrated default, and verify the complete reasoning/tool/fallback matrix before enabling the feature.
+
+**Acceptance criteria:**
+
+- [ ] Eligible reasoning profiles complete text-only, mandatory-tool, repair, optional-tool, note/skill, eager, and fallback flows through Responses.
+- [ ] Ineligible or failed profiles never silently lose tool choice or continuation; diagnostics identify the exact compatibility/fallback decision.
+- [ ] Aborts, stream failures, incomplete responses, context limits, and plugin reloads leave no reusable continuation or partial answer.
+- [ ] Saved conversations and answer notes remain schema-compatible.
+
+**Verification:**
+
+- [ ] End-to-end fake-provider suites cover agentic/eager × reasoning on/off × summary on/off × forced eager on/off.
+- [ ] `npm test`, `npm run lint`, `npm run build`, and `npm run format` pass.
+
+**Dependencies:** Tasks 27–30.
+
+**Files likely touched:** `src/client/chat/ChatModelClient.ts`, `src/research/ResearchService.ts`, `src/main.ts`, integration tests.
+
+**Estimated scope:** Large.
 
 ### Checkpoint: Reasoning support
 
-- [ ] Tool rounds preserve Responses continuation.
-- [ ] Raw reasoning never enters user content or storage.
-- [ ] Forced eager remains an immediate compatibility override.
+- [ ] Tool rounds preserve ordered Responses continuation with `store: false` and no server-side conversation dependency.
+- [ ] Raw/encrypted reasoning never enters user content, storage, exports, logs, or diagnostics.
+- [ ] Forced eager remains an immediate research-strategy override without disabling reasoning synthesis.
+- [ ] Existing Chat Completions, Anthropic, and Ollama behavior remains compatible.
+- [ ] Capability probes and manual overrides fail closed and expose provenance.
 - [ ] Saved conversations remain backward compatible.
+- [ ] Full test suite, type check, build, format, and security/redaction review pass.
+- [ ] Human review approves additional-provider work in iteration 5.
 
 ## Iteration 5: Additional providers and deep research
 
@@ -450,4 +895,5 @@ npm run format
 
 - Agentic `deepResearch` behavior.
 - Anthropic versus Ollama rollout priority after OpenAI Responses.
-- Exact reasoning-effort options exposed by model profile.
+- Server-side Responses continuation through `previous_response_id`; iteration 4 uses answer-scoped stateless continuation.
+- Persistence of provider-generated reasoning summaries; iteration 4 keeps them ephemeral.

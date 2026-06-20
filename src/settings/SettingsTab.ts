@@ -11,6 +11,7 @@ import {
 } from "obsidian";
 
 import type IxplorerPlugin from "../main";
+import { ChatModelClient } from "../client/chat/ChatModelClient";
 import { IndexingState, IndexSourceReportItem } from "../indexing/IndexingService";
 import { IndexProfile } from "../indexing/FileVectorIndexStore";
 import { formatIndexSize } from "../indexing/indexSize";
@@ -24,6 +25,16 @@ import {
   DiscoveredModel,
 } from "./connectionTests";
 import { contextLengthInputAfterDiscovery } from "./modelContext";
+import { probeToolControlCapabilities } from "./toolCapabilityProbe";
+import {
+  canProbeToolCapabilities,
+  createToolCapabilitySettings,
+  describeToolCapability,
+  resolveToolCapabilities,
+  ToolCapabilityLayer,
+  ToolCapabilitySettings,
+  withProbeResults,
+} from "./toolCapabilities";
 import { DUCK_DUCK_GO_DESCRIPTION } from "./privacyCopy";
 import {
   ChatModelProfile,
@@ -233,6 +244,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
         fetchModels: (server) => this.fetchModelsForServer(server),
         fetchContextLength: (server, modelName) =>
           this.fetchContextLengthForModel(server, modelName),
+        probeTools: (server, modelName) => this.probeToolsForServer(server, modelName),
         onSave: async (profile) => {
           this.plugin.settings.chatModelProfiles.push(profile);
           if (this.plugin.settings.chatModelProfiles.length === 1) {
@@ -261,6 +273,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
             fetchModels: (server) => this.fetchModelsForServer(server),
             fetchContextLength: (server, modelName) =>
               this.fetchContextLengthForModel(server, modelName),
+            probeTools: (server, modelName) => this.probeToolsForServer(server, modelName),
             onSave: async (updatedProfile) => {
               Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
               await this.plugin.saveSettings();
@@ -462,6 +475,22 @@ export class IxplorerSettingTab extends PluginSettingTab {
     modelName: string,
   ): Promise<boolean> {
     return verifyEmbeddingCapability(server, modelName, { logger: this.plugin.logger });
+  }
+
+  private async probeToolsForServer(
+    server: ServerProfile,
+    modelName: string,
+  ): Promise<ToolCapabilityLayer> {
+    return probeToolControlCapabilities({
+      provider: new ChatModelClient({
+        apiFormat: server.apiFormat,
+        baseUrl: server.baseUrl,
+        apiKey: server.apiKey,
+        logger: this.plugin.logger,
+      }),
+      model: modelName,
+      apiFormat: server.apiFormat,
+    });
   }
 
   private async fetchContextLengthForModel(
@@ -1518,6 +1547,7 @@ interface ModelProfileModalOptions<TProfile extends ModelProfile> {
     modelName: string,
   ) => Promise<number | undefined>;
   verifyEmbedding?: (server: ServerProfile, modelName: string) => Promise<boolean>;
+  probeTools?: (server: ServerProfile, modelName: string) => Promise<ToolCapabilityLayer>;
   onSave(profile: TProfile): Promise<void>;
 }
 
@@ -1545,7 +1575,16 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   private capabilityEmbeddings =
     this.options.profile?.capabilities?.embeddings ?? this.options.kind === "embedding";
   private capabilityVision = this.options.profile?.capabilities?.vision ?? false;
-  private capabilityTools = this.options.profile?.capabilities?.tools ?? false;
+  private capabilityTools = this.options.profile?.capabilities?.toolCalling
+    ? resolveToolCapabilities(this.options.profile.capabilities.toolCalling).capabilities.calls
+    : (this.options.profile?.capabilities?.tools ?? false);
+  private toolCapabilitySettings: ToolCapabilitySettings =
+    this.options.profile?.capabilities?.toolCalling ?? createToolCapabilitySettings(false);
+  private capabilityToolsToggle?: import("obsidian").ToggleComponent;
+  private readonly toolCapabilitySettingRows = new Map<
+    "choiceRequired" | "choiceSpecific" | "parallelCalls",
+    Setting
+  >();
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
@@ -1563,6 +1602,7 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
+    this.toolCapabilitySettingRows.clear();
     contentEl.createEl("h2", {
       text: this.options.profile
         ? `Edit ${this.options.kind} model profile`
@@ -1874,6 +1914,13 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       embeddings: this.capabilityEmbeddings,
       vision: this.capabilityVision,
       tools: this.capabilityTools,
+      toolCalling: {
+        ...this.toolCapabilitySettings,
+        manual: {
+          ...(this.toolCapabilitySettings.manual ?? {}),
+          calls: this.capabilityTools,
+        },
+      },
       temperature: model?.capabilities.temperature ?? this.options.profile?.capabilities?.temperature,
       maxTokens: model?.capabilities.maxTokens ?? this.options.profile?.capabilities?.maxTokens,
       contextLength,
@@ -1918,11 +1965,78 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     new Setting(containerEl)
       .setName("Tools")
       .setDesc("The model supports function/tool calling. Note tools are enabled only when this is on.")
-      .addToggle((toggle) =>
+      .addToggle((toggle) => {
+        this.capabilityToolsToggle = toggle;
         toggle.setValue(this.capabilityTools).onChange((value) => {
           this.capabilityTools = value;
-        }),
-      );
+          this.toolCapabilitySettings.manual = {
+            ...(this.toolCapabilitySettings.manual ?? {}),
+            calls: value,
+          };
+        });
+      });
+
+    if (this.options.kind === "chat") {
+      this.renderToolControlOverride(containerEl, "Required tool choice", "choiceRequired");
+      this.renderToolControlOverride(containerEl, "Specific tool choice", "choiceSpecific");
+      this.renderToolControlOverride(containerEl, "Parallel tool calls", "parallelCalls");
+      new Setting(containerEl)
+        .setName("Probe tool controls")
+        .setDesc("Runs isolated synthetic calls. It never sends vault, note, index, web, or skill data.")
+        .addButton((button) => button.setButtonText("Probe").onClick(async () => {
+          const target = {
+            server: this.selectedServer(),
+            modelName: this.modelName,
+            probe: this.options.probeTools,
+          };
+          if (!canProbeToolCapabilities(target)) {
+            new Notice("Select a provider and model first.");
+            return;
+          }
+          button.setDisabled(true);
+          try {
+            const probe = await target.probe(target.server, target.modelName);
+            this.toolCapabilitySettings = withProbeResults(this.toolCapabilitySettings, probe);
+            this.refreshToolCapabilityControls();
+            new Notice("Tool-control probe completed. Save the profile to persist the result.");
+          } finally {
+            button.setDisabled(false);
+          }
+        }));
+    }
+  }
+
+  private renderToolControlOverride(
+    containerEl: HTMLElement,
+    name: string,
+    flag: "choiceRequired" | "choiceSpecific" | "parallelCalls",
+  ): void {
+    const manual = this.toolCapabilitySettings.manual?.[flag];
+    const setting = new Setting(containerEl)
+      .setName(name)
+      .setDesc(describeToolCapability(this.toolCapabilitySettings, flag))
+      .addDropdown((dropdown) => dropdown
+        .addOption("auto", "Detected/default")
+        .addOption("true", "Enabled override")
+        .addOption("false", "Disabled override")
+        .setValue(manual === undefined ? "auto" : String(manual))
+        .onChange((value) => {
+          const next = { ...(this.toolCapabilitySettings.manual ?? {}) };
+          if (value === "auto") delete next[flag];
+          else next[flag] = value === "true";
+          this.toolCapabilitySettings.manual = next;
+          this.refreshToolCapabilityControls();
+        }));
+    this.toolCapabilitySettingRows.set(flag, setting);
+  }
+
+  private refreshToolCapabilityControls(): void {
+    const effective = resolveToolCapabilities(this.toolCapabilitySettings).capabilities;
+    this.capabilityTools = effective.calls;
+    this.capabilityToolsToggle?.setValue(effective.calls);
+    for (const [flag, setting] of this.toolCapabilitySettingRows) {
+      setting.setDesc(describeToolCapability(this.toolCapabilitySettings, flag));
+    }
   }
 }
 

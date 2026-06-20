@@ -157,6 +157,19 @@ function diagnosticSummaryLines(diagnostics: ContextDiagnostics): string[] {
   if (diagnostics.graph?.included.length > 0) {
     lines.push(`${diagnostics.graph.included.length} linked note(s) used`);
   }
+  if (diagnostics.agentic) {
+    lines.push(
+      `Agentic policy: ${diagnostics.agentic.policyReason} · ${diagnostics.agentic.rounds} round(s), ${diagnostics.agentic.totalCalls} call(s)`,
+      `Mandatory tools: ${diagnostics.agentic.requiredTools.join(", ") || "none"}`,
+      `Satisfied tools: ${diagnostics.agentic.satisfiedTools.join(", ") || "none"}`,
+    );
+    if (diagnostics.agentic.fallbackReason) {
+      lines.push(`Agentic fallback: ${diagnostics.agentic.fallbackReason}`);
+    }
+    if (diagnostics.agentic.unknownCitationIds?.length) {
+      lines.push(`Unknown citation IDs ignored: ${diagnostics.agentic.unknownCitationIds.join(", ")}`);
+    }
+  }
   if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
     lines.push(`${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`);
   }

@@ -56,6 +56,7 @@ export interface ResearchQuestionControllerOptions {
 export class ResearchQuestionController {
   private readonly options: ResearchQuestionControllerOptions;
   private shouldStopRunning = false;
+  private activeAbortController: AbortController | null = null;
   private running = false;
 
   constructor(options: ResearchQuestionControllerOptions) {
@@ -137,6 +138,7 @@ export class ResearchQuestionController {
     }
 
     this.shouldStopRunning = true;
+    this.activeAbortController?.abort(new DOMException("Cancelled by user", "AbortError"));
   }
 
   async regenerateWithExpandedContext(): Promise<void> {
@@ -168,6 +170,7 @@ export class ResearchQuestionController {
   ): Promise<void> {
     this.setRunning(true);
     this.shouldStopRunning = false;
+    this.activeAbortController = new AbortController();
     await this.options.updateChatModel(
       this.options.getModelInputValue() || this.options.getCurrentModel(),
     );
@@ -203,6 +206,7 @@ export class ResearchQuestionController {
         expandedEvidence: expandedEvidence.length > 0 ? expandedEvidence : undefined,
         expandedCitationKeys: expandedCitationKeys.length > 0 ? expandedCitationKeys : undefined,
         chatHistory: chatHistoryForPrompt(options.chatHistory),
+        signal: this.activeAbortController.signal,
       })) {
         if (this.shouldStopRunning) {
           break;
@@ -224,6 +228,7 @@ export class ResearchQuestionController {
       this.options.renderMessages();
     } finally {
       this.shouldStopRunning = false;
+      this.activeAbortController = null;
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);

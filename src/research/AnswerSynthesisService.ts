@@ -49,6 +49,7 @@ export interface AnswerSynthesisInput {
   retrievalDiagnostics?: string;
   skillToolResultChars?: number;
   indexDescription?: IndexDescriptionPromptContext;
+  signal?: AbortSignal;
 }
 
 export class AnswerSynthesisService {
@@ -119,6 +120,7 @@ export class AnswerSynthesisService {
         tools: this.noteTools.definitions(),
         executeTool: (toolCall) => this.noteTools!.execute(toolCall),
         maxTotalResultChars: input.skillToolResultChars,
+        signal: input.signal,
       });
       answerText = result.answerText;
       toolDiagnostics = result.diagnostics;
@@ -156,6 +158,7 @@ export class AnswerSynthesisService {
         temperature: this.chatOptions.temperature,
         maxTokens: this.chatOptions.maxTokens,
         messages,
+        signal: input.signal,
       })) {
         if (chunk.content) {
           answerText += chunk.content;

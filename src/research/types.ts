@@ -34,6 +34,7 @@ export interface ResearchRequest {
   expandedCitationKeys?: string[];
   deepResearch?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
+  signal?: AbortSignal;
 }
 
 export type ResearchStreamEvent =

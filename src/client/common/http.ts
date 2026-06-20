@@ -38,6 +38,10 @@ export class ProviderHttpClient {
 
   async request(path: string, init: RequestInit): Promise<Response> {
     const controller = new AbortController();
+    const externalSignal = init.signal;
+    const abortFromExternal = () => controller.abort(externalSignal?.reason);
+    externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+    if (externalSignal?.aborted) abortFromExternal();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
@@ -86,6 +90,7 @@ export class ProviderHttpClient {
       throw wrappedError;
     } finally {
       clearTimeout(timeout);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
 

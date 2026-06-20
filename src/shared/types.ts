@@ -185,6 +185,30 @@ export interface ContextDiagnostics {
   skills?: SkillContextDiagnostics;
   tools: ToolCallDiagnostic[];
   warnings: string[];
+  agentic?: AgenticAttemptDiagnostics;
+}
+
+export interface AgenticAttemptDiagnostics {
+  policyReason: string;
+  requiredTools: string[];
+  satisfiedTools: string[];
+  repairedTools: string[];
+  rounds: number;
+  totalCalls: number;
+  duplicateCalls: number;
+  fallbackReason?: string;
+  duplicatedCost: boolean;
+  capabilityProvenance?: Record<string, string>;
+  unknownCitationIds?: string[];
+  phases?: string[];
+  stopReasons?: string[];
+  budgets?: {
+    maxRounds: number;
+    maxCallsPerRound: number;
+    maxTotalCalls: number;
+    maxResultChars: number;
+    usedResultChars: number;
+  };
 }
 
 export interface IndexDescriptionPromptDiagnostics {
@@ -373,6 +397,10 @@ export interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   tools?: ChatToolDefinition[];
+  toolChoice?: ChatToolChoice;
+  parallelToolCalls?: boolean;
+  reasoningEnabled?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface ChatResponseChunk {

@@ -2,6 +2,7 @@ export type IxplorerErrorCode =
   | "INVALID_SETTINGS"
   | "MODEL_PROVIDER_UNAVAILABLE"
   | "MODEL_NOT_FOUND"
+  | "UNSUPPORTED_CAPABILITY"
   | "EMBEDDING_UNAVAILABLE"
   | "INDEX_UNAVAILABLE"
   | "INDEX_REBUILD_REQUIRED"
@@ -17,6 +18,7 @@ const USER_MESSAGES: Record<IxplorerErrorCode, string> = {
   INVALID_SETTINGS: "Check Ixplorer settings and try again.",
   MODEL_PROVIDER_UNAVAILABLE: "The local model provider is unavailable.",
   MODEL_NOT_FOUND: "The configured model is not available.",
+  UNSUPPORTED_CAPABILITY: "The selected model does not support this capability.",
   EMBEDDING_UNAVAILABLE: "The embedding provider is unavailable.",
   INDEX_UNAVAILABLE: "The local search index is unavailable.",
   INDEX_REBUILD_REQUIRED: "The local search index needs to be rebuilt.",

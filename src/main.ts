@@ -27,6 +27,7 @@ import { NoteToolService } from "./research/tools/NoteTools";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
+import { resolveToolCapabilities } from "./settings/toolCapabilities";
 import {
   DEFAULT_SETTINGS,
   ChatModelProfile,
@@ -242,7 +243,8 @@ export default class IxplorerPlugin extends Plugin {
     const retriever = this.createRetrieverForProfile(indexProfile);
     const contextFiles = new ObsidianContextFileProvider(this.app.vault);
     const contextExtractors = this.createContextExtractorsForProfile(indexProfile);
-    const toolsEnabled = chatProfile.capabilities?.tools === true;
+    const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
+    const toolsEnabled = toolResolution.capabilities.calls;
 
     return new ResearchService({
       retriever,
@@ -273,6 +275,9 @@ export default class IxplorerPlugin extends Plugin {
       searchProvider: this.createSearchProvider(),
       toolsEnabled,
       forceEagerResearch: this.settings.forceEagerResearch,
+      toolCapabilities: toolResolution.capabilities,
+      toolCapabilityProvenance: toolResolution.provenance,
+      apiFormat: chatServer.apiFormat,
       indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
       skillRegistry: this.skillRegistry,
       getIndexStatus: () => {

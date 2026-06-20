@@ -259,12 +259,16 @@ export class NoteToolService {
       return jsonResult(true, {
         ok: true,
         path,
+        evidenceId: packed.chunks[0]?.id,
+        evidenceSource: packed.chunks[0]?.source,
         chunkCount: chunks.length,
         returnedChunkCount: packed.chunks.length,
         content: packed.content,
         chunks: packed.chunks.map((chunk) => ({
           id: chunk.id,
           source: sourceSummary(chunk),
+          evidenceSource: chunk.source,
+          text: chunk.text,
           tokens: estimateTextTokens(chunk.text),
         })),
         includedTokens: estimateTextTokens(packed.content),
