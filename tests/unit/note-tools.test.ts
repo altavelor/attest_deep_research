@@ -1,5 +1,5 @@
 import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import { NoteToolService } from "../../src/research/NoteTools";
+import { NoteToolService } from "../../src/research/tools/NoteTools";
 import { ContextFileProvider } from "../../src/research/ContextAssembler";
 import { ResearchRetriever } from "../../src/research/types";
 import { citation, emptyRetrieval, markdownSource, retrieved } from "../helpers/factories";

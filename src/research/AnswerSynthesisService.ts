@@ -17,8 +17,8 @@ import {
   ResearchChatHistoryMessage,
 } from "./prompts";
 import { ResearchStreamEvent } from "./types";
-import { NoteToolService } from "./NoteTools";
-import { runToolLoop } from "./ToolLoopRunner";
+import { NoteToolService } from "./tools/NoteTools";
+import { runToolLoop } from "./tools/ToolLoopRunner";
 import { buildSkillCatalogPrompt, LoadedSkill, SkillDefinition } from "../skills/SkillRegistry";
 
 export interface AnswerSynthesisServiceOptions {

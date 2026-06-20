@@ -3,7 +3,7 @@ import {
   selectResearchExecutionStrategy,
 } from "../../src/research/ResearchService";
 import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import { NoteToolService } from "../../src/research/NoteTools";
+import { NoteToolService } from "../../src/research/tools/NoteTools";
 import { ContextAssembler, ContextFileProvider } from "../../src/research/ContextAssembler";
 import { QueryExpansionService } from "../../src/retrieval/QueryExpansionService";
 import {
@@ -217,6 +217,7 @@ describe("ResearchService", () => {
     });
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
+    expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
   it.each([

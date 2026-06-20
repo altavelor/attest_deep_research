@@ -199,6 +199,127 @@ describe("DuckDuckGoSearchProvider", () => {
     await expect(provider.search("zzzz")).resolves.toEqual([]);
   });
 
+  it("keeps metadata-only search to one request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      htmlResponse(`
+        <a href="https://example.com/research" class="result__a">Example research</a>
+        <a class="result__snippet">Snippet text</a>
+      `),
+    );
+    const provider = new DuckDuckGoSearchProvider({ fetch: fetchMock, now: fixedNow });
+
+    const results = await provider.search("local models", { limit: 1, maxFetches: 0 });
+
+    expect(results[0]?.source.wasContentFetched).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches a page with bounded content and manual redirect validation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("", {
+          status: 302,
+          headers: { location: "https://www.example.com/final" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        htmlResponse(
+          `<html><body><article>${"Useful content. ".repeat(20)}</article></body></html>`,
+        ),
+      );
+    const provider = new DuckDuckGoSearchProvider({ fetch: fetchMock });
+
+    const result = await provider.fetchPage("https://example.com/start", {
+      maxContentChars: 80,
+      maxRedirects: 2,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      url: "https://example.com/start",
+      finalUrl: "https://www.example.com/final",
+      truncated: true,
+      redirects: ["https://www.example.com/final"],
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://example.com/start",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
+  it("distinguishes URL, HTTP, content-type, size, and timeout failures", async () => {
+    const privateProvider = new DuckDuckGoSearchProvider({ fetch: vi.fn() });
+    await expect(privateProvider.fetchPage("http://127.0.0.1/private")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "unsafe-web-url", retryable: false },
+    });
+
+    const httpProvider = new DuckDuckGoSearchProvider({
+      fetch: vi.fn().mockResolvedValue(new Response("error", { status: 503 })),
+    });
+    await expect(httpProvider.fetchPage("https://example.com")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-http", retryable: true, details: { status: 503 } },
+    });
+
+    const binaryProvider = new DuckDuckGoSearchProvider({
+      fetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response("binary", { headers: { "content-type": "application/octet-stream" } }),
+        ),
+    });
+    await expect(binaryProvider.fetchPage("https://example.com")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-content-type", retryable: false },
+    });
+
+    const largeProvider = new DuckDuckGoSearchProvider({
+      fetch: vi.fn().mockResolvedValue(htmlResponse("x".repeat(20))),
+    });
+    await expect(
+      largeProvider.fetchPage("https://example.com", { maxResponseBytes: 10 }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-response-too-large", retryable: false },
+    });
+
+    const timeoutProvider = new DuckDuckGoSearchProvider({
+      fetch: vi.fn((_url, init) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        });
+      }) as typeof fetch,
+    });
+    await expect(
+      timeoutProvider.fetchPage("https://example.com", { timeoutMs: 1 }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-timeout", retryable: true },
+    });
+
+    const brokenStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new TypeError("connection reset"));
+      },
+    });
+    const streamProvider = new DuckDuckGoSearchProvider({
+      fetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(brokenStream, { headers: { "content-type": "text/html" } }),
+        ),
+    });
+    await expect(streamProvider.fetchPage("https://example.com")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-network", retryable: true },
+    });
+  });
+
   it("maps DuckDuckGo failures to recoverable web search errors", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("network unavailable"));
     const provider = new DuckDuckGoSearchProvider({ fetch: fetchMock });

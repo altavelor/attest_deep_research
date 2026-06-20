@@ -405,7 +405,8 @@ The normal transcript continues to stream final answer text. Intermediate model 
 Expected ownership, subject to implementation planning:
 
 - `src/client/chat/` — provider-neutral model-round contract and provider mappings.
-- `src/research/` — policy controller, research tools, evidence registry, fallback selection.
+- `src/research/` — policy controller, research orchestration, and fallback selection.
+- `src/research/tools/` — research-tool contracts, handlers, registries, evidence state, and tool-loop execution.
 - `src/indexing/` — description sampling, generation, persistence lifecycle, and freshness.
 - `src/settings/` — capabilities, migration, probing/manual controls.
 - `src/ui/` — status/diagnostic presentation without raw reasoning.

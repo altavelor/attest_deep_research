@@ -289,6 +289,13 @@ export interface ToolCallDiagnostic {
   metadata?: Record<string, unknown>;
 }
 
+export interface ToolError {
+  code: string;
+  message: string;
+  retryable: boolean;
+  details?: Record<string, unknown>;
+}
+
 export interface Citation {
   id: string;
   source: SourceReference;
@@ -507,8 +514,34 @@ export interface WebSearchOptions {
   timeoutMs?: number;
 }
 
+export interface WebPageFetchOptions {
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+  maxContentChars?: number;
+  maxRedirects?: number;
+}
+
+export interface WebPageFetchSuccess {
+  ok: true;
+  url: string;
+  finalUrl: string;
+  content: string;
+  contentType: string;
+  bytes: number;
+  truncated: boolean;
+  redirects: string[];
+}
+
+export interface WebPageFetchFailure {
+  ok: false;
+  error: ToolError;
+}
+
+export type WebPageFetchResult = WebPageFetchSuccess | WebPageFetchFailure;
+
 export interface SearchProvider {
   search(query: string, options?: WebSearchOptions): Promise<SearchProviderResult[]>;
+  fetchPage?(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult>;
 }
 
 export interface ResearchAnswer {

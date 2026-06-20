@@ -164,6 +164,21 @@ The following details were not explicit enough to implement consistently. Iterat
 10. **Citation ownership.** Tools register visible evidence with the registry. Later orchestration consumes a registry snapshot to build `ResearchAnswer.evidence` and citations; it never trusts citation IDs invented in model text.
 11. **Compatibility.** Existing `search_notes` remains unchanged for compatibility. It does not count as `search_index` and is not reused as the new index-tool implementation because its path-search fallback weakens mandatory index semantics.
 
+### Iteration 2 clarification review and recommendations
+
+The implementation uses these resolutions for details that were not explicit enough in the original task descriptions:
+
+1. **Input normalization.** A missing result limit defaults to 5. Integer limits are clamped to 1–5; non-numeric and non-integer limits fail validation. Queries are whitespace-normalized, must remain non-empty, and fail when they exceed 240 characters. They are never silently truncated. New tool schemas reject unknown properties with `additionalProperties: false`.
+2. **URL canonicalization.** Canonical web URLs lower-case the scheme and hostname, remove credentials, fragments, and default ports, and preserve path and query ordering. Tracking parameters are not removed because doing so can change resource identity.
+3. **Evidence identity and merging.** Index evidence uses the existing chunk ID. Web evidence derives its ID from the canonical registered URL. Duplicate discoveries retain one citation and merge call/query provenance. Fetching a page upgrades its snippet evidence without changing its evidence or citation ID.
+4. **Answer-scoped handles.** Web result handles are random opaque identifiers stored only by one `ResearchEvidenceRegistry`. Snapshot ordering depends on evidence registration, not handle values, and snapshots are detached and deeply frozen.
+5. **Fetch defaults.** Page fetch permits HTTP(S) without credentials; rejects localhost and private, loopback, link-local, multicast, unspecified, and reserved literal IP addresses; validates every redirect manually; uses a 30-second timeout; accepts HTML and plain text; caps raw response bytes at 1 MiB and extracted text at 16,000 characters.
+6. **Retry semantics.** Network errors, timeouts, HTTP 429, and HTTP 5xx are retryable. Input, handle, URL-policy, content-type, redirect-policy, size, and other HTTP 4xx failures are non-retryable.
+7. **DNS limitation before activation.** Browser `fetch` does not expose the connected IP address, so a hostname that resolves to a private address cannot be proven safe against DNS rebinding at this boundary. Iteration 2 therefore remains unavailable at runtime. Activation requires a resolver-aware transport or an explicit trusted-host policy; iteration 2 does not claim complete hostname-level SSRF enforcement.
+8. **Redirect identity.** A fetched final URL is retained as metadata. The citation continues to use the canonical URL registered by `search_web`, preserving stable identity across redirects.
+9. **Note-tool compatibility.** The typed registry adapts existing note-tool JSON at its edge and preserves existing schemas and the successful `no-active-note` execution semantics. Existing note tools are not retrofitted with stricter argument validation in this iteration.
+10. **Inactive assembly.** The iteration-2 factory is a standalone dependency-assembly boundary used by direct tests. It is not instantiated from `main.ts`, `ResearchService`, `ToolLoopRunner`, or a provider adapter.
+
 ### Task 6: Define typed research-tool execution contracts
 
 **Description:** Introduce a provider-neutral internal tool contract with typed success/error payloads, execution metadata, and boundary validation. Keep existing `ChatToolDefinition` as the schema sent to models later, but stop requiring new tools to construct JSON strings internally.
@@ -181,7 +196,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Iteration 1 checkpoint.
 
-**Files likely touched:** `src/research/ResearchTools.ts`, `src/shared/types.ts`, `tests/unit/research-tool-contracts.test.ts`.
+**Files likely touched:** `src/research/tools/ResearchTools.ts`, `src/shared/types.ts`, `tests/unit/research-tool-contracts.test.ts`.
 
 **Estimated scope:** Medium.
 
@@ -202,7 +217,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Task 6.
 
-**Files likely touched:** `src/research/ResearchEvidenceRegistry.ts`, `tests/unit/research-evidence-registry.test.ts`, `src/shared/types.ts`.
+**Files likely touched:** `src/research/tools/ResearchEvidenceRegistry.ts`, `tests/unit/research-evidence-registry.test.ts`, `src/shared/types.ts`.
 
 **Estimated scope:** Medium.
 
@@ -223,7 +238,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Tasks 6 and 7.
 
-**Files likely touched:** `src/research/IndexResearchTool.ts`, `src/research/ResearchEvidenceRegistry.ts`, `tests/unit/index-research-tool.test.ts`, `src/research/types.ts`.
+**Files likely touched:** `src/research/tools/IndexResearchTool.ts`, `src/research/tools/ResearchEvidenceRegistry.ts`, `tests/unit/index-research-tool.test.ts`, `src/research/types.ts`.
 
 **Estimated scope:** Medium.
 
@@ -272,7 +287,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Tasks 7 and 9.
 
-**Files likely touched:** `src/research/WebSearchResearchTool.ts`, `src/research/ResearchEvidenceRegistry.ts`, `tests/unit/web-search-research-tool.test.ts`.
+**Files likely touched:** `src/research/tools/WebSearchResearchTool.ts`, `src/research/tools/ResearchEvidenceRegistry.ts`, `tests/unit/web-search-research-tool.test.ts`.
 
 **Estimated scope:** Medium.
 
@@ -293,7 +308,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Tasks 7, 9, and 10.
 
-**Files likely touched:** `src/research/WebFetchResearchTool.ts`, `src/web/WebUrlPolicy.ts`, `src/research/ResearchEvidenceRegistry.ts`, related tests.
+**Files likely touched:** `src/research/tools/WebFetchResearchTool.ts`, `src/web/WebUrlPolicy.ts`, `src/research/tools/ResearchEvidenceRegistry.ts`, related tests.
 
 **Estimated scope:** Medium.
 
@@ -321,7 +336,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Tasks 8, 10, and 11.
 
-**Files likely touched:** `src/research/ResearchToolRegistry.ts`, `src/research/NoteTools.ts`, registry tests, `tests/unit/note-tools.test.ts`.
+**Files likely touched:** `src/research/tools/ResearchToolRegistry.ts`, `src/research/tools/NoteTools.ts`, registry tests, `tests/unit/note-tools.test.ts`.
 
 **Estimated scope:** Medium.
 
@@ -342,7 +357,7 @@ The following details were not explicit enough to implement consistently. Iterat
 
 **Dependencies:** Task 12.
 
-**Files likely touched:** `src/research/createResearchToolRegistry.ts`, `src/main.ts`, factory tests, existing request regression tests.
+**Files likely touched:** `src/research/tools/createResearchToolRegistry.ts`, `src/main.ts`, factory tests, existing request regression tests.
 
 **Estimated scope:** Medium.
 
@@ -410,17 +425,17 @@ Render tool statuses and optional summaries while excluding raw reasoning from t
 
 ## Risks and mitigations
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| New contracts accidentally alter current answers | High | Iteration 1 keeps the existing eager implementation for both setting values and adds payload/evidence regression tests |
-| Description is stale or misleading | High | Bind it to index timestamps/counts, regenerate only after commit, expose freshness, retain deterministic fallback |
-| Description generation adds indexing cost | Medium | Local bounded representative sampling, deterministic topic extraction, and no regeneration for no-change runs |
-| Provider advertises tools but ignores choice | High | Capability validation, one repair, then clean fallback |
-| Reasoning state is flattened into text | High | Opaque continuation and ordered output items; storage exclusion tests |
-| Tool loop increases latency/cost | Medium | Parallel first calls, strict budgets, cache duplicates, forced eager override |
-| Web/vault prompt injection | High | Treat results as untrusted evidence and validate all citations |
-| Web result enables SSRF on page fetch | High | Answer-scoped opaque handles, URL/redirect policy, private-address rejection, and fail-closed provider boundary |
-| Partial agentic run duplicates work on fallback | Medium | Explicit diagnostics and clean, non-mixed fallback state |
+| Risk                                             | Impact | Mitigation                                                                                                             |
+| ------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| New contracts accidentally alter current answers | High   | Iteration 1 keeps the existing eager implementation for both setting values and adds payload/evidence regression tests |
+| Description is stale or misleading               | High   | Bind it to index timestamps/counts, regenerate only after commit, expose freshness, retain deterministic fallback      |
+| Description generation adds indexing cost        | Medium | Local bounded representative sampling, deterministic topic extraction, and no regeneration for no-change runs          |
+| Provider advertises tools but ignores choice     | High   | Capability validation, one repair, then clean fallback                                                                 |
+| Reasoning state is flattened into text           | High   | Opaque continuation and ordered output items; storage exclusion tests                                                  |
+| Tool loop increases latency/cost                 | Medium | Parallel first calls, strict budgets, cache duplicates, forced eager override                                          |
+| Web/vault prompt injection                       | High   | Treat results as untrusted evidence and validate all citations                                                         |
+| Web result enables SSRF on page fetch            | High   | Answer-scoped opaque handles, URL/redirect policy, private-address rejection, and fail-closed provider boundary        |
+| Partial agentic run duplicates work on fallback  | Medium | Explicit diagnostics and clean, non-mixed fallback state                                                               |
 
 ## Verification commands
 
