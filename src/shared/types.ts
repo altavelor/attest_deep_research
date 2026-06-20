@@ -159,6 +159,7 @@ export interface ContextGraphDiagnostics {
 }
 
 export interface ContextDiagnostics {
+  executionStrategy?: ResearchExecutionStrategy;
   contextMode: ContextMode;
   explicitSources: ContextDiagnosticSource[];
   mentionSources: ContextDiagnosticSource[];
@@ -178,10 +179,69 @@ export interface ContextDiagnostics {
     groups: ContextBudgetGroup[];
   };
   evidencePlanner?: EvidencePlannerDiagnostics;
+  web?: WebContextDiagnostics;
   index?: ContextIndexDiagnostics;
+  indexDescription?: IndexDescriptionPromptDiagnostics;
   skills?: SkillContextDiagnostics;
   tools: ToolCallDiagnostic[];
   warnings: string[];
+}
+
+export interface IndexDescriptionPromptDiagnostics {
+  freshness: "current" | "stale" | "failed" | "missing";
+  textHash: string;
+  algorithmVersion: number;
+  generatedAt: string;
+  indexUpdatedAt: string;
+  representativeChunkCount: number;
+  truncated: boolean;
+  usedFallback: boolean;
+  failureReason?: string;
+}
+
+export interface IndexDescriptionPromptContext {
+  text: string;
+  diagnostics: IndexDescriptionPromptDiagnostics;
+}
+
+export type ResearchExecutionStrategy =
+  | "eager-forced"
+  | "eager-default"
+  | "agentic"
+  | "deterministic-fallback";
+
+export interface WebContextDiagnostics {
+  originalQuestion: string;
+  queryStrategy: "direct" | "planned" | "fallback";
+  queries: string[];
+  requests: Array<{
+    query: string;
+    limit: number;
+    maxFetches: number;
+  }>;
+  results: WebResultDiagnostic[];
+  finalPrompt: {
+    includedChunkIds: string[];
+    usedTokens: number;
+  };
+}
+
+export interface WebResultDiagnostic {
+  chunkId: string;
+  query: string;
+  url: string;
+  title: string;
+  providerRank: number;
+  processingRank?: number;
+  relevanceScore: number;
+  wasContentFetched: boolean;
+  textSource: "fetched-content" | "search-snippet";
+  textCharacters: number;
+  estimatedTokens: number;
+  textPreview: string;
+  status: "candidate" | "included" | "dropped";
+  promptOrder?: number;
+  reason?: "duplicate-url" | "web-evidence-limit" | "evidence-planner";
 }
 
 export interface RetrievalChunkDiagnostic {
@@ -256,6 +316,41 @@ export interface ChatToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+}
+
+export type ChatToolChoice =
+  | { type: "auto" }
+  | { type: "none" }
+  | { type: "required" }
+  | { type: "specific"; name: string };
+
+export interface ToolCallingCapabilities {
+  calls: boolean;
+  choiceRequired: boolean;
+  choiceSpecific: boolean;
+  parallelCalls: boolean;
+}
+
+export interface ReasoningCapabilities {
+  enabled: boolean;
+  continuation: boolean;
+  summary: boolean;
+}
+
+export interface ProviderContinuationState {
+  provider: ApiFormat;
+  opaque: unknown;
+}
+
+export type ModelOutputItem =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; providerData: unknown; summary?: string }
+  | { type: "toolCall"; call: ChatToolCall };
+
+export interface ModelRoundResult {
+  items: ModelOutputItem[];
+  continuation?: ProviderContinuationState;
+  stopReason: "complete" | "tool_calls" | "length" | "error";
 }
 
 export interface ChatMessage {

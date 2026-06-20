@@ -7,6 +7,7 @@ import {
   readBinaryIndexFile,
   readJsonIndexFile,
   readJsonlIndexFile,
+  readFirstJsonlIndexRows,
 } from "../../src/indexing/fileIndexFiles";
 
 describe("file index files", () => {
@@ -48,6 +49,23 @@ describe("file index files", () => {
     await expect(readJsonlIndexFile(join(folder, "bad.jsonl"), isAnyRecord)).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
     });
+  });
+
+  it("reads a bounded JSONL prefix without loading the remaining rows", async () => {
+    const path = join(folder, "rows.jsonl");
+    await atomicWriteIndexFiles({
+      files: [{ path, data: '{"id":1}\n{"id":2}\nnot-json\n' }],
+      manifest: { path: join(folder, "manifest.json"), data: '{"ok":true}' },
+      writeId: "bounded",
+    });
+
+    await expect(readFirstJsonlIndexRows(path, isAnyRecord, 2)).resolves.toEqual([
+      { id: 1 },
+      { id: 2 },
+    ]);
+    await expect(
+      readFirstJsonlIndexRows(join(folder, "missing.jsonl"), isAnyRecord, 2),
+    ).resolves.toEqual([]);
   });
 
   it("commits all files and publishes the manifest last without leaving temp files", async () => {

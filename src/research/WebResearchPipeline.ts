@@ -6,6 +6,7 @@ import {
   RetrievedChunk,
   SearchProvider,
   SearchProviderResult,
+  WebContextDiagnostics,
   WebSearchOptions,
 } from "../shared/types";
 import {
@@ -15,12 +16,13 @@ import {
 } from "../shared/llmOutput";
 import { tokenSetForSearch } from "../retrieval/tokenization";
 import { normalizeInlineWhitespace } from "../shared/whitespace";
-import { buildDeepResearchPlanPrompt } from "./prompts";
+import { buildDeepResearchPlanPrompt, estimateTextTokens } from "./prompts";
 import { ResearchStreamEvent } from "./types";
 
 export interface ResearchEvidenceResult {
   chunks: RetrievedChunk[];
   citations: Citation[];
+  diagnostics?: WebContextDiagnostics;
 }
 
 export interface WebResearchPipelineOptions {
@@ -75,31 +77,61 @@ export class WebResearchPipeline {
       return { chunks: [], citations: [] };
     }
 
-    const queries = deepResearch ? yield* this.buildDeepResearchQueries(question) : [question];
+    const queryPlan = deepResearch
+      ? yield* this.buildDeepResearchQueries(question)
+      : { queries: [question], strategy: "direct" as const };
+    const queries = queryPlan.queries;
 
     yield { type: "status", message: "Searching web..." };
-    const results = deepResearch
+    const search = deepResearch
       ? await this.searchDeepWebResults(queries)
-      : await this.searchProvider.search(question, NORMAL_WEB_SEARCH_OPTIONS);
+      : {
+          results: await this.searchProvider.search(question, NORMAL_WEB_SEARCH_OPTIONS),
+          requests: [{ query: question, ...NORMAL_WEB_SEARCH_OPTIONS }],
+        };
+    const results = search.results;
 
     if (results.length === 0) {
-      return { chunks: [], citations: [] };
+      return {
+        chunks: [],
+        citations: [],
+        diagnostics: createWebDiagnostics(
+          question,
+          queryPlan.strategy,
+          queries,
+          search.requests,
+          [],
+          [],
+        ),
+      };
     }
 
     yield { type: "status", message: "Fetching sources..." };
-    const chunks = rankWebResults(dedupeWebResults(results), question)
-      .slice(0, this.evidenceLimit)
-      .map((result) => webResultToChunk(result));
+    const rankedResults = rankWebResults(dedupeWebResults(results), question);
+    const selectedResults = rankedResults.slice(0, this.evidenceLimit);
+    const chunks = selectedResults.map((result) => webResultToChunk(result));
 
     return {
       chunks,
       citations: chunks.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
+      diagnostics: createWebDiagnostics(
+        question,
+        queryPlan.strategy,
+        queries,
+        search.requests,
+        results,
+        rankedResults,
+        this.evidenceLimit,
+      ),
     };
   }
 
   private async *buildDeepResearchQueries(
     question: string,
-  ): AsyncGenerator<ResearchStreamEvent, string[]> {
+  ): AsyncGenerator<
+    ResearchStreamEvent,
+    { queries: string[]; strategy: "planned" | "fallback" }
+  > {
     yield { type: "status", message: "Planning web queries..." };
 
     const planText = await collectChatText(
@@ -122,12 +154,18 @@ export class WebResearchPipeline {
       this.onDiagnostic?.({ source: "web-research-plan", ...diagnostic }),
     );
 
-    return queries.length > 0 ? queries : [question];
+    return queries.length > 0
+      ? { queries, strategy: "planned" }
+      : { queries: [question], strategy: "fallback" };
   }
 
-  private async searchDeepWebResults(queries: string[]): Promise<SearchProviderResult[]> {
+  private async searchDeepWebResults(queries: string[]): Promise<{
+    results: SearchProviderResult[];
+    requests: Array<{ query: string; limit: number; maxFetches: number }>;
+  }> {
     const boundedQueries = queries.slice(0, HARD_MAX_DEEP_QUERIES);
     const results: SearchProviderResult[] = [];
+    const requests: Array<{ query: string; limit: number; maxFetches: number }> = [];
     let remainingFetches = Math.min(DEEP_WEB_MAX_TOTAL_FETCHES, HARD_MAX_TOTAL_FETCHES);
 
     for (const query of boundedQueries) {
@@ -136,6 +174,11 @@ export class WebResearchPipeline {
       }
 
       const perQueryMaxFetches = Math.min(DEEP_WEB_LIMIT_PER_QUERY, remainingFetches);
+      requests.push({
+        query,
+        limit: DEEP_WEB_LIMIT_PER_QUERY,
+        maxFetches: perQueryMaxFetches,
+      });
       const queryResults = await this.searchProvider?.search(query, {
         limit: DEEP_WEB_LIMIT_PER_QUERY,
         maxFetches: perQueryMaxFetches,
@@ -149,8 +192,62 @@ export class WebResearchPipeline {
       }
     }
 
-    return results.slice(0, HARD_MAX_TOTAL_RESULTS);
+    return { results: results.slice(0, HARD_MAX_TOTAL_RESULTS), requests };
   }
+}
+
+function createWebDiagnostics(
+  originalQuestion: string,
+  queryStrategy: WebContextDiagnostics["queryStrategy"],
+  queries: string[],
+  requests: WebContextDiagnostics["requests"],
+  rawResults: SearchProviderResult[],
+  rankedResults: SearchProviderResult[],
+  evidenceLimit = 0,
+): WebContextDiagnostics {
+  const processingRanks = new Map(
+    rankedResults.map((result, index) => [result, index + 1] as const),
+  );
+  const retainedResults = new Set(rankedResults);
+
+  return {
+    originalQuestion,
+    queryStrategy,
+    queries,
+    requests,
+    results: rawResults.map((result) => {
+      const text = result.extractedText ?? result.source.snippet;
+      const processingRank = processingRanks.get(result);
+      const isDuplicate = !retainedResults.has(result);
+      const exceedsLimit = processingRank !== undefined && processingRank > evidenceLimit;
+
+      return {
+        chunkId: result.source.id,
+        query: result.query,
+        url: result.source.url,
+        title: result.source.title,
+        providerRank: result.rank,
+        ...(processingRank !== undefined ? { processingRank } : {}),
+        relevanceScore: webResultScore(
+          result,
+          tokenSetForSearch(originalQuestion, { minLength: 3 }),
+        ),
+        wasContentFetched: result.source.wasContentFetched,
+        textSource:
+          result.extractedText !== undefined ? "fetched-content" : "search-snippet",
+        textCharacters: text.length,
+        estimatedTokens: estimateTextTokens(text),
+        textPreview: normalizeInlineWhitespace(text).slice(0, 240),
+        status: isDuplicate || exceedsLimit ? "dropped" : "candidate",
+        ...(isDuplicate
+          ? { reason: "duplicate-url" as const }
+          : exceedsLimit
+            ? { reason: "web-evidence-limit" as const }
+            : {}),
+      };
+    }),
+    finalPrompt: { includedChunkIds: [], usedTokens: 0 },
+  };
 }
 
 function parseDeepResearchQueries(

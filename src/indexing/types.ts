@@ -44,6 +44,7 @@ export interface IndexingState {
   lastUpdatedAt?: string;
   indexSizeBytes?: number;
   isStale: boolean;
+  indexChanged?: boolean;
   errorMessage?: string;
 }
 

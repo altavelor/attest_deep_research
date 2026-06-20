@@ -47,6 +47,8 @@ export interface ContextAssembleRequest {
   contextLimitTokens?: number;
   reservedOutputTokens?: number;
   smallMarkdownCharLimit?: number;
+  skipRetrieval?: boolean;
+  explicitSourcesOnly?: boolean;
   graph?: {
     enabled: boolean;
     includeBacklinks: boolean;
@@ -91,10 +93,20 @@ export class ContextAssembler {
 
   async assemble(request: ContextAssembleRequest): Promise<AssembledContext> {
     const availablePaths = await this.files.listPaths();
-    const mentionPaths = findMentionedPaths(request.question, availablePaths);
+    const mentionPaths = request.explicitSourcesOnly
+      ? []
+      : findMentionedPaths(request.question, availablePaths);
     const explicitCandidates = this.explicitCandidates(request, mentionPaths);
     const diagnostics = createEmptyDiagnostics(request.contextMode);
-    const graph = await this.discoverGraphContext(request, availablePaths, mentionPaths);
+    const graph = request.explicitSourcesOnly
+      ? {
+          sourcePaths: [],
+          diagnostics: createDisabledGraphDiagnostics({
+            ...DEFAULT_GRAPH_CONTEXT_LIMITS,
+            ...(request.graph?.limits ?? {}),
+          }),
+        }
+      : await this.discoverGraphContext(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
     for (const path of request.contextMode === "filter" ? request.contextPaths : []) {
       addDiagnosticSource(diagnostics, {
@@ -154,12 +166,14 @@ export class ContextAssembler {
     );
     const boostedSourcePaths =
       request.contextMode === "filter" ? [] : uniquePaths(graph.sourcePaths);
-    const retrievalResult = await this.retrieve(request.question, {
-      limit: request.evidenceLimit,
-      includeWebResults: false,
-      ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
-      ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
-    });
+    const retrievalResult = request.skipRetrieval
+      ? []
+      : await this.retrieve(request.question, {
+          limit: request.evidenceLimit,
+          includeWebResults: false,
+          ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
+          ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
+        });
     const retrievalChunks = Array.isArray(retrievalResult)
       ? retrievalResult
       : retrievalResult.chunks;

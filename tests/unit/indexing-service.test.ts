@@ -117,7 +117,8 @@ describe("IndexingService", () => {
       excludeGlobs: [],
     });
 
-    await service.manualReindex();
+    const initialRun = await service.manualReindex();
+    expect(initialRun.indexChanged).toBe(true);
 
     expect(jsonExtractor.extractedPaths).toEqual([]);
     expect(markdownExtractor.extractedPaths).toEqual(["Research/a.md"]);
@@ -232,11 +233,13 @@ describe("IndexingService", () => {
       excludeGlobs: [],
     });
 
-    await service.manualReindex();
+    const initialRun = await service.manualReindex();
+    expect(initialRun.indexChanged).toBe(true);
     expect(indexStore.upsertCalls).toBe(1);
     expect(files.readPaths).toEqual(["Research/a.md"]);
 
-    await service.manualReindex();
+    const unchangedRun = await service.manualReindex();
+    expect(unchangedRun.indexChanged).toBe(false);
     expect(indexStore.upsertCalls).toBe(1);
     expect(files.readPaths).toEqual(["Research/a.md"]);
 
@@ -378,7 +381,8 @@ describe("IndexingService", () => {
       isStale: false,
     });
 
-    await service.rebuild();
+    const rebuild = await service.rebuild();
+    expect(rebuild.indexChanged).toBe(true);
     expect(indexStore.clearCalls).toBe(2);
     expect(indexStore.upsertCalls).toBe(2);
   });

@@ -10,6 +10,10 @@ import {
 import { ApiFormat } from "../shared/types";
 import { isRecord } from "../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
+import {
+  INDEX_DESCRIPTION_MAX_CHARACTERS,
+  type IndexDescription,
+} from "../indexing/IndexDescription";
 
 export interface ServerProfile {
   id: string;
@@ -79,6 +83,7 @@ export interface IxplorerSettings {
   expandFilteredContextThroughLinks: boolean;
   graphContextDepth: number;
   useWebWhenFreshnessNeeded: boolean;
+  forceEagerResearch: boolean;
   debugMode: boolean;
 }
 
@@ -133,6 +138,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   expandFilteredContextThroughLinks: false,
   graphContextDepth: 1,
   useWebWhenFreshnessNeeded: true,
+  forceEagerResearch: false,
   debugMode: false,
 };
 
@@ -212,6 +218,10 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
       typeof data.useWebWhenFreshnessNeeded === "boolean"
         ? data.useWebWhenFreshnessNeeded
         : DEFAULT_SETTINGS.useWebWhenFreshnessNeeded,
+    forceEagerResearch:
+      typeof data.forceEagerResearch === "boolean"
+        ? data.forceEagerResearch
+        : DEFAULT_SETTINGS.forceEagerResearch,
     debugMode: data.debugMode === true,
   };
 
@@ -631,6 +641,7 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
     lastIndexedAt: readString(value.lastIndexedAt) || undefined,
     indexedFileCount: readNonNegativeIntegerOrUndefined(value.indexedFileCount),
     indexSizeBytes: readNonNegativeIntegerOrUndefined(value.indexSizeBytes),
+    indexDescription: readIndexDescription(value.indexDescription),
     chunkSize: readPositiveInteger(value.chunkSize, DEFAULT_CHUNK_LENGTH),
     chunkOverlap: normalizeChunkOverlap(
       readNonNegativeInteger(value.chunkOverlap, DEFAULT_CHUNK_OVERLAP),
@@ -772,6 +783,49 @@ function readGraphContextDepth(value: unknown): number {
   return value === 2 ? 2 : DEFAULT_SETTINGS.graphContextDepth;
 }
 
+function readIndexDescription(value: unknown): IndexDescription | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.text !== "string" ||
+    value.text.length === 0 ||
+    value.text.length > INDEX_DESCRIPTION_MAX_CHARACTERS ||
+    typeof value.generatedAt !== "string" ||
+    typeof value.indexUpdatedAt !== "string" ||
+    value.generator !== "deterministic" ||
+    !isPositiveInteger(value.algorithmVersion) ||
+    (value.status !== "current" && value.status !== "stale" && value.status !== "failed") ||
+    !isNonNegativeInteger(value.sourceCount) ||
+    !isNonNegativeInteger(value.chunkCount) ||
+    !isRecord(value.diagnostics) ||
+    !isNonNegativeInteger(value.diagnostics.representativeChunkCount) ||
+    typeof value.diagnostics.truncated !== "boolean" ||
+    typeof value.diagnostics.usedFallback !== "boolean" ||
+    (value.diagnostics.failureReason !== undefined &&
+      typeof value.diagnostics.failureReason !== "string")
+  ) {
+    return undefined;
+  }
+
+  return {
+    text: value.text,
+    generatedAt: value.generatedAt,
+    indexUpdatedAt: value.indexUpdatedAt,
+    generator: "deterministic",
+    algorithmVersion: value.algorithmVersion,
+    status: value.status,
+    sourceCount: value.sourceCount,
+    chunkCount: value.chunkCount,
+    diagnostics: {
+      representativeChunkCount: value.diagnostics.representativeChunkCount,
+      truncated: value.diagnostics.truncated,
+      usedFallback: value.diagnostics.usedFallback,
+      ...(typeof value.diagnostics.failureReason === "string"
+        ? { failureReason: value.diagnostics.failureReason }
+        : {}),
+    },
+  };
+}
+
 function readIndexMode(value: unknown): IndexProfile["mode"] {
   return value === "selected" ? "selected" : "wholeVault";
 }
@@ -786,6 +840,9 @@ function cloneIndexProfile(profile: IndexProfile): IndexProfile {
     includeFolders: [...profile.includeFolders],
     excludeGlobs: [...profile.excludeGlobs],
     sourceKinds: profile.sourceKinds ? [...profile.sourceKinds] : undefined,
+    indexDescription: profile.indexDescription
+      ? { ...profile.indexDescription, diagnostics: { ...profile.indexDescription.diagnostics } }
+      : undefined,
     keywordIndex: { ...profile.keywordIndex },
   };
 }

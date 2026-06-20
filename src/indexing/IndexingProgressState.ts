@@ -32,6 +32,7 @@ export class IndexingProgressState {
       failedFiles: 0,
       indexSizeBytes: this.state.indexSizeBytes,
       isStale: false,
+      indexChanged: activeOperation === "rebuild",
       errorMessage: undefined,
       lastUpdatedAt: this.timestamp(),
     };
@@ -121,7 +122,11 @@ export class IndexingProgressState {
   }
 
   markIndexedFile(): void {
-    this.state = { ...this.state, indexedFiles: this.state.indexedFiles + 1 };
+    this.state = {
+      ...this.state,
+      indexedFiles: this.state.indexedFiles + 1,
+      indexChanged: true,
+    };
   }
 
   markFailedFile(): void {

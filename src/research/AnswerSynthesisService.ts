@@ -6,6 +6,7 @@ import {
   ResearchAnswer,
   RetrievedChunk,
   ToolCallDiagnostic,
+  IndexDescriptionPromptContext,
 } from "../shared/types";
 import { IxplorerError } from "../shared/errors";
 import {
@@ -47,6 +48,7 @@ export interface AnswerSynthesisInput {
   inlineSkill?: LoadedSkill;
   retrievalDiagnostics?: string;
   skillToolResultChars?: number;
+  indexDescription?: IndexDescriptionPromptContext;
 }
 
 export class AnswerSynthesisService {
@@ -71,6 +73,7 @@ export class AnswerSynthesisService {
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
     this.assertWithinContextWindow(input);
     const systemPromptOptions = {
+      indexDescription: input.indexDescription?.text,
       skillCatalog: input.skillCatalog ? buildSkillCatalogPrompt(input.skillCatalog) : undefined,
       inlineSkill: input.inlineSkill
         ? {
@@ -204,6 +207,7 @@ export class AnswerSynthesisService {
       retrievalDiagnostics: input.retrievalDiagnostics,
       reservedOutputTokens: this.chatOptions.maxTokens,
       systemPromptOptions: {
+        indexDescription: input.indexDescription?.text,
         skillCatalog: input.skillCatalog ? buildSkillCatalogPrompt(input.skillCatalog) : undefined,
         inlineSkill: input.inlineSkill
           ? {

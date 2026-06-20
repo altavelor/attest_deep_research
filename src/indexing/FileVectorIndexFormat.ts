@@ -2,6 +2,7 @@ import { isRecord } from "../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
 import { LanguageInventoryItem, SourceReference } from "../shared/types";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
+import type { IndexDescription } from "./IndexDescription";
 
 export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 2;
 export const FILE_VECTOR_INDEX_FORMAT = "ixplorer-file-vector-index";
@@ -26,6 +27,7 @@ export interface IndexProfile {
   indexedFileCount?: number;
   indexSizeBytes?: number;
   sourceKinds?: Array<SourceReference["kind"]>;
+  indexDescription?: IndexDescription;
   refreshMode: "manual" | "onStartup" | "onVaultChange";
   shardCount: typeof DEFAULT_FILE_VECTOR_SHARD_COUNT;
   chunkSize: number;

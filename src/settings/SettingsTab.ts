@@ -87,6 +87,20 @@ export class IxplorerSettingTab extends PluginSettingTab {
       "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
     );
 
+    renderSubcategoryHeading(containerEl, "Execution strategy");
+
+    new Setting(containerEl)
+      .setName("Force eager research mode")
+      .setDesc(
+        "Force the existing eager research pipeline for every model. Disable this to permit automatic strategy selection when agentic research becomes available.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.forceEagerResearch).onChange(async (value) => {
+          this.plugin.settings.forceEagerResearch = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
     renderSubcategoryHeading(containerEl, "Local context");
 
     new Setting(containerEl)
@@ -557,7 +571,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
         });
       } else {
         createIconButton(actions, {
-          icon: "play",
+          icon: profile.lastIndexedAt ? "history" : "play",
           label: profile.lastIndexedAt ? "Update index" : "Start indexing",
           disabled: !canRun,
           onClick: () => void this.plugin.indexing.start(profile.id),

@@ -39,6 +39,7 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.expandFilteredContextThroughLinks).toBe(false);
     expect(DEFAULT_SETTINGS.graphContextDepth).toBe(1);
     expect(DEFAULT_SETTINGS.useWebWhenFreshnessNeeded).toBe(true);
+    expect(DEFAULT_SETTINGS.forceEagerResearch).toBe(false);
     expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
@@ -75,6 +76,7 @@ describe("Ixplorer settings", () => {
       expandFilteredContextThroughLinks: true,
       graphContextDepth: 2,
       useWebWhenFreshnessNeeded: false,
+      forceEagerResearch: true,
       debugMode: true,
     });
 
@@ -98,7 +100,70 @@ describe("Ixplorer settings", () => {
     expect(settings.expandFilteredContextThroughLinks).toBe(true);
     expect(settings.graphContextDepth).toBe(2);
     expect(settings.useWebWhenFreshnessNeeded).toBe(false);
+    expect(settings.forceEagerResearch).toBe(true);
     expect(settings.debugMode).toBe(true);
+  });
+
+  it("migrates missing and malformed eager overrides to false", () => {
+    expect(migrateSettings({}).forceEagerResearch).toBe(false);
+    expect(migrateSettings({ forceEagerResearch: "true" }).forceEagerResearch).toBe(false);
+  });
+
+  it("preserves valid index descriptions and drops malformed metadata", () => {
+    const valid = migrateSettings({
+      indexProfiles: [
+        {
+          id: "default",
+          indexFolder: ".ixplorer/index",
+          includeFolders: ["/"],
+          excludeGlobs: [],
+          indexDescription: {
+            text: "A bounded description",
+            generatedAt: "2026-06-20T10:00:00.000Z",
+            indexUpdatedAt: "2026-06-20T09:59:00.000Z",
+            generator: "deterministic",
+            algorithmVersion: 1,
+            status: "current",
+            sourceCount: 2,
+            chunkCount: 4,
+            diagnostics: {
+              representativeChunkCount: 2,
+              truncated: false,
+              usedFallback: false,
+            },
+          },
+        },
+      ],
+    });
+    const invalid = migrateSettings({
+      indexProfiles: [
+        {
+          id: "default",
+          indexFolder: ".ixplorer/index",
+          includeFolders: ["/"],
+          excludeGlobs: [],
+          indexDescription: { text: "missing metadata" },
+        },
+      ],
+    });
+    const oversized = migrateSettings({
+      indexProfiles: [
+        {
+          id: "default",
+          indexFolder: ".ixplorer/index",
+          includeFolders: ["/"],
+          excludeGlobs: [],
+          indexDescription: {
+            ...valid.indexProfiles[0].indexDescription,
+            text: "x".repeat(2_001),
+          },
+        },
+      ],
+    });
+
+    expect(valid.indexProfiles[0].indexDescription?.text).toBe("A bounded description");
+    expect(invalid.indexProfiles[0].indexDescription).toBeUndefined();
+    expect(oversized.indexProfiles[0].indexDescription).toBeUndefined();
   });
 
   it("marks dependent profiles suspended when server is missing or suspended", () => {
