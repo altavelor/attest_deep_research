@@ -1,7 +1,14 @@
 import { IxplorerError } from "../shared/errors";
-import { SearchProvider, SearchProviderResult, WebSearchOptions } from "../shared/types";
+import {
+  SearchProvider,
+  SearchProviderResult,
+  WebPageFetchOptions,
+  WebPageFetchResult,
+  WebSearchOptions,
+} from "../shared/types";
 import type { PluginRequestLogger } from "../settings/debugLogger";
 import { extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
+import { validatePublicWebUrl } from "./WebUrlPolicy";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -19,6 +26,8 @@ const DEFAULT_RESULT_LIMIT = 5;
 const DEFAULT_MAX_FETCHES = 3;
 const HARD_RESULT_LIMIT = 50;
 const HARD_MAX_FETCHES = 15;
+const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576;
+const DEFAULT_MAX_REDIRECTS = 5;
 
 export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly fetchImpl: typeof fetch;
@@ -92,6 +101,102 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     }
   }
 
+  async fetchPage(url: string, options: WebPageFetchOptions = {}): Promise<WebPageFetchResult> {
+    const initial = validatePublicWebUrl(url);
+    if (!initial.ok) {
+      return pageFailure("unsafe-web-url", "The registered web URL is not allowed.", false, {
+        reason: initial.reason,
+      });
+    }
+
+    const timeoutMs = positiveInteger(options.timeoutMs, this.timeoutMs);
+    const maxResponseBytes = positiveInteger(options.maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES);
+    const maxContentChars = positiveInteger(options.maxContentChars, this.maxExtractedTextLength);
+    const maxRedirects = nonNegativeInteger(options.maxRedirects, DEFAULT_MAX_REDIRECTS);
+    const redirects: string[] = [];
+    let currentUrl = initial.url;
+
+    for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+      let response: Response;
+      try {
+        response = await this.requestPage(currentUrl, timeoutMs);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return pageFailure("web-fetch-timeout", "Page fetch timed out.", true);
+        }
+        return pageFailure("web-fetch-network", "Page fetch failed.", true);
+      }
+
+      if (isRedirect(response.status)) {
+        const location = response.headers.get("location");
+        await response.body?.cancel();
+        if (!location) {
+          return pageFailure("web-fetch-redirect", "Redirect response had no location.", false);
+        }
+        if (redirectCount === maxRedirects) {
+          return pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false);
+        }
+        const redirected = validatePublicWebUrl(new URL(location, currentUrl).toString());
+        if (!redirected.ok) {
+          return pageFailure("web-fetch-redirect", "Redirect target is not allowed.", false, {
+            reason: redirected.reason,
+          });
+        }
+        currentUrl = redirected.url;
+        redirects.push(currentUrl);
+        continue;
+      }
+
+      if (!response.ok) {
+        return pageFailure(
+          "web-fetch-http",
+          `Page fetch returned HTTP ${response.status}.`,
+          response.status === 429 || response.status >= 500,
+          { status: response.status },
+        );
+      }
+
+      const contentType = normalizedContentType(response.headers.get("content-type"));
+      if (!isSupportedPageContentType(contentType)) {
+        return pageFailure("web-fetch-content-type", "Page content type is not supported.", false, {
+          contentType,
+        });
+      }
+
+      let body: Awaited<ReturnType<typeof readBoundedBody>>;
+      try {
+        body = await readBoundedBody(response, maxResponseBytes);
+      } catch {
+        return pageFailure("web-fetch-network", "Page response could not be read.", true);
+      }
+      if (!body.ok) {
+        return body.result;
+      }
+      const rawText = new TextDecoder().decode(body.bytes);
+      const extracted =
+        contentType === "text/plain"
+          ? rawText.replace(/\s+/g, " ").trim()
+          : extractReadableText(rawText, maxContentChars + 1);
+      if (!extracted) {
+        return pageFailure("web-fetch-empty-content", "Page contained no readable text.", false);
+      }
+      const content = extracted.slice(0, maxContentChars);
+
+      return {
+        ok: true,
+        url: initial.url,
+        finalUrl: currentUrl,
+        content,
+        contentType,
+        bytes: body.bytes.byteLength,
+        truncated: extracted.length > maxContentChars,
+        redirects,
+      };
+    }
+
+    return pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false);
+  }
+
   private async fetchSearchResults(query: string): Promise<string> {
     const url = new URL(this.searchUrl);
     url.searchParams.set("q", query);
@@ -162,6 +267,34 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       clearTimeout(timeout);
     }
   }
+
+  private async requestPage(url: string, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const context = {
+      url,
+      method: "GET",
+      headers: { accept: "text/html,application/xhtml+xml,text/plain" },
+    };
+
+    try {
+      this.logger?.logRequest(context);
+      const response = await this.fetchImpl.call(globalThis, url, {
+        method: "GET",
+        headers: context.headers,
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      this.logger?.logResponse({
+        ...context,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return response;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
@@ -178,4 +311,101 @@ function clampNonNegativeInteger(value: number | undefined, fallback: number, ma
   }
 
   return Math.max(0, Math.min(Math.floor(value), max));
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeInteger(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function isRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function normalizedContentType(value: string | null): string {
+  return (value ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+function isSupportedPageContentType(contentType: string): boolean {
+  return (
+    contentType === "text/html" ||
+    contentType === "application/xhtml+xml" ||
+    contentType === "text/plain"
+  );
+}
+
+async function readBoundedBody(
+  response: Response,
+  maxBytes: number,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchResult }> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return {
+      ok: false,
+      result: pageFailure(
+        "web-fetch-response-too-large",
+        "Page response exceeded the size limit.",
+        false,
+        { maxBytes },
+      ),
+    };
+  }
+
+  if (!response.body) {
+    return { ok: true, bytes: new Uint8Array() };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return {
+        ok: false,
+        result: pageFailure(
+          "web-fetch-response-too-large",
+          "Page response exceeded the size limit.",
+          false,
+          { maxBytes },
+        ),
+      };
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, bytes };
+}
+
+function pageFailure(
+  code: string,
+  message: string,
+  retryable: boolean,
+  details?: Record<string, unknown>,
+): WebPageFetchResult {
+  return {
+    ok: false,
+    error: { code, message, retryable, ...(details ? { details } : {}) },
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }

@@ -19,7 +19,7 @@ import {
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
 import { EvidencePlanner, EvidencePlannerOptions } from "./EvidencePlanner";
-import { NoteToolService } from "./NoteTools";
+import { NoteToolService } from "./tools/NoteTools";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {

@@ -176,6 +176,7 @@ describe("ChatModelClient", () => {
         function: expect.objectContaining({ name: "read_note" }),
       }),
     ]);
+    expect(body).not.toHaveProperty("tool_choice");
   });
 
   it("streams Ollama chat JSON lines", async () => {

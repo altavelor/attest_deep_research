@@ -1,16 +1,16 @@
-import { stableId } from "../extractors/common";
-import { isInternalSkillPath, normalizeVaultPath } from "../shared/pathFilters";
+import { stableId } from "../../extractors/common";
+import { isInternalSkillPath, normalizeVaultPath } from "../../shared/pathFilters";
 import {
   ChatToolCall,
   ChatToolDefinition,
   Extractor,
   ExtractedChunk,
   RetrievedChunk,
-} from "../shared/types";
-import { ContextFileProvider } from "./ContextAssembler";
-import { estimateTextTokens } from "./prompts";
-import { ResearchRetriever } from "./types";
-import { SKILL_ROOT, SkillRegistry } from "../skills/SkillRegistry";
+} from "../../shared/types";
+import { ContextFileProvider } from "../ContextAssembler";
+import { estimateTextTokens } from "../prompts";
+import { ResearchRetriever } from "../types";
+import { SKILL_ROOT, SkillRegistry } from "../../skills/SkillRegistry";
 
 export interface NoteToolServiceOptions {
   files: ContextFileProvider;

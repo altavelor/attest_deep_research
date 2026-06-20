@@ -5,7 +5,7 @@ import {
   ChatToolCall,
   ChatToolDefinition,
   ToolCallDiagnostic,
-} from "../shared/types";
+} from "../../shared/types";
 
 export interface ToolLoopRunnerOptions {
   chatModel: ChatModelProvider;
