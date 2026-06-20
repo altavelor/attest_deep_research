@@ -192,7 +192,7 @@ describe("ResearchService", () => {
 
   it.each([
     [true, "eager-forced"],
-    [false, "eager-default"],
+    [false, "deterministic-fallback"],
   ] as const)("reports the iteration-1 execution strategy for forceEagerResearch=%s", async (forceEagerResearch, expected) => {
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
@@ -218,6 +218,56 @@ describe("ResearchService", () => {
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
+  });
+
+  it("routes an eligible profile through the agentic loop", async () => {
+    const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Evidence");
+    const chatModel = new FakeChatModel([
+      [{ content: "discard", isComplete: true, toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }] }],
+      [{ content: "Agentic answer [idx-1]", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever({ ...emptyRetrieval(), chunks: [chunk], citations: [citation("idx-1", chunk.source)] }),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: { calls: true, choiceRequired: true, choiceSpecific: true, parallelCalls: true },
+      now: fixedNow,
+    });
+    const events = await collectAsync(service.answer({
+      question: "q", searchMode: "indexOnly", includeContextDiagnostics: true,
+    }));
+    expect(events.filter((event) => event.type === "delta")).toEqual([{ type: "delta", content: "Agentic answer [idx-1]" }]);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: {
+        answer: "Agentic answer [idx-1]",
+        citations: [{ id: "idx-1" }],
+        contextDiagnostics: { executionStrategy: "agentic", agentic: { requiredTools: ["search_index"] } },
+      },
+    });
+    expect(chatModel.requests).toHaveLength(2);
+  });
+
+  it("discards partial agentic text and restarts eager on terminal failure", async () => {
+    const chatModel = new FakeChatModel([
+      [{ content: "partial agentic", isComplete: true }],
+      [{ content: "repair text", isComplete: true }],
+      [{ content: "Eager fallback", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()), chatModel, chatModelName: "qwen",
+      toolCapabilities: { calls: true, choiceRequired: true, choiceSpecific: true, parallelCalls: true },
+      now: fixedNow,
+    });
+    const events = await collectAsync(service.answer({
+      question: "q", searchMode: "indexOnly", includeContextDiagnostics: true,
+    }));
+    expect(events.filter((event) => event.type === "delta")).toEqual([{ type: "delta", content: "Eager fallback" }]);
+    expect(JSON.stringify(events)).not.toContain("partial agentic");
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: { contextDiagnostics: { executionStrategy: "deterministic-fallback", agentic: { duplicatedCost: true } } },
+    });
   });
 
   it.each([

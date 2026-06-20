@@ -133,7 +133,12 @@ export class ChatModelClient implements ChatModelProvider {
         max_tokens: request.maxTokens,
         stream: true,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
+        ...(request.toolChoice ? { tool_choice: mapOpenAiToolChoice(request) } : {}),
+        ...(request.parallelToolCalls !== undefined
+          ? { parallel_tool_calls: request.parallelToolCalls }
+          : {}),
       }),
+      signal: request.signal,
     });
 
     if (!response.body) {
@@ -170,14 +175,13 @@ export class ChatModelClient implements ChatModelProvider {
   private async *streamAnthropicChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     const systemMessage = request.messages.find((message) => message.role === "system")?.content;
     const messages = request.messages
-      .filter((message) => message.role !== "system")
-      .map(mapAnthropicMessage);
+      .filter((message) => message.role !== "system");
     const response = await this.http.request("/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: request.model,
-        messages,
+        messages: mapAnthropicMessages(messages),
         system: systemMessage || undefined,
         temperature: request.temperature,
         max_tokens: request.maxTokens ?? 4096,
@@ -189,10 +193,11 @@ export class ChatModelClient implements ChatModelProvider {
                 description: tool.function.description,
                 input_schema: tool.function.parameters,
               })),
-              tool_choice: { type: "auto" },
+              tool_choice: mapAnthropicToolChoice(request),
             }
           : {}),
       }),
+      signal: request.signal,
     });
 
     if (!response.body) {
@@ -227,6 +232,7 @@ export class ChatModelClient implements ChatModelProvider {
   }
 
   private async *streamOllamaChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    validateOllamaToolChoice(request);
     const response = await this.http.request("/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -234,12 +240,15 @@ export class ChatModelClient implements ChatModelProvider {
         model: request.model,
         messages: request.messages.map(mapOllamaMessage),
         stream: true,
-        ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
+        ...(request.toolChoice?.type !== "none" && request.tools && request.tools.length > 0
+          ? { tools: request.tools }
+          : {}),
         options:
           request.temperature === undefined && request.maxTokens === undefined
             ? undefined
             : { temperature: request.temperature, num_predict: request.maxTokens },
       }),
+      signal: request.signal,
     });
 
     if (!response.body) {
@@ -286,6 +295,41 @@ export class ChatModelClient implements ChatModelProvider {
       throw error;
     }
   }
+}
+
+function mapOpenAiToolChoice(request: ChatRequest): unknown {
+  const choice = request.toolChoice!;
+  if (choice.type !== "specific") return choice.type;
+  validateSpecificTool(request, choice.name);
+  return { type: "function", function: { name: choice.name } };
+}
+
+function mapAnthropicToolChoice(request: ChatRequest): Record<string, unknown> {
+  const choice = request.toolChoice ?? { type: "auto" as const };
+  if ((choice.type === "required" || choice.type === "specific") && request.reasoningEnabled) {
+    throw unsupported("Anthropic forced tool choice is incompatible with reasoning.");
+  }
+  if (choice.type === "specific") {
+    validateSpecificTool(request, choice.name);
+    return { type: "tool", name: choice.name };
+  }
+  return { type: choice.type === "required" ? "any" : choice.type };
+}
+
+function validateOllamaToolChoice(request: ChatRequest): void {
+  if (request.toolChoice?.type === "required" || request.toolChoice?.type === "specific") {
+    throw unsupported("Ollama does not support required or specific tool choice.");
+  }
+}
+
+function validateSpecificTool(request: ChatRequest, name: string): void {
+  if (!request.tools?.some((tool) => tool.function.name === name)) {
+    throw unsupported(`Specific tool is not defined: ${name}.`);
+  }
+}
+
+function unsupported(message: string): IxplorerError {
+  return new IxplorerError({ code: "UNSUPPORTED_CAPABILITY", message });
 }
 
 interface ToolCallDelta {
@@ -577,4 +621,28 @@ function mapAnthropicMessage(message: ChatMessage): Record<string, unknown> {
   }
 
   return { role: message.role === "assistant" ? "assistant" : "user", content: message.content };
+}
+
+function mapAnthropicMessages(messages: ChatMessage[]): Record<string, unknown>[] {
+  const mapped: Record<string, unknown>[] = [];
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role !== "tool") {
+      mapped.push(mapAnthropicMessage(message));
+      continue;
+    }
+    const content: Record<string, unknown>[] = [];
+    while (index < messages.length && messages[index].role === "tool") {
+      const tool = messages[index];
+      content.push({
+        type: "tool_result",
+        tool_use_id: tool.toolCallId,
+        content: tool.content,
+      });
+      index += 1;
+    }
+    index -= 1;
+    mapped.push({ role: "user", content });
+  }
+  return mapped;
 }

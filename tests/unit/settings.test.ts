@@ -109,6 +109,20 @@ describe("Ixplorer settings", () => {
     expect(migrateSettings({ forceEagerResearch: "true" }).forceEagerResearch).toBe(false);
   });
 
+  it("migrates legacy tools conservatively into tool calling settings", () => {
+    const settings = migrateSettings({
+      serverProfiles: [{ id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "http://x" }],
+      chatModelProfiles: [{
+        id: "m", name: "M", serverProfileId: "s", modelName: "model",
+        capabilities: { chat: true, embeddings: false, tools: true, detectionSource: "probe" },
+      }],
+    });
+    expect(settings.chatModelProfiles[0].capabilities?.toolCalling).toEqual({
+      formatDefault: { calls: false, choiceRequired: false, choiceSpecific: false, parallelCalls: false },
+      probe: { calls: true },
+    });
+  });
+
   it("preserves valid index descriptions and drops malformed metadata", () => {
     const valid = migrateSettings({
       indexProfiles: [

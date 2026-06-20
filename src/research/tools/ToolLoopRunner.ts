@@ -20,6 +20,7 @@ export interface ToolLoopRunnerOptions {
   maxRounds?: number;
   maxToolCallsPerRound?: number;
   maxTotalResultChars?: number;
+  signal?: AbortSignal;
 }
 
 export interface ToolLoopEvent {
@@ -56,6 +57,7 @@ export async function runToolLoop(options: ToolLoopRunnerOptions): Promise<ToolL
       tools: options.tools,
       temperature: options.temperature,
       maxTokens: options.maxTokens,
+      signal: options.signal,
     });
 
     answerText = roundResult.content;
@@ -142,6 +144,7 @@ async function collectModelRound(options: {
   tools: ChatToolDefinition[];
   temperature?: number;
   maxTokens?: number;
+  signal?: AbortSignal;
 }): Promise<{ content: string; events: ToolLoopEvent[]; toolCalls: ChatToolCall[] }> {
   const events: ToolLoopEvent[] = [];
   const toolCalls: ChatToolCall[] = [];
@@ -153,6 +156,7 @@ async function collectModelRound(options: {
     tools: options.tools,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
+    signal: options.signal,
   } satisfies ChatRequest)) {
     if (chunk.content) {
       content += chunk.content;

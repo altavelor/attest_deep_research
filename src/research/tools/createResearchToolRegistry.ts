@@ -42,7 +42,7 @@ export function createResearchToolRegistry(
         noteAccess: availability.noteAccess,
         activeFileAccess: availability.activeFileAccess,
         skillAccess: availability.skillAccess,
-      }),
+      }, evidence),
     );
   }
 

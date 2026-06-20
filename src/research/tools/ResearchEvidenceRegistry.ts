@@ -2,13 +2,13 @@ import { randomUUID } from "crypto";
 
 import { stableId } from "../../extractors/common";
 import { formatCitation } from "../../retrieval/citations";
-import { Citation, RetrievedChunk, WebSourceReference } from "../../shared/types";
+import { Citation, RetrievedChunk, SourceReference, WebSourceReference } from "../../shared/types";
 import { validatePublicWebUrl } from "../../web/WebUrlPolicy";
 
 export interface EvidenceCallProvenance {
   callId: string;
   query?: string;
-  tool: "search_index" | "search_web" | "fetch_web_page";
+  tool: "search_index" | "search_web" | "fetch_web_page" | "read_note" | "get_active_note";
 }
 
 export interface EvidenceProvenance {
@@ -83,6 +83,31 @@ export class ResearchEvidenceRegistry {
       calls: [call],
     });
     return evidenceId;
+  }
+
+  registerNoteEvidence(
+    input: { evidenceId: string; source: SourceReference; content: string },
+    provenance: { callId: string; tool: "read_note" | "get_active_note" },
+  ): string {
+    const existing = this.entries.get(input.evidenceId);
+    const call: EvidenceCallProvenance = { callId: provenance.callId, tool: provenance.tool };
+    if (existing) {
+      appendCall(existing.calls, call);
+      return input.evidenceId;
+    }
+    const chunk: RetrievedChunk = {
+      id: input.evidenceId,
+      source: cloneValue(input.source),
+      text: input.content,
+      contentHash: stableId(input.content),
+      score: 1,
+    };
+    this.entries.set(input.evidenceId, {
+      chunk,
+      citation: { ...formatCitation(chunk.source), id: chunk.id },
+      calls: [call],
+    });
+    return input.evidenceId;
   }
 
   registerWebResult(

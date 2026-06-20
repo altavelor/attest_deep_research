@@ -9,10 +9,11 @@ Approved requirements draft. Implementation is phased; iteration 1 adds a config
 1. The selected search mode is an application policy, not a suggestion to the model.
 2. “Required in the first request” means that the first model round must request every required source tool before a final answer can be accepted.
 3. A required source is satisfied only by a successfully executed tool call, not merely by an attempted call.
-4. Full chain-of-thought is neither rendered nor persisted. Provider-supported reasoning summaries may be exposed separately later.
+4. Full chain-of-thought is neither rendered nor persisted. Provider-supported reasoning summaries may be exposed only as separate ephemeral UI status in iteration 4.
 5. When the necessary `tool_choice` behavior or reasoning continuation is unavailable, the existing deterministic evidence pipeline remains the fallback.
 6. This change prepares the architecture for reasoning models; provider-specific reasoning controls and UI may be delivered separately.
 7. OpenAI Responses is the authoritative target for full reasoning continuation. OpenAI-compatible Chat Completions remains a compatibility protocol.
+8. OpenAI Responses continuation is stateless and answer-scoped in iteration 4: requests use `store: false` and do not use `previous_response_id`.
 
 ## Objective
 
@@ -47,12 +48,12 @@ When forced eager mode is disabled during iteration 1, diagnostics report `execu
 
 ### Mandatory first-round source policy
 
-| Search mode | Required successful tools before final answer |
-| --- | --- |
-| `none` | None |
-| `indexOnly` | `search_index` |
-| `indexAndWeb` | `search_index` and `search_web` |
-| `webOnly` | `search_web` |
+| Search mode   | Required successful tools before final answer |
+| ------------- | --------------------------------------------- |
+| `none`        | None                                          |
+| `indexOnly`   | `search_index`                                |
+| `indexAndWeb` | `search_index` and `search_web`               |
+| `webOnly`     | `search_web`                                  |
 
 When **Include active file as context** is enabled, `get_active_note` is additionally required in every mode. The active note content must not be inserted into the initial prompt.
 
@@ -304,6 +305,12 @@ type ChatToolChoice =
 
 Each provider adapter maps this contract to its native request format. Unsupported mappings must fail capability validation rather than being silently dropped.
 
+Iteration-3 mappings are constrained as follows:
+
+- OpenAI-compatible Chat Completions maps all four choices and optional parallel calls, but compatible servers require probe or manual confirmation before agentic use.
+- Anthropic maps `required` to `any` and `specific` to `tool`; forced choices are unavailable when extended reasoning is enabled.
+- Ollama has no documented required/specific choice mapping and therefore uses deterministic eager fallback for mandatory-source policies.
+
 ### Ordered model output
 
 The current `content + toolCalls` response loses reasoning structure. The target interface must preserve ordered output items:
@@ -439,7 +446,7 @@ Unit and contract tests must cover:
 11. Regression coverage for the current deterministic pipeline.
 12. Deterministic description generation without network/model calls, no regeneration after no-change runs, minimal fallback, freshness, mode-based prompt injection, and selected-index switching.
 
-Integration fixtures should simulate complete multi-round streams for OpenAI-compatible, Anthropic, and Ollama formats selected for the initial release.
+Integration fixtures should simulate complete multi-round agentic streams for verified OpenAI-compatible and Anthropic profiles, plus deterministic fallback for Ollama and unverified compatible profiles.
 
 ## Boundaries
 
@@ -500,9 +507,14 @@ Integration fixtures should simulate complete multi-round streams for OpenAI-com
 14. Retryable mandatory-tool failures receive one retry; a remaining mandatory failure triggers fallback. Optional tool failures are returned to the model for recovery.
 15. Duplicate calls reuse cached results and count against the total call budget.
 16. Capabilities combine metadata, probing, and explicit manual override.
+17. Responses protocol selection belongs to the model profile. Existing profiles migrate to Chat Completions and never opt into Responses solely because their server is OpenAI-compatible.
+18. Responses tool rounds preserve provider output items losslessly using encrypted reasoning content; opaque continuation is destroyed at every answer boundary.
+19. `forceEagerResearch` controls evidence acquisition only. It does not disable a profile's reasoning settings during final synthesis.
+20. Reasoning summaries are provider-generated, visually separate from assistant content, and not persisted or exported in iteration 4.
 
 ## Deferred questions
 
 - Agentic semantics for `deepResearch`.
-- Exact OpenAI Responses reasoning-effort values exposed by the profile UI.
 - Anthropic and Ollama reasoning-continuation rollout order after the OpenAI Responses reference implementation.
+- Whether a later iteration should offer server-side Responses continuation through `previous_response_id`.
+- Whether provider-generated reasoning summaries should ever be persisted as separate metadata.

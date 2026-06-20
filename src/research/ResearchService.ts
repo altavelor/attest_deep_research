@@ -15,6 +15,8 @@ import {
   SearchProvider,
   WebContextDiagnostics,
   IndexDescriptionPromptContext,
+  ToolCallingCapabilities,
+  ApiFormat,
 } from "../shared/types";
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
@@ -42,6 +44,11 @@ import { SkillSelectionService } from "../skills/SkillSelectionService";
 import { estimateTextTokens } from "./prompts";
 import { IxplorerError } from "../shared/errors";
 import { isInternalSkillPath } from "../shared/pathFilters";
+import { resolveResearchExecutionPolicy } from "./ResearchExecutionPolicy";
+import { createResearchToolRegistry } from "./tools/createResearchToolRegistry";
+import { AgenticResearchRunner, AgenticResearchFailure } from "./AgenticResearchRunner";
+import { buildAgenticResearchMessages } from "./agenticPrompts";
+import { extractFollowUpQuestions } from "./prompts";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 
@@ -66,6 +73,9 @@ export interface ResearchServiceOptions {
   getIndexStatus?: () => ContextIndexDiagnostics;
   forceEagerResearch?: boolean;
   indexDescription?: IndexDescriptionPromptContext;
+  toolCapabilities?: ToolCallingCapabilities;
+  toolCapabilityProvenance?: Record<string, string>;
+  apiFormat?: ApiFormat;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -86,8 +96,16 @@ export class ResearchService {
   private readonly toolsEnabled: boolean;
   private readonly skillRegistry?: SkillRegistry;
   private readonly getIndexStatus?: () => ContextIndexDiagnostics;
-  private readonly executionStrategy: ResearchExecutionStrategy;
+  private readonly forceEagerResearch: boolean;
   private readonly indexDescription?: IndexDescriptionPromptContext;
+  private readonly retriever: ResearchRetriever;
+  private readonly searchProvider?: SearchProvider;
+  private readonly noteTools?: NoteToolService;
+  private readonly toolCapabilities: ToolCallingCapabilities;
+  private readonly toolCapabilityProvenance?: Record<string, string>;
+  private readonly now: () => Date;
+  private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
+  private readonly apiFormat?: ApiFormat;
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -106,9 +124,22 @@ export class ResearchService {
     this.toolsEnabled = options.toolsEnabled === true && options.noteTools !== undefined;
     this.skillRegistry = options.skillRegistry;
     this.getIndexStatus = options.getIndexStatus;
-    this.executionStrategy = selectResearchExecutionStrategy(options.forceEagerResearch === true);
+    this.forceEagerResearch = options.forceEagerResearch === true;
     this.indexDescription = options.indexDescription;
     const now = options.now ?? (() => new Date());
+    this.now = now;
+    this.persistFinalAnswer = options.persistFinalAnswer;
+    this.retriever = options.retriever;
+    this.searchProvider = options.searchProvider;
+    this.noteTools = options.noteTools;
+    this.toolCapabilities = options.toolCapabilities ?? {
+      calls: false,
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    };
+    this.toolCapabilityProvenance = options.toolCapabilityProvenance;
+    this.apiFormat = options.apiFormat;
 
     this.vaultPipeline = new VaultResearchPipeline({
       retriever: options.retriever,
@@ -136,11 +167,27 @@ export class ResearchService {
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     let question = request.question.trim();
     const searchMode = resolveSearchMode(request);
+    const policy = resolveResearchExecutionPolicy({
+      forceEagerResearch: this.forceEagerResearch,
+      deepResearch: request.deepResearch === true,
+      searchMode,
+      includeActiveFile: request.includeActiveFile === true,
+      dependencies: {
+        retriever: true,
+        webProvider: this.searchProvider !== undefined,
+        activeFileAccess: this.noteTools !== undefined,
+      },
+      capabilities: this.toolCapabilities,
+      apiFormat: this.apiFormat,
+    });
+    let executionStrategy = policy.strategy;
+    let failedAgenticAttempt: AgenticResearchFailure | undefined;
     const indexDescription =
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
         : undefined;
-    const skillToolsEnabled = this.toolsEnabled && searchMode !== "webOnly";
+    let skillToolsEnabled =
+      this.toolsEnabled && (policy.strategy === "agentic" || searchMode !== "webOnly");
     let skillSnapshot: SkillCatalogSnapshot | undefined;
     let selectedSkill: SkillDefinition | undefined;
     let inlineSkill: LoadedSkill | undefined;
@@ -195,6 +242,48 @@ export class ResearchService {
       }
     }
 
+    if (policy.strategy === "agentic") {
+      const agentic = await this.answerAgentically({
+        request,
+        question,
+        searchMode,
+        policy,
+        indexDescription,
+        skillSnapshot,
+        selectedSkill,
+        skillSelectionMode,
+      });
+      if (agentic.result.ok) {
+        if (agentic.diagnostics) yield { type: "context", diagnostics: agentic.diagnostics };
+        yield { type: "status", message: "Synthesizing answer..." };
+        if (agentic.result.answerText) yield { type: "delta", content: agentic.result.answerText };
+        yield { type: "complete", answer: agentic.answer };
+        return;
+      }
+      if (agentic.result.reason === "cancelled") return;
+      failedAgenticAttempt = agentic.result;
+      executionStrategy = "deterministic-fallback";
+      if (searchMode === "webOnly" && skillToolsEnabled) {
+        skillToolsEnabled = false;
+        if (skillSnapshot && !selectedSkill) {
+          const selection = await new SkillSelectionService({
+            chatModel: this.chatModel,
+            model: this.chatModelName,
+          }).select(question, skillSnapshot.skills);
+          selectedSkill = selection.skill;
+          selectorWarning = selection.warning;
+          if (selectedSkill) skillSelectionMode = "automatic";
+        }
+        if (selectedSkill) {
+          const catalogTokens = estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot?.skills ?? []));
+          const maxSkillTokens = this.contextLimitTokens
+            ? Math.max(0, this.contextLimitTokens - (this.reservedOutputTokens ?? 0) - catalogTokens)
+            : undefined;
+          inlineSkill = await this.skillRegistry?.load(selectedSkill, { maxTokens: maxSkillTokens });
+        }
+      }
+    }
+
     const deepResearch = request.deepResearch === true;
     const skillReservedTokens = skillSnapshot
       ? estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot.skills)) +
@@ -222,7 +311,7 @@ export class ResearchService {
             graph: this.graphContext,
           });
     if (assembled) {
-      assembled.diagnostics.executionStrategy = this.executionStrategy;
+      assembled.diagnostics.executionStrategy = executionStrategy;
     }
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
@@ -243,7 +332,7 @@ export class ResearchService {
     );
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
-        createEmptyContextDiagnostics(request.contextMode ?? "include", this.executionStrategy),
+        createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
       retrieval,
       rawRetrieval,
     );
@@ -314,6 +403,36 @@ export class ResearchService {
         );
       }
     }
+    if (failedAgenticAttempt) {
+      diagnostics.agentic = {
+        policyReason: policy.reason,
+        requiredTools: [...policy.requiredTools],
+        satisfiedTools: failedAgenticAttempt.satisfiedTools,
+        repairedTools: failedAgenticAttempt.repairedTools,
+        rounds: failedAgenticAttempt.rounds,
+        totalCalls: failedAgenticAttempt.totalCalls,
+        duplicateCalls: failedAgenticAttempt.duplicateCalls,
+        fallbackReason: failedAgenticAttempt.reason,
+        duplicatedCost: true,
+        capabilityProvenance: this.toolCapabilityProvenance,
+        phases: failedAgenticAttempt.phases,
+        stopReasons: failedAgenticAttempt.stopReasons,
+        budgets: agenticBudgets(failedAgenticAttempt.totalResultChars),
+      };
+    } else if (policy.strategy === "deterministic-fallback") {
+      diagnostics.agentic = {
+        policyReason: policy.reason,
+        requiredTools: [...policy.requiredTools],
+        satisfiedTools: [],
+        repairedTools: [],
+        rounds: 0,
+        totalCalls: 0,
+        duplicateCalls: 0,
+        fallbackReason: policy.reason,
+        duplicatedCost: false,
+        capabilityProvenance: this.toolCapabilityProvenance,
+      };
+    }
 
     yield* this.answerSynthesis.synthesize({
       question,
@@ -338,7 +457,149 @@ export class ResearchService {
         ? Math.max(50_000, this.skillRegistry!.maxDiscoveredSkillTokens() * 4 + 2_000)
         : undefined,
       indexDescription,
+      signal: request.signal,
     });
+  }
+
+  private async answerAgentically(options: {
+    request: ResearchRequest;
+    question: string;
+    searchMode: ResearchSearchMode;
+    policy: ReturnType<typeof resolveResearchExecutionPolicy>;
+    indexDescription?: IndexDescriptionPromptContext;
+    skillSnapshot?: SkillCatalogSnapshot;
+    selectedSkill?: SkillDefinition;
+    skillSelectionMode: "automatic" | "manual" | "none";
+  }): Promise<{
+    result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
+    answer: ResearchAnswer;
+    diagnostics?: ContextDiagnostics;
+  }> {
+    const assembled = this.contextAssembler
+      ? await this.contextAssembler.assemble({
+          question: options.question,
+          contextMode: options.request.contextMode ?? "include",
+          contextPaths: options.request.contextPaths ?? [],
+          includeActiveFile: false,
+          chatHistory: options.request.chatHistory,
+          contextLimitTokens: this.contextLimitTokens,
+          reservedOutputTokens: this.reservedOutputTokens,
+          evidenceLimit: this.evidenceLimit,
+          skipRetrieval: true,
+          graph: { enabled: false, includeBacklinks: false, expandFilteredContextThroughLinks: false, depth: 1 },
+        })
+      : undefined;
+    const created = createResearchToolRegistry({
+      availability: {
+        searchMode: options.searchMode,
+        noteAccess:
+          this.noteTools !== undefined &&
+          (options.searchMode === "indexOnly" || options.searchMode === "indexAndWeb"),
+        activeFileAccess:
+          this.noteTools !== undefined && options.request.includeActiveFile === true,
+        skillAccess: this.noteTools !== undefined && options.skillSnapshot !== undefined,
+        retrieverAvailable: true,
+        webProviderAvailable: this.searchProvider !== undefined,
+      },
+      noteTools: this.noteTools,
+      retriever: this.retriever,
+      searchProvider: this.searchProvider,
+    });
+    const messages = buildAgenticResearchMessages({
+      question: options.question,
+      chatHistory: options.request.chatHistory,
+      requiredTools: options.policy.requiredTools,
+      explicitEvidence: assembled?.explicitEvidence,
+      indexDescription: options.indexDescription?.text,
+      skillCatalog: options.skillSnapshot
+        ? buildSkillCatalogPrompt(options.skillSnapshot.skills)
+        : undefined,
+    });
+    const estimatedTokens =
+      estimateTextTokens(messages.map((message) => message.content).join("\n")) +
+      estimateTextTokens(JSON.stringify(created.tools.definitions())) +
+      (this.reservedOutputTokens ?? 0);
+    let result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
+    if (this.contextLimitTokens && estimatedTokens > this.contextLimitTokens) {
+      result = emptyAgenticFailure("context-limit-exceeded");
+    } else {
+      result = await new AgenticResearchRunner({
+        chatModel: this.chatModel,
+        model: this.chatModelName,
+        messages,
+        tools: created.tools,
+        policy: options.policy,
+        temperature: this.chatOptions.temperature,
+        maxTokens: this.chatOptions.maxTokens,
+        signal: options.request.signal,
+      }).run();
+    }
+    if (result.ok && !validSkillCalls(result.diagnostics, options.selectedSkill)) {
+      result = {
+        ...result,
+        ok: false,
+        reason: "skill-contract-violation",
+      };
+    }
+    const snapshot = created.evidence.snapshot();
+    const explicitEvidence = assembled?.explicitEvidence ?? [];
+    const evidence = dedupeEvidence([...explicitEvidence, ...snapshot.evidence]);
+    const availableCitations = mergeCitations(
+      explicitEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
+      [...snapshot.citations],
+    );
+    const citedIds = result.ok ? citationIdsFromText(result.answerText) : new Set<string>();
+    const knownIds = new Set(evidence.map((chunk) => chunk.id));
+    const unknownCitationIds = [...citedIds].filter((id) => !knownIds.has(id));
+    const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
+    const diagnostics = assembled?.diagnostics ?? createEmptyContextDiagnostics(
+      options.request.contextMode ?? "include",
+      result.ok ? "agentic" : "deterministic-fallback",
+    );
+    diagnostics.executionStrategy = result.ok ? "agentic" : "deterministic-fallback";
+    diagnostics.tools = result.diagnostics;
+    diagnostics.agentic = {
+      policyReason: options.policy.reason,
+      requiredTools: [...options.policy.requiredTools],
+      satisfiedTools: result.satisfiedTools,
+      repairedTools: result.repairedTools,
+      rounds: result.rounds,
+      totalCalls: result.totalCalls,
+      duplicateCalls: result.duplicateCalls,
+      ...(!result.ok ? { fallbackReason: result.reason } : {}),
+      duplicatedCost: !result.ok,
+      capabilityProvenance: this.toolCapabilityProvenance,
+      ...(unknownCitationIds.length > 0 ? { unknownCitationIds } : {}),
+      phases: result.phases,
+      stopReasons: result.stopReasons,
+      budgets: agenticBudgets(result.totalResultChars),
+    };
+    if (options.indexDescription) diagnostics.indexDescription = { ...options.indexDescription.diagnostics };
+    if (options.skillSnapshot) {
+      diagnostics.skills = {
+        discoveredCount: options.skillSnapshot.skills.length,
+        warnings: options.skillSnapshot.warnings,
+        ...(options.selectedSkill ? {
+          selectedId: options.selectedSkill.id,
+          selectedName: options.selectedSkill.name,
+          selectedPath: options.selectedSkill.path,
+        } : {}),
+        selectionMode: options.skillSelectionMode,
+        loadMode: options.selectedSkill ? "read_note" : "none",
+        loadStatus: options.selectedSkill ? "loaded" : "not-selected",
+      };
+    }
+    const answer: ResearchAnswer = {
+      question: options.question,
+      answer: result.ok ? result.answerText : "",
+      citations,
+      evidence,
+      ...(options.request.includeContextDiagnostics === true ? { contextDiagnostics: diagnostics } : {}),
+      followUpQuestions: result.ok ? extractFollowUpQuestions(result.answerText) : [],
+      createdAt: this.now().toISOString(),
+    };
+    if (result.ok && this.persistFinalAnswer) await this.persistFinalAnswer(answer);
+    return { result, answer, diagnostics: options.request.includeContextDiagnostics ? diagnostics : undefined };
   }
 
   async expandAdjacentEvidence(
@@ -366,6 +627,64 @@ export class ResearchService {
       maxTokens: this.chatOptions.maxTokens,
     });
   }
+}
+
+function emptyAgenticFailure(reason: AgenticResearchFailure["reason"]): AgenticResearchFailure {
+  return {
+    ok: false,
+    reason,
+    diagnostics: [],
+    satisfiedTools: [],
+    repairedTools: [],
+    rounds: 0,
+    totalCalls: 0,
+    duplicateCalls: 0,
+    phases: [],
+    stopReasons: [],
+    totalResultChars: 0,
+  };
+}
+
+function agenticBudgets(usedResultChars: number) {
+  return {
+    maxRounds: 5,
+    maxCallsPerRound: 5,
+    maxTotalCalls: 10,
+    maxResultChars: 50_000,
+    usedResultChars,
+  };
+}
+
+function validSkillCalls(
+  diagnostics: ContextDiagnostics["tools"],
+  selectedSkill: SkillDefinition | undefined,
+): boolean {
+  const loaded = diagnostics.filter(
+    (tool) =>
+      tool.name === "read_note" &&
+      tool.status === "success" &&
+      typeof tool.metadata?.skillId === "string",
+  );
+  const paths = new Set(loaded.map((tool) => String(tool.arguments.path ?? "")));
+  if (paths.size > 1) return false;
+  return !selectedSkill || paths.has(selectedSkill.path);
+}
+
+function citationIdsFromText(text: string): Set<string> {
+  return new Set(
+    [...text.matchAll(/\[([^\]\n]{1,200})\]/g)]
+      .map((match) => match[1].trim())
+      .filter(Boolean),
+  );
+}
+
+function dedupeEvidence(evidence: readonly RetrievedChunk[]): RetrievedChunk[] {
+  const seen = new Set<string>();
+  return evidence.filter((chunk) => {
+    if (seen.has(chunk.id)) return false;
+    seen.add(chunk.id);
+    return true;
+  });
 }
 
 function graphEvidenceFromRetrieval(

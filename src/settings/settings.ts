@@ -14,6 +14,10 @@ import {
   INDEX_DESCRIPTION_MAX_CHARACTERS,
   type IndexDescription,
 } from "../indexing/IndexDescription";
+import {
+  normalizeToolCapabilitySettings,
+  ToolCapabilitySettings,
+} from "./toolCapabilities";
 
 export interface ServerProfile {
   id: string;
@@ -32,6 +36,7 @@ export interface ModelCapability {
   embeddings: boolean;
   vision?: boolean;
   tools?: boolean;
+  toolCalling?: ToolCapabilitySettings;
   temperature?: boolean;
   maxTokens?: boolean;
   contextLength?: number;
@@ -594,6 +599,11 @@ function normalizeCapability(value: unknown): ModelCapability | undefined {
     embeddings: value.embeddings,
     vision: typeof value.vision === "boolean" ? value.vision : undefined,
     tools: typeof value.tools === "boolean" ? value.tools : undefined,
+    toolCalling: normalizeToolCapabilitySettings(
+      value.toolCalling,
+      typeof value.tools === "boolean" ? value.tools : undefined,
+      detectionSource,
+    ),
     temperature: typeof value.temperature === "boolean" ? value.temperature : undefined,
     maxTokens: typeof value.maxTokens === "boolean" ? value.maxTokens : undefined,
     contextLength: isPositiveInteger(value.contextLength) ? value.contextLength : undefined,
