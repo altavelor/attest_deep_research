@@ -804,7 +804,8 @@ export class IxplorerChatView extends ItemView {
     }
 
     if (this.deepResearchEl) {
-      this.deepResearchEl.disabled = running || this.getSearchMode() === "indexOnly";
+      this.deepResearchEl.disabled =
+        running || this.getSearchMode() === "indexOnly" || this.getSearchMode() === "none";
     }
 
     this.updateSubmitAvailability();
@@ -815,7 +816,11 @@ export class IxplorerChatView extends ItemView {
   }
 
   private isDeepResearchEnabled(): boolean {
-    return this.getSearchMode() !== "indexOnly" && this.deepResearchEl?.checked === true;
+    return (
+      this.getSearchMode() !== "indexOnly" &&
+      this.getSearchMode() !== "none" &&
+      this.deepResearchEl?.checked === true
+    );
   }
 
   private updateDeepResearchAvailability(): void {
@@ -823,7 +828,8 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    this.deepResearchEl.disabled = this.isRunning || this.getSearchMode() === "indexOnly";
+    this.deepResearchEl.disabled =
+      this.isRunning || this.getSearchMode() === "indexOnly" || this.getSearchMode() === "none";
   }
 
   private updateSubmitAvailability(): void {
@@ -861,11 +867,17 @@ export class IxplorerChatView extends ItemView {
       return "Create and select a chat model profile in Ixplorer settings.";
     }
 
-    if (this.getSearchMode() !== "webOnly" && !this.currentChatSettings.indexProfileId) {
+    if (
+      this.getSearchMode() !== "webOnly" &&
+      this.getSearchMode() !== "none" &&
+      !this.currentChatSettings.indexProfileId
+    ) {
       return "Create and select an active index in Ixplorer settings.";
     }
 
-    return this.getSearchMode() !== "indexOnly" && !this.services.isWebSearchEnabled()
+    return this.getSearchMode() !== "indexOnly" &&
+      this.getSearchMode() !== "none" &&
+      !this.services.isWebSearchEnabled()
       ? "Enable web search in Ixplorer settings to use this search mode."
       : null;
   }

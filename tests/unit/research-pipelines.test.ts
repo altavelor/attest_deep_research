@@ -58,6 +58,80 @@ describe("VaultResearchPipeline", () => {
 });
 
 describe("WebResearchPipeline", () => {
+  it("reports direct queries and processing decisions for every web result", async () => {
+    const primary = webSource("https://example.com/article?utm_source=test");
+    const duplicate = webSource("https://example.com/article");
+    const limited = webSource("https://example.com/limited");
+    const searchProvider = new FakeSearchProvider([
+      {
+        source: primary,
+        extractedText: "Fetched article text",
+        rank: 1,
+        query: "public research",
+      },
+      {
+        source: duplicate,
+        rank: 2,
+        query: "public research",
+      },
+      {
+        source: limited,
+        rank: 3,
+        query: "public research",
+      },
+    ]);
+    const pipeline = new WebResearchPipeline({
+      searchProvider,
+      chatModel: new FakeChatModel(),
+      chatModelName: "qwen",
+      evidenceLimit: 1,
+    });
+
+    const generator = pipeline.search("public research", true, false);
+    let step = await generator.next();
+    while (!step.done) {
+      step = await generator.next();
+    }
+
+    expect(step.value.diagnostics).toMatchObject({
+      originalQuestion: "public research",
+      queryStrategy: "direct",
+      queries: ["public research"],
+      requests: [{ query: "public research", limit: 5, maxFetches: 3 }],
+      finalPrompt: { includedChunkIds: [], usedTokens: 0 },
+      results: [
+        {
+          chunkId: primary.id,
+          query: "public research",
+          url: primary.url,
+          providerRank: 1,
+          processingRank: 1,
+          wasContentFetched: true,
+          textSource: "fetched-content",
+          textPreview: "Fetched article text",
+          status: "candidate",
+        },
+        {
+          chunkId: duplicate.id,
+          query: "public research",
+          url: duplicate.url,
+          providerRank: 2,
+          wasContentFetched: true,
+          textSource: "search-snippet",
+          textPreview: duplicate.snippet,
+          status: "dropped",
+          reason: "duplicate-url",
+        },
+        {
+          chunkId: limited.id,
+          processingRank: 2,
+          status: "dropped",
+          reason: "web-evidence-limit",
+        },
+      ],
+    });
+  });
+
   it("plans deep web queries from only the typed question", async () => {
     const searchProvider = new FakeSearchProvider([
       {

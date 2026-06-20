@@ -120,7 +120,7 @@ export class EvidencePlanner {
     );
     const webSlots = Math.min(slots.web, remainingAfterExplicit);
     const localSlots =
-      input.searchMode === "indexOnly"
+      input.searchMode === "indexOnly" || input.searchMode === "none"
         ? remainingAfterExplicit
         : Math.max(0, remainingAfterExplicit - webSlots);
 
@@ -189,7 +189,7 @@ function takeLocalFirstGroups(
     seen,
   ).included;
   const web =
-    input.searchMode === "indexOnly"
+    input.searchMode === "indexOnly" || input.searchMode === "none"
       ? []
       : takeGroup(input.webEvidence, webSlots, tokenBudget.web, seen).included;
 
@@ -472,7 +472,7 @@ function resolvePolicy(
     return "web-only";
   }
 
-  if (searchMode === "indexOnly") {
+  if (searchMode === "indexOnly" || searchMode === "none") {
     return "index-only";
   }
 

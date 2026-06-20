@@ -8,10 +8,13 @@ import {
   Citation,
   ContextDiagnostics,
   ContextMode,
+  ResearchExecutionStrategy,
   ContextIndexDiagnostics,
   ResearchAnswer,
   RetrievedChunk,
   SearchProvider,
+  WebContextDiagnostics,
+  IndexDescriptionPromptContext,
 } from "../shared/types";
 import { AnswerSynthesisService } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "./ContextAssembler";
@@ -61,6 +64,8 @@ export interface ResearchServiceOptions {
   toolsEnabled?: boolean;
   skillRegistry?: SkillRegistry;
   getIndexStatus?: () => ContextIndexDiagnostics;
+  forceEagerResearch?: boolean;
+  indexDescription?: IndexDescriptionPromptContext;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -81,6 +86,8 @@ export class ResearchService {
   private readonly toolsEnabled: boolean;
   private readonly skillRegistry?: SkillRegistry;
   private readonly getIndexStatus?: () => ContextIndexDiagnostics;
+  private readonly executionStrategy: ResearchExecutionStrategy;
+  private readonly indexDescription?: IndexDescriptionPromptContext;
 
   constructor(options: ResearchServiceOptions) {
     this.evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -99,6 +106,8 @@ export class ResearchService {
     this.toolsEnabled = options.toolsEnabled === true && options.noteTools !== undefined;
     this.skillRegistry = options.skillRegistry;
     this.getIndexStatus = options.getIndexStatus;
+    this.executionStrategy = selectResearchExecutionStrategy(options.forceEagerResearch === true);
+    this.indexDescription = options.indexDescription;
     const now = options.now ?? (() => new Date());
 
     this.vaultPipeline = new VaultResearchPipeline({
@@ -127,6 +136,10 @@ export class ResearchService {
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     let question = request.question.trim();
     const searchMode = resolveSearchMode(request);
+    const indexDescription =
+      searchMode === "indexOnly" || searchMode === "indexAndWeb"
+        ? this.indexDescription
+        : undefined;
     const skillToolsEnabled = this.toolsEnabled && searchMode !== "webOnly";
     let skillSnapshot: SkillCatalogSnapshot | undefined;
     let selectedSkill: SkillDefinition | undefined;
@@ -189,26 +202,33 @@ export class ResearchService {
           (skillToolsEnabled ? (this.skillRegistry?.maxDiscoveredSkillTokens() ?? 0) : 0))
       : 0;
     const totalReservedTokens = (this.reservedOutputTokens ?? 0) + skillReservedTokens;
+    const totalReservedWithIndexTokens =
+      totalReservedTokens + (indexDescription ? estimateTextTokens(indexDescription.text) : 0);
     const assembled =
       searchMode === "webOnly" || !this.contextAssembler
         ? undefined
         : await this.contextAssembler.assemble({
             question,
-            contextMode: request.contextMode ?? "include",
+            contextMode: searchMode === "none" ? "include" : (request.contextMode ?? "include"),
             contextPaths: request.contextPaths ?? [],
             activeFilePath: request.activeFilePath,
             includeActiveFile: request.includeActiveFile === true,
             chatHistory: request.chatHistory,
             contextLimitTokens: this.contextLimitTokens,
-            reservedOutputTokens: totalReservedTokens,
+            reservedOutputTokens: totalReservedWithIndexTokens,
             evidenceLimit: this.evidenceLimit,
+            skipRetrieval: searchMode === "none",
+            explicitSourcesOnly: searchMode === "none",
             graph: this.graphContext,
           });
+    if (assembled) {
+      assembled.diagnostics.executionStrategy = this.executionStrategy;
+    }
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
     }
     const rawRetrieval =
-      searchMode === "webOnly"
+      searchMode === "webOnly" || searchMode === "none"
         ? emptyRetrievalResult()
         : yield* this.vaultPipeline.search(
             question,
@@ -218,11 +238,12 @@ export class ResearchService {
     const retrieval = withoutInternalSkillEvidence(rawRetrieval);
     const webEvidence = yield* this.webPipeline.search(
       question,
-      searchMode !== "indexOnly",
+      searchMode !== "indexOnly" && searchMode !== "none",
       deepResearch,
     );
     const contextDiagnostics = withRetrievalDiagnostics(
-      assembled?.diagnostics ?? createEmptyContextDiagnostics(request.contextMode ?? "include"),
+      assembled?.diagnostics ??
+        createEmptyContextDiagnostics(request.contextMode ?? "include", this.executionStrategy),
       retrieval,
       rawRetrieval,
     );
@@ -238,15 +259,15 @@ export class ResearchService {
       question,
       chatHistory: request.chatHistory,
       contextLimitTokens: this.contextLimitTokens,
-      reservedOutputTokens: totalReservedTokens,
+      reservedOutputTokens: totalReservedWithIndexTokens,
       evidenceLimit: this.evidenceLimit,
       searchMode,
       explicitEvidence: assembled?.explicitEvidence ?? [],
       graphEvidence: rawGraphEvidence,
       retrievalEvidence: rawRetrievalEvidence,
       webEvidence: webEvidence.chunks,
-      expandedEvidence: request.expandedEvidence,
-      expandedCitationKeys: request.expandedCitationKeys,
+      expandedEvidence: searchMode === "none" ? undefined : request.expandedEvidence,
+      expandedCitationKeys: searchMode === "none" ? undefined : request.expandedCitationKeys,
     });
     const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
       ...formatCitation(chunk.source),
@@ -256,7 +277,11 @@ export class ResearchService {
       planned.finalEvidence,
       mergeCitations(mergeCitations(explicitCitations, retrieval.citations), webEvidence.citations),
     );
-    const diagnostics = withPlannerDiagnostics(contextDiagnostics, planned.diagnostics);
+    const diagnostics = withWebDiagnostics(
+      withPlannerDiagnostics(contextDiagnostics, planned.diagnostics),
+      webEvidence.diagnostics,
+      planned.webEvidence,
+    );
     if (skillSnapshot) {
       diagnostics.skills = {
         discoveredCount: skillSnapshot.skills.length,
@@ -281,6 +306,14 @@ export class ResearchService {
         ...(selectorWarning ? { selectorWarning } : {}),
       };
     }
+    if (indexDescription) {
+      diagnostics.indexDescription = { ...indexDescription.diagnostics };
+      if (indexDescription.diagnostics.freshness !== "current") {
+        diagnostics.warnings.push(
+          `Index description used ${indexDescription.diagnostics.freshness} deterministic fallback metadata.`,
+        );
+      }
+    }
 
     yield* this.answerSynthesis.synthesize({
       question,
@@ -304,6 +337,7 @@ export class ResearchService {
       skillToolResultChars: skillSnapshot
         ? Math.max(50_000, this.skillRegistry!.maxDiscoveredSkillTokens() * 4 + 2_000)
         : undefined,
+      indexDescription,
     });
   }
 
@@ -420,6 +454,42 @@ function withPlannerDiagnostics(
   };
 }
 
+function withWebDiagnostics(
+  diagnostics: ContextDiagnostics,
+  webDiagnostics: WebContextDiagnostics | undefined,
+  promptEvidence: RetrievedChunk[],
+): ContextDiagnostics {
+  if (!webDiagnostics) {
+    return diagnostics;
+  }
+
+  const promptOrder = new Map(promptEvidence.map((chunk, index) => [chunk.id, index + 1]));
+
+  return {
+    ...diagnostics,
+    web: {
+      ...webDiagnostics,
+      results: webDiagnostics.results.map((result) => {
+        if (result.status !== "candidate") {
+          return result;
+        }
+
+        const order = promptOrder.get(result.chunkId);
+        return order === undefined
+          ? { ...result, status: "dropped", reason: "evidence-planner" }
+          : { ...result, status: "included", promptOrder: order };
+      }),
+      finalPrompt: {
+        includedChunkIds: promptEvidence.map((chunk) => chunk.id),
+        usedTokens: promptEvidence.reduce(
+          (total, chunk) => total + estimateTextTokens(chunk.text),
+          0,
+        ),
+      },
+    },
+  };
+}
+
 function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {
   const seen = new Set<string>();
   const citations: Citation[] = [];
@@ -464,8 +534,12 @@ function withoutInternalSkillEvidence(result: RetrievalResult): RetrievalResult 
   };
 }
 
-function createEmptyContextDiagnostics(contextMode: ContextMode): ContextDiagnostics {
+function createEmptyContextDiagnostics(
+  contextMode: ContextMode,
+  executionStrategy: ResearchExecutionStrategy,
+): ContextDiagnostics {
   return {
+    executionStrategy,
     contextMode,
     explicitSources: [],
     mentionSources: [],
@@ -498,6 +572,12 @@ function createEmptyContextDiagnostics(contextMode: ContextMode): ContextDiagnos
     tools: [],
     warnings: [],
   };
+}
+
+export function selectResearchExecutionStrategy(
+  forceEagerResearch: boolean,
+): ResearchExecutionStrategy {
+  return forceEagerResearch ? "eager-forced" : "eager-default";
 }
 
 function isRagDebugIntent(question: string): boolean {

@@ -17,6 +17,22 @@ describe("FileChatStore", () => {
     rmSync(folder, { recursive: true, force: true });
   });
 
+  it("persists the none search mode", async () => {
+    const store = new FileChatStore({ folder, createId: () => "chat-none" });
+
+    await store.saveChat({
+      messages: [],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: {
+        chatModelProfileId: "chat-model",
+        searchMode: "none",
+      },
+    });
+
+    expect((await store.loadChat("chat-none"))?.chatSettings?.searchMode).toBe("none");
+  });
+
   it("saves a chat and lists summaries by most recent update", async () => {
     let now = new Date("2026-06-10T10:00:00.000Z");
     const store = new FileChatStore({

@@ -19,7 +19,7 @@ export interface ResearchRetriever {
   ): Promise<RetrievalResult["chunks"]>;
 }
 
-export type ResearchSearchMode = "indexOnly" | "indexAndWeb" | "webOnly";
+export type ResearchSearchMode = "none" | "indexOnly" | "indexAndWeb" | "webOnly";
 
 export interface ResearchRequest {
   question: string;

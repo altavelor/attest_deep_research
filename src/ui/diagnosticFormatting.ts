@@ -54,10 +54,65 @@ export function retrievalDiagnosticLines(diagnostics: ContextDiagnostics): strin
   return lines;
 }
 
+export function webDiagnosticLines(diagnostics: ContextDiagnostics): string[] {
+  const web = diagnostics.web;
+  if (!web) {
+    return [];
+  }
+
+  const queryConstruction =
+    web.queryStrategy === "direct"
+      ? "use the original question unchanged"
+      : web.queryStrategy === "planned"
+        ? "model-generated query plan from the original question"
+        : "use the original question after query planning failed";
+  const lines = [
+    `Original question: ${web.originalQuestion}`,
+    `Query strategy: ${web.queryStrategy}`,
+    `Query construction: ${queryConstruction}`,
+    ...web.queries.map((query, index) => `Query ${index + 1}: ${query}`),
+    ...web.requests.map(
+      (request, index) =>
+        `Search request ${index + 1}: ${request.query} · limit ${request.limit}, max fetches ${request.maxFetches}`,
+    ),
+    "Processing: normalize URL → deduplicate → rank → apply web limit → evidence planner → final prompt",
+    "Ranking: query-token overlap × 10 + provider-rank bonus",
+  ];
+
+  for (const result of web.results) {
+    const decision =
+      result.status === "included"
+        ? `included (prompt #${result.promptOrder})`
+        : result.status === "dropped"
+          ? `dropped (${result.reason ?? "unspecified"})`
+          : "candidate";
+    lines.push(
+      `#${result.processingRank ?? "-"} ${result.title} · ${decision} · provider rank ${result.providerRank} · relevance ${result.relevanceScore.toFixed(3)} · ${result.textSource} · ${result.textCharacters.toLocaleString("en-US")} chars / ${result.estimatedTokens.toLocaleString("en-US")} tokens`,
+      `  URL: ${result.url}`,
+      `  Query: ${result.query}`,
+      `  Preview: ${result.textPreview}`,
+    );
+  }
+
+  lines.push(
+    `Final prompt web section: ${web.finalPrompt.includedChunkIds.length} item(s), ${web.finalPrompt.usedTokens.toLocaleString("en-US")} evidence-text tokens`,
+    ...web.finalPrompt.includedChunkIds.map(
+      (chunkId, index) => `Prompt web #${index + 1}: ${chunkId}`,
+    ),
+  );
+
+  return lines;
+}
+
 export function formatDiagnosticReport(diagnostics: ContextDiagnostics): string {
   const summaryLines = diagnosticSummaryLines(diagnostics);
+  const webLines = webDiagnosticLines(diagnostics);
   const retrievalLines = retrievalDiagnosticLines(diagnostics);
   const sections = ["Diagnostic report", "", "Context used", ...summaryLines];
+
+  if (webLines.length > 0) {
+    sections.push("", "Web research", ...webLines);
+  }
 
   if (retrievalLines.length > 0) {
     sections.push("", "Retrieval diagnostics", ...retrievalLines);
@@ -74,11 +129,30 @@ function diagnosticSummaryLines(diagnostics: ContextDiagnostics): string[] {
     ...(diagnostics.activeSources ?? []),
   ];
   const includedExplicit = explicitSources.filter((source) => source.status === "included").length;
+  const plannerPolicy = diagnostics.evidencePlanner?.budget.policy;
+  const webBudget = diagnostics.evidencePlanner?.budget.groups.find(
+    (group) => group.name === "web",
+  );
   const lines = [
-    `Mode: ${diagnostics.contextMode === "filter" ? "filter retrieval" : "include attached files"}`,
+    ...(diagnostics.executionStrategy
+      ? [`Execution strategy: ${diagnostics.executionStrategy.replace(/-/g, " ")}`]
+      : []),
+    `Mode: ${
+      plannerPolicy === "web-only"
+        ? "web only"
+        : diagnostics.contextMode === "filter"
+          ? "filter retrieval"
+          : "include attached files"
+    }`,
     `${includedExplicit} explicit source(s) included`,
     `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
   ];
+
+  if (webBudget && (webBudget.includedItems ?? 0) > 0) {
+    lines.push(
+      `${webBudget.includedItems} web source(s) used (${webBudget.usedTokens.toLocaleString("en-US")} tokens)`,
+    );
+  }
 
   if (diagnostics.graph?.included.length > 0) {
     lines.push(`${diagnostics.graph.included.length} linked note(s) used`);

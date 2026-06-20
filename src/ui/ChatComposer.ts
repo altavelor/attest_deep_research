@@ -417,7 +417,7 @@ function setIndexControlVisibility(
   indexControlEl: HTMLElement,
   searchMode: ResearchSearchMode,
 ): void {
-  indexControlEl.toggleClass("is-hidden", searchMode === "webOnly");
+  indexControlEl.toggleClass("is-hidden", searchMode === "webOnly" || searchMode === "none");
 }
 
 function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
@@ -494,6 +494,7 @@ export function getResearchSearchMode(value: string | undefined): ResearchSearch
 function createSearchModeOptions(selectEl: HTMLSelectElement): void {
   const options: Array<{ value: ResearchSearchMode | ""; label: string }> = [
     { value: "", label: "Search" },
+    { value: "none", label: "None" },
     { value: "indexOnly", label: "Index only" },
     { value: "indexAndWeb", label: "Index + Web" },
     { value: "webOnly", label: "Web only" },
@@ -511,5 +512,10 @@ function createSearchModeOptions(selectEl: HTMLSelectElement): void {
 }
 
 function isResearchSearchMode(value: string | undefined): value is ResearchSearchMode {
-  return value === "indexOnly" || value === "indexAndWeb" || value === "webOnly";
+  return (
+    value === "none" ||
+    value === "indexOnly" ||
+    value === "indexAndWeb" ||
+    value === "webOnly"
+  );
 }

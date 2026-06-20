@@ -6,6 +6,7 @@ import {
   readBinaryIndexFile,
   readJsonIndexFile,
   readJsonlIndexFile,
+  readFirstJsonlIndexRows,
 } from "./fileIndexFiles";
 import {
   createFileVectorManifest,
@@ -19,16 +20,14 @@ import {
   KeywordPostingRow,
   validateFileVectorIndexFormat,
 } from "./FileVectorIndexFormat";
-import { encodeStoredChunks, decodeStoredChunks, sourcePathFromReference } from "./FileVectorIndexVector";
 import {
-  buildKeywordPostingRows,
-  countIndexedKeywordChunks,
-} from "./LightweightKeywordIndex";
+  encodeStoredChunks,
+  decodeStoredChunks,
+  sourcePathFromReference,
+} from "./FileVectorIndexVector";
+import { buildKeywordPostingRows, countIndexedKeywordChunks } from "./LightweightKeywordIndex";
 import { languageInventoryFromSources } from "./languageDetection";
-import {
-  FileVectorIndexState,
-  FileVectorIndexWriteChanges,
-} from "./FileVectorIndexState";
+import { FileVectorIndexState, FileVectorIndexWriteChanges } from "./FileVectorIndexState";
 
 export interface FileVectorIndexPersistenceOptions {
   folder: string;
@@ -81,6 +80,34 @@ export class FileVectorIndexPersistence {
     }
 
     return this.loadState(manifest);
+  }
+
+  async readRepresentativeChunkRows(
+    manifest: FileVectorManifest,
+    limit: number,
+  ): Promise<FileVectorChunkRow[]> {
+    const nonEmptyShards = manifest.shards
+      .filter((shard) => shard.chunkCount > 0)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (nonEmptyShards.length === 0 || limit <= 0) {
+      return [];
+    }
+
+    const rowsPerShard = Math.max(1, Math.ceil(limit / nonEmptyShards.length));
+    const rows: FileVectorChunkRow[] = [];
+    for (const shard of nonEmptyShards) {
+      rows.push(
+        ...(await readFirstJsonlIndexRows(
+          this.pathFor(shard.chunkMetadataFile),
+          isChunkRow,
+          Math.min(rowsPerShard, limit - rows.length),
+        )),
+      );
+      if (rows.length >= limit) {
+        break;
+      }
+    }
+    return rows;
   }
 
   async loadState(manifest: FileVectorManifest): Promise<FileVectorIndexState> {

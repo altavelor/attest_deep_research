@@ -197,7 +197,8 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
   return (
     typeof settings.chatModelProfileId === "string" &&
     (settings.indexProfileId === undefined || typeof settings.indexProfileId === "string") &&
-    (settings.searchMode === "indexOnly" ||
+    (settings.searchMode === "none" ||
+      settings.searchMode === "indexOnly" ||
       settings.searchMode === "indexAndWeb" ||
       settings.searchMode === "webOnly") &&
     (settings.contextMode === undefined ||

@@ -47,6 +47,10 @@ import { SkillRegistry } from "./skills/SkillRegistry";
 import { DEFAULT_SKILLS } from "./skills/defaultSkills";
 import { ObsidianSkillFileStore } from "./skills/ObsidianSkillFileStore";
 import { isInternalSkillPath } from "./shared/pathFilters";
+import {
+  refreshIndexDescriptionAfterRun,
+  resolveIndexDescriptionForPrompt,
+} from "./indexing/IndexDescription";
 
 export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
@@ -66,6 +70,16 @@ export default class IxplorerPlugin extends Plugin {
       if (!profile) {
         return;
       }
+      const generatedAt = new Date().toISOString();
+      if (state.indexChanged === true && profile.indexDescription) {
+        profile.indexDescription = { ...profile.indexDescription, status: "stale" };
+      }
+      profile.indexDescription = await refreshIndexDescriptionAfterRun(
+        profile,
+        state,
+        () => this.createVectorIndexStoreForProfile(profile).loadIndexDescriptionSource(),
+        generatedAt,
+      );
       profile.lastIndexedAt = state.lastIndexedAt;
       profile.indexedFileCount = state.indexedFiles;
       profile.indexSizeBytes = state.indexSizeBytes;
@@ -258,6 +272,8 @@ export default class IxplorerPlugin extends Plugin {
       },
       searchProvider: this.createSearchProvider(),
       toolsEnabled,
+      forceEagerResearch: this.settings.forceEagerResearch,
+      indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
       skillRegistry: this.skillRegistry,
       getIndexStatus: () => {
         const state = this.indexing.getState(indexProfile.id);

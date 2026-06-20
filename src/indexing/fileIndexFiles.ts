@@ -1,5 +1,7 @@
+import { createReadStream } from "fs";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname } from "path";
+import { createInterface } from "readline";
 
 import { IxplorerError } from "../shared/errors";
 import { isMissingFileError } from "./FileVectorIndexErrors";
@@ -76,6 +78,46 @@ export async function readJsonlIndexFile<T>(
     } catch (error) {
       throwIndexReadError(error, path);
     }
+  }
+
+  return rows;
+}
+
+export async function readFirstJsonlIndexRows<T>(
+  path: string,
+  isValid: (value: unknown) => value is T,
+  limit: number,
+): Promise<T[]> {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const stream = createReadStream(path, { encoding: "utf8" });
+  const lines = createInterface({ input: stream, crlfDelay: Infinity });
+  const rows: T[] = [];
+
+  try {
+    for await (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      const parsed: unknown = JSON.parse(line);
+      if (!isValid(parsed)) {
+        throw new Error("JSONL row did not match the expected index schema.");
+      }
+      rows.push(parsed);
+      if (rows.length >= limit) {
+        break;
+      }
+    }
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return [];
+    }
+    throwIndexReadError(error, path);
+  } finally {
+    lines.close();
+    stream.destroy();
   }
 
   return rows;

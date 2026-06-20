@@ -19,6 +19,10 @@ import {
 import { throwRebuildRequired, isMissingFileError } from "./FileVectorIndexErrors";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";
+import {
+  INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS,
+  type IndexDescriptionSource,
+} from "./IndexDescription";
 import { languageInventoryFromStoredChunks } from "./FileVectorIndexLanguage";
 import {
   FileVectorIndexPersistence,
@@ -251,6 +255,55 @@ export class FileVectorIndexStore
       .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }
 
+  async loadIndexDescriptionSource(): Promise<IndexDescriptionSource> {
+    const manifest = this.state?.manifest ?? (await this.persistence.readManifest());
+
+    if (manifest === null) {
+      throw new IxplorerError({
+        code: "INDEX_UNAVAILABLE",
+        message: "The committed index is unavailable for description generation.",
+      });
+    }
+
+    const rows = (
+      this.state
+        ? [...this.state.chunksByShard.values()].flat().map((chunk) => chunk.row)
+        : await this.persistence.readRepresentativeChunkRows(
+            manifest,
+            INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS,
+          )
+    ).sort((left, right) => {
+      const leftPath = left.sourcePath ?? sourcePathForDescription(left.source);
+      const rightPath = right.sourcePath ?? sourcePathForDescription(right.source);
+      return (
+        leftPath.localeCompare(rightPath) ||
+        (left.chunkIndex ?? 0) - (right.chunkIndex ?? 0) ||
+        left.id.localeCompare(right.id)
+      );
+    });
+    const sourceKinds = [...new Set(rows.map((row) => row.source.kind))].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const languageInventory = manifest.languageInventory ? [...manifest.languageInventory] : [];
+
+    return {
+      indexUpdatedAt: manifest.updatedAt,
+      sourceCount: manifest.sourceCount,
+      chunkCount: manifest.chunkCount,
+      sourceKinds,
+      languageInventory,
+      representativeChunks: rows
+        .slice(0, INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS)
+        .map((row) => ({
+          path: row.sourcePath ?? sourcePathForDescription(row.source),
+          title: row.source.title,
+          headingPath: row.source.kind === "markdown" ? [...row.source.headingPath] : [],
+          text: row.text,
+          kind: row.source.kind,
+        })),
+    };
+  }
+
   async updateSourceSnapshots(snapshots: IndexSourceSnapshot[]): Promise<void> {
     if (snapshots.length === 0) {
       return;
@@ -412,6 +465,10 @@ export class FileVectorIndexStore
 
     return this.state;
   }
+}
+
+function sourcePathForDescription(source: SourceReference): string {
+  return "path" in source ? source.path : source.url;
 }
 
 function createWriteId(now: () => Date): string {
