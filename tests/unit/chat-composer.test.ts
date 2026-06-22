@@ -1,27 +1,10 @@
-import {
-  getMentionCandidates,
-  type SkillMentionOption,
-} from "../../src/ui/mentionAutocomplete";
+import { getMentionCandidates } from "../../src/ui/mentionAutocomplete";
 import { nextHorizontalWheelScrollLeft } from "../../src/ui/horizontalWheelScroll";
 import { isSupportedContextDocumentPath } from "../../src/shared/pathFilters";
 
 describe("chat composer", () => {
-  it("offers matching skills before context documents for an @ query", () => {
-    const skills: SkillMentionOption[] = [
-      {
-        id: "citation-grounded-answer",
-        name: "Citation Grounded Answer",
-        aliases: ["cite"],
-      },
-      { id: "rag-debugger", name: "RAG Debugger", aliases: [] },
-    ];
-
-    expect(getMentionCandidates("c", ["Concepts/Cache.md"], skills)).toEqual([
-      {
-        insertText: "citation-grounded-answer",
-        label: "Citation Grounded Answer",
-        detail: "Skill",
-      },
+  it("offers context documents for an @ query", () => {
+    expect(getMentionCandidates("cache", ["Concepts/Cache.md", "Notes/Other.md"])).toEqual([
       {
         insertText: "Concepts/Cache.md",
         label: "Concepts/Cache.md",
@@ -30,9 +13,10 @@ describe("chat composer", () => {
     ]);
   });
 
-  it("does not offer internal skill files as context documents", () => {
+  it("supports .md, .pdf, .txt and other document types as context", () => {
     expect(isSupportedContextDocumentPath("Notes/Research.md")).toBe(true);
-    expect(isSupportedContextDocumentPath(".ixplorer/skills/rag-debugger/SKILL.md")).toBe(false);
+    expect(isSupportedContextDocumentPath("Docs/Paper.pdf")).toBe(true);
+    expect(isSupportedContextDocumentPath("Notes/image.png")).toBe(false);
   });
 
   it("maps vertical wheel movement to horizontal attachment carousel scrolling", () => {

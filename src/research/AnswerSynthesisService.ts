@@ -21,7 +21,6 @@ import { ResearchStreamEvent } from "./types";
 import { createAsyncEventChannel } from "../shared/AsyncEventChannel";
 import { NoteToolService } from "./tools/NoteTools";
 import { runToolLoop } from "./tools/ToolLoopRunner";
-import { buildSkillCatalogPrompt, LoadedSkill, SkillDefinition } from "../skills/SkillRegistry";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -51,11 +50,7 @@ export interface AnswerSynthesisInput {
   contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
   toolsEnabled?: boolean;
-  skillCatalog?: SkillDefinition[];
-  selectedSkill?: SkillDefinition;
-  inlineSkill?: LoadedSkill;
   retrievalDiagnostics?: string;
-  skillToolResultChars?: number;
   indexDescription?: IndexDescriptionPromptContext;
   signal?: AbortSignal;
 }
@@ -89,16 +84,6 @@ export class AnswerSynthesisService {
     this.assertWithinContextWindow(input);
     const systemPromptOptions = {
       indexDescription: input.indexDescription?.text,
-      skillCatalog: input.skillCatalog ? buildSkillCatalogPrompt(input.skillCatalog) : undefined,
-      inlineSkill: input.inlineSkill
-        ? {
-            name: input.inlineSkill.skill.name,
-            path: input.inlineSkill.skill.path,
-            content: input.inlineSkill.content,
-          }
-        : undefined,
-      requiredSkillPath: input.toolsEnabled === true ? input.selectedSkill?.path : undefined,
-      toolsEnabled: input.toolsEnabled,
     };
     const prompt = buildResearchPrompt({
       question: input.question,
@@ -135,7 +120,7 @@ export class AnswerSynthesisService {
         messages,
         tools: this.noteTools.definitions(),
         executeTool: (toolCall) => this.noteTools!.execute(toolCall),
-        maxTotalResultChars: input.skillToolResultChars,
+        maxTotalResultChars: undefined,
         signal: input.signal,
         reasoning: this.reasoning,
         onEvent: (event) => events.push(event),
@@ -154,29 +139,6 @@ export class AnswerSynthesisService {
       const result = await resultPromise;
       answerText = result.answerText;
       toolDiagnostics = result.diagnostics;
-      const loadedSkillPaths = new Set(
-        toolDiagnostics
-          .filter(
-            (tool) =>
-              tool.name === "read_note" &&
-              tool.status === "success" &&
-              typeof tool.metadata?.skillId === "string" &&
-              typeof tool.arguments.path === "string",
-          )
-          .map((tool) => String(tool.arguments.path)),
-      );
-      if (loadedSkillPaths.size > 1) {
-        throw new IxplorerError({
-          code: "INVALID_SKILL_SELECTION",
-          details: { reason: "multiple-skills", paths: [...loadedSkillPaths] },
-        });
-      }
-      if (input.selectedSkill && !loadedSkillToolCall(toolDiagnostics, input.selectedSkill.path)) {
-        throw new IxplorerError({
-          code: "INVALID_SKILL_SELECTION",
-          details: { reason: "skill-not-loaded", path: input.selectedSkill.path },
-        });
-      }
       this.applyReasoningDiagnostics(input.contextDiagnostics, {
         reasoningItemCount: result.reasoningItemCount,
         continuationRounds: result.continuationRounds,
@@ -263,11 +225,7 @@ export class AnswerSynthesisService {
       }
     }
 
-    const contextDiagnostics = applySkillToolDiagnostics(
-      appendToolDiagnostics(input.contextDiagnostics, toolDiagnostics),
-      toolDiagnostics,
-      input.skillCatalog ?? [],
-    );
+    const contextDiagnostics = appendToolDiagnostics(input.contextDiagnostics, toolDiagnostics);
     const finalAnswer: ResearchAnswer = {
       question: input.question,
       answer: answerText,
@@ -303,16 +261,6 @@ export class AnswerSynthesisService {
       reservedOutputTokens: this.chatOptions.maxTokens,
       systemPromptOptions: {
         indexDescription: input.indexDescription?.text,
-        skillCatalog: input.skillCatalog ? buildSkillCatalogPrompt(input.skillCatalog) : undefined,
-        inlineSkill: input.inlineSkill
-          ? {
-              name: input.inlineSkill.skill.name,
-              path: input.inlineSkill.skill.path,
-              content: input.inlineSkill.content,
-            }
-          : undefined,
-        requiredSkillPath: input.toolsEnabled === true ? input.selectedSkill?.path : undefined,
-        toolsEnabled: input.toolsEnabled,
       },
     });
 
@@ -350,59 +298,6 @@ export class AnswerSynthesisService {
   }
 }
 
-function loadedSkillToolCall(tools: ToolCallDiagnostic[], path: string): boolean {
-  return tools.some(
-    (tool) =>
-      tool.name === "read_note" &&
-      tool.status === "success" &&
-      tool.arguments.path === path &&
-      typeof tool.metadata?.skillId === "string",
-  );
-}
-
-function applySkillToolDiagnostics(
-  diagnostics: ContextDiagnostics | undefined,
-  tools: ToolCallDiagnostic[],
-  catalog: SkillDefinition[],
-): ContextDiagnostics | undefined {
-  if (!diagnostics?.skills) {
-    return diagnostics;
-  }
-  const skillCall = tools.find(
-    (tool) =>
-      tool.name === "read_note" &&
-      typeof tool.arguments.path === "string" &&
-      catalog.some((skill) => skill.path === tool.arguments.path),
-  );
-  if (!skillCall) {
-    return diagnostics;
-  }
-  const skill = catalog.find((candidate) => candidate.path === skillCall.arguments.path);
-  if (!skill) {
-    return diagnostics;
-  }
-
-  const loaded = skillCall.status === "success" && typeof skillCall.metadata?.skillId === "string";
-  return {
-    ...diagnostics,
-    skills: {
-      ...diagnostics.skills,
-      selectedId: skill.id,
-      selectedName: skill.name,
-      selectedPath: skill.path,
-      selectionMode: diagnostics.skills.selectionMode === "manual" ? "manual" : "automatic",
-      loadMode: "read_note",
-      loadStatus: loaded ? "loaded" : "failed",
-      ...(loaded
-        ? {
-            loadedCharacters: Number(skillCall.metadata?.loadedCharacters ?? 0),
-            loadedTokens: Number(skillCall.metadata?.loadedTokens ?? 0),
-            truncated: false as const,
-          }
-        : { loadError: skillCall.reason ?? "skill-read-failed" }),
-    },
-  };
-}
 
 function appendToolDiagnostics(
   diagnostics: ContextDiagnostics | undefined,

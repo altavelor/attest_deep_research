@@ -7,7 +7,6 @@ import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 import {
   getMentionCandidates,
   MentionCandidate,
-  SkillMentionOption,
 } from "./mentionAutocomplete";
 
 export interface ChatModelSelectOption {
@@ -43,7 +42,6 @@ export interface ChatComposerOptions {
   settings: SavedChatSettings;
   availableModels: ChatModelSelectOption[];
   availableIndexes: IndexProfileSelectOption[];
-  availableSkills: SkillMentionOption[];
   contextFilePaths: string[];
   onSubmit(): void;
   onStop(): void;
@@ -325,10 +323,7 @@ function createMentionAutocomplete(
     candidates.forEach((candidate, index) => {
       const item = autocompleteEl.createEl("button", {
         cls: `ixplorer-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
-        text:
-          candidate.detail === "Skill"
-            ? `@${candidate.insertText} — ${candidate.label}`
-            : candidate.label,
+        text: candidate.label,
         attr: {
           type: "button",
           role: "option",
@@ -360,7 +355,7 @@ function createMentionAutocomplete(
 
     mentionStart = atIndex;
     const query = token.toLowerCase();
-    candidates = getMentionCandidates(query, options.contextFilePaths, options.availableSkills);
+    candidates = getMentionCandidates(query, options.contextFilePaths);
     activeIndex = 0;
     render();
   };

@@ -9,8 +9,8 @@ describe("IndexResearchTool", () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockResolvedValue({
         chunks: [
-          retrieved("skill", markdownSource(".ixplorer/skills/hidden/SKILL.md"), "Ignore"),
-          retrieved("visible", markdownSource("Notes/Visible.md"), "x".repeat(1_200)),
+          retrieved("chunk-a", markdownSource("Notes/A.md"), "First result"),
+          retrieved("chunk-b", markdownSource("Notes/Visible.md"), "x".repeat(1_200)),
         ],
         citations: [],
         usedFallback: false,
@@ -34,19 +34,15 @@ describe("IndexResearchTool", () => {
       value: {
         query: "local research",
         results: [
-          {
-            evidenceId: "visible",
-            chunkId: "visible",
-            path: "Notes/Visible.md",
-            snippet: expect.any(String),
-          },
+          { evidenceId: "chunk-a", chunkId: "chunk-a", path: "Notes/A.md" },
+          { evidenceId: "chunk-b", chunkId: "chunk-b", path: "Notes/Visible.md" },
         ],
       },
     });
     if (execution.ok) {
-      expect(execution.value.results[0]?.snippet.length).toBe(1_000);
+      expect(execution.value.results[1]?.snippet.length).toBe(1_000);
     }
-    expect(registry.snapshot().evidence.map((item) => item.id)).toEqual(["visible"]);
+    expect(registry.snapshot().evidence.map((item) => item.id)).toEqual(["chunk-a", "chunk-b"]);
   });
 
   it("returns successful empty results", async () => {

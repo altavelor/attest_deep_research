@@ -32,19 +32,7 @@ import {
   ResearchStreamEvent,
 } from "./types";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../ui/rendering";
-import {
-  buildSkillCatalogPrompt,
-  LoadedSkill,
-  resolveExplicitSkill,
-  SkillCatalogSnapshot,
-  SkillDefinition,
-  SkillLoadError,
-  SkillRegistry,
-} from "../skills/SkillRegistry";
-import { SkillSelectionService } from "../skills/SkillSelectionService";
 import { estimateTextTokens } from "./prompts";
-import { IxplorerError } from "../shared/errors";
-import { isInternalSkillPath } from "../shared/pathFilters";
 import { resolveResearchExecutionPolicy } from "./ResearchExecutionPolicy";
 import { createResearchToolRegistry } from "./tools/createResearchToolRegistry";
 import { AgenticResearchRunner, AgenticResearchFailure } from "./AgenticResearchRunner";
@@ -71,7 +59,6 @@ export interface ResearchServiceOptions {
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   noteTools?: NoteToolService;
   toolsEnabled?: boolean;
-  skillRegistry?: SkillRegistry;
   getIndexStatus?: () => ContextIndexDiagnostics;
   forceEagerResearch?: boolean;
   indexDescription?: IndexDescriptionPromptContext;
@@ -99,7 +86,6 @@ export class ResearchService {
   private readonly chatModelName: string;
   private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
   private readonly toolsEnabled: boolean;
-  private readonly skillRegistry?: SkillRegistry;
   private readonly getIndexStatus?: () => ContextIndexDiagnostics;
   private readonly forceEagerResearch: boolean;
   private readonly indexDescription?: IndexDescriptionPromptContext;
@@ -130,7 +116,6 @@ export class ResearchService {
     this.chatModelName = options.chatModelName;
     this.chatOptions = chatOptions;
     this.toolsEnabled = options.toolsEnabled === true && options.noteTools !== undefined;
-    this.skillRegistry = options.skillRegistry;
     this.getIndexStatus = options.getIndexStatus;
     this.forceEagerResearch = options.forceEagerResearch === true;
     this.indexDescription = options.indexDescription;
@@ -185,11 +170,9 @@ export class ResearchService {
       forceEagerResearch: this.forceEagerResearch,
       deepResearch: request.deepResearch === true,
       searchMode,
-      includeActiveFile: request.includeActiveFile === true && Boolean(request.activeFilePath),
       dependencies: {
         retriever: true,
         webProvider: this.searchProvider !== undefined,
-        activeFileAccess: this.noteTools !== undefined,
       },
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
@@ -200,62 +183,6 @@ export class ResearchService {
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
         : undefined;
-    let skillToolsEnabled =
-      this.toolsEnabled && (policy.strategy === "agentic" || searchMode !== "webOnly");
-    let skillSnapshot: SkillCatalogSnapshot | undefined;
-    let selectedSkill: SkillDefinition | undefined;
-    let inlineSkill: LoadedSkill | undefined;
-    let skillSelectionMode: "automatic" | "manual" | "none" = "none";
-    let selectorWarning: string | undefined;
-
-    if (this.skillRegistry) {
-      skillSnapshot = await this.skillRegistry.getSnapshot();
-      const explicit = resolveExplicitSkill(question, skillSnapshot.skills);
-      if (explicit.kind === "error") {
-        throw new IxplorerError({
-          code: "INVALID_SKILL_SELECTION",
-          details: { reason: explicit.reason, mentions: explicit.mentions },
-        });
-      }
-      question = explicit.normalizedQuestion;
-      if (explicit.kind === "selected") {
-        selectedSkill = explicit.skill;
-        skillSelectionMode = "manual";
-      } else if (!skillToolsEnabled) {
-        yield { type: "status", message: "Selecting skill..." };
-        const selection = await new SkillSelectionService({
-          chatModel: this.chatModel,
-          model: this.chatModelName,
-        }).select(question, skillSnapshot.skills);
-        selectedSkill = selection.skill;
-        selectorWarning = selection.warning;
-        if (selectedSkill) {
-          skillSelectionMode = "automatic";
-        }
-      }
-
-      if (selectedSkill && !skillToolsEnabled) {
-        const catalogTokens = estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot.skills));
-        const maxSkillTokens = this.contextLimitTokens
-          ? Math.max(0, this.contextLimitTokens - (this.reservedOutputTokens ?? 0) - catalogTokens)
-          : undefined;
-        try {
-          inlineSkill = await this.skillRegistry.load(selectedSkill, {
-            maxTokens: maxSkillTokens,
-          });
-        } catch (error) {
-          if (error instanceof SkillLoadError && error.code === "skill-too-large") {
-            throw new IxplorerError({
-              code: "SKILL_TOO_LARGE",
-              cause: error,
-              details: { skillId: selectedSkill.id },
-            });
-          }
-          throw error;
-        }
-      }
-    }
-
     if (policy.strategy === "agentic") {
       yield { type: "status", message: "Synthesizing answer..." };
       const liveEvents = createAsyncEventChannel<ResearchStreamEvent>();
@@ -265,9 +192,6 @@ export class ResearchService {
         searchMode,
         policy,
         indexDescription,
-        skillSnapshot,
-        selectedSkill,
-        skillSelectionMode,
         onEvent: (event) => liveEvents.push(event),
       }).finally(() => liveEvents.close());
       for await (const event of liveEvents) yield event;
@@ -280,41 +204,10 @@ export class ResearchService {
       if (agentic.result.reason === "cancelled") return;
       failedAgenticAttempt = agentic.result;
       executionStrategy = "deterministic-fallback";
-      if (searchMode === "webOnly" && skillToolsEnabled) {
-        skillToolsEnabled = false;
-        if (skillSnapshot && !selectedSkill) {
-          const selection = await new SkillSelectionService({
-            chatModel: this.chatModel,
-            model: this.chatModelName,
-          }).select(question, skillSnapshot.skills);
-          selectedSkill = selection.skill;
-          selectorWarning = selection.warning;
-          if (selectedSkill) skillSelectionMode = "automatic";
-        }
-        if (selectedSkill) {
-          const catalogTokens = estimateTextTokens(
-            buildSkillCatalogPrompt(skillSnapshot?.skills ?? []),
-          );
-          const maxSkillTokens = this.contextLimitTokens
-            ? Math.max(
-                0,
-                this.contextLimitTokens - (this.reservedOutputTokens ?? 0) - catalogTokens,
-              )
-            : undefined;
-          inlineSkill = await this.skillRegistry?.load(selectedSkill, {
-            maxTokens: maxSkillTokens,
-          });
-        }
-      }
     }
 
     const deepResearch = request.deepResearch === true;
-    const skillReservedTokens = skillSnapshot
-      ? estimateTextTokens(buildSkillCatalogPrompt(skillSnapshot.skills)) +
-        (inlineSkill?.estimatedTokens ??
-          (skillToolsEnabled ? (this.skillRegistry?.maxDiscoveredSkillTokens() ?? 0) : 0))
-      : 0;
-    const totalReservedTokens = (this.reservedOutputTokens ?? 0) + skillReservedTokens;
+    const totalReservedTokens = this.reservedOutputTokens ?? 0;
     const totalReservedWithIndexTokens =
       totalReservedTokens + (indexDescription ? estimateTextTokens(indexDescription.text) : 0);
     const assembled =
@@ -340,7 +233,7 @@ export class ResearchService {
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
     }
-    const rawRetrieval =
+    const retrieval =
       searchMode === "webOnly" || searchMode === "none"
         ? emptyRetrievalResult()
         : yield* this.vaultPipeline.search(
@@ -348,7 +241,6 @@ export class ResearchService {
             assembled?.retrievalSourcePaths ?? request.contextPaths,
             assembled?.boostedSourcePaths,
           );
-    const retrieval = withoutInternalSkillEvidence(rawRetrieval);
     const webEvidence = yield* this.webPipeline.search(
       question,
       searchMode !== "indexOnly" && searchMode !== "none",
@@ -358,7 +250,6 @@ export class ResearchService {
       assembled?.diagnostics ??
         createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
       retrieval,
-      rawRetrieval,
     );
     if (this.getIndexStatus) {
       contextDiagnostics.index = this.getIndexStatus();
@@ -368,6 +259,7 @@ export class ResearchService {
       assembled?.graphSourcePaths ?? [],
     );
     const rawRetrievalEvidence = nonExplicitEvidence(retrieval.chunks, rawGraphEvidence);
+
     const planned = this.evidencePlanner.plan({
       question,
       chatHistory: request.chatHistory,
@@ -395,30 +287,6 @@ export class ResearchService {
       webEvidence.diagnostics,
       planned.webEvidence,
     );
-    if (skillSnapshot) {
-      diagnostics.skills = {
-        discoveredCount: skillSnapshot.skills.length,
-        warnings: skillSnapshot.warnings,
-        ...(selectedSkill
-          ? {
-              selectedId: selectedSkill.id,
-              selectedName: selectedSkill.name,
-              selectedPath: selectedSkill.path,
-            }
-          : {}),
-        selectionMode: skillSelectionMode,
-        loadMode: inlineSkill ? "inline" : selectedSkill ? "read_note" : "none",
-        loadStatus: inlineSkill ? "loaded" : selectedSkill ? "selected" : "not-selected",
-        ...(inlineSkill
-          ? {
-              loadedCharacters: inlineSkill.characters,
-              loadedTokens: inlineSkill.estimatedTokens,
-              truncated: false as const,
-            }
-          : {}),
-        ...(selectorWarning ? { selectorWarning } : {}),
-      };
-    }
     if (indexDescription) {
       diagnostics.indexDescription = { ...indexDescription.diagnostics };
       if (indexDescription.diagnostics.freshness !== "current") {
@@ -469,16 +337,9 @@ export class ResearchService {
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit: this.evidenceLimit,
-      toolsEnabled: skillToolsEnabled,
-      skillCatalog: skillSnapshot?.skills,
-      selectedSkill,
-      inlineSkill,
-      retrievalDiagnostics:
-        selectedSkill?.id === "rag-debugger" || isRagDebugIntent(question)
-          ? buildRagDiagnosticSnapshot(diagnostics)
-          : undefined,
-      skillToolResultChars: skillSnapshot
-        ? Math.max(50_000, this.skillRegistry!.maxDiscoveredSkillTokens() * 4 + 2_000)
+      toolsEnabled: this.toolsEnabled,
+      retrievalDiagnostics: isRagDebugIntent(question)
+        ? buildRagDiagnosticSnapshot(diagnostics)
         : undefined,
       indexDescription,
       signal: request.signal,
@@ -491,9 +352,6 @@ export class ResearchService {
     searchMode: ResearchSearchMode;
     policy: ReturnType<typeof resolveResearchExecutionPolicy>;
     indexDescription?: IndexDescriptionPromptContext;
-    skillSnapshot?: SkillCatalogSnapshot;
-    selectedSkill?: SkillDefinition;
-    skillSelectionMode: "automatic" | "manual" | "none";
     onEvent?(event: ResearchStreamEvent): void;
   }): Promise<{
     result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
@@ -519,15 +377,39 @@ export class ResearchService {
           },
         })
       : undefined;
+    // Active note is read upfront and passed as explicit evidence (not via tool loop)
+    let activeNoteEvidence: RetrievedChunk[] = [];
+    if (options.request.includeActiveFile && options.request.activeFilePath && this.noteTools) {
+      try {
+        const activeResult = await this.noteTools.execute({
+          id: "active-note-prefetch",
+          name: "get_active_note",
+          arguments: {},
+        });
+        if (activeResult.ok) {
+          const parsed = JSON.parse(activeResult.result) as unknown;
+          if (isChunkList(parsed)) {
+            activeNoteEvidence = parsed.chunks.map((chunk) => ({
+              id: chunk.id,
+              text: chunk.text,
+              score: 1,
+              contentHash: chunk.id,
+              source: chunk.evidenceSource,
+            }));
+          }
+        }
+      } catch {
+        // Silently ignore — active note is optional context
+      }
+    }
+
     const created = createResearchToolRegistry({
       availability: {
         searchMode: options.searchMode,
         noteAccess:
           this.noteTools !== undefined &&
           (options.searchMode === "indexOnly" || options.searchMode === "indexAndWeb"),
-        activeFileAccess:
-          this.noteTools !== undefined && options.request.includeActiveFile === true,
-        skillAccess: this.noteTools !== undefined && options.skillSnapshot !== undefined,
+        activeFileAccess: this.noteTools !== undefined && options.request.includeActiveFile === true,
         noteMutationAccess: this.noteTools?.mutationEnabled() === true,
         retrieverAvailable: true,
         webProviderAvailable: this.searchProvider !== undefined,
@@ -540,12 +422,14 @@ export class ResearchService {
       question: options.question,
       chatHistory: options.request.chatHistory,
       requiredTools: options.policy.requiredTools,
-      explicitEvidence: assembled?.explicitEvidence,
-      indexDescription: options.indexDescription?.text,
-      skillCatalog: options.skillSnapshot
-        ? buildSkillCatalogPrompt(options.skillSnapshot.skills)
-        : undefined,
-      noteMutationAccess: this.noteTools?.mutationEnabled() === true,
+      explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
+      activeSkills: {
+        coreVariant: options.searchMode === "none" ? "vault" : "research",
+        index: options.searchMode === "indexOnly" || options.searchMode === "indexAndWeb",
+        web: options.searchMode === "webOnly" || options.searchMode === "indexAndWeb",
+        indexDescription: options.indexDescription?.text,
+        noteMutationAccess: this.noteTools?.mutationEnabled() === true,
+      },
     });
     const estimatedTokens =
       estimateTextTokens(messages.map((message) => message.content).join("\n")) +
@@ -589,13 +473,6 @@ export class ResearchService {
             round,
           }),
       }).run();
-    }
-    if (result.ok && !validSkillCalls(result.diagnostics, options.selectedSkill)) {
-      result = {
-        ...result,
-        ok: false,
-        reason: "skill-contract-violation",
-      };
     }
     const snapshot = created.evidence.snapshot();
     const explicitEvidence = assembled?.explicitEvidence ?? [];
@@ -644,22 +521,6 @@ export class ResearchService {
     }
     if (options.indexDescription)
       diagnostics.indexDescription = { ...options.indexDescription.diagnostics };
-    if (options.skillSnapshot) {
-      diagnostics.skills = {
-        discoveredCount: options.skillSnapshot.skills.length,
-        warnings: options.skillSnapshot.warnings,
-        ...(options.selectedSkill
-          ? {
-              selectedId: options.selectedSkill.id,
-              selectedName: options.selectedSkill.name,
-              selectedPath: options.selectedSkill.path,
-            }
-          : {}),
-        selectionMode: options.skillSelectionMode,
-        loadMode: options.selectedSkill ? "read_note" : "none",
-        loadStatus: options.selectedSkill ? "loaded" : "not-selected",
-      };
-    }
     const answer: ResearchAnswer = {
       question: options.question,
       answer: result.ok ? result.answerText : "",
@@ -735,20 +596,6 @@ function agenticBudgets(usedResultChars: number) {
   };
 }
 
-function validSkillCalls(
-  diagnostics: ContextDiagnostics["tools"],
-  selectedSkill: SkillDefinition | undefined,
-): boolean {
-  const loaded = diagnostics.filter(
-    (tool) =>
-      tool.name === "read_note" &&
-      tool.status === "success" &&
-      typeof tool.metadata?.skillId === "string",
-  );
-  const paths = new Set(loaded.map((tool) => String(tool.arguments.path ?? "")));
-  if (paths.size > 1) return false;
-  return !selectedSkill || paths.has(selectedSkill.path);
-}
 
 function citationIdsFromText(text: string): Set<string> {
   return new Set(
@@ -789,19 +636,15 @@ function nonExplicitEvidence(
 function withRetrievalDiagnostics(
   diagnostics: ContextDiagnostics,
   retrieval: RetrievalResult,
-  rawRetrieval: RetrievalResult = retrieval,
 ): ContextDiagnostics {
-  const retainedIds = new Set(retrieval.chunks.map((chunk) => chunk.id));
-  const rankedChunks = rawRetrieval.chunks.map((chunk, index) => {
+  const rankedChunks = retrieval.chunks.map((chunk, index) => {
     const path = "path" in chunk.source ? chunk.source.path : chunk.source.title;
-    const filtered = !retainedIds.has(chunk.id);
     return {
       id: chunk.id,
       path,
       rank: index + 1,
       score: chunk.score,
-      status: filtered ? ("filtered" as const) : ("included" as const),
-      ...(filtered ? { reason: "internal-skill-path" } : {}),
+      status: "included" as const,
     };
   });
   return {
@@ -810,9 +653,7 @@ function withRetrievalDiagnostics(
       ...diagnostics.retrieval,
       queryVariants: (retrieval.queryVariants ?? []).map((variant) => variant.query),
       includedChunkIds: retrieval.chunks.map((chunk) => chunk.id),
-      droppedChunkIds: rawRetrieval.chunks
-        .filter((chunk) => !retainedIds.has(chunk.id))
-        .map((chunk) => chunk.id),
+      droppedChunkIds: [],
       rankedChunks,
     },
   };
@@ -919,17 +760,6 @@ function emptyRetrievalResult(): RetrievalResult {
   };
 }
 
-function withoutInternalSkillEvidence(result: RetrievalResult): RetrievalResult {
-  const chunks = result.chunks.filter(
-    (chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)),
-  );
-  const includedIds = new Set(chunks.map((chunk) => chunk.id));
-  return {
-    ...result,
-    chunks,
-    citations: result.citations.filter((citation) => includedIds.has(citation.id)),
-  };
-}
 
 function createEmptyContextDiagnostics(
   contextMode: ContextMode,
@@ -979,6 +809,18 @@ export function selectResearchExecutionStrategy(
 
 function isRagDebugIntent(question: string): boolean {
   return /(rag|retrieval|чанк|почему[^?]*(?:не наш|плох)|диагностик)/i.test(question);
+}
+
+function isChunkList(value: unknown): value is {
+  chunks: Array<{ id: string; text: string; evidenceSource: import("../shared/types").SourceReference }>;
+} {
+  if (typeof value !== "object" || value === null) return false;
+  const chunks = (value as Record<string, unknown>).chunks;
+  return Array.isArray(chunks) && chunks.every(
+    (c) => typeof c === "object" && c !== null &&
+      typeof (c as Record<string, unknown>).id === "string" &&
+      typeof (c as Record<string, unknown>).text === "string",
+  );
 }
 
 function buildRagDiagnosticSnapshot(diagnostics: ContextDiagnostics): string {

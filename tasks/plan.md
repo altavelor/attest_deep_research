@@ -1,116 +1,154 @@
-# Plan: Note Mutation Tools
+# Plan: Agentic Skills и роли инструментов
 
-Spec: SPEC-note-mutation-tools.md
+Spec: SPEC-agentic-skills-and-tool-roles.md
 
 ## Tasks
 
-### Task 1 — Core types and path validation [x]
-Add `VaultWriter` interface, `NoteActionConfirmation` stub, `AUTO_CONFIRM`, `validateMutablePath`,
-and extend `NoteToolServiceOptions` with `writer`, `confirmation`, `noteMutationAccess`.
+### Task 1 — `agenticPrompts.ts`: новый `ActiveSkills` API + встроенные скилы + fix `sanitize()` [ ]
 
-Files: `src/research/tools/NoteTools.ts`
+Files: `src/research/agenticPrompts.ts`, `src/research/ResearchService.ts` (только call site в `answerAgentically`), `tests/unit/agentic-prompts.test.ts`
 
 Acceptance:
-- `VaultWriter` interface exported with: exists, createFile, modifyFile, appendFile, readFile, trashFile, ensureFolder
-- `NoteActionConfirmation` interface and `AUTO_CONFIRM` const exported
-- `validateMutablePath(path)` returns `{ ok: true }` for valid `.md` paths outside `.ixplorer/`
-- Returns `{ ok: false, reason: "invalid-path" }` for non-`.md`
-- Returns `{ ok: false, reason: "forbidden-path" }` for `.ixplorer/` paths
-- `NoteToolServiceOptions` has optional `writer`, `confirmation`, `noteMutationAccess`
+- `ActiveSkills` interface экспортирован: `coreVariant`, `index`, `web`, `indexDescription?`, `noteMutationAccess`
+- `BuildAgenticResearchMessagesOptions` заменяет `skillCatalog`/`noteMutationAccess`/`indexDescription` на `activeSkills: ActiveSkills`
+- Core-Vault skill появляется в system prompt когда `coreVariant === "vault"`
+- Core-Research skill появляется когда `coreVariant === "research"`
+- Index skill с `indexDescription` появляется когда `activeSkills.index === true && indexDescription`
+- Index skill НЕ появляется когда `indexDescription` отсутствует
+- Web skill появляется когда `activeSkills.web === true`
+- Mutation rules секция появляется только когда `noteMutationAccess === true`
+- `sanitize()` использует HTML entities (`&lt;` / `&gt;` / `&amp;`)
+- `requiredTools` и `explicitEvidence` работают как прежде
+- `ResearchService.answerAgentically` строит `activeSkills` и передаёт в `buildAgenticResearchMessages`
+- Все тесты в `agentic-prompts.test.ts` обновлены и проходят
 
 ---
 
-### Task 2 — `create_note` tool [x]
-Implement `create_note` tool definition and handler in `NoteToolService`.
+### Task 2 — `search_notes`: убрать retriever, добавить `editingOnly` [ ]
 
 Files: `src/research/tools/NoteTools.ts`, `tests/unit/note-tools.test.ts`
 
 Dependencies: Task 1
 
 Acceptance:
-- Tool definition registered in `NOTE_MUTATION_TOOL_DEFINITIONS`
-- `supports()` recognises `create_note`
-- Creates file via `writer.createFile`; creates parent folders via `writer.ensureFolder`
-- Returns `{ ok: true, path, created: true }` on success
-- Returns `{ ok: false, reason: "already-exists" }` if file exists and `overwrite: false`
-- Overwrites if `overwrite: true`
-- Returns `{ ok: false, reason: "forbidden-path" }` for `.ixplorer/` paths
-- Returns `{ ok: false, reason: "invalid-path" }` for non-`.md` paths
-- Returns `{ ok: false, reason: "user-cancelled" }` when confirmation returns false
-- Not registered when `writer` is absent
+- `searchWithRetriever` метод удалён из `NoteToolService`
+- `retriever` больше не используется в `searchNotes`
+- Результат содержит `editingOnly: true`
+- Результат содержит `source: "path"` (всегда)
+- Описание инструмента обновлено: "Find vault notes by keyword match... Results are NOT evidence..."
+- `NoteToolServiceOptions.retriever` НЕ используется в `searchNotes` (может оставаться для будущего использования другими методами)
+- Тесты обновлены
 
 ---
 
-### Task 3 — `update_note` tool [x]
-Implement `update_note` tool definition and handler.
+### Task 3 — `read_note` + editing tools: убрать `readSkill`, обновить descriptions, прекратить регистрацию evidence [ ]
 
-Files: `src/research/tools/NoteTools.ts`, `tests/unit/note-tools.test.ts`
+Files: `src/research/tools/NoteTools.ts`, `src/research/tools/ResearchToolRegistry.ts`
 
-Dependencies: Task 1
+Dependencies: Task 2
 
 Acceptance:
-- Modes: `replace` (vault.modifyFile), `append` (vault.appendFile), `prepend` (read + write)
-- Default mode is `replace`
-- Returns `{ ok: false, reason: "not-found" }` if file does not exist
-- Forbidden-path and invalid-path validation apply
-- `user-cancelled` on confirmation rejection
-- `prepend` non-atomicity documented in tool description
+- `readSkill` метод удалён из `NoteToolService`
+- `SKILL_ROOT` импорт и использование удалены из `NoteTools.ts`
+- `SkillRegistry` удалён из `NoteToolServiceOptions` и `NoteToolService`
+- `read_note` description обновлён: "For editing only — returned text is NOT citable evidence..."
+- `list_notes` description обновлён: "For editing navigation only — results are not evidence."
+- `get_active_note` description обновлён: "For editing only — not citable evidence. Active note content is already provided as attached context..."
+- `NoteToolHandlerAdapter.execute` НЕ вызывает `registerNoteEvidence` для `read_note` и `get_active_note`
+- `isEvidenceResult` и связанная логика регистрации chunks удалены из `ResearchToolRegistry.ts`
+- `tests/unit/note-tools.test.ts`: удалены skill-related тесты
 
 ---
 
-### Task 4 — `delete_note` tool [x]
-Implement `delete_note` tool definition and handler.
-
-Files: `src/research/tools/NoteTools.ts`, `tests/unit/note-tools.test.ts`
-
-Dependencies: Task 1
-
-Acceptance:
-- Calls `writer.trashFile`
-- Returns `{ ok: true, path, trashed: true }` on success
-- Returns `{ ok: false, reason: "not-found" }` if file does not exist
-- Forbidden-path validation applies (no `.md` restriction for delete)
-- `user-cancelled` on confirmation rejection
-
----
-
-### Task 5 — Registry availability flag [x]
-Add `noteMutationAccess` to `ResearchToolAvailability` and `NoteToolAvailability`.
-Filter mutation tools in `adaptNoteToolHandlers`.
+### Task 4 — `ResearchToolRegistry`: убрать `skillAccess`, `skillOnly` [ ]
 
 Files: `src/research/tools/ResearchToolRegistry.ts`, `src/research/tools/createResearchToolRegistry.ts`
 
-Dependencies: Task 2, 3, 4
+Dependencies: Task 3
 
 Acceptance:
-- `noteMutationAccess: boolean` in both availability types
-- Default value `false` in `DEFAULT_AVAILABILITY`
-- `adaptNoteToolHandlers` includes mutation tools only when `noteMutationAccess === true`
+- `skillAccess: boolean` удалён из `ResearchToolAvailability` и `NoteToolAvailability`
+- `skillOnly` поле удалено из `NoteToolHandlerAdapter`
+- `parseInput` в `NoteToolHandlerAdapter` не содержит skill-path проверку
+- `adaptNoteToolHandlers` не принимает `skillAccess`
+- `isInternalSkillPath` импорт удалён из `ResearchToolRegistry.ts`
+- `createResearchToolRegistry.ts` не передаёт `skillAccess`
+- `DEFAULT_AVAILABILITY` не содержит `skillAccess`
 
 ---
 
-### Task 6 — Settings: noteMutationAccess [x]
-Add `noteMutationAccess` to `ChatModelProfile` defaults.
+### Task 5 — `ResearchExecutionPolicy` + active note prefetch [ ]
 
-Files: `src/settings/settings.ts`
+Files: `src/research/ResearchExecutionPolicy.ts`, `src/research/ResearchService.ts`
+
+Dependencies: Task 4
+
+Acceptance:
+- `includeActiveFile` убран из `mandatoryTools` в `ResearchExecutionPolicy`
+- `mandatoryTools` принимает только `searchMode` (не `includeActiveFile`)
+- `get_active_note` НЕ входит в `requiredTools` ни при каких условиях
+- В `ResearchService.answerAgentically`: если `includeActiveFile && activeFilePath && noteTools` — читает активный файл через `noteTools.execute(get_active_note)` перед запуском runner
+- Результат активного файла добавляется в `explicitEvidence` (не регистрируется в evidence registry отдельно)
+- При ошибке чтения активного файла — игнорируется (не падает весь запрос)
+
+---
+
+### Task 6 — Удалить skill system из `ResearchService.ts` и `AnswerSynthesisService.ts` [ ]
+
+Files: `src/research/ResearchService.ts`, `src/research/AnswerSynthesisService.ts`
 
 Dependencies: Task 5
 
 Acceptance:
-- Field exists with default `false`
-- Read/written through existing settings serialisation
+- `skillRegistry`, `skillSnapshot`, `selectedSkill`, `inlineSkill`, `skillSelectionMode`, `selectorWarning` удалены из `ResearchService`
+- `SkillRegistry`, `SkillSelectionService`, `buildSkillCatalogPrompt`, `resolveExplicitSkill` импорты удалены
+- `validSkillCalls` функция удалена
+- `skill-contract-violation` удалён из `AgenticFallbackReason`
+- `diagnostics.skills` не заполняется
+- `ResearchServiceOptions.skillRegistry` удалён
+- `AnswerSynthesisService`: удалены `skillCatalog`, `selectedSkill`, `inlineSkill`, `toolsEnabled`, `skillToolResultChars` параметры
+- Core-Vault skill инжектируется в system prompt `AnswerSynthesisService` когда `searchMode === "none"` и есть tool loop
 
 ---
 
-### Task 7 — ObsidianVaultWriter + main.ts wiring [x]
-Create `ObsidianVaultWriter` and pass it (with writer/confirmation) to `NoteToolService` in `main.ts`.
+### Task 7 — Удалить старые skill файлы + `isInternalSkillPath` [ ]
 
-Files: `src/research/tools/ObsidianVaultWriter.ts` (new), `src/main.ts`
+Files: `src/skills/SkillRegistry.ts` (delete), `src/skills/SkillSelectionService.ts` (delete), `src/skills/ObsidianSkillFileStore.ts` (delete), `src/skills/defaultSkills.ts` (delete), `src/shared/pathFilters.ts`, `src/research/tools/IndexResearchTool.ts`, `src/research/ContextAssembler.ts`, `src/main.ts`
 
-Dependencies: Task 5, 6
+Dependencies: Task 6
 
 Acceptance:
-- `ObsidianVaultWriter` implements `VaultWriter` via Obsidian `App.vault` API
-- `main.ts` constructs `ObsidianVaultWriter` and passes it to `NoteToolService`
-- `noteMutationAccess` read from profile settings
-- Plugin builds without TypeScript errors
+- Файлы в `src/skills/` удалены (все четыре)
+- `isInternalSkillPath` удалена из `pathFilters.ts`
+- `isInternalSkillPath` импорт и использование удалены из `IndexResearchTool.ts`
+- `isInternalSkillPath` импорт и использование удалены из `ContextAssembler.ts`
+- `SkillRegistry` импорт и использование удалены из `main.ts`
+- `isInternalSkillPath` импорт удалён из `main.ts`
+- Проект компилируется без ошибок
+
+---
+
+### Task 8 — Удалить `SkillContextDiagnostics` из types + diagnostic formatting [ ]
+
+Files: `src/shared/types.ts`, `src/ui/diagnosticFormatting.ts`
+
+Dependencies: Task 7
+
+Acceptance:
+- `SkillContextDiagnostics` интерфейс удалён из `types.ts`
+- `skills?: SkillContextDiagnostics` поле удалено из `ContextDiagnostics`
+- `diagnosticFormatting.ts` не обращается к `diagnostics.skills`
+- Проект компилируется без ошибок
+
+---
+
+### Task 9 — Vault migration: удалить `.ixplorer/skills/` при upgrade [ ]
+
+Files: `src/main.ts`
+
+Dependencies: Task 8
+
+Acceptance:
+- В `onload` плагина: если `.ixplorer/skills/` существует — перемещается в trash через `app.vault.adapter` или `vault.trash`
+- Миграция выполняется тихо (нет уведомлений пользователю если папки нет)
+- При ошибке trash — логируется в console, не бросает исключение

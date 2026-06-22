@@ -24,6 +24,7 @@ describe("PluginDebugLogger", () => {
               serverProfileId: "server-a",
               modelName: "qwen3",
               toolsEnabled: true,
+              noteMutationAccess: false,
               reasoning: { mode: "off", summary: "off" },
               createdAt: "2026-01-01T00:00:00.000Z",
               updatedAt: "2026-01-01T00:00:00.000Z",

@@ -23,8 +23,7 @@ export type AgenticFallbackReason =
   | "tool-result-budget-exceeded"
   | "provider-error"
   | "cancelled"
-  | "context-limit-exceeded"
-  | "skill-contract-violation";
+  | "context-limit-exceeded";
 
 export interface AgenticResearchRunnerOptions {
   chatModel: ChatModelProvider;

@@ -183,7 +183,6 @@ export interface ContextDiagnostics {
   web?: WebContextDiagnostics;
   index?: ContextIndexDiagnostics;
   indexDescription?: IndexDescriptionPromptDiagnostics;
-  skills?: SkillContextDiagnostics;
   tools: ToolCallDiagnostic[];
   warnings: string[];
   agentic?: AgenticAttemptDiagnostics;
@@ -380,21 +379,6 @@ export interface ContextIndexDiagnostics {
   errorMessage?: string;
 }
 
-export interface SkillContextDiagnostics {
-  discoveredCount: number;
-  warnings: Array<{ path: string; reason: string }>;
-  selectedId?: string;
-  selectedName?: string;
-  selectedPath?: string;
-  selectionMode: "automatic" | "manual" | "none";
-  loadMode: "read_note" | "inline" | "none";
-  loadStatus: "not-selected" | "selected" | "loaded" | "failed";
-  loadedCharacters?: number;
-  loadedTokens?: number;
-  loadError?: string;
-  truncated?: false;
-  selectorWarning?: string;
-}
 
 export interface ToolCallDiagnostic {
   id: string;
