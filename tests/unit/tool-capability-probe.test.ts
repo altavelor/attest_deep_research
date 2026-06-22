@@ -18,18 +18,22 @@ describe("probeToolControlCapabilities", () => {
     const provider = new ProbeProvider((request) => ({
       content: "",
       isComplete: true,
-      toolCalls: [
-        {
-          id: "p",
-          name:
-            request.toolChoice?.type === "specific" ? request.toolChoice.name : "ixplorer_probe_a",
-          arguments: {},
-        },
-      ],
+      toolCalls:
+        request.toolChoice?.type === "specific"
+          ? [{ id: "specific", name: request.toolChoice.name, arguments: {} }]
+          : [
+              { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
+              { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
+            ],
     }));
     await expect(
       probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" }),
-    ).resolves.toEqual({ calls: true, choiceRequired: true, choiceSpecific: true });
+    ).resolves.toEqual({
+      calls: true,
+      choiceRequired: true,
+      choiceSpecific: true,
+      parallelCalls: true,
+    });
     expect(provider.requests).toHaveLength(2);
     expect(JSON.stringify(provider.requests)).not.toMatch(/vault|index|note|web/i);
   });
@@ -38,13 +42,23 @@ describe("probeToolControlCapabilities", () => {
     const textProvider = new ProbeProvider(() => ({ content: "no", isComplete: true }));
     await expect(
       probeToolControlCapabilities({ provider: textProvider, model: "m", apiFormat: "anthropic" }),
-    ).resolves.toEqual({ calls: false, choiceRequired: false, choiceSpecific: false });
+    ).resolves.toEqual({
+      calls: false,
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    });
     const unused = new ProbeProvider(() => {
       throw new Error("must not run");
     });
     await expect(
       probeToolControlCapabilities({ provider: unused, model: "m", apiFormat: "ollama" }),
-    ).resolves.toEqual({ calls: false, choiceRequired: false, choiceSpecific: false });
+    ).resolves.toEqual({
+      calls: false,
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    });
     expect(unused.requests).toHaveLength(0);
   });
 
@@ -63,6 +77,11 @@ describe("probeToolControlCapabilities", () => {
     }));
     await expect(
       probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" }),
-    ).resolves.toEqual({ calls: false, choiceRequired: false, choiceSpecific: false });
+    ).resolves.toEqual({
+      calls: false,
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    });
   });
 });

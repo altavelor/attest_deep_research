@@ -7,6 +7,7 @@ import {
   messageDisplayContent,
   messageMarkdownContent,
   nextAssistantMessage,
+  nextAssistantReasoning,
   shouldShowDiagnosticAction,
   stripMessageDiagnostics,
 } from "../../src/ui/rendering";
@@ -109,6 +110,31 @@ describe("chat rendering helpers", () => {
     ]);
   });
 
+  it("groups streamed reasoning deltas into ordered assistant segments", () => {
+    const first = nextAssistantReasoning([], "round-1", "Checking ");
+    const second = nextAssistantReasoning(first, "round-1", "constraints.");
+    const third = nextAssistantReasoning(second, "round-2", "Verifying result.");
+
+    expect(third).toEqual([
+      {
+        role: "assistant",
+        content: "",
+        createdAt: expect.any(String),
+        researchProgress: expect.objectContaining({
+          phase: "streaming",
+          disclosure: "auto",
+          reasoning: expect.objectContaining({
+            segments: [
+              { id: "round-1", kind: "summary", content: "Checking constraints." },
+              { id: "round-2", kind: "summary", content: "Verifying result." },
+            ],
+          }),
+          checkpoints: [],
+        }),
+      },
+    ]);
+  });
+
   it("attaches completed diagnostics to the corresponding last assistant message", () => {
     const diagnostics = { contextMode: "include" } as ContextDiagnostics;
     const messages = [
@@ -138,9 +164,9 @@ describe("chat rendering helpers", () => {
 
     expect(shouldShowDiagnosticAction(assistantMessage, true)).toBe(true);
     expect(shouldShowDiagnosticAction(assistantMessage, false)).toBe(false);
-    expect(shouldShowDiagnosticAction({ ...assistantMessage, contextDiagnostics: undefined }, true)).toBe(
-      false,
-    );
+    expect(
+      shouldShowDiagnosticAction({ ...assistantMessage, contextDiagnostics: undefined }, true),
+    ).toBe(false);
     expect(shouldShowDiagnosticAction({ ...assistantMessage, role: "user" }, true)).toBe(false);
   });
 

@@ -36,7 +36,11 @@ export class ProviderHttpClient {
     this.unavailableMessage = options.unavailableMessage;
   }
 
-  async request(path: string, init: RequestInit): Promise<Response> {
+  async request(
+    path: string,
+    init: RequestInit,
+    logging: { redactBody?: boolean } = {},
+  ): Promise<Response> {
     const controller = new AbortController();
     const externalSignal = init.signal;
     const abortFromExternal = () => controller.abort(externalSignal?.reason);
@@ -46,7 +50,7 @@ export class ProviderHttpClient {
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
     const requestInit = withAuthorization(init, this.apiKey);
-    const logContext = createLogContext(url, method, requestInit);
+    const logContext = createLogContext(url, method, requestInit, logging.redactBody === true);
 
     try {
       this.logger?.logRequest(logContext);
@@ -62,15 +66,30 @@ export class ProviderHttpClient {
         statusText: response.statusText,
       });
 
+      const providerError = !response.ok
+        ? await readProviderError(response, this.apiKey)
+        : undefined;
+      if (providerError) {
+        this.logger?.logResponse({
+          ...logContext,
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: { error: providerError },
+        });
+      }
+
       if (response.status === 404) {
-        throw new IxplorerError({ code: "MODEL_NOT_FOUND" });
+        throw new IxplorerError({
+          code: "MODEL_NOT_FOUND",
+          details: { status: response.status, ...providerErrorDetails(providerError) },
+        });
       }
 
       if (!response.ok) {
         throw new IxplorerError({
           code: this.unavailableCode,
           message: `Provider returned HTTP ${response.status}.`,
-          details: { status: response.status },
+          details: { status: response.status, ...providerErrorDetails(providerError) },
         });
       }
 
@@ -123,6 +142,73 @@ export class ProviderHttpClient {
   }
 }
 
+interface ProviderErrorSummary {
+  code?: string;
+  message?: string;
+}
+
+async function readProviderError(
+  response: Response,
+  apiKey: string | undefined,
+): Promise<ProviderErrorSummary | undefined> {
+  const text = await readBoundedResponseText(response, 4_096);
+  if (!text) return undefined;
+  try {
+    const body: unknown = JSON.parse(text);
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return undefined;
+    const error = (body as Record<string, unknown>).error;
+    if (typeof error !== "object" || error === null || Array.isArray(error)) return undefined;
+    const record = error as Record<string, unknown>;
+    const code =
+      typeof record.code === "string" || typeof record.code === "number"
+        ? String(record.code).slice(0, 100)
+        : undefined;
+    const message =
+      typeof record.message === "string"
+        ? sanitizeProviderMessage(record.message, apiKey)
+        : undefined;
+    return code || message
+      ? { ...(code ? { code } : {}), ...(message ? { message } : {}) }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readBoundedResponseText(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+  try {
+    while (bytes < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = maxBytes - bytes;
+      const chunk = value.byteLength > remaining ? value.slice(0, remaining) : value;
+      bytes += chunk.byteLength;
+      text += decoder.decode(chunk, { stream: bytes < maxBytes });
+      if (value.byteLength > remaining) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return text + decoder.decode();
+}
+
+function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
+  const normalized = value.replace(/\s+/g, " ").trim().slice(0, 500);
+  return apiKey ? normalized.split(apiKey).join("[redacted]") : normalized;
+}
+
+function providerErrorDetails(error: ProviderErrorSummary | undefined): Record<string, unknown> {
+  return {
+    ...(error?.code ? { providerCode: error.code } : {}),
+    ...(error?.message ? { providerMessage: error.message } : {}),
+  };
+}
+
 function normalizeProviderBaseUrl(apiFormat: ApiFormat, baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, "");
 
@@ -147,12 +233,13 @@ function withAuthorization(init: RequestInit, apiKey: string | undefined): Reque
   };
 }
 
-function createLogContext(url: string, method: string, init: RequestInit) {
+function createLogContext(url: string, method: string, init: RequestInit, redactBody: boolean) {
   return {
     url,
     method,
     headers: redactHeaders(headersToRecord(init.headers)),
-    requestBody: summarizeBody(init.body),
+    requestBody:
+      redactBody && init.body ? "[redacted sensitive provider body]" : summarizeBody(init.body),
   };
 }
 

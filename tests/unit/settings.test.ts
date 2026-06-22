@@ -11,6 +11,9 @@ import {
   normalizeUrl,
   normalizeVaultFolder,
   resolveChatModelProfile,
+  resolveEffectiveChatApiProtocol,
+  resolveEffectiveReasoning,
+  resolveEffectiveTools,
   updateActiveIndexProfile,
 } from "../../src/settings/settings";
 
@@ -88,6 +91,7 @@ describe("Ixplorer settings", () => {
     });
     expect(resolveChatModelProfile(settings, "chat-a")).toMatchObject({
       id: "chat-a",
+      toolsEnabled: true,
       isSuspended: false,
       capabilities: expect.objectContaining({ contextLength: 128000 }),
     });
@@ -112,15 +116,172 @@ describe("Ixplorer settings", () => {
   it("migrates legacy tools conservatively into tool calling settings", () => {
     const settings = migrateSettings({
       serverProfiles: [{ id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "http://x" }],
-      chatModelProfiles: [{
-        id: "m", name: "M", serverProfileId: "s", modelName: "model",
-        capabilities: { chat: true, embeddings: false, tools: true, detectionSource: "probe" },
-      }],
+      chatModelProfiles: [
+        {
+          id: "m",
+          name: "M",
+          serverProfileId: "s",
+          modelName: "model",
+          capabilities: { chat: true, embeddings: false, tools: true, detectionSource: "probe" },
+        },
+      ],
     });
     expect(settings.chatModelProfiles[0].capabilities?.toolCalling).toEqual({
-      formatDefault: { calls: false, choiceRequired: false, choiceSpecific: false, parallelCalls: false },
+      formatDefault: {
+        calls: false,
+        choiceRequired: false,
+        choiceSpecific: false,
+        parallelCalls: false,
+      },
       probe: { calls: true },
     });
+    expect(settings.chatModelProfiles[0].toolsEnabled).toBe(true);
+  });
+
+  it("gates detected tool support with the user Tools switch", () => {
+    const profile = migrateSettings({
+      serverProfiles: [{ id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "http://x" }],
+      chatModelProfiles: [
+        {
+          id: "m",
+          name: "M",
+          serverProfileId: "s",
+          modelName: "model",
+          toolsEnabled: false,
+          capabilities: {
+            chat: true,
+            embeddings: false,
+            toolCalling: {
+              formatDefault: {
+                calls: false,
+                choiceRequired: false,
+                choiceSpecific: false,
+                parallelCalls: false,
+              },
+              probe: { calls: true },
+            },
+          },
+        },
+      ],
+    }).chatModelProfiles[0];
+
+    expect(resolveEffectiveTools(profile)).toBe(false);
+    profile.toolsEnabled = true;
+    expect(resolveEffectiveTools(profile)).toBe(true);
+    profile.capabilities!.toolCalling!.probe = { calls: false };
+    expect(resolveEffectiveTools(profile)).toBe(false);
+  });
+
+  it("migrates reasoning settings without retaining the legacy protocol setting", () => {
+    const settings = migrateSettings({
+      serverProfiles: [
+        {
+          id: "openai",
+          name: "OpenAI",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://api.openai.com/v1",
+        },
+        { id: "ollama", name: "Ollama", apiFormat: "ollama", baseUrl: "http://localhost:11434" },
+      ],
+      chatModelProfiles: [
+        {
+          id: "responses",
+          name: "Responses",
+          serverProfileId: "openai",
+          modelName: "gpt-5",
+          reasoning: { enabled: true, effort: "high", summary: "auto" },
+          reasoningCapabilities: {
+            source: "manual",
+            responses: true,
+            continuation: true,
+            summary: true,
+            efforts: ["low", "high", "high", ""],
+          },
+        },
+        {
+          id: "legacy",
+          name: "Legacy",
+          serverProfileId: "openai",
+          modelName: "legacy-model",
+          reasoning: { enabled: "yes", effort: 1, summary: "detailed" },
+        },
+        {
+          id: "ollama-responses",
+          name: "Invalid Ollama Responses",
+          serverProfileId: "ollama",
+          modelName: "qwen",
+          reasoning: { mode: "on", summary: "auto" },
+        },
+      ],
+    });
+
+    expect(settings.chatModelProfiles[0]).toMatchObject({
+      reasoning: { mode: "on", effort: "high", summary: "auto" },
+      reasoningCapabilities: {
+        source: "manual",
+        responses: true,
+        continuation: true,
+        summary: true,
+        efforts: ["low", "high"],
+      },
+    });
+    expect(settings.chatModelProfiles[1]).toMatchObject({
+      reasoning: { mode: "off", summary: "off" },
+    });
+    expect(settings.chatModelProfiles[2]).toMatchObject({
+      reasoning: { mode: "off", summary: "off" },
+    });
+    expect(settings.chatModelProfiles[0]).not.toHaveProperty("apiProtocol");
+  });
+
+  it("resolves automatic protocol and reasoning from detected capabilities", () => {
+    const profile = migrateSettings({
+      serverProfiles: [
+        { id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "https://example.test/v1" },
+      ],
+      chatModelProfiles: [
+        {
+          id: "m",
+          name: "M",
+          serverProfileId: "s",
+          modelName: "model",
+          reasoning: { mode: "auto", summary: "off" },
+          reasoningCapabilities: {
+            source: "probe",
+            responses: true,
+            continuation: true,
+            summary: false,
+            efforts: ["medium"],
+            requiresEffort: true,
+            defaultEffort: "medium",
+          },
+        },
+      ],
+    }).chatModelProfiles[0];
+
+    expect(resolveEffectiveChatApiProtocol(profile)).toBe("responses");
+    expect(resolveEffectiveReasoning(profile, "responses")).toEqual({
+      enabled: true,
+      effort: "medium",
+      summary: "off",
+    });
+
+    profile.reasoningCapabilities = undefined;
+    expect(resolveEffectiveChatApiProtocol(profile)).toBe("chat-completions");
+    expect(resolveEffectiveReasoning(profile, "chat-completions")).toEqual({
+      enabled: true,
+      summary: "off",
+    });
+
+    profile.reasoning.mode = "off";
+    profile.reasoningCapabilities = {
+      source: "manual",
+      responses: true,
+      continuation: true,
+      summary: true,
+      efforts: ["medium"],
+    };
+    expect(resolveEffectiveChatApiProtocol(profile)).toBe("chat-completions");
   });
 
   it("preserves valid index descriptions and drops malformed metadata", () => {

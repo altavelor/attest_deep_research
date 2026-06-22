@@ -9,9 +9,9 @@ Deliver the architecture incrementally without changing research behavior in the
 - `forceEagerResearch` is a global persisted setting, defaults to `false`, remains editable, and overrides model capabilities only when enabled.
 - Iteration 1 does not yet provide an agentic path. Both setting values therefore use the existing eager implementation, but only `true` represents a user-forced strategy.
 - Eager and agentic executions are separate strategies selected before evidence gathering.
-- OpenAI Responses is the reference reasoning implementation; Chat Completions remains the compatibility path.
+- Responses and OpenAI-compatible Chat Completions are equal inputs to the provider-neutral reasoning stream contract in `docs/universal-reasoning-streaming-spec.md`.
 - Research sources are atomic tools in agentic mode; application policy validates mandatory source use.
-- Raw reasoning is never normal transcript or persisted answer content.
+- Opaque/private reasoning is never normal transcript or persisted answer content; provider-exposed reasoning follows the separate research-progress persistence contract.
 - Each completed changed index run produces a bounded index description; index-backed prompts receive the description of the currently selected index.
 
 ## Iteration 1 clarification review and recommendations
@@ -626,29 +626,51 @@ The following implementation details were still ambiguous after comparing the pl
 
 ## Iteration 4: OpenAI Responses reasoning reference
 
+### Iteration 4 clarification review and recommendations
+
+The pre-implementation review found the following details insufficiently precise. Iteration 4 uses these resolutions:
+
+1. **Iteration boundary and activation.** “Iteration 4” means Tasks 23–31 and both checkpoints. Tasks 23–30 remain dark: Responses capability may be probed, but production answer routing is enabled only by Task 31 after transport, continuation, eager, agentic, redaction, and migration tests pass.
+2. **Wire representation of disabled reasoning controls.** `summary: "off"` and provider-default effort are application settings only. They are represented on the wire by omitting `reasoning.summary` and `reasoning.effort`; the adapter never sends undocumented `"off"` or a fabricated effort value. When reasoning is disabled, the entire `reasoning` object and encrypted-content include are omitted.
+3. **Effort capability values.** Reasoning effort capabilities are bounded opaque strings supplied by trusted metadata, a successful probe, or manual override rather than a hard-coded universal enum. Migration removes malformed, empty, or duplicate values. A configured non-default effort must occur in the effective allowed set or request validation fails before network I/O.
+4. **Lossless continuation payload.** The Responses adapter retains the complete ordered provider `output` item objects required for the next stateless request, including reasoning, function calls, and any intervening items. The orchestration layer receives only an opaque handle plus normalized visible/tool/summary items and cannot inspect or reconstruct provider data.
+5. **Continuation request construction.** A continuation request rebuilds `input` from the answer-scope bootstrap input plus every prior provider output item in provider order and then appends exactly one `function_call_output` per executed `call_id`. Stable provider call order, not asynchronous completion order, controls appended output order. System instructions and tool definitions are repeated on every stateless request.
+6. **Reasoning continuation representation.** `include: ["reasoning.encrypted_content"]` is requested on every reasoning-enabled stateless request, but providers may omit encrypted content. Continuation replays the complete reasoning item exactly as returned and is accepted only when the subsequent tool-output round succeeds.
+7. **Responses token semantics.** Existing `maxTokens` maps to `max_output_tokens`, which includes visible and reasoning output. `status: "incomplete"`, including `incomplete_details.reason: "max_output_tokens"`, is not a successful terminal response even when partial text exists; buffered partial text is discarded and a stable fallback reason is recorded.
+8. **SSE completion contract.** The parser accepts a round only after a single recognized terminal event (`response.completed`, `response.incomplete`, or `response.failed`) consistent with the assembled response. EOF before a terminal event, duplicate/conflicting terminal events, missing item/call IDs, invalid JSON arguments, unknown item types needed for continuation, or deltas after terminal are protocol errors. Provider `error` events are sanitized before conversion to application errors.
+9. **Text and summary release.** Output text is buffered/classified by round. Intermediate text is emitted as a provisional research checkpoint and retained inside `Research progress`; validated terminal text becomes the final answer. Provider-exposed reasoning is persisted separately and excluded from ordinary copy/export/prompt history.
+10. **Tool schema and choice mapping.** Responses function definitions use the flat native shape (`type`, `name`, `description`, `parameters`, `strict`) and specific choice uses `{ type: "function", name }`. Existing schemas remain explicitly non-strict unless they already satisfy strict-mode requirements; the adapter must not rely on provider normalization. `parallel_tool_calls` is sent only when capability-validated.
+11. **Capability probe isolation.** The Responses probe uses a reserved synthetic function name and constant non-vault arguments/results. It verifies text transport, requested effort/summary controls, function-call parsing, and successful stateless continuation. No application registry or tool handler is reachable from the probe.
+12. **Probe cache identity.** Cache identity is a hash of normalized base URL, authentication identity hash (never the secret), model ID, protocol, requested reasoning controls, and probe contract version. Changing any component invalidates the result. Success and failure entries have explicit timestamps and bounded freshness; cancellation is never cached.
+13. **Compatibility failure behavior.** Protocol selection is automatic. A verified Responses path enables native continuation and controls; Chat Completions reasoning parsing remains active independently of probe state.
+14. **Answer-scope ownership.** One owner creates and disposes opaque continuation. Disposal is mandatory in `finally` on completion, fallback, provider error, budget exhaustion, cancellation, plugin unload, and profile change. Retries are classified explicitly: transport retry before any accepted output may reuse the scope; every semantic retry starts a clean scope.
+15. **Diagnostics and redaction.** Diagnostics expose counts, statuses, configured controls, capability provenance, token usage, and sanitized failure codes only. Raw SSE data, response bodies, response IDs, output item IDs, call arguments containing evidence, summaries, and encrypted content are excluded from logs and diagnostics. Redaction tests use distinct sentinels for every forbidden channel.
+
+These resolutions follow the Responses guidance: stateless requests replay the reasoning items returned by the provider, function-call continuations replay prior output and append `function_call_output`, and incomplete responses may consume reasoning tokens without producing usable visible output.
+
 ### Iteration 4 decisions
 
 1. **Provider scope.** OpenAI Responses is the only reasoning-continuation implementation activated in this iteration. Anthropic and Ollama retain their iteration-3 behavior.
-2. **Protocol is model-profile data.** Add `apiProtocol: "chat-completions" | "responses"` to OpenAI-compatible chat profiles instead of adding another `ApiFormat`. Existing and malformed profiles migrate to `chat-completions`; Responses is opt-in or probe-confirmed and is never inferred solely from an OpenAI-compatible base URL.
+2. **Protocol is derived runtime state.** Model profiles do not expose or persist protocol selection. Verified Responses support may select Responses; otherwise Chat Completions remains active with tolerant reasoning parsing.
 3. **Separate model-round boundary.** Introduce a provider-neutral ordered round interface beside `ChatModelProvider`. Do not flatten Responses reasoning/function-call items into `ChatMessage`, and do not make the agentic runner parse provider SSE.
 4. **Stateless continuation.** Responses requests use `store: false` and request `reasoning.encrypted_content`. The adapter passes the provider output items required for continuation back unchanged with `function_call_output` items. `previous_response_id` and server-side stored conversation state are deferred.
 5. **Answer-scoped opaque state.** Response IDs, encrypted reasoning, and provider output items exist only in memory for one answer attempt. They are cleared on completion, fallback, error, or cancellation and are never written to chat history, answer notes, settings, logs, or diagnostics.
-6. **Reasoning settings.** A Responses profile may enable reasoning, choose an effort from the profile's verified/manual allowed set, and request provider summary `off | auto`. Defaults are reasoning disabled, provider-default effort, and summary off.
+6. **Reasoning settings.** A profile may set reasoning `off | auto | on` and choose an effort from its verified allowed set. New OpenAI-compatible profiles default to `auto`; successful probing supplies the default effort and enables provider summary when supported.
 7. **Effort is capability constrained.** The application does not assume one universal effort enum. The UI exposes only values declared by trusted metadata, a successful probe, or an explicit manual override; an unavailable value fails closed before a request.
 8. **Eager is orthogonal to reasoning.** `forceEagerResearch` still forces deterministic evidence collection, but it does not disable the selected Responses protocol or reasoning during synthesis. Both eager synthesis and agentic research therefore use the same round abstraction.
-9. **No raw chain-of-thought.** Only provider-generated summaries may produce ephemeral UI status events. Raw reasoning text and encrypted content never become assistant text. Only terminal output text is eligible for persistence.
+9. **No private chain-of-thought.** Provider-exposed text/summary may populate persisted research progress. Encrypted or opaque reasoning never becomes display or saved chat content.
 10. **Fallback boundary.** A Responses parse, continuation, capability, or budget failure discards the entire answer-scoped continuation. Research fallback remains clean; it may make a fresh Responses synthesis request when the profile is otherwise usable.
 
-### Task 23: Add protocol and reasoning profile contracts
+### Task 23: Add reasoning profile contracts and protocol resolution
 
-**Description:** Add the profile-level API protocol and reasoning configuration/capability contracts with conservative migration. Keep all existing profiles on Chat Completions until Responses is explicitly selected and supported.
+**Description:** Add reasoning configuration/capability contracts with conservative migration and derive the effective API protocol automatically at runtime.
 
 **Acceptance criteria:**
 
-- [ ] OpenAI-compatible chat profiles distinguish `chat-completions` from `responses`; Anthropic and Ollama cannot select Responses.
+- [ ] Reasoning parsing remains available on Chat Completions; a current successful probe is required only for Responses-native continuation and controls.
 - [ ] Existing profiles migrate without changing request URLs or payloads.
 - [ ] Reasoning configuration represents enabled state, provider-default or selected effort, and summary `off | auto` separately from verified/manual capabilities.
-- [ ] Unsupported protocol/effort combinations fail validation and never silently downgrade a live request.
+- [ ] Failed or stale Responses capability safely falls back to Chat Completions with reasoning disabled.
 
 **Verification:**
 
@@ -809,7 +831,7 @@ The following implementation details were still ambiguous after comparing the pl
 
 ### Task 30: Add profile UI, safe summary events, and reasoning diagnostics
 
-**Description:** Expose protocol, reasoning enablement, verified/manual effort values, and summary mode in model settings. Add ephemeral provider-summary status events and bounded diagnostics without exposing raw or encrypted reasoning.
+**Description:** Expose reasoning enablement, verified/manual effort values, summary mode, capability provenance, and bounded diagnostics without exposing encrypted or opaque reasoning. Provider-exposed summaries flow into research progress under the universal streaming specification.
 
 **Acceptance criteria:**
 
@@ -896,4 +918,4 @@ npm run format
 - Agentic `deepResearch` behavior.
 - Anthropic versus Ollama rollout priority after OpenAI Responses.
 - Server-side Responses continuation through `previous_response_id`; iteration 4 uses answer-scoped stateless continuation.
-- Persistence of provider-generated reasoning summaries; iteration 4 keeps them ephemeral.
+- Persistence and display of provider-exposed reasoning are governed by `docs/universal-reasoning-streaming-spec.md`.

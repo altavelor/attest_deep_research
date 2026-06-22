@@ -15,11 +15,7 @@ import { ResearchService } from "../research/ResearchService";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import { toUserMessage } from "../shared/errors";
 import { parsePositiveInteger } from "../shared/numbers";
-import {
-  Citation,
-  ResearchAnswer,
-  RetrievedChunk,
-} from "../shared/types";
+import { Citation, ResearchAnswer, RetrievedChunk } from "../shared/types";
 import { AnswerNoteWriter } from "./AnswerNoteWriter";
 import {
   ChatComposerRefs,
@@ -29,7 +25,12 @@ import {
   renderChatComposer,
 } from "./ChatComposer";
 import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
-import { renderChatTranscript, renderFollowUps as renderChatFollowUps } from "./ChatTranscript";
+import {
+  patchActiveAssistantMessage,
+  renderChatTranscript,
+  renderFollowUps as renderChatFollowUps,
+} from "./ChatTranscript";
+import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { ChatCitationRef, CitationPopoverController } from "./CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
@@ -129,6 +130,7 @@ export class IxplorerChatView extends ItemView {
   private indexSearchResultsEl: HTMLElement | null = null;
   private historyPopoverEl: HTMLElement | null = null;
   private historyPopoverAnchorEl: HTMLElement | null = null;
+  private activeMessageRenderFrame: number | null = null;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
     this.closeHistoryPopoverOnOutsidePointer(event);
   };
@@ -197,6 +199,7 @@ export class IxplorerChatView extends ItemView {
         this.isRunning = running;
       },
       renderMessages: () => this.renderMessages(),
+      renderActiveMessage: () => this.scheduleActiveMessageRender(),
       renderAnswerDetails: () => this.renderAnswerDetails(),
       renderIndexControl: () => this.renderIndexControl(),
     });
@@ -225,6 +228,10 @@ export class IxplorerChatView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    if (this.activeMessageRenderFrame !== null) {
+      window.cancelAnimationFrame(this.activeMessageRenderFrame);
+      this.activeMessageRenderFrame = null;
+    }
     this.unsubscribeIndexing?.();
     this.unsubscribeIndexing = null;
     document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
@@ -409,7 +416,24 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    renderChatTranscript(this.transcriptEl, {
+    renderChatTranscript(this.transcriptEl, this.transcriptOptions());
+  }
+
+  private scheduleActiveMessageRender(): void {
+    if (this.activeMessageRenderFrame !== null) return;
+    this.activeMessageRenderFrame = window.requestAnimationFrame(() => {
+      this.activeMessageRenderFrame = null;
+      if (
+        !this.transcriptEl ||
+        !patchActiveAssistantMessage(this.transcriptEl, this.transcriptOptions())
+      ) {
+        this.renderMessages();
+      }
+    });
+  }
+
+  private transcriptOptions(): ChatTranscriptOptions {
+    return {
       app: this.app,
       markdownContext: this,
       messages: this.messages,
@@ -430,7 +454,7 @@ export class IxplorerChatView extends ItemView {
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
-    });
+    };
   }
 
   private renderAnswerDetails(): void {
@@ -1066,7 +1090,6 @@ function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
 
   return unique;
 }
-
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value) ?? fallback;

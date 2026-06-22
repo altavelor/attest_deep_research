@@ -26,15 +26,28 @@ export interface ToolCapabilityProbeOptions {
 
 export async function probeToolControlCapabilities(
   options: ToolCapabilityProbeOptions,
-): Promise<Pick<ToolCallingCapabilities, "calls" | "choiceRequired" | "choiceSpecific">> {
-  const failed = { calls: false, choiceRequired: false, choiceSpecific: false };
+): Promise<
+  Pick<ToolCallingCapabilities, "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls">
+> {
+  const failed = {
+    calls: false,
+    choiceRequired: false,
+    choiceSpecific: false,
+    parallelCalls: false,
+  };
   if (options.apiFormat === "ollama") return failed;
 
   const required = await runProbe(options, { type: "required" });
   const specific = await runProbe(options, { type: "specific", name: PROBE_B });
   const choiceRequired = required.some((name) => name === PROBE_A || name === PROBE_B);
   const choiceSpecific = specific.includes(PROBE_B);
-  return { calls: choiceRequired || choiceSpecific, choiceRequired, choiceSpecific };
+  const parallelCalls = required.includes(PROBE_A) && required.includes(PROBE_B);
+  return {
+    calls: choiceRequired || choiceSpecific,
+    choiceRequired,
+    choiceSpecific,
+    parallelCalls,
+  };
 }
 
 async function runProbe(

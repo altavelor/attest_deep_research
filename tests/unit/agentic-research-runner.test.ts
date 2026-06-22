@@ -2,7 +2,14 @@ import { AgenticResearchRunner } from "../../src/research/AgenticResearchRunner"
 import { ResearchExecutionPolicy } from "../../src/research/ResearchExecutionPolicy";
 import { ResearchToolRegistry } from "../../src/research/tools/ResearchToolRegistry";
 import { ResearchToolHandler } from "../../src/research/tools/ResearchTools";
-import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/shared/types";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  ChatResponseChunk,
+  ModelRoundProvider,
+  ModelRoundRequest,
+  ProviderContinuationState,
+} from "../../src/shared/types";
 
 class ScriptedProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -45,6 +52,46 @@ function policy(requiredTools: string[]): ResearchExecutionPolicy {
 }
 
 describe("AgenticResearchRunner", () => {
+  it("keeps Responses continuation outside the message transcript", async () => {
+    const search = tool("search_index");
+    const continuation: ProviderContinuationState = {
+      provider: "openai-compatible",
+      dispose: vi.fn(),
+    };
+    const requests: ModelRoundRequest[] = [];
+    const roundProvider: ModelRoundProvider = {
+      listModels: async () => ["m"],
+      runRound: vi.fn(async (request: ModelRoundRequest) => {
+        requests.push(request);
+        return requests.length === 1
+          ? {
+              items: [
+                {
+                  type: "toolCall" as const,
+                  call: { id: "call-1", name: "search_index", arguments: {} },
+                },
+              ],
+              continuation,
+              stopReason: "tool_calls" as const,
+            }
+          : { items: [{ type: "text" as const, text: "final" }], stopReason: "complete" as const };
+      }),
+    };
+    const result = await new AgenticResearchRunner({
+      chatModel: new ScriptedProvider([]),
+      modelRound: roundProvider,
+      model: "m",
+      messages: [{ role: "user", content: "q" }],
+      tools: new ResearchToolRegistry([search.handler]),
+      policy: policy(["search_index"]),
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+    expect(requests[1].continuation).toBe(continuation);
+    expect(requests[1].toolOutputs?.[0]).toMatchObject({ callId: "call-1" });
+    expect(requests[1].messages).toEqual([{ role: "user", content: "q" }]);
+  });
+
   it("accepts only terminal text after successful mandatory execution", async () => {
     const search = tool("search_index");
     const provider = new ScriptedProvider([

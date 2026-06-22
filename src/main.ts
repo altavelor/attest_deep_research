@@ -3,6 +3,9 @@ import { join } from "path";
 import { FileSystemAdapter, Notice, Plugin, requestUrl } from "obsidian";
 
 import { ChatModelClient } from "./client/chat/ChatModelClient";
+import { OpenAiResponsesClient } from "./client/chat/OpenAiResponsesClient";
+import { ChatCompletionsRoundAdapter } from "./client/chat/ChatCompletionsRoundAdapter";
+import { FallbackModelRoundProvider } from "./client/chat/FallbackModelRoundProvider";
 import { FileChatStore } from "./chat/ChatStore";
 import { EmbeddingClient } from "./client/embeddings/EmbeddingClient";
 import { DocxExtractor } from "./extractors/DocxExtractor";
@@ -28,6 +31,9 @@ import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
 import { resolveToolCapabilities } from "./settings/toolCapabilities";
+import { isResponsesCapabilityCurrent } from "./settings/responsesCapabilityProbe";
+import { capabilityCacheKey, recordObservedReasoningFormat } from "./settings/modelCapabilityCache";
+import type { ReasoningResponseFormat } from "./settings/modelCapabilityCache";
 import {
   DEFAULT_SETTINGS,
   ChatModelProfile,
@@ -39,9 +45,13 @@ import {
   normalizeSettingsState,
   resolveChatModelProfile,
   resolveEmbeddingModelProfile,
+  resolveEffectiveChatApiProtocol,
+  resolveEffectiveReasoning,
+  resolveEffectiveTools,
   resolveServerProfile,
 } from "./settings/settings";
-import { toUserMessage } from "./shared/errors";
+import { IxplorerError, toUserMessage } from "./shared/errors";
+import type { ModelRoundProvider } from "./shared/types";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
 import { SkillRegistry } from "./skills/SkillRegistry";
@@ -244,11 +254,46 @@ export default class IxplorerPlugin extends Plugin {
     const contextFiles = new ObsidianContextFileProvider(this.app.vault);
     const contextExtractors = this.createContextExtractorsForProfile(indexProfile);
     const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
-    const toolsEnabled = toolResolution.capabilities.calls;
+    const toolsEnabled = resolveEffectiveTools(chatProfile);
+    let effectiveProtocol = resolveEffectiveChatApiProtocol(chatProfile);
+    if (
+      effectiveProtocol === "responses" &&
+      !isResponsesCapabilityCurrent(
+        chatProfile.reasoningCapabilities,
+        chatServer,
+        chatProfile.modelName,
+      )
+    ) {
+      effectiveProtocol = "chat-completions";
+    }
+    const reasoning = resolveEffectiveReasoning(chatProfile, effectiveProtocol);
+    const modelRound = this.createResponsesRoundProvider(
+      chatProfile,
+      chatServer,
+      effectiveProtocol,
+      reasoning,
+    );
+    const capabilitySnapshot =
+      this.settings.modelCapabilityCache[
+        capabilityCacheKey({
+          baseUrl: chatServer.baseUrl,
+          apiKey: chatServer.apiKey,
+          model: chatProfile.modelName,
+          protocol: effectiveProtocol,
+        })
+      ];
 
     return new ResearchService({
       retriever,
-      chatModel: this.createChatModelClient(chatServer),
+      chatModel: this.createChatModelClient(chatServer, chatProfile),
+      ...(modelRound ? { modelRound } : {}),
+      reasoning,
+      reasoningDiagnostics: {
+        protocol: effectiveProtocol,
+        capabilitySource: capabilitySnapshot?.source ?? chatProfile.reasoningCapabilities?.source,
+        observedFormats: capabilitySnapshot?.reasoning.responseFormats,
+        summaryAvailable: chatProfile.reasoningCapabilities?.summary === true,
+      },
       chatModelName: chatProfile.modelName,
       chatOptions: {
         temperature: chatProfile.temperature,
@@ -469,13 +514,118 @@ export default class IxplorerPlugin extends Plugin {
     });
   }
 
-  private createChatModelClient(server: ServerProfile): ChatModelClient {
+  private createChatModelClient(
+    server: ServerProfile,
+    profile?: ChatModelProfile,
+  ): ChatModelClient {
     return new ChatModelClient({
       apiFormat: server.apiFormat,
       baseUrl: server.baseUrl,
       apiKey: server.apiKey,
       logger: this.logger,
+      ...(profile
+        ? {
+            onReasoningObserved: (observation: {
+              protocol: "chat-completions";
+              dialect: string;
+            }) => {
+              const identity = {
+                baseUrl: server.baseUrl,
+                apiKey: server.apiKey,
+                model: profile.modelName,
+                protocol: observation.protocol,
+              };
+              const key = capabilityCacheKey(identity);
+              const current = this.settings.modelCapabilityCache[key];
+              const observedFormat = (
+                observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
+              ) as ReasoningResponseFormat;
+              if (current?.reasoning.responseFormats.includes(observedFormat)) {
+                return;
+              }
+              this.settings.modelCapabilityCache = recordObservedReasoningFormat(
+                this.settings.modelCapabilityCache,
+                identity,
+                observation.dialect,
+              );
+              void this.saveSettings();
+            },
+          }
+        : {}),
     });
+  }
+
+  private createResponsesRoundProvider(
+    profile: ChatModelProfile,
+    server: ServerProfile,
+    effectiveProtocol: "chat-completions" | "responses",
+    reasoning: { enabled: boolean; effort?: string; summary: "off" | "auto" },
+  ): ModelRoundProvider | undefined {
+    if (effectiveProtocol !== "responses") return undefined;
+    const capabilities = profile.reasoningCapabilities;
+    if (server.apiFormat !== "openai-compatible") {
+      throw new IxplorerError({
+        code: "UNSUPPORTED_CAPABILITY",
+        message: "The Responses protocol requires an OpenAI-compatible server profile.",
+      });
+    }
+    if (!capabilities) {
+      throw new IxplorerError({
+        code: "UNSUPPORTED_CAPABILITY",
+        message: "Responses capability detection has not completed for this model profile.",
+      });
+    }
+    if (!capabilities.responses) {
+      throw new IxplorerError({
+        code: "UNSUPPORTED_CAPABILITY",
+        message:
+          capabilities.failureReason ??
+          "The capability probe reported that this model does not support Responses.",
+      });
+    }
+    if (!isResponsesCapabilityCurrent(capabilities, server, profile.modelName)) {
+      throw new IxplorerError({
+        code: "UNSUPPORTED_CAPABILITY",
+        message: "The Responses capability probe is stale for this model profile.",
+      });
+    }
+    if (reasoning.enabled) {
+      if (capabilities.continuation !== true) {
+        throw new IxplorerError({
+          code: "UNSUPPORTED_CAPABILITY",
+          message: "Reasoning continuation has not been verified for this model profile.",
+        });
+      }
+      if (capabilities.requiresEffort && !reasoning.effort) {
+        throw new IxplorerError({
+          code: "UNSUPPORTED_CAPABILITY",
+          message: "This model requires an explicit reasoning effort.",
+        });
+      }
+      if (reasoning.effort && !capabilities.efforts.includes(reasoning.effort)) {
+        throw new IxplorerError({
+          code: "UNSUPPORTED_CAPABILITY",
+          message: "The selected reasoning effort is not supported by this model profile.",
+        });
+      }
+      if (reasoning.summary === "auto" && !capabilities.summary) {
+        throw new IxplorerError({
+          code: "UNSUPPORTED_CAPABILITY",
+          message: "Reasoning summaries are not supported by this model profile.",
+        });
+      }
+    }
+    const responses = new OpenAiResponsesClient({
+      baseUrl: server.baseUrl,
+      apiKey: server.apiKey,
+      logger: this.logger,
+      reasoningEfforts: capabilities.efforts,
+      reasoningSummary: capabilities.summary,
+    });
+    return new FallbackModelRoundProvider(
+      responses,
+      new ChatCompletionsRoundAdapter(this.createChatModelClient(server)),
+    );
   }
 
   private createQueryExpansionService(

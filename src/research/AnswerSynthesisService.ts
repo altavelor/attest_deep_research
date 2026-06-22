@@ -7,6 +7,7 @@ import {
   RetrievedChunk,
   ToolCallDiagnostic,
   IndexDescriptionPromptContext,
+  ModelRoundProvider,
 } from "../shared/types";
 import { IxplorerError } from "../shared/errors";
 import {
@@ -17,12 +18,19 @@ import {
   ResearchChatHistoryMessage,
 } from "./prompts";
 import { ResearchStreamEvent } from "./types";
+import { createAsyncEventChannel } from "../shared/AsyncEventChannel";
 import { NoteToolService } from "./tools/NoteTools";
 import { runToolLoop } from "./tools/ToolLoopRunner";
 import { buildSkillCatalogPrompt, LoadedSkill, SkillDefinition } from "../skills/SkillRegistry";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
+  modelRound?: ModelRoundProvider;
+  reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
+  reasoningDiagnostics?: Pick<
+    NonNullable<ContextDiagnostics["reasoning"]>,
+    "protocol" | "capabilitySource" | "summaryAvailable" | "observedFormats"
+  >;
   chatModelName: string;
   chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
   contextLimitTokens?: number;
@@ -60,6 +68,9 @@ export class AnswerSynthesisService {
   private readonly now: () => Date;
   private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   private readonly noteTools?: NoteToolService;
+  private readonly modelRound?: ModelRoundProvider;
+  private readonly reasoning?: AnswerSynthesisServiceOptions["reasoning"];
+  private readonly reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
 
   constructor(options: AnswerSynthesisServiceOptions) {
     this.chatModel = options.chatModel;
@@ -69,6 +80,9 @@ export class AnswerSynthesisService {
     this.now = options.now;
     this.persistFinalAnswer = options.persistFinalAnswer;
     this.noteTools = options.noteTools;
+    this.modelRound = options.modelRound;
+    this.reasoning = options.reasoning;
+    this.reasoningDiagnostics = options.reasoningDiagnostics;
   }
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
@@ -111,8 +125,10 @@ export class AnswerSynthesisService {
     ];
 
     if (input.toolsEnabled === true && this.noteTools) {
-      const result = await runToolLoop({
+      const events = createAsyncEventChannel<import("./tools/ToolLoopRunner").ToolLoopEvent>();
+      const resultPromise = runToolLoop({
         chatModel: this.chatModel,
+        modelRound: this.modelRound,
         model: this.chatModelName,
         temperature: this.chatOptions.temperature,
         maxTokens: this.chatOptions.maxTokens,
@@ -121,7 +137,21 @@ export class AnswerSynthesisService {
         executeTool: (toolCall) => this.noteTools!.execute(toolCall),
         maxTotalResultChars: input.skillToolResultChars,
         signal: input.signal,
-      });
+        reasoning: this.reasoning,
+        onEvent: (event) => events.push(event),
+      }).finally(() => events.close());
+      for await (const event of events) {
+        if (event.type === "delta") yield { type: "delta", content: event.content };
+        else if (event.type === "reasoning") yield event;
+        else if (
+          event.type === "answer-reset" ||
+          event.type === "checkpoint-delta" ||
+          event.type === "checkpoint-complete" ||
+          event.type === "checkpoint-promote"
+        )
+          yield event;
+      }
+      const result = await resultPromise;
       answerText = result.answerText;
       toolDiagnostics = result.diagnostics;
       const loadedSkillPaths = new Set(
@@ -147,11 +177,73 @@ export class AnswerSynthesisService {
           details: { reason: "skill-not-loaded", path: input.selectedSkill.path },
         });
       }
-      for (const event of result.events) {
-        if (event.type === "delta" && event.content) {
-          yield { type: "delta", content: event.content };
+      this.applyReasoningDiagnostics(input.contextDiagnostics, {
+        reasoningItemCount: result.reasoningItemCount,
+        continuationRounds: result.continuationRounds,
+        ...result.usage,
+      });
+    } else if (this.modelRound) {
+      const deltas = createAsyncEventChannel<import("../shared/types").ModelRoundDelta>();
+      let streamedText = false;
+      let streamedSummaries = false;
+      const resultPromise = this.modelRound
+        .runRound({
+          model: this.chatModelName,
+          temperature: this.chatOptions.temperature,
+          maxTokens: this.chatOptions.maxTokens,
+          messages,
+          reasoning: this.reasoning,
+          signal: input.signal,
+          onDelta: (delta) => {
+            deltas.push(delta);
+          },
+        })
+        .finally(() => deltas.close());
+      for await (const delta of deltas) {
+        if (delta.type === "text") {
+          streamedText = true;
+          yield { type: "delta", content: delta.text };
+        } else {
+          streamedSummaries = true;
+          yield {
+            type: "reasoning",
+            segmentId: delta.segmentId ?? "reasoning-0",
+            content: delta.text,
+          };
         }
       }
+      const result = await resultPromise;
+      if (result.stopReason !== "complete") {
+        throw new IxplorerError({
+          code: "MODEL_PROVIDER_UNAVAILABLE",
+          message: "The model did not complete the synthesis round.",
+          details: { reason: `model-round-${result.stopReason}` },
+        });
+      }
+      if (!streamedSummaries) {
+        const summaries = result.items.filter((item) => item.type === "reasoningSummary");
+        for (let index = 0; index < summaries.length; index += 1) {
+          yield {
+            type: "reasoning",
+            segmentId: `reasoning-${index}`,
+            content: summaries[index].text,
+          };
+        }
+      }
+      if (!streamedText) {
+        for (const item of result.items) {
+          if (item.type === "text") yield { type: "delta", content: item.text };
+        }
+      }
+      answerText = result.items
+        .filter((item) => item.type === "text")
+        .map((item) => item.text)
+        .join("");
+      this.applyReasoningDiagnostics(input.contextDiagnostics, {
+        reasoningItemCount: result.reasoningItemCount ?? 0,
+        continuationRounds: 0,
+        ...(result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }),
+      });
     } else {
       for await (const chunk of this.chatModel.streamChat({
         model: this.chatModelName,
@@ -235,6 +327,26 @@ export class AnswerSynthesisService {
         estimatedTokens,
       },
     });
+  }
+
+  private applyReasoningDiagnostics(
+    diagnostics: ContextDiagnostics | undefined,
+    counts: Pick<
+      NonNullable<ContextDiagnostics["reasoning"]>,
+      | "reasoningItemCount"
+      | "continuationRounds"
+      | "inputTokens"
+      | "outputTokens"
+      | "reasoningTokens"
+    >,
+  ): void {
+    if (!diagnostics || !this.reasoningDiagnostics) return;
+    diagnostics.reasoning = {
+      ...this.reasoningDiagnostics,
+      ...(this.reasoning?.effort ? { configuredEffort: this.reasoning.effort } : {}),
+      summaryRequested: this.reasoning?.summary === "auto",
+      ...counts,
+    };
   }
 }
 

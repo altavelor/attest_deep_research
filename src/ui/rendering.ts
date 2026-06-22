@@ -19,6 +19,37 @@ export interface ChatDisplayMessage {
   compactSummary?: ConversationCompactionSummary;
   evidence?: RetrievedChunk[];
   contextDiagnostics?: ContextDiagnostics;
+  reasoning?: Array<{ id: string; content: string }>;
+  reasoningOpen?: boolean;
+  researchProgress?: AssistantResearchProgress;
+}
+
+export interface ReasoningSegment {
+  id: string;
+  kind: "text" | "summary";
+  content: string;
+}
+
+export interface AssistantReasoningState {
+  phase: "idle" | "streaming" | "complete" | "interrupted";
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  segments: ReasoningSegment[];
+}
+
+export interface ResearchProgressCheckpoint {
+  id: string;
+  round: number;
+  content: string;
+  status: "streaming" | "complete" | "superseded" | "interrupted";
+}
+
+export interface AssistantResearchProgress {
+  phase: "idle" | "streaming" | "complete" | "interrupted";
+  disclosure: "auto" | "user-open" | "user-closed";
+  reasoning: AssistantReasoningState;
+  checkpoints: ResearchProgressCheckpoint[];
 }
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };
@@ -140,15 +171,185 @@ export function nextAssistantMessage(
     return [
       ...messages.slice(0, -1),
       {
+        ...last,
         role: "assistant",
         content: `${last.content}${delta}`,
         createdAt: last.createdAt,
-        evidence: last.evidence,
       },
     ];
   }
 
   return [...messages, { role: "assistant", content: delta, createdAt: new Date().toISOString() }];
+}
+
+export function nextAssistantReasoning(
+  messages: ChatDisplayMessage[],
+  segmentId: string,
+  delta: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  const assistant =
+    last?.role === "assistant"
+      ? last
+      : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const progress = researchProgressFromMessage(assistant, now);
+  const reasoning = [...progress.reasoning.segments];
+  const segmentIndex = reasoning.findIndex((segment) => segment.id === segmentId);
+  if (segmentIndex >= 0) {
+    reasoning[segmentIndex] = {
+      ...reasoning[segmentIndex],
+      content: `${reasoning[segmentIndex].content}${delta}`,
+    };
+  } else {
+    reasoning.push({ id: segmentId, kind: "summary", content: delta });
+  }
+  const updated: ChatDisplayMessage = {
+    ...assistant,
+    researchProgress: {
+      ...progress,
+      phase: "streaming",
+      reasoning: {
+        ...progress.reasoning,
+        phase: "streaming",
+        startedAt: progress.reasoning.startedAt ?? now,
+        segments: reasoning,
+      },
+    },
+  };
+  return last?.role === "assistant" ? [...messages.slice(0, -1), updated] : [...messages, updated];
+}
+
+export function nextAssistantCheckpoint(
+  messages: ChatDisplayMessage[],
+  checkpointId: string,
+  round: number,
+  delta: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  const assistant =
+    last?.role === "assistant"
+      ? last
+      : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
+  const progress = researchProgressFromMessage(assistant, new Date().toISOString());
+  const checkpoints = [...progress.checkpoints];
+  const index = checkpoints.findIndex((checkpoint) => checkpoint.id === checkpointId);
+  if (index >= 0) {
+    checkpoints[index] = {
+      ...checkpoints[index],
+      content: `${checkpoints[index].content}${delta}`,
+      status: "streaming",
+    };
+  } else {
+    checkpoints.push({ id: checkpointId, round, content: delta, status: "streaming" });
+  }
+  const updated = {
+    ...assistant,
+    researchProgress: { ...progress, phase: "streaming" as const, checkpoints },
+  };
+  return last?.role === "assistant" ? [...messages.slice(0, -1), updated] : [...messages, updated];
+}
+
+export function completeAssistantCheckpoint(
+  messages: ChatDisplayMessage[],
+  checkpointId: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      researchProgress: {
+        ...last.researchProgress,
+        checkpoints: last.researchProgress.checkpoints.map((checkpoint) =>
+          checkpoint.id === checkpointId
+            ? { ...checkpoint, status: "complete" as const }
+            : checkpoint,
+        ),
+      },
+    },
+  ];
+}
+
+export function resetLastAssistantContent(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return messages;
+  return [...messages.slice(0, -1), { ...last, content: "" }];
+}
+
+export function finalizeLastAssistantReasoning(
+  messages: ChatDisplayMessage[],
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return messages;
+  const progress = last.researchProgress;
+  if (!progress) return messages;
+  const completedAt = new Date().toISOString();
+  const startedAt = progress.reasoning.startedAt;
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      researchProgress: {
+        ...progress,
+        phase: "complete",
+        reasoning: {
+          ...progress.reasoning,
+          phase: "complete",
+          completedAt,
+          ...(startedAt
+            ? { durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)) }
+            : {}),
+        },
+        checkpoints: progress.checkpoints.map((checkpoint) =>
+          checkpoint.status === "streaming"
+            ? { ...checkpoint, status: "interrupted" as const }
+            : checkpoint,
+        ),
+      },
+    },
+  ];
+}
+
+export function interruptLastAssistantProgress(
+  messages: ChatDisplayMessage[],
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      researchProgress: {
+        ...last.researchProgress,
+        phase: "interrupted",
+        reasoning: { ...last.researchProgress.reasoning, phase: "interrupted" },
+        checkpoints: last.researchProgress.checkpoints.map((checkpoint) =>
+          checkpoint.status === "streaming"
+            ? { ...checkpoint, status: "interrupted" as const }
+            : checkpoint,
+        ),
+      },
+    },
+  ];
+}
+
+function researchProgressFromMessage(
+  message: ChatDisplayMessage,
+  now: string,
+): AssistantResearchProgress {
+  if (message.researchProgress) return message.researchProgress;
+  return {
+    phase: "streaming",
+    disclosure: "auto",
+    reasoning: {
+      phase: "streaming",
+      startedAt: now,
+      segments: (message.reasoning ?? []).map((segment) => ({ ...segment, kind: "summary" })),
+    },
+    checkpoints: [],
+  };
 }
 
 export function attachAnswerDetailsToLastAssistantMessage(

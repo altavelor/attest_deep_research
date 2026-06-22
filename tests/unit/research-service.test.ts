@@ -71,6 +71,19 @@ function registrySnapshotCalls(snapshot: Awaited<ReturnType<SkillRegistry["getSn
 }
 
 describe("buildResearchPrompt", () => {
+  it("allows a direct general-knowledge answer when no evidence is available", () => {
+    const system = buildResearchSystemPrompt();
+    const prompt = buildResearchPrompt({
+      question: "Solve a self-contained logic puzzle",
+      evidence: [],
+      maxEvidenceItems: 2,
+    });
+
+    expect(system).toContain("otherwise use general knowledge");
+    expect(prompt).toContain("The question is self-contained");
+    expect(prompt).not.toContain("say what is missing instead of guessing");
+  });
+
   it("includes only the compact skill catalog until a skill is selected", () => {
     const system = buildResearchSystemPrompt({
       skillCatalog:
@@ -193,59 +206,119 @@ describe("ResearchService", () => {
   it.each([
     [true, "eager-forced"],
     [false, "deterministic-fallback"],
-  ] as const)("reports the iteration-1 execution strategy for forceEagerResearch=%s", async (forceEagerResearch, expected) => {
-    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+  ] as const)(
+    "reports the iteration-1 execution strategy for forceEagerResearch=%s",
+    async (forceEagerResearch, expected) => {
+      const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+      const service = new ResearchService({
+        retriever: new FakeRetriever(emptyRetrieval()),
+        chatModel,
+        chatModelName: "qwen",
+        forceEagerResearch,
+        now: fixedNow,
+      });
+
+      const events = await collectAsync(
+        service.answer({
+          question: "Answer eagerly",
+          searchMode: "none",
+          includeContextDiagnostics: true,
+        }),
+      );
+
+      expect(events.at(-1)).toMatchObject({
+        type: "complete",
+        answer: { contextDiagnostics: { executionStrategy: expected } },
+      });
+      expect(chatModel.requests).toHaveLength(1);
+      expect(chatModel.requests[0].tools).toBeUndefined();
+      expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
+    },
+  );
+
+  it("routes an eligible profile through the agentic loop", async () => {
+    const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Evidence");
+    const chatModel = new FakeChatModel([
+      [
+        {
+          content: "discard",
+          isComplete: true,
+          toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
+        },
+      ],
+      [{ content: "Agentic answer [idx-1]", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever({
+        ...emptyRetrieval(),
+        chunks: [chunk],
+        citations: [citation("idx-1", chunk.source)],
+      }),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+    const events = await collectAsync(
+      service.answer({
+        question: "q",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+    expect(visibleAnswerText(events)).toBe("Agentic answer [idx-1]");
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: {
+        answer: "Agentic answer [idx-1]",
+        citations: [{ id: "idx-1" }],
+        contextDiagnostics: {
+          executionStrategy: "agentic",
+          agentic: { requiredTools: ["search_index"] },
+        },
+      },
+    });
+    expect(chatModel.requests).toHaveLength(2);
+  });
+
+  it("does not require get_active_note when active-file inclusion is enabled without an active file", async () => {
+    const chatModel = new FakeChatModel([{ content: "Direct answer", isComplete: true }]);
     const service = new ResearchService({
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
-      forceEagerResearch,
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: false,
+        parallelCalls: true,
+      },
       now: fixedNow,
     });
 
     const events = await collectAsync(
       service.answer({
-        question: "Answer eagerly",
+        question: "Solve a self-contained puzzle",
         searchMode: "none",
+        includeActiveFile: true,
         includeContextDiagnostics: true,
       }),
     );
 
     expect(events.at(-1)).toMatchObject({
       type: "complete",
-      answer: { contextDiagnostics: { executionStrategy: expected } },
-    });
-    expect(chatModel.requests).toHaveLength(1);
-    expect(chatModel.requests[0].tools).toBeUndefined();
-    expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
-  });
-
-  it("routes an eligible profile through the agentic loop", async () => {
-    const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Evidence");
-    const chatModel = new FakeChatModel([
-      [{ content: "discard", isComplete: true, toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }] }],
-      [{ content: "Agentic answer [idx-1]", isComplete: true }],
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever({ ...emptyRetrieval(), chunks: [chunk], citations: [citation("idx-1", chunk.source)] }),
-      chatModel,
-      chatModelName: "qwen",
-      toolCapabilities: { calls: true, choiceRequired: true, choiceSpecific: true, parallelCalls: true },
-      now: fixedNow,
-    });
-    const events = await collectAsync(service.answer({
-      question: "q", searchMode: "indexOnly", includeContextDiagnostics: true,
-    }));
-    expect(events.filter((event) => event.type === "delta")).toEqual([{ type: "delta", content: "Agentic answer [idx-1]" }]);
-    expect(events.at(-1)).toMatchObject({
-      type: "complete",
       answer: {
-        answer: "Agentic answer [idx-1]",
-        citations: [{ id: "idx-1" }],
-        contextDiagnostics: { executionStrategy: "agentic", agentic: { requiredTools: ["search_index"] } },
+        contextDiagnostics: {
+          executionStrategy: "agentic",
+          agentic: { requiredTools: [] },
+        },
       },
     });
-    expect(chatModel.requests).toHaveLength(2);
   });
 
   it("discards partial agentic text and restarts eager on terminal failure", async () => {
@@ -255,18 +328,38 @@ describe("ResearchService", () => {
       [{ content: "Eager fallback", isComplete: true }],
     ]);
     const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()), chatModel, chatModelName: "qwen",
-      toolCapabilities: { calls: true, choiceRequired: true, choiceSpecific: true, parallelCalls: true },
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
       now: fixedNow,
     });
-    const events = await collectAsync(service.answer({
-      question: "q", searchMode: "indexOnly", includeContextDiagnostics: true,
-    }));
-    expect(events.filter((event) => event.type === "delta")).toEqual([{ type: "delta", content: "Eager fallback" }]);
-    expect(JSON.stringify(events)).not.toContain("partial agentic");
+    const events = await collectAsync(
+      service.answer({
+        question: "q",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+    expect(visibleAnswerText(events)).toBe("Eager fallback");
+    expect(events).toContainEqual({
+      type: "checkpoint-complete",
+      checkpointId: "round-1",
+      round: 1,
+    });
     expect(events.at(-1)).toMatchObject({
       type: "complete",
-      answer: { contextDiagnostics: { executionStrategy: "deterministic-fallback", agentic: { duplicatedCost: true } } },
+      answer: {
+        contextDiagnostics: {
+          executionStrategy: "deterministic-fallback",
+          agentic: { duplicatedCost: true },
+        },
+      },
     });
   });
 
@@ -711,7 +804,13 @@ describe("ResearchService", () => {
       }),
     );
 
-    expect(events.map((event) => event.type)).toEqual(["status", "status", "delta", "complete"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "status",
+      "status",
+      "checkpoint-delta",
+      "checkpoint-promote",
+      "complete",
+    ]);
     expect(chatModel.requests).toHaveLength(2);
     expect(chatModel.requests[0].tools?.map((tool) => tool.function.name)).toContain("read_note");
     expect(chatModel.requests[1].messages.at(-1)).toMatchObject({
@@ -1299,3 +1398,24 @@ describe("ResearchService", () => {
     ]);
   });
 });
+
+function visibleAnswerText(
+  events: Array<{ type: string; content?: string; checkpointId?: string }>,
+): string {
+  let content = "";
+  const checkpoints = new Map<string, string>();
+  for (const event of events) {
+    if (event.type === "answer-reset") content = "";
+    else if (event.type === "delta") content += event.content ?? "";
+    else if (event.type === "checkpoint-delta" && event.checkpointId) {
+      checkpoints.set(
+        event.checkpointId,
+        `${checkpoints.get(event.checkpointId) ?? ""}${event.content ?? ""}`,
+      );
+    } else if (event.type === "checkpoint-promote" && event.checkpointId) {
+      content += checkpoints.get(event.checkpointId) ?? "";
+      checkpoints.delete(event.checkpointId);
+    }
+  }
+  return content;
+}

@@ -14,6 +14,12 @@ describe("diagnostic report modal styles", () => {
     expect(reportRule).toContain("scrollbar-gutter: stable");
     expect(styles).toContain(".ixplorer-chat__diagnostic-modal-report::-webkit-scrollbar");
   });
+
+  it("styles readable and raw report modes without changing chat message styles", () => {
+    expect(styles).toContain(".ixplorer-chat__diagnostic-mode-switch");
+    expect(cssRule(".ixplorer-chat__diagnostic-readable")).toContain("overflow: auto");
+    expect(styles).toContain(".ixplorer-diagnostic-readable__section");
+  });
 });
 
 function cssRule(selector: string): string {

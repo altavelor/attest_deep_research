@@ -8,6 +8,7 @@ import {
   shouldCompactForContext,
 } from "../chat/ChatCompaction";
 import { ResearchService, ResearchStreamEvent } from "../research/ResearchService";
+import { AgentRunDiagnosticCollector } from "../research/AgentRunDiagnostics";
 import { estimateResearchRequestTokens } from "../research/prompts";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import type { ContextMode } from "../shared/types";
@@ -16,7 +17,13 @@ import { ResearchAnswer, RetrievedChunk } from "../shared/types";
 import {
   attachAnswerDetailsToLastAssistantMessage,
   ChatDisplayMessage,
+  completeAssistantCheckpoint,
   nextAssistantMessage,
+  nextAssistantCheckpoint,
+  nextAssistantReasoning,
+  resetLastAssistantContent,
+  finalizeLastAssistantReasoning,
+  interruptLastAssistantProgress,
 } from "./rendering";
 
 export interface ResearchQuestionControllerOptions {
@@ -49,6 +56,7 @@ export interface ResearchQuestionControllerOptions {
   setFormRunning(running: boolean): void;
   setRunningState(running: boolean): void;
   renderMessages(): void;
+  renderActiveMessage(): void;
   renderAnswerDetails(): void;
   renderIndexControl(): void;
 }
@@ -57,6 +65,7 @@ export class ResearchQuestionController {
   private readonly options: ResearchQuestionControllerOptions;
   private shouldStopRunning = false;
   private activeAbortController: AbortController | null = null;
+  private activeRunId: string | null = null;
   private running = false;
 
   constructor(options: ResearchQuestionControllerOptions) {
@@ -168,6 +177,12 @@ export class ResearchQuestionController {
       chatHistory: ChatDisplayMessage[];
     },
   ): Promise<void> {
+    const runId = createRunId();
+    const runDiagnostics = new AgentRunDiagnosticCollector({
+      runId,
+      answerId: `answer-${runId}`,
+    });
+    this.activeRunId = runId;
     this.setRunning(true);
     this.shouldStopRunning = false;
     this.activeAbortController = new AbortController();
@@ -208,10 +223,14 @@ export class ResearchQuestionController {
         chatHistory: chatHistoryForPrompt(options.chatHistory),
         signal: this.activeAbortController.signal,
       })) {
-        if (this.shouldStopRunning) {
+        if (this.shouldStopRunning || this.activeRunId !== runId) {
           break;
         }
-        this.applyResearchEvent(event);
+        runDiagnostics.record(event);
+        if (event.type === "complete" && event.answer.contextDiagnostics) {
+          runDiagnostics.complete(event.answer.contextDiagnostics);
+        }
+        this.applyResearchEvent(event, runId);
         if (event.type === "complete") {
           completed = true;
         }
@@ -219,16 +238,23 @@ export class ResearchQuestionController {
       if (completed && expandedEvidence.length > 0) {
         await this.options.clearExpandedCitationContexts();
       }
+      if (!completed) {
+        this.options.setMessages(interruptLastAssistantProgress(this.options.getMessages()));
+        this.options.renderActiveMessage();
+        await this.options.saveCurrentChat();
+      }
     } catch (error) {
-      this.options.setMessages(
-        nextAssistantMessage(this.options.getMessages(), toUserMessage(error)),
-      );
+      const finalizedMessages = interruptLastAssistantProgress(this.options.getMessages());
+      this.options.setMessages(nextAssistantMessage(finalizedMessages, toUserMessage(error)));
       await this.options.saveCurrentChat();
       new Notice(toUserMessage(error));
       this.options.renderMessages();
     } finally {
       this.shouldStopRunning = false;
-      this.activeAbortController = null;
+      if (this.activeRunId === runId) {
+        this.activeAbortController = null;
+        this.activeRunId = null;
+      }
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);
@@ -236,7 +262,8 @@ export class ResearchQuestionController {
     }
   }
 
-  private applyResearchEvent(event: ResearchStreamEvent): void {
+  private applyResearchEvent(event: ResearchStreamEvent, runId: string): void {
+    if (this.activeRunId !== runId) return;
     if (event.type === "status") {
       this.options.setProgressStatus(event.message);
       return;
@@ -248,11 +275,72 @@ export class ResearchQuestionController {
 
     if (event.type === "delta") {
       this.options.setMessages(nextAssistantMessage(this.options.getMessages(), event.content));
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "reasoning") {
+      this.options.setMessages(
+        nextAssistantReasoning(this.options.getMessages(), event.segmentId, event.content),
+      );
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "checkpoint-delta") {
+      this.options.setMessages(
+        nextAssistantCheckpoint(
+          this.options.getMessages(),
+          event.checkpointId,
+          event.round,
+          event.content,
+        ),
+      );
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "checkpoint-complete") {
+      this.options.setMessages(
+        completeAssistantCheckpoint(this.options.getMessages(), event.checkpointId),
+      );
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "checkpoint-promote") {
+      const messages = this.options.getMessages();
+      const last = messages.at(-1);
+      const checkpoint = last?.researchProgress?.checkpoints.find(
+        (item) => item.id === event.checkpointId,
+      );
+      if (checkpoint && last?.researchProgress) {
+        const updated = [
+          ...messages.slice(0, -1),
+          {
+            ...last,
+            researchProgress: {
+              ...last.researchProgress,
+              checkpoints: last.researchProgress.checkpoints.filter(
+                (item) => item.id !== event.checkpointId,
+              ),
+            },
+          },
+        ];
+        this.options.setMessages(nextAssistantMessage(updated, checkpoint.content));
+      }
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "answer-reset") {
+      this.options.setMessages(resetLastAssistantContent(this.options.getMessages()));
       this.options.renderMessages();
       return;
     }
 
     this.options.setLastAnswer(event.answer);
+    this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
     this.options.setMessages(
       attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), event.answer),
     );
@@ -367,4 +455,11 @@ export class ResearchQuestionController {
       return false;
     }
   }
+}
+
+let runSequence = 0;
+
+function createRunId(): string {
+  runSequence += 1;
+  return `${Date.now().toString(36)}-${runSequence.toString(36)}`;
 }
