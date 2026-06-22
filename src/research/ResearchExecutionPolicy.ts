@@ -16,18 +16,15 @@ export type ResearchPolicyReason =
   | "parallel-calls-unavailable"
   | "retriever-unavailable"
   | "web-provider-unavailable"
-  | "active-file-unavailable"
   | "provider-tool-control-unsupported";
 
 export interface ResearchExecutionPolicyInput {
   forceEagerResearch: boolean;
   deepResearch: boolean;
   searchMode: ResearchSearchMode;
-  includeActiveFile: boolean;
   dependencies: {
     retriever: boolean;
     webProvider: boolean;
-    activeFileAccess: boolean;
   };
   capabilities: ToolCallingCapabilities;
   apiFormat?: ApiFormat;
@@ -44,7 +41,7 @@ export interface ResearchExecutionPolicy {
 export function resolveResearchExecutionPolicy(
   input: ResearchExecutionPolicyInput,
 ): Readonly<ResearchExecutionPolicy> {
-  const requiredTools = mandatoryTools(input.searchMode, input.includeActiveFile);
+  const requiredTools = mandatoryTools(input.searchMode);
   const bootstrapChoice = choiceFor(requiredTools);
   const base = { requiredTools, bootstrapChoice, parallelToolCalls: requiredTools.length > 1 };
 
@@ -70,14 +67,10 @@ export function resolveResearchExecutionPolicy(
   return freeze({ ...base, strategy: "agentic", reason: "eligible" });
 }
 
-function mandatoryTools(
-  searchMode: ResearchSearchMode,
-  includeActiveFile: boolean,
-): readonly string[] {
+function mandatoryTools(searchMode: ResearchSearchMode): readonly string[] {
   const tools: string[] = [];
   if (searchMode === "indexOnly" || searchMode === "indexAndWeb") tools.push("search_index");
   if (searchMode === "webOnly" || searchMode === "indexAndWeb") tools.push("search_web");
-  if (includeActiveFile) tools.push("get_active_note");
   return Object.freeze(tools);
 }
 
@@ -98,9 +91,6 @@ function dependencyFailure(
   }
   if (requiredTools.includes("search_web") && !input.dependencies.webProvider) {
     return "web-provider-unavailable";
-  }
-  if (requiredTools.includes("get_active_note") && !input.dependencies.activeFileAccess) {
-    return "active-file-unavailable";
   }
   return undefined;
 }

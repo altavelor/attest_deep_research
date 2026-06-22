@@ -154,34 +154,6 @@ function formatMilliseconds(value: number): string {
   return value < 1_000 ? `${value} ms` : `${(value / 1_000).toFixed(2)} s`;
 }
 
-export function skillDiagnosticLines(diagnostics: ContextDiagnostics): string[] {
-  const skills = diagnostics.skills;
-  if (!skills) {
-    return [];
-  }
-
-  const lines = [`${skills.discoveredCount} skill(s) discovered`];
-  if (skills.selectedName) {
-    lines.push(
-      `Skill: ${skills.selectedName} (${skills.selectionMode}, ${skills.loadMode}, ${skills.loadStatus})`,
-    );
-  }
-  if (skills.loadedCharacters !== undefined || skills.loadedTokens !== undefined) {
-    lines.push(
-      `Skill size: ${(skills.loadedCharacters ?? 0).toLocaleString("en-US")} chars / ${(skills.loadedTokens ?? 0).toLocaleString("en-US")} tokens`,
-    );
-  }
-  for (const warning of skills.warnings) {
-    lines.push(`Skill warning: ${warning.path} · ${warning.reason}`);
-  }
-  if (skills.selectorWarning) {
-    lines.push(`Skill selector warning: ${skills.selectorWarning}`);
-  }
-  if (skills.loadError) {
-    lines.push(`Skill load error: ${skills.loadError}`);
-  }
-  return lines;
-}
 
 export function retrievalDiagnosticLines(diagnostics: ContextDiagnostics): string[] {
   const lines: string[] = [];
@@ -329,8 +301,6 @@ function diagnosticSummaryLines(diagnostics: ContextDiagnostics): string[] {
   if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
     lines.push(`${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`);
   }
-  lines.push(...skillDiagnosticLines(diagnostics));
-
   const toolDiagnostics = diagnostics.tools ?? [];
   if (toolDiagnostics.length > 0) {
     const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;

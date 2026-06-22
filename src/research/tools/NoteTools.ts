@@ -1,5 +1,5 @@
 import { stableId } from "../../extractors/common";
-import { isInternalSkillPath, normalizeVaultPath } from "../../shared/pathFilters";
+import { normalizeVaultPath } from "../../shared/pathFilters";
 import {
   ChatToolCall,
   ChatToolDefinition,
@@ -9,8 +9,6 @@ import {
 } from "../../shared/types";
 import { ContextFileProvider } from "../ContextAssembler";
 import { estimateTextTokens } from "../prompts";
-import { ResearchRetriever } from "../types";
-import { SKILL_ROOT, SkillRegistry } from "../../skills/SkillRegistry";
 
 export interface VaultWriter {
   exists(path: string): Promise<boolean>;
@@ -54,14 +52,10 @@ export function validateMutablePath(path: string): { ok: true } | { ok: false; r
 export interface NoteToolServiceOptions {
   files: ContextFileProvider;
   extractors: Extractor[];
-  retriever?: ResearchRetriever;
   getActiveFilePath?: () => string | undefined;
   readNoteMaxChars?: number;
   searchResultLimit?: number;
-  searchSnippetChars?: number;
   listLimit?: number;
-  skillRegistry?: SkillRegistry;
-  skillMaxTokens?: number;
   writer?: VaultWriter;
   confirmation?: NoteActionConfirmation;
   noteMutationAccess?: boolean;
@@ -79,7 +73,6 @@ type AnyNoteToolName = NoteToolName | NoteMutationToolName;
 
 const DEFAULT_READ_NOTE_MAX_CHARS = 16_000;
 const DEFAULT_SEARCH_RESULT_LIMIT = 5;
-const DEFAULT_SEARCH_SNIPPET_CHARS = 1_000;
 const DEFAULT_LIST_LIMIT = 100;
 const SUPPORTED_TOOL_NAMES = new Set<NoteToolName>([
   "read_note",
@@ -162,7 +155,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: "read_note",
       description:
-        "Read a supported vault file by path using the same extraction pipeline as attached Ixplorer context. Returns compact JSON with extracted chunks and truncation diagnostics.",
+        "Read the raw content of a vault note by path. For editing only — returned text is NOT citable evidence. To search authoritative sources, use search_index or search_web instead.",
       parameters: {
         type: "object",
         properties: {
@@ -181,7 +174,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: "search_notes",
       description:
-        "Search supported vault notes. Uses Ixplorer retrieval when available, otherwise falls back to path/name matching. Returns paths and short snippets, not full notes.",
+        "Find vault notes by keyword match in path or filename. Returns matching paths for editing navigation. Results are NOT evidence and cannot be cited or used to reason about the question.",
       parameters: {
         type: "object",
         properties: {
@@ -197,7 +190,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: "list_notes",
       description:
-        "List supported vault context files. Supports optional path prefix, filename query, and result limit.",
+        "List vault notes by path prefix or keyword. For editing navigation only — results are not evidence.",
       parameters: {
         type: "object",
         properties: {
@@ -214,7 +207,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: "get_active_note",
       description:
-        "Return the active Obsidian file path and extracted content when the active file is supported.",
+        "Return the currently open Obsidian file path and its raw content. For editing only — not citable evidence. The active note content is already provided as attached context at the start of this conversation.",
       parameters: {
         type: "object",
         properties: {},
@@ -227,14 +220,10 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
 export class NoteToolService {
   private readonly files: ContextFileProvider;
   private readonly extractors: Extractor[];
-  private readonly retriever?: ResearchRetriever;
   private readonly getActiveFilePath?: () => string | undefined;
   private readonly readNoteMaxChars: number;
   private readonly searchResultLimit: number;
-  private readonly searchSnippetChars: number;
   private readonly listLimit: number;
-  private readonly skillRegistry?: SkillRegistry;
-  private readonly skillMaxTokens?: number;
   private readonly writer?: VaultWriter;
   private readonly confirmation: NoteActionConfirmation;
   private readonly noteMutationAccess: boolean;
@@ -242,14 +231,10 @@ export class NoteToolService {
   constructor(options: NoteToolServiceOptions) {
     this.files = options.files;
     this.extractors = options.extractors;
-    this.retriever = options.retriever;
     this.getActiveFilePath = options.getActiveFilePath;
     this.readNoteMaxChars = options.readNoteMaxChars ?? DEFAULT_READ_NOTE_MAX_CHARS;
     this.searchResultLimit = options.searchResultLimit ?? DEFAULT_SEARCH_RESULT_LIMIT;
-    this.searchSnippetChars = options.searchSnippetChars ?? DEFAULT_SEARCH_SNIPPET_CHARS;
     this.listLimit = options.listLimit ?? DEFAULT_LIST_LIMIT;
-    this.skillRegistry = options.skillRegistry;
-    this.skillMaxTokens = options.skillMaxTokens;
     this.writer = options.writer;
     this.confirmation = options.confirmation ?? AUTO_CONFIRM;
     this.noteMutationAccess = options.noteMutationAccess ?? false;
@@ -399,59 +384,7 @@ export class NoteToolService {
     if (!path) {
       return jsonResult(false, { ok: false, reason: "missing-path" });
     }
-
-    if (path.startsWith(`${SKILL_ROOT}/`)) {
-      return this.readSkill(path);
-    }
-
     return this.readSupportedPath(path, readPositiveNumber(args.maxChars) ?? this.readNoteMaxChars);
-  }
-
-  private async readSkill(path: string): Promise<NoteToolExecution> {
-    if (!this.skillRegistry) {
-      return jsonResult(false, { ok: false, reason: "invalid-skill", path });
-    }
-
-    const snapshot = await this.skillRegistry.getSnapshot();
-    const skill = snapshot.skills.find((candidate) => candidate.path === path);
-    if (!skill) {
-      return jsonResult(false, { ok: false, reason: "invalid-skill", path });
-    }
-
-    try {
-      const loaded = await this.skillRegistry.load(skill, { maxTokens: this.skillMaxTokens });
-      const result = jsonResult(true, {
-        ok: true,
-        skill: true,
-        id: skill.id,
-        name: skill.name,
-        path,
-        content: loaded.content,
-        includedTokens: loaded.estimatedTokens,
-        characters: loaded.characters,
-        truncated: false,
-      });
-      return {
-        ...result,
-        diagnostic: {
-          skillId: skill.id,
-          skillName: skill.name,
-          skillPath: path,
-          loadedCharacters: loaded.characters,
-          loadedTokens: loaded.estimatedTokens,
-          truncated: false,
-        },
-      };
-    } catch (error) {
-      return jsonResult(false, {
-        ok: false,
-        path,
-        reason:
-          typeof error === "object" && error !== null && "code" in error
-            ? String(error.code)
-            : "skill-read-failed",
-      });
-    }
   }
 
   private async getActiveNote(): Promise<NoteToolExecution> {
@@ -528,40 +461,15 @@ export class NoteToolService {
       return jsonResult(false, { ok: false, reason: "missing-query" });
     }
 
-    const limit = boundLimit(readPositiveNumber(args.limit), this.searchResultLimit, 10);
-    const retrieval = await this.searchWithRetriever(query, limit);
-    if (retrieval.length > 0) {
-      return jsonResult(true, {
-        ok: true,
-        query,
-        source: "retrieval",
-        results: retrieval.map((chunk) => ({
-          path: "path" in chunk.source ? chunk.source.path : chunk.source.title,
-          id: chunk.id,
-          score: chunk.score,
-          source: sourceSummary(chunk),
-          snippet: truncateText(chunk.text, this.searchSnippetChars),
-        })),
-      });
-    }
-
-    const fallback = await this.searchPaths(query, limit);
-    return jsonResult(true, { ok: true, query, source: "path", results: fallback });
-  }
-
-  private async searchWithRetriever(query: string, limit: number): Promise<RetrievedChunk[]> {
-    if (!this.retriever) {
-      return [];
-    }
-
-    try {
-      const result = await this.retriever.search(query, { limit, includeWebResults: false });
-      return result.chunks
-        .filter((chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)))
-        .slice(0, limit);
-    } catch {
-      return [];
-    }
+    const limit = boundLimit(readPositiveNumber(args.limit), this.searchResultLimit, 20);
+    const results = await this.searchPaths(query, limit);
+    return jsonResult(true, {
+      ok: true,
+      query,
+      source: "path",
+      editingOnly: true,
+      results,
+    });
   }
 
   private async searchPaths(
@@ -669,10 +577,6 @@ function boundLimit(value: number | undefined, fallback: number, max: number): n
   return Math.max(1, Math.min(max, value ?? fallback));
 }
 
-function truncateText(value: string, maxChars: number): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars)}...`;
-}
 
 function jsonResult(ok: boolean, value: unknown): NoteToolExecution {
   return { ok, result: JSON.stringify(value) };

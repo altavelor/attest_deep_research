@@ -17,7 +17,6 @@ import {
   GraphRoot,
 } from "./GraphContext";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "./prompts";
-import { isInternalSkillPath } from "../shared/pathFilters";
 
 export interface ContextFileProvider {
   listPaths(): Promise<string[]>;
@@ -338,17 +337,6 @@ export class ContextAssembler {
     request: ContextAssembleRequest,
     remainingTokens: number,
   ): Promise<{ chunks: RetrievedChunk[]; diagnostic: ContextDiagnosticSource }> {
-    if (isInternalSkillPath(candidate.path)) {
-      return {
-        chunks: [],
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "unsupported",
-          reason: "internal-skill-path",
-        },
-      };
-    }
     const extractor = this.extractors.find((item) => item.supports(candidate.path));
 
     if (!extractor) {

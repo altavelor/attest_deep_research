@@ -19,7 +19,7 @@ class MemoryFiles implements ContextFileProvider {
 }
 
 describe("ResearchToolRegistry", () => {
-  it("restricts read_note to internal skill paths when note access is disabled", async () => {
+  it("returns unknown-tool when note access is disabled", async () => {
     const service = {
       definitions: () => [],
       execute: vi.fn(),
@@ -27,13 +27,14 @@ describe("ResearchToolRegistry", () => {
     const handlers = adaptNoteToolHandlers(service, {
       noteAccess: false,
       activeFileAccess: false,
-      skillAccess: true,
+      noteMutationAccess: false,
     });
     const registry = new ResearchToolRegistry(handlers);
     const result = await registry.execute({ id: "x", name: "read_note", arguments: { path: "Private.md" } });
-    expect(result).toMatchObject({ ok: false, error: { code: "tool-unavailable" } });
+    expect(result).toMatchObject({ ok: false, error: { code: "unknown-tool" } });
     expect(service.execute).not.toHaveBeenCalled();
   });
+
   it("rejects duplicate names during construction", () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
@@ -70,7 +71,7 @@ describe("ResearchToolRegistry", () => {
       adaptNoteToolHandlers(notes, {
         noteAccess: true,
         activeFileAccess: false,
-        skillAccess: false,
+        noteMutationAccess: false,
       }),
     );
 

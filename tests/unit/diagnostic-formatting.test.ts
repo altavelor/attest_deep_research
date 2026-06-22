@@ -3,26 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   formatDiagnosticReport,
   retrievalDiagnosticLines,
-  skillDiagnosticLines,
   webDiagnosticLines,
 } from "../../src/ui/diagnosticFormatting";
 import { ContextDiagnostics } from "../../src/shared/types";
 
 const diagnostics = {
   executionStrategy: "eager-forced",
-  skills: {
-    discoveredCount: 10,
-    warnings: [],
-    selectedId: "rag-debugger",
-    selectedName: "RAG Debugger",
-    selectedPath: ".ixplorer/skills/rag-debugger/SKILL.md",
-    selectionMode: "manual",
-    loadMode: "inline",
-    loadStatus: "loaded",
-    loadedCharacters: 1200,
-    loadedTokens: 300,
-    truncated: false,
-  },
   retrieval: {
     queryVariants: ["rag query"],
     includedChunkIds: ["a"],
@@ -100,14 +86,6 @@ const diagnostics = {
 } as unknown as ContextDiagnostics;
 
 describe("diagnostic formatting", () => {
-  it("formats skill selection and load details", () => {
-    expect(skillDiagnosticLines(diagnostics)).toEqual([
-      "10 skill(s) discovered",
-      "Skill: RAG Debugger (manual, inline, loaded)",
-      "Skill size: 1,200 chars / 300 tokens",
-    ]);
-  });
-
   it("formats ranked chunks and index state", () => {
     expect(retrievalDiagnosticLines(diagnostics)).toEqual([
       "Index: stale (available, stale)",
@@ -122,7 +100,6 @@ describe("diagnostic formatting", () => {
 
     expect(report).toContain("Diagnostic report");
     expect(report).toContain("Execution strategy: eager forced");
-    expect(report).toContain("Skill: RAG Debugger (manual, inline, loaded)");
     expect(report).toContain("#2 B.md · b · 0.200 · dropped · evidence-planner");
     expect(report).toContain(JSON.stringify(diagnostics, null, 2));
   });

@@ -8,14 +8,10 @@ import {
   ResearchToolParseResult,
 } from "./ResearchTools";
 import { ResearchSearchMode } from "../types";
-import { ResearchEvidenceRegistry } from "./ResearchEvidenceRegistry";
-import { isInternalSkillPath } from "../../shared/pathFilters";
-
 export interface ResearchToolAvailability {
   searchMode: ResearchSearchMode;
   noteAccess: boolean;
   activeFileAccess: boolean;
-  skillAccess: boolean;
   retrieverAvailable: boolean;
   webProviderAvailable: boolean;
   noteMutationAccess: boolean;
@@ -24,7 +20,6 @@ export interface ResearchToolAvailability {
 export interface NoteToolAvailability {
   noteAccess: boolean;
   activeFileAccess: boolean;
-  skillAccess: boolean;
   noteMutationAccess: boolean;
 }
 
@@ -34,7 +29,6 @@ const DEFAULT_AVAILABILITY: ResearchToolAvailability = {
   searchMode: "none",
   noteAccess: false,
   activeFileAccess: false,
-  skillAccess: false,
   retrieverAvailable: false,
   webProviderAvailable: false,
   noteMutationAccess: false,
@@ -78,12 +72,10 @@ export class ResearchToolRegistry {
 export function adaptNoteToolHandlers(
   service: NoteToolService,
   availability: NoteToolAvailability,
-  evidence?: ResearchEvidenceRegistry,
 ): AnyResearchToolHandler[] {
   const readDefinitions = NOTE_TOOL_DEFINITIONS.filter((definition) => {
     switch (definition.function.name) {
       case "read_note":
-        return availability.noteAccess || availability.skillAccess;
       case "search_notes":
       case "list_notes":
         return availability.noteAccess;
@@ -92,20 +84,10 @@ export function adaptNoteToolHandlers(
       default:
         return false;
     }
-  }).map(
-    (definition) =>
-      new NoteToolHandlerAdapter(
-        service,
-        definition,
-        evidence,
-        definition.function.name === "read_note" && !availability.noteAccess,
-      ),
-  );
+  }).map((definition) => new NoteToolHandlerAdapter(service, definition));
 
   const mutationDefinitions = availability.noteMutationAccess
-    ? NOTE_MUTATION_TOOL_DEFINITIONS.map(
-        (definition) => new NoteToolHandlerAdapter(service, definition, undefined, false),
-      )
+    ? NOTE_MUTATION_TOOL_DEFINITIONS.map((definition) => new NoteToolHandlerAdapter(service, definition))
     : [];
 
   return [...readDefinitions, ...mutationDefinitions];
@@ -115,17 +97,9 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
   constructor(
     private readonly service: NoteToolService,
     readonly definition: ChatToolDefinition,
-    private readonly evidence?: ResearchEvidenceRegistry,
-    private readonly skillOnly = false,
   ) {}
 
   parseInput(input: Record<string, unknown>): ResearchToolParseResult<Record<string, unknown>> {
-    if (
-      this.skillOnly &&
-      (typeof input.path !== "string" || !isInternalSkillPath(input.path))
-    ) {
-      return failure("tool-unavailable", "Only an exact internal skill path is available.");
-    }
     return { ok: true, value: input };
   }
 
@@ -155,18 +129,6 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
         hint ? { hint } : undefined,
       );
     }
-    if (
-      this.evidence &&
-      (this.definition.function.name === "read_note" || this.definition.function.name === "get_active_note") &&
-      isEvidenceResult(value)
-    ) {
-      for (const chunk of value.chunks) {
-        this.evidence.registerNoteEvidence(
-          { evidenceId: chunk.id, source: chunk.evidenceSource, content: chunk.text },
-          { callId: context.callId, tool: this.definition.function.name },
-        );
-      }
-    }
     return {
       ok: true,
       value,
@@ -176,22 +138,4 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
       },
     };
   }
-}
-
-function isEvidenceResult(value: unknown): value is {
-  chunks: Array<{
-    id: string;
-    evidenceSource: import("../../shared/types").SourceReference;
-    text: string;
-  }>;
-} {
-  if (typeof value !== "object" || value === null) return false;
-  const chunks = (value as Record<string, unknown>).chunks;
-  return Array.isArray(chunks) && chunks.every((chunk) =>
-    typeof chunk === "object" && chunk !== null &&
-    typeof (chunk as Record<string, unknown>).id === "string" &&
-    typeof (chunk as Record<string, unknown>).text === "string" &&
-    typeof (chunk as Record<string, unknown>).evidenceSource === "object" &&
-    (chunk as Record<string, unknown>).evidenceSource !== null
-  );
 }

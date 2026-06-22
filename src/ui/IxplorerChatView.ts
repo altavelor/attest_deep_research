@@ -44,7 +44,6 @@ import {
 } from "./IndexSearchPanel";
 import { ResearchQuestionController } from "./ResearchQuestionController";
 import { ChatDisplayMessage, citationTarget, stripMessageDiagnostics } from "./rendering";
-import type { SkillMentionOption } from "./mentionAutocomplete";
 import {
   positionSavedChatsPopover,
   renderSavedChatsEmptyState,
@@ -66,7 +65,6 @@ export interface IxplorerChatViewServices {
   setChatModel(modelProfileId: string): Promise<void>;
   getAvailableChatModels(): string[];
   getChatModelProfiles(): ChatModelSelectOption[];
-  getAvailableSkills(): Promise<SkillMentionOption[]>;
   getDefaultIndexProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
   searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
@@ -108,7 +106,6 @@ export class IxplorerChatView extends ItemView {
   private isSearchingIndex = false;
   private isRunning = false;
   private editingMessageIndex: number | null = null;
-  private availableSkills: SkillMentionOption[] = [];
 
   private transcriptEl: HTMLElement | null = null;
   private indexControlEl: HTMLElement | null = null;
@@ -219,11 +216,7 @@ export class IxplorerChatView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    const [, availableSkills] = await Promise.all([
-      this.refreshSavedChatSummaries(),
-      this.services.getAvailableSkills(),
-    ]);
-    this.availableSkills = availableSkills;
+    await this.refreshSavedChatSummaries();
     this.render();
   }
 
@@ -272,7 +265,6 @@ export class IxplorerChatView extends ItemView {
       settings: this.currentChatSettings,
       availableModels: this.services.getChatModelProfiles(),
       availableIndexes: this.services.getIndexProfiles(),
-      availableSkills: this.availableSkills,
       contextFilePaths: this.app.vault
         .getFiles()
         .filter((file) => isContextDocumentPath(file.path))

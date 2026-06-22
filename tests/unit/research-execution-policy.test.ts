@@ -9,23 +9,18 @@ const fullCapabilities = {
 
 describe("resolveResearchExecutionPolicy", () => {
   it.each([
-    ["none", false, []],
-    ["none", true, ["get_active_note"]],
-    ["indexOnly", false, ["search_index"]],
-    ["indexOnly", true, ["search_index", "get_active_note"]],
-    ["indexAndWeb", false, ["search_index", "search_web"]],
-    ["indexAndWeb", true, ["search_index", "search_web", "get_active_note"]],
-    ["webOnly", false, ["search_web"]],
-    ["webOnly", true, ["search_web", "get_active_note"]],
+    ["none", []],
+    ["indexOnly", ["search_index"]],
+    ["indexAndWeb", ["search_index", "search_web"]],
+    ["webOnly", ["search_web"]],
   ] as const)(
-    "computes mandatory tools for %s active=%s",
-    (searchMode, includeActiveFile, expected) => {
+    "computes mandatory tools for %s",
+    (searchMode, expected) => {
       const policy = resolveResearchExecutionPolicy({
         forceEagerResearch: false,
         deepResearch: false,
         searchMode,
-        includeActiveFile,
-        dependencies: { retriever: true, webProvider: true, activeFileAccess: true },
+        dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
       });
 
@@ -41,8 +36,7 @@ describe("resolveResearchExecutionPolicy", () => {
         forceEagerResearch: true,
         deepResearch: false,
         searchMode: "indexOnly",
-        includeActiveFile: false,
-        dependencies: { retriever: false, webProvider: false, activeFileAccess: false },
+        dependencies: { retriever: false, webProvider: false },
         capabilities: fullCapabilities,
       }).strategy,
     ).toBe("eager-forced");
@@ -51,8 +45,7 @@ describe("resolveResearchExecutionPolicy", () => {
         forceEagerResearch: false,
         deepResearch: true,
         searchMode: "indexOnly",
-        includeActiveFile: false,
-        dependencies: { retriever: true, webProvider: true, activeFileAccess: true },
+        dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
       }),
     ).toMatchObject({ strategy: "eager-default", reason: "deep-research-eager" });
@@ -69,29 +62,15 @@ describe("resolveResearchExecutionPolicy", () => {
       forceEagerResearch: false,
       deepResearch: false,
       searchMode,
-      includeActiveFile: false,
-      dependencies: { retriever: true, webProvider: true, activeFileAccess: true },
+      dependencies: { retriever: true, webProvider: true },
       capabilities,
     });
     expect(policy).toMatchObject({ strategy: "deterministic-fallback", reason });
   });
 
   it.each([
-    [
-      "indexOnly",
-      { retriever: false, webProvider: true, activeFileAccess: true },
-      "retriever-unavailable",
-    ],
-    [
-      "webOnly",
-      { retriever: true, webProvider: false, activeFileAccess: true },
-      "web-provider-unavailable",
-    ],
-    [
-      "none",
-      { retriever: true, webProvider: true, activeFileAccess: false },
-      "active-file-unavailable",
-    ],
+    ["indexOnly", { retriever: false, webProvider: true }, "retriever-unavailable"],
+    ["webOnly", { retriever: true, webProvider: false }, "web-provider-unavailable"],
   ] as const)(
     "fails closed when a required dependency is missing",
     (searchMode, dependencies, reason) => {
@@ -100,7 +79,6 @@ describe("resolveResearchExecutionPolicy", () => {
           forceEagerResearch: false,
           deepResearch: false,
           searchMode,
-          includeActiveFile: searchMode === "none",
           dependencies,
           capabilities: fullCapabilities,
         }),
@@ -114,8 +92,7 @@ describe("resolveResearchExecutionPolicy", () => {
         forceEagerResearch: false,
         deepResearch: false,
         searchMode,
-        includeActiveFile: false,
-        dependencies: { retriever: true, webProvider: true, activeFileAccess: true },
+        dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
       }).bootstrapChoice;
     expect(resolve("none")).toEqual({ type: "auto" });
@@ -129,8 +106,7 @@ describe("resolveResearchExecutionPolicy", () => {
         forceEagerResearch: false,
         deepResearch: false,
         searchMode: "indexOnly",
-        includeActiveFile: false,
-        dependencies: { retriever: true, webProvider: true, activeFileAccess: true },
+        dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
         apiFormat: "ollama",
       }),

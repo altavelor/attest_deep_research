@@ -22,8 +22,6 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
-import { SkillFileStore, SkillRegistry } from "../../src/skills/SkillRegistry";
-
 class MemoryContextFiles implements ContextFileProvider {
   constructor(private readonly files: Record<string, string>) {}
 
@@ -34,40 +32,6 @@ class MemoryContextFiles implements ContextFileProvider {
   async readFile(path: string): Promise<string> {
     return this.files[path] ?? "";
   }
-}
-
-async function createSkillRegistry(): Promise<SkillRegistry> {
-  const path = ".ixplorer/skills/note-synthesis/SKILL.md";
-  const content = [
-    "---",
-    "name: Note Synthesis",
-    "description: Synthesize notes.",
-    "---",
-    "",
-    "# Note Synthesis",
-    "SKILL BODY: group findings by theme.",
-  ].join("\n");
-  const store: SkillFileStore = {
-    exists: async (candidate) =>
-      candidate === ".ixplorer/skills" ||
-      candidate === ".ixplorer/skills/note-synthesis" ||
-      candidate === path,
-    list: async () => ({ files: [], folders: [".ixplorer/skills/note-synthesis"] }),
-    read: async () => content,
-    write: async () => undefined,
-    mkdir: async () => undefined,
-  };
-  const registry = new SkillRegistry({ store, defaults: [] });
-  await registry.refresh();
-  return registry;
-}
-
-function registrySnapshotCalls(snapshot: Awaited<ReturnType<SkillRegistry["getSnapshot"]>>) {
-  return snapshot.skills.map((skill, index) => ({
-    id: `call-skill-${index}`,
-    name: "read_note",
-    arguments: { path: skill.path },
-  }));
 }
 
 describe("buildResearchPrompt", () => {
@@ -82,32 +46,6 @@ describe("buildResearchPrompt", () => {
     expect(system).toContain("otherwise use general knowledge");
     expect(prompt).toContain("The question is self-contained");
     expect(prompt).not.toContain("say what is missing instead of guessing");
-  });
-
-  it("includes only the compact skill catalog until a skill is selected", () => {
-    const system = buildResearchSystemPrompt({
-      skillCatalog:
-        "Available skills:\n- Note Synthesis: Synthesize notes.\n  Path: .ixplorer/skills/note-synthesis/SKILL.md",
-    });
-
-    expect(system).toContain("Note Synthesis");
-    expect(system).toContain(".ixplorer/skills/note-synthesis/SKILL.md");
-    expect(system).not.toContain("SECRET SKILL BODY");
-  });
-
-  it("adds the complete inline skill as trusted instructions", () => {
-    const system = buildResearchSystemPrompt({
-      skillCatalog: "Available skills: one",
-      inlineSkill: {
-        name: "Note Synthesis",
-        path: ".ixplorer/skills/note-synthesis/SKILL.md",
-        content: "---\nname: Note Synthesis\n---\nSECRET SKILL BODY",
-      },
-    });
-
-    expect(system).toContain("Selected skill: Note Synthesis");
-    expect(system).toContain("SECRET SKILL BODY");
-    expect(system).toContain("trusted skill instructions");
   });
 
   it("adds index scope as delimited non-citable system context", () => {
@@ -550,43 +488,6 @@ describe("ResearchService", () => {
     });
   });
 
-  it("drops stale indexed skill chunks before evidence planning", async () => {
-    const retriever = new FakeRetriever({
-      chunks: [
-        retrieved(
-          "skill-chunk",
-          markdownSource(".ixplorer/skills/rag-debugger/SKILL.md"),
-          "Instruction body must not be evidence.",
-        ),
-        retrieved("note-chunk", markdownSource("Notes/Useful.md"), "Useful evidence."),
-      ],
-      citations: [
-        citation("skill-chunk", markdownSource(".ixplorer/skills/rag-debugger/SKILL.md")),
-        citation("note-chunk", markdownSource("Notes/Useful.md")),
-      ],
-      usedFallback: false,
-    });
-    const chatModel = new FakeChatModel();
-    const service = new ResearchService({
-      retriever,
-      chatModel,
-      chatModelName: "qwen",
-      now: fixedNow,
-    });
-
-    const events = await collectAsync(service.answer({ question: "What is useful?" }));
-    const complete = events.at(-1);
-
-    expect(complete).toMatchObject({
-      type: "complete",
-      answer: {
-        evidence: [expect.objectContaining({ id: "note-chunk" })],
-        citations: [expect.objectContaining({ id: "note-chunk" })],
-      },
-    });
-    expect(JSON.stringify(complete)).not.toContain("skill-chunk");
-  });
-
   it("records ranked retrieval, dropped reasons, budget, and index status for RAG diagnostics", async () => {
     const retriever = new FakeRetriever({
       chunks: [
@@ -644,120 +545,6 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0].messages[1].content).toContain("Retrieval diagnostics:");
     expect(chatModel.requests[0].messages[1].content).toContain('"rankedChunks"');
     expect(chatModel.requests[0].messages[1].content).toContain('"status":"stale"');
-  });
-
-  it("loads an explicitly mentioned skill inline for a model without tools", async () => {
-    const registry = await createSkillRegistry();
-    const chatModel = new FakeChatModel([
-      { content: "Synthesized answer.", isComplete: false },
-      { content: "", isComplete: true },
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()),
-      chatModel,
-      chatModelName: "qwen",
-      skillRegistry: registry,
-      toolsEnabled: false,
-      now: fixedNow,
-    });
-
-    const events = await collectAsync(
-      service.answer({
-        question: "@note-synthesis Summarize these notes",
-        includeContextDiagnostics: true,
-      }),
-    );
-
-    expect(chatModel.requests).toHaveLength(1);
-    expect(chatModel.requests[0].messages[0].content).toContain(
-      "SKILL BODY: group findings by theme.",
-    );
-    expect(chatModel.requests[0].messages[1].content).toContain("Question: Summarize these notes");
-    expect(chatModel.requests[0].messages[1].content).not.toContain("@note-synthesis");
-    expect(events.at(-1)).toMatchObject({
-      type: "complete",
-      answer: {
-        contextDiagnostics: {
-          skills: {
-            discoveredCount: 1,
-            selectedId: "note-synthesis",
-            selectionMode: "manual",
-            loadMode: "inline",
-            loadStatus: "loaded",
-            truncated: false,
-          },
-        },
-      },
-    });
-  });
-
-  it("uses a selector pass then inline loading for a model without tools", async () => {
-    const registry = await createSkillRegistry();
-    const chatModel = new FakeChatModel([
-      [
-        { content: '{"skill":"note-synthesis"}', isComplete: false },
-        { content: "", isComplete: true },
-      ],
-      [
-        { content: "Synthesized answer.", isComplete: false },
-        { content: "", isComplete: true },
-      ],
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()),
-      chatModel,
-      chatModelName: "qwen",
-      skillRegistry: registry,
-      toolsEnabled: false,
-      now: fixedNow,
-    });
-
-    const events = await collectAsync(
-      service.answer({ question: "Summarize these notes", includeContextDiagnostics: true }),
-    );
-
-    expect(chatModel.requests).toHaveLength(2);
-    expect(chatModel.requests[0].messages[0].content).toContain("Return JSON only");
-    expect(chatModel.requests[1].messages[0].content).toContain("SKILL BODY");
-    expect(events.at(-1)).toMatchObject({
-      type: "complete",
-      answer: {
-        contextDiagnostics: {
-          skills: {
-            selectedId: "note-synthesis",
-            selectionMode: "automatic",
-            loadMode: "inline",
-          },
-        },
-      },
-    });
-  });
-
-  it("uses inline skill loading in web-only mode without exposing vault note tools", async () => {
-    const registry = await createSkillRegistry();
-    const chatModel = new FakeChatModel([
-      [
-        { content: '{"skill":"note-synthesis"}', isComplete: false },
-        { content: "", isComplete: true },
-      ],
-      [{ content: "Web-only skill answer.", isComplete: true }],
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()),
-      chatModel,
-      chatModelName: "qwen",
-      toolsEnabled: true,
-      skillRegistry: registry,
-      now: fixedNow,
-    });
-
-    await collectAsync(
-      service.answer({ question: "Summarize these sources", searchMode: "webOnly" }),
-    );
-
-    expect(chatModel.requests).toHaveLength(2);
-    expect(chatModel.requests[1].tools).toBeUndefined();
-    expect(chatModel.requests[1].messages[0].content).toContain("SKILL BODY");
   });
 
   it("lets compatible models read notes through the optional tool loop", async () => {
@@ -832,121 +619,6 @@ describe("ResearchService", () => {
           ],
         }),
       }),
-    });
-  });
-
-  it("lets a tool-capable model select and load a catalog skill through read_note", async () => {
-    const registry = await createSkillRegistry();
-    const skillPath = ".ixplorer/skills/note-synthesis/SKILL.md";
-    const chatModel = new FakeChatModel([
-      [
-        {
-          content: "",
-          isComplete: true,
-          toolCalls: [
-            {
-              id: "call-skill",
-              name: "read_note",
-              arguments: { path: skillPath },
-            },
-          ],
-        },
-      ],
-      [
-        { content: "Skill-guided answer.", isComplete: false },
-        { content: "", isComplete: true },
-      ],
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()),
-      chatModel,
-      chatModelName: "qwen",
-      toolsEnabled: true,
-      skillRegistry: registry,
-      noteTools: new NoteToolService({
-        files: new MemoryContextFiles({}),
-        extractors: [new MarkdownExtractor()],
-        skillRegistry: registry,
-      }),
-      now: fixedNow,
-    });
-
-    const events = await collectAsync(
-      service.answer({ question: "Summarize these notes", includeContextDiagnostics: true }),
-    );
-
-    expect(chatModel.requests[0].messages[0].content).toContain(skillPath);
-    expect(chatModel.requests[1].messages.at(-1)?.content).toContain(
-      "SKILL BODY: group findings by theme.",
-    );
-    expect(events.at(-1)).toMatchObject({
-      type: "complete",
-      answer: {
-        contextDiagnostics: {
-          skills: {
-            selectedId: "note-synthesis",
-            selectionMode: "automatic",
-            loadMode: "read_note",
-            loadStatus: "loaded",
-            truncated: false,
-          },
-        },
-      },
-    });
-  });
-
-  it("rejects tool output that loads more than one skill", async () => {
-    const first = await createSkillRegistry();
-    const snapshot = await first.getSnapshot();
-    const baseStore = new Map([
-      [snapshot.skills[0].path, (await first.load(snapshot.skills[0])).content],
-      [
-        ".ixplorer/skills/rag-debugger/SKILL.md",
-        "---\nname: RAG Debugger\ndescription: Debug RAG.\n---\n# RAG Debugger",
-      ],
-    ]);
-    const store: SkillFileStore = {
-      exists: async (path) =>
-        path === ".ixplorer/skills" ||
-        path === ".ixplorer/skills/note-synthesis" ||
-        path === ".ixplorer/skills/rag-debugger" ||
-        baseStore.has(path),
-      list: async () => ({
-        files: [],
-        folders: [".ixplorer/skills/note-synthesis", ".ixplorer/skills/rag-debugger"],
-      }),
-      read: async (path) => baseStore.get(path) ?? "",
-      write: async () => undefined,
-      mkdir: async () => undefined,
-    };
-    const registry = new SkillRegistry({ store, defaults: [] });
-    await registry.refresh();
-    const chatModel = new FakeChatModel([
-      [
-        {
-          content: "",
-          isComplete: true,
-          toolCalls: registrySnapshotCalls(await registry.getSnapshot()),
-        },
-      ],
-      [{ content: "Invalid multi-skill answer.", isComplete: true }],
-    ]);
-    const service = new ResearchService({
-      retriever: new FakeRetriever(emptyRetrieval()),
-      chatModel,
-      chatModelName: "qwen",
-      toolsEnabled: true,
-      skillRegistry: registry,
-      noteTools: new NoteToolService({
-        files: new MemoryContextFiles({}),
-        extractors: [new MarkdownExtractor()],
-        skillRegistry: registry,
-      }),
-      now: fixedNow,
-    });
-
-    await expect(collectAsync(service.answer({ question: "Use skills" }))).rejects.toMatchObject({
-      code: "INVALID_SKILL_SELECTION",
     });
   });
 

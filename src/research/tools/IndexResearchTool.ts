@@ -1,4 +1,3 @@
-import { isInternalSkillPath } from "../../shared/pathFilters";
 import { RetrievedChunk } from "../../shared/types";
 import { ResearchEvidenceRegistry } from "./ResearchEvidenceRegistry";
 import {
@@ -24,7 +23,6 @@ export interface SearchIndexOutput {
   }>;
   diagnostics: {
     resultCount: number;
-    excludedInternalSkillCount: number;
     snippetsTruncated: number;
     untrustedEvidence: true;
   };
@@ -87,12 +85,7 @@ export class IndexResearchTool implements ResearchToolHandler<
       return failure("index-search-failed", "Index search failed.", true);
     }
 
-    const visibleChunks = chunks
-      .filter((chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)))
-      .slice(0, input.limit);
-    const excludedInternalSkillCount = chunks.filter(
-      (chunk) => "path" in chunk.source && isInternalSkillPath(chunk.source.path),
-    ).length;
+    const visibleChunks = chunks.slice(0, input.limit);
     let snippetsTruncated = 0;
 
     const results = visibleChunks.map((chunk) => {
@@ -122,7 +115,6 @@ export class IndexResearchTool implements ResearchToolHandler<
         results,
         diagnostics: {
           resultCount: results.length,
-          excludedInternalSkillCount,
           snippetsTruncated,
           untrustedEvidence: true,
         },

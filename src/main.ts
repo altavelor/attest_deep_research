@@ -55,10 +55,6 @@ import { IxplorerError, toUserMessage } from "./shared/errors";
 import type { ModelRoundProvider } from "./shared/types";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
-import { SkillRegistry } from "./skills/SkillRegistry";
-import { DEFAULT_SKILLS } from "./skills/defaultSkills";
-import { ObsidianSkillFileStore } from "./skills/ObsidianSkillFileStore";
-import { isInternalSkillPath } from "./shared/pathFilters";
 import {
   refreshIndexDescriptionAfterRun,
   resolveIndexDescriptionForPrompt,
@@ -69,7 +65,6 @@ export default class IxplorerPlugin extends Plugin {
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
-  private skillRegistry?: SkillRegistry;
   readonly indexing = new IndexingProfileController({
     getProfile: (profileId) =>
       this.settings.indexProfiles.find((profile) => profile.id === profileId),
@@ -101,30 +96,7 @@ export default class IxplorerPlugin extends Plugin {
   });
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.skillRegistry = new SkillRegistry({
-      store: new ObsidianSkillFileStore(this.app.vault.adapter),
-      defaults: DEFAULT_SKILLS,
-    });
-    try {
-      await this.skillRegistry.initialize();
-    } catch (error) {
-      this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "initialize" });
-      new Notice("Ixplorer could not initialize its default skills.");
-    }
-    const invalidateSkills = (path: string): void => {
-      if (isInternalSkillPath(path)) {
-        this.skillRegistry?.markDirty();
-      }
-    };
-    this.registerEvent(this.app.vault.on("create", (file) => invalidateSkills(file.path)));
-    this.registerEvent(this.app.vault.on("modify", (file) => invalidateSkills(file.path)));
-    this.registerEvent(this.app.vault.on("delete", (file) => invalidateSkills(file.path)));
-    this.registerEvent(
-      this.app.vault.on("rename", (file, oldPath) => {
-        invalidateSkills(oldPath);
-        invalidateSkills(file.path);
-      }),
-    );
+    void this.migrateRemoveSkillsFolder();
     if (getActiveIndexProfile(this.settings).isSuspended !== true) {
       void this.indexing.refreshIndexSize(this.settings.activeIndexProfileId);
     }
@@ -169,14 +141,6 @@ export default class IxplorerPlugin extends Plugin {
               maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
             })),
-          getAvailableSkills: async () => {
-            try {
-              return (await this.skillRegistry?.getSnapshot())?.skills ?? [];
-            } catch (error) {
-              this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "list" });
-              return [];
-            }
-          },
           getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
@@ -325,7 +289,6 @@ export default class IxplorerPlugin extends Plugin {
       toolCapabilityProvenance: toolResolution.provenance,
       apiFormat: chatServer.apiFormat,
       indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
-      skillRegistry: this.skillRegistry,
       getIndexStatus: () => {
         const state = this.indexing.getState(indexProfile.id);
         return {
@@ -340,12 +303,7 @@ export default class IxplorerPlugin extends Plugin {
         ? new NoteToolService({
             files: contextFiles,
             extractors: contextExtractors,
-            retriever,
             getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
-            skillRegistry: this.skillRegistry,
-            skillMaxTokens: chatProfile.capabilities?.contextLength
-              ? Math.max(0, chatProfile.capabilities.contextLength - (chatProfile.maxTokens ?? 0))
-              : undefined,
             writer: chatProfile.noteMutationAccess
               ? new ObsidianVaultWriter(this.app)
               : undefined,
@@ -396,9 +354,7 @@ export default class IxplorerPlugin extends Plugin {
       queryVariants: queryVariants.length > 0 ? queryVariants : undefined,
     });
 
-    return result.chunks.filter(
-      (chunk) => !("path" in chunk.source && isInternalSkillPath(chunk.source.path)),
-    );
+    return result.chunks;
   }
 
   private createIndexingService(
@@ -720,6 +676,23 @@ export default class IxplorerPlugin extends Plugin {
     }
 
     return path;
+  }
+
+  private async migrateRemoveSkillsFolder(): Promise<void> {
+    const skillsFolder = ".ixplorer/skills";
+    try {
+      const exists = await this.app.vault.adapter.exists(skillsFolder);
+      if (!exists) return;
+      const files = await this.app.vault.adapter.list(skillsFolder);
+      for (const filePath of [...files.files, ...files.folders]) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (file) await this.app.vault.trash(file, false);
+      }
+      const folder = this.app.vault.getAbstractFileByPath(skillsFolder);
+      if (folder) await this.app.vault.trash(folder, false);
+    } catch (error) {
+      this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "migrate" });
+    }
   }
 }
 
