@@ -42,8 +42,12 @@ export async function probeToolControlCapabilities(
   const choiceRequired = required.some((name) => name === PROBE_A || name === PROBE_B);
   const choiceSpecific = specific.includes(PROBE_B);
   const parallelCalls = required.includes(PROBE_A) && required.includes(PROBE_B);
+  const callsViaControlled = choiceRequired || choiceSpecific;
+  const callsViaAuto = callsViaControlled
+    ? false
+    : (await runProbe(options, { type: "auto" })).length > 0;
   return {
-    calls: choiceRequired || choiceSpecific,
+    calls: callsViaControlled || callsViaAuto,
     choiceRequired,
     choiceSpecific,
     parallelCalls,

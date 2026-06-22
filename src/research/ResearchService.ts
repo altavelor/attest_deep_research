@@ -202,6 +202,24 @@ export class ResearchService {
         return;
       }
       if (agentic.result.reason === "cancelled") return;
+      if (agentic.result.reason === "provider-error") throw new Error("Research provider error");
+      const partialEvidence = agentic.answer.evidence ?? [];
+      if (partialEvidence.length > 0) {
+        yield { type: "status", message: "Synthesizing from partial results…" };
+        yield* this.answerSynthesis.synthesize({
+          question,
+          evidence: partialEvidence,
+          citations: agentic.answer.citations ?? [],
+          chatHistory: request.chatHistory,
+          evidenceLimit: this.evidenceLimit,
+          contextDiagnostics: request.includeContextDiagnostics === true
+            ? agentic.diagnostics
+            : undefined,
+          signal: request.signal,
+          fallback: { reason: agentic.result.reason },
+        });
+        return;
+      }
       failedAgenticAttempt = agentic.result;
       executionStrategy = "deterministic-fallback";
     }
@@ -472,6 +490,10 @@ export class ResearchService {
             checkpointId: `round-${round}`,
             round,
           }),
+        onToolCall: (id, name, label, round) =>
+          options.onEvent?.({ type: "tool-call-start", id, name, label, round }),
+        onToolResult: (id, ok, resolvedLabel, resultSummary) =>
+          options.onEvent?.({ type: "tool-call-end", id, ok, resolvedLabel, resultSummary }),
       }).run();
     }
     const snapshot = created.evidence.snapshot();

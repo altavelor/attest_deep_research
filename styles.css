@@ -1102,6 +1102,111 @@
   margin-bottom: 0;
 }
 
+.ixplorer-chat__reasoning-summary-label {
+  font-weight: var(--font-semibold);
+}
+
+.ixplorer-chat__reasoning-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  margin-left: 0.5em;
+  padding: 0.1em 0.45em;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+  font-size: 0.8em;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+.ixplorer-chat__reasoning-duration {
+  margin-left: 0.5em;
+  font-size: 0.8em;
+  font-weight: normal;
+  color: var(--text-faint);
+}
+
+/* Reasoning chain */
+
+.ixplorer-chat__chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.ixplorer-chat__chain-tool-call {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.ixplorer-chat__chain-tool-call--failed {
+  color: var(--text-error);
+}
+
+.ixplorer-chat__chain-tool-call--pending {
+  opacity: 0.65;
+}
+
+.ixplorer-chat__chain-tool-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.ixplorer-chat__chain-tool-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ixplorer-chat__chain-tool-result {
+  color: var(--text-faint);
+  font-size: 0.85em;
+}
+
+.ixplorer-chat__chain-reasoning {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  opacity: 0.82;
+  padding: 0.25rem 0;
+}
+
+.ixplorer-chat__chain-reasoning-summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-faint);
+}
+
+.ixplorer-chat__chain-reasoning-content {
+  padding-top: 0.25rem;
+}
+
+/* Fallback notice */
+
+.ixplorer-chat__fallback-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-error);
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+.ixplorer-chat__fallback-notice-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-top: 0.05em;
+}
+
 .ixplorer-chat__answer-content:empty {
   display: none;
 }

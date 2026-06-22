@@ -11,6 +11,11 @@ import {
 } from "../../shared/types";
 import { ChatCompletionsRoundAdapter } from "../../client/chat/ChatCompletionsRoundAdapter";
 import { IxplorerError } from "../../shared/errors";
+import {
+  toolCallChainLabel,
+  resolveLabelFromResult,
+  resolveResultSummary,
+} from "./toolCallLabel";
 
 export interface ToolLoopRunnerOptions {
   chatModel: ChatModelProvider;
@@ -37,6 +42,8 @@ export type ToolLoopEvent =
   | { type: "checkpoint-delta"; checkpointId: string; round: number; content: string }
   | { type: "checkpoint-complete"; checkpointId: string; round: number }
   | { type: "checkpoint-promote"; checkpointId: string; round: number }
+  | { type: "tool-call-start"; id: string; name: string; label: string; round: number }
+  | { type: "tool-call-end"; id: string; ok: boolean; resolvedLabel?: string; resultSummary?: string }
   | { type: "answer-reset" }
   | { type: "complete"; content: string };
 
@@ -159,8 +166,13 @@ export async function runToolLoop(options: ToolLoopRunnerOptions): Promise<ToolL
           continue;
         }
 
+        const label = toolCallChainLabel(toolCall.name, toolCall.arguments);
+        options.onEvent?.({ type: "tool-call-start", id: toolCall.id, name: toolCall.name, label, round });
         const execution = await options.executeTool(toolCall);
         const result = truncateResult(execution.result, remainingChars);
+        const resolvedLabel = resolveLabelFromResult(toolCall.name, result);
+        const resultSummary = resolveResultSummary(toolCall.name, result);
+        options.onEvent?.({ type: "tool-call-end", id: toolCall.id, ok: execution.ok, resolvedLabel, resultSummary });
         totalResultChars += result.length;
         diagnostics.push({
           id: toolCall.id,

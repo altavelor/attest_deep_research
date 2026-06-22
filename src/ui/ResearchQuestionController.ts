@@ -24,6 +24,9 @@ import {
   resetLastAssistantContent,
   finalizeLastAssistantReasoning,
   interruptLastAssistantProgress,
+  nextChainToolCallStart,
+  nextChainToolCallEnd,
+  nextChainReasoningSegment,
 } from "./rendering";
 
 export interface ResearchQuestionControllerOptions {
@@ -280,8 +283,30 @@ export class ResearchQuestionController {
     }
 
     if (event.type === "reasoning") {
+      let msgs = nextAssistantReasoning(this.options.getMessages(), event.segmentId, event.content);
+      msgs = nextChainReasoningSegment(msgs, event.segmentId, event.content);
+      this.options.setMessages(msgs);
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "tool-call-start") {
       this.options.setMessages(
-        nextAssistantReasoning(this.options.getMessages(), event.segmentId, event.content),
+        nextChainToolCallStart(this.options.getMessages(), event.id, event.name, event.label),
+      );
+      this.options.renderActiveMessage();
+      return;
+    }
+
+    if (event.type === "tool-call-end") {
+      this.options.setMessages(
+        nextChainToolCallEnd(
+          this.options.getMessages(),
+          event.id,
+          event.ok,
+          event.resolvedLabel,
+          event.resultSummary,
+        ),
       );
       this.options.renderActiveMessage();
       return;
@@ -342,7 +367,10 @@ export class ResearchQuestionController {
     this.options.setLastAnswer(event.answer);
     this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
     this.options.setMessages(
-      attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), event.answer),
+      attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), {
+        ...event.answer,
+        ...(event.answer.isFallback ? { isFallback: true as const, fallbackReason: event.answer.fallbackReason } : {}),
+      }),
     );
     this.options.renderAnswerDetails();
     this.options.renderMessages();

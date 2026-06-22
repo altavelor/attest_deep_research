@@ -53,6 +53,7 @@ export interface AnswerSynthesisInput {
   retrievalDiagnostics?: string;
   indexDescription?: IndexDescriptionPromptContext;
   signal?: AbortSignal;
+  fallback?: { reason: string };
 }
 
 export class AnswerSynthesisService {
@@ -82,6 +83,9 @@ export class AnswerSynthesisService {
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
     this.assertWithinContextWindow(input);
+    const fallbackPrefix = input.fallback
+      ? `IMPORTANT: The research process could not complete (${input.fallback.reason}).\nYou are synthesizing a best-effort answer from PARTIAL results.\nBegin your response with a clear notice that the answer may be incomplete.\nDo not pretend to have complete information.\n\n`
+      : "";
     const systemPromptOptions = {
       indexDescription: input.indexDescription?.text,
     };
@@ -104,7 +108,7 @@ export class AnswerSynthesisService {
     const messages = [
       {
         role: "system" as const,
-        content: buildResearchSystemPrompt(systemPromptOptions),
+        content: fallbackPrefix + buildResearchSystemPrompt(systemPromptOptions),
       },
       { role: "user" as const, content: prompt },
     ];
@@ -234,6 +238,7 @@ export class AnswerSynthesisService {
       ...(contextDiagnostics ? { contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
+      ...(input.fallback ? { isFallback: true as const, fallbackReason: input.fallback.reason } : {}),
     };
 
     if (this.persistFinalAnswer) {
