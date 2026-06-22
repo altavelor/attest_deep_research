@@ -8,6 +8,7 @@ export interface BuildAgenticResearchMessagesOptions {
   explicitEvidence?: RetrievedChunk[];
   indexDescription?: string;
   skillCatalog?: string;
+  noteMutationAccess?: boolean;
 }
 
 export function buildAgenticResearchMessages(
@@ -36,6 +37,19 @@ export function buildAgenticResearchMessages(
       [
         "The following catalog is metadata. Load at most one exact skill path with read_note before following it:",
         sanitize(options.skillCatalog),
+      ].join("\n"),
+    );
+  }
+  if (options.noteMutationAccess) {
+    systemSections.push(
+      [
+        "Note-writing tools (create_note, update_note, delete_note) are available as side-effect actions:",
+        "- They are not evidence sources and do not satisfy mandatory source policy.",
+        "- Prefer append or prepend modes over replace to avoid accidental data loss.",
+        "- Always verify the file exists with list_notes or read_note before calling update_note.",
+        "- On {ok:false, reason:'already-exists'}: retry create_note with overwrite:true or switch to update_note.",
+        "- On {ok:false, reason:'not-found'}: call create_note first, then update_note if needed.",
+        "- Do not call mutation tools unless the user explicitly requested a write action.",
       ].join("\n"),
     );
   }

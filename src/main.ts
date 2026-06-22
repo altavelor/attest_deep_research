@@ -27,6 +27,7 @@ import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "./research/GraphContext";
 import { ObsidianContextFileProvider } from "./research/ObsidianContextFileProvider";
 import { ObsidianGraphContextProvider } from "./research/ObsidianGraphContextProvider";
 import { NoteToolService } from "./research/tools/NoteTools";
+import { ObsidianVaultWriter } from "./research/tools/ObsidianVaultWriter";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
@@ -345,6 +346,10 @@ export default class IxplorerPlugin extends Plugin {
             skillMaxTokens: chatProfile.capabilities?.contextLength
               ? Math.max(0, chatProfile.capabilities.contextLength - (chatProfile.maxTokens ?? 0))
               : undefined,
+            writer: chatProfile.noteMutationAccess
+              ? new ObsidianVaultWriter(this.app)
+              : undefined,
+            noteMutationAccess: chatProfile.noteMutationAccess,
           })
         : undefined,
     });

@@ -528,6 +528,7 @@ export class ResearchService {
         activeFileAccess:
           this.noteTools !== undefined && options.request.includeActiveFile === true,
         skillAccess: this.noteTools !== undefined && options.skillSnapshot !== undefined,
+        noteMutationAccess: this.noteTools?.mutationEnabled() === true,
         retrieverAvailable: true,
         webProviderAvailable: this.searchProvider !== undefined,
       },
@@ -544,6 +545,7 @@ export class ResearchService {
       skillCatalog: options.skillSnapshot
         ? buildSkillCatalogPrompt(options.skillSnapshot.skills)
         : undefined,
+      noteMutationAccess: this.noteTools?.mutationEnabled() === true,
     });
     const estimatedTokens =
       estimateTextTokens(messages.map((message) => message.content).join("\n")) +

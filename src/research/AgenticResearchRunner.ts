@@ -240,12 +240,16 @@ export class AgenticResearchRunner {
             call.name === repairTool &&
             execution?.ok === false &&
             execution.retryable;
-          if (execution && !retryMandatory) {
+          // Mutation tools are never cached: identical args may have different vault state.
+          const bypassCache = mutationTool(call.name);
+          if (execution && !retryMandatory && !bypassCache) {
             duplicateCalls += 1;
           } else {
             const raw = await this.options.tools.execute(call);
             execution = serializeExecution(raw);
-            cache.set(key, execution);
+            if (!bypassCache) {
+              cache.set(key, execution);
+            }
           }
           if (totalResultChars + execution.result.length > maxResultChars) {
             return failure("tool-result-budget-exceeded");
@@ -423,4 +427,8 @@ function isAbortError(error: unknown): boolean {
 
 function contentBearingTool(name: string): boolean {
   return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
+}
+
+function mutationTool(name: string): boolean {
+  return name === "create_note" || name === "update_note" || name === "delete_note";
 }

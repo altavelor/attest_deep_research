@@ -59,6 +59,7 @@ export interface ChatModelProfile {
   serverProfileId: string;
   modelName: string;
   toolsEnabled: boolean;
+  noteMutationAccess: boolean;
   reasoning: ReasoningProfileSettings;
   reasoningCapabilities?: ReasoningCapabilitySettings;
   temperature?: number;
@@ -571,6 +572,7 @@ function normalizeChatModelProfile(value: unknown): ChatModelProfile | null {
     serverProfileId,
     modelName,
     toolsEnabled: value.toolsEnabled !== false,
+    noteMutationAccess: value.noteMutationAccess === true,
     reasoning: readReasoningProfileSettings(value.reasoning),
     reasoningCapabilities: readReasoningCapabilitySettings(value.reasoningCapabilities),
     temperature: readOptionalNumber(value.temperature),
