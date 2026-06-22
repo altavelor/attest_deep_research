@@ -12,6 +12,45 @@ import { estimateTextTokens } from "../prompts";
 import { ResearchRetriever } from "../types";
 import { SKILL_ROOT, SkillRegistry } from "../../skills/SkillRegistry";
 
+export interface VaultWriter {
+  exists(path: string): Promise<boolean>;
+  createFile(path: string, content: string): Promise<void>;
+  modifyFile(path: string, content: string): Promise<void>;
+  appendFile(path: string, content: string): Promise<void>;
+  readFile(path: string): Promise<string>;
+  trashFile(path: string): Promise<void>;
+  ensureFolder(path: string): Promise<void>;
+}
+
+export type NoteActionType = "create" | "update" | "delete";
+
+export interface NoteActionRequest {
+  action: NoteActionType;
+  path: string;
+  content?: string;
+}
+
+export interface NoteActionConfirmation {
+  confirm(request: NoteActionRequest): Promise<boolean>;
+}
+
+export const AUTO_CONFIRM: NoteActionConfirmation = {
+  confirm: async () => true,
+};
+
+export function validateMutablePath(path: string): { ok: true } | { ok: false; reason: string } {
+  if (!path || !path.endsWith(".md")) {
+    return { ok: false, reason: "invalid-path" };
+  }
+  if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
+    return { ok: false, reason: "invalid-path" };
+  }
+  if (path === ".ixplorer" || path.startsWith(".ixplorer/")) {
+    return { ok: false, reason: "forbidden-path" };
+  }
+  return { ok: true };
+}
+
 export interface NoteToolServiceOptions {
   files: ContextFileProvider;
   extractors: Extractor[];
@@ -23,6 +62,9 @@ export interface NoteToolServiceOptions {
   listLimit?: number;
   skillRegistry?: SkillRegistry;
   skillMaxTokens?: number;
+  writer?: VaultWriter;
+  confirmation?: NoteActionConfirmation;
+  noteMutationAccess?: boolean;
 }
 
 export interface NoteToolExecution {
@@ -32,6 +74,8 @@ export interface NoteToolExecution {
 }
 
 type NoteToolName = "read_note" | "search_notes" | "list_notes" | "get_active_note";
+type NoteMutationToolName = "create_note" | "update_note" | "delete_note";
+type AnyNoteToolName = NoteToolName | NoteMutationToolName;
 
 const DEFAULT_READ_NOTE_MAX_CHARS = 16_000;
 const DEFAULT_SEARCH_RESULT_LIMIT = 5;
@@ -43,6 +87,74 @@ const SUPPORTED_TOOL_NAMES = new Set<NoteToolName>([
   "list_notes",
   "get_active_note",
 ]);
+const MUTATION_TOOL_NAMES = new Set<NoteMutationToolName>([
+  "create_note",
+  "update_note",
+  "delete_note",
+]);
+
+export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "create_note",
+      description:
+        "Create a new markdown note at the given vault-relative path. Returns {ok:false, reason:'already-exists'} if the file exists — set overwrite:true to replace it, or use update_note to modify it.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", maxLength: 500, description: "Vault-relative path ending in .md." },
+          content: { type: "string", description: "Markdown content for the new note." },
+          overwrite: {
+            type: "boolean",
+            description: "If true, overwrite an existing file. Default false.",
+          },
+        },
+        required: ["path", "content"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_note",
+      description:
+        "Update an existing markdown note. CAUTION: mode=replace (default) destroys all existing content. Prefer mode=append to add content or mode=prepend to insert at the top. mode=prepend is non-atomic: avoid when concurrent edits are likely. Returns {ok:false, reason:'not-found'} if the file does not exist — use create_note first.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", maxLength: 500, description: "Vault-relative path ending in .md." },
+          content: { type: "string", description: "Content to write." },
+          mode: {
+            type: "string",
+            enum: ["replace", "append", "prepend"],
+            description:
+              "replace: overwrite entire file (destructive). append: add to end. prepend: add to beginning. Default: replace.",
+          },
+        },
+        required: ["path", "content"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_note",
+      description:
+        "Move a vault note to the system trash. The file is not permanently deleted and can be recovered. Returns {ok:false, reason:'not-found'} if the file does not exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", maxLength: 500, description: "Vault-relative file path." },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
 
 export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
@@ -123,6 +235,9 @@ export class NoteToolService {
   private readonly listLimit: number;
   private readonly skillRegistry?: SkillRegistry;
   private readonly skillMaxTokens?: number;
+  private readonly writer?: VaultWriter;
+  private readonly confirmation: NoteActionConfirmation;
+  private readonly noteMutationAccess: boolean;
 
   constructor(options: NoteToolServiceOptions) {
     this.files = options.files;
@@ -135,14 +250,29 @@ export class NoteToolService {
     this.listLimit = options.listLimit ?? DEFAULT_LIST_LIMIT;
     this.skillRegistry = options.skillRegistry;
     this.skillMaxTokens = options.skillMaxTokens;
+    this.writer = options.writer;
+    this.confirmation = options.confirmation ?? AUTO_CONFIRM;
+    this.noteMutationAccess = options.noteMutationAccess ?? false;
   }
 
   definitions(): ChatToolDefinition[] {
-    return NOTE_TOOL_DEFINITIONS;
+    const defs: ChatToolDefinition[] = [...NOTE_TOOL_DEFINITIONS];
+    if (this.noteMutationAccess && this.writer) {
+      defs.push(...NOTE_MUTATION_TOOL_DEFINITIONS);
+    }
+    return defs;
   }
 
-  supports(name: string): name is NoteToolName {
-    return SUPPORTED_TOOL_NAMES.has(name as NoteToolName);
+  mutationEnabled(): boolean {
+    return this.noteMutationAccess && this.writer !== undefined;
+  }
+
+  supports(name: string): name is AnyNoteToolName {
+    if (SUPPORTED_TOOL_NAMES.has(name as NoteToolName)) return true;
+    if (MUTATION_TOOL_NAMES.has(name as NoteMutationToolName)) {
+      return this.noteMutationAccess && this.writer !== undefined;
+    }
+    return false;
   }
 
   async execute(toolCall: ChatToolCall): Promise<NoteToolExecution> {
@@ -151,6 +281,12 @@ export class NoteToolService {
     }
 
     switch (toolCall.name) {
+      case "create_note":
+        return this.createNote(toolCall.arguments);
+      case "update_note":
+        return this.updateNote(toolCall.arguments);
+      case "delete_note":
+        return this.deleteNote(toolCall.arguments);
       case "read_note":
         return this.readNote(toolCall.arguments);
       case "search_notes":
@@ -160,6 +296,102 @@ export class NoteToolService {
       case "get_active_note":
         return this.getActiveNote();
     }
+  }
+
+  private async createNote(args: Record<string, unknown>): Promise<NoteToolExecution> {
+    const writer = this.writer!;
+    const path = normalizePathArg(args.path);
+    const validation = validateMutablePath(path);
+    if (!validation.ok) {
+      return jsonResult(false, { ok: false, reason: validation.reason, path });
+    }
+
+    const overwrite = args.overwrite === true;
+    const exists = await writer.exists(path);
+    if (exists && !overwrite) {
+      return jsonResult(false, {
+        ok: false,
+        reason: "already-exists",
+        path,
+        hint: "Set overwrite:true to replace the existing file, or use update_note to modify it.",
+      });
+    }
+
+    const confirmed = await this.confirmation.confirm({ action: "create", path });
+    if (!confirmed) {
+      return jsonResult(false, { ok: false, reason: "user-cancelled", path });
+    }
+
+    const content = typeof args.content === "string" ? args.content : "";
+    const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+    if (folder) {
+      await writer.ensureFolder(folder);
+    }
+    await writer.createFile(path, content);
+    return jsonResult(true, { ok: true, path, created: true });
+  }
+
+  private async updateNote(args: Record<string, unknown>): Promise<NoteToolExecution> {
+    const writer = this.writer!;
+    const path = normalizePathArg(args.path);
+    const validation = validateMutablePath(path);
+    if (!validation.ok) {
+      return jsonResult(false, { ok: false, reason: validation.reason, path });
+    }
+
+    const exists = await writer.exists(path);
+    if (!exists) {
+      return jsonResult(false, {
+        ok: false,
+        reason: "not-found",
+        path,
+        hint: "Use create_note to create the file first.",
+      });
+    }
+
+    const confirmed = await this.confirmation.confirm({ action: "update", path });
+    if (!confirmed) {
+      return jsonResult(false, { ok: false, reason: "user-cancelled", path });
+    }
+
+    const content = typeof args.content === "string" ? args.content : "";
+    const mode =
+      args.mode === "append" || args.mode === "prepend" ? args.mode : "replace";
+
+    if (mode === "replace") {
+      await writer.modifyFile(path, content);
+    } else if (mode === "append") {
+      await writer.appendFile(path, content);
+    } else {
+      const existing = await writer.readFile(path);
+      await writer.modifyFile(path, `${content}\n\n${existing}`);
+    }
+
+    return jsonResult(true, { ok: true, path, mode });
+  }
+
+  private async deleteNote(args: Record<string, unknown>): Promise<NoteToolExecution> {
+    const writer = this.writer!;
+    const path = normalizePathArg(args.path);
+    if (!path) {
+      return jsonResult(false, { ok: false, reason: "missing-path" });
+    }
+    if (path === ".ixplorer" || path.startsWith(".ixplorer/")) {
+      return jsonResult(false, { ok: false, reason: "forbidden-path", path });
+    }
+
+    const exists = await writer.exists(path);
+    if (!exists) {
+      return jsonResult(false, { ok: false, reason: "not-found", path });
+    }
+
+    const confirmed = await this.confirmation.confirm({ action: "delete", path });
+    if (!confirmed) {
+      return jsonResult(false, { ok: false, reason: "user-cancelled", path });
+    }
+
+    await writer.trashFile(path);
+    return jsonResult(true, { ok: true, path, trashed: true });
   }
 
   private async readNote(args: Record<string, unknown>): Promise<NoteToolExecution> {

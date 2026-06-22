@@ -28,4 +28,28 @@ describe("agentic research prompts", () => {
     expect(messages.at(-1)).toEqual({ role: "user", content: "Question" });
     expect(text).not.toMatch(/No relevant evidence was found/);
   });
+
+  it("includes mutation tool guidance when noteMutationAccess is true", () => {
+    const messages = buildAgenticResearchMessages({
+      question: "Create a note",
+      requiredTools: [],
+      noteMutationAccess: true,
+    });
+    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    expect(system).toContain("create_note");
+    expect(system).toContain("update_note");
+    expect(system).toContain("delete_note");
+    expect(system).toContain("not evidence sources");
+    expect(system).toContain("overwrite:true");
+  });
+
+  it("does not include mutation guidance when noteMutationAccess is false or absent", () => {
+    const messages = buildAgenticResearchMessages({
+      question: "Research something",
+      requiredTools: ["search_index"],
+    });
+    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    expect(system).not.toContain("create_note");
+    expect(system).not.toContain("delete_note");
+  });
 });

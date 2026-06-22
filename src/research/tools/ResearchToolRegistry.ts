@@ -1,5 +1,5 @@
 import { ChatToolCall, ChatToolDefinition } from "../../shared/types";
-import { NOTE_TOOL_DEFINITIONS, NoteToolService } from "./NoteTools";
+import { NOTE_MUTATION_TOOL_DEFINITIONS, NOTE_TOOL_DEFINITIONS, NoteToolService } from "./NoteTools";
 import {
   executeResearchTool,
   failure,
@@ -18,12 +18,14 @@ export interface ResearchToolAvailability {
   skillAccess: boolean;
   retrieverAvailable: boolean;
   webProviderAvailable: boolean;
+  noteMutationAccess: boolean;
 }
 
 export interface NoteToolAvailability {
   noteAccess: boolean;
   activeFileAccess: boolean;
   skillAccess: boolean;
+  noteMutationAccess: boolean;
 }
 
 type AnyResearchToolHandler = ResearchToolHandler<any, any>;
@@ -35,6 +37,7 @@ const DEFAULT_AVAILABILITY: ResearchToolAvailability = {
   skillAccess: false,
   retrieverAvailable: false,
   webProviderAvailable: false,
+  noteMutationAccess: false,
 };
 
 export class ResearchToolRegistry {
@@ -77,7 +80,7 @@ export function adaptNoteToolHandlers(
   availability: NoteToolAvailability,
   evidence?: ResearchEvidenceRegistry,
 ): AnyResearchToolHandler[] {
-  return NOTE_TOOL_DEFINITIONS.filter((definition) => {
+  const readDefinitions = NOTE_TOOL_DEFINITIONS.filter((definition) => {
     switch (definition.function.name) {
       case "read_note":
         return availability.noteAccess || availability.skillAccess;
@@ -98,6 +101,14 @@ export function adaptNoteToolHandlers(
         definition.function.name === "read_note" && !availability.noteAccess,
       ),
   );
+
+  const mutationDefinitions = availability.noteMutationAccess
+    ? NOTE_MUTATION_TOOL_DEFINITIONS.map(
+        (definition) => new NoteToolHandlerAdapter(service, definition, undefined, false),
+      )
+    : [];
+
+  return [...readDefinitions, ...mutationDefinitions];
 }
 
 class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unknown>, unknown> {
@@ -134,11 +145,15 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
       throw new Error(`Note tool ${this.definition.function.name} returned invalid JSON.`);
     }
     if (!execution.ok) {
-      const reason =
-        typeof value === "object" && value !== null && "reason" in value
-          ? String(value.reason)
-          : "note-tool-failed";
-      return failure(reason, `Note tool ${this.definition.function.name} failed.`, false);
+      const payload = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+      const reason = typeof payload.reason === "string" ? payload.reason : "note-tool-failed";
+      const hint = typeof payload.hint === "string" ? payload.hint : undefined;
+      return failure(
+        reason,
+        `Note tool ${this.definition.function.name} failed.`,
+        false,
+        hint ? { hint } : undefined,
+      );
     }
     if (
       this.evidence &&
