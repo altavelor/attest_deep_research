@@ -4,7 +4,7 @@ import { ContextDiagnostics, RetrievedChunk } from "../shared/types";
 import { copyToClipboard } from "./clipboard";
 import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./CitationPopover";
 import { stripRenderedCitationIds } from "./citationText";
-import { ChatDisplayMessage, shouldShowDiagnosticAction } from "./rendering";
+import { ChatDisplayMessage, ChainItem, shouldShowDiagnosticAction } from "./rendering";
 import { messageDisplayContent, messageMarkdownContent } from "./rendering";
 
 export interface ChatTranscriptOptions {
@@ -103,6 +103,9 @@ export function renderChatTranscript(
     } else if (message.role === "assistant") {
       const progressEl = contentEl.createDiv({ cls: "ixplorer-chat__research-progress-host" });
       renderReasoningSegments(progressEl, message, options);
+      if (message.isFallback) {
+        renderFallbackBanner(contentEl, message.fallbackReason);
+      }
       const citationRefs = buildCitationRefs(message.evidence ?? []);
       const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
       void MarkdownRenderer.render(
@@ -143,8 +146,23 @@ export function patchActiveAssistantMessage(
   const progressEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__research-progress-host");
   const answerEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__answer-content");
   if (!progressEl || !answerEl) return false;
+  // Capture current open/closed state from the live DOM before destroying the element.
+  // The toggle listener mutates the *old* researchProgress object (captured in its closure),
+  // but by the time we re-render, options.messages already holds a *new* object created via
+  // spread — so the mutation is invisible to state. Reading the DOM directly is the source
+  // of truth here.
+  const liveDetails = progressEl.querySelector<HTMLDetailsElement>("details[data-reasoning-id]");
+  if (liveDetails && message.researchProgress) {
+    message.researchProgress.disclosure = liveDetails.open ? "user-open" : "user-closed";
+  }
   progressEl.empty();
   renderReasoningSegments(progressEl, message, options);
+  const fallbackEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__fallback-notice");
+  fallbackEl?.remove();
+  if (message.isFallback) {
+    const contentElForFallback = answerEl.parentElement;
+    if (contentElForFallback) renderFallbackBanner(contentElForFallback, message.fallbackReason);
+  }
   answerEl.empty();
   const citationRefs = buildCitationRefs(message.evidence ?? []);
   void MarkdownRenderer.render(
@@ -167,7 +185,9 @@ function renderReasoningSegments(
   const legacySegments = message.reasoning ?? [];
   const segments = progress?.reasoning.segments ?? legacySegments;
   const checkpoints = progress?.checkpoints ?? [];
-  if (segments.length === 0 && checkpoints.length === 0) return;
+  const chain = progress?.chain ?? [];
+  const hasChain = chain.length > 0;
+  if (segments.length === 0 && checkpoints.length === 0 && !hasChain) return;
   const details = containerEl.createEl("details", {
     cls: "ixplorer-chat__reasoning",
     attr: { "data-reasoning-id": "research-progress" },
@@ -178,41 +198,96 @@ function renderReasoningSegments(
     : message.reasoningOpen === true;
   const duration = progress?.reasoning.durationMs;
   const roundCount = new Set(checkpoints.map((checkpoint) => checkpoint.round)).size;
-  const label =
-    progress?.phase === "streaming"
-      ? "Thinking…"
-      : `Research progress${roundCount > 0 ? ` · ${roundCount} rounds` : ""}${duration !== undefined ? ` · ${formatDuration(duration)}` : ""}`;
-  details.createEl("summary", { cls: "ixplorer-chat__reasoning-summary", text: label });
+  const toolCallCount = chain.filter((item) => item.kind === "tool-call").length;
+  const isStreaming = progress?.phase === "streaming";
+  const summaryEl = details.createEl("summary", { cls: "ixplorer-chat__reasoning-summary" });
+  if (isStreaming) {
+    summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-summary-label", text: "Thinking…" });
+  } else {
+    summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-summary-label", text: "Research progress" });
+    if (roundCount > 0) {
+      const pillEl = summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-pill" });
+      setIcon(pillEl.createSpan(), "refresh-cw");
+      pillEl.createSpan({ text: ` ${roundCount}` });
+    }
+    if (toolCallCount > 0) {
+      const pillEl = summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-pill" });
+      setIcon(pillEl.createSpan(), "tool");
+      pillEl.createSpan({ text: ` ${toolCallCount}` });
+    }
+    if (duration !== undefined) {
+      summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-duration", text: formatDuration(duration) });
+    }
+  }
   details.addEventListener("toggle", () => {
     if (progress) progress.disclosure = details.open ? "user-open" : "user-closed";
   });
   const reasoningEl = details.createDiv({ cls: "ixplorer-chat__reasoning-content" });
-  for (const segment of segments) {
-    const segmentEl = reasoningEl.createDiv({
-      cls: "ixplorer-chat__reasoning-segment",
-      attr: { "data-segment-id": segment.id },
-    });
-    void MarkdownRenderer.render(
-      options.app,
-      segment.content,
-      segmentEl,
-      "",
-      options.markdownContext,
-    );
+  if (hasChain) {
+    renderChain(reasoningEl, chain, options);
+  } else {
+    for (const segment of segments) {
+      const segmentEl = reasoningEl.createDiv({
+        cls: "ixplorer-chat__reasoning-segment",
+        attr: { "data-segment-id": segment.id },
+      });
+      void MarkdownRenderer.render(options.app, segment.content, segmentEl, "", options.markdownContext);
+    }
+    for (const checkpoint of checkpoints) {
+      const checkpointEl = reasoningEl.createDiv({ cls: "ixplorer-chat__reasoning-checkpoint" });
+      checkpointEl.createEl("strong", { text: `Provisional checkpoint ${checkpoint.round}` });
+      void MarkdownRenderer.render(options.app, checkpoint.content, checkpointEl, "", options.markdownContext);
+    }
   }
-  for (const checkpoint of checkpoints) {
-    const checkpointEl = reasoningEl.createDiv({ cls: "ixplorer-chat__reasoning-checkpoint" });
-    checkpointEl.createEl("strong", {
-      text: `Provisional checkpoint ${checkpoint.round}`,
-    });
-    void MarkdownRenderer.render(
-      options.app,
-      checkpoint.content,
-      checkpointEl,
-      "",
-      options.markdownContext,
-    );
+}
+
+function renderChain(
+  containerEl: HTMLElement,
+  chain: ChainItem[],
+  options: ChatTranscriptOptions,
+): void {
+  const chainEl = containerEl.createDiv({ cls: "ixplorer-chat__chain" });
+  for (const item of chain) {
+    if (item.kind === "tool-call") {
+      const itemEl = chainEl.createDiv({
+        cls: `ixplorer-chat__chain-tool-call ixplorer-chat__chain-tool-call--${item.status}`,
+        attr: { "data-tool-id": item.id },
+      });
+      const iconEl = itemEl.createSpan({ cls: "ixplorer-chat__chain-tool-icon" });
+      setIcon(iconEl, item.status === "failed" ? "x-circle" : item.status === "complete" ? "check-circle" : "loader");
+      const labelEl = itemEl.createSpan({ cls: "ixplorer-chat__chain-tool-label", text: item.label });
+      if (item.resultSummary) {
+        labelEl.createSpan({ cls: "ixplorer-chat__chain-tool-result", text: ` · ${item.resultSummary}` });
+      }
+    } else if (item.kind === "reasoning") {
+      const content = item.content;
+      const isLong = content.length > 400;
+      if (isLong) {
+        const segDetails = chainEl.createEl("details", { cls: "ixplorer-chat__chain-reasoning" });
+        segDetails.createEl("summary", { cls: "ixplorer-chat__chain-reasoning-summary", text: "Reasoning…" });
+        const segEl = segDetails.createDiv({ cls: "ixplorer-chat__chain-reasoning-content" });
+        void MarkdownRenderer.render(options.app, content, segEl, "", options.markdownContext);
+      } else {
+        const segEl = chainEl.createDiv({ cls: "ixplorer-chat__chain-reasoning" });
+        void MarkdownRenderer.render(options.app, content, segEl, "", options.markdownContext);
+      }
+    }
   }
+}
+
+function renderFallbackBanner(containerEl: HTMLElement, reason?: string): void {
+  const reasonLabel: Record<string, string> = {
+    "loop-detected": "Research stopped: detected repetitive tool calls.",
+    "model-round-limit-exceeded": "Research stopped: maximum rounds exceeded.",
+    "tool-call-limit-exceeded": "Research stopped: too many tool calls.",
+    "tool-result-budget-exceeded": "Research stopped: result size limit exceeded.",
+    "context-limit-exceeded": "Research stopped: context window limit reached.",
+  };
+  const bannerEl = containerEl.createDiv({ cls: "ixplorer-chat__fallback-notice" });
+  const iconEl = bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-icon" });
+  setIcon(iconEl, "alert-triangle");
+  const text = reason ? (reasonLabel[reason] ?? `Research stopped (${reason}).`) : "Research could not complete.";
+  bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-text", text: `${text} The answer below is based on partial results.` });
 }
 
 function formatDuration(durationMs: number): string {

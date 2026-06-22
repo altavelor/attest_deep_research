@@ -713,4 +713,6 @@ export interface ResearchAnswer {
   contextDiagnostics?: ContextDiagnostics;
   followUpQuestions: string[];
   createdAt: string;
+  isFallback?: true;
+  fallbackReason?: string;
 }

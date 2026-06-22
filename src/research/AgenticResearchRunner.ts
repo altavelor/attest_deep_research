@@ -14,6 +14,11 @@ import { ResearchExecutionPolicy } from "./ResearchExecutionPolicy";
 import { ResearchToolRegistry } from "./tools/ResearchToolRegistry";
 import { researchToolExecutionPayload, ResearchToolExecution } from "./tools/ResearchTools";
 import { ChatCompletionsRoundAdapter } from "../client/chat/ChatCompletionsRoundAdapter";
+import {
+  toolCallChainLabel,
+  resolveLabelFromResult,
+  resolveResultSummary,
+} from "./tools/toolCallLabel";
 
 export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -23,7 +28,8 @@ export type AgenticFallbackReason =
   | "tool-result-budget-exceeded"
   | "provider-error"
   | "cancelled"
-  | "context-limit-exceeded";
+  | "context-limit-exceeded"
+  | "loop-detected";
 
 export interface AgenticResearchRunnerOptions {
   chatModel: ChatModelProvider;
@@ -43,6 +49,8 @@ export interface AgenticResearchRunnerOptions {
   onDelta?(delta: ModelRoundDelta, round: number): void;
   onAnswerReset?(): void;
   onRoundClassified?(round: number, classification: "intermediate" | "final"): void;
+  onToolCall?(id: string, name: string, label: string, round: number): void;
+  onToolResult?(id: string, ok: boolean, resolvedLabel?: string, resultSummary?: string): void;
 }
 
 export type AgenticResearchResult = AgenticResearchSuccess | AgenticResearchFailure;
@@ -118,6 +126,7 @@ export class AgenticResearchRunner {
     let totalCalls = 0;
     let duplicateCalls = 0;
     let totalResultChars = 0;
+    let consecutiveDuplicateRounds = 0;
     let rounds = 0;
     const phases: string[] = [];
     const stopReasons: string[] = [];
@@ -230,6 +239,7 @@ export class AgenticResearchRunner {
           toolOutputs = [];
         }
 
+        let roundDuplicates = 0;
         for (const call of response.toolCalls) {
           totalCalls += 1;
           const key = normalizedCallKey(call);
@@ -241,8 +251,11 @@ export class AgenticResearchRunner {
             execution.retryable;
           // Mutation tools are never cached: identical args may have different vault state.
           const bypassCache = mutationTool(call.name);
+          const label = toolCallChainLabel(call.name, call.arguments);
+          this.options.onToolCall?.(call.id, call.name, label, round);
           if (execution && !retryMandatory && !bypassCache) {
             duplicateCalls += 1;
+            roundDuplicates += 1;
           } else {
             const raw = await this.options.tools.execute(call);
             execution = serializeExecution(raw);
@@ -250,6 +263,9 @@ export class AgenticResearchRunner {
               cache.set(key, execution);
             }
           }
+          const resolvedLabel = resolveLabelFromResult(call.name, execution.result);
+          const resultSummary = resolveResultSummary(call.name, execution.result);
+          this.options.onToolResult?.(call.id, execution.ok, resolvedLabel, resultSummary);
           if (totalResultChars + execution.result.length > maxResultChars) {
             return failure("tool-result-budget-exceeded");
           }
@@ -279,6 +295,15 @@ export class AgenticResearchRunner {
           } else {
             messages.push({ role: "tool", content: execution.result, toolCallId: call.id });
           }
+        }
+
+        if (roundDuplicates === response.toolCalls.length && response.toolCalls.length > 0) {
+          consecutiveDuplicateRounds += 1;
+          if (consecutiveDuplicateRounds >= 2) {
+            return failure("loop-detected");
+          }
+        } else {
+          consecutiveDuplicateRounds = 0;
         }
 
         const missing = missingTools(required, satisfied);

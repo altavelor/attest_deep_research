@@ -44,6 +44,8 @@ export type ResearchStreamEvent =
   | { type: "checkpoint-delta"; checkpointId: string; round: number; content: string }
   | { type: "checkpoint-complete"; checkpointId: string; round: number }
   | { type: "checkpoint-promote"; checkpointId: string; round: number }
+  | { type: "tool-call-start"; id: string; name: string; label: string; round: number }
+  | { type: "tool-call-end"; id: string; ok: boolean; resolvedLabel?: string; resultSummary?: string }
   | { type: "answer-reset" }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };

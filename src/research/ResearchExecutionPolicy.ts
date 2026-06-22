@@ -42,7 +42,7 @@ export function resolveResearchExecutionPolicy(
   input: ResearchExecutionPolicyInput,
 ): Readonly<ResearchExecutionPolicy> {
   const requiredTools = mandatoryTools(input.searchMode);
-  const bootstrapChoice = choiceFor(requiredTools);
+  const bootstrapChoice = choiceFor(requiredTools, input.capabilities);
   const base = { requiredTools, bootstrapChoice, parallelToolCalls: requiredTools.length > 1 };
 
   if (input.forceEagerResearch) {
@@ -74,11 +74,16 @@ function mandatoryTools(searchMode: ResearchSearchMode): readonly string[] {
   return Object.freeze(tools);
 }
 
-function choiceFor(requiredTools: readonly string[]): ChatToolChoice {
+function choiceFor(
+  requiredTools: readonly string[],
+  capabilities?: ToolCallingCapabilities,
+): ChatToolChoice {
   if (requiredTools.length === 0) return Object.freeze({ type: "auto" });
   if (requiredTools.length === 1) {
+    if (capabilities && !capabilities.choiceSpecific) return Object.freeze({ type: "auto" });
     return Object.freeze({ type: "specific", name: requiredTools[0] });
   }
+  if (capabilities && !capabilities.choiceRequired) return Object.freeze({ type: "auto" });
   return Object.freeze({ type: "required" });
 }
 

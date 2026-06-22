@@ -22,6 +22,8 @@ export interface ChatDisplayMessage {
   reasoning?: Array<{ id: string; content: string }>;
   reasoningOpen?: boolean;
   researchProgress?: AssistantResearchProgress;
+  isFallback?: true;
+  fallbackReason?: string;
 }
 
 export interface ReasoningSegment {
@@ -45,11 +47,18 @@ export interface ResearchProgressCheckpoint {
   status: "streaming" | "complete" | "superseded" | "interrupted";
 }
 
+export type ChainItem =
+  | { kind: "reasoning"; segmentId: string; content: string }
+  | { kind: "checkpoint"; id: string; round: number; content: string; status: "streaming" | "complete" | "superseded" }
+  | { kind: "tool-call"; id: string; name: string; label: string; status: "pending" | "complete" | "failed"; resultSummary?: string };
+
 export interface AssistantResearchProgress {
   phase: "idle" | "streaming" | "complete" | "interrupted";
   disclosure: "auto" | "user-open" | "user-closed";
+  view: "expanded" | "compact";
   reasoning: AssistantReasoningState;
   checkpoints: ResearchProgressCheckpoint[];
+  chain: ChainItem[];
 }
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };
@@ -335,6 +344,77 @@ export function interruptLastAssistantProgress(
   ];
 }
 
+export function nextChainToolCallStart(
+  messages: ChatDisplayMessage[],
+  id: string,
+  name: string,
+  label: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  const assistant =
+    last?.role === "assistant"
+      ? last
+      : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
+  const progress = researchProgressFromMessage(assistant, new Date().toISOString());
+  const item: ChainItem = { kind: "tool-call", id, name, label, status: "pending" };
+  const updated: ChatDisplayMessage = {
+    ...assistant,
+    researchProgress: { ...progress, chain: [...progress.chain, item] },
+  };
+  return last?.role === "assistant" ? [...messages.slice(0, -1), updated] : [...messages, updated];
+}
+
+export function nextChainToolCallEnd(
+  messages: ChatDisplayMessage[],
+  id: string,
+  ok: boolean,
+  resolvedLabel?: string,
+  resultSummary?: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  const chain = last.researchProgress.chain.map((item) =>
+    item.kind === "tool-call" && item.id === id
+      ? {
+          ...item,
+          status: (ok ? "complete" : "failed") as "complete" | "failed",
+          ...(resolvedLabel !== undefined ? { label: resolvedLabel } : {}),
+          ...(resultSummary !== undefined ? { resultSummary } : {}),
+        }
+      : item,
+  );
+  return [
+    ...messages.slice(0, -1),
+    { ...last, researchProgress: { ...last.researchProgress, chain } },
+  ];
+}
+
+export function nextChainReasoningSegment(
+  messages: ChatDisplayMessage[],
+  segmentId: string,
+  delta: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  const assistant =
+    last?.role === "assistant"
+      ? last
+      : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
+  const progress = researchProgressFromMessage(assistant, new Date().toISOString());
+  const chain = [...progress.chain];
+  const index = chain.findIndex((item) => item.kind === "reasoning" && item.segmentId === segmentId);
+  if (index >= 0) {
+    const existing = chain[index] as Extract<ChainItem, { kind: "reasoning" }>;
+    chain[index] = { ...existing, content: existing.content + delta };
+  } else {
+    chain.push({ kind: "reasoning", segmentId, content: delta });
+  }
+  const updated: ChatDisplayMessage = {
+    ...assistant,
+    researchProgress: { ...progress, chain },
+  };
+  return last?.role === "assistant" ? [...messages.slice(0, -1), updated] : [...messages, updated];
+}
+
 function researchProgressFromMessage(
   message: ChatDisplayMessage,
   now: string,
@@ -343,18 +423,20 @@ function researchProgressFromMessage(
   return {
     phase: "streaming",
     disclosure: "auto",
+    view: "expanded",
     reasoning: {
       phase: "streaming",
       startedAt: now,
       segments: (message.reasoning ?? []).map((segment) => ({ ...segment, kind: "summary" })),
     },
     checkpoints: [],
+    chain: [],
   };
 }
 
 export function attachAnswerDetailsToLastAssistantMessage(
   messages: ChatDisplayMessage[],
-  answer: { evidence?: RetrievedChunk[]; contextDiagnostics?: ContextDiagnostics },
+  answer: { evidence?: RetrievedChunk[]; contextDiagnostics?: ContextDiagnostics; isFallback?: true; fallbackReason?: string },
 ): ChatDisplayMessage[] {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index].role !== "assistant") {
@@ -367,6 +449,7 @@ export function attachAnswerDetailsToLastAssistantMessage(
         ...messages[index],
         evidence: answer.evidence ?? [],
         contextDiagnostics: answer.contextDiagnostics,
+        ...(answer.isFallback ? { isFallback: true as const, fallbackReason: answer.fallbackReason } : {}),
       },
       ...messages.slice(index + 1),
     ];
