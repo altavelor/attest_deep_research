@@ -58,6 +58,7 @@ export function isIxplorerError(error: unknown): error is IxplorerError {
 
 export function toUserMessage(error: unknown): string {
   if (isIxplorerError(error)) {
+    if (error.code === "UNSUPPORTED_CAPABILITY") return error.message;
     return USER_MESSAGES[error.code];
   }
 

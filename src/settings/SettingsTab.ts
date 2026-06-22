@@ -12,6 +12,11 @@ import {
 
 import type IxplorerPlugin from "../main";
 import { ChatModelClient } from "../client/chat/ChatModelClient";
+import {
+  isResponsesCapabilityCurrent,
+  probeResponsesCapabilities,
+} from "./responsesCapabilityProbe";
+import { startChatProfileProbes as startChatProfileProbeTasks } from "./chatProfileProbes";
 import { IndexingState, IndexSourceReportItem } from "../indexing/IndexingService";
 import { IndexProfile } from "../indexing/FileVectorIndexStore";
 import { formatIndexSize } from "../indexing/indexSize";
@@ -27,15 +32,14 @@ import {
 import { contextLengthInputAfterDiscovery } from "./modelContext";
 import { probeToolControlCapabilities } from "./toolCapabilityProbe";
 import {
-  canProbeToolCapabilities,
   createToolCapabilitySettings,
-  describeToolCapability,
   resolveToolCapabilities,
   ToolCapabilityLayer,
   ToolCapabilitySettings,
-  withProbeResults,
 } from "./toolCapabilities";
 import { DUCK_DUCK_GO_DESCRIPTION } from "./privacyCopy";
+import { capabilityCacheKey, unknownSnapshot } from "./modelCapabilityCache";
+import { probeReasoningVisibility } from "./reasoningVisibilityProbe";
 import {
   ChatModelProfile,
   DEFAULT_INDEX_PROFILE,
@@ -56,6 +60,7 @@ import {
 export class IxplorerSettingTab extends PluginSettingTab {
   private unsubscribeIndexing: (() => void) | null = null;
   private readonly fetchedModelsByServerId = new Map<string, DiscoveredModel[]>();
+  private metadataRefreshStarted = false;
 
   constructor(
     app: App,
@@ -77,6 +82,41 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.renderSearchEngineSettings(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
+    if (!this.metadataRefreshStarted) {
+      this.metadataRefreshStarted = true;
+      void this.refreshMetadataCapabilities();
+    }
+  }
+
+  private async refreshMetadataCapabilities(): Promise<void> {
+    let changed = false;
+    for (const server of this.plugin.settings.serverProfiles.filter(
+      (candidate) => candidate.isSuspended !== true,
+    )) {
+      const identity = `${server.baseUrl}|${server.updatedAt}`;
+      const result = await fetchAvailableModels(server, { logger: this.plugin.logger });
+      const currentServer = this.plugin.settings.serverProfiles.find(
+        (candidate) => candidate.id === server.id,
+      );
+      if (!currentServer || `${currentServer.baseUrl}|${currentServer.updatedAt}` !== identity) {
+        continue;
+      }
+      this.fetchedModelsByServerId.set(server.id, result.models);
+      for (const model of result.models) {
+        if (!model.capabilitySnapshot) continue;
+        for (const protocol of ["chat-completions", "responses"] as const) {
+          const key = capabilityCacheKey({
+            baseUrl: server.baseUrl,
+            apiKey: server.apiKey,
+            model: model.id,
+            protocol,
+          });
+          this.plugin.settings.modelCapabilityCache[key] = model.capabilitySnapshot;
+          changed = true;
+        }
+      }
+    }
+    if (changed) await this.plugin.saveSettings();
   }
 
   private renderDebugSettings(containerEl: HTMLElement): void {
@@ -128,7 +168,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Use linked notes")
-      .setDesc("Discover linked notes from @mentions, active files, and included attachments before retrieval.")
+      .setDesc(
+        "Discover linked notes from @mentions, active files, and included attachments before retrieval.",
+      )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.useLinkedNotes).onChange(async (value) => {
           this.plugin.settings.useLinkedNotes = value;
@@ -138,7 +180,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Include backlinks")
-      .setDesc("Use one-hop backlinks as graph candidates. Backlink notes are not traversed further.")
+      .setDesc(
+        "Use one-hop backlinks as graph candidates. Backlink notes are not traversed further.",
+      )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.includeBacklinks).onChange(async (value) => {
           this.plugin.settings.includeBacklinks = value;
@@ -160,7 +204,9 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Graph depth")
-      .setDesc("Depth 1 follows direct links, embeds, and backlinks. Depth 2 is reserved for advanced debugging.")
+      .setDesc(
+        "Depth 1 follows direct links, embeds, and backlinks. Depth 2 is reserved for advanced debugging.",
+      )
       .addDropdown((dropdown) =>
         dropdown
           .addOption("1", "1")
@@ -244,7 +290,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
         fetchModels: (server) => this.fetchModelsForServer(server),
         fetchContextLength: (server, modelName) =>
           this.fetchContextLengthForModel(server, modelName),
-        probeTools: (server, modelName) => this.probeToolsForServer(server, modelName),
         onSave: async (profile) => {
           this.plugin.settings.chatModelProfiles.push(profile);
           if (this.plugin.settings.chatModelProfiles.length === 1) {
@@ -273,7 +318,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
             fetchModels: (server) => this.fetchModelsForServer(server),
             fetchContextLength: (server, modelName) =>
               this.fetchContextLengthForModel(server, modelName),
-            probeTools: (server, modelName) => this.probeToolsForServer(server, modelName),
             onSave: async (updatedProfile) => {
               Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
               await this.plugin.saveSettings();
@@ -282,6 +326,16 @@ export class IxplorerSettingTab extends PluginSettingTab {
           }).open();
         },
         extraActions: [
+          {
+            icon: "refresh-cw",
+            className: "ixplorer-settings__refresh-capabilities-action",
+            label: "Refresh capabilities",
+            onClick: async () => {
+              await this.refreshMetadataCapabilities();
+              this.startChatProfileProbes(profile.id);
+              new Notice(`Refreshing capabilities for ${profile.name}.`);
+            },
+          },
           {
             icon: "star",
             className: "ixplorer-settings__default-action",
@@ -321,11 +375,11 @@ export class IxplorerSettingTab extends PluginSettingTab {
         profiles: this.plugin.settings.embeddingModelProfiles,
         fetchedModelsByServerId: this.fetchedModelsByServerId,
         fetchModels: (server) => this.fetchModelsForServer(server),
-        verifyEmbedding: (server, modelName) => this.verifyEmbeddingForServer(server, modelName),
         onSave: async (profile) => {
           this.plugin.settings.embeddingModelProfiles.push(profile);
           await this.plugin.saveSettings();
           this.display();
+          this.startEmbeddingProfileProbe(profile.id);
         },
       }).open();
     });
@@ -342,12 +396,11 @@ export class IxplorerSettingTab extends PluginSettingTab {
             profiles: this.plugin.settings.embeddingModelProfiles,
             fetchedModelsByServerId: this.fetchedModelsByServerId,
             fetchModels: (server) => this.fetchModelsForServer(server),
-            verifyEmbedding: (server, modelName) =>
-              this.verifyEmbeddingForServer(server, modelName),
             onSave: async (updatedProfile) => {
               Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
               await this.plugin.saveSettings();
               this.display();
+              this.startEmbeddingProfileProbe(updatedProfile.id);
             },
           }).open();
         },
@@ -477,6 +530,52 @@ export class IxplorerSettingTab extends PluginSettingTab {
     return verifyEmbeddingCapability(server, modelName, { logger: this.plugin.logger });
   }
 
+  private startEmbeddingProfileProbe(profileId: string): void {
+    const savedProfile = this.plugin.settings.embeddingModelProfiles.find(
+      (profile) => profile.id === profileId,
+    );
+    if (!savedProfile) return;
+    const server = this.plugin.settings.serverProfiles.find(
+      (profile) => profile.id === savedProfile.serverProfileId && profile.isSuspended !== true,
+    );
+    if (!server) return;
+    const target = {
+      profileId,
+      serverProfileId: savedProfile.serverProfileId,
+      modelName: savedProfile.modelName,
+    };
+    void this.verifyEmbeddingForServer(server, target.modelName)
+      .then(async (verified) => {
+        const profile = this.plugin.settings.embeddingModelProfiles.find(
+          (candidate) =>
+            candidate.id === target.profileId &&
+            candidate.serverProfileId === target.serverProfileId &&
+            candidate.modelName === target.modelName,
+        );
+        if (!profile) return;
+        profile.capabilities ??= {
+          chat: false,
+          embeddings: verified,
+          detectionSource: "probe",
+        };
+        profile.capabilities.embeddings = verified;
+        profile.capabilities.detectionSource = "probe";
+        if (verified) {
+          if (profile.suspendedReason === "Embedding capability could not be verified.") {
+            profile.isSuspended = false;
+            profile.suspendedReason = undefined;
+          }
+        } else {
+          profile.isSuspended = true;
+          profile.suspendedReason = "Embedding capability could not be verified.";
+        }
+        profile.updatedAt = new Date().toISOString();
+        await this.plugin.saveSettings();
+        this.display();
+      })
+      .catch(() => new Notice(`Capability detection failed for ${savedProfile.name}.`));
+  }
+
   private async probeToolsForServer(
     server: ServerProfile,
     modelName: string,
@@ -491,6 +590,127 @@ export class IxplorerSettingTab extends PluginSettingTab {
       model: modelName,
       apiFormat: server.apiFormat,
     });
+  }
+
+  private startChatProfileProbes(profileId: string): void {
+    const savedProfile = this.plugin.settings.chatModelProfiles.find(
+      (profile) => profile.id === profileId,
+    );
+    if (!savedProfile) return;
+    const server = this.plugin.settings.serverProfiles.find(
+      (profile) => profile.id === savedProfile.serverProfileId && profile.isSuspended !== true,
+    );
+    if (!server) return;
+    const target = {
+      profileId,
+      serverProfileId: savedProfile.serverProfileId,
+      modelName: savedProfile.modelName,
+    };
+    const shouldProbeResponses =
+      server.apiFormat === "openai-compatible" &&
+      savedProfile.reasoning.mode !== "off" &&
+      !isResponsesCapabilityCurrent(
+        savedProfile.reasoningCapabilities,
+        server,
+        savedProfile.modelName,
+      );
+
+    startChatProfileProbeTasks({
+      probeTools: () => this.probeToolsForServer(server, target.modelName),
+      probeReasoning: () =>
+        probeReasoningVisibility({
+          provider: new ChatModelClient({
+            apiFormat: server.apiFormat,
+            baseUrl: server.baseUrl,
+            apiKey: server.apiKey,
+            logger: this.plugin.logger,
+          }),
+          model: target.modelName,
+        }),
+      probeResponses: shouldProbeResponses
+        ? () =>
+            probeResponsesCapabilities({
+              server,
+              model: target.modelName,
+              efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
+              logger: this.plugin.logger,
+            })
+        : undefined,
+      onTools: async (probe) => {
+        await this.updateChatProfileAfterProbe(target, (profile) => {
+          profile.capabilities ??= {
+            chat: true,
+            embeddings: false,
+            detectionSource: "probe",
+          };
+          profile.capabilities.toolCalling = {
+            formatDefault: {
+              ...(profile.capabilities.toolCalling?.formatDefault ??
+                createToolCapabilitySettings(false).formatDefault),
+            },
+            probe,
+          };
+          profile.capabilities.tools = probe.calls;
+        });
+      },
+      onResponses: async (reasoningCapabilities) => {
+        await this.updateChatProfileAfterProbe(target, (profile) => {
+          profile.reasoningCapabilities = reasoningCapabilities;
+          profile.reasoning.summary = reasoningCapabilities.summary ? "auto" : "off";
+          if (!profile.reasoning.effort && reasoningCapabilities.defaultEffort) {
+            profile.reasoning.effort = reasoningCapabilities.defaultEffort;
+          }
+        });
+      },
+      onReasoning: async (result) => {
+        const currentProfile = this.plugin.settings.chatModelProfiles.find(
+          (candidate) =>
+            candidate.id === target.profileId &&
+            candidate.serverProfileId === target.serverProfileId &&
+            candidate.modelName === target.modelName,
+        );
+        if (!currentProfile) return;
+        const identity = {
+          baseUrl: server.baseUrl,
+          apiKey: server.apiKey,
+          model: target.modelName,
+          protocol: "chat-completions" as const,
+        };
+        const key = capabilityCacheKey(identity);
+        const current =
+          this.plugin.settings.modelCapabilityCache[key] ?? unknownSnapshot(result.checkedAt);
+        this.plugin.settings.modelCapabilityCache[key] = {
+          ...current,
+          reasoning: {
+            ...current.reasoning,
+            visibleOutput: result.visible ? "supported" : "unsupported",
+          },
+          source: "probe",
+          checkedAt: result.checkedAt,
+          expiresAt: result.expiresAt,
+        };
+        await this.plugin.saveSettings();
+        this.display();
+      },
+      onError: () => new Notice(`Capability detection failed for ${savedProfile.name}.`),
+    });
+  }
+
+  private async updateChatProfileAfterProbe(
+    target: { profileId: string; serverProfileId: string; modelName: string },
+    update: (profile: ChatModelProfile) => void,
+  ): Promise<void> {
+    const profile = this.plugin.settings.chatModelProfiles.find(
+      (candidate) =>
+        candidate.id === target.profileId &&
+        candidate.serverProfileId === target.serverProfileId &&
+        candidate.modelName === target.modelName,
+    );
+    if (!profile) return;
+    update(profile);
+    profile.updatedAt = new Date().toISOString();
+    await this.plugin.saveSettings();
+    this.display();
   }
 
   private async fetchContextLengthForModel(
@@ -722,14 +942,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Use web for freshness questions")
-      .setDesc("Give web evidence more budget when a question asks for current, latest, price, or release information.")
+      .setDesc(
+        "Give web evidence more budget when a question asks for current, latest, price, or release information.",
+      )
       .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.useWebWhenFreshnessNeeded)
-          .onChange(async (value) => {
-            this.plugin.settings.useWebWhenFreshnessNeeded = value;
-            await this.plugin.saveSettings();
-          }),
+        toggle.setValue(this.plugin.settings.useWebWhenFreshnessNeeded).onChange(async (value) => {
+          this.plugin.settings.useWebWhenFreshnessNeeded = value;
+          await this.plugin.saveSettings();
+        }),
       );
   }
 }
@@ -740,11 +960,7 @@ interface ProfileStatus {
   title: string;
 }
 
-function renderCategoryHeading(
-  containerEl: HTMLElement,
-  name: string,
-  description?: string,
-): void {
+function renderCategoryHeading(containerEl: HTMLElement, name: string, description?: string): void {
   const setting = new Setting(containerEl).setName(name).setHeading();
 
   if (description) {
@@ -1542,12 +1758,7 @@ interface ModelProfileModalOptions<TProfile extends ModelProfile> {
   profiles: TProfile[];
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   fetchModels(server: ServerProfile): Promise<DiscoveredModel[]>;
-  fetchContextLength?: (
-    server: ServerProfile,
-    modelName: string,
-  ) => Promise<number | undefined>;
-  verifyEmbedding?: (server: ServerProfile, modelName: string) => Promise<boolean>;
-  probeTools?: (server: ServerProfile, modelName: string) => Promise<ToolCapabilityLayer>;
+  fetchContextLength?: (server: ServerProfile, modelName: string) => Promise<number | undefined>;
   onSave(profile: TProfile): Promise<void>;
 }
 
@@ -1566,6 +1777,28 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.kind === "chat" && this.options.profile && "maxTokens" in this.options.profile
       ? (this.options.profile.maxTokens?.toString() ?? "")
       : "";
+  private toolsEnabled =
+    this.options.kind === "chat" && this.options.profile && "toolsEnabled" in this.options.profile
+      ? this.options.profile.toolsEnabled
+      : true;
+  private reasoningMode =
+    this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
+      ? this.options.profile.reasoning.mode
+      : "auto";
+  private reasoningEffort =
+    this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
+      ? (this.options.profile.reasoning.effort ?? "")
+      : "";
+  private reasoningSummary: "off" | "auto" =
+    this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
+      ? this.options.profile.reasoning.summary
+      : "off";
+  private reasoningCapabilities =
+    this.options.kind === "chat" &&
+    this.options.profile &&
+    "reasoningCapabilities" in this.options.profile
+      ? this.options.profile.reasoningCapabilities
+      : undefined;
   private contextLength =
     this.options.kind === "chat"
       ? (this.options.profile?.capabilities?.contextLength?.toString() ?? "")
@@ -1580,11 +1813,6 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     : (this.options.profile?.capabilities?.tools ?? false);
   private toolCapabilitySettings: ToolCapabilitySettings =
     this.options.profile?.capabilities?.toolCalling ?? createToolCapabilitySettings(false);
-  private capabilityToolsToggle?: import("obsidian").ToggleComponent;
-  private readonly toolCapabilitySettingRows = new Map<
-    "choiceRequired" | "choiceSpecific" | "parallelCalls",
-    Setting
-  >();
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
@@ -1602,7 +1830,6 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
-    this.toolCapabilitySettingRows.clear();
     contentEl.createEl("h2", {
       text: this.options.profile
         ? `Edit ${this.options.kind} model profile`
@@ -1630,6 +1857,14 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         dropdown.setValue(this.serverProfileId).onChange((value) => {
           this.serverProfileId = value;
           this.modelName = "";
+          this.reasoningCapabilities = undefined;
+          this.toolCapabilitySettings = createToolCapabilitySettings(false);
+          this.capabilityTools = false;
+          if (this.selectedServer()?.apiFormat !== "openai-compatible") {
+            this.reasoningMode = "off";
+          } else {
+            this.reasoningMode = "auto";
+          }
           this.refreshModelControl();
         });
       });
@@ -1643,7 +1878,13 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           .setPlaceholder("Fetch models, then type to filter")
           .setValue(this.modelName)
           .onChange((value) => {
-            this.modelName = value.trim();
+            const nextModelName = value.trim();
+            if (nextModelName !== this.modelName) {
+              this.reasoningCapabilities = undefined;
+              this.toolCapabilitySettings = createToolCapabilitySettings(false);
+              this.capabilityTools = false;
+            }
+            this.modelName = nextModelName;
             this.renderModelMenu();
           });
         text.inputEl.addClass("ixplorer-profile-modal__model-input");
@@ -1672,9 +1913,13 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         }),
       );
 
-    this.renderCapabilityControls(contentEl);
+    if (this.options.kind === "embedding") {
+      this.renderEmbeddingCapabilityControls(contentEl);
+    }
 
     if (this.options.kind === "chat") {
+      this.renderToolsControl(contentEl);
+      this.renderReasoningControls(contentEl);
       new Setting(contentEl)
         .setName("Temperature")
         .setDesc("Optional. Controls response randomness; blank uses the provider or app default.")
@@ -1777,6 +2022,11 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         },
       });
       option.addEventListener("click", () => {
+        if (this.modelName !== model.name) {
+          this.reasoningCapabilities = undefined;
+          this.toolCapabilitySettings = createToolCapabilitySettings(false);
+          this.capabilityTools = false;
+        }
         this.modelName = model.name;
         this.modelInputEl!.value = model.name;
         this.closeModelMenu();
@@ -1871,10 +2121,18 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       return;
     }
 
-    if (this.options.kind === "embedding") {
-      const verified = await this.options.verifyEmbedding?.(server, this.modelName);
-      if (!verified) {
-        new Notice("Embedding capability could not be verified.");
+    if (this.options.kind === "chat") {
+      const allowedEfforts = this.reasoningCapabilities?.efforts;
+      if (
+        this.reasoningEffort &&
+        allowedEfforts &&
+        !allowedEfforts.includes(this.reasoningEffort)
+      ) {
+        new Notice("Reasoning effort must be provider-default or capability-verified.");
+        return;
+      }
+      if (this.reasoningSummary === "auto" && this.reasoningCapabilities?.summary === false) {
+        new Notice("Reasoning summaries were not verified for this profile.");
         return;
       }
     }
@@ -1896,6 +2154,13 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       this.options.kind === "chat"
         ? {
             ...baseProfile,
+            toolsEnabled: this.toolsEnabled,
+            reasoning: {
+              mode: this.reasoningMode,
+              ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
+              summary: this.reasoningSummary,
+            },
+            reasoningCapabilities: this.reasoningCapabilities,
             temperature: optionalNumber(this.temperature),
             maxTokens: parsePositiveInteger(this.maxTokens) ?? undefined,
           }
@@ -1914,17 +2179,13 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       embeddings: this.capabilityEmbeddings,
       vision: this.capabilityVision,
       tools: this.capabilityTools,
-      toolCalling: {
-        ...this.toolCapabilitySettings,
-        manual: {
-          ...(this.toolCapabilitySettings.manual ?? {}),
-          calls: this.capabilityTools,
-        },
-      },
-      temperature: model?.capabilities.temperature ?? this.options.profile?.capabilities?.temperature,
+      toolCalling: this.toolCapabilitySettings,
+      temperature:
+        model?.capabilities.temperature ?? this.options.profile?.capabilities?.temperature,
       maxTokens: model?.capabilities.maxTokens ?? this.options.profile?.capabilities?.maxTokens,
       contextLength,
-      maxOutputTokens: model?.capabilities.maxOutputTokens ?? this.options.profile?.capabilities?.maxOutputTokens,
+      maxOutputTokens:
+        model?.capabilities.maxOutputTokens ?? this.options.profile?.capabilities?.maxOutputTokens,
       detectionSource:
         model?.capabilities.detectionSource ??
         this.options.profile?.capabilities?.detectionSource ??
@@ -1932,7 +2193,7 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     };
   }
 
-  private renderCapabilityControls(containerEl: HTMLElement): void {
+  private renderEmbeddingCapabilityControls(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName("Chat")
       .setDesc(
@@ -1961,82 +2222,47 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           this.capabilityVision = value;
         }),
       );
+  }
 
+  private renderReasoningControls(containerEl: HTMLElement): void {
     new Setting(containerEl)
-      .setName("Tools")
-      .setDesc("The model supports function/tool calling. Note tools are enabled only when this is on.")
-      .addToggle((toggle) => {
-        this.capabilityToolsToggle = toggle;
-        toggle.setValue(this.capabilityTools).onChange((value) => {
-          this.capabilityTools = value;
-          this.toolCapabilitySettings.manual = {
-            ...(this.toolCapabilitySettings.manual ?? {}),
-            calls: value,
-          };
+      .setName("Reasoning")
+      .setDesc(
+        "Reasoning output is detected for any compatible stream. Verified Responses support enables native continuation and controls.",
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("off", "Off")
+          .addOption("auto", "Auto")
+          .addOption("on", "On")
+          .setValue(this.reasoningMode)
+          .onChange((value) => {
+            this.reasoningMode = value as "off" | "auto" | "on";
+          }),
+      );
+    const effortValues = new Set(this.reasoningCapabilities?.efforts ?? []);
+    if (this.reasoningEffort) effortValues.add(this.reasoningEffort);
+    new Setting(containerEl)
+      .setName("Reasoning effort")
+      .setDesc("Auto uses the provider default or a required detected value.")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "Auto");
+        for (const effort of effortValues) dropdown.addOption(effort, effort);
+        dropdown.setValue(this.reasoningEffort).onChange((value) => {
+          this.reasoningEffort = value;
         });
       });
-
-    if (this.options.kind === "chat") {
-      this.renderToolControlOverride(containerEl, "Required tool choice", "choiceRequired");
-      this.renderToolControlOverride(containerEl, "Specific tool choice", "choiceSpecific");
-      this.renderToolControlOverride(containerEl, "Parallel tool calls", "parallelCalls");
-      new Setting(containerEl)
-        .setName("Probe tool controls")
-        .setDesc("Runs isolated synthetic calls. It never sends vault, note, index, web, or skill data.")
-        .addButton((button) => button.setButtonText("Probe").onClick(async () => {
-          const target = {
-            server: this.selectedServer(),
-            modelName: this.modelName,
-            probe: this.options.probeTools,
-          };
-          if (!canProbeToolCapabilities(target)) {
-            new Notice("Select a provider and model first.");
-            return;
-          }
-          button.setDisabled(true);
-          try {
-            const probe = await target.probe(target.server, target.modelName);
-            this.toolCapabilitySettings = withProbeResults(this.toolCapabilitySettings, probe);
-            this.refreshToolCapabilityControls();
-            new Notice("Tool-control probe completed. Save the profile to persist the result.");
-          } finally {
-            button.setDisabled(false);
-          }
-        }));
-    }
   }
 
-  private renderToolControlOverride(
-    containerEl: HTMLElement,
-    name: string,
-    flag: "choiceRequired" | "choiceSpecific" | "parallelCalls",
-  ): void {
-    const manual = this.toolCapabilitySettings.manual?.[flag];
-    const setting = new Setting(containerEl)
-      .setName(name)
-      .setDesc(describeToolCapability(this.toolCapabilitySettings, flag))
-      .addDropdown((dropdown) => dropdown
-        .addOption("auto", "Detected/default")
-        .addOption("true", "Enabled override")
-        .addOption("false", "Disabled override")
-        .setValue(manual === undefined ? "auto" : String(manual))
-        .onChange((value) => {
-          const next = { ...(this.toolCapabilitySettings.manual ?? {}) };
-          if (value === "auto") delete next[flag];
-          else next[flag] = value === "true";
-          this.toolCapabilitySettings.manual = next;
-          this.refreshToolCapabilityControls();
-        }));
-    this.toolCapabilitySettingRows.set(flag, setting);
-  }
-
-  private refreshToolCapabilityControls(): void {
-    const effective = resolveToolCapabilities(this.toolCapabilitySettings).capabilities;
-    this.capabilityTools = effective.calls;
-    this.capabilityToolsToggle?.setValue(effective.calls);
-    for (const [flag, setting] of this.toolCapabilitySettingRows) {
-      setting.setDesc(describeToolCapability(this.toolCapabilitySettings, flag));
-    }
+  private renderToolsControl(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Tools")
+      .setDesc("Allow this profile to use tools when support is detected in the background.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.toolsEnabled).onChange((value) => {
+          this.toolsEnabled = value;
+        }),
+      );
   }
 }
 

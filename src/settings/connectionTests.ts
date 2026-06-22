@@ -11,11 +11,14 @@ import { toUserMessage } from "../shared/errors";
 import { ApiFormat } from "../shared/types";
 import type { PluginRequestLogger } from "./debugLogger";
 import { ModelCapability, ServerProfile } from "./settings";
+import type { ModelCapabilitySnapshot } from "./modelCapabilityCache";
+import { resolveCapabilityMetadata } from "./capabilityMetadataResolver";
 
 export interface DiscoveredModel {
   id: string;
   name: string;
   capabilities: ModelCapability;
+  capabilitySnapshot?: ModelCapabilitySnapshot;
 }
 
 export interface ModelDiscoveryResult {
@@ -171,6 +174,7 @@ async function fetchOpenAiCompatibleModels(
 
   return body.data.map((model) => {
     const contextLength = contextLengthFromModelMetadata(model);
+    const capabilitySnapshot = resolveCapabilityMetadata(model);
     return {
       id: model.id,
       name: model.id,
@@ -180,6 +184,7 @@ async function fetchOpenAiCompatibleModels(
           ? { contextLength, detectionSource: "metadata" as const }
           : {}),
       },
+      ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
     };
   });
 }

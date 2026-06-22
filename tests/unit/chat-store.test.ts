@@ -142,6 +142,36 @@ describe("FileChatStore", () => {
     expect(await store.loadChat(first.id)).toEqual(second);
   });
 
+  it("persists segmented reasoning separately from the assistant answer", async () => {
+    const store = new FileChatStore({ folder, createId: () => "reasoning" });
+
+    await store.saveChat({
+      messages: [
+        {
+          role: "assistant",
+          content: "Final answer",
+          createdAt: "2026-06-10T10:00:00.000Z",
+          reasoning: [
+            { id: "reasoning-0", content: "First summary" },
+            { id: "reasoning-1", content: "Second summary" },
+          ],
+          reasoningOpen: false,
+        },
+      ],
+      lastAnswer: null,
+      attachedContextPaths: [],
+    });
+
+    expect((await store.loadChat("reasoning"))?.messages[0]).toMatchObject({
+      content: "Final answer",
+      reasoning: [
+        { id: "reasoning-0", content: "First summary" },
+        { id: "reasoning-1", content: "Second summary" },
+      ],
+      reasoningOpen: false,
+    });
+  });
+
   it("writes JSON atomically without leaving temporary files", async () => {
     const store = new FileChatStore({
       folder,

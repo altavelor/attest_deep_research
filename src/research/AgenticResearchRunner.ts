@@ -3,11 +3,17 @@ import {
   ChatModelProvider,
   ChatRequest,
   ChatToolCall,
+  ModelRoundProvider,
+  ModelRoundDelta,
+  ModelRoundRequest,
+  ModelToolOutput,
+  ProviderContinuationState,
   ToolCallDiagnostic,
 } from "../shared/types";
 import { ResearchExecutionPolicy } from "./ResearchExecutionPolicy";
 import { ResearchToolRegistry } from "./tools/ResearchToolRegistry";
 import { researchToolExecutionPayload, ResearchToolExecution } from "./tools/ResearchTools";
+import { ChatCompletionsRoundAdapter } from "../client/chat/ChatCompletionsRoundAdapter";
 
 export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -22,6 +28,7 @@ export type AgenticFallbackReason =
 
 export interface AgenticResearchRunnerOptions {
   chatModel: ChatModelProvider;
+  modelRound?: ModelRoundProvider;
   model: string;
   messages: ChatMessage[];
   tools: ResearchToolRegistry;
@@ -33,6 +40,10 @@ export interface AgenticResearchRunnerOptions {
   maxCallsPerRound?: number;
   maxTotalCalls?: number;
   maxResultChars?: number;
+  reasoning?: ModelRoundRequest["reasoning"];
+  onDelta?(delta: ModelRoundDelta, round: number): void;
+  onAnswerReset?(): void;
+  onRoundClassified?(round: number, classification: "intermediate" | "final"): void;
 }
 
 export type AgenticResearchResult = AgenticResearchSuccess | AgenticResearchFailure;
@@ -49,6 +60,9 @@ export interface AgenticResearchSuccess {
   phases: string[];
   stopReasons: string[];
   totalResultChars: number;
+  reasoningItemCount: number;
+  continuationRounds: number;
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
 export interface AgenticResearchFailure {
@@ -63,6 +77,9 @@ export interface AgenticResearchFailure {
   phases: string[];
   stopReasons: string[];
   totalResultChars: number;
+  reasoningItemCount: number;
+  continuationRounds: number;
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
 const DEFAULT_MAX_ROUNDS = 5;
@@ -79,7 +96,11 @@ interface CachedExecution {
 }
 
 export class AgenticResearchRunner {
-  constructor(private readonly options: AgenticResearchRunnerOptions) {}
+  private readonly modelRound: ModelRoundProvider;
+
+  constructor(private readonly options: AgenticResearchRunnerOptions) {
+    this.modelRound = options.modelRound ?? new ChatCompletionsRoundAdapter(options.chatModel);
+  }
 
   async run(): Promise<AgenticResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
@@ -101,6 +122,11 @@ export class AgenticResearchRunner {
     let rounds = 0;
     const phases: string[] = [];
     const stopReasons: string[] = [];
+    let continuation: ProviderContinuationState | undefined;
+    let toolOutputs: ModelToolOutput[] | undefined;
+    let reasoningItemCount = 0;
+    let continuationRounds = 0;
+    const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
 
     const failure = (reason: AgenticFallbackReason): AgenticResearchFailure => ({
       ok: false,
@@ -114,6 +140,9 @@ export class AgenticResearchRunner {
       phases,
       stopReasons,
       totalResultChars,
+      reasoningItemCount,
+      continuationRounds,
+      usage,
     });
 
     try {
@@ -127,12 +156,33 @@ export class AgenticResearchRunner {
             : phase === "repair"
               ? { type: "specific", name: repairTool! }
               : { type: "auto" };
-        const response = await collectRound(this.options, messages, toolChoice);
-        stopReasons.push(response.toolCalls.length > 0 ? "tool_calls" : "complete");
+        const response = await collectRound(
+          this.options,
+          this.modelRound,
+          messages,
+          toolChoice,
+          continuation,
+          toolOutputs,
+          round,
+        );
+        continuation = response.continuation;
+        reasoningItemCount += response.reasoningItemCount;
+        if (continuation) continuationRounds += 1;
+        usage.inputTokens += response.usage.inputTokens;
+        usage.outputTokens += response.usage.outputTokens;
+        usage.reasoningTokens += response.usage.reasoningTokens;
+        toolOutputs = undefined;
+        stopReasons.push(response.stopReason);
+        if (response.stopReason === "length" || response.stopReason === "error") {
+          return failure(
+            response.stopReason === "length" ? "context-limit-exceeded" : "provider-error",
+          );
+        }
 
         if (response.toolCalls.length === 0) {
           const missing = missingTools(required, satisfied);
           if (missing.length === 0 && phase !== "repair") {
+            this.options.onRoundClassified?.(round, "final");
             return {
               ok: true,
               answerText: response.content,
@@ -145,9 +195,13 @@ export class AgenticResearchRunner {
               phases,
               stopReasons,
               totalResultChars,
+              reasoningItemCount,
+              continuationRounds,
+              usage,
             };
           }
           if (phase === "bootstrap" && missing.length === 1) {
+            this.options.onRoundClassified?.(round, "intermediate");
             phase = "repair";
             repairTool = missing[0];
             continue;
@@ -157,17 +211,25 @@ export class AgenticResearchRunner {
           );
         }
 
+        if (response.streamedText) {
+          this.options.onRoundClassified?.(round, "intermediate");
+        }
+
         if (
           response.toolCalls.length > maxCallsPerRound ||
           totalCalls + response.toolCalls.length > maxTotalCalls
         ) {
           return failure("tool-call-limit-exceeded");
         }
-        messages.push({
-          role: "assistant",
-          content: response.content,
-          toolCalls: response.toolCalls,
-        });
+        if (!continuation) {
+          messages.push({
+            role: "assistant",
+            content: response.content,
+            toolCalls: response.toolCalls,
+          });
+        } else {
+          toolOutputs = [];
+        }
 
         for (const call of response.toolCalls) {
           totalCalls += 1;
@@ -209,7 +271,11 @@ export class AgenticResearchRunner {
               : {}),
             ...(execution.diagnostic ? { metadata: execution.diagnostic } : {}),
           });
-          messages.push({ role: "tool", content: execution.result, toolCallId: call.id });
+          if (continuation) {
+            toolOutputs!.push({ callId: call.id, output: execution.result });
+          } else {
+            messages.push({ role: "tool", content: execution.result, toolCallId: call.id });
+          }
         }
 
         const missing = missingTools(required, satisfied);
@@ -236,18 +302,32 @@ export class AgenticResearchRunner {
       return failure(
         this.options.signal?.aborted || isAbortError(error) ? "cancelled" : "provider-error",
       );
+    } finally {
+      continuation?.dispose();
     }
   }
 }
 
 async function collectRound(
   options: AgenticResearchRunnerOptions,
+  modelRound: ModelRoundProvider,
   messages: ChatMessage[],
   toolChoice: ChatRequest["toolChoice"],
-): Promise<{ content: string; toolCalls: ChatToolCall[] }> {
-  let content = "";
-  const toolCalls: ChatToolCall[] = [];
-  for await (const chunk of options.chatModel.streamChat({
+  continuation?: ProviderContinuationState,
+  toolOutputs?: ModelToolOutput[],
+  round = 1,
+): Promise<{
+  content: string;
+  toolCalls: ChatToolCall[];
+  continuation?: ProviderContinuationState;
+  stopReason: "complete" | "tool_calls" | "length" | "error";
+  reasoningItemCount: number;
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  streamedText: boolean;
+}> {
+  let streamedText = false;
+  let streamedReasoning = false;
+  const result = await modelRound.runRound({
     model: options.model,
     messages,
     tools: options.tools.definitions(),
@@ -256,12 +336,50 @@ async function collectRound(
     temperature: options.temperature,
     maxTokens: options.maxTokens,
     signal: options.signal,
-  })) {
-    content += chunk.content;
-    if (chunk.toolCalls) toolCalls.push(...chunk.toolCalls);
-    if (chunk.isComplete) break;
+    continuation,
+    toolOutputs,
+    reasoning: options.reasoning,
+    onDelta: (delta) => {
+      if (delta.type === "text") streamedText = true;
+      else streamedReasoning = true;
+      options.onDelta?.(
+        delta.type === "reasoningSummary" && delta.segmentId
+          ? { ...delta, segmentId: `round-${round}-${delta.segmentId}` }
+          : delta,
+        round,
+      );
+    },
+  });
+  const content = result.items
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("");
+  if (!streamedText && content) {
+    streamedText = true;
+    options.onDelta?.({ type: "text", text: content }, round);
   }
-  return { content, toolCalls };
+  if (!streamedReasoning) {
+    const summaries = result.items.filter((item) => item.type === "reasoningSummary");
+    for (let index = 0; index < summaries.length; index += 1) {
+      options.onDelta?.(
+        {
+          type: "reasoningSummary",
+          segmentId: `reasoning-${round}-${index}`,
+          text: summaries[index].text,
+        },
+        round,
+      );
+    }
+  }
+  return {
+    content,
+    toolCalls: result.items.filter((item) => item.type === "toolCall").map((item) => item.call),
+    continuation: result.continuation,
+    stopReason: result.stopReason,
+    reasoningItemCount: result.reasoningItemCount ?? 0,
+    usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    streamedText,
+  };
 }
 
 function serializeExecution(execution: ResearchToolExecution<unknown>): CachedExecution {

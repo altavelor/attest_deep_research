@@ -1,14 +1,20 @@
 import {
   ChatMessage,
   ChatModelProvider,
-  ChatRequest,
   ChatToolCall,
   ChatToolDefinition,
+  ModelRoundProvider,
+  ModelRoundRequest,
+  ModelToolOutput,
+  ProviderContinuationState,
   ToolCallDiagnostic,
 } from "../../shared/types";
+import { ChatCompletionsRoundAdapter } from "../../client/chat/ChatCompletionsRoundAdapter";
+import { IxplorerError } from "../../shared/errors";
 
 export interface ToolLoopRunnerOptions {
   chatModel: ChatModelProvider;
+  modelRound?: ModelRoundProvider;
   model: string;
   messages: ChatMessage[];
   tools: ChatToolDefinition[];
@@ -21,17 +27,27 @@ export interface ToolLoopRunnerOptions {
   maxToolCallsPerRound?: number;
   maxTotalResultChars?: number;
   signal?: AbortSignal;
+  reasoning?: ModelRoundRequest["reasoning"];
+  onEvent?(event: ToolLoopEvent): void;
 }
 
-export interface ToolLoopEvent {
-  type: "delta" | "complete";
-  content: string;
-}
+export type ToolLoopEvent =
+  | { type: "delta"; content: string }
+  | { type: "reasoning"; segmentId: string; content: string }
+  | { type: "checkpoint-delta"; checkpointId: string; round: number; content: string }
+  | { type: "checkpoint-complete"; checkpointId: string; round: number }
+  | { type: "checkpoint-promote"; checkpointId: string; round: number }
+  | { type: "answer-reset" }
+  | { type: "complete"; content: string };
 
 export interface ToolLoopResult {
   events: ToolLoopEvent[];
   answerText: string;
   diagnostics: ToolCallDiagnostic[];
+  reasoningSummaries: string[];
+  reasoningItemCount: number;
+  continuationRounds: number;
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
 const DEFAULT_MAX_ROUNDS = 5;
@@ -48,131 +64,259 @@ export async function runToolLoop(options: ToolLoopRunnerOptions): Promise<ToolL
   const maxTotalResultChars = options.maxTotalResultChars ?? DEFAULT_MAX_TOTAL_RESULT_CHARS;
   let totalResultChars = 0;
   let answerText = "";
+  const reasoningSummaries: string[] = [];
+  let reasoningItemCount = 0;
+  let continuationRounds = 0;
+  const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+  const modelRound = options.modelRound ?? new ChatCompletionsRoundAdapter(options.chatModel);
+  let continuation: ProviderContinuationState | undefined;
+  let toolOutputs: ModelToolOutput[] | undefined;
 
-  for (let round = 1; round <= maxRounds; round += 1) {
-    const roundResult = await collectModelRound({
-      chatModel: options.chatModel,
-      model: options.model,
-      messages,
-      tools: options.tools,
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      signal: options.signal,
-    });
-
-    answerText = roundResult.content;
-
-    if (roundResult.toolCalls.length === 0) {
-      events.push(...roundResult.events, { type: "complete", content: "" });
-      return { events, answerText, diagnostics };
-    }
-
-    messages.push({
-      role: "assistant",
-      content: roundResult.content,
-      toolCalls: roundResult.toolCalls,
-    });
-
-    for (const toolCall of roundResult.toolCalls.slice(0, maxToolCallsPerRound)) {
-      const remainingChars = maxTotalResultChars - totalResultChars;
-      if (remainingChars <= 0) {
-        const result = JSON.stringify({ ok: false, reason: "tool-output-budget-exceeded" });
-        diagnostics.push({
-          id: toolCall.id,
-          name: toolCall.name,
-          status: "skipped",
-          arguments: toolCall.arguments,
-          round,
-          reason: "tool-output-budget-exceeded",
-        });
-        messages.push({
-          role: "tool",
-          content: result,
-          toolCallId: toolCall.id,
-        });
-        continue;
-      }
-
-      const execution = await options.executeTool(toolCall);
-      const result = truncateResult(execution.result, remainingChars);
-      totalResultChars += result.length;
-      diagnostics.push({
-        id: toolCall.id,
-        name: toolCall.name,
-        status: execution.ok ? "success" : "failed",
-        arguments: toolCall.arguments,
-        resultPreview: result.slice(0, RESULT_PREVIEW_CHARS),
-        resultBytes: result.length,
+  try {
+    for (let round = 1; round <= maxRounds; round += 1) {
+      const roundResult = await collectModelRound({
+        chatModel: options.chatModel,
+        modelRound,
+        model: options.model,
+        messages,
+        tools: options.tools,
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
+        signal: options.signal,
+        continuation,
+        toolOutputs,
+        reasoning: options.reasoning,
         round,
-        reason: result.length < execution.result.length ? "tool-output-truncated" : undefined,
-        metadata: execution.diagnostic,
+        onEvent: options.onEvent,
       });
-      messages.push({
-        role: "tool",
-        content: result,
-        toolCallId: toolCall.id,
-      });
-    }
+      continuation = roundResult.continuation;
+      reasoningSummaries.push(...roundResult.reasoningSummaries);
+      reasoningItemCount += roundResult.reasoningItemCount;
+      if (continuation) continuationRounds += 1;
+      usage.inputTokens += roundResult.usage.inputTokens;
+      usage.outputTokens += roundResult.usage.outputTokens;
+      usage.reasoningTokens += roundResult.usage.reasoningTokens;
+      toolOutputs = continuation ? [] : undefined;
 
-    if (roundResult.toolCalls.length > maxToolCallsPerRound) {
-      for (const toolCall of roundResult.toolCalls.slice(maxToolCallsPerRound)) {
-        const result = JSON.stringify({ ok: false, reason: "tool-call-limit-exceeded" });
+      answerText = roundResult.content;
+
+      if (roundResult.stopReason === "length" || roundResult.stopReason === "error") {
+        throw new IxplorerError({
+          code: "MODEL_PROVIDER_UNAVAILABLE",
+          details: { reason: `model-round-${roundResult.stopReason}` },
+        });
+      }
+
+      if (roundResult.toolCalls.length === 0) {
+        if (roundResult.streamedText) {
+          options.onEvent?.({
+            type: "checkpoint-promote",
+            checkpointId: `round-${round}`,
+            round,
+          });
+        }
+        events.push(...roundResult.events, { type: "complete", content: "" });
+        return {
+          events,
+          answerText,
+          diagnostics,
+          reasoningSummaries,
+          reasoningItemCount,
+          continuationRounds,
+          usage,
+        };
+      }
+
+      if (roundResult.streamedText) {
+        options.onEvent?.({
+          type: "checkpoint-complete",
+          checkpointId: `round-${round}`,
+          round,
+        });
+      }
+
+      if (!continuation) {
+        messages.push({
+          role: "assistant",
+          content: roundResult.content,
+          toolCalls: roundResult.toolCalls,
+        });
+      }
+
+      for (const toolCall of roundResult.toolCalls.slice(0, maxToolCallsPerRound)) {
+        const remainingChars = maxTotalResultChars - totalResultChars;
+        if (remainingChars <= 0) {
+          const result = JSON.stringify({ ok: false, reason: "tool-output-budget-exceeded" });
+          diagnostics.push({
+            id: toolCall.id,
+            name: toolCall.name,
+            status: "skipped",
+            arguments: toolCall.arguments,
+            round,
+            reason: "tool-output-budget-exceeded",
+          });
+          appendToolResult(messages, toolOutputs, toolCall.id, result);
+          continue;
+        }
+
+        const execution = await options.executeTool(toolCall);
+        const result = truncateResult(execution.result, remainingChars);
+        totalResultChars += result.length;
         diagnostics.push({
           id: toolCall.id,
           name: toolCall.name,
-          status: "skipped",
+          status: execution.ok ? "success" : "failed",
           arguments: toolCall.arguments,
+          resultPreview: result.slice(0, RESULT_PREVIEW_CHARS),
+          resultBytes: result.length,
           round,
-          reason: "tool-call-limit-exceeded",
+          reason: result.length < execution.result.length ? "tool-output-truncated" : undefined,
+          metadata: execution.diagnostic,
         });
-        messages.push({
-          role: "tool",
-          content: result,
-          toolCallId: toolCall.id,
-        });
+        appendToolResult(messages, toolOutputs, toolCall.id, result);
+      }
+
+      if (roundResult.toolCalls.length > maxToolCallsPerRound) {
+        for (const toolCall of roundResult.toolCalls.slice(maxToolCallsPerRound)) {
+          const result = JSON.stringify({ ok: false, reason: "tool-call-limit-exceeded" });
+          diagnostics.push({
+            id: toolCall.id,
+            name: toolCall.name,
+            status: "skipped",
+            arguments: toolCall.arguments,
+            round,
+            reason: "tool-call-limit-exceeded",
+          });
+          appendToolResult(messages, toolOutputs, toolCall.id, result);
+        }
       }
     }
+  } finally {
+    continuation?.dispose();
   }
 
-  return { events: [{ type: "complete", content: "" }], answerText, diagnostics };
+  return {
+    events: [{ type: "complete", content: "" }],
+    answerText,
+    diagnostics,
+    reasoningSummaries,
+    reasoningItemCount,
+    continuationRounds,
+    usage,
+  };
 }
 
 async function collectModelRound(options: {
   chatModel: ChatModelProvider;
+  modelRound: ModelRoundProvider;
   model: string;
   messages: ChatMessage[];
   tools: ChatToolDefinition[];
   temperature?: number;
   maxTokens?: number;
   signal?: AbortSignal;
-}): Promise<{ content: string; events: ToolLoopEvent[]; toolCalls: ChatToolCall[] }> {
+  continuation?: ProviderContinuationState;
+  toolOutputs?: ModelToolOutput[];
+  reasoning?: ModelRoundRequest["reasoning"];
+  round: number;
+  onEvent?: ToolLoopRunnerOptions["onEvent"];
+}): Promise<{
+  content: string;
+  events: ToolLoopEvent[];
+  toolCalls: ChatToolCall[];
+  continuation?: ProviderContinuationState;
+  reasoningSummaries: string[];
+  reasoningItemCount: number;
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  stopReason: "complete" | "tool_calls" | "length" | "error";
+  streamedText: boolean;
+}> {
   const events: ToolLoopEvent[] = [];
-  const toolCalls: ChatToolCall[] = [];
-  let content = "";
-
-  for await (const chunk of options.chatModel.streamChat({
+  const streamedText: string[] = [];
+  const streamedSummaries: string[] = [];
+  const result = await options.modelRound.runRound({
     model: options.model,
     messages: options.messages,
     tools: options.tools,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
     signal: options.signal,
-  } satisfies ChatRequest)) {
-    if (chunk.content) {
-      content += chunk.content;
-      events.push({ type: "delta", content: chunk.content });
-    }
-
-    if (chunk.toolCalls) {
-      toolCalls.push(...chunk.toolCalls);
-    }
-
-    if (chunk.isComplete) {
-      break;
+    continuation: options.continuation,
+    toolOutputs: options.toolOutputs,
+    reasoning: options.reasoning,
+    onDelta: (delta) => {
+      if (delta.type === "text") {
+        streamedText.push(delta.text);
+        options.onEvent?.({
+          type: "checkpoint-delta",
+          checkpointId: `round-${options.round}`,
+          round: options.round,
+          content: delta.text,
+        });
+      } else {
+        streamedSummaries.push(delta.text);
+        options.onEvent?.({
+          type: "reasoning",
+          segmentId: delta.segmentId
+            ? `round-${options.round}-${delta.segmentId}`
+            : `reasoning-${options.round}`,
+          content: delta.text,
+        });
+      }
+    },
+  } satisfies ModelRoundRequest);
+  const content = result.items
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("");
+  if (streamedText.length > 0) {
+    events.push(...streamedText.map((text) => ({ type: "delta" as const, content: text })));
+  } else if (content) {
+    events.push({ type: "delta", content });
+    options.onEvent?.({
+      type: "checkpoint-delta",
+      checkpointId: `round-${options.round}`,
+      round: options.round,
+      content,
+    });
+  }
+  const toolCalls = result.items
+    .filter((item) => item.type === "toolCall")
+    .map((item) => item.call);
+  const reasoningSummaries =
+    streamedSummaries.length > 0
+      ? streamedSummaries
+      : result.items.filter((item) => item.type === "reasoningSummary").map((item) => item.text);
+  if (streamedSummaries.length === 0) {
+    for (let index = 0; index < reasoningSummaries.length; index += 1) {
+      options.onEvent?.({
+        type: "reasoning",
+        segmentId: `reasoning-${options.round}-${index}`,
+        content: reasoningSummaries[index],
+      });
     }
   }
+  return {
+    content,
+    events,
+    toolCalls,
+    continuation: result.continuation,
+    reasoningSummaries,
+    reasoningItemCount: result.reasoningItemCount ?? 0,
+    usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    stopReason: result.stopReason,
+    streamedText: streamedText.length > 0 || content.length > 0,
+  };
+}
 
-  return { content, events, toolCalls };
+function appendToolResult(
+  messages: ChatMessage[],
+  toolOutputs: ModelToolOutput[] | undefined,
+  callId: string,
+  result: string,
+): void {
+  if (toolOutputs) toolOutputs.push({ callId, output: result });
+  else messages.push({ role: "tool", content: result, toolCallId: callId });
 }
 
 function truncateResult(value: string, maxChars: number): string {

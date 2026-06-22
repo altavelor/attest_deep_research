@@ -101,15 +101,18 @@ export function renderChatTranscript(
     if (message.role === "user" && options.editingMessageIndex === index) {
       renderQuestionEditor(contentEl, message, index, options);
     } else if (message.role === "assistant") {
+      const progressEl = contentEl.createDiv({ cls: "ixplorer-chat__research-progress-host" });
+      renderReasoningSegments(progressEl, message, options);
       const citationRefs = buildCitationRefs(message.evidence ?? []);
+      const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
       void MarkdownRenderer.render(
         options.app,
         messageMarkdownContent(message),
-        contentEl,
+        answerEl,
         "",
         options.markdownContext,
       ).then(() => {
-        renderInlineCitationAnchors(contentEl, citationRefs, options);
+        renderInlineCitationAnchors(answerEl, citationRefs, options);
       });
     } else {
       contentEl.setText(messageDisplayContent(message));
@@ -124,6 +127,96 @@ export function renderChatTranscript(
   });
 
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+export function patchActiveAssistantMessage(
+  transcriptEl: HTMLElement,
+  options: ChatTranscriptOptions,
+): boolean {
+  const message = [...options.messages]
+    .reverse()
+    .find((candidate) => candidate.kind !== "compact-summary");
+  if (message?.role !== "assistant") return false;
+  const messageElements = transcriptEl.querySelectorAll<HTMLElement>(".ixplorer-chat__message");
+  const messageEl = messageElements.item(messageElements.length - 1);
+  if (!messageEl?.classList.contains("ixplorer-chat__message--assistant")) return false;
+  const progressEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__research-progress-host");
+  const answerEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__answer-content");
+  if (!progressEl || !answerEl) return false;
+  progressEl.empty();
+  renderReasoningSegments(progressEl, message, options);
+  answerEl.empty();
+  const citationRefs = buildCitationRefs(message.evidence ?? []);
+  void MarkdownRenderer.render(
+    options.app,
+    messageMarkdownContent(message),
+    answerEl,
+    "",
+    options.markdownContext,
+  ).then(() => renderInlineCitationAnchors(answerEl, citationRefs, options));
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  return true;
+}
+
+function renderReasoningSegments(
+  containerEl: HTMLElement,
+  message: ChatDisplayMessage,
+  options: ChatTranscriptOptions,
+): void {
+  const progress = message.researchProgress;
+  const legacySegments = message.reasoning ?? [];
+  const segments = progress?.reasoning.segments ?? legacySegments;
+  const checkpoints = progress?.checkpoints ?? [];
+  if (segments.length === 0 && checkpoints.length === 0) return;
+  const details = containerEl.createEl("details", {
+    cls: "ixplorer-chat__reasoning",
+    attr: { "data-reasoning-id": "research-progress" },
+  });
+  details.open = progress
+    ? progress.disclosure === "user-open" ||
+      (progress.disclosure === "auto" && progress.phase === "streaming")
+    : message.reasoningOpen === true;
+  const duration = progress?.reasoning.durationMs;
+  const roundCount = new Set(checkpoints.map((checkpoint) => checkpoint.round)).size;
+  const label =
+    progress?.phase === "streaming"
+      ? "Thinking…"
+      : `Research progress${roundCount > 0 ? ` · ${roundCount} rounds` : ""}${duration !== undefined ? ` · ${formatDuration(duration)}` : ""}`;
+  details.createEl("summary", { cls: "ixplorer-chat__reasoning-summary", text: label });
+  details.addEventListener("toggle", () => {
+    if (progress) progress.disclosure = details.open ? "user-open" : "user-closed";
+  });
+  const reasoningEl = details.createDiv({ cls: "ixplorer-chat__reasoning-content" });
+  for (const segment of segments) {
+    const segmentEl = reasoningEl.createDiv({
+      cls: "ixplorer-chat__reasoning-segment",
+      attr: { "data-segment-id": segment.id },
+    });
+    void MarkdownRenderer.render(
+      options.app,
+      segment.content,
+      segmentEl,
+      "",
+      options.markdownContext,
+    );
+  }
+  for (const checkpoint of checkpoints) {
+    const checkpointEl = reasoningEl.createDiv({ cls: "ixplorer-chat__reasoning-checkpoint" });
+    checkpointEl.createEl("strong", {
+      text: `Provisional checkpoint ${checkpoint.round}`,
+    });
+    void MarkdownRenderer.render(
+      options.app,
+      checkpoint.content,
+      checkpointEl,
+      "",
+      options.markdownContext,
+    );
+  }
+}
+
+function formatDuration(durationMs: number): string {
+  return durationMs < 1_000 ? `${durationMs} ms` : `${(durationMs / 1_000).toFixed(1)} s`;
 }
 
 export function renderFollowUps(

@@ -7,7 +7,7 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "../indexing/FileVectorIndexStore";
-import { ApiFormat } from "../shared/types";
+import { ApiFormat, ChatApiProtocol } from "../shared/types";
 import { isRecord } from "../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../shared/numbers";
 import {
@@ -16,8 +16,10 @@ import {
 } from "../indexing/IndexDescription";
 import {
   normalizeToolCapabilitySettings,
+  resolveToolCapabilities,
   ToolCapabilitySettings,
 } from "./toolCapabilities";
+import { ModelCapabilitySnapshot, readModelCapabilityCache } from "./modelCapabilityCache";
 
 export interface ServerProfile {
   id: string;
@@ -41,6 +43,13 @@ export interface ModelCapability {
   maxTokens?: boolean;
   contextLength?: number;
   maxOutputTokens?: number;
+  reasoningObservation?: {
+    chatCompletions: boolean;
+    responses: boolean;
+    dialects: string[];
+    source: "passive-observation" | "metadata";
+    checkedAt: string;
+  };
   detectionSource: "metadata" | "probe" | "format-default";
 }
 
@@ -49,6 +58,9 @@ export interface ChatModelProfile {
   name: string;
   serverProfileId: string;
   modelName: string;
+  toolsEnabled: boolean;
+  reasoning: ReasoningProfileSettings;
+  reasoningCapabilities?: ReasoningCapabilitySettings;
   temperature?: number;
   maxTokens?: number;
   capabilities?: ModelCapability;
@@ -56,6 +68,26 @@ export interface ChatModelProfile {
   suspendedReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReasoningProfileSettings {
+  mode: "off" | "auto" | "on";
+  effort?: string;
+  summary: "off" | "auto";
+}
+
+export interface ReasoningCapabilitySettings {
+  source: "metadata" | "probe" | "manual";
+  responses: boolean;
+  continuation: boolean;
+  summary: boolean;
+  efforts: string[];
+  requiresEffort?: boolean;
+  defaultEffort?: string;
+  failureReason?: string;
+  checkedAt?: string;
+  cacheKey?: string;
+  contractVersion?: number;
 }
 
 export interface EmbeddingModelProfile {
@@ -90,6 +122,7 @@ export interface IxplorerSettings {
   useWebWhenFreshnessNeeded: boolean;
   forceEagerResearch: boolean;
   debugMode: boolean;
+  modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;
 }
 
 export const DEFAULT_INDEX_PROFILE_ID = "default";
@@ -145,6 +178,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   useWebWhenFreshnessNeeded: true,
   forceEagerResearch: false,
   debugMode: false,
+  modelCapabilityCache: {},
 };
 
 export function normalizeListInput(value: string): string[] {
@@ -228,6 +262,7 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
         ? data.forceEagerResearch
         : DEFAULT_SETTINGS.forceEagerResearch,
     debugMode: data.debugMode === true,
+    modelCapabilityCache: readModelCapabilityCache(data.modelCapabilityCache),
   };
 
   settings.activeIndexProfileId = readActiveIndexProfileId(
@@ -398,6 +433,10 @@ function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
     } else if (isProfileSuspended(server)) {
       suspend(profile, "Server profile is suspended.");
     } else {
+      if (server.apiFormat !== "openai-compatible") {
+        profile.reasoning = { mode: "off", summary: "off" };
+        profile.reasoningCapabilities = undefined;
+      }
       unsuspend(profile);
     }
   }
@@ -531,6 +570,9 @@ function normalizeChatModelProfile(value: unknown): ChatModelProfile | null {
     name,
     serverProfileId,
     modelName,
+    toolsEnabled: value.toolsEnabled !== false,
+    reasoning: readReasoningProfileSettings(value.reasoning),
+    reasoningCapabilities: readReasoningCapabilitySettings(value.reasoningCapabilities),
     temperature: readOptionalNumber(value.temperature),
     maxTokens: readOptionalPositiveInteger(value.maxTokens),
     capabilities: normalizeCapability(value.capabilities),
@@ -538,6 +580,97 @@ function normalizeChatModelProfile(value: unknown): ChatModelProfile | null {
     suspendedReason: readString(value.suspendedReason) || undefined,
     createdAt: readString(value.createdAt) || DEFAULT_PROFILE_TIMESTAMP,
     updatedAt: readString(value.updatedAt) || DEFAULT_PROFILE_TIMESTAMP,
+  };
+}
+
+function readReasoningProfileSettings(value: unknown): ReasoningProfileSettings {
+  const record = isSettingsRecord(value) ? value : {};
+  const effort = readString(record.effort);
+  const mode =
+    record.mode === "off" || record.mode === "auto" || record.mode === "on"
+      ? record.mode
+      : record.enabled === true
+        ? "on"
+        : "off";
+  return {
+    mode,
+    ...(effort ? { effort } : {}),
+    summary: record.summary === "auto" ? "auto" : "off",
+  };
+}
+
+export function resolveEffectiveChatApiProtocol(
+  profile: Pick<ChatModelProfile, "reasoning" | "reasoningCapabilities">,
+): ChatApiProtocol {
+  return profile.reasoning.mode !== "off" &&
+    profile.reasoningCapabilities?.responses === true &&
+    profile.reasoningCapabilities.continuation === true
+    ? "responses"
+    : "chat-completions";
+}
+
+export function resolveEffectiveTools(
+  profile: Pick<ChatModelProfile, "toolsEnabled" | "capabilities">,
+): boolean {
+  return (
+    profile.toolsEnabled &&
+    resolveToolCapabilities(profile.capabilities?.toolCalling).capabilities.calls
+  );
+}
+
+export function resolveEffectiveReasoning(
+  profile: Pick<ChatModelProfile, "reasoning" | "reasoningCapabilities">,
+  protocol: ChatApiProtocol,
+): { enabled: boolean; effort?: string; summary: "off" | "auto" } {
+  const enabled = profile.reasoning.mode !== "off";
+  if (!enabled) return { enabled: false, summary: "off" };
+  const effort =
+    protocol === "responses"
+      ? (profile.reasoning.effort ?? profile.reasoningCapabilities?.defaultEffort)
+      : undefined;
+  return {
+    enabled: true,
+    ...(effort ? { effort } : {}),
+    summary:
+      protocol === "responses" &&
+      profile.reasoning.summary === "auto" &&
+      profile.reasoningCapabilities?.summary === true
+        ? "auto"
+        : "off",
+  };
+}
+
+function readReasoningCapabilitySettings(value: unknown): ReasoningCapabilitySettings | undefined {
+  if (!isSettingsRecord(value)) return undefined;
+  const source =
+    value.source === "metadata" || value.source === "probe" || value.source === "manual"
+      ? value.source
+      : undefined;
+  if (!source) return undefined;
+  const efforts = Array.isArray(value.efforts)
+    ? [
+        ...new Set(
+          value.efforts
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ),
+      ]
+    : [];
+  const defaultEffort = readString(value.defaultEffort);
+  const failureReason = readString(value.failureReason).slice(0, 500);
+  return {
+    source,
+    responses: value.responses === true,
+    continuation: value.continuation === true,
+    summary: value.summary === true,
+    efforts,
+    ...(value.requiresEffort === true ? { requiresEffort: true } : {}),
+    ...(defaultEffort && efforts.includes(defaultEffort) ? { defaultEffort } : {}),
+    ...(failureReason ? { failureReason } : {}),
+    ...(readString(value.checkedAt) ? { checkedAt: readString(value.checkedAt) } : {}),
+    ...(readString(value.cacheKey) ? { cacheKey: readString(value.cacheKey) } : {}),
+    ...(isPositiveInteger(value.contractVersion) ? { contractVersion: value.contractVersion } : {}),
   };
 }
 
@@ -608,7 +741,23 @@ function normalizeCapability(value: unknown): ModelCapability | undefined {
     maxTokens: typeof value.maxTokens === "boolean" ? value.maxTokens : undefined,
     contextLength: isPositiveInteger(value.contextLength) ? value.contextLength : undefined,
     maxOutputTokens: isPositiveInteger(value.maxOutputTokens) ? value.maxOutputTokens : undefined,
+    reasoningObservation: normalizeReasoningObservation(value.reasoningObservation),
     detectionSource,
+  };
+}
+
+function normalizeReasoningObservation(value: unknown): ModelCapability["reasoningObservation"] {
+  if (!isSettingsRecord(value)) return undefined;
+  const dialects = Array.isArray(value.dialects)
+    ? value.dialects.filter((item): item is string => typeof item === "string").slice(0, 20)
+    : [];
+  if (value.source !== "passive-observation" && value.source !== "metadata") return undefined;
+  return {
+    chatCompletions: value.chatCompletions === true,
+    responses: value.responses === true,
+    dialects,
+    source: value.source,
+    checkedAt: readString(value.checkedAt) || DEFAULT_PROFILE_TIMESTAMP,
   };
 }
 

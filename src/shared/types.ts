@@ -159,6 +159,7 @@ export interface ContextGraphDiagnostics {
 }
 
 export interface ContextDiagnostics {
+  reportSchemaVersion?: 2;
   executionStrategy?: ResearchExecutionStrategy;
   contextMode: ContextMode;
   explicitSources: ContextDiagnosticSource[];
@@ -186,6 +187,100 @@ export interface ContextDiagnostics {
   tools: ToolCallDiagnostic[];
   warnings: string[];
   agentic?: AgenticAttemptDiagnostics;
+  reasoning?: ReasoningDiagnostics;
+  run?: RunDiagnostics;
+  attempts?: AttemptDiagnostics[];
+  stream?: StreamDiagnostics;
+  projection?: ProjectionDiagnostics;
+  delivery?: DeliveryDiagnostics;
+}
+
+export interface DiagnosticTimelineEvent {
+  offsetMs: number;
+  type: string;
+  round?: number;
+  status?: string;
+  reason?: string;
+}
+
+export interface RunDiagnostics {
+  runId: string;
+  answerId: string;
+  status: "completed" | "failed" | "cancelled" | "replaced";
+  startedAt: string;
+  durationMs: number;
+  lastPhase: string;
+  terminalReason?: string;
+  timeline: DiagnosticTimelineEvent[];
+  omittedTimelineEvents?: number;
+  budgets?: Record<string, { used: number; limit: number }>;
+}
+
+export interface AttemptDiagnostics {
+  attempt: number;
+  protocol: ChatApiProtocol;
+  status: "completed" | "failed" | "cancelled";
+  outputEmitted: boolean;
+  errorCode?: string;
+  fallbackDecision?: string;
+}
+
+export interface StreamDiagnostics {
+  protocol: ChatApiProtocol;
+  protocolSource: "profile" | "cache" | "probe" | "fallback";
+  observedDialects: string[];
+  frameCount: number;
+  malformedFrameCount: number;
+  ignoredEventCount: number;
+  reasoningDeltaCount: number;
+  textDeltaCount: number;
+  toolDeltaCount: number;
+  synthesizedStartCount: number;
+  synthesizedEndCount: number;
+  aliasConflictCount: number;
+  terminalEventObserved: boolean;
+  doneMarkerObserved: boolean;
+  warnings: string[];
+  firstByteMs?: number;
+  firstReasoningMs?: number;
+}
+
+export interface ProjectionDiagnostics {
+  reasoningSegments: number;
+  checkpointsCreated: number;
+  finalAnswersCommitted: number;
+  bufferedTextChars: number;
+  staleEventsIgnored: number;
+  duplicateDeltasIgnored: number;
+  classifications: Array<{
+    round: number;
+    classification: "intermediate" | "final" | "discarded";
+    reason: string;
+  }>;
+}
+
+export interface DeliveryDiagnostics {
+  projectorEventsReceived: number;
+  uiPatchesApplied: number;
+  coalescedUpdates: number;
+  markdownRenders: number;
+  staleRunEventsIgnored: number;
+  persistenceStatus: "not-requested" | "saved" | "failed";
+  reloadRestored?: boolean;
+}
+
+export interface ReasoningDiagnostics {
+  protocol: ChatApiProtocol;
+  capabilitySource?: "metadata" | "probe" | "manual" | "observed";
+  observedFormats?: string[];
+  configuredEffort?: string;
+  summaryRequested: boolean;
+  summaryAvailable: boolean;
+  reasoningItemCount: number;
+  continuationRounds: number;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
 }
 
 export interface AgenticAttemptDiagnostics {
@@ -369,19 +464,71 @@ export interface ReasoningCapabilities {
 }
 
 export interface ProviderContinuationState {
-  provider: ApiFormat;
-  opaque: unknown;
+  readonly provider: ApiFormat;
+  dispose(): void;
 }
 
 export type ModelOutputItem =
   | { type: "text"; text: string }
-  | { type: "reasoning"; providerData: unknown; summary?: string }
+  | { type: "reasoningSummary"; text: string }
   | { type: "toolCall"; call: ChatToolCall };
 
 export interface ModelRoundResult {
   items: ModelOutputItem[];
   continuation?: ProviderContinuationState;
   stopReason: "complete" | "tool_calls" | "length" | "error";
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+  };
+  reasoningItemCount?: number;
+}
+
+export interface ModelToolOutput {
+  callId: string;
+  output: string;
+}
+
+export type ModelStreamEvent =
+  | { type: "reasoning-start"; segmentId: string; visibility: "text" | "summary" }
+  | { type: "reasoning-delta"; segmentId: string; text: string }
+  | { type: "reasoning-end"; segmentId: string }
+  | { type: "text-delta"; text: string }
+  | {
+      type: "tool-call-delta";
+      index: number;
+      id?: string;
+      name?: string;
+      argumentsText?: string;
+    }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens: number;
+    }
+  | { type: "complete"; stopReason: "complete" | "tool_calls" | "length" | "error" };
+
+export type ModelRoundDelta =
+  | { type: "text"; text: string }
+  | { type: "reasoningSummary"; text: string; segmentId?: string };
+
+export interface ModelRoundRequest extends ChatRequest {
+  continuation?: ProviderContinuationState;
+  toolOutputs?: ModelToolOutput[];
+  reasoning?: {
+    enabled: boolean;
+    effort?: string;
+    summary: "off" | "auto";
+  };
+  onEvent?(event: ModelStreamEvent): void;
+  onDelta?(delta: ModelRoundDelta): void;
+}
+
+export interface ModelRoundProvider {
+  listModels(): Promise<string[]>;
+  runRound(request: ModelRoundRequest): Promise<ModelRoundResult>;
 }
 
 export interface ChatMessage {
@@ -407,9 +554,11 @@ export interface ChatResponseChunk {
   content: string;
   isComplete: boolean;
   toolCalls?: ChatToolCall[];
+  events?: ModelStreamEvent[];
 }
 
 export type ApiFormat = "openai-compatible" | "ollama" | "anthropic";
+export type ChatApiProtocol = "chat-completions" | "responses";
 export type LocalModelProvider = ApiFormat;
 
 export interface ChatModelProvider {

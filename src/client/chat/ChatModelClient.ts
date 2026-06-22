@@ -7,6 +7,7 @@ import {
   ChatRequest,
   ChatResponseChunk,
   ChatToolCall,
+  ModelStreamEvent,
 } from "../../shared/types";
 import {
   isOllamaTagsResponse,
@@ -17,6 +18,7 @@ import {
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { parseJsonLines, parseServerSentEvents } from "../common/streams";
+import { InlineReasoningParser } from "./InlineReasoningParser";
 
 export interface ChatModelClientOptions {
   apiFormat?: ApiFormat;
@@ -26,16 +28,19 @@ export interface ChatModelClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
+  onReasoningObserved?(observation: { protocol: "chat-completions"; dialect: string }): void;
 }
 
 export class ChatModelClient implements ChatModelProvider {
   private readonly provider: ApiFormat;
   private readonly http: ProviderHttpClient;
   private readonly logger?: PluginRequestLogger;
+  private readonly onReasoningObserved?: ChatModelClientOptions["onReasoningObserved"];
 
   constructor(options: ChatModelClientOptions) {
     this.provider = normalizeApiFormat(options.apiFormat ?? options.provider);
     this.logger = options.logger;
+    this.onReasoningObserved = options.onReasoningObserved;
     this.http = new ProviderHttpClient({
       ...options,
       apiFormat: this.provider,
@@ -91,7 +96,10 @@ export class ChatModelClient implements ChatModelProvider {
       method: "GET",
       headers: { "anthropic-version": "2023-06-01" },
     });
-    const body = await this.http.readJson(response, "The chat model provider returned invalid JSON.");
+    const body = await this.http.readJson(
+      response,
+      "The chat model provider returned invalid JSON.",
+    );
 
     if (!isOpenAiModelsResponse(body)) {
       throw new IxplorerError({
@@ -149,33 +157,101 @@ export class ChatModelClient implements ChatModelProvider {
     }
 
     const toolCallBuilder = new ToolCallBuilder();
+    let reasoningOpen = false;
+    const reasoningSegmentId = "reasoning-0";
+    const inlineReasoning = new InlineReasoningParser();
+    let terminalStopReason: "complete" | "length" | "error" = "complete";
+    const observedDialects = new Set<string>();
+    const observe = (dialect: string): void => {
+      if (observedDialects.has(dialect)) return;
+      observedDialects.add(dialect);
+      this.onReasoningObserved?.({ protocol: "chat-completions", dialect });
+    };
 
     for await (const event of parseServerSentEvents(response.body)) {
       if (event === "[DONE]") {
-        yield { content: "", isComplete: true };
+        const events: ModelStreamEvent[] = [];
+        if (reasoningOpen) {
+          events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
+        }
+        events.push(...inlineReasoning.finish());
+        events.push({ type: "complete", stopReason: terminalStopReason });
+        yield { content: textFromEvents(events), isComplete: true, events };
         return;
       }
 
       const parsed = parseOpenAiChatEvent(event);
+      if (parsed.finishReason === "length") terminalStopReason = "length";
+      else if (
+        parsed.finishReason &&
+        parsed.finishReason !== "stop" &&
+        parsed.finishReason !== "tool_calls" &&
+        parsed.finishReason !== "function_call"
+      )
+        terminalStopReason = "error";
+      const events: ModelStreamEvent[] = [];
+      if (parsed.reasoning) {
+        observe(parsed.reasoningDialect);
+        if (!reasoningOpen) {
+          reasoningOpen = true;
+          events.push({
+            type: "reasoning-start",
+            segmentId: reasoningSegmentId,
+            visibility: parsed.reasoningVisibility,
+          });
+        }
+        events.push({
+          type: "reasoning-delta",
+          segmentId: reasoningSegmentId,
+          text: parsed.reasoning,
+        });
+      }
       if (parsed.content) {
-        yield { content: parsed.content, isComplete: false };
+        if (reasoningOpen) {
+          reasoningOpen = false;
+          events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
+        }
+        const inlineEvents = inlineReasoning.push(parsed.content);
+        if (inlineEvents.some((candidate) => candidate.type === "reasoning-start")) {
+          observe("inline-tags");
+        }
+        events.push(...inlineEvents);
       }
       for (const delta of parsed.toolCallDeltas) {
         toolCallBuilder.add(delta);
+        events.push({
+          type: "tool-call-delta",
+          index: delta.index ?? 0,
+          ...(delta.id ? { id: delta.id } : {}),
+          ...(delta.name ? { name: delta.name } : {}),
+          ...(delta.argumentsText ? { argumentsText: delta.argumentsText } : {}),
+        });
       }
       if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
-        yield { content: "", isComplete: true, toolCalls: toolCallBuilder.build() };
+        if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
+        events.push(...inlineReasoning.finish());
+        events.push({ type: "complete", stopReason: "tool_calls" });
+        yield {
+          content: textFromEvents(events),
+          isComplete: true,
+          toolCalls: toolCallBuilder.build(),
+          events,
+        };
         return;
       }
+      if (events.length > 0) yield { content: textFromEvents(events), isComplete: false, events };
     }
 
-    yield { content: "", isComplete: true };
+    const events: ModelStreamEvent[] = [];
+    if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
+    events.push(...inlineReasoning.finish());
+    events.push({ type: "complete", stopReason: terminalStopReason });
+    yield { content: textFromEvents(events), isComplete: true, events };
   }
 
   private async *streamAnthropicChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     const systemMessage = request.messages.find((message) => message.role === "system")?.content;
-    const messages = request.messages
-      .filter((message) => message.role !== "system");
+    const messages = request.messages.filter((message) => message.role !== "system");
     const response = await this.http.request("/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "anthropic-version": "2023-06-01" },
@@ -367,30 +443,113 @@ class ToolCallBuilder {
 
 function parseOpenAiChatEvent(event: string): {
   content: string;
+  reasoning: string;
+  reasoningDialect: string;
+  reasoningVisibility: "text" | "summary";
   toolCallDeltas: ToolCallDelta[];
   finishReason?: string;
 } {
   try {
     const parsed: unknown = JSON.parse(event);
     if (!isRecord(parsed) || !Array.isArray(parsed.choices)) {
-      return { content: "", toolCallDeltas: [] };
+      return {
+        content: "",
+        reasoning: "",
+        reasoningDialect: "",
+        reasoningVisibility: "text",
+        toolCallDeltas: [],
+      };
     }
 
     const firstChoice: unknown = parsed.choices[0];
     if (!isRecord(firstChoice) || !isRecord(firstChoice.delta)) {
-      return { content: "", toolCallDeltas: [] };
+      return {
+        content: "",
+        reasoning: "",
+        reasoningDialect: "",
+        reasoningVisibility: "text",
+        toolCallDeltas: [],
+      };
     }
 
     const delta = firstChoice.delta;
+    const reasoning = readReasoningDelta(delta);
     return {
       content: typeof delta.content === "string" ? delta.content : "",
+      reasoning: reasoning.text,
+      reasoningDialect: reasoning.dialect,
+      reasoningVisibility: reasoning.visibility,
       finishReason:
         typeof firstChoice.finish_reason === "string" ? firstChoice.finish_reason : undefined,
       toolCallDeltas: parseOpenAiToolCallDeltas(delta.tool_calls),
     };
   } catch {
-    return { content: "", toolCallDeltas: [] };
+    return {
+      content: "",
+      reasoning: "",
+      reasoningDialect: "",
+      reasoningVisibility: "text",
+      toolCallDeltas: [],
+    };
   }
+}
+
+function readReasoningDelta(delta: Record<string, unknown>): {
+  text: string;
+  dialect: string;
+  visibility: "text" | "summary";
+} {
+  const details = visibleReasoningDetails(delta.reasoning_details);
+  if (details) return { ...details, dialect: "reasoning_details" };
+  for (const key of ["reasoning", "reasoning_content", "thinking"] as const) {
+    if (typeof delta[key] === "string" && delta[key]) {
+      return { text: delta[key], visibility: "text", dialect: key };
+    }
+  }
+  return { text: "", visibility: "text", dialect: "" };
+}
+
+function visibleReasoningDetails(value: unknown):
+  | {
+      text: string;
+      visibility: "text" | "summary";
+    }
+  | undefined {
+  const values = Array.isArray(value) ? value : [value];
+  const visible: Array<{ text: string; visibility: "text" | "summary" }> = [];
+  for (const item of values) {
+    if (typeof item === "string" && item) {
+      visible.push({ text: item, visibility: "text" });
+      continue;
+    }
+    if (!isRecord(item)) continue;
+    const text =
+      typeof item.text === "string"
+        ? item.text
+        : typeof item.content === "string"
+          ? item.content
+          : "";
+    if (!text) continue;
+    const visibility =
+      item.type === "reasoning.summary" || item.type === "summary" ? "summary" : "text";
+    visible.push({ text, visibility });
+  }
+  return visible.length > 0
+    ? {
+        text: visible.map((item) => item.text).join(""),
+        visibility: visible.every((item) => item.visibility === "summary") ? "summary" : "text",
+      }
+    : undefined;
+}
+
+function textFromEvents(events: ModelStreamEvent[]): string {
+  return events
+    .filter(
+      (event): event is Extract<ModelStreamEvent, { type: "text-delta" }> =>
+        event.type === "text-delta",
+    )
+    .map((event) => event.text)
+    .join("");
 }
 
 function normalizeApiFormat(value: ApiFormat | "lmStudio" | undefined): ApiFormat {
@@ -402,20 +561,18 @@ function parseOpenAiToolCallDeltas(value: unknown): ToolCallDelta[] {
     return [];
   }
 
-  return value
-    .filter(isRecord)
-    .map((toolCall) => ({
-      index: typeof toolCall.index === "number" ? toolCall.index : undefined,
-      id: typeof toolCall.id === "string" ? toolCall.id : undefined,
-      name:
-        isRecord(toolCall.function) && typeof toolCall.function.name === "string"
-          ? toolCall.function.name
-          : undefined,
-      argumentsText:
-        isRecord(toolCall.function) && typeof toolCall.function.arguments === "string"
-          ? toolCall.function.arguments
-          : undefined,
-    }));
+  return value.filter(isRecord).map((toolCall) => ({
+    index: typeof toolCall.index === "number" ? toolCall.index : undefined,
+    id: typeof toolCall.id === "string" ? toolCall.id : undefined,
+    name:
+      isRecord(toolCall.function) && typeof toolCall.function.name === "string"
+        ? toolCall.function.name
+        : undefined,
+    argumentsText:
+      isRecord(toolCall.function) && typeof toolCall.function.arguments === "string"
+        ? toolCall.function.arguments
+        : undefined,
+  }));
 }
 
 function parseAnthropicChatEvent(event: string): {
@@ -521,8 +678,7 @@ function parseOllamaToolCalls(value: unknown): ChatToolCall[] {
       {
         id: typeof toolCall.id === "string" ? toolCall.id : `call_${index}`,
         name: toolCall.function.name,
-        arguments:
-          isRecord(toolCall.function.arguments) ? toolCall.function.arguments : {},
+        arguments: isRecord(toolCall.function.arguments) ? toolCall.function.arguments : {},
       },
     ];
   });

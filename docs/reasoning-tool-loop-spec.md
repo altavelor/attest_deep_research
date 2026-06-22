@@ -9,10 +9,10 @@ Approved requirements draft. Implementation is phased; iteration 1 adds a config
 1. The selected search mode is an application policy, not a suggestion to the model.
 2. “Required in the first request” means that the first model round must request every required source tool before a final answer can be accepted.
 3. A required source is satisfied only by a successfully executed tool call, not merely by an attempted call.
-4. Full chain-of-thought is neither rendered nor persisted. Provider-supported reasoning summaries may be exposed only as separate ephemeral UI status in iteration 4.
+4. Private/opaque chain-of-thought is neither rendered nor persisted. Provider-exposed reasoning text or summaries follow `docs/universal-reasoning-streaming-spec.md` and may be persisted separately from final answer content.
 5. When the necessary `tool_choice` behavior or reasoning continuation is unavailable, the existing deterministic evidence pipeline remains the fallback.
 6. This change prepares the architecture for reasoning models; provider-specific reasoning controls and UI may be delivered separately.
-7. OpenAI Responses is the authoritative target for full reasoning continuation. OpenAI-compatible Chat Completions remains a compatibility protocol.
+7. No provider protocol is authoritative for reasoning display. Responses and OpenAI-compatible Chat Completions normalize into the same provider-neutral stream contract; Responses may additionally provide opaque continuation.
 8. OpenAI Responses continuation is stateless and answer-scoped in iteration 4: requests use `store: false` and do not use `previous_response_id`.
 
 ## Objective
@@ -491,7 +491,7 @@ Integration fixtures should simulate complete multi-round agentic streams for ve
 
 ## Resolved design decisions
 
-1. OpenAI Responses is the first authoritative full-reasoning target. Chat Completions remains supported without assuming lossless reasoning continuation.
+1. `docs/universal-reasoning-streaming-spec.md` is authoritative for reasoning transport normalization, display, persistence, and capability discovery.
 2. Provider-native reasoning continuation is delivered after the first iteration, which only adds the configurable eager override and supporting strategy diagnostics.
 3. A successful required search with zero results satisfies source policy.
 4. `get_active_note: no-active-note` satisfies the attempted context policy, emits a warning, and does not force fallback.
@@ -517,4 +517,4 @@ Integration fixtures should simulate complete multi-round agentic streams for ve
 - Agentic semantics for `deepResearch`.
 - Anthropic and Ollama reasoning-continuation rollout order after the OpenAI Responses reference implementation.
 - Whether a later iteration should offer server-side Responses continuation through `previous_response_id`.
-- Whether provider-generated reasoning summaries should ever be persisted as separate metadata.
+- Provider-exposed reasoning is persisted as separate metadata under the universal reasoning-streaming specification.

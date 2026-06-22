@@ -31,6 +31,17 @@ describe("Ixplorer errors", () => {
     expect(toUserMessage(error)).toBe("Ixplorer could not read this file.");
   });
 
+  it("exposes actionable capability validation messages", () => {
+    const error = new IxplorerError({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Responses capability detection has not completed for this model profile.",
+    });
+
+    expect(toUserMessage(error)).toBe(
+      "Responses capability detection has not completed for this model profile.",
+    );
+  });
+
   it("classifies unknown errors without throwing", () => {
     expect(toUserMessage(new Error("network stack details"))).toBe(
       "Something went wrong in Ixplorer.",

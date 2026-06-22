@@ -229,6 +229,98 @@ describe("WebResearchPipeline", () => {
 });
 
 describe("AnswerSynthesisService", () => {
+  it("uses Responses rounds for eager synthesis without adding summaries to the final answer", async () => {
+    const chatModel = new FakeChatModel([]);
+    const service = new AnswerSynthesisService({
+      chatModel,
+      modelRound: {
+        listModels: async () => ["gpt-5"],
+        runRound: async (request) => {
+          request.onDelta?.({ type: "reasoningSummary", text: "summary-sentinel" });
+          request.onDelta?.({ type: "text", text: "Final answer" });
+          return {
+            items: [
+              { type: "reasoningSummary", text: "summary-sentinel" },
+              { type: "text", text: "Final answer" },
+            ],
+            stopReason: "complete",
+            reasoningItemCount: 1,
+          };
+        },
+      },
+      reasoning: { enabled: true, summary: "auto" },
+      chatModelName: "gpt-5",
+      chatOptions: {},
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.synthesize({ question: "Why?", evidence: [], citations: [], evidenceLimit: 8 }),
+    );
+    expect(events).toContainEqual({
+      type: "reasoning",
+      segmentId: "reasoning-0",
+      content: "summary-sentinel",
+    });
+    expect(events).toContainEqual({ type: "delta", content: "Final answer" });
+    const complete = events.find((event) => event.type === "complete");
+    expect(complete).toMatchObject({ answer: { answer: "Final answer" } });
+    expect(JSON.stringify(complete)).not.toContain("summary-sentinel");
+    expect(chatModel.requests).toEqual([]);
+  });
+
+  it("releases Responses text and reasoning deltas before the terminal event", async () => {
+    let finishRound!: () => void;
+    const roundFinished = new Promise<void>((resolve) => (finishRound = resolve));
+    const service = new AnswerSynthesisService({
+      chatModel: new FakeChatModel([]),
+      modelRound: {
+        listModels: async () => ["gpt-5"],
+        runRound: async (request) => {
+          request.onDelta?.({
+            type: "reasoningSummary",
+            segmentId: "reasoning-live",
+            text: "Inspecting constraints...",
+          });
+          request.onDelta?.({ type: "text", text: "Streaming answer" });
+          await roundFinished;
+          return {
+            items: [{ type: "text", text: "Streaming answer" }],
+            stopReason: "complete",
+          };
+        },
+      },
+      reasoning: { enabled: true, summary: "auto" },
+      chatModelName: "gpt-5",
+      chatOptions: {},
+      now: fixedNow,
+    });
+    const stream = service
+      .synthesize({ question: "Why?", evidence: [], citations: [], evidenceLimit: 8 })
+      [Symbol.asyncIterator]();
+
+    await expect(stream.next()).resolves.toEqual({
+      done: false,
+      value: { type: "status", message: "Synthesizing answer..." },
+    });
+    await expect(stream.next()).resolves.toEqual({
+      done: false,
+      value: {
+        type: "reasoning",
+        segmentId: "reasoning-live",
+        content: "Inspecting constraints...",
+      },
+    });
+    await expect(stream.next()).resolves.toEqual({
+      done: false,
+      value: { type: "delta", content: "Streaming answer" },
+    });
+    finishRound();
+    while (!(await stream.next()).done) {
+      // Drain the completed answer after proving the deltas arrived live.
+    }
+  });
+
   it("streams deltas and completes with a persisted research answer", async () => {
     const persisted: unknown[] = [];
     const chatModel = new FakeChatModel([

@@ -40,6 +40,11 @@ export interface ResearchRequest {
 export type ResearchStreamEvent =
   | { type: "status"; message: string }
   | { type: "delta"; content: string }
+  | { type: "reasoning"; segmentId: string; content: string }
+  | { type: "checkpoint-delta"; checkpointId: string; round: number; content: string }
+  | { type: "checkpoint-complete"; checkpointId: string; round: number }
+  | { type: "checkpoint-promote"; checkpointId: string; round: number }
+  | { type: "answer-reset" }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };
 
