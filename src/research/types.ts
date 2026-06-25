@@ -1,4 +1,4 @@
-import { RetrievalResult } from "../retrieval/RetrievalService";
+import { RetrievalResult } from "../application/contracts/retrieval";
 import {
   ContextDiagnostics,
   ContextMode,

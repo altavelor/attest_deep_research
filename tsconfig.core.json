@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": [
+    "src/core/**/*.ts",
+    "src/application/ports/**/*.ts",
+    "src/application/contracts/**/*.ts"
+  ],
+  "exclude": ["src/application/ports/chat.ts"],
+  "//": "application/sources and ports/chat are the wiring layer: they reference concrete modules (tools, FileChatStore) that still carry Node deps. They are guarded against obsidian/DOM by the import-boundary test, but are not yet part of the platform-neutral isolation check. Tightening them is post-stage-1 work."
+}

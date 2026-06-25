@@ -2,9 +2,10 @@ import { mkdir, readFile, readdir, rename, unlink, writeFile } from "fs/promises
 import { basename, join } from "path";
 
 import { ResearchAnswer, RetrievedChunk } from "../shared/types";
-import { ChatDisplayMessage } from "../ui/rendering";
+import { ChatDisplayMessage } from "../core/conversation";
 import type { ResearchSearchMode } from "../research/ResearchService";
 import type { ContextMode } from "../shared/types";
+import type { ChatRepository } from "../application/ports/chat";
 
 export interface SavedChatSettings {
   chatModelProfileId: string;
@@ -60,7 +61,7 @@ export interface FileChatStoreOptions {
 const CHAT_SCHEMA_VERSION = 2;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
 
-export class FileChatStore {
+export class FileChatStore implements ChatRepository {
   private readonly folder: string;
   private readonly now: () => Date;
   private readonly createId: () => string;

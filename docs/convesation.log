@@ -1,0 +1,500 @@
+проверь архитектуру приложения на соответствие требованиям чистой архитектруы:
+You said: основные принципы чистой архитектуры также в ответе используй блок схему связности уровней между собойЧистая архитектура (Clean Architecture) — это подход к проектированию программного обеспечения, главная цель которого заключается в разделении кода на независимые слои с жестко ограниченными зонами ответственности. Этот подход делает систему легко тестируемой, независимой от внешних фреймворков, баз данных или UI, а также простой в поддержке.Ниже представлена блок-схема и подробный разбор ключевых правил взаимодействия уровней.Блок-схема связности уровнейГлавное правило чистой архитектуры — Правило зависимостей (The Dependency Rule): зависимости должны быть направлены строго извне внутрь. Внутренние слои ничего не знают о существовании внешних слоев.       [ ВНЕШНИЙ СЛОЙ ]          [ ПРОМЕЖУТОЧНЫЙ СЛОЙ ]        [ ЦЕНТРАЛЬНЫЙ СЛОЙ ]
+ ____________________________     ____________________     ____________________________
+
+|   Frameworks & Drivers     |   |   Interface        |   |    Core (Бизнес-логика)    |
+| (БД, UI, Веб-сервер, Игры) |   |   Adapters         |   |                            |
+|____________________________|   |____________________|   |____________________________|
+              |                            |                            |
+              v                            v                            v
+   +----------------------+     +----------------------+     +----------------------+
+
+   |       Drivers /      | --> |     Presenters /     | --> |      Use Cases       |
+   |      Web / UI        |     |     Controllers      |     |  (Сценарии бизнеса)  |
+   +----------------------+     +----------------------+     +----------------------+
+                                                                        |
+                                                                        v
+                                                             +----------------------+
+
+                                                             |       Entities       |
+                                                             |  (Бизнес-сущности)   |
+                                                             +----------------------+
+
+ ------------------------------------------------------------------------------------>
+                  НАПРАВЛЕНИЕ ЗАВИСИМОСТЕЙ (Извне к центру)
+1. Направление зависимостей (The Dependency Rule)Изоляция Core-слоя: Код в слоях Entities и Use Cases не содержит ключевых слов import или ссылок на внешние библиотеки, фреймворки (например, Spring, Hibernate, NestJS), базы данных или компоненты UI.Вектор зависимостей: Все зависимости (стрелки импорта в коде) направлены строго извне внутрь: Frameworks -> Adapters -> Use Cases -> Entities.Передача данных (DTO): Данные пересекают границы слоев только в виде простых структур (Data Transfer Objects, plain objects, структуры). Бизнес-логика не принимает напрямую HTTP-запросы (Request) и не возвращает HTTP-ответы (Response).2. Независимость от инфраструктуры (Decoupling)Заменяемость БД: Вы можете полностью заменить базу данных (например, PostgreSQL на MongoDB) или способ хранения (в памяти/In-Memory) путем изменения одного конфигурационного файла или класса инициализации, вообще не меняя код бизнес-логики.Заменяемость UI/Клиента: Приложение может работать одновременно через REST API, GraphQL, gRPC или консольный CLI, используя одни и те же сценарии использования (Use Cases), без дублирования кода.Фреймворк как деталь: Если вы решите обновить или полностью сменить фреймворк (например, перейти с Express на Fastify или со Spring Boot на Quarkus), код ядра (Use Cases и Entities) останется нетронутым.3. Применение инверсии зависимостей (DIP)Интерфейсы на стороне Ядра: Все интерфейсы для взаимодействия с внешним миром (репозитории, шлюзы API, сервисы отправки почты) объявлены во внутреннем слое (Use Cases), а реализуются во внешнем слое (Adapters / Infrastructure).Внедрение зависимостей (DI): Создание и связывание объектов (Dependency Injection) происходит исключительно на самом внешнем уровне приложения (в точке входа / Main компоненте). Компоненты бизнес-логики не создают экземпляры внешних сервисов через new.4. Тестируемость (Testability)Unit-тесты без баз данных: Вы можете написать Unit-тесты для любого сценария (Use Case) и бизнес-сущности (Entity) без запуска контейнеров, подключения к реальной БД и без поднятия веб-сервера.Тестирование на заглушках: В тестах бизнес-логики внешние зависимости легко заменяются на Mock-объекты или простые Stub-заглушки через интерфейсы.5. Разделение ответственности (Separation of Concerns)Entities без логики приложения: Классы бизнес-сущностей хранят только высокоуровневые бизнес-правила (валидация данных, инварианты), общие для всей организации, и ничего не знают о том, как они отображаются или сохраняются.Use Cases как координаторы: Каждый класс сценария выполняет ровно одну бизнес-задачу (например, CreateOrderUseCase), оркеструя бизнес-сущности и интерфейсы. В нем отсутствует логика парсинга HTTP-параметров или генерации SQL-запросов.
+Основная цель применения этих принципов: независимость логики rag и генерации запросов от текущего окружения electron/obsidian и возможность переиспользования кода в других средах (использование с hermes/open claw) а также возможность быстро переписать основную логику на другой более эффективный язык программирования
+
+
+Показать ещё
+
+18 июн., 16:58
+
+
+
+
+
+
+Работал на протяжении 3m 10s
+
+
+
+Итог
+Архитектура соответствует Clean Architecture частично — примерно на 6/10. Ядро RAG уже хорошо тестируется и почти не зависит от Obsidian, но строгого правила зависимостей сейчас нет.
+Текущую структуру корректнее назвать модульной слоистой архитектурой с элементами Hexagonal/Clean Architecture. Для переиспользования в Hermes/OpenClaw потребуется выделить самостоятельное application/core-ядро.
+Основные замечания
+1. Внутренние слои зависят от UI — нарушение Dependency Rule
+[ResearchService.ts (line 28)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/research/ResearchService.ts:28) и [ChatCompaction.ts (line 3)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/chat/ChatCompaction.ts:3) импортируют ChatDisplayMessage и ConversationCompactionSummary из ui/rendering.
+[ChatStore.ts (line 5)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/chat/ChatStore.ts:5) также использует UI-модель как формат хранения.
+Фактическое направление:
+Research / Chat ──────> UI models
+     внутренний слой     внешний слой
+Это основное архитектурное нарушение. Модели сообщения и compact summary должны находиться в core/contracts или application/dto, а UI должен импортировать их оттуда.
+2. Application-контракты зависят от конкретных сервисов
+[research/types.ts (line 1)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/research/types.ts:1) импортирует RetrievalResult из конкретного RetrievalService.
+Кроме того, публичные параметры [ResearchService.ts (line 45)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/research/ResearchService.ts:45) ссылаются на конкретные QueryExpansionService, ContextAssembler, NoteToolService и SkillRegistry.
+Это затрудняет:
+замену конкретного алгоритма;
+сборку ядра отдельным пакетом;
+перенос сценариев на другой язык;
+создание альтернативного runtime без части текущих модулей.
+RetrievalResult и остальные boundary DTO следует перенести к портам, а для заменяемых компонентов определить минимальные интерфейсы.
+3. Chat-модель, контракт хранилища и файловый адаптер смешаны
+[ChatStore.ts (line 1)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/chat/ChatStore.ts:1) одновременно содержит:
+DTO сохраненного чата;
+правила заголовков и идентификаторов;
+валидацию схемы;
+Node.js filesystem persistence.
+Отсутствует отдельный ChatRepository/ChatStore порт. Поэтому переход, например, с файлов на SQLite/IndexedDB потребует изменения самого модуля, а не только подключения другого адаптера.
+Индексирование организовано лучше: IndexStore объявлен как абстракция в [shared/types.ts (line 322)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/shared/types.ts:322), а [FileVectorIndexStore.ts (line 80)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/indexing/FileVectorIndexStore.ts:80) реализует этот контракт.
+4. Границы архитектуры ничем не контролируются
+Проект компилируется одной TypeScript-конфигурацией, а относительные импорты между всеми каталогами разрешены. Нет boundary linting или теста, запрещающего зависимости вроде research -> ui.
+Поэтому даже после рефакторинга нарушения легко вернутся. Нужен автоматический quality gate:
+core          не импортирует application/adapters/ui
+application   не импортирует adapters/ui/settings
+adapters      импортируют application ports
+ui            импортирует application DTO/use cases
+5. Composition root привязан к Obsidian
+Положительно, что основное связывание объектов находится в [main.ts (line 225)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/main.ts:225). Однако этот файл одновременно является:
+Obsidian plugin lifecycle;
+конфигурацией DI;
+фабрикой RAG;
+фабрикой индексирования;
+фабрикой HTTP-клиентов;
+фабрикой persistence;
+обработчиком настроек.
+Для Hermes/OpenClaw придется повторять значительную часть сборки.
+Также build жестко пишет в локальное хранилище Obsidian: [esbuild.config.mjs (line 10)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/esbuild.config.mjs:10). Это не нарушение ядра, но препятствие для воспроизводимой сборки и других runtime.
+6. Небольшая утечка settings в extractor
+[MarkdownExtractor.ts (line 1)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/extractors/MarkdownExtractor.ts:1) зависит от полной IxplorerSettings только ради фабрики fromSettings.
+Сам extractor уже принимает нормальный DTO MarkdownExtractorOptions; статическую фабрику лучше удалить или перенести во внешний composition layer.
+Что уже сделано правильно
+Прямые импорты obsidian сосредоточены в UI и Obsidian-адаптерах.
+ResearchService, retrieval, query expansion и indexing не требуют запуска Obsidian.
+В ядре уже присутствуют полезные порты:
+ChatModelProvider, EmbeddingProviderClient, SearchProvider, IndexStore, ContextFileProvider, VaultFileProvider.
+Внешние реализации в основном передаются через конструкторы.
+Данные между слоями передаются обычными TypeScript-структурами.
+main.ts фактически работает как composition root.
+271 unit-тест проходит без запуска Obsidian.
+Текущая связность
+```mermaid
+flowchart LR
+    O["Obsidian UI / Settings"] --> M["main.ts — Composition Root"]
+    M --> A["Research / Retrieval / Indexing"]
+    M --> I["Obsidian, HTTP и File-system adapters"]
+    I --> C["Shared contracts"]
+    A --> C
+    A -. "Нарушение: ChatDisplayMessage" .-> U["UI rendering models"]
+    P["FileChatStore"] --> U
+    P --> N["Node.js fs"]
+```
+
+
+
+Целевая связность
+```mermaid
+flowchart LR
+    subgraph Drivers["Frameworks & Drivers"]
+        O["Obsidian"]
+        H["Hermes / OpenClaw"]
+        CLI["CLI / другой runtime"]
+        FS["Filesystem / DB"]
+        LLM["LLM / Embedding APIs"]
+    end
+
+    subgraph Adapters["Interface Adapters"]
+        OA["Obsidian adapter"]
+        HA["Hermes/OpenClaw adapter"]
+        PA["Persistence adapters"]
+        LA["LLM adapters"]
+    end
+
+    subgraph Application["Application"]
+        IN["Inbound ports и DTO"]
+        UC["RAG / Indexing / Query use cases"]
+        OUT["Outbound ports"]
+    end
+
+    subgraph Core["Core"]
+        E["Entities, invariants и алгоритмы"]
+    end
+
+    O --> OA --> IN
+    H --> HA --> IN
+    CLI --> IN
+    IN --> UC --> E
+    UC --> OUT
+    FS --> PA --> OUT
+    LLM --> LA --> OUT
+```
+
+
+
+Все стрелки исходного кода направлены к Application/Core; адаптеры реализуют объявленные внутри порты.
+Рекомендуемый порядок рефакторинга
+Перенести ChatDisplayMessage, ConversationCompactionSummary, RetrievalResult и другие boundary DTO в application/contracts.
+Ввести ChatRepository, QueryExpander, ContextProvider, SkillProvider и минимальные observability-порты.
+Разделить FileChatStore на контракты/сценарии и FileChatRepository.
+Выделить apps/obsidian, adapters/obsidian, adapters/node, application, core.
+Добавить тест направления импортов.
+Добавить platform-neutral фабрику приложения, принимающую только порты и конфигурацию.
+Зафиксировать контракты JSON Schema и golden-тестами перед переносом RAG на другой язык.
+После первых четырех шагов основную RAG-логику можно будет подключать к Hermes/OpenClaw без импортов Obsidian и без копирования orchestration-кода.
+Проверка: 271/271 тестов прошли, tsc --noEmit прошел. Полный build остановился только при попытке записать bundle в жестко заданный внешний каталог Obsidian.
+
+18 июн., 17:01
+
+
+
+
+
+
+вот еще данные об плане интеграции текущего кода с hermess/openclaw:
+Наиболее разумная архитектура:
+Obsidian plugin
+  ├─ UI, citations, выбор заметок
+  └─ локальный bridge
+           ↓
+OpenClaw / Hermes runtime
+  ├─ model providers
+  ├─ agent/tool loop
+  ├─ sessions, memory, compaction
+  ├─ skills, permissions, retries
+  └─ Ixplorer extension
+       ├─ vault_search
+       ├─ read_note
+       ├─ graph_context
+       ├─ retrieve_adjacent
+       ├─ web_research
+       └─ save_answer
+Что можно отдать harness
+Оба проекта уже предоставляют:
+model/provider routing;
+agent loop и tool calling;
+skills;
+управление сессиями и памятью;
+ограничения инструментов;
+автоматизацию и расширения.
+OpenClaw позволяет добавлять через plugins инструменты, providers, channels, hooks и skills; инструменты регистрируются как типизированные функции. У него также есть политики доступа и sandboxing. OpenClaw tools and plugins
+Hermes предоставляет более готовый набор: provider routing и fallback, MCP, context-engine plugins, memory providers, hooks, subagents, batch execution и OpenAI-compatible API server. Hermes feature overview
+Следовательно, из Ixplorer можно убрать или значительно сократить:
+[ChatModelClient.ts (line 31)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/client/chat/ChatModelClient.ts:31);
+[ToolLoopRunner.ts (line 41)](/Users/ilya/Documents/Projects/ai-chat-obsidian-extension/src/research/ToolLoopRunner.ts:41);
+часть compaction;
+provider settings;
+общий skill registry;
+в перспективе часть session persistence.
+
+На первом этапе требуется полностью отделить ядро приложения от зависимостей obsidian через абстракцию; составь предварительную спецификацию и вопросы требующие решения перед началом планирования
+
+
+Показать ещё
+
+пятница 13:11
+
+
+
+
+
+
+Работал на протяжении 1m 42s
+
+
+
+Предварительная спецификация: отделение Ixplorer Core
+Статус: Draft — требуется согласование перед планированием.
+1. Допущения
+На первом этапе текущий Obsidian-плагин продолжает работать автономно.
+Интеграция с Hermes/OpenClaw пока не реализуется.
+ChatModelClient, ToolLoopRunner, compaction и skill registry пока не удаляются — они помещаются за заменяемыми интерфейсами.
+Ядро не зависит ни от Obsidian, ни от конкретного harness SDK.
+Контракты проектируются JSON-совместимыми, чтобы в будущем ядро или отдельные компоненты можно было переписать на другом языке.
+Точная совместимость с API Hermes/OpenClaw должна проверяться после выбора runtime и фиксации его версии.
+2. Цель этапа
+Выделить платформенно-независимое ядро Ixplorer, содержащее:
+индексирование и retrieval;
+query expansion;
+сбор контекста;
+работу с графом заметок;
+формирование evidence и citations;
+сценарии инструментов Ixplorer;
+доменные DTO, ошибки и политики.
+Obsidian должен остаться внешним адаптером для:
+чтения и записи vault;
+получения активной заметки;
+доступа к metadataCache;
+UI, уведомлений и выбора файлов;
+запуска и конфигурации приложения.
+После этапа любой сценарий Ixplorer должен запускаться в unit-тесте без пакета obsidian, DOM, Electron и реального filesystem.
+3. Целевая архитектура
+```mermaid
+flowchart LR
+    subgraph ObsidianApp["Obsidian application"]
+        UI["UI, citations, note picker"]
+        OA["Obsidian vault/graph adapter"]
+        OC["Obsidian composition root"]
+    end
+
+    subgraph Core["Ixplorer Core"]
+        API["Application API / Tool handlers"]
+        UC["Use cases"]
+        PORTS["Outbound ports"]
+        DOMAIN["DTO, errors, ranking and policies"]
+    end
+
+    subgraph Runtime["Future runtime adapters"]
+        BRIDGE["Local bridge client/server"]
+        HERMES["Hermes extension"]
+        OPENCLAW["OpenClaw plugin"]
+    end
+
+    UI --> OC
+    OC --> API
+    OC --> OA
+    API --> UC
+    UC --> DOMAIN
+    UC --> PORTS
+    OA --> PORTS
+
+    HERMES --> API
+    OPENCLAW --> API
+    BRIDGE --> PORTS
+```
+
+
+
+Разрешенное направление импортов:
+apps/obsidian ──> adapters/obsidian ──> application ports
+       │                                      ▲
+       └──────────────> application ──────────┘
+                              │
+                              v
+                            core
+Запрещено:
+core/application ─X─> obsidian, ui, settings, fs, DOM, harness SDK
+core             ─X─> adapters
+4. Предлагаемая структура
+src/
+  core/
+    model/                 # Evidence, Citation, SourceReference
+    errors/                # Стабильные коды ошибок
+    retrieval/             # Ranking, filtering, query policies
+    context/               # Context budgets and graph policies
+
+  application/
+    contracts/             # JSON-compatible input/output DTO
+    ports/                 # Outbound interfaces
+    use-cases/
+      vault-search/
+      read-note/
+      graph-context/
+      retrieve-adjacent/
+      web-research/
+      save-answer/
+    events/                # Progress and streaming events
+
+  adapters/
+    obsidian/               # Vault, MetadataCache, active note
+    filesystem/             # Vector index and chat persistence
+    model-provider/         # Текущие LLM/embedding clients
+    web/                    # DuckDuckGo
+    legacy-agent/           # ToolLoopRunner facade
+    bridge/                 # После выбора транспорта
+
+  apps/
+    obsidian/
+      main.ts
+      ui/
+      settings/
+
+  integrations/
+    openclaw/               # Не входит в первый этап
+    hermes/                 # Не входит в первый этап
+Физическое перемещение всех файлов сразу не требуется. Сначала должны появиться контракты и правила импортов, затем модули переносятся инкрементально.
+5. Application API
+Предлагается один платформенно-независимый фасад:
+interface IxplorerApplication {
+  vaultSearch(input: VaultSearchInput): Promise<VaultSearchResult>;
+  readNote(input: ReadNoteInput): Promise<ReadNoteResult>;
+  graphContext(input: GraphContextInput): Promise<GraphContextResult>;
+  retrieveAdjacent(input: RetrieveAdjacentInput): Promise<RetrieveAdjacentResult>;
+  webResearch(input: WebResearchInput): Promise<WebResearchResult>;
+  saveAnswer(input: SaveAnswerInput): Promise<SaveAnswerResult>;
+}
+Входы и результаты должны быть:
+сериализуемыми в JSON;
+версионируемыми;
+без TFile, Vault, HTMLElement, Response, Date, Map, Set;
+без ссылок на конкретные сервис-классы;
+валидируемыми на внешней границе.
+Общий результат инструмента:
+type ToolResult<T> =
+  | {
+      ok: true;
+      data: T;
+      diagnostics?: ToolDiagnostic[];
+    }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        retryable: boolean;
+        details?: unknown;
+      };
+    };
+6. Outbound ports
+Минимальный предварительный набор:
+interface VaultContentPort {
+  listDocuments(input: ListDocumentsInput): Promise<DocumentSummary[]>;
+  readDocument(path: string): Promise<DocumentContent>;
+}
+
+interface VaultGraphPort {
+  getLinks(input: GraphLinksInput): Promise<GraphLinksResult>;
+}
+
+interface VaultWritePort {
+  saveDocument(input: SaveDocumentInput): Promise<SavedDocument>;
+}
+
+interface ActiveDocumentPort {
+  getActiveDocument(): Promise<DocumentSummary | null>;
+}
+
+interface RetrievalIndexPort {
+  search(input: RetrievalInput): Promise<RetrievalResult>;
+  adjacent(input: AdjacentInput): Promise<RetrievedChunk[]>;
+}
+
+interface EmbeddingPort {
+  embed(input: EmbeddingInput): Promise<EmbeddingResult>;
+}
+
+interface WebSearchPort {
+  search(input: WebSearchInput): Promise<WebSearchResult>;
+}
+
+interface ProgressSink {
+  emit(event: IxplorerEvent): void;
+}
+Порты должны принадлежать application, а Obsidian/filesystem/Hermes/OpenClaw должны их реализовывать.
+7. Разделение ответственности с harness
+Возможность	После интеграции	Этап 1
+Model/provider routing	Harness	Legacy-адаптер сохраняется
+Agent/tool loop	Harness	ToolLoopRunner за интерфейсом
+Sessions/memory	Harness	Текущее поведение сохраняется
+Compaction	Harness	Не удаляется
+Skills	Harness	Registry остается совместимым
+Permissions/retries	Harness	Не дублировать новые механизмы
+Vault retrieval	Ixplorer	Выделить как use case
+Graph context	Ixplorer	Выделить как use case
+Citations/evidence	Ixplorer Core	Сохранить
+Obsidian UI	Obsidian plugin	Сохранить
+
+Ключевое правило: этап 1 не должен развивать функции, которые позднее полностью перейдут harness.
+8. Локальный bridge
+До выбора транспорта спецификация определяет только логический контракт.
+Обязательные свойства будущего bridge:
+version handshake;
+authentication с одноразовым или локальным секретом;
+loopback-only binding либо исходящее соединение из плагина;
+ограничение разрешенных vault paths;
+schema validation;
+request ID и correlation ID;
+timeouts и cancellation;
+максимальные размеры запроса и ответа;
+потоковые progress-события;
+структурированные ошибки;
+отсутствие передачи абсолютного пути vault без необходимости.
+9. Совместимость
+На первом этапе:
+существующий UI продолжает работать;
+формат индекса не меняется;
+сохраненные чаты не мигрируют;
+текущие настройки сохраняются;
+citations и diagnostics не теряют поля;
+standalone mode остается рабочим;
+удаление legacy-компонентов запрещено.
+Новые поля контрактов добавляются как optional. Удаление или изменение типов требует отдельной миграционной спецификации.
+10. Тестирование
+Обязательные проверки:
+архитектурный тест запрещает импорты core/application -> obsidian/ui/settings/adapters;
+каждый из шести use cases тестируется с in-memory ports;
+Obsidian-адаптеры имеют contract tests;
+сериализация контрактов проверяется JSON round-trip;
+входные данные bridge/tool API валидируются;
+существующие 271 тест продолжают проходить;
+standalone Obsidian flow сохраняет текущее поведение;
+core/application компилируются без DOM и типов obsidian.
+Команды проверки:
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+Путь сборки Obsidian из esbuild.config.mjs должен стать конфигурируемым, иначе npm run build не является воспроизводимой проверкой.
+11. Критерии готовности этапа
+Этап завершен, когда:
+В core/application нет импортов Obsidian, UI, settings, filesystem и harness SDK.
+Все шесть Ixplorer-инструментов доступны через типизированный application API.
+Obsidian работает через реализации портов.
+Текущий плагин сохраняет функциональную совместимость.
+Application API запускается полностью с in-memory адаптерами.
+Архитектурные ограничения автоматически проверяются.
+Контракты пригодны для передачи через JSON bridge.
+Существующие тесты и typecheck проходят.
+Документировано, какие legacy-компоненты позднее заменяет harness.
+Вопросы, блокирующие планирование
+Топология
+Где должен находиться индекс: в vault/Obsidian-плагине или в процессе Hermes/OpenClaw?
+
+Кто является владельцем чтения vault:
+Obsidian bridge;
+прямой filesystem-доступ runtime;
+гибрид?
+
+Рекомендация: Obsidian остается владельцем чтения, графа и записи; runtime владеет orchestration.
+Требуется ли поддержка Obsidian Mobile? Локальный внешний процесс там практически меняет всю топологию.
+Выбор runtime
+Нужно поддерживать Hermes и OpenClaw одновременно или сначала выбрать один?
+Какие точные версии и extension API фиксируются?
+Нужен ли единый Ixplorer protocol поверх обоих runtime или допустимы два отдельных адаптера?
+Рекомендация: единый application API и отдельные тонкие runtime-адаптеры.
+Bridge
+Какой транспорт допустим: HTTP+SSE, WebSocket, MCP или иной?
+Кто инициирует соединение — плагин или runtime?
+Требуется ли автоматический запуск runtime из Obsidian?
+Какая модель аутентификации и выдачи разрешений нужна?
+Ответственность инструментов
+vault_search должен выполнять полный hybrid retrieval или только поиск по уже готовому индексу?
+web_research остается Ixplorer-пайплайном либо делегируется встроенному инструменту harness?
+save_answer может писать без подтверждения или требует user approval?
+read_note возвращает полный текст, chunks или ограниченный контекст?
+Должен ли graph_context использовать исключительно Obsidian metadataCache, или нужен переносимый parser fallback?
+Совместимость
+Обязателен ли standalone-режим после интеграции?
+Кто владеет историей существующих чатов и должен ли harness импортировать ее?
+Нужно ли сохранять текущие форматы индекса и .ixplorer/skills?
+Что является первым целевым результатом: архитектурное отделение, работающий bridge или один end-to-end инструмент?
+Рекомендуемый первый milestone: standalone Obsidian сохраняет поведение, а vault_search и read_note успешно выполняются через независимый application API с in-memory и Obsidian-адаптерами. После согласования этих вопросов спецификацию следует сохранить в репозитории и только затем составлять implementation plan.

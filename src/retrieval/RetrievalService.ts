@@ -1,5 +1,4 @@
 import {
-  Citation,
   AdjacentChunkIndexStore,
   EmbeddingProviderClient,
   IndexStore,
@@ -7,20 +6,15 @@ import {
   LanguageInventoryItem,
   KeywordSearchIndexStore,
   RetrievedChunk,
-  RetrievalQueryVariant,
   RetrievalOptions,
   SourceReference,
 } from "../shared/types";
 import { formatCitation } from "./citations";
 import { rankKeywordMatches } from "./ranking";
 import { filterRetrievedChunks } from "./retrievalFilters";
+import { RetrievalResult } from "../application/contracts/retrieval";
 
-export interface RetrievalResult {
-  chunks: RetrievedChunk[];
-  citations: Citation[];
-  usedFallback: boolean;
-  queryVariants?: RetrievalQueryVariant[];
-}
+export type { RetrievalResult };
 
 export interface RetrievalServiceOptions {
   embeddings: EmbeddingProviderClient;
