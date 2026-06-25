@@ -30,9 +30,8 @@ export function renderIndexControl(containerEl: HTMLElement, options: IndexContr
   const state = options.state;
   const isError = state?.status === "error";
   const root = containerEl.createDiv({
-    cls: `ixplorer-index-control${options.compact ? " ixplorer-index-control--compact" : ""}${
-      isError ? " ixplorer-index-control--error" : ""
-    }`,
+    cls: `ixplorer-index-control${options.compact ? " ixplorer-index-control--compact" : ""}${isError ? " ixplorer-index-control--error" : ""
+      }`,
   });
 
   const summary = root.createDiv({ cls: "ixplorer-index-control__summary" });

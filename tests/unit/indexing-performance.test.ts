@@ -33,7 +33,7 @@ describe("IndexingService large-vault behavior", () => {
       excludeGlobs: [],
       batchSize: 64,
       yieldEveryFiles: 100,
-      yieldToEventLoop: async () => {},
+      yieldToEventLoop: async () => { },
     });
 
     const result = await service.manualReindex();
@@ -160,7 +160,7 @@ function markdownChunk(id: string, path: string, text = `text ${id}`): Extracted
 }
 
 class FakeVaultFileProvider implements VaultFileProvider {
-  constructor(private readonly files: Array<VaultFileSummary & { data: string }>) {}
+  constructor(private readonly files: Array<VaultFileSummary & { data: string }>) { }
 
   async listFiles(): Promise<VaultFileSummary[]> {
     return this.files.map(({ path, modifiedTime }) => ({ path, modifiedTime }));
@@ -172,7 +172,7 @@ class FakeVaultFileProvider implements VaultFileProvider {
 }
 
 class FakeExtractor implements Extractor {
-  constructor(private readonly extension: string) {}
+  constructor(private readonly extension: string) { }
 
   supports(path: string): boolean {
     return path.endsWith(this.extension);
@@ -210,15 +210,15 @@ class RecordingEmbeddingProvider implements EmbeddingProviderClient {
 class RecordingIndexStore implements IndexStore {
   readonly upsertBatchSizes: number[] = [];
 
-  async initialize(): Promise<void> {}
+  async initialize(): Promise<void> { }
 
   async upsert(chunks: EmbeddedChunk[]): Promise<void> {
     this.upsertBatchSizes.push(chunks.length);
   }
 
-  async deleteBySourcePath(): Promise<void> {}
+  async deleteBySourcePath(): Promise<void> { }
 
-  async clear(): Promise<void> {}
+  async clear(): Promise<void> { }
 
   async query(): Promise<never[]> {
     return [];

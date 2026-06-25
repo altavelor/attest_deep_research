@@ -9,7 +9,7 @@ import {
 import { ContextFileProvider } from "../../src/research/ContextAssembler";
 
 class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) {}
+  constructor(private readonly files: Record<string, string>) { }
 
   async listPaths(): Promise<string[]> {
     return Object.keys(this.files).sort();
@@ -208,7 +208,7 @@ class MemoryVaultWriter implements VaultWriter {
     this.files.delete(path);
   }
 
-  async ensureFolder(_path: string): Promise<void> {}
+  async ensureFolder(_path: string): Promise<void> { }
 }
 
 function makeWriter(initial: Record<string, string> = {}): MemoryVaultWriter {
@@ -248,6 +248,38 @@ describe("create_note tool", () => {
     expect(parsed.created).toBe(true);
     expect(parsed.path).toBe("Notes/Hello.md");
     expect(writer.files.get("Notes/Hello.md")).toBe("# Hello");
+  });
+
+  it("rewrites evidence-ID citation tokens into footnote links when creating a note", async () => {
+    const writer = makeWriter();
+    const svc = makeService(writer);
+    svc.setCitationProvider(() => [
+      {
+        id: "web:abc",
+        label: "Elephant — Wikipedia",
+        source: {
+          id: "web:abc",
+          kind: "web",
+          title: "Elephant — Wikipedia",
+          url: "https://en.wikipedia.org/wiki/Elephant",
+          snippet: "",
+          retrievedAt: "2026-06-25T00:00:00.000Z",
+          wasContentFetched: false,
+        },
+      },
+    ]);
+
+    const result = await svc.execute({
+      id: "c-cite",
+      name: "create_note",
+      arguments: { path: "Notes/Elephant.md", content: "Elephants live up to 70 years [web:abc]." },
+    });
+
+    expect(result.ok).toBe(true);
+    const written = writer.files.get("Notes/Elephant.md") ?? "";
+    expect(written).toContain("Elephants live up to 70 years [^1].");
+    expect(written).toContain("[^1]: [Elephant — Wikipedia](https://en.wikipedia.org/wiki/Elephant)");
+    expect(written).not.toContain("web:abc.");
   });
 
   it("returns already-exists when file exists and overwrite is false", async () => {

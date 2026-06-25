@@ -19,6 +19,17 @@ export interface ResponseLogContext extends RequestLogContext {
   responseBody?: unknown;
 }
 
+export interface ProbeLogContext {
+  /** Which probe produced the result, e.g. "tool-capabilities". */
+  probe: string;
+  profileId: string;
+  model: string;
+  /** The capability values the probe returned. */
+  received: unknown;
+  /** The values that were persisted onto the profile / cache. */
+  saved: unknown;
+}
+
 export interface PluginRequestLogger {
   logRequest(context: RequestLogContext): void;
   logResponse(context: ResponseLogContext): void;
@@ -79,6 +90,25 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
       context,
       error: serializeError(error),
       settings: redactLogValue(this.getSettings()),
+    });
+  }
+
+  logProbeResult(context: ProbeLogContext): void {
+    if (!this.getSettings().debugMode) {
+      return;
+    }
+
+    this.console.debug("[Ixplorer] Probe result", redactLogValue(context));
+  }
+
+  logConfiguration(stage: string, settings: IxplorerSettings): void {
+    if (!settings.debugMode) {
+      return;
+    }
+
+    this.console.debug("[Ixplorer] Configuration", {
+      stage,
+      settings: redactLogValue(settings),
     });
   }
 
@@ -147,9 +177,9 @@ function redactLogValue(value: unknown): unknown {
     const normalizedKey = key.toLowerCase();
     redacted[key] =
       normalizedKey === "apikey" ||
-      normalizedKey === "api_key" ||
-      normalizedKey === "authorization" ||
-      normalizedKey.includes("api-key")
+        normalizedKey === "api_key" ||
+        normalizedKey === "authorization" ||
+        normalizedKey.includes("api-key")
         ? "[redacted]"
         : redactLogValue(item);
   }

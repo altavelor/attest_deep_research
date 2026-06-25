@@ -8,7 +8,7 @@ import {
 import { IxplorerError } from "../../shared/errors";
 
 export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
-  constructor(private readonly chatModel: ChatModelProvider) {}
+  constructor(private readonly chatModel: ChatModelProvider) { }
 
   listModels(): Promise<string[]> {
     return this.chatModel.listModels();
@@ -84,12 +84,12 @@ export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
       stopReason: items.some((item) => item.type === "toolCall") ? "tool_calls" : stopReason,
       ...(usage
         ? {
-            usage: {
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-              reasoningTokens: usage.reasoningTokens,
-            },
-          }
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            reasoningTokens: usage.reasoningTokens,
+          },
+        }
         : {}),
       ...(reasoningItems.size > 0 ? { reasoningItemCount: reasoningItems.size } : {}),
     };

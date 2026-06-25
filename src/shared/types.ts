@@ -158,9 +158,38 @@ export interface ContextGraphDiagnostics {
   };
 }
 
+export interface ToolCapabilityProbeAudit {
+  ranAt: string;
+  modelName: string;
+  apiFormat: ApiFormat;
+  results: {
+    required: string[];
+    specific: string[];
+    auto: string[];
+  };
+  rawCapabilities: {
+    calls: boolean;
+    choiceRequired: boolean;
+    choiceSpecific: boolean;
+    parallelCalls: boolean;
+  };
+}
+
 export interface ContextDiagnostics {
   reportSchemaVersion?: 2;
   executionStrategy?: ResearchExecutionStrategy;
+  /** The user's original question, trimmed. Added in v3. */
+  question?: string;
+  /** Chat model name. Added in v3. */
+  modelName?: string;
+  /** API format of the chat model. Added in v3. */
+  modelApiFormat?: ApiFormat;
+  /** Search mode used for this request. Added in v3. */
+  searchMode?: string;
+  /** Probe audit trail. Added in v3. */
+  probeAudit?: ToolCapabilityProbeAudit;
+  /** Effective tool calling capabilities used for policy resolution. Added in v3. */
+  toolCapabilities?: ToolCallingCapabilities;
   contextMode: ContextMode;
   explicitSources: ContextDiagnosticSource[];
   mentionSources: ContextDiagnosticSource[];
@@ -282,9 +311,22 @@ export interface ReasoningDiagnostics {
   reasoningTokens: number;
 }
 
+/**
+ * Attribution of a single reasoning segment to the agentic round and phase that
+ * produced it. Lets the diagnostic report map each "thinking" block back to its
+ * round/phase instead of guessing from the timeline.
+ */
+export interface ReasoningSegmentAttribution {
+  segmentId: string;
+  round: number;
+  phase: string;
+  chars: number;
+}
+
 export interface AgenticAttemptDiagnostics {
   policyReason: string;
   requiredTools: string[];
+  bootstrapChoice?: ChatToolChoice;
   satisfiedTools: string[];
   repairedTools: string[];
   rounds: number;
@@ -295,11 +337,10 @@ export interface AgenticAttemptDiagnostics {
   capabilityProvenance?: Record<string, string>;
   unknownCitationIds?: string[];
   phases?: string[];
+  reasoningSegments?: ReasoningSegmentAttribution[];
   stopReasons?: string[];
   budgets?: {
     maxRounds: number;
-    maxCallsPerRound: number;
-    maxTotalCalls: number;
     maxResultChars: number;
     usedResultChars: number;
   };
@@ -369,6 +410,7 @@ export interface RetrievalChunkDiagnostic {
   score: number;
   status: "included" | "dropped" | "filtered";
   reason?: string;
+  dropReason?: "budget-overflow" | "score-threshold" | "policy" | "explicit-limit";
 }
 
 export interface ContextIndexDiagnostics {
@@ -480,18 +522,18 @@ export type ModelStreamEvent =
   | { type: "reasoning-end"; segmentId: string }
   | { type: "text-delta"; text: string }
   | {
-      type: "tool-call-delta";
-      index: number;
-      id?: string;
-      name?: string;
-      argumentsText?: string;
-    }
+    type: "tool-call-delta";
+    index: number;
+    id?: string;
+    name?: string;
+    argumentsText?: string;
+  }
   | {
-      type: "usage";
-      inputTokens: number;
-      outputTokens: number;
-      reasoningTokens: number;
-    }
+    type: "usage";
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+  }
   | { type: "complete"; stopReason: "complete" | "tool_calls" | "length" | "error" };
 
 export type ModelRoundDelta =
@@ -531,6 +573,12 @@ export interface ChatRequest {
   toolChoice?: ChatToolChoice;
   parallelToolCalls?: boolean;
   reasoningEnabled?: boolean;
+  /**
+   * Optional reasoning depth hint for providers that support it (Anthropic
+   * `effort`, Ollama think levels). Undefined leaves the provider on its
+   * adaptive default.
+   */
+  reasoningEffort?: string;
   signal?: AbortSignal;
 }
 

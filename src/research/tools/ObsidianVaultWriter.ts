@@ -2,7 +2,7 @@ import { App, TFile } from "obsidian";
 import { VaultWriter } from "./NoteTools";
 
 export class ObsidianVaultWriter implements VaultWriter {
-  constructor(private readonly app: App) {}
+  constructor(private readonly app: App) { }
 
   async exists(path: string): Promise<boolean> {
     return this.app.vault.getAbstractFileByPath(path) instanceof TFile;

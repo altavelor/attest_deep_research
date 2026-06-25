@@ -24,33 +24,49 @@ export interface ToolCapabilityProbeOptions {
   signal?: AbortSignal;
 }
 
+export interface ToolCapabilityProbeResult
+  extends Pick<ToolCallingCapabilities, "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls"> {
+  /** Per-mode raw tool-name arrays and timestamp for the audit trail. */
+  probeAuditData: {
+    ranAt: string;
+    results: {
+      required: string[];
+      specific: string[];
+      auto: string[];
+    };
+  };
+}
+
 export async function probeToolControlCapabilities(
   options: ToolCapabilityProbeOptions,
-): Promise<
-  Pick<ToolCallingCapabilities, "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls">
-> {
-  const failed = {
+): Promise<ToolCapabilityProbeResult> {
+  const failed: ToolCapabilityProbeResult = {
     calls: false,
     choiceRequired: false,
     choiceSpecific: false,
     parallelCalls: false,
+    probeAuditData: { ranAt: new Date().toISOString(), results: { required: [], specific: [], auto: [] } },
   };
   if (options.apiFormat === "ollama") return failed;
 
+  const ranAt = new Date().toISOString();
   const required = await runProbe(options, { type: "required" });
   const specific = await runProbe(options, { type: "specific", name: PROBE_B });
   const choiceRequired = required.some((name) => name === PROBE_A || name === PROBE_B);
   const choiceSpecific = specific.includes(PROBE_B);
   const parallelCalls = required.includes(PROBE_A) && required.includes(PROBE_B);
   const callsViaControlled = choiceRequired || choiceSpecific;
-  const callsViaAuto = callsViaControlled
-    ? false
-    : (await runProbe(options, { type: "auto" })).length > 0;
+  const autoResults = callsViaControlled ? [] : await runProbe(options, { type: "auto" });
+  const callsViaAuto = !callsViaControlled && autoResults.length > 0;
   return {
     calls: callsViaControlled || callsViaAuto,
     choiceRequired,
     choiceSpecific,
     parallelCalls,
+    probeAuditData: {
+      ranAt,
+      results: { required, specific, auto: autoResults },
+    },
   };
 }
 
@@ -65,7 +81,12 @@ async function runProbe(
       messages: [{ role: "user", content: "Run the requested local synthetic capability check." }],
       tools: PROBE_TOOLS,
       toolChoice,
-      maxTokens: 32,
+      // Reasoning-capable local models (e.g. LM Studio harmony templates) emit a
+      // chain of thought into `content` before the tool call. A tight budget
+      // truncates the stream with finish_reason "length" before any call is
+      // produced, making a tool-capable model look incapable. Give enough room
+      // to finish reasoning and still emit the call.
+      maxTokens: 512,
       temperature: 0,
       signal: options.signal,
     })) {

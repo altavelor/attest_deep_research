@@ -25,6 +25,8 @@ export class AgentRunDiagnosticCollector {
   private finalTextChars = 0;
   private finalCommitted = false;
   private uiPatches = 0;
+  private markdownRenders = 0;
+  private coalescedUpdates = 0;
 
   constructor(private readonly options: AgentRunDiagnosticCollectorOptions) {
     this.now = options.now ?? Date.now;
@@ -65,6 +67,16 @@ export class AgentRunDiagnosticCollector {
     }
   }
 
+  /** A streaming update flushed to the DOM (one actual markdown render). */
+  recordMarkdownRender(): void {
+    this.markdownRenders += 1;
+  }
+
+  /** A streaming update that rode along on an already-scheduled render (no extra render). */
+  recordCoalescedUpdate(): void {
+    this.coalescedUpdates += 1;
+  }
+
   complete(diagnostics: ContextDiagnostics): void {
     const completedAt = this.now();
     this.push("run.completed", undefined, "success");
@@ -90,11 +102,16 @@ export class AgentRunDiagnosticCollector {
       duplicateDeltasIgnored: 0,
       classifications: [],
     };
+    // When render instrumentation is wired in (the chat view), report the real
+    // number of DOM renders versus updates that were coalesced into a pending
+    // render. When it is absent (e.g. headless callers), fall back to the
+    // pre-instrumentation convention of one render per UI patch.
+    const renderInstrumented = this.markdownRenders + this.coalescedUpdates > 0;
     diagnostics.delivery = {
       projectorEventsReceived: this.uiPatches,
       uiPatchesApplied: this.uiPatches,
-      coalescedUpdates: 0,
-      markdownRenders: this.uiPatches,
+      coalescedUpdates: renderInstrumented ? this.coalescedUpdates : 0,
+      markdownRenders: renderInstrumented ? this.markdownRenders : this.uiPatches,
       staleRunEventsIgnored: 0,
       persistenceStatus: "not-requested",
     };

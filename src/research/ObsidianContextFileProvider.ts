@@ -4,7 +4,7 @@ import { normalizeVaultPath, isSupportedContextDocumentPath } from "../shared/pa
 import { ContextFileProvider } from "./ContextAssembler";
 
 export class ObsidianContextFileProvider implements ContextFileProvider {
-  constructor(private readonly vault: Vault) {}
+  constructor(private readonly vault: Vault) { }
 
   async listPaths(): Promise<string[]> {
     return this.vault

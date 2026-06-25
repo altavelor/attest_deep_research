@@ -95,20 +95,49 @@ describe("diagnostic formatting", () => {
     ]);
   });
 
-  it("formats one complete report for display and clipboard copy", () => {
+  it("returns pure v3 JSON without any text prefix", () => {
     const report = formatDiagnosticReport(diagnostics);
 
-    expect(report).toContain("Diagnostic report");
-    expect(report).toContain("Execution strategy: eager forced");
-    expect(report).toContain("#2 B.md · b · 0.200 · dropped · evidence-planner");
-    expect(report).toContain(JSON.stringify(diagnostics, null, 2));
+    // Must be valid JSON
+    expect(() => JSON.parse(report)).not.toThrow();
+    const parsed = JSON.parse(report);
+    expect(parsed.schemaVersion).toBe(3);
+
+    // No text prefix — must start with "{"
+    expect(report.trimStart()).toMatch(/^\{/);
+    expect(report).not.toContain("Diagnostic report");
+    expect(report).not.toContain("Context used");
+    expect(report).not.toContain("Debug details");
   });
 
-  it("summarizes web evidence in web-only diagnostics", () => {
-    const report = formatDiagnosticReport(diagnostics);
+  it("v3 report contains execution strategy in model section", () => {
+    const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
+    expect(parsed.model.executionStrategy).toBe("eager-forced");
+  });
 
-    expect(report).toContain("Mode: web only");
-    expect(report).toContain("8 web source(s) used (8,882 tokens)");
+  it("v3 report contains ranked chunks with scores in request section", () => {
+    const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
+    const ranked = parsed.request.retrieval.rankedChunks;
+    expect(ranked).toHaveLength(2);
+    expect(ranked[0].score).toBe(0.9);
+    expect(ranked[1].score).toBe(0.2);
+    expect(ranked[1].status).toBe("dropped");
+  });
+
+  it("v3 report has scoreStats for ranked chunks", () => {
+    const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
+    const stats = parsed.request.retrieval.scoreStats;
+    expect(stats).not.toBeNull();
+    expect(stats.min).toBeCloseTo(0.2);
+    expect(stats.max).toBeCloseTo(0.9);
+    expect(typeof stats.avg).toBe("number");
+  });
+
+  it("summarizes web evidence in request.web section", () => {
+    const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
+    expect(parsed.request.web).not.toBeNull();
+    expect(parsed.request.web.queryStrategy).toBe("direct");
+    expect(parsed.request.web.results).toHaveLength(2);
   });
 
   it("explains web queries, result processing, and final prompt inclusion", () => {
@@ -131,9 +160,5 @@ describe("diagnostic formatting", () => {
       "Final prompt web section: 1 item(s), 300 evidence-text tokens",
       "Prompt web #1: web:https://example.com/cia-contact",
     ]);
-
-    expect(formatDiagnosticReport(diagnostics)).toContain(
-      "Web research\nOriginal question: How does anonymous CIA contact work?\nQuery strategy: direct",
-    );
   });
 });

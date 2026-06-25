@@ -16,6 +16,7 @@ import {
   WebContextDiagnostics,
   IndexDescriptionPromptContext,
   ToolCallingCapabilities,
+  ToolCapabilityProbeAudit,
   ApiFormat,
   ModelRoundProvider,
 } from "../shared/types";
@@ -64,6 +65,7 @@ export interface ResearchServiceOptions {
   indexDescription?: IndexDescriptionPromptContext;
   toolCapabilities?: ToolCallingCapabilities;
   toolCapabilityProvenance?: Record<string, string>;
+  toolCapabilityProbeAudit?: ToolCapabilityProbeAudit;
   apiFormat?: ApiFormat;
   modelRound?: ModelRoundProvider;
   reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
@@ -94,6 +96,7 @@ export class ResearchService {
   private readonly noteTools?: NoteToolService;
   private readonly toolCapabilities: ToolCallingCapabilities;
   private readonly toolCapabilityProvenance?: Record<string, string>;
+  private readonly toolCapabilityProbeAudit?: ToolCapabilityProbeAudit;
   private readonly now: () => Date;
   private readonly persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   private readonly apiFormat?: ApiFormat;
@@ -132,6 +135,7 @@ export class ResearchService {
       parallelCalls: false,
     };
     this.toolCapabilityProvenance = options.toolCapabilityProvenance;
+    this.toolCapabilityProbeAudit = options.toolCapabilityProbeAudit;
     this.apiFormat = options.apiFormat;
     this.modelRound = options.modelRound;
     this.reasoning = options.reasoning;
@@ -202,7 +206,9 @@ export class ResearchService {
         return;
       }
       if (agentic.result.reason === "cancelled") return;
-      if (agentic.result.reason === "provider-error") throw new Error("Research provider error");
+      // All non-cancel failures (including provider-error) fall through to the
+      // deterministic fallback so a diagnostic report is still produced. Throwing
+      // here would surface a generic error with no diagnostics to debug from.
       const partialEvidence = agentic.answer.evidence ?? [];
       if (partialEvidence.length > 0) {
         yield { type: "status", message: "Synthesizing from partial results…" };
@@ -212,9 +218,8 @@ export class ResearchService {
           citations: agentic.answer.citations ?? [],
           chatHistory: request.chatHistory,
           evidenceLimit: this.evidenceLimit,
-          contextDiagnostics: request.includeContextDiagnostics === true
-            ? agentic.diagnostics
-            : undefined,
+          contextDiagnostics:
+            request.includeContextDiagnostics === true ? agentic.diagnostics : undefined,
           signal: request.signal,
           fallback: { reason: agentic.result.reason },
         });
@@ -232,21 +237,28 @@ export class ResearchService {
       searchMode === "webOnly" || !this.contextAssembler
         ? undefined
         : await this.contextAssembler.assemble({
-            question,
-            contextMode: searchMode === "none" ? "include" : (request.contextMode ?? "include"),
-            contextPaths: request.contextPaths ?? [],
-            activeFilePath: request.activeFilePath,
-            includeActiveFile: request.includeActiveFile === true,
-            chatHistory: request.chatHistory,
-            contextLimitTokens: this.contextLimitTokens,
-            reservedOutputTokens: totalReservedWithIndexTokens,
-            evidenceLimit: this.evidenceLimit,
-            skipRetrieval: searchMode === "none",
-            explicitSourcesOnly: searchMode === "none",
-            graph: this.graphContext,
-          });
+          question,
+          contextMode: searchMode === "none" ? "include" : (request.contextMode ?? "include"),
+          contextPaths: request.contextPaths ?? [],
+          activeFilePath: request.activeFilePath,
+          includeActiveFile: request.includeActiveFile === true,
+          chatHistory: request.chatHistory,
+          contextLimitTokens: this.contextLimitTokens,
+          reservedOutputTokens: totalReservedWithIndexTokens,
+          evidenceLimit: this.evidenceLimit,
+          skipRetrieval: searchMode === "none",
+          explicitSourcesOnly: searchMode === "none",
+          graph: this.graphContext,
+        });
     if (assembled) {
       assembled.diagnostics.executionStrategy = executionStrategy;
+      assembled.diagnostics.question = question;
+      assembled.diagnostics.modelName = this.chatModelName;
+      assembled.diagnostics.modelApiFormat = this.apiFormat;
+      assembled.diagnostics.searchMode = searchMode;
+      if (this.toolCapabilityProbeAudit)
+        assembled.diagnostics.probeAudit = this.toolCapabilityProbeAudit;
+      assembled.diagnostics.toolCapabilities = this.toolCapabilities;
     }
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
@@ -255,10 +267,10 @@ export class ResearchService {
       searchMode === "webOnly" || searchMode === "none"
         ? emptyRetrievalResult()
         : yield* this.vaultPipeline.search(
-            question,
-            assembled?.retrievalSourcePaths ?? request.contextPaths,
-            assembled?.boostedSourcePaths,
-          );
+          question,
+          assembled?.retrievalSourcePaths ?? request.contextPaths,
+          assembled?.boostedSourcePaths,
+        );
     const webEvidence = yield* this.webPipeline.search(
       question,
       searchMode !== "indexOnly" && searchMode !== "none",
@@ -266,9 +278,16 @@ export class ResearchService {
     );
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
-        createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
+      createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
       retrieval,
     );
+    contextDiagnostics.question = question;
+    contextDiagnostics.modelName = this.chatModelName;
+    contextDiagnostics.modelApiFormat = this.apiFormat;
+    contextDiagnostics.searchMode = searchMode;
+    contextDiagnostics.toolCapabilities = this.toolCapabilities;
+    if (this.toolCapabilityProbeAudit)
+      contextDiagnostics.probeAudit = this.toolCapabilityProbeAudit;
     if (this.getIndexStatus) {
       contextDiagnostics.index = this.getIndexStatus();
     }
@@ -317,6 +336,7 @@ export class ResearchService {
       diagnostics.agentic = {
         policyReason: policy.reason,
         requiredTools: [...policy.requiredTools],
+        bootstrapChoice: policy.bootstrapChoice,
         satisfiedTools: failedAgenticAttempt.satisfiedTools,
         repairedTools: failedAgenticAttempt.repairedTools,
         rounds: failedAgenticAttempt.rounds,
@@ -326,6 +346,7 @@ export class ResearchService {
         duplicatedCost: true,
         capabilityProvenance: this.toolCapabilityProvenance,
         phases: failedAgenticAttempt.phases,
+        reasoningSegments: failedAgenticAttempt.reasoningSegments,
         stopReasons: failedAgenticAttempt.stopReasons,
         budgets: agenticBudgets(failedAgenticAttempt.totalResultChars),
       };
@@ -333,6 +354,7 @@ export class ResearchService {
       diagnostics.agentic = {
         policyReason: policy.reason,
         requiredTools: [...policy.requiredTools],
+        bootstrapChoice: policy.bootstrapChoice,
         satisfiedTools: [],
         repairedTools: [],
         rounds: 0,
@@ -378,22 +400,22 @@ export class ResearchService {
   }> {
     const assembled = this.contextAssembler
       ? await this.contextAssembler.assemble({
-          question: options.question,
-          contextMode: options.request.contextMode ?? "include",
-          contextPaths: options.request.contextPaths ?? [],
-          includeActiveFile: false,
-          chatHistory: options.request.chatHistory,
-          contextLimitTokens: this.contextLimitTokens,
-          reservedOutputTokens: this.reservedOutputTokens,
-          evidenceLimit: this.evidenceLimit,
-          skipRetrieval: true,
-          graph: {
-            enabled: false,
-            includeBacklinks: false,
-            expandFilteredContextThroughLinks: false,
-            depth: 1,
-          },
-        })
+        question: options.question,
+        contextMode: options.request.contextMode ?? "include",
+        contextPaths: options.request.contextPaths ?? [],
+        includeActiveFile: false,
+        chatHistory: options.request.chatHistory,
+        contextLimitTokens: this.contextLimitTokens,
+        reservedOutputTokens: this.reservedOutputTokens,
+        evidenceLimit: this.evidenceLimit,
+        skipRetrieval: true,
+        graph: {
+          enabled: false,
+          includeBacklinks: false,
+          expandFilteredContextThroughLinks: false,
+          depth: 1,
+        },
+      })
       : undefined;
     // Active note is read upfront and passed as explicit evidence (not via tool loop)
     let activeNoteEvidence: RetrievedChunk[] = [];
@@ -424,10 +446,9 @@ export class ResearchService {
     const created = createResearchToolRegistry({
       availability: {
         searchMode: options.searchMode,
-        noteAccess:
-          this.noteTools !== undefined &&
-          (options.searchMode === "indexOnly" || options.searchMode === "indexAndWeb"),
-        activeFileAccess: this.noteTools !== undefined && options.request.includeActiveFile === true,
+        noteAccess: this.noteTools !== undefined,
+        activeFileAccess:
+          this.noteTools !== undefined && options.request.includeActiveFile === true,
         noteMutationAccess: this.noteTools?.mutationEnabled() === true,
         retrieverAvailable: true,
         webProviderAvailable: this.searchProvider !== undefined,
@@ -490,10 +511,17 @@ export class ResearchService {
             checkpointId: `round-${round}`,
             round,
           }),
-        onToolCall: (id, name, label, round) =>
-          options.onEvent?.({ type: "tool-call-start", id, name, label, round }),
-        onToolResult: (id, ok, resolvedLabel, resultSummary) =>
-          options.onEvent?.({ type: "tool-call-end", id, ok, resolvedLabel, resultSummary }),
+        onToolCall: (id, name, label, round, args) =>
+          options.onEvent?.({ type: "tool-call-start", id, name, label, round, args }),
+        onToolResult: (id, ok, resolvedLabel, resultSummary, resultJson) =>
+          options.onEvent?.({
+            type: "tool-call-end",
+            id,
+            ok,
+            resolvedLabel,
+            resultSummary,
+            resultJson,
+          }),
       }).run();
     }
     const snapshot = created.evidence.snapshot();
@@ -514,10 +542,17 @@ export class ResearchService {
         result.ok ? "agentic" : "deterministic-fallback",
       );
     diagnostics.executionStrategy = result.ok ? "agentic" : "deterministic-fallback";
+    diagnostics.question = options.question;
+    diagnostics.modelName = this.chatModelName;
+    diagnostics.modelApiFormat = this.apiFormat;
+    diagnostics.searchMode = options.searchMode;
+    if (this.toolCapabilityProbeAudit) diagnostics.probeAudit = this.toolCapabilityProbeAudit;
+    diagnostics.toolCapabilities = this.toolCapabilities;
     diagnostics.tools = result.diagnostics;
     diagnostics.agentic = {
       policyReason: options.policy.reason,
       requiredTools: [...options.policy.requiredTools],
+      bootstrapChoice: options.policy.bootstrapChoice,
       satisfiedTools: result.satisfiedTools,
       repairedTools: result.repairedTools,
       rounds: result.rounds,
@@ -528,6 +563,7 @@ export class ResearchService {
       capabilityProvenance: this.toolCapabilityProvenance,
       ...(unknownCitationIds.length > 0 ? { unknownCitationIds } : {}),
       phases: result.phases,
+      reasoningSegments: result.reasoningSegments,
       stopReasons: result.stopReasons,
       budgets: agenticBudgets(result.totalResultChars),
     };
@@ -603,6 +639,7 @@ function emptyAgenticFailure(reason: AgenticResearchFailure["reason"]): AgenticR
     stopReasons: [],
     totalResultChars: 0,
     reasoningItemCount: 0,
+    reasoningSegments: [],
     continuationRounds: 0,
     usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
   };
@@ -610,14 +647,11 @@ function emptyAgenticFailure(reason: AgenticResearchFailure["reason"]): AgenticR
 
 function agenticBudgets(usedResultChars: number) {
   return {
-    maxRounds: 5,
-    maxCallsPerRound: 5,
-    maxTotalCalls: 10,
+    maxRounds: 30,
     maxResultChars: 50_000,
     usedResultChars,
   };
 }
-
 
 function citationIdsFromText(text: string): Set<string> {
   return new Set(
@@ -782,7 +816,6 @@ function emptyRetrievalResult(): RetrievalResult {
   };
 }
 
-
 function createEmptyContextDiagnostics(
   contextMode: ContextMode,
   executionStrategy: ResearchExecutionStrategy,
@@ -834,14 +867,23 @@ function isRagDebugIntent(question: string): boolean {
 }
 
 function isChunkList(value: unknown): value is {
-  chunks: Array<{ id: string; text: string; evidenceSource: import("../shared/types").SourceReference }>;
+  chunks: Array<{
+    id: string;
+    text: string;
+    evidenceSource: import("../shared/types").SourceReference;
+  }>;
 } {
   if (typeof value !== "object" || value === null) return false;
   const chunks = (value as Record<string, unknown>).chunks;
-  return Array.isArray(chunks) && chunks.every(
-    (c) => typeof c === "object" && c !== null &&
-      typeof (c as Record<string, unknown>).id === "string" &&
-      typeof (c as Record<string, unknown>).text === "string",
+  return (
+    Array.isArray(chunks) &&
+    chunks.every(
+      (c) =>
+        typeof c === "object" &&
+        c !== null &&
+        typeof (c as Record<string, unknown>).id === "string" &&
+        typeof (c as Record<string, unknown>).text === "string",
+    )
   );
 }
 

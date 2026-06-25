@@ -6,6 +6,7 @@ import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./Cita
 import { stripRenderedCitationIds } from "./citationText";
 import { ChatDisplayMessage, ChainItem, shouldShowDiagnosticAction } from "./rendering";
 import { messageDisplayContent, messageMarkdownContent } from "./rendering";
+import { describeToolCall, ToolCell } from "./toolCallView";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -46,7 +47,10 @@ export function renderChatTranscript(
     const header = messageEl.createDiv({ cls: "ixplorer-chat__message-header" });
     header.createSpan({
       cls: "ixplorer-chat__message-label",
-      text: message.role === "user" ? "You" : options.assistantLabel || "Assistant",
+      text:
+        message.role === "user"
+          ? "You"
+          : message.modelName || options.assistantLabel || "Assistant",
     });
     header.createSpan({
       cls: "ixplorer-chat__message-time",
@@ -102,7 +106,8 @@ export function renderChatTranscript(
       renderQuestionEditor(contentEl, message, index, options);
     } else if (message.role === "assistant") {
       const progressEl = contentEl.createDiv({ cls: "ixplorer-chat__research-progress-host" });
-      renderReasoningSegments(progressEl, message, options);
+      const hasWorkflow = renderWorkflowNodes(progressEl, message, options);
+      contentEl.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
       if (message.isFallback) {
         renderFallbackBanner(contentEl, message.fallbackReason);
       }
@@ -146,17 +151,14 @@ export function patchActiveAssistantMessage(
   const progressEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__research-progress-host");
   const answerEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__answer-content");
   if (!progressEl || !answerEl) return false;
-  // Capture current open/closed state from the live DOM before destroying the element.
-  // The toggle listener mutates the *old* researchProgress object (captured in its closure),
-  // but by the time we re-render, options.messages already holds a *new* object created via
-  // spread — so the mutation is invisible to state. Reading the DOM directly is the source
-  // of truth here.
-  const liveDetails = progressEl.querySelector<HTMLDetailsElement>("details[data-reasoning-id]");
-  if (liveDetails && message.researchProgress) {
-    message.researchProgress.disclosure = liveDetails.open ? "user-open" : "user-closed";
-  }
+  const contentEl = progressEl.parentElement;
+  // Capture per-node open/expanded state from the live DOM before destroying it. The chain
+  // items are recreated via spread on every update, so the DOM is the only source of truth
+  // for which "Thinking" blocks the user opened and which tool cells they expanded.
+  const uiState = captureWorkflowUiState(progressEl);
   progressEl.empty();
-  renderReasoningSegments(progressEl, message, options);
+  const hasWorkflow = renderWorkflowNodes(progressEl, message, options, uiState);
+  contentEl?.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
   const fallbackEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__fallback-notice");
   fallbackEl?.remove();
   if (message.isFallback) {
@@ -176,103 +178,255 @@ export function patchActiveAssistantMessage(
   return true;
 }
 
-function renderReasoningSegments(
-  containerEl: HTMLElement,
+interface WorkflowUiState {
+  openThinking: Set<string>;
+  expandedCells: Set<string>;
+}
+
+function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
+  const openThinking = new Set<string>();
+  hostEl.querySelectorAll<HTMLDetailsElement>("details[data-thinking-id]").forEach((el) => {
+    if (el.open && el.dataset.thinkingId) openThinking.add(el.dataset.thinkingId);
+  });
+  const expandedCells = new Set<string>();
+  hostEl.querySelectorAll<HTMLElement>("[data-tool-cell-id].is-expanded").forEach((el) => {
+    if (el.dataset.toolCellId) expandedCells.add(el.dataset.toolCellId);
+  });
+  return { openThinking, expandedCells };
+}
+
+/**
+ * Render reasoning, tool calls, and intermediate summaries as a single vertical
+ * workflow that flows directly into the final answer. Returns whether any nodes
+ * were rendered so the caller can mark the answer as the tail of the workflow.
+ */
+function renderWorkflowNodes(
+  hostEl: HTMLElement,
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
-): void {
+  uiState?: WorkflowUiState,
+): boolean {
   const progress = message.researchProgress;
   const legacySegments = message.reasoning ?? [];
   const segments = progress?.reasoning.segments ?? legacySegments;
   const checkpoints = progress?.checkpoints ?? [];
   const chain = progress?.chain ?? [];
   const hasChain = chain.length > 0;
-  if (segments.length === 0 && checkpoints.length === 0 && !hasChain) return;
-  const details = containerEl.createEl("details", {
-    cls: "ixplorer-chat__reasoning",
-    attr: { "data-reasoning-id": "research-progress" },
-  });
-  details.open = progress
-    ? progress.disclosure === "user-open" ||
-      (progress.disclosure === "auto" && progress.phase === "streaming")
-    : message.reasoningOpen === true;
-  const duration = progress?.reasoning.durationMs;
-  const roundCount = new Set(checkpoints.map((checkpoint) => checkpoint.round)).size;
-  const toolCallCount = chain.filter((item) => item.kind === "tool-call").length;
+  if (segments.length === 0 && checkpoints.length === 0 && !hasChain) return false;
   const isStreaming = progress?.phase === "streaming";
-  const summaryEl = details.createEl("summary", { cls: "ixplorer-chat__reasoning-summary" });
-  if (isStreaming) {
-    summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-summary-label", text: "Thinking…" });
-  } else {
-    summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-summary-label", text: "Research progress" });
-    if (roundCount > 0) {
-      const pillEl = summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-pill" });
-      setIcon(pillEl.createSpan(), "refresh-cw");
-      pillEl.createSpan({ text: ` ${roundCount}` });
-    }
-    if (toolCallCount > 0) {
-      const pillEl = summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-pill" });
-      setIcon(pillEl.createSpan(), "tool");
-      pillEl.createSpan({ text: ` ${toolCallCount}` });
-    }
-    if (duration !== undefined) {
-      summaryEl.createSpan({ cls: "ixplorer-chat__reasoning-duration", text: formatDuration(duration) });
-    }
-  }
-  details.addEventListener("toggle", () => {
-    if (progress) progress.disclosure = details.open ? "user-open" : "user-closed";
-  });
-  const reasoningEl = details.createDiv({ cls: "ixplorer-chat__reasoning-content" });
+  const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
+
   if (hasChain) {
-    renderChain(reasoningEl, chain, options);
-  } else {
-    for (const segment of segments) {
-      const segmentEl = reasoningEl.createDiv({
-        cls: "ixplorer-chat__reasoning-segment",
-        attr: { "data-segment-id": segment.id },
-      });
-      void MarkdownRenderer.render(options.app, segment.content, segmentEl, "", options.markdownContext);
+    let activeReasoningId: string | undefined;
+    if (isStreaming) {
+      for (let i = chain.length - 1; i >= 0; i -= 1) {
+        const item = chain[i];
+        if (item.kind === "reasoning") {
+          activeReasoningId = item.segmentId;
+          break;
+        }
+      }
     }
-    for (const checkpoint of checkpoints) {
-      const checkpointEl = reasoningEl.createDiv({ cls: "ixplorer-chat__reasoning-checkpoint" });
-      checkpointEl.createEl("strong", { text: `Provisional checkpoint ${checkpoint.round}` });
-      void MarkdownRenderer.render(options.app, checkpoint.content, checkpointEl, "", options.markdownContext);
+    for (const item of chain) {
+      if (item.kind === "reasoning") {
+        renderThinkingNode(listEl, item.segmentId, item.content, {
+          active: item.segmentId === activeReasoningId,
+          options,
+          uiState,
+        });
+      } else if (item.kind === "tool-call") {
+        renderToolNode(listEl, item, options, uiState);
+      }
+    }
+    return true;
+  }
+
+  segments.forEach((segment, index) => {
+    renderThinkingNode(listEl, segment.id, segment.content, {
+      active: isStreaming === true && index === segments.length - 1,
+      options,
+      uiState,
+    });
+  });
+  for (const checkpoint of checkpoints) {
+    renderSummaryNode(listEl, checkpoint.content, options);
+  }
+  return true;
+}
+
+const LONG_THINKING_CHARS = 280;
+
+function isLongThinking(content: string): boolean {
+  return content.length > LONG_THINKING_CHARS || content.split("\n").length > 4;
+}
+
+function renderThinkingNode(
+  listEl: HTMLElement,
+  id: string,
+  content: string,
+  context: { active: boolean; options: ChatTranscriptOptions; uiState?: WorkflowUiState },
+): void {
+  const { active, options, uiState } = context;
+  const node = listEl.createDiv({
+    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking",
+  });
+  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
+  const body = node.createDiv({ cls: "ixplorer-chat__workflow-body" });
+
+  if (!active && isLongThinking(content)) {
+    const details = body.createEl("details", {
+      cls: "ixplorer-chat__thinking",
+      attr: { "data-thinking-id": id },
+    });
+    details.open = uiState?.openThinking.has(id) ?? false;
+    const summary = details.createEl("summary", { cls: "ixplorer-chat__thinking-summary" });
+    setIcon(summary.createSpan({ cls: "ixplorer-chat__thinking-caret" }), "chevron-right");
+    summary.createSpan({ cls: "ixplorer-chat__thinking-summary-label", text: "Thinking" });
+    const textEl = details.createDiv({ cls: "ixplorer-chat__workflow-text" });
+    void MarkdownRenderer.render(options.app, content, textEl, "", options.markdownContext);
+    return;
+  }
+
+  if (active) {
+    body.createDiv({ cls: "ixplorer-chat__workflow-heading", text: "Thinking…" });
+  }
+  const textEl = body.createDiv({ cls: "ixplorer-chat__workflow-text" });
+  void MarkdownRenderer.render(options.app, content, textEl, "", options.markdownContext);
+}
+
+function renderSummaryNode(
+  listEl: HTMLElement,
+  content: string,
+  options: ChatTranscriptOptions,
+): void {
+  const node = listEl.createDiv({
+    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--summary",
+  });
+  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
+  const body = node.createDiv({ cls: "ixplorer-chat__workflow-body" });
+  const textEl = body.createDiv({ cls: "ixplorer-chat__workflow-text" });
+  void MarkdownRenderer.render(options.app, content, textEl, "", options.markdownContext);
+}
+
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  search_index: "Search index",
+  search_notes: "Search notes",
+  search_web: "Search web",
+  fetch_web_page: "Fetch web page",
+  read_note: "Read note",
+  get_active_note: "Active note",
+  list_notes: "List notes",
+  create_note: "Create note",
+  update_note: "Edit note",
+  delete_note: "Delete note",
+};
+
+function renderToolNode(
+  listEl: HTMLElement,
+  item: Extract<ChainItem, { kind: "tool-call" }>,
+  options: ChatTranscriptOptions,
+  uiState?: WorkflowUiState,
+): void {
+  const view = describeToolCall({
+    name: item.name,
+    label: item.label,
+    status: item.status,
+    args: item.args,
+    resultJson: item.resultJson,
+  });
+  const node = listEl.createDiv({
+    cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--tool ixplorer-chat__workflow-node--${item.status}`,
+    attr: { "data-tool-id": item.id },
+  });
+  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--tool" });
+  const body = node.createDiv({ cls: "ixplorer-chat__workflow-body" });
+  const head = body.createDiv({ cls: "ixplorer-chat__tool-head" });
+  head.createSpan({
+    cls: "ixplorer-chat__tool-name",
+    text: TOOL_DISPLAY_NAMES[item.name] ?? item.name,
+  });
+  if (view.intent) {
+    head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
+  }
+  if (view.inCell) {
+    renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, uiState);
+  }
+  if (view.outCell) {
+    renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, uiState);
+  }
+}
+
+const TOOL_CELL_COLLAPSED_PX = 160;
+
+function renderToolCell(
+  parentEl: HTMLElement,
+  cellId: string,
+  label: string,
+  cell: ToolCell,
+  options: ChatTranscriptOptions,
+  uiState?: WorkflowUiState,
+): void {
+  const wrap = parentEl.createDiv({
+    cls: "ixplorer-chat__tool-cell",
+    attr: { "data-tool-cell-id": cellId },
+  });
+  if (uiState?.expandedCells.has(cellId)) wrap.addClass("is-expanded");
+  const header = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-header" });
+  header.createSpan({ cls: "ixplorer-chat__tool-cell-label", text: label });
+  const expandBtn = header.createEl("button", {
+    cls: "ixplorer-chat__tool-cell-expand",
+    attr: { type: "button", "aria-label": "Expand", title: "Expand" },
+  });
+  setIcon(expandBtn, "chevrons-up-down");
+  const bodyEl = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-body" });
+  renderToolCellBody(bodyEl, cell, options);
+
+  expandBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const expanded = !wrap.hasClass("is-expanded");
+    wrap.toggleClass("is-expanded", expanded);
+    expandBtn.setAttr("aria-label", expanded ? "Collapse" : "Expand");
+    expandBtn.setAttr("title", expanded ? "Collapse" : "Expand");
+  });
+
+  // Hide the toggle when the content already fits within the collapsed height.
+  if (cell.kind !== "diff" || cell.hunks.length > 0) {
+    if (bodyEl.scrollHeight <= TOOL_CELL_COLLAPSED_PX && !wrap.hasClass("is-expanded")) {
+      expandBtn.addClass("is-hidden");
     }
   }
 }
 
-function renderChain(
-  containerEl: HTMLElement,
-  chain: ChainItem[],
+function renderToolCellBody(
+  bodyEl: HTMLElement,
+  cell: ToolCell,
   options: ChatTranscriptOptions,
 ): void {
-  const chainEl = containerEl.createDiv({ cls: "ixplorer-chat__chain" });
-  for (const item of chain) {
-    if (item.kind === "tool-call") {
-      const itemEl = chainEl.createDiv({
-        cls: `ixplorer-chat__chain-tool-call ixplorer-chat__chain-tool-call--${item.status}`,
-        attr: { "data-tool-id": item.id },
-      });
-      const iconEl = itemEl.createSpan({ cls: "ixplorer-chat__chain-tool-icon" });
-      setIcon(iconEl, item.status === "failed" ? "x-circle" : item.status === "complete" ? "check-circle" : "loader");
-      const labelEl = itemEl.createSpan({ cls: "ixplorer-chat__chain-tool-label", text: item.label });
-      if (item.resultSummary) {
-        labelEl.createSpan({ cls: "ixplorer-chat__chain-tool-result", text: ` · ${item.resultSummary}` });
-      }
-    } else if (item.kind === "reasoning") {
-      const content = item.content;
-      const isLong = content.length > 400;
-      if (isLong) {
-        const segDetails = chainEl.createEl("details", { cls: "ixplorer-chat__chain-reasoning" });
-        segDetails.createEl("summary", { cls: "ixplorer-chat__chain-reasoning-summary", text: "Reasoning…" });
-        const segEl = segDetails.createDiv({ cls: "ixplorer-chat__chain-reasoning-content" });
-        void MarkdownRenderer.render(options.app, content, segEl, "", options.markdownContext);
-      } else {
-        const segEl = chainEl.createDiv({ cls: "ixplorer-chat__chain-reasoning" });
-        void MarkdownRenderer.render(options.app, content, segEl, "", options.markdownContext);
-      }
-    }
+  if (cell.kind === "code") {
+    const pre = bodyEl.createEl("pre", { cls: "ixplorer-chat__tool-cell-code" });
+    pre.createEl("code", { text: cell.text });
+    return;
   }
+  if (cell.kind === "text") {
+    void MarkdownRenderer.render(options.app, cell.text, bodyEl, "", options.markdownContext);
+    return;
+  }
+  const diffEl = bodyEl.createDiv({ cls: "ixplorer-chat__diff" });
+  cell.hunks.forEach((hunk, index) => {
+    if (index > 0) {
+      diffEl.createDiv({ cls: "ixplorer-chat__diff-gap", text: "⋯" });
+    }
+    for (const line of hunk.lines) {
+      const lineEl = diffEl.createDiv({
+        cls: `ixplorer-chat__diff-line ixplorer-chat__diff-line--${line.type}`,
+      });
+      lineEl.createSpan({
+        cls: "ixplorer-chat__diff-sign",
+        text: line.type === "add" ? "+" : line.type === "remove" ? "−" : " ",
+      });
+      lineEl.createSpan({ cls: "ixplorer-chat__diff-text", text: line.text });
+    }
+  });
 }
 
 function renderFallbackBanner(containerEl: HTMLElement, reason?: string): void {
@@ -286,12 +440,13 @@ function renderFallbackBanner(containerEl: HTMLElement, reason?: string): void {
   const bannerEl = containerEl.createDiv({ cls: "ixplorer-chat__fallback-notice" });
   const iconEl = bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-icon" });
   setIcon(iconEl, "alert-triangle");
-  const text = reason ? (reasonLabel[reason] ?? `Research stopped (${reason}).`) : "Research could not complete.";
-  bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-text", text: `${text} The answer below is based on partial results.` });
-}
-
-function formatDuration(durationMs: number): string {
-  return durationMs < 1_000 ? `${durationMs} ms` : `${(durationMs / 1_000).toFixed(1)} s`;
+  const text = reason
+    ? (reasonLabel[reason] ?? `Research stopped (${reason}).`)
+    : "Research could not complete.";
+  bannerEl.createSpan({
+    cls: "ixplorer-chat__fallback-notice-text",
+    text: `${text} The answer below is based on partial results.`,
+  });
 }
 
 export function renderFollowUps(

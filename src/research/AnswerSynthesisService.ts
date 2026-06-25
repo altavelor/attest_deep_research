@@ -86,8 +86,12 @@ export class AnswerSynthesisService {
     const fallbackPrefix = input.fallback
       ? `IMPORTANT: The research process could not complete (${input.fallback.reason}).\nYou are synthesizing a best-effort answer from PARTIAL results.\nBegin your response with a clear notice that the answer may be incomplete.\nDo not pretend to have complete information.\n\n`
       : "";
+    const toolLoopEnabled = input.toolsEnabled === true && this.noteTools !== undefined;
     const systemPromptOptions = {
       indexDescription: input.indexDescription?.text,
+      ...(toolLoopEnabled
+        ? { noteToolNames: this.noteTools!.definitions().map((def) => def.function.name) }
+        : {}),
     };
     const prompt = buildResearchPrompt({
       question: input.question,
@@ -113,7 +117,7 @@ export class AnswerSynthesisService {
       { role: "user" as const, content: prompt },
     ];
 
-    if (input.toolsEnabled === true && this.noteTools) {
+    if (toolLoopEnabled) {
       const events = createAsyncEventChannel<import("./tools/ToolLoopRunner").ToolLoopEvent>();
       const resultPromise = runToolLoop({
         chatModel: this.chatModel,
@@ -136,7 +140,9 @@ export class AnswerSynthesisService {
           event.type === "answer-reset" ||
           event.type === "checkpoint-delta" ||
           event.type === "checkpoint-complete" ||
-          event.type === "checkpoint-promote"
+          event.type === "checkpoint-promote" ||
+          event.type === "tool-call-start" ||
+          event.type === "tool-call-end"
         )
           yield event;
       }
@@ -238,7 +244,9 @@ export class AnswerSynthesisService {
       ...(contextDiagnostics ? { contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
-      ...(input.fallback ? { isFallback: true as const, fallbackReason: input.fallback.reason } : {}),
+      ...(input.fallback
+        ? { isFallback: true as const, fallbackReason: input.fallback.reason }
+        : {}),
     };
 
     if (this.persistFinalAnswer) {
@@ -302,7 +310,6 @@ export class AnswerSynthesisService {
     };
   }
 }
-
 
 function appendToolDiagnostics(
   diagnostics: ContextDiagnostics | undefined,

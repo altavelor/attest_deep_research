@@ -3,7 +3,7 @@ import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/sha
 
 class ProbeProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
-  constructor(private readonly respond: (request: ChatRequest) => ChatResponseChunk) {}
+  constructor(private readonly respond: (request: ChatRequest) => ChatResponseChunk) { }
   async listModels(): Promise<string[]> {
     return ["m"];
   }
@@ -22,43 +22,42 @@ describe("probeToolControlCapabilities", () => {
         request.toolChoice?.type === "specific"
           ? [{ id: "specific", name: request.toolChoice.name, arguments: {} }]
           : [
-              { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
-              { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
-            ],
+            { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
+            { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
+          ],
     }));
-    await expect(
-      probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" }),
-    ).resolves.toEqual({
-      calls: true,
-      choiceRequired: true,
-      choiceSpecific: true,
-      parallelCalls: true,
-    });
+    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    expect(result.calls).toBe(true);
+    expect(result.choiceRequired).toBe(true);
+    expect(result.choiceSpecific).toBe(true);
+    expect(result.parallelCalls).toBe(true);
+    // Audit data
+    expect(result.probeAuditData.ranAt).toBeTruthy();
+    expect(result.probeAuditData.results.required).toContain("ixplorer_probe_a");
+    expect(result.probeAuditData.results.specific).toContain("ixplorer_probe_b");
+    expect(result.probeAuditData.results.auto).toEqual([]);
     expect(provider.requests).toHaveLength(2);
     expect(JSON.stringify(provider.requests)).not.toMatch(/vault|index|note|web/i);
   });
 
   it("fails closed on text, wrong tools, and Ollama", async () => {
     const textProvider = new ProbeProvider(() => ({ content: "no", isComplete: true }));
-    await expect(
-      probeToolControlCapabilities({ provider: textProvider, model: "m", apiFormat: "anthropic" }),
-    ).resolves.toEqual({
-      calls: false,
-      choiceRequired: false,
-      choiceSpecific: false,
-      parallelCalls: false,
-    });
+    const result = await probeToolControlCapabilities({ provider: textProvider, model: "m", apiFormat: "anthropic" });
+    expect(result.calls).toBe(false);
+    expect(result.choiceRequired).toBe(false);
+    expect(result.choiceSpecific).toBe(false);
+    expect(result.parallelCalls).toBe(false);
+    // auto fallback was tried
+    expect(result.probeAuditData.results.auto).toEqual([]);
+
     const unused = new ProbeProvider(() => {
       throw new Error("must not run");
     });
-    await expect(
-      probeToolControlCapabilities({ provider: unused, model: "m", apiFormat: "ollama" }),
-    ).resolves.toEqual({
-      calls: false,
-      choiceRequired: false,
-      choiceSpecific: false,
-      parallelCalls: false,
-    });
+    const ollamaResult = await probeToolControlCapabilities({ provider: unused, model: "m", apiFormat: "ollama" });
+    expect(ollamaResult.calls).toBe(false);
+    expect(ollamaResult.choiceRequired).toBe(false);
+    expect(ollamaResult.choiceSpecific).toBe(false);
+    expect(ollamaResult.parallelCalls).toBe(false);
     expect(unused.requests).toHaveLength(0);
   });
 
@@ -75,13 +74,32 @@ describe("probeToolControlCapabilities", () => {
         },
       ],
     }));
-    await expect(
-      probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" }),
-    ).resolves.toEqual({
-      calls: false,
-      choiceRequired: false,
-      choiceSpecific: false,
-      parallelCalls: false,
+    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    expect(result.calls).toBe(false);
+    expect(result.choiceRequired).toBe(false);
+    expect(result.choiceSpecific).toBe(false);
+    expect(result.parallelCalls).toBe(false);
+  });
+
+  it("falls back to auto probe when required and specific probes return no calls", async () => {
+    let callCount = 0;
+    const provider = new ProbeProvider((request) => {
+      callCount += 1;
+      // Only respond to auto
+      if (request.toolChoice?.type === "auto") {
+        return {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "a", name: "ixplorer_probe_a", arguments: {} }],
+        };
+      }
+      return { content: "", isComplete: true };
     });
+    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    expect(result.calls).toBe(true);
+    expect(result.choiceRequired).toBe(false);
+    expect(result.choiceSpecific).toBe(false);
+    expect(result.probeAuditData.results.auto).toContain("ixplorer_probe_a");
+    expect(callCount).toBe(3); // required, specific, auto
   });
 });

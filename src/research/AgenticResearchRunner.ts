@@ -8,6 +8,7 @@ import {
   ModelRoundRequest,
   ModelToolOutput,
   ProviderContinuationState,
+  ReasoningSegmentAttribution,
   ToolCallDiagnostic,
 } from "../shared/types";
 import { ResearchExecutionPolicy } from "./ResearchExecutionPolicy";
@@ -24,7 +25,6 @@ export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"
   | "mandatory-repair-failed"
   | "model-round-limit-exceeded"
-  | "tool-call-limit-exceeded"
   | "tool-result-budget-exceeded"
   | "provider-error"
   | "cancelled"
@@ -42,15 +42,25 @@ export interface AgenticResearchRunnerOptions {
   maxTokens?: number;
   signal?: AbortSignal;
   maxRounds?: number;
-  maxCallsPerRound?: number;
-  maxTotalCalls?: number;
   maxResultChars?: number;
   reasoning?: ModelRoundRequest["reasoning"];
   onDelta?(delta: ModelRoundDelta, round: number): void;
   onAnswerReset?(): void;
   onRoundClassified?(round: number, classification: "intermediate" | "final"): void;
-  onToolCall?(id: string, name: string, label: string, round: number): void;
-  onToolResult?(id: string, ok: boolean, resolvedLabel?: string, resultSummary?: string): void;
+  onToolCall?(
+    id: string,
+    name: string,
+    label: string,
+    round: number,
+    args?: Record<string, unknown>,
+  ): void;
+  onToolResult?(
+    id: string,
+    ok: boolean,
+    resolvedLabel?: string,
+    resultSummary?: string,
+    resultJson?: string,
+  ): void;
 }
 
 export type AgenticResearchResult = AgenticResearchSuccess | AgenticResearchFailure;
@@ -68,6 +78,7 @@ export interface AgenticResearchSuccess {
   stopReasons: string[];
   totalResultChars: number;
   reasoningItemCount: number;
+  reasoningSegments: ReasoningSegmentAttribution[];
   continuationRounds: number;
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
@@ -85,13 +96,14 @@ export interface AgenticResearchFailure {
   stopReasons: string[];
   totalResultChars: number;
   reasoningItemCount: number;
+  reasoningSegments: ReasoningSegmentAttribution[];
   continuationRounds: number;
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
-const DEFAULT_MAX_ROUNDS = 5;
-const DEFAULT_MAX_CALLS_PER_ROUND = 5;
-const DEFAULT_MAX_TOTAL_CALLS = 10;
+// maxRounds is a runaway backstop, not the active limiter; the model decides when
+// to stop (coding-loop style). Real control is maxResultChars + loop detection.
+const DEFAULT_MAX_ROUNDS = 30;
 const DEFAULT_MAX_RESULT_CHARS = 50_000;
 const PREVIEW_CHARS = 600;
 
@@ -118,21 +130,21 @@ export class AgenticResearchRunner {
     const cache = new Map<string, CachedExecution>();
     const mandatoryFailures = new Map<string, boolean>();
     const maxRounds = this.options.maxRounds ?? DEFAULT_MAX_ROUNDS;
-    const maxCallsPerRound = this.options.maxCallsPerRound ?? DEFAULT_MAX_CALLS_PER_ROUND;
-    const maxTotalCalls = this.options.maxTotalCalls ?? DEFAULT_MAX_TOTAL_CALLS;
     const maxResultChars = this.options.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
     let phase: "bootstrap" | "repair" | "research" = "bootstrap";
     let repairTool: string | undefined;
     let totalCalls = 0;
     let duplicateCalls = 0;
     let totalResultChars = 0;
-    let consecutiveDuplicateRounds = 0;
+    let consecutiveNoProgressRounds = 0;
+    const seenEvidenceIds = new Set<string>();
     let rounds = 0;
     const phases: string[] = [];
     const stopReasons: string[] = [];
     let continuation: ProviderContinuationState | undefined;
     let toolOutputs: ModelToolOutput[] | undefined;
     let reasoningItemCount = 0;
+    const reasoningSegments: ReasoningSegmentAttribution[] = [];
     let continuationRounds = 0;
     const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
 
@@ -149,6 +161,7 @@ export class AgenticResearchRunner {
       stopReasons,
       totalResultChars,
       reasoningItemCount,
+      reasoningSegments,
       continuationRounds,
       usage,
     });
@@ -156,13 +169,16 @@ export class AgenticResearchRunner {
     try {
       for (let round = 1; round <= maxRounds; round += 1) {
         rounds = round;
+        const roundPhase = phase;
         phases.push(phase);
         if (this.options.signal?.aborted) return failure("cancelled");
         const toolChoice: ChatRequest["toolChoice"] =
           phase === "bootstrap"
             ? this.options.policy.bootstrapChoice
             : phase === "repair"
-              ? { type: "specific", name: repairTool! }
+              ? this.options.policy.supportsSpecificChoice
+                ? { type: "specific", name: repairTool! }
+                : { type: "required" }
               : { type: "auto" };
         const response = await collectRound(
           this.options,
@@ -175,6 +191,14 @@ export class AgenticResearchRunner {
         );
         continuation = response.continuation;
         reasoningItemCount += response.reasoningItemCount;
+        for (const segment of response.reasoningSegments) {
+          reasoningSegments.push({
+            segmentId: segment.segmentId,
+            round,
+            phase: roundPhase,
+            chars: segment.chars,
+          });
+        }
         if (continuation) continuationRounds += 1;
         usage.inputTokens += response.usage.inputTokens;
         usage.outputTokens += response.usage.outputTokens;
@@ -204,6 +228,7 @@ export class AgenticResearchRunner {
               stopReasons,
               totalResultChars,
               reasoningItemCount,
+              reasoningSegments,
               continuationRounds,
               usage,
             };
@@ -223,12 +248,6 @@ export class AgenticResearchRunner {
           this.options.onRoundClassified?.(round, "intermediate");
         }
 
-        if (
-          response.toolCalls.length > maxCallsPerRound ||
-          totalCalls + response.toolCalls.length > maxTotalCalls
-        ) {
-          return failure("tool-call-limit-exceeded");
-        }
         if (!continuation) {
           messages.push({
             role: "assistant",
@@ -240,6 +259,8 @@ export class AgenticResearchRunner {
         }
 
         let roundDuplicates = 0;
+        let roundHadEvidence = false;
+        let roundNewEvidence = false;
         for (const call of response.toolCalls) {
           totalCalls += 1;
           const key = normalizedCallKey(call);
@@ -252,7 +273,7 @@ export class AgenticResearchRunner {
           // Mutation tools are never cached: identical args may have different vault state.
           const bypassCache = mutationTool(call.name);
           const label = toolCallChainLabel(call.name, call.arguments);
-          this.options.onToolCall?.(call.id, call.name, label, round);
+          this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
           if (execution && !retryMandatory && !bypassCache) {
             duplicateCalls += 1;
             roundDuplicates += 1;
@@ -265,11 +286,27 @@ export class AgenticResearchRunner {
           }
           const resolvedLabel = resolveLabelFromResult(call.name, execution.result);
           const resultSummary = resolveResultSummary(call.name, execution.result);
-          this.options.onToolResult?.(call.id, execution.ok, resolvedLabel, resultSummary);
+          this.options.onToolResult?.(
+            call.id,
+            execution.ok,
+            resolvedLabel,
+            resultSummary,
+            execution.result,
+          );
           if (totalResultChars + execution.result.length > maxResultChars) {
             return failure("tool-result-budget-exceeded");
           }
           totalResultChars += execution.result.length;
+          const evidenceIds = extractEvidenceIds(execution.result);
+          if (evidenceIds.length > 0) {
+            roundHadEvidence = true;
+            for (const id of evidenceIds) {
+              if (!seenEvidenceIds.has(id)) {
+                roundNewEvidence = true;
+                seenEvidenceIds.add(id);
+              }
+            }
+          }
           if (execution.ok && required.has(call.name)) satisfied.add(call.name);
           if (!execution.ok && required.has(call.name)) {
             mandatoryFailures.set(call.name, execution.retryable);
@@ -285,7 +322,7 @@ export class AgenticResearchRunner {
             resultBytes: execution.result.length,
             round,
             ...(cache.get(key) === execution &&
-            diagnostics.some((item) => normalizedDiagnosticKey(item) === key)
+              diagnostics.some((item) => normalizedDiagnosticKey(item) === key)
               ? { reason: "duplicate-result-reused" }
               : {}),
             ...(execution.diagnostic ? { metadata: execution.diagnostic } : {}),
@@ -297,13 +334,18 @@ export class AgenticResearchRunner {
           }
         }
 
-        if (roundDuplicates === response.toolCalls.length && response.toolCalls.length > 0) {
-          consecutiveDuplicateRounds += 1;
-          if (consecutiveDuplicateRounds >= 2) {
+        // No-progress detection: a round spins if every call was an exact duplicate,
+        // or if it searched for evidence but surfaced nothing new (e.g. the model
+        // keeps reformulating the same query against the same low-value chunks).
+        const allDuplicates = roundDuplicates === response.toolCalls.length;
+        const searchedWithoutNewEvidence = roundHadEvidence && !roundNewEvidence;
+        if (response.toolCalls.length > 0 && (allDuplicates || searchedWithoutNewEvidence)) {
+          consecutiveNoProgressRounds += 1;
+          if (consecutiveNoProgressRounds >= 2) {
             return failure("loop-detected");
           }
         } else {
-          consecutiveDuplicateRounds = 0;
+          consecutiveNoProgressRounds = 0;
         }
 
         const missing = missingTools(required, satisfied);
@@ -350,11 +392,19 @@ async function collectRound(
   continuation?: ProviderContinuationState;
   stopReason: "complete" | "tool_calls" | "length" | "error";
   reasoningItemCount: number;
+  reasoningSegments: { segmentId: string; chars: number }[];
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
   streamedText: boolean;
 }> {
   let streamedText = false;
   let streamedReasoning = false;
+  // segmentId (post-round-prefix) -> accumulated character count, so attribution
+  // matches the segmentIds the UI renders.
+  const segmentChars = new Map<string, number>();
+  const recordSegment = (segmentId: string | undefined, text: string): void => {
+    if (!segmentId) return;
+    segmentChars.set(segmentId, (segmentChars.get(segmentId) ?? 0) + text.length);
+  };
   const result = await modelRound.runRound({
     model: options.model,
     messages,
@@ -370,12 +420,14 @@ async function collectRound(
     onDelta: (delta) => {
       if (delta.type === "text") streamedText = true;
       else streamedReasoning = true;
-      options.onDelta?.(
+      const forwarded: ModelRoundDelta =
         delta.type === "reasoningSummary" && delta.segmentId
           ? { ...delta, segmentId: `round-${round}-${delta.segmentId}` }
-          : delta,
-        round,
-      );
+          : delta;
+      if (forwarded.type === "reasoningSummary") {
+        recordSegment(forwarded.segmentId, forwarded.text);
+      }
+      options.onDelta?.(forwarded, round);
     },
   });
   const content = result.items
@@ -389,14 +441,9 @@ async function collectRound(
   if (!streamedReasoning) {
     const summaries = result.items.filter((item) => item.type === "reasoningSummary");
     for (let index = 0; index < summaries.length; index += 1) {
-      options.onDelta?.(
-        {
-          type: "reasoningSummary",
-          segmentId: `reasoning-${round}-${index}`,
-          text: summaries[index].text,
-        },
-        round,
-      );
+      const segmentId = `reasoning-${round}-${index}`;
+      recordSegment(segmentId, summaries[index].text);
+      options.onDelta?.({ type: "reasoningSummary", segmentId, text: summaries[index].text }, round);
     }
   }
   return {
@@ -405,6 +452,7 @@ async function collectRound(
     continuation: result.continuation,
     stopReason: result.stopReason,
     reasoningItemCount: result.reasoningItemCount ?? 0,
+    reasoningSegments: [...segmentChars].map(([segmentId, chars]) => ({ segmentId, chars })),
     usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
     streamedText,
   };
@@ -421,6 +469,18 @@ function serializeExecution(execution: ResearchToolExecution<unknown>): CachedEx
 
 function missingTools(required: Set<string>, satisfied: Set<string>): string[] {
   return [...required].filter((name) => !satisfied.has(name));
+}
+
+// Pull evidence/chunk identifiers out of a serialized tool result. Regex-based so it
+// tolerates truncated or wrapped payloads where JSON.parse would throw.
+function extractEvidenceIds(result: string): string[] {
+  const ids: string[] = [];
+  const pattern = /"(?:evidenceId|chunkId)"\s*:\s*"([^"]+)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(result)) !== null) {
+    ids.push(match[1]);
+  }
+  return ids;
 }
 
 function normalizedCallKey(call: Pick<ChatToolCall, "name" | "arguments">): string {

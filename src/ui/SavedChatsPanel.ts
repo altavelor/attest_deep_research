@@ -2,7 +2,12 @@ import { setIcon } from "obsidian";
 
 import { SavedChatSummary } from "../chat/ChatStore";
 
-export interface SavedChatsPanelOptions {
+export interface SavedChatRowActions {
+  onRenameChat?(id: string, title: string): void | Promise<void>;
+  onDeleteChat?(id: string): void | Promise<void>;
+}
+
+export interface SavedChatsPanelOptions extends SavedChatRowActions {
   savedChats: SavedChatSummary[];
   currentChatId: string | null;
   searchQuery: string;
@@ -13,7 +18,8 @@ export interface SavedChatsPanelOptions {
 
 export function renderSavedChatsEmptyState(
   containerEl: HTMLElement,
-  options: Pick<SavedChatsPanelOptions, "savedChats" | "onOpenChat" | "onViewAll">,
+  options: Pick<SavedChatsPanelOptions, "savedChats" | "onOpenChat" | "onViewAll"> &
+    SavedChatRowActions,
 ): void {
   const empty = containerEl.createDiv({ cls: "ixplorer-chat__empty-state" });
   const header = empty.createDiv({ cls: "ixplorer-chat__empty-header" });
@@ -34,7 +40,7 @@ export function renderSavedChatsEmptyState(
   const list = empty.createDiv({ cls: "ixplorer-chat__saved-list" });
   const visibleChats = options.savedChats.slice(0, 5);
   for (const chat of visibleChats) {
-    renderSavedChatRow(list, chat, "ixplorer-chat__saved-item", options.onOpenChat);
+    renderSavedChatRow(list, chat, "ixplorer-chat__saved-item", options);
   }
 
   const hiddenCount = options.savedChats.length - visibleChats.length;
@@ -89,12 +95,7 @@ export function renderSavedChatsPopoverContent(
   }
 
   for (const chat of filtered) {
-    const item = renderSavedChatRow(
-      list,
-      chat,
-      "ixplorer-chat__history-item",
-      options.onOpenChat,
-    );
+    const item = renderSavedChatRow(list, chat, "ixplorer-chat__history-item", options);
     if (chat.id === options.currentChatId) {
       item.addClass("is-active");
     }
@@ -131,10 +132,12 @@ function renderSavedChatRow(
   containerEl: HTMLElement,
   chat: SavedChatSummary,
   className: string,
-  onOpenChat: (id: string) => void,
-): HTMLButtonElement {
-  const button = containerEl.createEl("button", {
-    cls: className,
+  options: Pick<SavedChatsPanelOptions, "onOpenChat"> & SavedChatRowActions,
+): HTMLElement {
+  const row = containerEl.createDiv({ cls: `${className} ixplorer-chat__saved-row` });
+
+  const button = row.createEl("button", {
+    cls: "ixplorer-chat__saved-open",
     attr: { type: "button" },
   });
   const title = button.createSpan({ cls: "ixplorer-chat__saved-title", text: chat.title });
@@ -142,8 +145,92 @@ function renderSavedChatRow(
   const meta = button.createSpan({ cls: "ixplorer-chat__saved-meta" });
   meta.createSpan({ text: formatMessageCount(chat.messageCount) });
   meta.createSpan({ text: formatRelativeTime(chat.updatedAt) });
-  button.addEventListener("click", () => onOpenChat(chat.id));
-  return button;
+  button.addEventListener("click", () => options.onOpenChat(chat.id));
+
+  if (options.onRenameChat || options.onDeleteChat) {
+    const actions = row.createDiv({ cls: "ixplorer-chat__saved-actions" });
+
+    if (options.onRenameChat) {
+      const editButton = actions.createEl("button", {
+        cls: "ixplorer-chat__saved-action",
+        attr: { type: "button", "aria-label": "Rename chat", title: "Rename chat" },
+      });
+      setIcon(editButton, "pencil");
+      editButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        startInlineTitleEdit(button, title, chat, options.onRenameChat!);
+      });
+    }
+
+    if (options.onDeleteChat) {
+      const deleteButton = actions.createEl("button", {
+        cls: "ixplorer-chat__saved-action ixplorer-chat__saved-action--delete",
+        attr: { type: "button", "aria-label": "Delete chat", title: "Delete chat from disk" },
+      });
+      setIcon(deleteButton, "trash");
+      deleteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void options.onDeleteChat!(chat.id);
+      });
+    }
+  }
+
+  return row;
+}
+
+function startInlineTitleEdit(
+  openButton: HTMLButtonElement,
+  titleEl: HTMLElement,
+  chat: SavedChatSummary,
+  onRenameChat: (id: string, title: string) => void | Promise<void>,
+): void {
+  if (openButton.querySelector("input")) {
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "ixplorer-chat__saved-title-input";
+  input.value = chat.title;
+  input.maxLength = 200;
+  titleEl.replaceWith(input);
+
+  let committed = false;
+  const restore = () => {
+    if (input.parentElement) {
+      input.replaceWith(titleEl);
+    }
+  };
+  const commit = () => {
+    if (committed) {
+      return;
+    }
+    committed = true;
+    const nextTitle = input.value.trim();
+    if (nextTitle && nextTitle !== chat.title) {
+      titleEl.setText(nextTitle);
+      titleEl.setAttr("title", nextTitle);
+      void onRenameChat(chat.id, nextTitle);
+    }
+    restore();
+  };
+
+  input.addEventListener("click", (event) => event.stopPropagation());
+  input.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      committed = true;
+      restore();
+    }
+  });
+  input.addEventListener("blur", () => commit());
+
+  input.focus();
+  input.select();
 }
 
 function filterSavedChatSummaries(

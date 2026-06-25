@@ -16,7 +16,7 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
   constructor(
     private readonly vault: Vault,
     private readonly metadataCache: MetadataCache,
-  ) {}
+  ) { }
 
   async discover(request: GraphContextRequest): Promise<GraphContextDiscovery> {
     const availablePaths = new Set(request.availablePaths.map((path) => normalizeVaultPath(path)));

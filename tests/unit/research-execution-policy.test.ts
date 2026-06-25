@@ -8,14 +8,9 @@ const fullCapabilities = {
 } as const;
 
 describe("resolveResearchExecutionPolicy", () => {
-  it.each([
-    ["none", []],
-    ["indexOnly", ["search_index"]],
-    ["indexAndWeb", ["search_index", "search_web"]],
-    ["webOnly", ["search_web"]],
-  ] as const)(
-    "computes mandatory tools for %s",
-    (searchMode, expected) => {
+  it.each(["none", "indexOnly", "indexAndWeb", "webOnly"] as const)(
+    "never mandates tools for %s — the model chooses via auto",
+    (searchMode) => {
       const policy = resolveResearchExecutionPolicy({
         forceEagerResearch: false,
         deepResearch: false,
@@ -24,8 +19,10 @@ describe("resolveResearchExecutionPolicy", () => {
         capabilities: fullCapabilities,
       });
 
-      expect(policy.requiredTools).toEqual(expected);
+      expect(policy.requiredTools).toEqual([]);
+      expect(policy.bootstrapChoice).toEqual({ type: "auto" });
       expect(policy.strategy).toBe("agentic");
+      expect(policy.reason).toBe("eligible");
       expect(Object.isFrozen(policy)).toBe(true);
     },
   );
@@ -51,53 +48,58 @@ describe("resolveResearchExecutionPolicy", () => {
     ).toMatchObject({ strategy: "eager-default", reason: "deep-research-eager" });
   });
 
-  it.each([
-    [{ ...fullCapabilities, calls: false }, "tool-calls-unavailable"],
-    [{ ...fullCapabilities, choiceSpecific: false }, "specific-choice-unavailable"],
-    [{ ...fullCapabilities, choiceRequired: false }, "required-choice-unavailable"],
-    [{ ...fullCapabilities, parallelCalls: false }, "parallel-calls-unavailable"],
-  ] as const)("fails closed for missing capability %s", (capabilities, reason) => {
-    const searchMode = reason === "specific-choice-unavailable" ? "indexOnly" : "indexAndWeb";
+  it("falls back to deterministic only when the model cannot call tools at all", () => {
     const policy = resolveResearchExecutionPolicy({
       forceEagerResearch: false,
       deepResearch: false,
-      searchMode,
+      searchMode: "indexAndWeb",
       dependencies: { retriever: true, webProvider: true },
-      capabilities,
+      capabilities: { ...fullCapabilities, calls: false },
     });
-    expect(policy).toMatchObject({ strategy: "deterministic-fallback", reason });
+    expect(policy).toMatchObject({
+      strategy: "deterministic-fallback",
+      reason: "tool-calls-unavailable",
+    });
   });
 
   it.each([
-    ["indexOnly", { retriever: false, webProvider: true }, "retriever-unavailable"],
-    ["webOnly", { retriever: true, webProvider: false }, "web-provider-unavailable"],
+    [{ ...fullCapabilities, choiceSpecific: false, choiceRequired: false }],
+    [{ ...fullCapabilities, choiceRequired: false }],
+    [{ ...fullCapabilities, parallelCalls: false }],
   ] as const)(
-    "fails closed when a required dependency is missing",
-    (searchMode, dependencies, reason) => {
-      expect(
-        resolveResearchExecutionPolicy({
-          forceEagerResearch: false,
-          deepResearch: false,
-          searchMode,
-          dependencies,
-          capabilities: fullCapabilities,
-        }),
-      ).toMatchObject({ strategy: "deterministic-fallback", reason });
+    "stays agentic regardless of tool-choice/parallel capability (no forcing)",
+    (capabilities) => {
+      const policy = resolveResearchExecutionPolicy({
+        forceEagerResearch: false,
+        deepResearch: false,
+        searchMode: "indexAndWeb",
+        dependencies: { retriever: true, webProvider: true },
+        capabilities,
+      });
+      expect(policy).toMatchObject({ strategy: "agentic", reason: "eligible" });
+      expect(policy.bootstrapChoice).toEqual({ type: "auto" });
     },
   );
 
-  it("selects auto, specific, or required bootstrap choice", () => {
-    const resolve = (searchMode: "none" | "indexOnly" | "indexAndWeb") =>
+  it("mirrors parallel-call capability without requiring it", () => {
+    expect(
       resolveResearchExecutionPolicy({
         forceEagerResearch: false,
         deepResearch: false,
-        searchMode,
+        searchMode: "indexAndWeb",
         dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
-      }).bootstrapChoice;
-    expect(resolve("none")).toEqual({ type: "auto" });
-    expect(resolve("indexOnly")).toEqual({ type: "specific", name: "search_index" });
-    expect(resolve("indexAndWeb")).toEqual({ type: "required" });
+      }).parallelToolCalls,
+    ).toBe(true);
+    expect(
+      resolveResearchExecutionPolicy({
+        forceEagerResearch: false,
+        deepResearch: false,
+        searchMode: "indexAndWeb",
+        dependencies: { retriever: true, webProvider: true },
+        capabilities: { ...fullCapabilities, parallelCalls: false },
+      }).parallelToolCalls,
+    ).toBe(false);
   });
 
   it("keeps Ollama on deterministic fallback even with manual-looking flags", () => {

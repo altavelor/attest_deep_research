@@ -86,9 +86,9 @@ export class WebResearchPipeline {
     const search = deepResearch
       ? await this.searchDeepWebResults(queries)
       : {
-          results: await this.searchProvider.search(question, NORMAL_WEB_SEARCH_OPTIONS),
-          requests: [{ query: question, ...NORMAL_WEB_SEARCH_OPTIONS }],
-        };
+        results: await this.searchProvider.search(question, NORMAL_WEB_SEARCH_OPTIONS),
+        requests: [{ query: question, ...NORMAL_WEB_SEARCH_OPTIONS }],
+      };
     const results = search.results;
 
     if (results.length === 0) {

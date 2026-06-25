@@ -83,10 +83,10 @@ export class IndexWriteCoordinator {
     const embeddedChunks =
       input.chunks.length > 0
         ? await this.embeddingBatcher.embedAndStoreChunks({
-            chunks: input.chunks,
-            sourcePathsToReplace,
-            getWriter: () => this.getWriter(),
-          })
+          chunks: input.chunks,
+          sourcePathsToReplace,
+          getWriter: () => this.getWriter(),
+        })
         : [];
 
     if (input.chunks.length === 0) {

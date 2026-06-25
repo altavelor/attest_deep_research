@@ -30,15 +30,18 @@ import {
   DiscoveredModel,
 } from "./connectionTests";
 import { contextLengthInputAfterDiscovery } from "./modelContext";
-import { probeToolControlCapabilities } from "./toolCapabilityProbe";
+import { probeToolControlCapabilities, ToolCapabilityProbeResult } from "./toolCapabilityProbe";
 import {
   createToolCapabilitySettings,
   resolveToolCapabilities,
-  ToolCapabilityLayer,
   ToolCapabilitySettings,
 } from "./toolCapabilities";
 import { DUCK_DUCK_GO_DESCRIPTION } from "./privacyCopy";
-import { capabilityCacheKey, unknownSnapshot } from "./modelCapabilityCache";
+import {
+  capabilityCacheKey,
+  ModelCapabilitySnapshot,
+  unknownSnapshot,
+} from "./modelCapabilityCache";
 import { probeReasoningVisibility } from "./reasoningVisibilityProbe";
 import {
   ChatModelProfile,
@@ -46,6 +49,7 @@ import {
   EmbeddingModelProfile,
   ServerProfile,
   MAX_INDEX_PROFILE_COUNT,
+  MAX_PROFILE_NAME_LENGTH,
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
   createIndexProfile,
@@ -53,6 +57,7 @@ import {
   getActiveIndexProfile,
   hasDuplicateProfileName,
   isValidIndexProfileName,
+  isValidProfileName,
   normalizeSettingsState,
   normalizeUrl,
 } from "./settings";
@@ -387,7 +392,29 @@ export class IxplorerSettingTab extends PluginSettingTab {
     for (const profile of this.plugin.settings.embeddingModelProfiles) {
       this.renderProfileListItem(listEl, {
         name: profile.name,
-        status: statusForProfile(profile),
+        status:
+          this.plugin.settings.activeEmbeddingModelProfileId === profile.id && !profile.isSuspended
+            ? { kind: "is-default", label: "Default", title: "Default embedding model" }
+            : statusForProfile(profile),
+        extraActions: [
+          {
+            icon: "star",
+            className: "ixplorer-settings__default-action",
+            label:
+              this.plugin.settings.activeEmbeddingModelProfileId === profile.id
+                ? "Default model"
+                : "Set as default model",
+            hidden: this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
+            disabled:
+              profile.isSuspended === true ||
+              this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
+            onClick: async () => {
+              this.plugin.settings.activeEmbeddingModelProfileId = profile.id;
+              await this.plugin.saveSettings();
+              this.display();
+            },
+          },
+        ],
         onEdit: () => {
           new ModelProfileModal(this.app, {
             kind: "embedding",
@@ -579,7 +606,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
   private async probeToolsForServer(
     server: ServerProfile,
     modelName: string,
-  ): Promise<ToolCapabilityLayer> {
+  ): Promise<ToolCapabilityProbeResult> {
     return probeToolControlCapabilities({
       provider: new ChatModelClient({
         apiFormat: server.apiFormat,
@@ -629,28 +656,54 @@ export class IxplorerSettingTab extends PluginSettingTab {
         }),
       probeResponses: shouldProbeResponses
         ? () =>
-            probeResponsesCapabilities({
-              server,
-              model: target.modelName,
-              efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
-              logger: this.plugin.logger,
-            })
+          probeResponsesCapabilities({
+            server,
+            model: target.modelName,
+            efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
+            logger: this.plugin.logger,
+          })
         : undefined,
       onTools: async (probe) => {
+        let saved: unknown;
         await this.updateChatProfileAfterProbe(target, (profile) => {
           profile.capabilities ??= {
             chat: true,
             embeddings: false,
             detectionSource: "probe",
           };
+          const { probeAuditData, ...capabilityLayer } = probe;
+          const probeAudit = {
+            ranAt: probeAuditData.ranAt,
+            modelName: target.modelName,
+            apiFormat: server.apiFormat,
+            results: probeAuditData.results,
+            rawCapabilities: {
+              calls: capabilityLayer.calls,
+              choiceRequired: capabilityLayer.choiceRequired,
+              choiceSpecific: capabilityLayer.choiceSpecific,
+              parallelCalls: capabilityLayer.parallelCalls,
+            },
+          };
           profile.capabilities.toolCalling = {
             formatDefault: {
               ...(profile.capabilities.toolCalling?.formatDefault ??
                 createToolCapabilitySettings(false).formatDefault),
             },
-            probe,
+            probe: capabilityLayer,
+            probeAudit,
           };
           profile.capabilities.tools = probe.calls;
+          saved = {
+            tools: profile.capabilities.tools,
+            toolCalling: profile.capabilities.toolCalling,
+          };
+        });
+        this.plugin.logger.logProbeResult({
+          probe: "tool-capabilities",
+          profileId: target.profileId,
+          model: target.modelName,
+          received: probe,
+          saved,
         });
       },
       onResponses: async (reasoningCapabilities) => {
@@ -660,6 +713,13 @@ export class IxplorerSettingTab extends PluginSettingTab {
           if (!profile.reasoning.effort && reasoningCapabilities.defaultEffort) {
             profile.reasoning.effort = reasoningCapabilities.defaultEffort;
           }
+        });
+        this.plugin.logger.logProbeResult({
+          probe: "responses-capabilities",
+          profileId: target.profileId,
+          model: target.modelName,
+          received: reasoningCapabilities,
+          saved: reasoningCapabilities,
         });
       },
       onReasoning: async (result) => {
@@ -679,7 +739,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
         const key = capabilityCacheKey(identity);
         const current =
           this.plugin.settings.modelCapabilityCache[key] ?? unknownSnapshot(result.checkedAt);
-        this.plugin.settings.modelCapabilityCache[key] = {
+        const snapshot: ModelCapabilitySnapshot = {
           ...current,
           reasoning: {
             ...current.reasoning,
@@ -689,7 +749,15 @@ export class IxplorerSettingTab extends PluginSettingTab {
           checkedAt: result.checkedAt,
           expiresAt: result.expiresAt,
         };
+        this.plugin.settings.modelCapabilityCache[key] = snapshot;
         await this.plugin.saveSettings();
+        this.plugin.logger.logProbeResult({
+          probe: "reasoning-visibility",
+          profileId: target.profileId,
+          model: target.modelName,
+          received: result,
+          saved: { cacheKey: key, snapshot },
+        });
         this.display();
       },
       onError: () => new Notice(`Capability detection failed for ${savedProfile.name}.`),
@@ -777,9 +845,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
       });
       row.createDiv({
         cls: "ixplorer-settings-index-list__size",
-        text: `${formatIndexSize(state.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${
-          state.indexedFiles || profile.indexedFileCount || 0
-        } files`,
+        text: `${formatIndexSize(state.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${state.indexedFiles || profile.indexedFileCount || 0
+          } files`,
       });
       const status = profile.isSuspended
         ? statusForProfile(profile)
@@ -787,10 +854,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
           ? { kind: "is-default", label: "Default", title: "Default index" }
           : state.status === "error"
             ? {
-                kind: "is-suspended",
-                label: "Error",
-                title: state.errorMessage ?? "Indexing failed",
-              }
+              kind: "is-suspended",
+              label: "Error",
+              title: state.errorMessage ?? "Indexing failed",
+            }
             : null;
       if (status) {
         row.createSpan({
@@ -882,6 +949,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
     new IndexProfileModal(this.app, {
       profiles: this.plugin.settings.indexProfiles,
       embeddingModels: this.plugin.settings.embeddingModelProfiles,
+      defaultEmbeddingModelProfileId: this.plugin.settings.activeEmbeddingModelProfileId,
       onSave: async (profile) => {
         this.plugin.settings.indexProfiles.push(profile);
         if (
@@ -1072,6 +1140,7 @@ interface IndexProfileModalOptions {
   profile?: IndexProfile;
   profiles: IndexProfile[];
   embeddingModels: EmbeddingModelProfile[];
+  defaultEmbeddingModelProfileId?: string;
   onSave(profile: IndexProfile): Promise<void>;
 }
 
@@ -1082,7 +1151,7 @@ class IndexProfileModal extends Modal {
   private excludeGlobs = [...(this.options.profile?.excludeGlobs ?? [])];
   private embeddingModelProfileId =
     this.options.profile?.embeddingModelProfileId ??
-    this.options.embeddingModels.find((profile) => profile.isSuspended !== true)?.id ??
+    this.resolveDefaultEmbeddingModelProfileId() ??
     "";
   private chunkSize = String(this.options.profile?.chunkSize ?? DEFAULT_INDEX_PROFILE.chunkSize);
   private chunkOverlap = String(
@@ -1105,6 +1174,20 @@ class IndexProfileModal extends Modal {
     super(app);
   }
 
+  private resolveDefaultEmbeddingModelProfileId(): string | undefined {
+    const defaultId = this.options.defaultEmbeddingModelProfileId;
+    if (
+      defaultId &&
+      this.options.embeddingModels.some(
+        (profile) => profile.id === defaultId && profile.isSuspended !== true,
+      )
+    ) {
+      return defaultId;
+    }
+
+    return this.options.embeddingModels.find((profile) => profile.isSuspended !== true)?.id;
+  }
+
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
@@ -1115,12 +1198,15 @@ class IndexProfileModal extends Modal {
 
     new Setting(contentEl)
       .setName("Name")
-      .setDesc("Unique index name shown in settings, chat, and search selectors.")
-      .addText((text) =>
+      .setDesc(
+        `Unique index name shown in settings, chat, and search selectors. Max ${MAX_PROFILE_NAME_LENGTH} characters.`,
+      )
+      .addText((text) => {
+        text.inputEl.maxLength = MAX_PROFILE_NAME_LENGTH;
         text.setValue(this.name).onChange((value) => {
           this.name = value.trim();
-        }),
-      );
+        });
+      });
 
     new Setting(contentEl)
       .setName("Mode")
@@ -1672,12 +1758,15 @@ class ServerProfileModal extends Modal {
 
     new Setting(contentEl)
       .setName("Name")
-      .setDesc("Human-readable name shown in settings and model selectors.")
-      .addText((text) =>
+      .setDesc(
+        `Human-readable name shown in settings and model selectors. Max ${MAX_PROFILE_NAME_LENGTH} characters.`,
+      )
+      .addText((text) => {
+        text.inputEl.maxLength = MAX_PROFILE_NAME_LENGTH;
         text.setValue(this.name).onChange((value) => {
           this.name = value.trim();
-        }),
-      );
+        });
+      });
 
     new Setting(contentEl)
       .setName("API format")
@@ -1725,6 +1814,11 @@ class ServerProfileModal extends Modal {
   private async save(): Promise<void> {
     if (!this.name || !this.baseUrl) {
       new Notice("Fill all required fields.");
+      return;
+    }
+
+    if (!isValidProfileName(this.name)) {
+      new Notice(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters.`);
       return;
     }
 
@@ -1795,8 +1889,8 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       : "off";
   private reasoningCapabilities =
     this.options.kind === "chat" &&
-    this.options.profile &&
-    "reasoningCapabilities" in this.options.profile
+      this.options.profile &&
+      "reasoningCapabilities" in this.options.profile
       ? this.options.profile.reasoningCapabilities
       : undefined;
   private contextLength =
@@ -1838,12 +1932,15 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     new Setting(contentEl)
       .setName("Name")
-      .setDesc("Human-readable name shown in settings and chat controls.")
-      .addText((text) =>
+      .setDesc(
+        `Human-readable name shown in settings and chat controls. Max ${MAX_PROFILE_NAME_LENGTH} characters.`,
+      )
+      .addText((text) => {
+        text.inputEl.maxLength = MAX_PROFILE_NAME_LENGTH;
         text.setValue(this.name).onChange((value) => {
           this.name = value.trim();
-        }),
-      );
+        });
+      });
 
     new Setting(contentEl)
       .setName("Server")
@@ -2102,6 +2199,11 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       return;
     }
 
+    if (!isValidProfileName(this.name)) {
+      new Notice(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters.`);
+      return;
+    }
+
     if (hasDuplicateProfileName(this.options.profiles, this.name, this.options.profile?.id)) {
       new Notice("Name must be unique.");
       return;
@@ -2153,17 +2255,18 @@ class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const profile =
       this.options.kind === "chat"
         ? {
-            ...baseProfile,
-            toolsEnabled: this.toolsEnabled,
-            reasoning: {
-              mode: this.reasoningMode,
-              ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
-              summary: this.reasoningSummary,
-            },
-            reasoningCapabilities: this.reasoningCapabilities,
-            temperature: optionalNumber(this.temperature),
-            maxTokens: parsePositiveInteger(this.maxTokens) ?? undefined,
-          }
+          ...baseProfile,
+          toolsEnabled: this.toolsEnabled,
+          noteMutationAccess: this.toolsEnabled,
+          reasoning: {
+            mode: this.reasoningMode,
+            ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
+            summary: this.reasoningSummary,
+          },
+          reasoningCapabilities: this.reasoningCapabilities,
+          temperature: optionalNumber(this.temperature),
+          maxTokens: parsePositiveInteger(this.maxTokens) ?? undefined,
+        }
         : baseProfile;
 
     await this.options.onSave(profile as TProfile);
