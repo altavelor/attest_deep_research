@@ -1,16 +1,12 @@
 import { SearchProvider } from "../../shared/types";
-import { IndexResearchTool } from "./IndexResearchTool";
 import { NoteToolService } from "./NoteTools";
 import { ResearchEvidenceRegistry } from "./ResearchEvidenceRegistry";
-import {
-  adaptNoteToolHandlers,
-  ResearchToolAvailability,
-  ResearchToolRegistry,
-} from "./ResearchToolRegistry";
-import { ResearchToolHandler } from "./ResearchTools";
+import { ResearchToolAvailability, ResearchToolRegistry } from "./ResearchToolRegistry";
 import { ResearchRetriever } from "../types";
-import { WebFetchResearchTool } from "./WebFetchResearchTool";
-import { WebSearchResearchTool } from "./WebSearchResearchTool";
+import { AttachmentSource } from "../../application/sources/AttachmentSource";
+import { RagSource } from "../../application/sources/RagSource";
+import { SourceManager } from "../../application/sources/DataSource";
+import { WebSource } from "../../application/sources/WebSource";
 
 export interface CreateResearchToolRegistryOptions {
   availability: ResearchToolAvailability;
@@ -22,13 +18,14 @@ export interface CreateResearchToolRegistryOptions {
 export interface CreatedResearchToolRegistry {
   evidence: ResearchEvidenceRegistry;
   tools: ResearchToolRegistry;
+  /** Introspection view of the data sources that contributed tools. */
+  sources: SourceManager;
 }
 
 export function createResearchToolRegistry(
   options: CreateResearchToolRegistryOptions,
 ): CreatedResearchToolRegistry {
   const evidence = new ResearchEvidenceRegistry();
-  const handlers: ResearchToolHandler<any, any>[] = [];
   const availability: ResearchToolAvailability = {
     ...options.availability,
     retrieverAvailable: options.availability.retrieverAvailable && options.retriever !== undefined,
@@ -36,14 +33,19 @@ export function createResearchToolRegistry(
       options.availability.webProviderAvailable && options.searchProvider !== undefined,
   };
 
+  const sources = new SourceManager();
+
   if (options.noteTools) {
     // Lets create_note/update_note rewrite raw evidence-ID tokens into footnote links.
     options.noteTools.setCitationProvider(() => evidence.snapshot().citations);
-    handlers.push(
-      ...adaptNoteToolHandlers(options.noteTools, {
-        noteAccess: availability.noteAccess,
-        activeFileAccess: availability.activeFileAccess,
-        noteMutationAccess: availability.noteMutationAccess,
+    sources.register(
+      new AttachmentSource({
+        service: options.noteTools,
+        availability: {
+          noteAccess: availability.noteAccess,
+          activeFileAccess: availability.activeFileAccess,
+          noteMutationAccess: availability.noteMutationAccess,
+        },
       }),
     );
   }
@@ -53,7 +55,7 @@ export function createResearchToolRegistry(
     availability.retrieverAvailable &&
     (availability.searchMode === "indexOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    handlers.push(new IndexResearchTool({ retriever: options.retriever, evidence }));
+    sources.register(new RagSource({ retriever: options.retriever, evidence }));
   }
 
   if (
@@ -61,14 +63,12 @@ export function createResearchToolRegistry(
     availability.webProviderAvailable &&
     (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    handlers.push(new WebSearchResearchTool({ provider: options.searchProvider, evidence }));
-    if (options.searchProvider.fetchPage) {
-      handlers.push(new WebFetchResearchTool({ provider: options.searchProvider, evidence }));
-    }
+    sources.register(new WebSource({ provider: options.searchProvider, evidence }));
   }
 
   return {
     evidence,
-    tools: new ResearchToolRegistry(handlers, availability),
+    tools: new ResearchToolRegistry(sources.tools(), availability),
+    sources,
   };
 }

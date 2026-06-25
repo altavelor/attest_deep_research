@@ -1,6 +1,6 @@
 import { ChatModelProvider, RetrievedChunk } from "../shared/types";
 import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "../research/prompts";
-import { ChatDisplayMessage, ConversationCompactionSummary } from "../ui/rendering";
+import { ChatDisplayMessage, ConversationCompactionSummary } from "../core/conversation";
 
 export const COMPACTION_RECENT_MESSAGE_COUNT = 4;
 

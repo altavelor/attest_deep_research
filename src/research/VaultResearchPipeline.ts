@@ -1,4 +1,4 @@
-import { RetrievalResult } from "../retrieval/RetrievalService";
+import { RetrievalResult } from "../application/contracts/retrieval";
 import { QueryExpansionService } from "../retrieval/QueryExpansionService";
 import { RetrievalQueryVariant } from "../shared/types";
 import { ResearchRetriever, ResearchStreamEvent } from "./types";

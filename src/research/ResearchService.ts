@@ -1,4 +1,4 @@
-import { RetrievalResult } from "../retrieval/RetrievalService";
+import { RetrievalResult } from "../application/contracts/retrieval";
 import { formatCitation } from "../retrieval/citations";
 import { QueryExpansionService } from "../retrieval/QueryExpansionService";
 import { summarizeCompactionWithModel } from "../chat/ChatCompaction";
@@ -32,7 +32,7 @@ import {
   ResearchSearchMode,
   ResearchStreamEvent,
 } from "./types";
-import { ChatDisplayMessage, ConversationCompactionSummary } from "../ui/rendering";
+import { ChatDisplayMessage, ConversationCompactionSummary } from "../core/conversation";
 import { estimateTextTokens } from "./prompts";
 import { resolveResearchExecutionPolicy } from "./ResearchExecutionPolicy";
 import { createResearchToolRegistry } from "./tools/createResearchToolRegistry";

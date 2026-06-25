@@ -4,6 +4,7 @@ import { FileSystemAdapter, Notice, Plugin, requestUrl } from "obsidian";
 
 import { ChatModelClient } from "./client/chat/ChatModelClient";
 import { OpenAiResponsesClient } from "./client/chat/OpenAiResponsesClient";
+import { resolveResponsesProviderPolicy } from "./client/chat/ResponsesProviderPolicy";
 import { ChatCompletionsRoundAdapter } from "./client/chat/ChatCompletionsRoundAdapter";
 import { FallbackModelRoundProvider } from "./client/chat/FallbackModelRoundProvider";
 import { FileChatStore } from "./chat/ChatStore";
@@ -19,15 +20,15 @@ import { IndexingService, IndexingState, IndexSourceReportItem } from "./indexin
 import { IndexingProfileController } from "./indexing/IndexingProfileController";
 import { FileVectorIndexStore, IndexProfile } from "./indexing/FileVectorIndexStore";
 import { measureFolderSize } from "./indexing/indexSize";
-import { ObsidianVaultFileProvider } from "./indexing/ObsidianVaultFileProvider";
+import { ObsidianVaultFileProvider } from "./adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "./retrieval/RetrievalService";
 import { QueryExpansionService } from "./retrieval/QueryExpansionService";
 import { ContextAssembler } from "./research/ContextAssembler";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "./research/GraphContext";
-import { ObsidianContextFileProvider } from "./research/ObsidianContextFileProvider";
-import { ObsidianGraphContextProvider } from "./research/ObsidianGraphContextProvider";
+import { ObsidianContextFileProvider } from "./adapters/obsidian/ObsidianContextFileProvider";
+import { ObsidianGraphContextProvider } from "./adapters/obsidian/ObsidianGraphContextProvider";
 import { NoteToolService } from "./research/tools/NoteTools";
-import { ObsidianVaultWriter } from "./research/tools/ObsidianVaultWriter";
+import { ObsidianVaultWriter } from "./adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "./research/ResearchService";
 import { IxplorerSettingTab } from "./settings/SettingsTab";
 import { PluginDebugLogger } from "./settings/debugLogger";
@@ -51,7 +52,7 @@ import {
   resolveEffectiveTools,
   resolveServerProfile,
 } from "./settings/settings";
-import { IxplorerError, toUserMessage } from "./shared/errors";
+import { toUserMessage } from "./shared/errors";
 import type { ModelRoundProvider } from "./shared/types";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { DuckDuckGoSearchProvider } from "./web/DuckDuckGoSearchProvider";
@@ -404,64 +405,36 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   private createExtractorsForProfile(indexProfile: IndexProfile) {
-    return [
-      new MarkdownExtractor({
-        includeFolders: indexProfile.includeFolders,
-        excludeGlobs: indexProfile.excludeGlobs,
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new TextExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new PdfExtractor({
-        maxChunkLength: indexProfile.pdfChunkSize,
-        chunkOverlap: indexProfile.pdfChunkOverlap,
-        cache: this.pdfTextCache,
-      }),
-      new EpubExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new Fb2Extractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new DocxExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-    ];
+    // Indexing scopes markdown extraction to the configured folders/globs.
+    return this.buildExtractors(indexProfile, { scopedMarkdown: true });
   }
 
   private createContextExtractorsForProfile(indexProfile: IndexProfile) {
+    // Context assembly reads explicitly requested files, so markdown is unscoped.
+    return this.buildExtractors(indexProfile, { scopedMarkdown: false });
+  }
+
+  private buildExtractors(indexProfile: IndexProfile, options: { scopedMarkdown: boolean }) {
+    const chunk = {
+      maxChunkLength: indexProfile.chunkSize,
+      chunkOverlap: indexProfile.chunkOverlap,
+    };
     return [
       new MarkdownExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
+        ...(options.scopedMarkdown
+          ? { includeFolders: indexProfile.includeFolders, excludeGlobs: indexProfile.excludeGlobs }
+          : {}),
+        ...chunk,
       }),
-      new TextExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
+      new TextExtractor({ ...chunk }),
       new PdfExtractor({
         maxChunkLength: indexProfile.pdfChunkSize,
         chunkOverlap: indexProfile.pdfChunkOverlap,
         cache: this.pdfTextCache,
       }),
-      new EpubExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new Fb2Extractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
-      new DocxExtractor({
-        maxChunkLength: indexProfile.chunkSize,
-        chunkOverlap: indexProfile.chunkOverlap,
-      }),
+      new EpubExtractor({ ...chunk }),
+      new Fb2Extractor({ ...chunk }),
+      new DocxExtractor({ ...chunk }),
     ];
   }
 
@@ -525,65 +498,20 @@ export default class IxplorerPlugin extends Plugin {
     reasoning: { enabled: boolean; effort?: string; summary: "off" | "auto" },
   ): ModelRoundProvider | undefined {
     if (effectiveProtocol !== "responses") return undefined;
-    const capabilities = profile.reasoningCapabilities;
-    if (server.apiFormat !== "openai-compatible") {
-      throw new IxplorerError({
-        code: "UNSUPPORTED_CAPABILITY",
-        message: "The Responses protocol requires an OpenAI-compatible server profile.",
-      });
-    }
-    if (!capabilities) {
-      throw new IxplorerError({
-        code: "UNSUPPORTED_CAPABILITY",
-        message: "Responses capability detection has not completed for this model profile.",
-      });
-    }
-    if (!capabilities.responses) {
-      throw new IxplorerError({
-        code: "UNSUPPORTED_CAPABILITY",
-        message:
-          capabilities.failureReason ??
-          "The capability probe reported that this model does not support Responses.",
-      });
-    }
-    if (!isResponsesCapabilityCurrent(capabilities, server, profile.modelName)) {
-      throw new IxplorerError({
-        code: "UNSUPPORTED_CAPABILITY",
-        message: "The Responses capability probe is stale for this model profile.",
-      });
-    }
-    if (reasoning.enabled) {
-      if (capabilities.continuation !== true) {
-        throw new IxplorerError({
-          code: "UNSUPPORTED_CAPABILITY",
-          message: "Reasoning continuation has not been verified for this model profile.",
-        });
-      }
-      if (capabilities.requiresEffort && !reasoning.effort) {
-        throw new IxplorerError({
-          code: "UNSUPPORTED_CAPABILITY",
-          message: "This model requires an explicit reasoning effort.",
-        });
-      }
-      if (reasoning.effort && !capabilities.efforts.includes(reasoning.effort)) {
-        throw new IxplorerError({
-          code: "UNSUPPORTED_CAPABILITY",
-          message: "The selected reasoning effort is not supported by this model profile.",
-        });
-      }
-      if (reasoning.summary === "auto" && !capabilities.summary) {
-        throw new IxplorerError({
-          code: "UNSUPPORTED_CAPABILITY",
-          message: "Reasoning summaries are not supported by this model profile.",
-        });
-      }
-    }
+    const decision = resolveResponsesProviderPolicy({
+      apiFormat: server.apiFormat,
+      capabilities: profile.reasoningCapabilities,
+      isCapabilityCurrent: profile.reasoningCapabilities
+        ? isResponsesCapabilityCurrent(profile.reasoningCapabilities, server, profile.modelName)
+        : false,
+      reasoning,
+    });
     const responses = new OpenAiResponsesClient({
       baseUrl: server.baseUrl,
       apiKey: server.apiKey,
       logger: this.logger,
-      reasoningEfforts: capabilities.efforts,
-      reasoningSummary: capabilities.summary,
+      reasoningEfforts: decision.efforts,
+      reasoningSummary: decision.summary,
     });
     return new FallbackModelRoundProvider(
       responses,

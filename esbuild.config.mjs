@@ -7,7 +7,11 @@ import process from "process";
 
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
-const pluginOutputDir = join(homedir(), "Documents", "Заметки", ".obsidian", "plugins", "ixplorer");
+// Output directory is configurable so the build is reproducible outside one
+// specific Obsidian vault (stage 1, task 6.4). Defaults to the original vault
+// path to preserve existing behavior when the env var is unset.
+const defaultOutputDir = join(homedir(), "Documents", "Заметки", ".obsidian", "plugins", "ixplorer");
+const pluginOutputDir = process.env.IXPLORER_OUTPUT_DIR ?? defaultOutputDir;
 const pluginOutputFile = join(pluginOutputDir, "main.js");
 
 const banner =
