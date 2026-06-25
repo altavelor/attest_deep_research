@@ -35,7 +35,7 @@ interface ContinuationPayload {
 class ResponsesContinuation implements ProviderContinuationState {
   readonly provider = "openai-compatible" as const;
   disposed = false;
-  constructor(private onDispose?: () => void) {}
+  constructor(private onDispose?: () => void) { }
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -109,12 +109,12 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
         : {}),
       ...(request.reasoning?.enabled
         ? {
-            reasoning: {
-              ...(request.reasoning.effort ? { effort: request.reasoning.effort } : {}),
-              ...(request.reasoning.summary === "auto" ? { summary: "auto" } : {}),
-            },
-            include: ["reasoning.encrypted_content"],
-          }
+          reasoning: {
+            ...(request.reasoning.effort ? { effort: request.reasoning.effort } : {}),
+            ...(request.reasoning.summary === "auto" ? { summary: "auto" } : {}),
+          },
+          include: ["reasoning.encrypted_content"],
+        }
         : {}),
     };
     const response = await this.http.request(
@@ -241,8 +241,8 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
 type ResponsesDelta =
   | Extract<ModelStreamEvent, { type: "text-delta" }>
   | (Extract<ModelStreamEvent, { type: "reasoning-delta" }> & {
-      visibility: "text" | "summary";
-    });
+    visibility: "text" | "summary";
+  });
 
 function parseResponsesDelta(value: unknown): ResponsesDelta | undefined {
   if (!isRecord(value) || typeof value.delta !== "string" || !value.delta) return undefined;

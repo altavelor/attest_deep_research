@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "fs/promises";
 import { basename, join } from "path";
 
 import { ResearchAnswer, RetrievedChunk } from "../shared/types";
@@ -134,6 +134,38 @@ export class FileChatStore {
 
     await writeJsonAtomically(this.chatPath(id), chat);
     return chat;
+  }
+
+  async renameChat(id: string, title: string): Promise<SavedChat | null> {
+    assertSafeChatId(id);
+    await mkdir(this.folder, { recursive: true });
+    const existing = await this.readChatFile(id);
+
+    if (!existing) {
+      return null;
+    }
+
+    const chat: SavedChat = {
+      ...existing,
+      title: normalizeTitle(title),
+      updatedAt: this.now().toISOString(),
+    };
+    await writeJsonAtomically(this.chatPath(id), chat);
+    return chat;
+  }
+
+  async deleteChat(id: string): Promise<void> {
+    assertSafeChatId(id);
+
+    try {
+      await unlink(this.chatPath(id));
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return;
+      }
+
+      throw error;
+    }
   }
 
   private async readChatFile(id: string): Promise<SavedChat | null> {

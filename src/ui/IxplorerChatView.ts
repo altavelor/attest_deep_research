@@ -62,15 +62,17 @@ export interface IxplorerChatViewServices {
   indexingActions?: IndexControlActions;
   isWebSearchEnabled(): boolean;
   getChatModel(): string;
-  setChatModel(modelProfileId: string): Promise<void>;
   getAvailableChatModels(): string[];
   getChatModelProfiles(): ChatModelSelectOption[];
+  getDefaultChatModelProfileId(): string;
   getDefaultIndexProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
   searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
   listSavedChats(): Promise<SavedChatSummary[]>;
   loadSavedChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
+  renameSavedChat(id: string, title: string): Promise<void>;
+  deleteSavedChat(id: string): Promise<void>;
   isChatIndexControlShown(): boolean;
   isDebugMode(): boolean;
   shouldIncludeActiveFileContext(): boolean;
@@ -162,6 +164,7 @@ export class IxplorerChatView extends ItemView {
       },
       getModelInputValue: () => this.modelInputEl?.value ?? "",
       getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
+      getCurrentModelLabel: () => this.services.getChatModel(),
       getContextLimitTokens: () => this.getContextLimitTokens(),
       getReservedOutputTokens: () => this.getReservedOutputTokens(),
       updateChatModel: (model) => this.updateChatModel(model),
@@ -487,6 +490,8 @@ export class IxplorerChatView extends ItemView {
       savedChats: this.savedChatSummaries,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
+      onRenameChat: (id, title) => this.renameSavedChat(id, title),
+      onDeleteChat: (id) => this.deleteSavedChat(id),
     });
   }
 
@@ -563,7 +568,33 @@ export class IxplorerChatView extends ItemView {
       },
       onOpenChat: (id) => void this.loadSavedChat(id),
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
+      onRenameChat: (id, title) => this.renameSavedChat(id, title),
+      onDeleteChat: (id) => this.deleteSavedChat(id),
     });
+  }
+
+  private async renameSavedChat(id: string, title: string): Promise<void> {
+    await this.services.renameSavedChat(id, title);
+    await this.refreshSavedChatSummaries();
+    if (this.historyPopoverEl) {
+      this.renderHistoryPopoverContent(this.historyPopoverEl);
+    } else {
+      this.renderMessages();
+    }
+  }
+
+  private async deleteSavedChat(id: string): Promise<void> {
+    await this.services.deleteSavedChat(id);
+    if (this.currentChatId === id) {
+      this.currentChatId = null;
+    }
+    await this.refreshSavedChatSummaries();
+    if (this.historyPopoverEl) {
+      this.renderHistoryPopoverContent(this.historyPopoverEl);
+    } else {
+      this.render();
+    }
+    new Notice("Chat deleted.");
   }
 
   private closeHistoryPopover(): void {
@@ -654,7 +685,6 @@ export class IxplorerChatView extends ItemView {
     ) {
       this.modelInputEl.value = this.currentChatSettings.chatModelProfileId;
     }
-    await this.services.setChatModel(normalizedModel);
     await this.saveCurrentChat();
     this.renderMessages();
     this.updateSubmitAvailability();
@@ -694,8 +724,11 @@ export class IxplorerChatView extends ItemView {
   private createDefaultChatSettings(): SavedChatSettings {
     const indexProfiles = this.services.getIndexProfiles();
     return {
-      chatModelProfileId:
-        this.services.getChatModelProfiles().find((profile) => !profile.isSuspended)?.id ?? "",
+      chatModelProfileId: resolveAvailableChatModelProfileId(
+        this.services.getChatModelProfiles(),
+        this.services.getDefaultChatModelProfileId(),
+        "",
+      ),
       indexProfileId: resolveAvailableIndexProfileId(
         indexProfiles,
         this.services.getDefaultIndexProfileId(),

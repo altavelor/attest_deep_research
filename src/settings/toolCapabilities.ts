@@ -1,12 +1,13 @@
-import { ToolCallingCapabilities } from "../shared/types";
+import { ToolCallingCapabilities, ToolCapabilityProbeAudit } from "../shared/types";
 
-export type ToolCapabilitySource = "format-default" | "probe" | "manual";
+export type ToolCapabilitySource = "format-default" | "probe";
 export type ToolCapabilityLayer = Partial<ToolCallingCapabilities>;
 
 export interface ToolCapabilitySettings {
   formatDefault: ToolCallingCapabilities;
   probe?: ToolCapabilityLayer;
-  manual?: ToolCapabilityLayer;
+  /** Audit trail from the last probe run. Stored for v3 diagnostic report. */
+  probeAudit?: ToolCapabilityProbeAudit;
 }
 
 export interface EffectiveToolCapabilities {
@@ -34,10 +35,7 @@ export function resolveToolCapabilities(
   const capabilities = {} as ToolCallingCapabilities;
   const provenance = {} as EffectiveToolCapabilities["provenance"];
   for (const flag of FLAGS) {
-    if (typeof normalized.manual?.[flag] === "boolean") {
-      capabilities[flag] = normalized.manual[flag]!;
-      provenance[flag] = "manual";
-    } else if (typeof normalized.probe?.[flag] === "boolean") {
+    if (typeof normalized.probe?.[flag] === "boolean") {
       capabilities[flag] = normalized.probe[flag]!;
       provenance[flag] = "probe";
     } else {
@@ -51,11 +49,12 @@ export function resolveToolCapabilities(
 export function withProbeResults(
   settings: ToolCapabilitySettings,
   probe: ToolCapabilityLayer,
+  probeAudit?: ToolCapabilityProbeAudit,
 ): ToolCapabilitySettings {
   return {
     formatDefault: { ...settings.formatDefault },
     probe: { ...(settings.probe ?? {}), ...probe },
-    ...(settings.manual ? { manual: { ...settings.manual } } : {}),
+    ...(probeAudit ? { probeAudit } : {}),
   };
 }
 
@@ -87,15 +86,19 @@ export function normalizeToolCapabilitySettings(
     (readLayer(record?.formatDefault, true) as ToolCallingCapabilities | undefined) ??
     createToolCapabilitySettings(false).formatDefault;
   const probe = readLayer(record?.probe);
-  const manual = readLayer(record?.manual);
   if (record) {
-    return { formatDefault, ...(probe ? { probe } : {}), ...(manual ? { manual } : {}) };
+    // A legacy `manual` override layer, if present, is intentionally dropped so the
+    // probe result is authoritative and cannot be silently shadowed.
+    return { formatDefault, ...(probe ? { probe } : {}) };
   }
   const migrated = createToolCapabilitySettings(false);
   if (typeof legacyTools === "boolean") {
-    const layer = { calls: legacyTools };
-    if (legacySource === "probe" || legacySource === "metadata") migrated.probe = layer;
-    else migrated.manual = layer;
+    if (legacySource === "probe" || legacySource === "metadata") {
+      migrated.probe = { calls: legacyTools };
+    } else {
+      // Previously stored as a manual override; fold it into the base default.
+      migrated.formatDefault.calls = legacyTools;
+    }
   }
   return migrated;
 }

@@ -37,6 +37,8 @@ export function createResearchToolRegistry(
   };
 
   if (options.noteTools) {
+    // Lets create_note/update_note rewrite raw evidence-ID tokens into footnote links.
+    options.noteTools.setCitationProvider(() => evidence.snapshot().citations);
     handlers.push(
       ...adaptNoteToolHandlers(options.noteTools, {
         noteAccess: availability.noteAccess,

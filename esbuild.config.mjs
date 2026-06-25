@@ -44,6 +44,10 @@ const context = await esbuild.context({
     "@lezer/highlight",
     "@lezer/lr",
     ...builtins,
+    // The Anthropic SDK lazily imports node:fs / node:path for Workload
+    // Identity Federation; Obsidian runs on Electron where Node builtins exist
+    // at runtime, so externalize the node:-prefixed forms too.
+    ...builtins.map((name) => `node:${name}`),
   ],
   format: "cjs",
   logLevel: "info",

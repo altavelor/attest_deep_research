@@ -11,7 +11,7 @@ import { renderReadableDiagnosticReport } from "./diagnosticReadable";
 export class DiagnosticReportModalController {
   private modal: DiagnosticReportModal | null = null;
 
-  constructor(private readonly app: App) {}
+  constructor(private readonly app: App) { }
 
   open(diagnostics: ContextDiagnostics): void {
     this.close();
@@ -36,7 +36,7 @@ class DiagnosticReportModal extends Modal {
   onOpen(): void {
     const report = formatDiagnosticReport(this.diagnostics);
     const viewModel = buildDiagnosticReportViewModel(this.diagnostics);
-    const readableHtml = formatDiagnosticReportHtml(viewModel);
+    const readableHtml = formatDiagnosticReportHtml(this.diagnostics);
     this.modalEl.addClass("ixplorer-chat__diagnostic-modal");
     this.setTitle("Diagnostic report");
     this.contentEl.empty();

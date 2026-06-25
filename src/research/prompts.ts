@@ -1,14 +1,55 @@
 import { ChatMessage, RetrievedChunk } from "../shared/types";
 
 export const RESEARCH_SYSTEM_PROMPT =
-  "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence.";
+  "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence. Cite only source IDs that appear in the evidence below or that were returned by a tool you actually called — never invent citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
 
 export interface ResearchSystemPromptOptions {
   indexDescription?: string;
+  /** Names of vault note tools available in this turn. When present, a usage section is appended. */
+  noteToolNames?: readonly string[];
+}
+
+const NOTE_TOOL_DESCRIPTIONS: Record<string, string> = {
+  list_notes: "list_notes — list or browse vault notes by folder prefix or keyword",
+  search_notes: "search_notes — find notes by keyword in their path or filename",
+  read_note: "read_note — read the full content of a specific note",
+  get_active_note: "get_active_note — read the note currently open in Obsidian",
+  create_note: "create_note — create a new note",
+  update_note: "update_note — modify an existing note (prefer append/prepend)",
+  delete_note: "delete_note — move a note to the system trash",
+};
+
+function buildVaultToolsSection(toolNames: readonly string[]): string {
+  const lines = toolNames
+    .map((name) => NOTE_TOOL_DESCRIPTIONS[name])
+    .filter((line): line is string => Boolean(line))
+    .map((line) => `- ${line}`);
+  if (lines.length === 0) return "";
+  return [
+    "## Vault tools",
+    "You can act on the user's Obsidian vault directly with these tools:",
+    ...lines,
+    "",
+    "When the user asks to find, list, browse, open, read, create, update, or delete notes,",
+    "call the appropriate tool immediately — do not answer such requests from the evidence below.",
+    'The "answer using the context below" guidance applies only to research and knowledge questions,',
+    "not to vault actions. Results from these tools are for navigation/editing and are not citable evidence.",
+    "",
+    "### How to call a tool",
+    "Invoke tools through the function-calling mechanism — emit a real tool call, not text.",
+    "Do NOT write the call as prose or pseudo-syntax such as `list_notes(path=\"\")`,",
+    '`<tool_call>...`, or a JSON code block. Use the plain tool name without any namespace prefix',
+    "(call `list_notes`, not `ixplorer.list_notes`). Make one call, then wait for its result.",
+  ].join("\n");
 }
 
 export function buildResearchSystemPrompt(options: ResearchSystemPromptOptions = {}): string {
   const sections = [RESEARCH_SYSTEM_PROMPT];
+
+  if (options.noteToolNames && options.noteToolNames.length > 0) {
+    const vaultTools = buildVaultToolsSection(options.noteToolNames);
+    if (vaultTools) sections.push(vaultTools);
+  }
 
   if (options.indexDescription) {
     sections.push(

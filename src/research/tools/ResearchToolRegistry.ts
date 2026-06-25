@@ -97,7 +97,7 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
   constructor(
     private readonly service: NoteToolService,
     readonly definition: ChatToolDefinition,
-  ) {}
+  ) { }
 
   parseInput(input: Record<string, unknown>): ResearchToolParseResult<Record<string, unknown>> {
     return { ok: true, value: input };

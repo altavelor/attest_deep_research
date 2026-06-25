@@ -233,7 +233,7 @@ function withAuthorization(init: RequestInit, apiKey: string | undefined): Reque
   };
 }
 
-function createLogContext(url: string, method: string, init: RequestInit, redactBody: boolean) {
+export function createLogContext(url: string, method: string, init: RequestInit, redactBody: boolean) {
   return {
     url,
     method,
@@ -260,7 +260,7 @@ function redactHeaders(
   );
 }
 
-function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
+export function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
   if (!headers) {
     return undefined;
   }

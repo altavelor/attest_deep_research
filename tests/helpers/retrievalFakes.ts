@@ -6,7 +6,7 @@ import {
 } from "../../src/shared/types";
 
 export class FakeEmbeddingProvider implements EmbeddingProviderClient {
-  constructor(private readonly embeddings: number[][]) {}
+  constructor(private readonly embeddings: number[][]) { }
 
   async listModels(): Promise<string[]> {
     return ["nomic"];
@@ -36,7 +36,7 @@ export class FakeIndexStore implements IndexStore {
   directAdjacentResults: RetrievedChunk[] = [];
   directAdjacentRequests: Array<{ source: SourceReference; chunkId: string; radius: number }> = [];
 
-  constructor(private readonly chunks: RetrievedChunk[]) {}
+  constructor(private readonly chunks: RetrievedChunk[]) { }
 
   async initialize(metadata: {
     embeddingModel: string;
@@ -45,11 +45,11 @@ export class FakeIndexStore implements IndexStore {
     this.initializations.push(metadata);
   }
 
-  async upsert(): Promise<void> {}
+  async upsert(): Promise<void> { }
 
-  async deleteBySourcePath(): Promise<void> {}
+  async deleteBySourcePath(): Promise<void> { }
 
-  async clear(): Promise<void> {}
+  async clear(): Promise<void> { }
 
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
     this.queries.push({ embedding, limit });

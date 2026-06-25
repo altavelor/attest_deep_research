@@ -108,6 +108,7 @@ export interface IxplorerSettings {
   chatModelProfiles: ChatModelProfile[];
   embeddingModelProfiles: EmbeddingModelProfile[];
   activeChatModelProfileId: string;
+  activeEmbeddingModelProfileId: string;
   lanceDbFolder: string;
   activeIndexProfileId: string;
   indexProfiles: IndexProfile[];
@@ -130,6 +131,7 @@ export const DEFAULT_INDEX_PROFILE_ID = "default";
 export const DEFAULT_INDEX_FOLDER = ".ixplorer/index";
 export const DEFAULT_ANTHROPIC_MAX_TOKENS = 4096;
 export const MAX_INDEX_PROFILE_COUNT = 30;
+export const MAX_PROFILE_NAME_LENGTH = 30;
 const DEFAULT_PROFILE_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 
@@ -164,6 +166,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   chatModelProfiles: [],
   embeddingModelProfiles: [],
   activeChatModelProfileId: "",
+  activeEmbeddingModelProfileId: "",
   lanceDbFolder: DEFAULT_INDEX_FOLDER,
   activeIndexProfileId: DEFAULT_INDEX_PROFILE_ID,
   indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
@@ -223,6 +226,7 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
     chatModelProfiles: readChatModelProfiles(data.chatModelProfiles),
     embeddingModelProfiles: readEmbeddingModelProfiles(data.embeddingModelProfiles),
     activeChatModelProfileId: readString(data.activeChatModelProfileId),
+    activeEmbeddingModelProfileId: readString(data.activeEmbeddingModelProfileId),
     lanceDbFolder,
     activeIndexProfileId: readString(data.activeIndexProfileId),
     indexProfiles: readIndexProfiles(data.indexProfiles, {
@@ -277,6 +281,7 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
 export function normalizeSettingsState(settings: IxplorerSettings): void {
   markInvalidProfilesSuspended(settings);
   normalizeActiveChatModel(settings);
+  normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
   normalizeActiveIndexProfile(settings);
 }
@@ -328,8 +333,15 @@ export function updateActiveIndexProfile(
 export function isValidIndexProfileName(value: string): boolean {
   const normalized = normalizeProfileName(value);
   return (
-    normalized.length > 0 && normalized.length <= 60 && INDEX_PROFILE_NAME_PATTERN.test(normalized)
+    normalized.length > 0 &&
+    normalized.length <= MAX_PROFILE_NAME_LENGTH &&
+    INDEX_PROFILE_NAME_PATTERN.test(normalized)
   );
+}
+
+export function isValidProfileName(value: string): boolean {
+  const normalized = normalizeProfileName(value);
+  return normalized.length > 0 && normalized.length <= MAX_PROFILE_NAME_LENGTH;
 }
 
 export function getActiveChatModelProfile(
@@ -469,13 +481,25 @@ function normalizeActiveChatModel(settings: IxplorerSettings): void {
   settings.activeChatModelProfileId = settings.chatModelProfiles.find(isProfileActive)?.id ?? "";
 }
 
+function normalizeActiveEmbeddingModel(settings: IxplorerSettings): void {
+  if (
+    settings.activeEmbeddingModelProfileId &&
+    !settings.embeddingModelProfiles.some(
+      (profile) =>
+        profile.id === settings.activeEmbeddingModelProfileId && !isProfileSuspended(profile),
+    )
+  ) {
+    settings.activeEmbeddingModelProfileId = "";
+  }
+}
+
 function normalizeIndexProfiles(settings: IxplorerSettings): void {
   for (const profile of settings.indexProfiles) {
     normalizeIndexProfileNumbers(profile);
     const embedding = profile.embeddingModelProfileId
       ? settings.embeddingModelProfiles.find(
-          (candidate) => candidate.id === profile.embeddingModelProfileId,
-        )
+        (candidate) => candidate.id === profile.embeddingModelProfileId,
+      )
       : undefined;
 
     if (!embedding) {
@@ -566,13 +590,17 @@ function normalizeChatModelProfile(value: unknown): ChatModelProfile | null {
     return null;
   }
 
+  const toolsEnabled = value.toolsEnabled !== false;
+
   return {
     id,
     name,
     serverProfileId,
     modelName,
-    toolsEnabled: value.toolsEnabled !== false,
-    noteMutationAccess: value.noteMutationAccess === true,
+    toolsEnabled,
+    // Note mutation access mirrors the Tools toggle: there is no separate UI
+    // control, so it is fully derived from whether tools are enabled.
+    noteMutationAccess: toolsEnabled,
     reasoning: readReasoningProfileSettings(value.reasoning),
     reasoningCapabilities: readReasoningCapabilitySettings(value.reasoningCapabilities),
     temperature: readOptionalNumber(value.temperature),
@@ -635,8 +663,8 @@ export function resolveEffectiveReasoning(
     ...(effort ? { effort } : {}),
     summary:
       protocol === "responses" &&
-      profile.reasoning.summary === "auto" &&
-      profile.reasoningCapabilities?.summary === true
+        profile.reasoning.summary === "auto" &&
+        profile.reasoningCapabilities?.summary === true
         ? "auto"
         : "off",
   };
@@ -651,13 +679,13 @@ function readReasoningCapabilitySettings(value: unknown): ReasoningCapabilitySet
   if (!source) return undefined;
   const efforts = Array.isArray(value.efforts)
     ? [
-        ...new Set(
-          value.efforts
-            .filter((item): item is string => typeof item === "string")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        ),
-      ]
+      ...new Set(
+        value.efforts
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    ]
     : [];
   const defaultEffort = readString(value.defaultEffort);
   const failureReason = readString(value.failureReason).slice(0, 500);
@@ -724,8 +752,8 @@ function normalizeCapability(value: unknown): ModelCapability | undefined {
 
   const detectionSource =
     value.detectionSource === "metadata" ||
-    value.detectionSource === "probe" ||
-    value.detectionSource === "format-default"
+      value.detectionSource === "probe" ||
+      value.detectionSource === "format-default"
       ? value.detectionSource
       : "format-default";
 

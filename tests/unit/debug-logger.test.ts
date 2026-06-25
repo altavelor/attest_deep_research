@@ -103,6 +103,63 @@ describe("PluginDebugLogger", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it("logs probe results, redacting secrets, only when debug mode is enabled", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    let debugMode = false;
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings({ debugMode }),
+      console: { debug, error },
+    });
+
+    const context = {
+      probe: "tool-capabilities",
+      profileId: "chat-qwen",
+      model: "qwen3",
+      received: { calls: true, apiKey: "secret-key" },
+      saved: { tools: true },
+    };
+
+    logger.logProbeResult(context);
+    expect(debug).not.toHaveBeenCalled();
+
+    debugMode = true;
+    logger.logProbeResult(context);
+
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(debug).toHaveBeenCalledWith("[Ixplorer] Probe result", {
+      probe: "tool-capabilities",
+      profileId: "chat-qwen",
+      model: "qwen3",
+      received: { calls: true, apiKey: "[redacted]" },
+      saved: { tools: true },
+    });
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("logs the plugin configuration only when debug mode is enabled", () => {
+    const debug = vi.fn();
+    const error = vi.fn();
+    const logger = new PluginDebugLogger({
+      getSettings: () => createSettings(),
+      console: { debug, error },
+    });
+
+    logger.logConfiguration("initial-load", createSettings({ debugMode: false }));
+    expect(debug).not.toHaveBeenCalled();
+
+    logger.logConfiguration("initial-load", createSettings({ debugMode: true }));
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(debug).toHaveBeenCalledWith(
+      "[Ixplorer] Configuration",
+      expect.objectContaining({
+        stage: "initial-load",
+        settings: expect.objectContaining({ debugMode: true }),
+      }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it("always logs errors with current plugin settings", () => {
     const debug = vi.fn();
     const error = vi.fn();

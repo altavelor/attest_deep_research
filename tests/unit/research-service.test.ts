@@ -22,8 +22,9 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+import { ChatModelProvider } from "../../src/shared/types";
 class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) {}
+  constructor(private readonly files: Record<string, string>) { }
 
   async listPaths(): Promise<string[]> {
     return Object.keys(this.files).sort();
@@ -46,6 +47,22 @@ describe("buildResearchPrompt", () => {
     expect(system).toContain("otherwise use general knowledge");
     expect(prompt).toContain("The question is self-contained");
     expect(prompt).not.toContain("say what is missing instead of guessing");
+  });
+
+  it("describes available vault tools and scopes the answer-from-context rule to research", () => {
+    const system = buildResearchSystemPrompt({
+      noteToolNames: ["list_notes", "read_note", "get_active_note", "search_notes"],
+    });
+
+    expect(system).toContain("## Vault tools");
+    expect(system).toContain("list_notes — list or browse vault notes");
+    expect(system).toContain("call the appropriate tool immediately");
+    expect(system).toContain("applies only to research and knowledge questions");
+  });
+
+  it("omits the vault tools section when no note tools are available", () => {
+    expect(buildResearchSystemPrompt()).not.toContain("## Vault tools");
+    expect(buildResearchSystemPrompt({ noteToolNames: [] })).not.toContain("## Vault tools");
   });
 
   it("adds index scope as delimited non-citable system context", () => {
@@ -217,7 +234,7 @@ describe("ResearchService", () => {
         citations: [{ id: "idx-1" }],
         contextDiagnostics: {
           executionStrategy: "agentic",
-          agentic: { requiredTools: ["search_index"] },
+          agentic: { requiredTools: [] },
         },
       },
     });
@@ -259,12 +276,10 @@ describe("ResearchService", () => {
     });
   });
 
-  it("discards partial agentic text and restarts eager on terminal failure", async () => {
-    const chatModel = new FakeChatModel([
-      [{ content: "partial agentic", isComplete: true }],
-      [{ content: "repair text", isComplete: true }],
-      [{ content: "Eager fallback", isComplete: true }],
-    ]);
+  it("accepts a direct answer without forcing a tool (Codex-style auto)", async () => {
+    // No mandatory tools: a tool-capable model that chooses to answer directly is
+    // accepted as the agentic result, rather than discarded and forced to search.
+    const chatModel = new FakeChatModel([[{ content: "Direct answer", isComplete: true }]]);
     const service = new ResearchService({
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
@@ -284,20 +299,62 @@ describe("ResearchService", () => {
         includeContextDiagnostics: true,
       }),
     );
-    expect(visibleAnswerText(events)).toBe("Eager fallback");
-    expect(events).toContainEqual({
-      type: "checkpoint-complete",
-      checkpointId: "round-1",
-      round: 1,
-    });
+    expect(visibleAnswerText(events)).toBe("Direct answer");
     expect(events.at(-1)).toMatchObject({
       type: "complete",
       answer: {
         contextDiagnostics: {
-          executionStrategy: "deterministic-fallback",
-          agentic: { duplicatedCost: true },
+          executionStrategy: "agentic",
+          agentic: { requiredTools: [], satisfiedTools: [] },
         },
       },
+    });
+  });
+
+  it("falls back to deterministic diagnostics instead of throwing on agentic provider error", async () => {
+    // First streamChat call (agentic attempt) throws to simulate a provider-side
+    // tool-calling failure; the deterministic fallback synthesis then succeeds.
+    let calls = 0;
+    const chatModel: ChatModelProvider = {
+      async listModels() {
+        return ["qwen"];
+      },
+      async *streamChat() {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error("provider exploded during tool round");
+        }
+        yield { content: "Deterministic fallback answer", isComplete: true };
+      },
+    };
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "show the list of existing notes",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    const complete = events.at(-1);
+    if (complete?.type !== "complete") {
+      throw new Error("Expected a complete event despite the agentic provider error");
+    }
+    expect(complete.answer.contextDiagnostics).toMatchObject({
+      executionStrategy: "deterministic-fallback",
+      agentic: { fallbackReason: "provider-error" },
     });
   });
 
@@ -351,6 +408,44 @@ describe("ResearchService", () => {
     }
   });
 
+  it("records tool capabilities in diagnostics for the webOnly fallback path", async () => {
+    // webOnly has no assembled context, so toolCapabilities must be attached on
+    // the deterministic-fallback branch — otherwise the V3 report defaults calls
+    // to false and raises a spurious tool-calls-blocked error.
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: false,
+        choiceRequired: false,
+        choiceSpecific: false,
+        parallelCalls: false,
+      },
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "q",
+        searchMode: "webOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    const complete = events.at(-1);
+    if (complete?.type !== "complete") {
+      throw new Error("Expected a complete event");
+    }
+    expect(complete.answer.contextDiagnostics?.toolCapabilities).toEqual({
+      calls: false,
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    });
+  });
+
   it("keeps note tools available in none mode", async () => {
     const chatModel = new FakeChatModel([
       [
@@ -378,6 +473,53 @@ describe("ResearchService", () => {
 
     expect(chatModel.requests[0].tools?.map((tool) => tool.function.name)).toContain("read_note");
     expect(chatModel.requests[1].messages.at(-1)?.content).toContain("Tool-provided context");
+  });
+
+  it("exposes note tools in the agentic loop for none mode", async () => {
+    const chatModel = new FakeChatModel([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "call-1", name: "list_notes", arguments: { path: "Ixplorer/" } }],
+        },
+      ],
+      [{ content: "Listed notes.", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolsEnabled: true,
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: false,
+      },
+      noteTools: new NoteToolService({
+        files: new MemoryContextFiles({ "Ixplorer/note.md": "Ixplorer note" }),
+        extractors: [new MarkdownExtractor()],
+      }),
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "show notes in ixplorer folder",
+        searchMode: "none",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    const offeredTools = chatModel.requests[0].tools?.map((tool) => tool.function.name) ?? [];
+    expect(offeredTools).toEqual(
+      expect.arrayContaining(["list_notes", "search_notes", "read_note"]),
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: { contextDiagnostics: { executionStrategy: "agentic" } },
+    });
   });
 
   it("uses only attached and enabled active-file context in none mode", async () => {
@@ -594,6 +736,8 @@ describe("ResearchService", () => {
     expect(events.map((event) => event.type)).toEqual([
       "status",
       "status",
+      "tool-call-start",
+      "tool-call-end",
       "checkpoint-delta",
       "checkpoint-promote",
       "complete",
@@ -745,7 +889,7 @@ describe("ResearchService", () => {
 
     const iterator = service
       .answer({ question: "What is local retrieval?" })
-      [Symbol.asyncIterator]();
+    [Symbol.asyncIterator]();
     const first = await iterator.next();
 
     expect(first.value).toEqual({ type: "status", message: "Reading vault context..." });

@@ -131,11 +131,11 @@ export function resolveIndexDescriptionForPrompt(
     persisted && persisted.status !== "stale"
       ? persisted
       : buildMinimalIndexDescription(profile, {
-          generatedAt: persisted?.generatedAt ?? profile.lastIndexedAt ?? profile.updatedAt,
-          indexUpdatedAt: profile.lastIndexedAt ?? persisted?.indexUpdatedAt ?? profile.updatedAt,
-          sourceCount: profile.indexedFileCount ?? persisted?.sourceCount ?? 0,
-          chunkCount: persisted?.chunkCount ?? 0,
-        });
+        generatedAt: persisted?.generatedAt ?? profile.lastIndexedAt ?? profile.updatedAt,
+        indexUpdatedAt: profile.lastIndexedAt ?? persisted?.indexUpdatedAt ?? profile.updatedAt,
+        sourceCount: profile.indexedFileCount ?? persisted?.sourceCount ?? 0,
+        chunkCount: persisted?.chunkCount ?? 0,
+      });
 
   return {
     text: description.text,

@@ -7,7 +7,7 @@ import {
 import { normalizeVaultPath, vaultPathMatchesGlob } from "../shared/pathFilters";
 
 export class ObsidianVaultFileProvider implements VaultFileProvider {
-  constructor(private readonly vault: Vault) {}
+  constructor(private readonly vault: Vault) { }
 
   async listFiles(): Promise<VaultFileSummary[]> {
     const ignoredGlobs = this.getIgnoredGlobs();

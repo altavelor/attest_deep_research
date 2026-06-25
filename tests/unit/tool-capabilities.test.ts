@@ -24,38 +24,34 @@ describe("tool capability resolution", () => {
     });
   });
 
-  it("resolves manual over probe over format default per flag", () => {
+  it("resolves probe over format default per flag", () => {
     const settings = createToolCapabilitySettings(false);
     settings.probe = { calls: true, choiceRequired: true, choiceSpecific: false };
-    settings.manual = { choiceRequired: false, choiceSpecific: true };
     expect(resolveToolCapabilities(settings)).toEqual({
       capabilities: {
         calls: true,
-        choiceRequired: false,
-        choiceSpecific: true,
+        choiceRequired: true,
+        choiceSpecific: false,
         parallelCalls: false,
       },
       provenance: {
         calls: "probe",
-        choiceRequired: "manual",
-        choiceSpecific: "manual",
+        choiceRequired: "probe",
+        choiceSpecific: "probe",
         parallelCalls: "format-default",
       },
     });
   });
 
-  it("updates probe results without changing manual overrides", () => {
-    const settings = createToolCapabilitySettings(false);
-    settings.manual = { choiceRequired: false };
-    const updated = withProbeResults(settings, {
+  it("makes probe results authoritative (no manual override can shadow them)", () => {
+    const updated = withProbeResults(createToolCapabilitySettings(false), {
       calls: true,
       choiceRequired: true,
       choiceSpecific: true,
     });
-    expect(updated.manual).toEqual({ choiceRequired: false });
     expect(resolveToolCapabilities(updated).capabilities).toMatchObject({
       calls: true,
-      choiceRequired: false,
+      choiceRequired: true,
       choiceSpecific: true,
     });
   });

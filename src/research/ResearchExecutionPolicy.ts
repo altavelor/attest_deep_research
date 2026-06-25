@@ -36,14 +36,27 @@ export interface ResearchExecutionPolicy {
   requiredTools: readonly string[];
   bootstrapChoice: ChatToolChoice;
   parallelToolCalls: boolean;
+  /**
+   * Whether the model can force a specific tool by name (`tool_choice` naming a
+   * single function). When false, callers that need to compel a particular tool
+   * (e.g. repairing a missing mandatory call) must fall back to `required`.
+   */
+  supportsSpecificChoice: boolean;
 }
 
 export function resolveResearchExecutionPolicy(
   input: ResearchExecutionPolicyInput,
 ): Readonly<ResearchExecutionPolicy> {
-  const requiredTools = mandatoryTools(input.searchMode);
-  const bootstrapChoice = choiceFor(requiredTools, input.capabilities);
-  const base = { requiredTools, bootstrapChoice, parallelToolCalls: requiredTools.length > 1 };
+  // Codex-style: the model chooses tools itself (`auto`). The search mode is only
+  // a tool-availability filter (applied in the tool registry), never a mandate.
+  // Grounding against fabrication is handled behaviorally by the citation guard,
+  // not by forcing a specific tool here.
+  const base = {
+    requiredTools: Object.freeze([] as string[]),
+    bootstrapChoice: Object.freeze({ type: "auto" as const }),
+    parallelToolCalls: input.capabilities.parallelCalls,
+    supportsSpecificChoice: input.capabilities.choiceSpecific,
+  };
 
   if (input.forceEagerResearch) {
     return freeze({ ...base, strategy: "eager-forced", reason: "forced-eager" });
@@ -58,64 +71,13 @@ export function resolveResearchExecutionPolicy(
       reason: "provider-tool-control-unsupported",
     });
   }
-
-  const unavailable =
-    dependencyFailure(input, requiredTools) ?? capabilityFailure(input, requiredTools);
-  if (unavailable) {
-    return freeze({ ...base, strategy: "deterministic-fallback", reason: unavailable });
+  // The only capability that still matters is whether the model can call tools at
+  // all. Specific/required/parallel choice no longer gate eligibility because we
+  // never force a tool.
+  if (!input.capabilities.calls) {
+    return freeze({ ...base, strategy: "deterministic-fallback", reason: "tool-calls-unavailable" });
   }
   return freeze({ ...base, strategy: "agentic", reason: "eligible" });
-}
-
-function mandatoryTools(searchMode: ResearchSearchMode): readonly string[] {
-  const tools: string[] = [];
-  if (searchMode === "indexOnly" || searchMode === "indexAndWeb") tools.push("search_index");
-  if (searchMode === "webOnly" || searchMode === "indexAndWeb") tools.push("search_web");
-  return Object.freeze(tools);
-}
-
-function choiceFor(
-  requiredTools: readonly string[],
-  capabilities?: ToolCallingCapabilities,
-): ChatToolChoice {
-  if (requiredTools.length === 0) return Object.freeze({ type: "auto" });
-  if (requiredTools.length === 1) {
-    if (capabilities && !capabilities.choiceSpecific) return Object.freeze({ type: "auto" });
-    return Object.freeze({ type: "specific", name: requiredTools[0] });
-  }
-  if (capabilities && !capabilities.choiceRequired) return Object.freeze({ type: "auto" });
-  return Object.freeze({ type: "required" });
-}
-
-function dependencyFailure(
-  input: ResearchExecutionPolicyInput,
-  requiredTools: readonly string[],
-): ResearchPolicyReason | undefined {
-  if (requiredTools.includes("search_index") && !input.dependencies.retriever) {
-    return "retriever-unavailable";
-  }
-  if (requiredTools.includes("search_web") && !input.dependencies.webProvider) {
-    return "web-provider-unavailable";
-  }
-  return undefined;
-}
-
-function capabilityFailure(
-  input: ResearchExecutionPolicyInput,
-  requiredTools: readonly string[],
-): ResearchPolicyReason | undefined {
-  const capabilities = input.capabilities;
-  if (!capabilities.calls) return "tool-calls-unavailable";
-  if (requiredTools.length === 1 && !capabilities.choiceSpecific) {
-    return "specific-choice-unavailable";
-  }
-  if (requiredTools.length > 1 && !capabilities.choiceRequired) {
-    return "required-choice-unavailable";
-  }
-  if (requiredTools.length > 1 && !capabilities.parallelCalls) {
-    return "parallel-calls-unavailable";
-  }
-  return undefined;
 }
 
 function freeze(policy: ResearchExecutionPolicy): Readonly<ResearchExecutionPolicy> {

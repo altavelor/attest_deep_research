@@ -483,7 +483,7 @@ class FakeVaultFileProvider implements VaultFileProvider {
 class FakeExtractor implements Extractor {
   extractedPaths: string[] = [];
 
-  constructor(private readonly extension: string) {}
+  constructor(private readonly extension: string) { }
 
   supports(path: string): boolean {
     return path.endsWith(this.extension);
@@ -503,7 +503,7 @@ class MultiChunkExtractor implements Extractor {
   constructor(
     private readonly extension: string,
     private readonly chunkCount: number,
-  ) {}
+  ) { }
 
   supports(path: string): boolean {
     return path.endsWith(this.extension);
@@ -521,7 +521,7 @@ class MultiChunkExtractor implements Extractor {
 }
 
 class FailingPathExtractor implements Extractor {
-  constructor(private readonly failedPath: string) {}
+  constructor(private readonly failedPath: string) { }
 
   supports(path: string): boolean {
     return path === this.failedPath;
@@ -533,7 +533,7 @@ class FailingPathExtractor implements Extractor {
 }
 
 class FailingIxplorerPathExtractor implements Extractor {
-  constructor(private readonly failedPath: string) {}
+  constructor(private readonly failedPath: string) { }
 
   supports(path: string): boolean {
     return path === this.failedPath;
@@ -549,7 +549,7 @@ class FailingIxplorerPathExtractor implements Extractor {
 }
 
 class EmptyPathExtractor implements Extractor {
-  constructor(private readonly emptyPath: string) {}
+  constructor(private readonly emptyPath: string) { }
 
   supports(path: string): boolean {
     return path === this.emptyPath;

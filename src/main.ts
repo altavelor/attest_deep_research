@@ -124,11 +124,6 @@ export default class IxplorerPlugin extends Plugin {
           getChatModel: () =>
             resolveChatModelProfile(this.settings, this.settings.activeChatModelProfileId)?.name ??
             "",
-          setChatModel: async (modelProfileId) => {
-            this.settings.activeChatModelProfileId = modelProfileId.trim();
-            normalizeSettingsState(this.settings);
-            await this.saveSettings();
-          },
           getAvailableChatModels: () =>
             this.settings.chatModelProfiles
               .filter((profile) => profile.isSuspended !== true)
@@ -141,6 +136,7 @@ export default class IxplorerPlugin extends Plugin {
               maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
             })),
+          getDefaultChatModelProfileId: () => this.settings.activeChatModelProfileId,
           getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
@@ -153,6 +149,10 @@ export default class IxplorerPlugin extends Plugin {
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
           saveChat: (input) => this.createChatStore().saveChat(input),
+          renameSavedChat: async (id, title) => {
+            await this.createChatStore().renameChat(id, title);
+          },
+          deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           isChatIndexControlShown: () => this.settings.showChatIndexControl,
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () => this.settings.includeActiveFileContext,
@@ -179,6 +179,7 @@ export default class IxplorerPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = migrateSettings(await this.loadData());
+    this.logger.logConfiguration("initial-load", this.settings);
   }
 
   async saveSettings(): Promise<void> {
@@ -240,12 +241,12 @@ export default class IxplorerPlugin extends Plugin {
     );
     const capabilitySnapshot =
       this.settings.modelCapabilityCache[
-        capabilityCacheKey({
-          baseUrl: chatServer.baseUrl,
-          apiKey: chatServer.apiKey,
-          model: chatProfile.modelName,
-          protocol: effectiveProtocol,
-        })
+      capabilityCacheKey({
+        baseUrl: chatServer.baseUrl,
+        apiKey: chatServer.apiKey,
+        model: chatProfile.modelName,
+        protocol: effectiveProtocol,
+      })
       ];
 
     return new ResearchService({
@@ -287,6 +288,7 @@ export default class IxplorerPlugin extends Plugin {
       forceEagerResearch: this.settings.forceEagerResearch,
       toolCapabilities: toolResolution.capabilities,
       toolCapabilityProvenance: toolResolution.provenance,
+      toolCapabilityProbeAudit: chatProfile.capabilities?.toolCalling?.probeAudit,
       apiFormat: chatServer.apiFormat,
       indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
       getIndexStatus: () => {
@@ -301,14 +303,14 @@ export default class IxplorerPlugin extends Plugin {
       },
       noteTools: toolsEnabled
         ? new NoteToolService({
-            files: contextFiles,
-            extractors: contextExtractors,
-            getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
-            writer: chatProfile.noteMutationAccess
-              ? new ObsidianVaultWriter(this.app)
-              : undefined,
-            noteMutationAccess: chatProfile.noteMutationAccess,
-          })
+          files: contextFiles,
+          extractors: contextExtractors,
+          getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+          writer: chatProfile.noteMutationAccess
+            ? new ObsidianVaultWriter(this.app)
+            : undefined,
+          noteMutationAccess: chatProfile.noteMutationAccess,
+        })
         : undefined,
     });
   }
@@ -342,9 +344,9 @@ export default class IxplorerPlugin extends Plugin {
     const languageInventory = await retriever.getLanguageInventory();
     const queryVariants = queryExpansion
       ? await queryExpansion.buildVariants({
-          query: options.query,
-          languageInventory,
-        })
+        query: options.query,
+        languageInventory,
+      })
       : [];
     const result = await retriever.search(options.query, {
       limit: options.limit,
@@ -486,32 +488,32 @@ export default class IxplorerPlugin extends Plugin {
       logger: this.logger,
       ...(profile
         ? {
-            onReasoningObserved: (observation: {
-              protocol: "chat-completions";
-              dialect: string;
-            }) => {
-              const identity = {
-                baseUrl: server.baseUrl,
-                apiKey: server.apiKey,
-                model: profile.modelName,
-                protocol: observation.protocol,
-              };
-              const key = capabilityCacheKey(identity);
-              const current = this.settings.modelCapabilityCache[key];
-              const observedFormat = (
-                observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
-              ) as ReasoningResponseFormat;
-              if (current?.reasoning.responseFormats.includes(observedFormat)) {
-                return;
-              }
-              this.settings.modelCapabilityCache = recordObservedReasoningFormat(
-                this.settings.modelCapabilityCache,
-                identity,
-                observation.dialect,
-              );
-              void this.saveSettings();
-            },
-          }
+          onReasoningObserved: (observation: {
+            protocol: "chat-completions";
+            dialect: string;
+          }) => {
+            const identity = {
+              baseUrl: server.baseUrl,
+              apiKey: server.apiKey,
+              model: profile.modelName,
+              protocol: observation.protocol,
+            };
+            const key = capabilityCacheKey(identity);
+            const current = this.settings.modelCapabilityCache[key];
+            const observedFormat = (
+              observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
+            ) as ReasoningResponseFormat;
+            if (current?.reasoning.responseFormats.includes(observedFormat)) {
+              return;
+            }
+            this.settings.modelCapabilityCache = recordObservedReasoningFormat(
+              this.settings.modelCapabilityCache,
+              identity,
+              observation.dialect,
+            );
+            void this.saveSettings();
+          },
+        }
         : {}),
     });
   }
@@ -630,11 +632,11 @@ export default class IxplorerPlugin extends Plugin {
   private resolveIndexProfile(profileId?: string): IndexProfile {
     const requested = profileId
       ? this.settings.indexProfiles.find(
-          (profile) =>
-            profile.id === profileId &&
-            profile.isSuspended !== true &&
-            Boolean(profile.lastIndexedAt),
-        )
+        (profile) =>
+          profile.id === profileId &&
+          profile.isSuspended !== true &&
+          Boolean(profile.lastIndexedAt),
+      )
       : undefined;
 
     const active = getActiveIndexProfile(this.settings);

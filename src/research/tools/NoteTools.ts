@@ -3,12 +3,14 @@ import { normalizeVaultPath } from "../../shared/pathFilters";
 import {
   ChatToolCall,
   ChatToolDefinition,
+  Citation,
   Extractor,
   ExtractedChunk,
   RetrievedChunk,
 } from "../../shared/types";
 import { ContextFileProvider } from "../ContextAssembler";
 import { estimateTextTokens } from "../prompts";
+import { applyNoteCitations, maxFootnoteNumber } from "./noteCitations";
 
 export interface VaultWriter {
   exists(path: string): Promise<boolean>;
@@ -59,6 +61,11 @@ export interface NoteToolServiceOptions {
   writer?: VaultWriter;
   confirmation?: NoteActionConfirmation;
   noteMutationAccess?: boolean;
+  /**
+   * Supplies the citations gathered during the current research run so that raw
+   * evidence-ID tokens written into notes can be rewritten as footnote links.
+   */
+  citationProvider?: () => readonly Citation[];
 }
 
 export interface NoteToolExecution {
@@ -96,7 +103,11 @@ export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", maxLength: 500, description: "Vault-relative path ending in .md." },
+          path: {
+            type: "string",
+            maxLength: 500,
+            description: "Vault-relative path ending in .md.",
+          },
           content: { type: "string", description: "Markdown content for the new note." },
           overwrite: {
             type: "boolean",
@@ -117,7 +128,11 @@ export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", maxLength: 500, description: "Vault-relative path ending in .md." },
+          path: {
+            type: "string",
+            maxLength: 500,
+            description: "Vault-relative path ending in .md.",
+          },
           content: { type: "string", description: "Content to write." },
           mode: {
             type: "string",
@@ -227,6 +242,7 @@ export class NoteToolService {
   private readonly writer?: VaultWriter;
   private readonly confirmation: NoteActionConfirmation;
   private readonly noteMutationAccess: boolean;
+  private citationProvider?: () => readonly Citation[];
 
   constructor(options: NoteToolServiceOptions) {
     this.files = options.files;
@@ -238,6 +254,20 @@ export class NoteToolService {
     this.writer = options.writer;
     this.confirmation = options.confirmation ?? AUTO_CONFIRM;
     this.noteMutationAccess = options.noteMutationAccess ?? false;
+    this.citationProvider = options.citationProvider;
+  }
+
+  /**
+   * Registers the source of research citations used to rewrite evidence-ID tokens in
+   * written notes. Wired after construction because the evidence registry is created
+   * per research run, while the service is long-lived.
+   */
+  setCitationProvider(provider: () => readonly Citation[]): void {
+    this.citationProvider = provider;
+  }
+
+  private citations(): readonly Citation[] {
+    return this.citationProvider?.() ?? [];
   }
 
   definitions(): ChatToolDefinition[] {
@@ -307,7 +337,8 @@ export class NoteToolService {
       return jsonResult(false, { ok: false, reason: "user-cancelled", path });
     }
 
-    const content = typeof args.content === "string" ? args.content : "";
+    const rawContent = typeof args.content === "string" ? args.content : "";
+    const content = applyNoteCitations(rawContent, this.citations()).content;
     const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
     if (folder) {
       await writer.ensureFolder(folder);
@@ -339,20 +370,31 @@ export class NoteToolService {
       return jsonResult(false, { ok: false, reason: "user-cancelled", path });
     }
 
-    const content = typeof args.content === "string" ? args.content : "";
-    const mode =
-      args.mode === "append" || args.mode === "prepend" ? args.mode : "replace";
+    const rawContent = typeof args.content === "string" ? args.content : "";
+    const mode = args.mode === "append" || args.mode === "prepend" ? args.mode : "replace";
 
+    const before = await writer.readFile(path);
+    // Continue footnote numbering past any already present in the file so appended or
+    // prepended citations do not collide with existing ones.
+    const startNumber = mode === "replace" ? 1 : maxFootnoteNumber(before) + 1;
+    const content = applyNoteCitations(rawContent, this.citations(), startNumber).content;
     if (mode === "replace") {
       await writer.modifyFile(path, content);
     } else if (mode === "append") {
       await writer.appendFile(path, content);
     } else {
-      const existing = await writer.readFile(path);
-      await writer.modifyFile(path, `${content}\n\n${existing}`);
+      await writer.modifyFile(path, `${content}\n\n${before}`);
     }
+    const after = await writer.readFile(path);
 
-    return jsonResult(true, { ok: true, path, mode });
+    return jsonResult(true, {
+      ok: true,
+      path,
+      mode,
+      // Display-only fields consumed by the chat UI to render an edit diff.
+      before: capDiffText(before),
+      after: capDiffText(after),
+    });
   }
 
   private async deleteNote(args: Record<string, unknown>): Promise<NoteToolExecution> {
@@ -440,7 +482,7 @@ export class NoteToolService {
         droppedTokens: Math.max(
           0,
           estimateTextTokens(chunks.map((chunk) => chunk.text).join("\n\n")) -
-            estimateTextTokens(packed.content),
+          estimateTextTokens(packed.content),
         ),
         truncated: packed.truncated,
         maxChars,
@@ -577,6 +619,11 @@ function boundLimit(value: number | undefined, fallback: number, max: number): n
   return Math.max(1, Math.min(max, value ?? fallback));
 }
 
+const DIFF_TEXT_CAP = 8_000;
+
+function capDiffText(value: string): string {
+  return value.length > DIFF_TEXT_CAP ? value.slice(0, DIFF_TEXT_CAP) : value;
+}
 
 function jsonResult(ok: boolean, value: unknown): NoteToolExecution {
   return { ok, result: JSON.stringify(value) };

@@ -99,12 +99,12 @@ export class ContextAssembler {
     const diagnostics = createEmptyDiagnostics(request.contextMode);
     const graph = request.explicitSourcesOnly
       ? {
-          sourcePaths: [],
-          diagnostics: createDisabledGraphDiagnostics({
-            ...DEFAULT_GRAPH_CONTEXT_LIMITS,
-            ...(request.graph?.limits ?? {}),
-          }),
-        }
+        sourcePaths: [],
+        diagnostics: createDisabledGraphDiagnostics({
+          ...DEFAULT_GRAPH_CONTEXT_LIMITS,
+          ...(request.graph?.limits ?? {}),
+        }),
+      }
       : await this.discoverGraphContext(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
     for (const path of request.contextMode === "filter" ? request.contextPaths : []) {
@@ -168,11 +168,11 @@ export class ContextAssembler {
     const retrievalResult = request.skipRetrieval
       ? []
       : await this.retrieve(request.question, {
-          limit: request.evidenceLimit,
-          includeWebResults: false,
-          ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
-          ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
-        });
+        limit: request.evidenceLimit,
+        includeWebResults: false,
+        ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
+        ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
+      });
     const retrievalChunks = Array.isArray(retrievalResult)
       ? retrievalResult
       : retrievalResult.chunks;
@@ -470,14 +470,14 @@ function combineMarkdownChunks(chunks: ExtractedChunk[]): RetrievedChunk {
   const source =
     first.source.kind === "markdown"
       ? {
-          ...first.source,
-          id: stableId(`${first.source.path}:explicit-full:${contentHash}`),
-          title: first.source.path,
-          headingPath: [],
-          startOffset: undefined,
-          endOffset: undefined,
-          blockId: undefined,
-        }
+        ...first.source,
+        id: stableId(`${first.source.path}:explicit-full:${contentHash}`),
+        title: first.source.path,
+        headingPath: [],
+        startOffset: undefined,
+        endOffset: undefined,
+        blockId: undefined,
+      }
       : first.source;
 
   return {

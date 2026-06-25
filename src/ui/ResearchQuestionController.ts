@@ -27,6 +27,7 @@ import {
   nextChainToolCallStart,
   nextChainToolCallEnd,
   nextChainReasoningSegment,
+  stampLastAssistantModel,
 } from "./rendering";
 
 export interface ResearchQuestionControllerOptions {
@@ -38,6 +39,7 @@ export interface ResearchQuestionControllerOptions {
   setLastAnswer(answer: ResearchAnswer | null): void;
   getModelInputValue(): string;
   getCurrentModel(): string;
+  getCurrentModelLabel(): string;
   getContextLimitTokens(): number | undefined;
   getReservedOutputTokens(): number | undefined;
   updateChatModel(model: string): Promise<void>;
@@ -70,6 +72,8 @@ export class ResearchQuestionController {
   private activeAbortController: AbortController | null = null;
   private activeRunId: string | null = null;
   private running = false;
+  private activeDiagnostics: AgentRunDiagnosticCollector | null = null;
+  private activeRenderHandle: number | null = null;
 
   constructor(options: ResearchQuestionControllerOptions) {
     this.options = options;
@@ -186,6 +190,7 @@ export class ResearchQuestionController {
       answerId: `answer-${runId}`,
     });
     this.activeRunId = runId;
+    this.activeDiagnostics = runDiagnostics;
     this.setRunning(true);
     this.shouldStopRunning = false;
     this.activeAbortController = new AbortController();
@@ -254,10 +259,12 @@ export class ResearchQuestionController {
       this.options.renderMessages();
     } finally {
       this.shouldStopRunning = false;
+      this.cancelActiveRender();
       if (this.activeRunId === runId) {
         this.activeAbortController = null;
         this.activeRunId = null;
       }
+      this.activeDiagnostics = null;
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);
@@ -278,7 +285,7 @@ export class ResearchQuestionController {
 
     if (event.type === "delta") {
       this.options.setMessages(nextAssistantMessage(this.options.getMessages(), event.content));
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
@@ -286,15 +293,21 @@ export class ResearchQuestionController {
       let msgs = nextAssistantReasoning(this.options.getMessages(), event.segmentId, event.content);
       msgs = nextChainReasoningSegment(msgs, event.segmentId, event.content);
       this.options.setMessages(msgs);
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
     if (event.type === "tool-call-start") {
       this.options.setMessages(
-        nextChainToolCallStart(this.options.getMessages(), event.id, event.name, event.label),
+        nextChainToolCallStart(
+          this.options.getMessages(),
+          event.id,
+          event.name,
+          event.label,
+          event.args,
+        ),
       );
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
@@ -306,9 +319,10 @@ export class ResearchQuestionController {
           event.ok,
           event.resolvedLabel,
           event.resultSummary,
+          event.resultJson,
         ),
       );
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
@@ -321,7 +335,7 @@ export class ResearchQuestionController {
           event.content,
         ),
       );
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
@@ -329,7 +343,7 @@ export class ResearchQuestionController {
       this.options.setMessages(
         completeAssistantCheckpoint(this.options.getMessages(), event.checkpointId),
       );
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
@@ -354,22 +368,29 @@ export class ResearchQuestionController {
         ];
         this.options.setMessages(nextAssistantMessage(updated, checkpoint.content));
       }
-      this.options.renderActiveMessage();
+      this.scheduleActiveRender();
       return;
     }
 
     if (event.type === "answer-reset") {
+      this.cancelActiveRender();
       this.options.setMessages(resetLastAssistantContent(this.options.getMessages()));
       this.options.renderMessages();
       return;
     }
 
+    this.cancelActiveRender();
     this.options.setLastAnswer(event.answer);
     this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
     this.options.setMessages(
+      stampLastAssistantModel(this.options.getMessages(), this.options.getCurrentModelLabel()),
+    );
+    this.options.setMessages(
       attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), {
         ...event.answer,
-        ...(event.answer.isFallback ? { isFallback: true as const, fallbackReason: event.answer.fallbackReason } : {}),
+        ...(event.answer.isFallback
+          ? { isFallback: true as const, fallbackReason: event.answer.fallbackReason }
+          : {}),
       }),
     );
     this.options.renderAnswerDetails();
@@ -380,6 +401,38 @@ export class ResearchQuestionController {
   private setRunning(running: boolean): void {
     this.running = running;
     this.options.setRunningState(running);
+  }
+
+  /**
+   * Coalesce high-frequency streaming renders. The message state is updated
+   * synchronously by the caller; the (expensive) active-message render is
+   * deferred to the next animation frame so a burst of deltas results in a
+   * single render rather than one per delta.
+   */
+  private scheduleActiveRender(): void {
+    if (this.activeRenderHandle !== null) {
+      this.activeDiagnostics?.recordCoalescedUpdate();
+      return;
+    }
+    const flush = () => {
+      this.activeRenderHandle = null;
+      this.activeDiagnostics?.recordMarkdownRender();
+      this.options.renderActiveMessage();
+    };
+    this.activeRenderHandle =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(flush)
+        : (setTimeout(flush, 16) as unknown as number);
+  }
+
+  private cancelActiveRender(): void {
+    if (this.activeRenderHandle === null) return;
+    if (typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.activeRenderHandle);
+    } else {
+      clearTimeout(this.activeRenderHandle);
+    }
+    this.activeRenderHandle = null;
   }
 
   private rejectIfContextWindowExceeded(

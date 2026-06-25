@@ -1,4 +1,5 @@
 import { ContextDiagnostics } from "../shared/types";
+import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
 
 export interface DiagnosticReportViewModel {
   title: string;
@@ -231,85 +232,6 @@ export function webDiagnosticLines(diagnostics: ContextDiagnostics): string[] {
 }
 
 export function formatDiagnosticReport(diagnostics: ContextDiagnostics): string {
-  const summaryLines = diagnosticSummaryLines(diagnostics);
-  const webLines = webDiagnosticLines(diagnostics);
-  const retrievalLines = retrievalDiagnosticLines(diagnostics);
-  const sections = ["Diagnostic report", "", "Context used", ...summaryLines];
-
-  if (webLines.length > 0) {
-    sections.push("", "Web research", ...webLines);
-  }
-
-  if (retrievalLines.length > 0) {
-    sections.push("", "Retrieval diagnostics", ...retrievalLines);
-  }
-
-  sections.push("", "Debug details", JSON.stringify(diagnostics, null, 2));
-  return sections.join("\n");
+  return JSON.stringify(buildDiagnosticReportV3(diagnostics), null, 2);
 }
 
-function diagnosticSummaryLines(diagnostics: ContextDiagnostics): string[] {
-  const explicitSources = [
-    ...(diagnostics.explicitSources ?? []),
-    ...(diagnostics.mentionSources ?? []),
-    ...(diagnostics.activeSources ?? []),
-  ];
-  const includedExplicit = explicitSources.filter((source) => source.status === "included").length;
-  const plannerPolicy = diagnostics.evidencePlanner?.budget.policy;
-  const webBudget = diagnostics.evidencePlanner?.budget.groups.find(
-    (group) => group.name === "web",
-  );
-  const lines = [
-    ...(diagnostics.executionStrategy
-      ? [`Execution strategy: ${diagnostics.executionStrategy.replace(/-/g, " ")}`]
-      : []),
-    `Mode: ${
-      plannerPolicy === "web-only"
-        ? "web only"
-        : diagnostics.contextMode === "filter"
-          ? "filter retrieval"
-          : "include attached files"
-    }`,
-    `${includedExplicit} explicit source(s) included`,
-    `${diagnostics.retrieval.includedChunkIds.length} retrieved chunk(s) used`,
-  ];
-
-  if (webBudget && (webBudget.includedItems ?? 0) > 0) {
-    lines.push(
-      `${webBudget.includedItems} web source(s) used (${webBudget.usedTokens.toLocaleString("en-US")} tokens)`,
-    );
-  }
-
-  if (diagnostics.graph?.included.length > 0) {
-    lines.push(`${diagnostics.graph.included.length} linked note(s) used`);
-  }
-  if (diagnostics.agentic) {
-    lines.push(
-      `Agentic policy: ${diagnostics.agentic.policyReason} · ${diagnostics.agentic.rounds} round(s), ${diagnostics.agentic.totalCalls} call(s)`,
-      `Mandatory tools: ${diagnostics.agentic.requiredTools.join(", ") || "none"}`,
-      `Satisfied tools: ${diagnostics.agentic.satisfiedTools.join(", ") || "none"}`,
-    );
-    if (diagnostics.agentic.fallbackReason) {
-      lines.push(`Agentic fallback: ${diagnostics.agentic.fallbackReason}`);
-    }
-    if (diagnostics.agentic.unknownCitationIds?.length) {
-      lines.push(
-        `Unknown citation IDs ignored: ${diagnostics.agentic.unknownCitationIds.join(", ")}`,
-      );
-    }
-  }
-  if (diagnostics.retrieval.filteredSourcePaths.length > 0) {
-    lines.push(`${diagnostics.retrieval.filteredSourcePaths.length} retrieval filter path(s)`);
-  }
-  const toolDiagnostics = diagnostics.tools ?? [];
-  if (toolDiagnostics.length > 0) {
-    const succeeded = toolDiagnostics.filter((tool) => tool.status === "success").length;
-    const skipped = toolDiagnostics.filter((tool) => tool.status === "skipped").length;
-    lines.push(`${succeeded} tool call(s) completed${skipped > 0 ? `, ${skipped} skipped` : ""}`);
-  }
-  for (const warning of diagnostics.warnings ?? []) {
-    lines.push(`Warning: ${warning}`);
-  }
-
-  return lines;
-}

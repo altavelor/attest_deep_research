@@ -118,8 +118,8 @@ function createMarkdownChunk(options: {
   const sourceId = blockId
     ? stableId(`${options.path}:block:${blockId}`)
     : stableId(
-        `${options.path}:${options.part.startOffset}:${options.part.endOffset}:${options.chunkIndex}`,
-      );
+      `${options.path}:${options.part.startOffset}:${options.part.endOffset}:${options.chunkIndex}`,
+    );
   const source: MarkdownSourceReference = {
     id: sourceId,
     kind: "markdown",
