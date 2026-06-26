@@ -11,7 +11,7 @@
 
 import { Tool, ToolManager } from "../../core/agent/tool";
 
-export type SourceKind = "rag" | "web" | "attachments";
+export type SourceKind = "rag" | "web" | "attachments" | "deep-research";
 
 export interface DataSourceDescriptor {
   id: string;

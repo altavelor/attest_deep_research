@@ -1,5 +1,5 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "../../core/agent/protocol";
-import { ChatToolCall } from "../../core/agent/tool";
+import { ChatToolCall, ToolEvent } from "../../core/agent/tool";
 import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "../../core/diagnostics";
 import { ResearchExecutionPolicy } from "../../core/research/ResearchExecutionPolicy";
 import { ToolManager } from "../../core/agent/tool";
@@ -49,6 +49,8 @@ export interface AgenticResearchRunnerOptions {
     resultSummary?: string,
     resultJson?: string,
   ): void;
+  /** Progress emitted from inside a tool (e.g. a deep_search sub-agent's loop). */
+  onToolEvent?(callId: string, event: ToolEvent): void;
 }
 
 export type AgenticResearchResult = AgenticResearchSuccess | AgenticResearchFailure;
@@ -92,8 +94,22 @@ export interface AgenticResearchFailure {
 // maxRounds is a runaway backstop, not the active limiter; the model decides when
 // to stop (coding-loop style). Real control is maxResultChars + loop detection.
 const DEFAULT_MAX_ROUNDS = 30;
-const DEFAULT_MAX_RESULT_CHARS = 50_000;
+// Parent tool-result budget. Headroom matters because a single deep_search report
+// (or several in parallel) lands here as one large tool result; too tight a budget
+// trips the fallback before the model can synthesize.
+export const DEFAULT_MAX_RESULT_CHARS = 80_000;
 const PREVIEW_CHARS = 600;
+
+// Stub returned in place of a tool result once the loop enters synthesis mode (result
+// budget spent or the model is spinning), plus the nudge that asks it to answer from what
+// it already gathered. Both conditions mean "stop gathering and answer now" — not "fail and
+// hand off to the deterministic fallback", which throws away an otherwise-usable session.
+const SYNTHESIS_TOOL_STUB =
+  "[omitted: stop calling tools — answer from the evidence already gathered]";
+const SYNTHESIS_NUDGE =
+  "Stop calling tools and write the final answer now from the evidence already gathered, " +
+  "citing sources as instructed. If some sub-question is unverified, state that explicitly " +
+  "rather than omitting it.";
 
 interface CachedExecution {
   ok: boolean;
@@ -124,6 +140,9 @@ export class AgenticResearchRunner {
     let totalCalls = 0;
     let duplicateCalls = 0;
     let totalResultChars = 0;
+    let budgetExhausted = false;
+    let forceSynthesis = false;
+    let synthesisRequested = false;
     let consecutiveNoProgressRounds = 0;
     const seenEvidenceIds = new Set<string>();
     let rounds = 0;
@@ -160,8 +179,9 @@ export class AgenticResearchRunner {
         const roundPhase = phase;
         phases.push(phase);
         if (this.options.signal?.aborted) return failure("cancelled");
-        const toolChoice: ChatRequest["toolChoice"] =
-          phase === "bootstrap"
+        const toolChoice: ChatRequest["toolChoice"] = forceSynthesis
+          ? { type: "none" }
+          : phase === "bootstrap"
             ? this.options.policy.bootstrapChoice
             : phase === "repair"
               ? this.options.policy.supportsSpecificChoice
@@ -249,8 +269,21 @@ export class AgenticResearchRunner {
         let roundDuplicates = 0;
         let roundHadEvidence = false;
         let roundNewEvidence = false;
+        let roundFetchedContent = false;
+        let roundAttemptedSearch = false;
         for (const call of response.toolCalls) {
           totalCalls += 1;
+          // Already in synthesis mode (budget spent or loop detected): don't spend more
+          // tool calls. Still answer every tool call id with a stub so the transcript stays
+          // well-formed for the provider.
+          if (forceSynthesis) {
+            if (continuation) {
+              toolOutputs!.push({ callId: call.id, output: SYNTHESIS_TOOL_STUB });
+            } else {
+              messages.push({ role: "tool", content: SYNTHESIS_TOOL_STUB, toolCallId: call.id });
+            }
+            continue;
+          }
           const key = normalizedCallKey(call);
           let execution = cache.get(key);
           const retryMandatory =
@@ -260,13 +293,17 @@ export class AgenticResearchRunner {
             execution.retryable;
           // Mutation tools are never cached: identical args may have different vault state.
           const bypassCache = mutationTool(call.name);
+          const cacheHit = !!execution && !retryMandatory && !bypassCache;
           const label = toolCallChainLabel(call.name, call.arguments);
           this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
           if (execution && !retryMandatory && !bypassCache) {
             duplicateCalls += 1;
             roundDuplicates += 1;
           } else {
-            const raw = await this.options.tools.execute(call, { signal: this.options.signal });
+            const raw = await this.options.tools.execute(call, {
+              signal: this.options.signal,
+              emit: (event) => this.options.onToolEvent?.(call.id, event),
+            });
             execution = serializeExecution(raw);
             if (!bypassCache) {
               cache.set(key, execution);
@@ -281,10 +318,28 @@ export class AgenticResearchRunner {
             resultSummary,
             execution.result,
           );
+          // Over budget: keep this result out of the transcript and switch the loop
+          // into synthesis mode. We still emit the tool message (as a stub below) so
+          // the provider sees a reply for this call id.
           if (totalResultChars + execution.result.length > maxResultChars) {
-            return failure("tool-result-budget-exceeded");
+            budgetExhausted = true;
           }
-          totalResultChars += execution.result.length;
+          const transcriptResult = budgetExhausted ? SYNTHESIS_TOOL_STUB : execution.result;
+          totalResultChars += transcriptResult.length;
+          // A fresh content-bearing read (fetch_web_page / read_note) is progress on
+          // its own: it pulls full page/note text into the transcript even though it
+          // reuses the evidenceId minted at search time. Without this, the normal
+          // deep-research pattern — search once, then read several pages — looks like
+          // "searched, surfaced no new evidence" and trips loop-detection mid-read.
+          if (!cacheHit && execution.ok && contentBearingTool(call.name)) {
+            roundFetchedContent = true;
+          }
+          // A successful keyword search that surfaces no new evidence is a spin signal —
+          // including the empty case (resultCount 0), which yields no evidence ids and so
+          // would otherwise be invisible to no-progress detection below.
+          if (execution.ok && searchTool(call.name)) {
+            roundAttemptedSearch = true;
+          }
           const evidenceIds = extractEvidenceIds(execution.result);
           if (evidenceIds.length > 0) {
             roundHadEvidence = true;
@@ -316,24 +371,44 @@ export class AgenticResearchRunner {
             ...(execution.diagnostic ? { metadata: execution.diagnostic } : {}),
           });
           if (continuation) {
-            toolOutputs!.push({ callId: call.id, output: execution.result });
+            toolOutputs!.push({ callId: call.id, output: transcriptResult });
           } else {
-            messages.push({ role: "tool", content: execution.result, toolCallId: call.id });
+            messages.push({ role: "tool", content: transcriptResult, toolCallId: call.id });
           }
         }
 
-        // No-progress detection: a round spins if every call was an exact duplicate,
-        // or if it searched for evidence but surfaced nothing new (e.g. the model
-        // keeps reformulating the same query against the same low-value chunks).
+        // No-progress detection: a round spins if every call was an exact duplicate, or it
+        // searched (keyword search_web/search_index) but surfaced nothing new — including
+        // empty results, which carry no evidence id and would otherwise look like a fresh
+        // round. Content-bearing reads (fetch_web_page) always count as progress.
         const allDuplicates = roundDuplicates === response.toolCalls.length;
-        const searchedWithoutNewEvidence = roundHadEvidence && !roundNewEvidence;
+        const searchedWithoutNewEvidence =
+          (roundHadEvidence || roundAttemptedSearch) && !roundNewEvidence && !roundFetchedContent;
         if (response.toolCalls.length > 0 && (allDuplicates || searchedWithoutNewEvidence)) {
           consecutiveNoProgressRounds += 1;
-          if (consecutiveNoProgressRounds >= 2) {
-            return failure("loop-detected");
-          }
         } else {
           consecutiveNoProgressRounds = 0;
+        }
+
+        // Stop gathering and synthesize when the result budget is spent or the loop is
+        // spinning. Either way the model has evidence in the transcript — far better to let
+        // it write the answer than to discard the session for the deterministic fallback.
+        // toolChoice is forced to "none" above once forceSynthesis is set.
+        if (budgetExhausted || consecutiveNoProgressRounds >= 2) {
+          if (missingTools(required, satisfied).length > 0) {
+            return failure(budgetExhausted ? "tool-result-budget-exceeded" : "loop-detected");
+          }
+          forceSynthesis = true;
+          if (!synthesisRequested) {
+            synthesisRequested = true;
+            this.options.onRoundClassified?.(round, "intermediate");
+            // In continuation mode the transport is server-side state, not `messages`, so a
+            // free user turn would desync — toolChoice "none" + the stub outputs are enough.
+            if (!continuation) {
+              messages.push({ role: "user", content: SYNTHESIS_NUDGE });
+            }
+          }
+          continue;
         }
 
         const missing = missingTools(required, satisfied);
@@ -499,6 +574,13 @@ function isAbortError(error: unknown): boolean {
 
 function contentBearingTool(name: string): boolean {
   return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
+}
+
+// Keyword searches whose only job is to surface evidence ids. deep_search is excluded:
+// it returns a synthesized report (rich even when it lists no parseable evidenceId), so
+// counting it as a "fruitless search" would falsely trip loop detection.
+function searchTool(name: string): boolean {
+  return name === "search_web" || name === "search_index";
 }
 
 function mutationTool(name: string): boolean {

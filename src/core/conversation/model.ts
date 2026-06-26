@@ -68,6 +68,10 @@ export type ChainItem =
       resultSummary?: string;
       args?: Record<string, unknown>;
       resultJson?: string;
+      /** Live phase of a nested sub-agent run (e.g. deep_search). */
+      phase?: string;
+      /** Nested tool calls produced inside this call (e.g. a deep_search session). */
+      children?: ChainItem[];
     };
 
 export interface AssistantResearchProgress {

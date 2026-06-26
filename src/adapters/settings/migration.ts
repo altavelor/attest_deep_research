@@ -64,6 +64,7 @@ export function migrateSettings(savedData: unknown): IxplorerSettings {
     includeFolders,
     excludeGlobs,
     duckDuckGoEnabled: data.duckDuckGoEnabled === true,
+    duckDuckGoResultLimit: readDuckDuckGoResultLimit(data.duckDuckGoResultLimit),
     showChatIndexControl:
       typeof data.showChatIndexControl === "boolean"
         ? data.showChatIndexControl
@@ -384,4 +385,13 @@ function normalizeIndexProfile(value: unknown): IndexProfile | null {
 
 function readGraphContextDepth(value: unknown): number {
   return value === 2 ? 2 : DEFAULT_SETTINGS.graphContextDepth;
+}
+
+const MAX_DUCK_DUCK_GO_RESULT_LIMIT = 50;
+
+function readDuckDuckGoResultLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    return DEFAULT_SETTINGS.duckDuckGoResultLimit;
+  }
+  return Math.max(1, Math.min(MAX_DUCK_DUCK_GO_RESULT_LIMIT, value));
 }

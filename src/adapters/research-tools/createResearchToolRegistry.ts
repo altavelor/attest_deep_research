@@ -9,6 +9,7 @@ import { AttachmentSource } from "../../application/sources/AttachmentSource";
 import { RagSource } from "../../application/sources/RagSource";
 import { SourceManager } from "../../application/sources/DataSource";
 import { WebSource } from "../../application/sources/WebSource";
+import { DeepResearchSource } from "../../application/sources/DeepResearchSource";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
@@ -59,6 +60,19 @@ export function createResearchToolRegistry(
     (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
   ) {
     sources.register(new WebSource({ provider: options.searchProvider, evidence }));
+  }
+
+  // Deep research is a web capability — only offered when web is active for this
+  // turn (same gating as WebSource), never in index-only / none modes.
+  if (
+    options.deepResearchRunner &&
+    options.searchProvider &&
+    availability.webProviderAvailable &&
+    (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
+  ) {
+    sources.register(
+      new DeepResearchSource({ runner: options.deepResearchRunner, evidence }),
+    );
   }
 
   // SourceManager -> ToolManager bridge (SPEC R5 diagram): each registered

@@ -13,7 +13,6 @@ describe("resolveResearchExecutionPolicy", () => {
     (searchMode) => {
       const policy = resolveResearchExecutionPolicy({
         forceEagerResearch: false,
-        deepResearch: false,
         searchMode,
         dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
@@ -27,31 +26,20 @@ describe("resolveResearchExecutionPolicy", () => {
     },
   );
 
-  it("gives forced eager and deep research precedence", () => {
+  it("gives forced eager precedence over agentic eligibility", () => {
     expect(
       resolveResearchExecutionPolicy({
         forceEagerResearch: true,
-        deepResearch: false,
         searchMode: "indexOnly",
         dependencies: { retriever: false, webProvider: false },
         capabilities: fullCapabilities,
-      }).strategy,
-    ).toBe("eager-forced");
-    expect(
-      resolveResearchExecutionPolicy({
-        forceEagerResearch: false,
-        deepResearch: true,
-        searchMode: "indexOnly",
-        dependencies: { retriever: true, webProvider: true },
-        capabilities: fullCapabilities,
       }),
-    ).toMatchObject({ strategy: "eager-default", reason: "deep-research-eager" });
+    ).toMatchObject({ strategy: "eager-forced", reason: "forced-eager" });
   });
 
   it("falls back to deterministic only when the model cannot call tools at all", () => {
     const policy = resolveResearchExecutionPolicy({
       forceEagerResearch: false,
-      deepResearch: false,
       searchMode: "indexAndWeb",
       dependencies: { retriever: true, webProvider: true },
       capabilities: { ...fullCapabilities, calls: false },
@@ -71,7 +59,6 @@ describe("resolveResearchExecutionPolicy", () => {
     (capabilities) => {
       const policy = resolveResearchExecutionPolicy({
         forceEagerResearch: false,
-        deepResearch: false,
         searchMode: "indexAndWeb",
         dependencies: { retriever: true, webProvider: true },
         capabilities,
@@ -85,7 +72,6 @@ describe("resolveResearchExecutionPolicy", () => {
     expect(
       resolveResearchExecutionPolicy({
         forceEagerResearch: false,
-        deepResearch: false,
         searchMode: "indexAndWeb",
         dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,
@@ -94,7 +80,6 @@ describe("resolveResearchExecutionPolicy", () => {
     expect(
       resolveResearchExecutionPolicy({
         forceEagerResearch: false,
-        deepResearch: false,
         searchMode: "indexAndWeb",
         dependencies: { retriever: true, webProvider: true },
         capabilities: { ...fullCapabilities, parallelCalls: false },
@@ -106,7 +91,6 @@ describe("resolveResearchExecutionPolicy", () => {
     expect(
       resolveResearchExecutionPolicy({
         forceEagerResearch: false,
-        deepResearch: false,
         searchMode: "indexOnly",
         dependencies: { retriever: true, webProvider: true },
         capabilities: fullCapabilities,

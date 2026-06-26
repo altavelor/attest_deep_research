@@ -30,6 +30,8 @@ import { resolveSearchMode } from "./research/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./research/ResearchStrategy";
 import { AgenticResearchStrategy } from "./research/AgenticResearchStrategy";
 import { EagerResearchStrategy } from "./research/EagerResearchStrategy";
+import { DeepResearchAgent } from "./research/deep-research/DeepResearchAgent";
+import { DeepResearchLogger, DeepResearchRunner } from "../research/deepResearchPort";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 export { selectResearchExecutionStrategy } from "./research/searchMode";
@@ -67,6 +69,8 @@ export interface ResearchServiceOptions {
   modelRound?: ModelRoundProvider;
   reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
+  /** Optional diagnostic sink for the deep-research sub-agent (gated by debug mode). */
+  deepResearchLogger?: DeepResearchLogger;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -125,9 +129,6 @@ export class ResearchService implements ConversationEngine {
     });
     const webPipeline = new WebResearchPipeline({
       searchProvider: options.searchProvider,
-      chatModel: options.chatModel,
-      chatModelName: options.chatModelName,
-      chatOptions,
       evidenceLimit,
     });
     this.answerSynthesis = new AnswerSynthesisService({
@@ -143,6 +144,21 @@ export class ResearchService implements ConversationEngine {
       noteTools: options.noteTools,
       runToolLoop: options.runToolLoop,
     });
+
+    // Deep-research sub-agent reuses the parent chat model + search provider; the
+    // `deep_search` tool it backs is only registered when a web provider exists.
+    const deepResearchRunner: DeepResearchRunner | undefined = options.searchProvider
+      ? new DeepResearchAgent({
+          toolsetFactory: options.toolsetFactory,
+          searchProvider: options.searchProvider,
+          modelRound: options.modelRound ?? options.modelRoundFactory(options.chatModel),
+          model: options.chatModelName,
+          temperature: chatOptions.temperature,
+          maxTokens: chatOptions.maxTokens,
+          reasoning: options.reasoning,
+          ...(options.deepResearchLogger ? { logger: options.deepResearchLogger } : {}),
+        })
+      : undefined;
 
     const deps: ResearchStrategyDeps = {
       chatModel: options.chatModel,
@@ -166,6 +182,7 @@ export class ResearchService implements ConversationEngine {
       searchProvider: options.searchProvider,
       noteTools: options.noteTools,
       toolsetFactory: options.toolsetFactory,
+      deepResearchRunner,
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,
@@ -184,7 +201,6 @@ export class ResearchService implements ConversationEngine {
     const searchMode = resolveSearchMode(request);
     const policy = resolveResearchExecutionPolicy({
       forceEagerResearch: this.forceEagerResearch,
-      deepResearch: request.deepResearch === true,
       searchMode,
       dependencies: {
         retriever: true,

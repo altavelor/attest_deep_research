@@ -232,9 +232,10 @@ describe("AgenticResearchRunner", () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it("stops with loop-detected when distinct queries surface no new evidence", async () => {
-    // Distinct args each round (no exact-duplicate cache hit), but every search
-    // returns the same chunk: round 1 makes progress, rounds 2-3 do not.
+  it("stops gathering and synthesizes when distinct queries surface no new evidence", async () => {
+    // Distinct args each round (no exact-duplicate cache hit), but every search returns
+    // the same chunk: round 1 makes progress, rounds 2-3 spin. Instead of failing to the
+    // deterministic fallback, the loop switches to a tool-free synthesis round.
     const execute = vi
       .fn()
       .mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", chunkId: "e1" }] } });
@@ -243,7 +244,7 @@ describe("AgenticResearchRunner", () => {
       [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }] }],
       [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "search_index", arguments: { query: "b" } }] }],
       [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "search_index", arguments: { query: "c" } }] }],
-      [{ content: "should never run", isComplete: true }],
+      [{ content: "synthesized", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
@@ -252,7 +253,90 @@ describe("AgenticResearchRunner", () => {
       tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
-    expect(result).toMatchObject({ ok: false, reason: "loop-detected", duplicateCalls: 0 });
+    // Gathering stops after 3 spinning rounds; the 4th round is forced tool-free.
+    expect(result).toMatchObject({ ok: true, answerText: "synthesized" });
     expect(execute).toHaveBeenCalledTimes(3);
+    expect(provider.requests[3].toolChoice).toEqual({ type: "none" });
+  });
+
+  it("loop-detected still fails when a mandatory tool is unsatisfied", async () => {
+    // No evidence ever surfaces and the required tool never returns a usable result, so the
+    // run cannot honor its contract — synthesis is not an option, it must fall back.
+    const execute = vi.fn().mockResolvedValue({ ok: false, error: { code: "x", message: "no", retryable: false } });
+    const search = tool("search_web", execute);
+    const provider = new ScriptedProvider([
+      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }] }],
+      [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "search_web", arguments: { query: "b" } }] }],
+      [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "search_web", arguments: { query: "c" } }] }],
+    ]);
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler]),
+      policy: policy(["search_web"]),
+    }).run();
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("synthesizes from gathered evidence when the result budget is exhausted", async () => {
+    // A single oversized result blows the budget. The run must NOT fail to the
+    // deterministic fallback — it should force a tool-free synthesis round and return
+    // the model's own answer, with the offending result kept out of the transcript.
+    const huge = "x".repeat(200);
+    const search = tool(
+      "search_web",
+      vi.fn().mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", text: huge }] } }),
+    );
+    const provider = new ScriptedProvider([
+      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }] }],
+      [{ content: "synthesized answer", isComplete: true }],
+    ]);
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler]),
+      policy: policy([]),
+      maxResultChars: 50,
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, answerText: "synthesized answer" });
+    // The second request is forced tool-free, and the oversized result was stubbed out.
+    const synthesisRequest = provider.requests[1];
+    expect(synthesisRequest.toolChoice).toEqual({ type: "none" });
+    const toolMessage = synthesisRequest.messages.find((m) => m.role === "tool");
+    expect(toolMessage?.content).not.toContain(huge);
+    expect(synthesisRequest.messages.some((m) => m.role === "user" && /stop calling tools/i.test(String(m.content)))).toBe(true);
+  });
+
+  it("treats consecutive fetch_web_page reads as progress, not a loop", async () => {
+    // The deep-research pattern: search once, then read several pages. fetch_web_page
+    // reuses the evidenceId minted at search time, so rounds 2-3 surface no NEW id —
+    // but each pulls fresh page content, which must count as progress (otherwise the
+    // session loop-detects mid-read and never synthesizes).
+    const search = tool(
+      "search_index",
+      vi.fn().mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1" }] } }),
+    );
+    const fetch = tool(
+      "fetch_web_page",
+      vi.fn().mockResolvedValue({ ok: true, value: { evidenceId: "e1", content: "page text" } }),
+    );
+    const provider = new ScriptedProvider([
+      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }] }],
+      [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "fetch_web_page", arguments: { resultId: "x" } }] }],
+      [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "fetch_web_page", arguments: { resultId: "y" } }] }],
+      [{ content: "final", isComplete: true }],
+    ]);
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler, fetch.handler]),
+      policy: policy(["search_index"]),
+    }).run();
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+    expect(fetch.execute).toHaveBeenCalledTimes(2);
   });
 });

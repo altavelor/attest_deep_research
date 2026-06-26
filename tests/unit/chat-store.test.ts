@@ -60,7 +60,6 @@ describe("FileChatStore", () => {
         indexProfileId: "index-research",
         searchMode: "indexAndWeb",
         contextMode: "filter",
-        deepResearch: true,
       },
     });
 
@@ -82,7 +81,6 @@ describe("FileChatStore", () => {
         indexProfileId: "index-research",
         searchMode: "indexAndWeb",
         contextMode: "filter",
-        deepResearch: true,
       },
     });
 

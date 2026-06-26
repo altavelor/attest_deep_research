@@ -9,6 +9,14 @@ export interface DuckDuckGoSearchProviderOptions {
   searchUrl?: string;
   timeoutMs?: number;
   maxExtractedTextLength?: number;
+  /** Result count used when a per-call `limit` is not supplied (user setting). */
+  defaultResultLimit?: number;
+  /** Minimum spacing between outbound requests, to avoid DuckDuckGo rate limits. */
+  minRequestIntervalMs?: number;
+  /** Retries on a rate-limited search response before failing. */
+  maxSearchRetries?: number;
+  /** Base backoff between rate-limit retries (multiplied by attempt number). */
+  rateLimitBackoffMs?: number;
   now?: () => Date;
   logger?: PluginRequestLogger;
 }
@@ -22,14 +30,27 @@ const HARD_RESULT_LIMIT = 50;
 const HARD_MAX_FETCHES = 15;
 const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576;
 const DEFAULT_MAX_REDIRECTS = 5;
+// DuckDuckGo's HTML endpoint blocks bursts aggressively. Agents (including deep
+// research sub-agents sharing this instance) can fan out many queries at once, so
+// outbound requests are serialized and spaced, with bounded backoff on 429/503.
+const DEFAULT_MIN_REQUEST_INTERVAL_MS = 700;
+const DEFAULT_MAX_SEARCH_RETRIES = 2;
+const RATE_LIMIT_BACKOFF_MS = 1_500;
 
 export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly searchUrl: string;
   private readonly timeoutMs: number;
   private readonly maxExtractedTextLength: number;
+  private readonly defaultResultLimit: number;
+  private readonly minRequestIntervalMs: number;
+  private readonly maxSearchRetries: number;
+  private readonly rateLimitBackoffMs: number;
   private readonly now: () => Date;
   private readonly logger?: PluginRequestLogger;
+  // Serializes + spaces all outbound requests across concurrent callers.
+  private requestChain: Promise<void> = Promise.resolve();
+  private lastRequestAt = 0;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
@@ -37,8 +58,31 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxExtractedTextLength =
       options.maxExtractedTextLength ?? DEFAULT_MAX_EXTRACTED_TEXT_LENGTH;
+    this.defaultResultLimit = clampPositiveInteger(
+      options.defaultResultLimit,
+      DEFAULT_RESULT_LIMIT,
+      HARD_RESULT_LIMIT,
+    );
+    this.minRequestIntervalMs = Math.max(0, options.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS);
+    this.maxSearchRetries = Math.max(0, options.maxSearchRetries ?? DEFAULT_MAX_SEARCH_RETRIES);
+    this.rateLimitBackoffMs = Math.max(0, options.rateLimitBackoffMs ?? RATE_LIMIT_BACKOFF_MS);
     this.now = options.now ?? (() => new Date());
     this.logger = options.logger;
+  }
+
+  /** Run an outbound request after the chain drains and the min interval elapses. */
+  private gate<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.requestChain.then(async () => {
+      const wait = this.minRequestIntervalMs - (Date.now() - this.lastRequestAt);
+      if (wait > 0) await delay(wait);
+      this.lastRequestAt = Date.now();
+      return task();
+    });
+    this.requestChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   async search(query: string, options: WebSearchOptions = {}): Promise<SearchProviderResult[]> {
@@ -49,7 +93,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     }
 
     try {
-      const limit = clampPositiveInteger(options.limit, DEFAULT_RESULT_LIMIT, HARD_RESULT_LIMIT);
+      const limit = clampPositiveInteger(options.limit, this.defaultResultLimit, HARD_RESULT_LIMIT);
       const maxFetches = clampNonNegativeInteger(
         options.maxFetches,
         DEFAULT_MAX_FETCHES,
@@ -195,17 +239,25 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     const url = new URL(this.searchUrl);
     url.searchParams.set("q", query);
 
-    const response = await this.request(url.toString());
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await this.request(url.toString());
 
-    if (!response.ok) {
+      if (response.ok) {
+        return response.text();
+      }
+
+      if (isRateLimited(response.status) && attempt < this.maxSearchRetries) {
+        await response.body?.cancel().catch(() => undefined);
+        await delay(this.rateLimitBackoffMs * (attempt + 1));
+        continue;
+      }
+
       throw new IxplorerError({
         code: "WEB_SEARCH_FAILED",
         message: `DuckDuckGo returned HTTP ${response.status}.`,
         details: { status: response.status },
       });
     }
-
-    return response.text();
   }
 
   private async fetchResultText(url: string): Promise<string | undefined> {
@@ -230,39 +282,45 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     return text.length > 0 ? text : undefined;
   }
 
-  private async request(url: string): Promise<Response> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-    const context = {
-      url,
-      method: "GET",
-      headers: {
-        accept: "text/html,application/xhtml+xml",
-      },
-    };
-
-    try {
-      this.logger?.logRequest(context);
-      const response = await this.fetchImpl.call(globalThis, url, {
+  private request(url: string): Promise<Response> {
+    return this.gate(async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      const context = {
+        url,
         method: "GET",
-        headers: context.headers,
-        signal: controller.signal,
-      });
-      this.logger?.logResponse({
-        ...context,
-        status: response.status,
-        statusText: response.statusText,
-      });
-      return response;
-    } catch (error) {
-      this.logger?.logError(error, context);
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-    }
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+        },
+      };
+
+      try {
+        this.logger?.logRequest(context);
+        const response = await this.fetchImpl.call(globalThis, url, {
+          method: "GET",
+          headers: context.headers,
+          signal: controller.signal,
+        });
+        this.logger?.logResponse({
+          ...context,
+          status: response.status,
+          statusText: response.statusText,
+        });
+        return response;
+      } catch (error) {
+        this.logger?.logError(error, context);
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
+    });
   }
 
-  private async requestPage(url: string, timeoutMs: number): Promise<Response> {
+  private requestPage(url: string, timeoutMs: number): Promise<Response> {
+    return this.gate(() => this.requestPageNow(url, timeoutMs));
+  }
+
+  private async requestPageNow(url: string, timeoutMs: number): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const context = {
@@ -313,6 +371,14 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 
 function nonNegativeInteger(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimited(status: number): boolean {
+  return status === 429 || status === 503 || status === 202;
 }
 
 function isRedirect(status: number): boolean {

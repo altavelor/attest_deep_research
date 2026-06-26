@@ -18,6 +18,10 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
       return typeof args.query === "string" && args.query ? truncate(args.query) : name;
     case "fetch_web_page":
       return "Fetching page";
+    case "deep_search":
+      return typeof args.question === "string" && args.question
+        ? `Deep research: ${truncate(args.question)}`
+        : "Deep research";
     case "read_note":
       return basename(args.path) || name;
     case "get_active_note":
@@ -89,6 +93,14 @@ export function resolveResultSummary(name: string, resultJson: string): string |
 
     if (name === "create_note" || name === "update_note" || name === "delete_note") {
       return root.ok === true ? "done" : undefined;
+    }
+
+    if (name === "deep_search") {
+      const value = root.value as Record<string, unknown> | undefined;
+      const findings = typeof value?.findingCount === "number" ? value.findingCount : undefined;
+      const sources = typeof value?.sourceCount === "number" ? value.sourceCount : undefined;
+      if (findings === undefined && sources === undefined) return undefined;
+      return `${findings ?? 0} findings · ${sources ?? 0} sources`;
     }
 
     return undefined;

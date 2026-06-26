@@ -1,5 +1,9 @@
 import { IxplorerError } from "../../core/errors";
 import type {
+  DeepResearchLogEvent,
+  DeepResearchLogger,
+} from "../../application/research/deepResearchPort";
+import type {
   IndexingFileLogEvent,
   IndexingLogger,
   IndexingPerformanceLogEvent,
@@ -41,7 +45,9 @@ export interface PluginDebugLoggerOptions {
   console?: Pick<Console, "debug" | "error">;
 }
 
-export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
+export class PluginDebugLogger
+  implements PluginRequestLogger, IndexingLogger, DeepResearchLogger
+{
   private readonly getSettings: () => IxplorerSettings;
   private readonly console: Pick<Console, "debug" | "error">;
   private readonly loggedErrors = new WeakSet<object>();
@@ -123,6 +129,14 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger {
       ...event,
       settings: redactLogValue(settings),
     });
+  }
+
+  logDeepResearch(event: DeepResearchLogEvent): void {
+    if (!this.getSettings().debugMode) {
+      return;
+    }
+
+    this.console.debug(`[Ixplorer] DeepResearch ${event.type}`, redactLogValue(event));
   }
 
   logIndexingPerformance(event: IndexingPerformanceLogEvent): void {

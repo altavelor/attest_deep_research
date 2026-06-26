@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 
 import { SavedChatSettings } from "../../../core/chat/savedChat";
 import type { ResearchSearchMode } from "../../../application/use-cases/ResearchService";
@@ -24,18 +24,29 @@ export interface IndexProfileSelectOption {
   isIndexed?: boolean;
 }
 
+/** Imperative handle the host view uses to read/sync composer control state. */
+export interface ComposerControls {
+  getModel(): string;
+  setModel(id: string): void;
+  getSearchMode(): ResearchSearchMode;
+  getIndexProfileId(): string;
+  setIndexProfileId(id: string): void;
+  getContextMode(): ContextMode;
+  /** Disable all settings controls (during an in-flight run). */
+  setDisabled(disabled: boolean): void;
+  /** Show the Include/Filter control only when context documents are attached. */
+  setAttachmentsPresent(present: boolean): void;
+}
+
 export interface ChatComposerRefs {
   formEl: HTMLFormElement;
   progressStatusEl: HTMLElement;
   contextIndicatorEl: HTMLElement;
   textareaEl: HTMLTextAreaElement;
-  modelInputEl: HTMLSelectElement;
-  indexInputEl: HTMLSelectElement;
   submitButtonEl: HTMLButtonElement;
   submitButtonTooltipEl: HTMLElement;
-  searchModeEl: HTMLSelectElement;
-  deepResearchEl: HTMLInputElement;
   attachedContextEl: HTMLElement;
+  controls: ComposerControls;
 }
 
 export interface ChatComposerOptions {
@@ -51,8 +62,24 @@ export interface ChatComposerOptions {
   onUpdateIndex(indexProfileId: string): void;
   onUpdateContextMode(contextMode: ContextMode): void;
   onUpdateSearchMode(searchMode: ResearchSearchMode): void;
-  onUpdateDeepResearch(deepResearch: boolean): void;
 }
+
+interface DropdownItem {
+  id: string;
+  name: string;
+}
+
+const SEARCH_MODE_ITEMS: DropdownItem[] = [
+  { id: "none", name: "None" },
+  { id: "indexOnly", name: "Index" },
+  { id: "indexAndWeb", name: "Index + Web" },
+  { id: "webOnly", name: "Web" },
+];
+
+const CONTEXT_MODE_ITEMS: DropdownItem[] = [
+  { id: "include", name: "Include" },
+  { id: "filter", name: "Filter" },
+];
 
 export function renderChatComposer(
   containerEl: HTMLElement,
@@ -70,8 +97,25 @@ export function renderChatComposer(
   });
 
   const composerPanelEl = formEl.createDiv({ cls: "ixplorer-chat__composer-panel" });
-  const attachedContextEl = composerPanelEl.createDiv({ cls: "ixplorer-chat__attachments" });
+
+  // Attachments row: chips + the Include/Filter control (only when files attached).
+  const attachmentsRowEl = composerPanelEl.createDiv({ cls: "ixplorer-chat__attachments-row" });
+  const attachedContextEl = attachmentsRowEl.createDiv({ cls: "ixplorer-chat__attachments" });
   enableHorizontalWheelScroll(attachedContextEl);
+  let currentContextMode: ContextMode =
+    options.settings.contextMode === "filter" ? "filter" : "include";
+  const contextModeDropdown = createMenuDropdown(attachmentsRowEl, {
+    cls: "ixplorer-chat__dropdown--context-mode",
+    ariaLabel: "Attached context mode",
+    placeholder: "Include",
+    items: CONTEXT_MODE_ITEMS,
+    initialId: currentContextMode,
+    onSelect: (id) => {
+      currentContextMode = id === "filter" ? "filter" : "include";
+      options.onUpdateContextMode(currentContextMode);
+    },
+  });
+  contextModeDropdown.el.parentElement?.toggleClass("is-hidden", true);
 
   const textareaEl = composerPanelEl.createEl("textarea", {
     cls: "ixplorer-chat__input",
@@ -92,16 +136,16 @@ export function renderChatComposer(
     if (mentionState.handleKeydown(event)) {
       return;
     }
-
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
       return;
     }
-
     event.preventDefault();
     options.onSubmit();
   });
 
   const modelRow = composerPanelEl.createDiv({ cls: "ixplorer-chat__model-row" });
+
+  // Left cluster: attach + sources (mode selector with a small index sub-button).
   const attachButton = modelRow.createEl("button", {
     cls: "ixplorer-chat__icon-button",
     attr: {
@@ -112,6 +156,63 @@ export function renderChatComposer(
   });
   setIcon(attachButton, "plus");
   attachButton.addEventListener("click", options.onOpenContextPicker);
+
+  let currentSearchMode = getResearchSearchMode(options.settings.searchMode);
+  let currentIndexId = options.settings.indexProfileId ?? "";
+
+  const sourcesEl = modelRow.createDiv({ cls: "ixplorer-chat__sources" });
+  const sourcesModeDropdown = createMenuDropdown(sourcesEl, {
+    cls: "ixplorer-chat__dropdown--sources",
+    ariaLabel: "Search sources",
+    placeholder: "Sources",
+    items: SEARCH_MODE_ITEMS,
+    initialId: currentSearchMode,
+    onSelect: (id) => {
+      currentSearchMode = getResearchSearchMode(id);
+      syncIndexButton();
+      options.onUpdateSearchMode(currentSearchMode);
+    },
+  });
+
+  const usableIndexes = (): DropdownItem[] =>
+    options.availableIndexes
+      .filter((index) => !index.isSuspended && index.isIndexed)
+      .map((index) => ({ id: index.id, name: index.name }));
+
+  const indexButton = sourcesEl.createEl("button", {
+    cls: "ixplorer-chat__sources-index",
+    attr: { type: "button", "aria-label": "Choose index" },
+  });
+  setIcon(indexButton, "chevron-down");
+  indexButton.addEventListener("click", () => {
+    if (indexButton.disabled) return;
+    const items = usableIndexes();
+    if (items.length === 0) return;
+    const menu = new Menu();
+    for (const item of items) {
+      menu.addItem((entry) =>
+        entry
+          .setTitle(item.name)
+          .setChecked(item.id === currentIndexId)
+          .onClick(() => {
+            currentIndexId = item.id;
+            options.onUpdateIndex(item.id);
+          }),
+      );
+    }
+    const rect = indexButton.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  });
+
+  function syncIndexButton(): void {
+    const usesIndex = currentSearchMode === "indexOnly" || currentSearchMode === "indexAndWeb";
+    const hasIndexes = usableIndexes().length > 0;
+    indexButton.toggleClass("is-hidden", !usesIndex);
+    indexButton.disabled = !usesIndex || !hasIndexes;
+  }
+  syncIndexButton();
+
+  // Right cluster: context-window indicator, model selector, submit.
   const contextIndicatorEl = modelRow.createSpan({
     cls: "ixplorer-chat__context-indicator",
     attr: {
@@ -120,131 +221,23 @@ export function renderChatComposer(
       title: "Unknown model context window size",
     },
   });
-  const modelControlEl = modelRow.createSpan({
-    cls: "ixplorer-chat__select-control ixplorer-chat__select-control--model",
-  });
-  const modelDisplayEl = modelControlEl.createSpan({ cls: "ixplorer-chat__select-value" });
-  const modelInputEl = modelControlEl.createEl("select", {
-    cls: "ixplorer-chat__model-input",
-    attr: {
-      id: "ixplorer-chat-model",
-      "aria-label": "Model",
+
+  let currentModel = options.settings.chatModelProfileId;
+  const modelDropdown = createMenuDropdown(modelRow, {
+    cls: "ixplorer-chat__dropdown--model",
+    ariaLabel: "Model",
+    placeholder: "Model",
+    items: options.availableModels
+      .filter((model) => !model.isSuspended)
+      .map((model) => ({ id: model.id, name: model.name })),
+    initialId: currentModel,
+    onSelect: (id) => {
+      currentModel = id;
+      options.onUpdateModel(id);
     },
-  });
-  modelInputEl.createEl("option", {
-    text: "Model",
-    value: "",
-    attr: { disabled: "true" },
-  });
-  for (const model of options.availableModels) {
-    if (model.isSuspended) {
-      continue;
-    }
-    modelInputEl.createEl("option", { text: model.name, value: model.id });
-  }
-  modelInputEl.value = options.settings.chatModelProfileId;
-  updateSelectControlLabel(modelControlEl, modelDisplayEl, modelInputEl);
-  modelInputEl.addEventListener("change", () => {
-    updateSelectControlLabel(modelControlEl, modelDisplayEl, modelInputEl);
-    options.onUpdateModel(modelInputEl.value);
   });
 
-  const searchModeLabel = modelRow.createSpan({
-    cls: "ixplorer-chat__select-control ixplorer-chat__select-control--search-mode",
-  });
-  const searchModeDisplayEl = searchModeLabel.createSpan({ cls: "ixplorer-chat__select-value" });
-  const searchModeEl = searchModeLabel.createEl("select", {
-    cls: "ixplorer-chat__model-input",
-    attr: {
-      id: "ixplorer-chat-search-mode",
-      "aria-label": "Search mode",
-    },
-  });
-  createSearchModeOptions(searchModeEl);
-  searchModeEl.value = options.settings.searchMode;
-  updateSelectControlLabel(searchModeLabel, searchModeDisplayEl, searchModeEl);
-  searchModeEl.addEventListener("change", () => {
-    const searchMode = getResearchSearchMode(searchModeEl.value);
-    updateSelectControlLabel(searchModeLabel, searchModeDisplayEl, searchModeEl);
-    setIndexControlVisibility(indexControlEl, searchMode);
-    options.onUpdateSearchMode(searchMode);
-  });
-
-  const deepResearchLabel = modelRow.createEl("label", {
-    cls: "ixplorer-chat__deep-research",
-    attr: {
-      title: "Use deeper multi-query web research",
-    },
-  });
-  const deepResearchEl = deepResearchLabel.createEl("input", {
-    attr: {
-      type: "checkbox",
-      "aria-label": "Deep web research",
-    },
-  });
-  deepResearchEl.checked = options.settings.deepResearch === true;
-  deepResearchEl.addEventListener("change", () => {
-    options.onUpdateDeepResearch(deepResearchEl.checked);
-  });
-  deepResearchLabel.createSpan({ text: "Deep" });
-
-  const indexControlEl = modelRow.createSpan({
-    cls: "ixplorer-chat__select-control ixplorer-chat__select-control--index",
-  });
-  const indexDisplayEl = indexControlEl.createSpan({ cls: "ixplorer-chat__select-value" });
-  const indexInputEl = indexControlEl.createEl("select", {
-    cls: "ixplorer-chat__model-input",
-    attr: {
-      id: "ixplorer-chat-index",
-      "aria-label": "Index",
-    },
-  });
-  indexInputEl.createEl("option", {
-    text: "Index",
-    value: "",
-    attr: { disabled: "true" },
-  });
-  for (const index of options.availableIndexes) {
-    if (index.isSuspended || !index.isIndexed) {
-      continue;
-    }
-    indexInputEl.createEl("option", { text: index.name, value: index.id });
-  }
-  indexInputEl.value = options.settings.indexProfileId ?? "";
-  updateSelectControlLabel(indexControlEl, indexDisplayEl, indexInputEl);
-  setIndexControlVisibility(indexControlEl, getResearchSearchMode(searchModeEl.value));
-  indexInputEl.addEventListener("change", () => {
-    updateSelectControlLabel(indexControlEl, indexDisplayEl, indexInputEl);
-    options.onUpdateIndex(indexInputEl.value);
-  });
-
-  const contextModeControlEl = modelRow.createSpan({
-    cls: "ixplorer-chat__select-control ixplorer-chat__select-control--context-mode",
-  });
-  const contextModeDisplayEl = contextModeControlEl.createSpan({
-    cls: "ixplorer-chat__select-value",
-  });
-  const contextModeEl = contextModeControlEl.createEl("select", {
-    cls: "ixplorer-chat__model-input",
-    attr: {
-      id: "ixplorer-chat-context-mode",
-      "aria-label": "Attached context mode",
-      title: "Attached context mode",
-    },
-  });
-  contextModeEl.createEl("option", { text: "Include", value: "include" });
-  contextModeEl.createEl("option", { text: "Filter", value: "filter" });
-  contextModeEl.value = options.settings.contextMode ?? "include";
-  updateSelectControlLabel(contextModeControlEl, contextModeDisplayEl, contextModeEl);
-  contextModeEl.addEventListener("change", () => {
-    const contextMode = contextModeEl.value === "filter" ? "filter" : "include";
-    updateSelectControlLabel(contextModeControlEl, contextModeDisplayEl, contextModeEl);
-    options.onUpdateContextMode(contextMode);
-  });
-
-  const submitButtonTooltipEl = modelRow.createSpan({
-    cls: "ixplorer-chat__submit-tooltip",
-  });
+  const submitButtonTooltipEl = modelRow.createSpan({ cls: "ixplorer-chat__submit-tooltip" });
   const submitButtonEl = submitButtonTooltipEl.createEl("button", {
     cls: "mod-cta ixplorer-chat__submit",
     attr: { type: "button" },
@@ -256,23 +249,109 @@ export function renderChatComposer(
       options.onStop();
       return;
     }
-
     options.onSubmit();
   });
   resizeQuestionInput();
+
+  const controls: ComposerControls = {
+    getModel: () => currentModel,
+    setModel: (id) => {
+      currentModel = id;
+      modelDropdown.setValue(id);
+    },
+    getSearchMode: () => currentSearchMode,
+    getIndexProfileId: () => currentIndexId,
+    setIndexProfileId: (id) => {
+      currentIndexId = id;
+    },
+    getContextMode: () => currentContextMode,
+    setDisabled: (disabled) => {
+      modelDropdown.setDisabled(disabled);
+      sourcesModeDropdown.setDisabled(disabled);
+      contextModeDropdown.setDisabled(disabled);
+      indexButton.disabled = disabled || indexButton.hasClass("is-hidden");
+      attachButton.disabled = disabled;
+    },
+    setAttachmentsPresent: (present) => {
+      contextModeDropdown.el.parentElement?.toggleClass("is-hidden", !present);
+    },
+  };
 
   return {
     formEl,
     progressStatusEl,
     contextIndicatorEl,
     textareaEl,
-    modelInputEl,
-    indexInputEl,
     submitButtonEl,
     submitButtonTooltipEl,
-    searchModeEl,
-    deepResearchEl,
     attachedContextEl,
+    controls,
+  };
+}
+
+interface MenuDropdownHandle {
+  el: HTMLButtonElement;
+  setValue(id: string): void;
+  setDisabled(disabled: boolean): void;
+}
+
+/** Compact label+caret button that opens an Obsidian Menu of options. */
+function createMenuDropdown(
+  parentEl: HTMLElement,
+  config: {
+    cls: string;
+    ariaLabel: string;
+    placeholder: string;
+    items: DropdownItem[];
+    initialId: string;
+    onSelect(id: string): void;
+  },
+): MenuDropdownHandle {
+  const wrapEl = parentEl.createSpan({ cls: "ixplorer-chat__dropdown-wrap" });
+  const buttonEl = wrapEl.createEl("button", {
+    cls: `ixplorer-chat__dropdown ${config.cls}`,
+    attr: { type: "button", "aria-label": config.ariaLabel },
+  });
+  const valueEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-value" });
+  const caretEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-caret" });
+  setIcon(caretEl, "chevron-down");
+
+  let currentId = config.initialId;
+  const renderLabel = (): void => {
+    const found = config.items.find((item) => item.id === currentId);
+    valueEl.setText(found ? found.name : config.placeholder);
+    buttonEl.setAttr("title", found ? found.name : config.placeholder);
+  };
+  renderLabel();
+
+  buttonEl.addEventListener("click", () => {
+    if (buttonEl.disabled) return;
+    const menu = new Menu();
+    for (const item of config.items) {
+      menu.addItem((entry) =>
+        entry
+          .setTitle(item.name)
+          .setChecked(item.id === currentId)
+          .onClick(() => {
+            currentId = item.id;
+            renderLabel();
+            config.onSelect(item.id);
+          }),
+      );
+    }
+    const rect = buttonEl.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  });
+
+  return {
+    el: buttonEl,
+    setValue: (id) => {
+      currentId = id;
+      renderLabel();
+    },
+    setDisabled: (disabled) => {
+      buttonEl.disabled = disabled;
+    },
   };
 }
 
@@ -397,24 +476,6 @@ function createMentionAutocomplete(
   return { update, handleKeydown };
 }
 
-function updateSelectControlLabel(
-  controlEl: HTMLElement,
-  displayEl: HTMLElement,
-  selectEl: HTMLSelectElement,
-): void {
-  const label = selectEl.selectedOptions[0]?.text ?? "";
-  displayEl.setText(label);
-  controlEl.style.setProperty("--ixplorer-select-label-ch", String(label.length));
-  selectEl.setAttr("title", label);
-}
-
-function setIndexControlVisibility(
-  indexControlEl: HTMLElement,
-  searchMode: ResearchSearchMode,
-): void {
-  indexControlEl.toggleClass("is-hidden", searchMode === "webOnly" || searchMode === "none");
-}
-
 function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
   let minTextareaHeight = 0;
 
@@ -484,26 +545,6 @@ function attachmentDisplayName(path: string): string {
 
 export function getResearchSearchMode(value: string | undefined): ResearchSearchMode {
   return isResearchSearchMode(value) ? value : "indexOnly";
-}
-
-function createSearchModeOptions(selectEl: HTMLSelectElement): void {
-  const options: Array<{ value: ResearchSearchMode | ""; label: string }> = [
-    { value: "", label: "Search" },
-    { value: "none", label: "None" },
-    { value: "indexOnly", label: "Index only" },
-    { value: "indexAndWeb", label: "Index + Web" },
-    { value: "webOnly", label: "Web only" },
-  ];
-
-  for (const option of options) {
-    const optionEl = selectEl.createEl("option", {
-      text: option.label,
-      value: option.value,
-    });
-    if (option.value === "") {
-      optionEl.disabled = true;
-    }
-  }
 }
 
 function isResearchSearchMode(value: string | undefined): value is ResearchSearchMode {

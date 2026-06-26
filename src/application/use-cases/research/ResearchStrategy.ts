@@ -18,6 +18,7 @@ import {
   ResearchStreamEvent,
 } from "../../contracts/research";
 import { NoteToolService, ResearchToolsetFactory } from "../../research/toolPorts";
+import { DeepResearchRunner } from "../../research/deepResearchPort";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "../AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "../ContextAssembler";
 import { VaultResearchPipeline } from "../VaultResearchPipeline";
@@ -51,6 +52,8 @@ export interface ResearchStrategyDeps {
   searchProvider?: SearchProvider;
   noteTools?: NoteToolService;
   toolsetFactory: ResearchToolsetFactory;
+  /** Launches deep-research sub-agents for the `deep_search` tool, when available. */
+  deepResearchRunner?: DeepResearchRunner;
   toolsEnabled: boolean;
   toolCapabilities: ToolCallingCapabilities;
   toolCapabilityProvenance?: Record<string, string>;

@@ -36,7 +36,6 @@ export class EagerResearchStrategy implements ResearchStrategy {
     const executionStrategy = ctx.executionStrategy ?? policy.strategy;
     const failedAgenticAttempt = ctx.failedAgenticAttempt;
 
-    const deepResearch = request.deepResearch === true;
     const totalReservedTokens = this.deps.reservedOutputTokens ?? 0;
     const totalReservedWithIndexTokens =
       totalReservedTokens + (indexDescription ? estimateTextTokens(indexDescription.text) : 0);
@@ -81,7 +80,6 @@ export class EagerResearchStrategy implements ResearchStrategy {
     const webEvidence = yield* this.deps.webPipeline.search(
       question,
       searchMode !== "indexOnly" && searchMode !== "none",
-      deepResearch,
     );
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??

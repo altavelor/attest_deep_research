@@ -123,6 +123,7 @@ export function createResearchService(
     chatModel: createChatModelClient(ctx, chatServer, chatProfile),
     ...(modelRound ? { modelRound } : {}),
     reasoning,
+    deepResearchLogger: ctx.logger,
     reasoningDiagnostics: {
       protocol: effectiveProtocol,
       capabilitySource: capabilitySnapshot?.source ?? chatProfile.reasoningCapabilities?.source,
@@ -338,7 +339,11 @@ export function createSearchProvider(
     return undefined;
   }
 
-  return new DuckDuckGoSearchProvider({ fetch: obsidianRequestFetch, logger: ctx.logger });
+  return new DuckDuckGoSearchProvider({
+    fetch: obsidianRequestFetch,
+    logger: ctx.logger,
+    defaultResultLimit: ctx.getSettings().duckDuckGoResultLimit,
+  });
 }
 
 export function createExtractorsForProfile(ctx: CompositionContext, indexProfile: IndexProfile) {

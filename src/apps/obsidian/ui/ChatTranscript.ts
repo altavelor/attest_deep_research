@@ -32,6 +32,7 @@ export function renderChatTranscript(
   transcriptEl: HTMLElement,
   options: ChatTranscriptOptions,
 ): void {
+  const scroll = captureScrollAnchor(transcriptEl);
   transcriptEl.empty();
   const visibleMessages = options.messages
     .map((message, index) => ({ message, index }))
@@ -136,13 +137,14 @@ export function renderChatTranscript(
     }
   });
 
-  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  applyScrollAnchor(transcriptEl, scroll);
 }
 
 export function patchActiveAssistantMessage(
   transcriptEl: HTMLElement,
   options: ChatTranscriptOptions,
 ): boolean {
+  const scroll = captureScrollAnchor(transcriptEl);
   const message = [...options.messages]
     .reverse()
     .find((candidate) => candidate.kind !== "compact-summary");
@@ -176,8 +178,33 @@ export function patchActiveAssistantMessage(
     "",
     options.markdownContext,
   ).then(() => renderInlineCitationAnchors(answerEl, citationRefs, options));
-  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  applyScrollAnchor(transcriptEl, scroll);
   return true;
+}
+
+// Auto-scroll only when the user is already at (or near) the bottom; if they have
+// scrolled up to read earlier messages, preserve their position so re-renders and
+// streaming updates don't yank the view away.
+const STICK_TO_BOTTOM_THRESHOLD_PX = 60;
+
+interface ScrollAnchor {
+  stickToBottom: boolean;
+  previousScrollTop: number;
+}
+
+function captureScrollAnchor(transcriptEl: HTMLElement): ScrollAnchor {
+  const distanceFromBottom =
+    transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight;
+  return {
+    stickToBottom: distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX,
+    previousScrollTop: transcriptEl.scrollTop,
+  };
+}
+
+function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): void {
+  transcriptEl.scrollTop = anchor.stickToBottom
+    ? transcriptEl.scrollHeight
+    : anchor.previousScrollTop;
 }
 
 interface WorkflowUiState {
@@ -321,6 +348,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   create_note: "Create note",
   update_note: "Edit note",
   delete_note: "Delete note",
+  deep_search: "Deep research",
 };
 
 function renderToolNode(
@@ -350,11 +378,22 @@ function renderToolNode(
   if (view.intent) {
     head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
   }
+  if (item.phase && item.status === "pending") {
+    head.createSpan({ cls: "ixplorer-chat__tool-phase", text: item.phase });
+  }
   if (view.inCell) {
     renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, uiState);
   }
   if (view.outCell) {
     renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, uiState);
+  }
+  if (item.children && item.children.length > 0) {
+    const nested = body.createDiv({ cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested" });
+    for (const child of item.children) {
+      if (child.kind === "tool-call") {
+        renderToolNode(nested, child, options, uiState);
+      }
+    }
   }
 }
 

@@ -5,6 +5,7 @@
 // root. This keeps application/use-cases free of any adapters import.
 
 import type { SearchProvider } from "../ports/web";
+import type { DeepResearchRunner } from "./deepResearchPort";
 import type { ChatModelProvider } from "../../core/agent/protocol";
 import type { ChatToolCall, ChatToolDefinition } from "../../core/agent/tool";
 import type { Citation } from "../../core/model/citation";
@@ -59,6 +60,8 @@ export interface ResearchToolsetOptions {
   noteTools?: NoteToolService;
   retriever?: ResearchRetriever;
   searchProvider?: SearchProvider;
+  /** Enables the `deep_search` tool when present (and a web provider exists). */
+  deepResearchRunner?: DeepResearchRunner;
 }
 
 /** Assembled research toolset (concrete factory lives in adapters). */

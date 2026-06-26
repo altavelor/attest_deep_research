@@ -97,6 +97,7 @@ export interface IxplorerSettings {
   includeFolders: string[];
   excludeGlobs: string[];
   duckDuckGoEnabled: boolean;
+  duckDuckGoResultLimit: number;
   showChatIndexControl: boolean;
   includeActiveFileContext: boolean;
   useLinkedNotes: boolean;
