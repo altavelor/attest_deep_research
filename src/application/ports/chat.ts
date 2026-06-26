@@ -1,17 +1,13 @@
-// Chat persistence port (stage 1, task 6.1). The application depends on this
-// abstraction, not on a concrete file store; swapping storage (SQLite/IndexedDB)
-// means providing another adapter that implements this interface.
-//
-// NOTE: the saved-chat DTOs still live in chat/ChatStore during stage 1; this
-// port re-exports them so callers have a single import site. Physically moving
-// the DTOs to a neutral module and the fs implementation to adapters/filesystem
-// is a follow-up.
+// Chat persistence port (stage 1, task 6.1; neutralized in stage 5). The
+// application depends on this abstraction, not on a concrete file store; swapping
+// storage (SQLite/IndexedDB) means providing another adapter that implements it.
+// DTOs now live in core/chat/savedChat, so this port is platform-neutral.
 
 import type {
   SavedChat,
   SavedChatSummary,
   SaveChatInput,
-} from "../../chat/ChatStore";
+} from "../../core/chat/savedChat";
 
 export type { SavedChat, SavedChatSummary, SaveChatInput };
 

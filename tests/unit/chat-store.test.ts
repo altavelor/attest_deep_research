@@ -3,7 +3,8 @@ import { readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { FileChatStore, inferChatTitle } from "../../src/chat/ChatStore";
+import { FileChatRepository as FileChatStore } from "../../src/adapters/filesystem/FileChatRepository";
+import { inferChatTitle } from "../../src/core/chat/savedChat";
 import { markdownSource, retrieved } from "../helpers/factories";
 
 describe("FileChatStore", () => {

@@ -1,5 +1,5 @@
-import { ChatModelClient } from "../../src/client/chat/ChatModelClient";
-import { IxplorerError } from "../../src/shared/errors";
+import { ChatModelClient } from "../../src/adapters/model-provider/chat/ChatModelClient";
+import { IxplorerError } from "../../src/core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {

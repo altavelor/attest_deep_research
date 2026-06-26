@@ -4,8 +4,8 @@ import {
   formatDiagnosticReport,
   retrievalDiagnosticLines,
   webDiagnosticLines,
-} from "../../src/ui/diagnosticFormatting";
-import { ContextDiagnostics } from "../../src/shared/types";
+} from "../../src/apps/obsidian/ui/diagnosticFormatting";
+import { ContextDiagnostics } from "../../src/core/diagnostics";
 
 const diagnostics = {
   executionStrategy: "eager-forced",

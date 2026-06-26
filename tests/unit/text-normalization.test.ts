@@ -1,4 +1,4 @@
-import { tokenizeForSearch, tokenSetForSearch } from "../../src/retrieval/tokenization";
+import { tokenizeForSearch, tokenSetForSearch } from "../../src/core/retrieval/tokenization";
 import { normalizeInlineWhitespace } from "../../src/shared/whitespace";
 
 describe("text normalization helpers", () => {

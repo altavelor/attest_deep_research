@@ -1,7 +1,8 @@
-import { QueryExpansionService } from "../../src/retrieval/QueryExpansionService";
-import { AnswerSynthesisService } from "../../src/research/AnswerSynthesisService";
-import { VaultResearchPipeline } from "../../src/research/VaultResearchPipeline";
-import { WebResearchPipeline } from "../../src/research/WebResearchPipeline";
+import { QueryExpansionService } from "../../src/adapters/retrieval/QueryExpansionService";
+import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
+import { AnswerSynthesisService } from "../../src/application/use-cases/AnswerSynthesisService";
+import { VaultResearchPipeline } from "../../src/application/use-cases/VaultResearchPipeline";
+import { WebResearchPipeline } from "../../src/application/use-cases/WebResearchPipeline";
 import { collectAsync } from "../helpers/async";
 import { citation, fixedNow, markdownSource, retrieved, webSource } from "../helpers/factories";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
@@ -232,6 +233,7 @@ describe("AnswerSynthesisService", () => {
   it("uses Responses rounds for eager synthesis without adding summaries to the final answer", async () => {
     const chatModel = new FakeChatModel([]);
     const service = new AnswerSynthesisService({
+      runToolLoop,
       chatModel,
       modelRound: {
         listModels: async () => ["gpt-5"],
@@ -273,6 +275,7 @@ describe("AnswerSynthesisService", () => {
     let finishRound!: () => void;
     const roundFinished = new Promise<void>((resolve) => (finishRound = resolve));
     const service = new AnswerSynthesisService({
+      runToolLoop,
       chatModel: new FakeChatModel([]),
       modelRound: {
         listModels: async () => ["gpt-5"],
@@ -328,6 +331,7 @@ describe("AnswerSynthesisService", () => {
       { content: "Follow-up questions:\n1. What next?", isComplete: true },
     ]);
     const service = new AnswerSynthesisService({
+      runToolLoop,
       chatModel,
       chatModelName: "qwen",
       chatOptions: { temperature: 0.2 },

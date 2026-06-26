@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 describe("reasoning transcript UI", () => {
-  const transcript = readFileSync(resolve("src/ui/ChatTranscript.ts"), "utf8");
+  const transcript = readFileSync(resolve("src/apps/obsidian/ui/ChatTranscript.ts"), "utf8");
   const styles = readFileSync(resolve("styles.css"), "utf8");
 
   it("renders reasoning, tools, and the answer as one unified workflow", () => {

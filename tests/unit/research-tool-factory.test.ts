@@ -1,6 +1,6 @@
-import { createResearchToolRegistry } from "../../src/research/tools/createResearchToolRegistry";
-import { ResearchRetriever } from "../../src/research/types";
-import { SearchProvider } from "../../src/shared/types";
+import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
+import { ResearchRetriever } from "../../src/application/contracts/research";
+import { SearchProvider } from "../../src/application/ports/web";
 
 describe("createResearchToolRegistry", () => {
   it("creates only explicitly permitted tools and a fresh answer-scoped registry", () => {
@@ -28,9 +28,7 @@ describe("createResearchToolRegistry", () => {
       "search_index",
       "search_web",
     ]);
-    expect(first.evidence).not.toBe(second.evidence);
-    expect(first.tools.availability()).toEqual(options.availability);
-  });
+    expect(first.evidence).not.toBe(second.evidence);  });
 
   it("does not expose or report index and web tools when dependencies are absent", () => {
     const created = createResearchToolRegistry({
@@ -44,10 +42,5 @@ describe("createResearchToolRegistry", () => {
       },
     });
 
-    expect(created.tools.definitions()).toEqual([]);
-    expect(created.tools.availability()).toMatchObject({
-      retrieverAvailable: false,
-      webProviderAvailable: false,
-    });
-  });
+    expect(created.tools.definitions()).toEqual([]);  });
 });

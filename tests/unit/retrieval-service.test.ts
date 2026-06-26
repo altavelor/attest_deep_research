@@ -1,6 +1,7 @@
-import { formatCitation, formatCitationLink } from "../../src/retrieval/citations";
-import { rankKeywordMatches } from "../../src/retrieval/ranking";
-import { RetrievalService } from "../../src/retrieval/RetrievalService";
+import { formatCitation } from "../../src/core/retrieval/citations";
+import { formatCitationLink } from "../../src/application/use-cases/citationLinks";
+import { rankKeywordMatches } from "../../src/adapters/retrieval/keywordRanking";
+import { RetrievalService } from "../../src/adapters/retrieval/RetrievalService";
 import {
   documentSource,
   markdownSource,

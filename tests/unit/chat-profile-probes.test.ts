@@ -1,4 +1,4 @@
-import { startChatProfileProbes } from "../../src/settings/chatProfileProbes";
+import { startChatProfileProbes } from "../../src/adapters/settings/chatProfileProbes";
 
 describe("chat profile probes", () => {
   it("starts tool and Responses probes concurrently and publishes results independently", async () => {

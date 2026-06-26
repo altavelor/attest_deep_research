@@ -3,20 +3,20 @@
 
 import { Tool } from "../../core/agent/tool";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { IndexResearchTool } from "../../research/tools/IndexResearchTool";
-import { ResearchEvidenceRegistry } from "../../research/tools/ResearchEvidenceRegistry";
-import { ResearchRetriever } from "../../research/types";
+import { IndexResearchTool } from "./tools/IndexResearchTool";
+import { EvidenceRegistry } from "./evidence";
+import { ResearchRetriever } from "../contracts/research";
 
 export interface RagSourceOptions {
   retriever: ResearchRetriever;
-  evidence: ResearchEvidenceRegistry;
+  evidence: EvidenceRegistry;
   available?: boolean;
 }
 
 export class RagSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
   private readonly retriever: ResearchRetriever;
-  private readonly evidence: ResearchEvidenceRegistry;
+  private readonly evidence: EvidenceRegistry;
 
   constructor(options: RagSourceOptions) {
     this.retriever = options.retriever;

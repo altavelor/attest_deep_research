@@ -1,5 +1,5 @@
-import { probeToolControlCapabilities } from "../../src/settings/toolCapabilityProbe";
-import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/shared/types";
+import { probeToolControlCapabilities } from "../../src/adapters/settings/toolCapabilityProbe";
+import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/core/agent/protocol";
 
 class ProbeProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];

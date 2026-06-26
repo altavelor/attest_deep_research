@@ -5,7 +5,7 @@ import {
   PLUGIN_ID,
   PLUGIN_NAME,
   PLUGIN_VERSION,
-} from "../src/pluginMetadata";
+} from "../src/apps/obsidian/pluginMetadata";
 
 describe("plugin metadata", () => {
   it("matches the Obsidian manifest", () => {

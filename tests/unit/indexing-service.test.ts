@@ -1,21 +1,13 @@
-import {
-  EmbeddedChunk,
-  EmbeddingProviderClient,
-  ExtractedChunk,
-  Extractor,
-  IndexFailedSourceSnapshot,
-  IndexSourceSnapshot,
-  IndexStore,
-  SourceSnapshotIndexStore,
-} from "../../src/shared/types";
-import { IxplorerError } from "../../src/shared/errors";
+import { Extractor, IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, SourceSnapshotIndexStore } from "../../src/application/ports/indexing";
+import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { EmbeddedChunk, ExtractedChunk } from "../../src/core/model/source";
+import { IxplorerError } from "../../src/core/errors";
 import {
   IndexingService,
   IndexingFileLogEvent,
-  VaultFileProvider,
-  VaultFileSummary,
-} from "../../src/indexing/IndexingService";
-import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/indexing/changeDetection";
+} from "../../src/adapters/indexing/IndexingService";
+import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
+import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/adapters/indexing/changeDetection";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {

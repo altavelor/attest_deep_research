@@ -1,5 +1,5 @@
-import { formatDiagnosticReportHtml } from "../../src/ui/diagnosticHtml";
-import { ContextDiagnostics } from "../../src/shared/types";
+import { formatDiagnosticReportHtml } from "../../src/apps/obsidian/ui/diagnosticHtml";
+import { ContextDiagnostics } from "../../src/core/diagnostics";
 
 function diagnosticFixture(): ContextDiagnostics {
   return {

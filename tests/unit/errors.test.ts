@@ -3,7 +3,7 @@ import {
   errorCodeFromUnknown,
   isIxplorerError,
   toUserMessage,
-} from "../../src/shared/errors";
+} from "../../src/core/errors";
 
 describe("Ixplorer errors", () => {
   it("maps recoverable errors to stable user-facing messages", () => {

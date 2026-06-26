@@ -1,7 +1,7 @@
-import { ResearchEvidenceRegistry } from "../../src/research/tools/ResearchEvidenceRegistry";
-import { executeResearchTool } from "../../src/research/tools/ResearchTools";
-import { WebSearchResearchTool } from "../../src/research/tools/WebSearchResearchTool";
-import { SearchProvider } from "../../src/shared/types";
+import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { WebSearchResearchTool } from "../../src/application/sources/tools/WebSearchResearchTool";
+import { SearchProvider } from "../../src/application/ports/web";
 
 describe("WebSearchResearchTool", () => {
   it("performs metadata-only search and collapses canonical duplicate URLs", async () => {

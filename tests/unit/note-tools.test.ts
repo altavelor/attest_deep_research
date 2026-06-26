@@ -1,12 +1,6 @@
-import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import {
-  AUTO_CONFIRM,
-  NoteActionConfirmation,
-  NoteToolService,
-  validateMutablePath,
-  VaultWriter,
-} from "../../src/research/tools/NoteTools";
-import { ContextFileProvider } from "../../src/research/ContextAssembler";
+import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
+import { ContextFileProvider, VaultWriter } from "../../src/application/ports/vault";
+import { AUTO_CONFIRM, NoteActionConfirmation, NoteToolService, validateMutablePath } from "../../src/adapters/research-tools/NoteTools";
 
 class MemoryContextFiles implements ContextFileProvider {
   constructor(private readonly files: Record<string, string>) { }

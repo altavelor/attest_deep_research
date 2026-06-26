@@ -3,7 +3,7 @@ import {
   toolCallChainLabel,
   resolveLabelFromResult,
   resolveResultSummary,
-} from "../../src/research/tools/toolCallLabel";
+} from "../../src/application/research/toolCallLabel";
 
 describe("toolCallChainLabel", () => {
   it("returns query for search tools", () => {

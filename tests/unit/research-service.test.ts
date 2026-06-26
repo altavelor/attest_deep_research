@@ -1,16 +1,21 @@
+import { ContextFileProvider } from "../../src/application/ports/vault";
 import {
   ResearchService,
   selectResearchExecutionStrategy,
-} from "../../src/research/ResearchService";
-import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import { NoteToolService } from "../../src/research/tools/NoteTools";
-import { ContextAssembler, ContextFileProvider } from "../../src/research/ContextAssembler";
-import { QueryExpansionService } from "../../src/retrieval/QueryExpansionService";
+} from "../../src/application/use-cases/ResearchService";
+import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
+import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
+import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
+import { NoteToolService } from "../../src/adapters/research-tools/NoteTools";
+import { ContextAssembler } from "../../src/application/use-cases/ContextAssembler";
+import { stableId } from "../../src/adapters/extractors/common";
+import { QueryExpansionService } from "../../src/adapters/retrieval/QueryExpansionService";
 import {
   buildResearchPrompt,
   buildResearchSystemPrompt,
   extractFollowUpQuestions,
-} from "../../src/research/prompts";
+} from "../../src/core/research/prompts";
 import {
   citation,
   emptyRetrieval,
@@ -22,7 +27,7 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
-import { ChatModelProvider } from "../../src/shared/types";
+import { ChatModelProvider } from "../../src/core/agent/protocol";
 class MemoryContextFiles implements ContextFileProvider {
   constructor(private readonly files: Record<string, string>) { }
 
@@ -166,6 +171,9 @@ describe("ResearchService", () => {
     async (forceEagerResearch, expected) => {
       const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
       const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
         retriever: new FakeRetriever(emptyRetrieval()),
         chatModel,
         chatModelName: "qwen",
@@ -204,6 +212,9 @@ describe("ResearchService", () => {
       [{ content: "Agentic answer [idx-1]", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever({
         ...emptyRetrieval(),
         chunks: [chunk],
@@ -244,6 +255,9 @@ describe("ResearchService", () => {
   it("does not require get_active_note when active-file inclusion is enabled without an active file", async () => {
     const chatModel = new FakeChatModel([{ content: "Direct answer", isComplete: true }]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -281,6 +295,9 @@ describe("ResearchService", () => {
     // accepted as the agentic result, rather than discarded and forced to search.
     const chatModel = new FakeChatModel([[{ content: "Direct answer", isComplete: true }]]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -328,6 +345,9 @@ describe("ResearchService", () => {
       },
     };
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -366,6 +386,9 @@ describe("ResearchService", () => {
   ] as const)("injects selected index scope for %s mode only", async (searchMode, expected) => {
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -414,6 +437,9 @@ describe("ResearchService", () => {
     // to false and raises a spurious tool-calls-blocked error.
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -458,6 +484,9 @@ describe("ResearchService", () => {
       [{ content: "Tool-based answer.", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -487,6 +516,9 @@ describe("ResearchService", () => {
       [{ content: "Listed notes.", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -544,8 +576,12 @@ describe("ResearchService", () => {
       }),
       extractors: [new MarkdownExtractor()],
       retrieve: async () => [],
+      generateId: stableId,
     });
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       searchProvider: webSearch,
       chatModel,
@@ -584,6 +620,9 @@ describe("ResearchService", () => {
   it("carries web query and source provenance into final context diagnostics", async () => {
     const source = webSource("https://example.com/cia-contact");
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       searchProvider: new FakeSearchProvider([
         {
@@ -644,6 +683,9 @@ describe("ResearchService", () => {
     });
     const chatModel = new FakeChatModel();
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       chatModel,
       chatModelName: "qwen",
@@ -713,6 +755,9 @@ describe("ResearchService", () => {
       ],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -793,6 +838,9 @@ describe("ResearchService", () => {
     ]);
     const persisted: unknown[] = [];
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       searchProvider: webSearch,
       chatModel,
@@ -872,6 +920,9 @@ describe("ResearchService", () => {
   it("does not persist intermediate research state while streaming", async () => {
     const persistFinalAnswer = vi.fn();
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever({
         chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
         citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
@@ -911,6 +962,9 @@ describe("ResearchService", () => {
   it("refuses to call the model when chat history exceeds the configured context window", async () => {
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
@@ -953,6 +1007,9 @@ describe("ResearchService", () => {
       [{ content: "Answer.", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       chatModel,
       chatModelName: "qwen",
@@ -1004,6 +1061,9 @@ describe("ResearchService", () => {
     ]);
     const chatModel = new FakeChatModel([{ content: "Use the web citation.", isComplete: true }]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       searchProvider: webSearch,
       chatModel,
@@ -1078,6 +1138,9 @@ describe("ResearchService", () => {
       [{ content: "Deep answer [local-1] [web:https://example.com/a]", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       searchProvider: webSearch,
       chatModel,
@@ -1159,6 +1222,9 @@ describe("ResearchService", () => {
       ],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever,
       searchProvider: webSearch,
       chatModel,
@@ -1194,6 +1260,9 @@ describe("ResearchService", () => {
       [{ content: "Fallback answer.", isComplete: true }],
     ]);
     const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
       retriever: new FakeRetriever(emptyRetrieval()),
       searchProvider: webSearch,
       chatModel,

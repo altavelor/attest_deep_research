@@ -1,8 +1,8 @@
 import {
   resolveResponsesProviderPolicy,
   ResponsesPolicyInput,
-} from "../../src/client/chat/ResponsesProviderPolicy";
-import { ReasoningCapabilitySettings } from "../../src/settings/settings";
+} from "../../src/adapters/model-provider/chat/ResponsesProviderPolicy";
+import { ReasoningCapabilitySettings } from "../../src/adapters/settings/settings";
 
 const capabilities: ReasoningCapabilitySettings = {
   source: "probe",

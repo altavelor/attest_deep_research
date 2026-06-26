@@ -1,4 +1,4 @@
-import { buildAgenticResearchMessages } from "../../src/research/agenticPrompts";
+import { buildAgenticResearchMessages } from "../../src/core/research/agenticPrompts";
 
 describe("agentic research prompts", () => {
   it("contains trusted policy, bounded explicit context, history, and index description", () => {

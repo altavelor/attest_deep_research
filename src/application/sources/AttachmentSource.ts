@@ -3,11 +3,9 @@
 
 import { Tool } from "../../core/agent/tool";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { NoteToolService } from "../../research/tools/NoteTools";
-import {
-  adaptNoteToolHandlers,
-  NoteToolAvailability,
-} from "../../research/tools/ResearchToolRegistry";
+import { NoteToolService } from "../research/toolPorts";
+import { NoteToolAvailability } from "../research/toolPorts";
+import { adaptNoteToolHandlers } from "./tools/noteToolHandlers";
 
 export interface AttachmentSourceOptions {
   service: NoteToolService;

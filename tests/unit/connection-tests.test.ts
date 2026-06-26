@@ -3,8 +3,8 @@ import {
   fetchAvailableModels,
   fetchModelContextLength,
   verifyEmbeddingCapability,
-} from "../../src/settings/connectionTests";
-import { ServerProfile } from "../../src/settings/settings";
+} from "../../src/adapters/settings/connectionTests";
+import { ServerProfile } from "../../src/adapters/settings/settings";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {

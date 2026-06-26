@@ -1,8 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 
-import { PdfExtractor, PdfPageTextParser } from "../../src/extractors/PdfExtractor";
-import { PdfTextCache } from "../../src/extractors/PdfTextCache";
+import { PdfExtractor, PdfPageTextParser } from "../../src/adapters/extractors/PdfExtractor";
+import { PdfTextCache } from "../../src/adapters/extractors/PdfTextCache";
 
 const fixturePath = join(__dirname, "../fixtures/pdf/simple-text.pdf");
 const plainTextFixturePath = join(__dirname, "../fixtures/pdf/plain-text.pdf");

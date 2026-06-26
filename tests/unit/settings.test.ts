@@ -15,7 +15,7 @@ import {
   resolveEffectiveReasoning,
   resolveEffectiveTools,
   updateActiveIndexProfile,
-} from "../../src/settings/settings";
+} from "../../src/adapters/settings/settings";
 
 describe("Ixplorer settings", () => {
   it("uses local-first safe defaults", () => {

@@ -6,9 +6,9 @@ import { join } from "path";
 import {
   FileVectorIndexStore,
   isFileVectorManifest,
-} from "../../src/indexing/FileVectorIndexStore";
-import { shardIdForSourcePath } from "../../src/indexing/sourcePathShard";
-import { EmbeddedChunk, SourceReference } from "../../src/shared/types";
+} from "../../src/adapters/indexing/FileVectorIndexStore";
+import { shardIdForSourcePath } from "../../src/adapters/indexing/sourcePathShard";
+import { EmbeddedChunk, SourceReference } from "../../src/core/model/source";
 
 describe("FileVectorIndexStore", () => {
   let folder: string;

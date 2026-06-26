@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EvidencePlanner } from "../../src/research/EvidencePlanner";
+import { EvidencePlanner } from "../../src/core/research/EvidencePlanner";
 import { markdownSource, retrieved, webSource } from "../helpers/factories";
 
 describe("EvidencePlanner", () => {

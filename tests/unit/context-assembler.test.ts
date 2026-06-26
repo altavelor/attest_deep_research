@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import { PdfExtractor, PdfPageTextParser } from "../../src/extractors/PdfExtractor";
-import { PdfTextCache } from "../../src/extractors/PdfTextCache";
-import { ContextAssembler } from "../../src/research/ContextAssembler";
-import { chatHistoryForPrompt, compactChatMessages } from "../../src/chat/ChatCompaction";
-import { GraphContextProvider } from "../../src/research/GraphContext";
-import { Extractor, RetrievedChunk } from "../../src/shared/types";
+import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
+import { PdfExtractor, PdfPageTextParser } from "../../src/adapters/extractors/PdfExtractor";
+import { PdfTextCache } from "../../src/adapters/extractors/PdfTextCache";
+import { ContextAssembler } from "../../src/application/use-cases/ContextAssembler";
+import { stableId } from "../../src/adapters/extractors/common";
+import { chatHistoryForPrompt, compactChatMessages } from "../../src/application/use-cases/ChatCompaction";
+import { GraphContextProvider } from "../../src/core/research/GraphContext";
+import { Extractor } from "../../src/application/ports/indexing";
+import { RetrievedChunk } from "../../src/core/model/source";
 
 describe("ContextAssembler", () => {
   it("prioritizes explicit files before the active note", async () => {
@@ -335,6 +337,7 @@ function createAssembler(
   return new ContextAssembler({
     extractors,
     graph,
+    generateId: stableId,
     files: {
       listPaths: async () => availablePaths,
       readFile: async (path) => files[path] ?? "",

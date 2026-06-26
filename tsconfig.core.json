@@ -10,6 +10,5 @@
     "src/application/ports/**/*.ts",
     "src/application/contracts/**/*.ts"
   ],
-  "exclude": ["src/application/ports/chat.ts"],
-  "//": "application/sources and ports/chat are the wiring layer: they reference concrete modules (tools, FileChatStore) that still carry Node deps. They are guarded against obsidian/DOM by the import-boundary test, but are not yet part of the platform-neutral isolation check. Tightening them is post-stage-1 work."
+  "//": "application/sources is the wiring layer: it composes concrete tools that still carry Node deps (extractors crypto/Buffer). It is guarded against obsidian/DOM by the import-boundary test but is not part of the platform-neutral isolation check. Tightening it requires decoupling the indexing extractors from Node."
 }

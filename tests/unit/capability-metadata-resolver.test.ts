@@ -1,7 +1,7 @@
 import {
   resolveCapabilityMetadata,
   resolveWithMetadataResolvers,
-} from "../../src/settings/capabilityMetadataResolver";
+} from "../../src/adapters/settings/capabilityMetadataResolver";
 
 describe("capability metadata resolvers", () => {
   it("returns unknown when generic metadata has no capability hints", async () => {
