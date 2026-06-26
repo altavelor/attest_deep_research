@@ -378,6 +378,84 @@ describe("ResearchService", () => {
     });
   });
 
+  it("synthesizes from partial evidence when an agentic attempt fails after gathering evidence", async () => {
+    // Round 1 records evidence via a successful search_index tool call; round 2
+    // throws. Because partial evidence was gathered, the service must take the
+    // partial-results synthesis branch (status notice + fallback answer) rather
+    // than re-running the full deterministic eager pipeline.
+    const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Partial evidence");
+    let calls = 0;
+    const chatModel: ChatModelProvider = {
+      async listModels() {
+        return ["qwen"];
+      },
+      async *streamChat() {
+        calls += 1;
+        if (calls === 1) {
+          yield {
+            content: "",
+            isComplete: true,
+            toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
+          };
+          return;
+        }
+        if (calls === 2) {
+          throw new Error("provider exploded after gathering evidence");
+        }
+        yield { content: "Best-effort answer from partial results [idx-1]", isComplete: true };
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever({
+        ...emptyRetrieval(),
+        chunks: [chunk],
+        citations: [citation("idx-1", chunk.source)],
+      }),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "q",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === "status" &&
+          (event as { message?: string }).message === "Synthesizing from partial results…",
+      ),
+    ).toBe(true);
+    const complete = events.at(-1);
+    if (complete?.type !== "complete") {
+      throw new Error("Expected a complete event from the partial-results synthesis");
+    }
+    expect(visibleAnswerText(events)).toBe("Best-effort answer from partial results [idx-1]");
+    expect(complete.answer).toMatchObject({
+      isFallback: true,
+      fallbackReason: "provider-error",
+    });
+    // Partial evidence gathered during the failed agentic attempt is carried into
+    // the synthesis, but citations are intentionally empty: a failed agentic run
+    // produces no cited ids, so the synthesis receives an empty citation list.
+    expect(complete.answer.evidence?.map((chunk) => chunk.id)).toContain("idx-1");
+    expect(complete.answer.citations).toEqual([]);
+  });
+
   it.each([
     ["none", false],
     ["indexOnly", true],
