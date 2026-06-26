@@ -189,6 +189,7 @@ export function nextChainToolCallStart(
   name: string,
   label: string,
   args?: Record<string, unknown>,
+  parentId?: string,
 ): ChatDisplayMessage[] {
   const last = messages.at(-1);
   const assistant =
@@ -197,9 +198,12 @@ export function nextChainToolCallStart(
       : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
   const progress = researchProgressFromMessage(assistant, new Date().toISOString());
   const item: ChainItem = { kind: "tool-call", id, name, label, status: "pending", args };
+  const chain = parentId
+    ? appendChild(progress.chain, parentId, item)
+    : [...progress.chain, item];
   const updated: ChatDisplayMessage = {
     ...assistant,
-    researchProgress: { ...progress, chain: [...progress.chain, item] },
+    researchProgress: { ...progress, chain },
   };
   return last?.role === "assistant" ? [...messages.slice(0, -1), updated] : [...messages, updated];
 }
@@ -211,24 +215,68 @@ export function nextChainToolCallEnd(
   resolvedLabel?: string,
   resultSummary?: string,
   resultJson?: string,
+  parentId?: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  const apply = (item: Extract<ChainItem, { kind: "tool-call" }>): ChainItem => ({
+    ...item,
+    status: (ok ? "complete" : "failed") as "complete" | "failed",
+    ...(resolvedLabel !== undefined ? { label: resolvedLabel } : {}),
+    ...(resultSummary !== undefined ? { resultSummary } : {}),
+    ...(resultJson !== undefined ? { resultJson } : {}),
+  });
+  const chain = parentId
+    ? updateChild(last.researchProgress.chain, parentId, id, apply)
+    : last.researchProgress.chain.map((item) =>
+        item.kind === "tool-call" && item.id === id ? apply(item) : item,
+      );
+  return [
+    ...messages.slice(0, -1),
+    { ...last, researchProgress: { ...last.researchProgress, chain } },
+  ];
+}
+
+/** Sets the live `phase` of a parent tool-call (e.g. a deep_search session). */
+export function nextChainDeepResearchPhase(
+  messages: ChatDisplayMessage[],
+  parentId: string,
+  phase: string,
 ): ChatDisplayMessage[] {
   const last = messages.at(-1);
   if (last?.role !== "assistant" || !last.researchProgress) return messages;
   const chain = last.researchProgress.chain.map((item) =>
-    item.kind === "tool-call" && item.id === id
-      ? {
-          ...item,
-          status: (ok ? "complete" : "failed") as "complete" | "failed",
-          ...(resolvedLabel !== undefined ? { label: resolvedLabel } : {}),
-          ...(resultSummary !== undefined ? { resultSummary } : {}),
-          ...(resultJson !== undefined ? { resultJson } : {}),
-        }
-      : item,
+    item.kind === "tool-call" && item.id === parentId ? { ...item, phase } : item,
   );
   return [
     ...messages.slice(0, -1),
     { ...last, researchProgress: { ...last.researchProgress, chain } },
   ];
+}
+
+function appendChild(chain: ChainItem[], parentId: string, child: ChainItem): ChainItem[] {
+  return chain.map((item) =>
+    item.kind === "tool-call" && item.id === parentId
+      ? { ...item, children: [...(item.children ?? []), child] }
+      : item,
+  );
+}
+
+function updateChild(
+  chain: ChainItem[],
+  parentId: string,
+  childId: string,
+  apply: (item: Extract<ChainItem, { kind: "tool-call" }>) => ChainItem,
+): ChainItem[] {
+  return chain.map((item) => {
+    if (item.kind !== "tool-call" || item.id !== parentId) return item;
+    return {
+      ...item,
+      children: (item.children ?? []).map((child) =>
+        child.kind === "tool-call" && child.id === childId ? apply(child) : child,
+      ),
+    };
+  });
 }
 
 export function nextChainReasoningSegment(

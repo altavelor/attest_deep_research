@@ -5,7 +5,6 @@ import { ResearchSearchMode } from "./searchMode";
 
 export type ResearchPolicyReason =
   | "forced-eager"
-  | "deep-research-eager"
   | "eligible"
   | "tool-calls-unavailable"
   | "specific-choice-unavailable"
@@ -17,7 +16,6 @@ export type ResearchPolicyReason =
 
 export interface ResearchExecutionPolicyInput {
   forceEagerResearch: boolean;
-  deepResearch: boolean;
   searchMode: ResearchSearchMode;
   dependencies: {
     retriever: boolean;
@@ -57,9 +55,6 @@ export function resolveResearchExecutionPolicy(
 
   if (input.forceEagerResearch) {
     return freeze({ ...base, strategy: "eager-forced", reason: "forced-eager" });
-  }
-  if (input.deepResearch) {
-    return freeze({ ...base, strategy: "eager-default", reason: "deep-research-eager" });
   }
   if (input.apiFormat === "ollama") {
     return freeze({

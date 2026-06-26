@@ -39,7 +39,8 @@ export interface ResearchRequest {
   includeContextDiagnostics?: boolean;
   expandedEvidence?: RetrievalResult["chunks"];
   expandedCitationKeys?: string[];
-  deepResearch?: boolean;
+  /** Set when the user explicitly requested deep research via an `@deep_search` mention. */
+  forceDeepSearch?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
   signal?: AbortSignal;
 }
@@ -58,6 +59,8 @@ export type ResearchStreamEvent =
     label: string;
     round: number;
     args?: Record<string, unknown>;
+    /** Set when this call is nested inside a parent tool-call (e.g. deep_search). */
+    parentId?: string;
   }
   | {
     type: "tool-call-end";
@@ -66,7 +69,9 @@ export type ResearchStreamEvent =
     resolvedLabel?: string;
     resultSummary?: string;
     resultJson?: string;
+    parentId?: string;
   }
+  | { type: "deep-research-phase"; parentId: string; phase: string }
   | { type: "answer-reset" }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };

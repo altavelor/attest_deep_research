@@ -6,6 +6,7 @@ export interface ActiveSkills {
   coreVariant: "vault" | "research";
   index: boolean;
   web: boolean;
+  deepSearch: boolean;
   indexDescription?: string;
   noteMutationAccess: boolean;
 }
@@ -54,9 +55,9 @@ using authoritative sources retrieved by evidence tools.
 
 ### Evidence tools (search_index, search_web, fetch_web_page)
 - Use these to find information relevant to the question.
-- Each result contains an \`evidenceId\`. Use this ID — enclosed in square brackets like [evidenceId] —
-  whenever you cite a source in your answer.
-- Never invent an evidenceId. Only cite IDs that appear in tool results.
+- Cite web sources by their URL: \`[url:https://example.com/page]\`. Cite local index
+  results by their \`evidenceId\`: \`[evidenceId]\`. Always enclose the cite in square brackets.
+- Never invent a URL or an evidenceId. Only cite URLs/ids that appear in tool results.
 - Evidence from search_index and search_web has equal authority.
 
 ### Editing tools (search_notes, read_note, list_notes, get_active_note)
@@ -75,19 +76,53 @@ Use search_web to find current or external information not available in the loca
 
 ### Strategy
 - Write focused queries (≤240 chars). Avoid vague queries — be specific.
-- Use the returned \`evidenceId\` to cite results.
+- Cite a web result by its \`url\` in the form \`[url:<url>]\`.
 - \`limit\` controls how many results (max 5).
-- If a snippet is insufficient, call fetch_web_page with the URL to get the full page content.
-  fetch_web_page also returns an \`evidenceId\` for the fetched page.
+- If a snippet is insufficient, call fetch_web_page with the result's \`resultId\` to get
+  the full page content. Pass the \`resultId\` returned by search_web — not its \`url\` and
+  not any \`[url:…]\` citation.
 - Do not call search_web or fetch_web_page with the same arguments twice.
 
 ### Reading results
 Each result has:
-- \`evidenceId\` — use in [square brackets] to cite
-- \`url\` — source URL (for reference)
+- \`url\` — source URL; cite it as \`[url:<url>]\`
+- \`resultId\` — opaque handle; pass to fetch_web_page to read the full page
 - \`title\` — page title
 - \`snippet\` — short preview (may be truncated)
 - \`rank\` — position in search results (lower = higher priority)`.trimStart();
+
+const DEEP_SEARCH_SKILL = `
+## Deep research (deep_search)
+
+You also have a deep_search tool that launches a dedicated research sub-agent. The
+sub-agent plans sub-queries, searches the web, reads pages, cross-checks multiple
+sources, and returns structured evidence (findings with a reliability grade + cited
+sources that you can cite directly by their URL).
+
+### When to prefer deep_search over manual search_web / fetch_web_page
+- The question needs breadth, comparison, or verification across several sources.
+- It asks for current/latest figures that should be cross-checked for conflicts.
+- You would otherwise fire many search_web + fetch_web_page calls yourself.
+
+Prefer deep_search for these — it is cheaper for your context (you get a compact
+structured report instead of many raw pages) and the heavy fetching runs in the
+sub-agent's own budget, not yours.
+
+### How to use it
+- Issue one deep_search call per distinct topic/facet; call several in parallel to
+  research independent facets at once.
+- Pass a focused \`question\` (and optional \`scope\`). Then synthesize the final answer
+  from the returned findings, citing the provided source URLs as \`[url:<url>]\`.
+- Use plain search_web / fetch_web_page only for a single quick lookup that does not
+  warrant a full research session.
+
+### Reading a deep_search result
+- Build your answer from the \`Summary\` and \`Findings\` — those are the synthesized,
+  citable substance. The \`(high|medium|low)\` tag on each finding is its reliability.
+- The \`Sources\` section lists \`- title — url\`. To cite a source, use its URL in the
+  form \`[url:<url>]\`; read URLs straight from that line — you do not need another tool.
+- These URLs are citation handles, NOT fetch targets: never pass a deep_search source URL
+  to fetch_web_page. If a finding needs deeper backing, run another deep_search.`.trimStart();
 
 function buildIndexSkill(indexDescription: string): string {
   return `## Using the Local Index (search_index)
@@ -145,6 +180,11 @@ export function buildAgenticResearchMessages(
   // Web skill — only when web search is active
   if (activeSkills.web) {
     systemSections.push(WEB_SKILL);
+  }
+
+  // Deep research skill — only when the deep_search tool is available
+  if (activeSkills.deepSearch) {
+    systemSections.push(DEEP_SEARCH_SKILL);
   }
 
   // Explicit evidence

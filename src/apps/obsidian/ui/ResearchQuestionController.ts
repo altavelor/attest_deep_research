@@ -10,12 +10,13 @@ import {
 import { ResearchService, ResearchStreamEvent } from "../../../application/use-cases/ResearchService";
 import { AgentRunDiagnosticCollector } from "../../../application/use-cases/AgentRunDiagnostics";
 import { estimateResearchRequestTokens } from "../../../core/research/prompts";
+import { parseDeepResearchDirective } from "../../../core/research/deepResearch/deepResearchDirective";
 import type { ResearchSearchMode } from "../../../application/use-cases/ResearchService";
 import type { ContextMode } from "../../../core/diagnostics";
 import { toUserMessage } from "../../../core/errors";
 import { ResearchAnswer } from "../../../core/answer";
 import { RetrievedChunk } from "../../../core/model/source";
-import { ChatDisplayMessage, attachAnswerDetailsToLastAssistantMessage, completeAssistantCheckpoint, finalizeLastAssistantReasoning, interruptLastAssistantProgress, nextAssistantCheckpoint, nextAssistantMessage, nextAssistantReasoning, nextChainReasoningSegment, nextChainToolCallEnd, nextChainToolCallStart, resetLastAssistantContent, stampLastAssistantModel } from "../../../core/conversation";
+import { ChatDisplayMessage, attachAnswerDetailsToLastAssistantMessage, completeAssistantCheckpoint, finalizeLastAssistantReasoning, interruptLastAssistantProgress, nextAssistantCheckpoint, nextAssistantMessage, nextAssistantReasoning, nextChainDeepResearchPhase, nextChainReasoningSegment, nextChainToolCallEnd, nextChainToolCallStart, resetLastAssistantContent, stampLastAssistantModel } from "../../../core/conversation";
 
 export interface ResearchQuestionControllerOptions {
   getQuestionInput(): string;
@@ -40,7 +41,6 @@ export interface ResearchQuestionControllerOptions {
   getExpandedEvidence(): RetrievedChunk[];
   getExpandedCitationKeys(): string[];
   clearExpandedCitationContexts(): Promise<void>;
-  isDeepResearchEnabled(): boolean;
   getContextPaths(): string[];
   getSearchUnavailableMessage(): string | null;
   setEditingMessageIndex(index: number | null): void;
@@ -202,13 +202,14 @@ export class ResearchQuestionController {
       const contextPaths = this.options.getContextPaths();
       const expandedEvidence = this.options.getExpandedEvidence();
       const expandedCitationKeys = this.options.getExpandedCitationKeys();
+      const { forceDeepSearch, cleanedQuestion } = parseDeepResearchDirective(question);
       let completed = false;
 
       for await (const event of service.answer({
-        question,
+        question: cleanedQuestion || question,
+        forceDeepSearch: forceDeepSearch || undefined,
         searchMode: this.options.getSearchMode(),
         contextMode: this.options.getContextMode(),
-        deepResearch: this.options.isDeepResearchEnabled(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,
         activeFilePath: this.options.getActiveFilePath(),
         includeActiveFile: this.options.shouldIncludeActiveFileContext(),
@@ -292,6 +293,7 @@ export class ResearchQuestionController {
           event.name,
           event.label,
           event.args,
+          event.parentId,
         ),
       );
       this.scheduleActiveRender();
@@ -307,7 +309,16 @@ export class ResearchQuestionController {
           event.resolvedLabel,
           event.resultSummary,
           event.resultJson,
+          event.parentId,
         ),
+      );
+      this.scheduleActiveRender();
+      return;
+    }
+
+    if (event.type === "deep-research-phase") {
+      this.options.setMessages(
+        nextChainDeepResearchPhase(this.options.getMessages(), event.parentId, event.phase),
       );
       this.scheduleActiveRender();
       return;

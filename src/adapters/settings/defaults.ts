@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   duckDuckGoEnabled: false,
+  duckDuckGoResultLimit: 5,
   showChatIndexControl: true,
   includeActiveFileContext: true,
   useLinkedNotes: true,

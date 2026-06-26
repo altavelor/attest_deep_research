@@ -10,6 +10,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         indexDescription: "Notes about systems",
         noteMutationAccess: false,
       },
@@ -37,6 +38,33 @@ describe("agentic research prompts", () => {
     expect(messages.at(-1)).toEqual({ role: "user", content: "Question" });
   });
 
+  it("injects the deep_search skill only when deepSearch is available", () => {
+    const base = {
+      question: "Q",
+      requiredTools: [],
+      activeSkills: {
+        coreVariant: "research" as const,
+        index: false,
+        web: true,
+        deepSearch: false,
+        noteMutationAccess: false,
+      },
+    };
+    const without = buildAgenticResearchMessages(base)
+      .map((message) => message.content)
+      .join("\n");
+    expect(without).not.toContain("deep_search");
+
+    const withDeep = buildAgenticResearchMessages({
+      ...base,
+      activeSkills: { ...base.activeSkills, deepSearch: true },
+    })
+      .map((message) => message.content)
+      .join("\n");
+    expect(withDeep).toContain("Deep research (deep_search)");
+    expect(withDeep).toContain("When to prefer deep_search");
+  });
+
   it("injects Core-Research skill when coreVariant is research", () => {
     const messages = buildAgenticResearchMessages({
       question: "Q",
@@ -45,6 +73,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -64,6 +93,7 @@ describe("agentic research prompts", () => {
         coreVariant: "vault",
         index: false,
         web: false,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -82,6 +112,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         indexDescription: "My personal knowledge base",
         noteMutationAccess: false,
       },
@@ -100,6 +131,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -115,6 +147,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: false,
         web: true,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -131,6 +164,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -146,6 +180,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: false,
         web: false,
+        deepSearch: false,
         noteMutationAccess: true,
       },
     });
@@ -164,6 +199,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         noteMutationAccess: false,
       },
     });
@@ -180,6 +216,7 @@ describe("agentic research prompts", () => {
         coreVariant: "vault",
         index: false,
         web: false,
+        deepSearch: false,
         noteMutationAccess: true,
       },
     });
@@ -197,6 +234,7 @@ describe("agentic research prompts", () => {
         coreVariant: "research",
         index: true,
         web: false,
+        deepSearch: false,
         indexDescription: "<script>alert(1)</script>",
         noteMutationAccess: false,
       },

@@ -703,6 +703,26 @@ export class IxplorerSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Links returned per web search")
+      .setDesc(
+        "How many result links each DuckDuckGo query returns. Higher values give deep research more sources but cost more requests.",
+      )
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.inputEl.max = "50";
+        text.setValue(String(this.plugin.settings.duckDuckGoResultLimit));
+        text.onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isInteger(parsed)) {
+            return;
+          }
+          this.plugin.settings.duckDuckGoResultLimit = Math.max(1, Math.min(50, parsed));
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
       .setName("Use web for freshness questions")
       .setDesc(
         "Give web evidence more budget when a question asks for current, latest, price, or release information.",

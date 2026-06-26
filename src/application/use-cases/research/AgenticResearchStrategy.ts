@@ -5,6 +5,12 @@ import { RetrievedChunk, SourceReference } from "../../../core/model/source";
 import { estimateTextTokens, extractFollowUpQuestions } from "../../../core/research/prompts";
 import { buildAgenticResearchMessages } from "../../../core/research/agenticPrompts";
 import { ResearchStreamEvent } from "../../contracts/research";
+import { ToolEvent } from "../../../core/agent/tool";
+import {
+  DEEP_RESEARCH_PHASE,
+  DEEP_RESEARCH_TOOL_END,
+  DEEP_RESEARCH_TOOL_START,
+} from "../../research/deepResearchPort";
 import { createAsyncEventChannel } from "../../AsyncEventChannel";
 import { AgenticResearchRunner, AgenticResearchFailure } from "../AgenticResearchRunner";
 import {
@@ -13,7 +19,12 @@ import {
   ResearchStrategyDeps,
   ResearchStrategyOutcome,
 } from "./ResearchStrategy";
-import { citationIdsFromText, dedupeEvidence, mergeCitations } from "./citations";
+import {
+  dedupeEvidence,
+  mergeCitations,
+  resolveCitationTokens,
+  webUrlEvidenceIndex,
+} from "./citations";
 import { agenticBudgets, createEmptyContextDiagnostics } from "./ResearchDiagnostics";
 
 interface AgenticRunResult {
@@ -121,16 +132,23 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       noteTools: this.deps.noteTools,
       retriever: this.deps.retriever,
       searchProvider: this.deps.searchProvider,
+      deepResearchRunner: this.deps.deepResearchRunner,
     });
+    // When the user wrote @deep_search, compel at least one deep_search call.
+    const effectivePolicy =
+      request.forceDeepSearch === true && created.tools.has("deep_search")
+        ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, "deep_search"]) }
+        : policy;
     const messages = buildAgenticResearchMessages({
       question,
       chatHistory: request.chatHistory,
-      requiredTools: policy.requiredTools,
+      requiredTools: effectivePolicy.requiredTools,
       explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
       activeSkills: {
         coreVariant: searchMode === "none" ? "vault" : "research",
         index: searchMode === "indexOnly" || searchMode === "indexAndWeb",
         web: searchMode === "webOnly" || searchMode === "indexAndWeb",
+        deepSearch: created.tools.has("deep_search"),
         indexDescription: indexDescription?.text,
         noteMutationAccess: this.deps.noteTools?.mutationEnabled() === true,
       },
@@ -148,7 +166,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
         model: this.deps.chatModelName,
         messages,
         tools: created.tools,
-        policy,
+        policy: effectivePolicy,
         temperature: this.deps.chatOptions.temperature,
         maxTokens: this.deps.chatOptions.maxTokens,
         reasoning: this.deps.reasoning,
@@ -186,6 +204,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
             resultSummary,
             resultJson,
           }),
+        onToolEvent: (callId, event) => emitNestedDeepResearchEvent(onEvent, callId, event),
       }).run();
     }
     const snapshot = created.evidence.snapshot();
@@ -195,9 +214,15 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       explicitEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
       [...snapshot.citations],
     );
-    const citedIds = result.ok ? citationIdsFromText(result.answerText) : new Set<string>();
+    const urlToEvidenceId = webUrlEvidenceIndex(evidence);
+    const { ids: citedIds, unresolvedUrls } = result.ok
+      ? resolveCitationTokens(result.answerText, urlToEvidenceId)
+      : { ids: new Set<string>(), unresolvedUrls: [] };
     const knownIds = new Set(evidence.map((chunk) => chunk.id));
-    const unknownCitationIds = [...citedIds].filter((id) => !knownIds.has(id));
+    const unknownCitationIds = [
+      ...[...citedIds].filter((id) => !knownIds.has(id)),
+      ...unresolvedUrls,
+    ];
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
       assembled?.diagnostics ??
@@ -216,7 +241,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
     diagnostics.tools = result.diagnostics;
     diagnostics.agentic = {
       policyReason: policy.reason,
-      requiredTools: [...policy.requiredTools],
+      requiredTools: [...effectivePolicy.requiredTools],
       bootstrapChoice: policy.bootstrapChoice,
       satisfiedTools: result.satisfiedTools,
       repairedTools: result.repairedTools,
@@ -258,6 +283,45 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       answer,
       diagnostics: request.includeContextDiagnostics ? diagnostics : undefined,
     };
+  }
+}
+
+/**
+ * Maps a deep_search sub-agent's progress (emitted via the tool's `emit`) into
+ * nested research-stream events tagged with the parent deep_search call id, so the
+ * UI can render the session's live work under its cell. Inner tool-call ids are
+ * namespaced by the parent id to stay unique across parallel sessions.
+ */
+function emitNestedDeepResearchEvent(
+  onEvent: (event: ResearchStreamEvent) => void,
+  parentId: string,
+  event: ToolEvent,
+): void {
+  const data = event.data ?? {};
+  if (event.type === DEEP_RESEARCH_PHASE) {
+    onEvent({ type: "deep-research-phase", parentId, phase: event.message ?? "" });
+    return;
+  }
+  if (event.type === DEEP_RESEARCH_TOOL_START) {
+    onEvent({
+      type: "tool-call-start",
+      parentId,
+      id: `${parentId}:${String(data.id ?? "")}`,
+      name: String(data.name ?? ""),
+      label: String(data.label ?? data.name ?? ""),
+      round: typeof data.round === "number" ? data.round : 0,
+    });
+    return;
+  }
+  if (event.type === DEEP_RESEARCH_TOOL_END) {
+    onEvent({
+      type: "tool-call-end",
+      parentId,
+      id: `${parentId}:${String(data.id ?? "")}`,
+      ok: data.ok === true,
+      resolvedLabel: typeof data.resolvedLabel === "string" ? data.resolvedLabel : undefined,
+      resultSummary: typeof data.resultSummary === "string" ? data.resultSummary : undefined,
+    });
   }
 }
 

@@ -117,7 +117,6 @@ export function createDefaultChatSettings(services: ChatSettingsServices): Saved
     ),
     searchMode: "indexOnly",
     contextMode: "include",
-    deepResearch: false,
   };
 }
 
@@ -140,6 +139,5 @@ export function resolveChatSettings(
     ),
     searchMode: settings?.searchMode ?? defaults.searchMode,
     contextMode: settings?.contextMode ?? defaults.contextMode,
-    deepResearch: settings?.deepResearch ?? defaults.deepResearch,
   };
 }

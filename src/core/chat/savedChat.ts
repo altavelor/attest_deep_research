@@ -17,7 +17,6 @@ export interface SavedChatSettings {
   indexProfileId?: string;
   searchMode: ResearchSearchMode;
   contextMode?: ContextMode;
-  deepResearch?: boolean;
 }
 
 export interface ExpandedCitationContext {
@@ -114,7 +113,6 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
       settings.searchMode === "webOnly") &&
     (settings.contextMode === undefined ||
       settings.contextMode === "include" ||
-      settings.contextMode === "filter") &&
-    (settings.deepResearch === undefined || typeof settings.deepResearch === "boolean")
+      settings.contextMode === "filter")
   );
 }

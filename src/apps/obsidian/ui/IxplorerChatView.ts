@@ -12,7 +12,7 @@ import { RetrievedChunk } from "../../../core/model/source";
 import { AnswerNoteWriter } from "./AnswerNoteWriter";
 import {
   ChatComposerRefs,
-  getResearchSearchMode,
+  ComposerControls,
   IndexProfileSelectOption,
   renderAttachedContext as renderComposerAttachedContext,
   renderChatComposer,
@@ -103,13 +103,10 @@ export class IxplorerChatView extends ItemView {
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
   private contextIndicatorEl: HTMLElement | null = null;
-  private modelInputEl: HTMLSelectElement | null = null;
-  private indexInputEl: HTMLSelectElement | null = null;
   private submitButtonEl: HTMLButtonElement | null = null;
   private submitButtonTooltipEl: HTMLElement | null = null;
-  private searchModeEl: HTMLSelectElement | null = null;
-  private deepResearchEl: HTMLInputElement | null = null;
   private attachedContextEl: HTMLElement | null = null;
+  private composerControls: ComposerControls | null = null;
   private composerRefs: ChatComposerRefs | null = null;
   private historyPopoverEl: HTMLElement | null = null;
   private historyPopoverAnchorEl: HTMLElement | null = null;
@@ -146,7 +143,7 @@ export class IxplorerChatView extends ItemView {
       setLastAnswer: (answer) => {
         this.lastAnswer = answer;
       },
-      getModelInputValue: () => this.modelInputEl?.value ?? "",
+      getModelInputValue: () => this.composerControls?.getModel() ?? "",
       getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
       getCurrentModelLabel: () => this.services.getChatModel(),
       getContextLimitTokens: () => this.getContextLimitTokens(),
@@ -171,7 +168,6 @@ export class IxplorerChatView extends ItemView {
         await this.saveCurrentChat();
         this.renderAnswerDetails();
       },
-      isDeepResearchEnabled: () => this.isDeepResearchEnabled(),
       getContextPaths: () => this.attachedContextPaths,
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
@@ -281,22 +277,16 @@ export class IxplorerChatView extends ItemView {
       onUpdateSearchMode: (searchMode) => {
         void this.updateSearchMode(searchMode);
         this.updateSubmitAvailability();
-        this.updateDeepResearchAvailability();
       },
-      onUpdateDeepResearch: (deepResearch) => void this.updateDeepResearch(deepResearch),
     });
     this.progressStatusEl = this.composerRefs.progressStatusEl;
     this.contextIndicatorEl = this.composerRefs.contextIndicatorEl;
     this.textareaEl = this.composerRefs.textareaEl;
-    this.modelInputEl = this.composerRefs.modelInputEl;
-    this.indexInputEl = this.composerRefs.indexInputEl;
     this.submitButtonTooltipEl = this.composerRefs.submitButtonTooltipEl;
     this.submitButtonEl = this.composerRefs.submitButtonEl;
-    this.searchModeEl = this.composerRefs.searchModeEl;
-    this.deepResearchEl = this.composerRefs.deepResearchEl;
     this.attachedContextEl = this.composerRefs.attachedContextEl;
+    this.composerControls = this.composerRefs.controls;
     this.renderAttachedContext();
-    this.updateDeepResearchAvailability();
     this.updateSubmitAvailability();
 
     const indexSearchRoot = root.createDiv({
@@ -376,6 +366,7 @@ export class IxplorerChatView extends ItemView {
       this.renderAttachedContext();
       void this.saveCurrentChat();
     });
+    this.composerControls?.setAttachmentsPresent(this.attachedContextPaths.length > 0);
   }
 
   private renderMessages(): void {
@@ -617,11 +608,8 @@ export class IxplorerChatView extends ItemView {
       ...this.currentChatSettings,
       chatModelProfileId: normalizedModel,
     };
-    if (
-      this.modelInputEl &&
-      this.modelInputEl.value !== this.currentChatSettings.chatModelProfileId
-    ) {
-      this.modelInputEl.value = this.currentChatSettings.chatModelProfileId;
+    if (this.composerControls?.getModel() !== this.currentChatSettings.chatModelProfileId) {
+      this.composerControls?.setModel(this.currentChatSettings.chatModelProfileId);
     }
     await this.saveCurrentChat();
     this.renderMessages();
@@ -635,8 +623,8 @@ export class IxplorerChatView extends ItemView {
       ...this.currentChatSettings,
       indexProfileId: normalizedIndex,
     };
-    if (this.indexInputEl && this.indexInputEl.value !== this.currentChatSettings.indexProfileId) {
-      this.indexInputEl.value = this.currentChatSettings.indexProfileId ?? "";
+    if (this.composerControls?.getIndexProfileId() !== this.currentChatSettings.indexProfileId) {
+      this.composerControls?.setIndexProfileId(this.currentChatSettings.indexProfileId ?? "");
     }
     await this.saveCurrentChat();
   }
@@ -651,11 +639,6 @@ export class IxplorerChatView extends ItemView {
 
   private async updateSearchMode(searchMode: ResearchSearchMode): Promise<void> {
     this.currentChatSettings = { ...this.currentChatSettings, searchMode };
-    await this.saveCurrentChat();
-  }
-
-  private async updateDeepResearch(deepResearch: boolean): Promise<void> {
-    this.currentChatSettings = { ...this.currentChatSettings, deepResearch };
     await this.saveCurrentChat();
   }
 
@@ -692,45 +675,13 @@ export class IxplorerChatView extends ItemView {
       this.textareaEl.disabled = running;
     }
 
-    if (this.modelInputEl) {
-      this.modelInputEl.disabled = running;
-    }
-
-    if (this.indexInputEl) {
-      this.indexInputEl.disabled = running;
-    }
-
-    if (this.searchModeEl) {
-      this.searchModeEl.disabled = running;
-    }
-
-    if (this.deepResearchEl) {
-      this.deepResearchEl.disabled =
-        running || this.getSearchMode() === "indexOnly" || this.getSearchMode() === "none";
-    }
+    this.composerControls?.setDisabled(running);
 
     this.updateSubmitAvailability();
   }
 
   private getSearchMode(): ResearchSearchMode {
-    return getResearchSearchMode(this.searchModeEl?.value);
-  }
-
-  private isDeepResearchEnabled(): boolean {
-    return (
-      this.getSearchMode() !== "indexOnly" &&
-      this.getSearchMode() !== "none" &&
-      this.deepResearchEl?.checked === true
-    );
-  }
-
-  private updateDeepResearchAvailability(): void {
-    if (!this.deepResearchEl) {
-      return;
-    }
-
-    this.deepResearchEl.disabled =
-      this.isRunning || this.getSearchMode() === "indexOnly" || this.getSearchMode() === "none";
+    return this.composerControls?.getSearchMode() ?? "indexOnly";
   }
 
   private updateSubmitAvailability(): void {
