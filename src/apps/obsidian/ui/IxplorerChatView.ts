@@ -6,8 +6,6 @@ import { IndexingState } from "../../../adapters/indexing/IndexingService";
 import { estimateResearchRequestTokens } from "../../../core/research/prompts";
 import { ResearchService } from "../../../application/use-cases/ResearchService";
 import type { ResearchSearchMode } from "../../../application/use-cases/ResearchService";
-import { toUserMessage } from "../../../core/errors";
-import { parsePositiveInteger } from "../../../shared/numbers";
 import { ResearchAnswer } from "../../../core/answer";
 import { Citation } from "../../../core/model/citation";
 import { RetrievedChunk } from "../../../core/model/source";
@@ -31,13 +29,15 @@ import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citationFormatting";
 import { DiagnosticReportModalController } from "./DiagnosticReportModal";
 import { ContextDocumentPickerModal, isContextDocumentPath } from "./ContextDocumentPickerModal";
-import { IndexControlActions, renderIndexControl } from "./IndexControl";
-import {
-  IndexSearchPanelRefs,
-  renderIndexSearchPanel,
-  renderIndexSearchResults,
-} from "./IndexSearchPanel";
+import { IndexControlActions } from "./IndexControl";
+import { IndexSearchController, IndexSearchOptions } from "./IndexSearchController";
 import { ResearchQuestionController } from "./ResearchQuestionController";
+import {
+  createDefaultChatSettings,
+  resolveChatSettings,
+  stripContextDiagnostics,
+  uniqueChunks,
+} from "./chatViewHelpers";
 import { ChatDisplayMessage, stripMessageDiagnostics } from "../../../core/conversation";
 import { citationTarget } from "./conversationFormatting";
 import {
@@ -47,6 +47,8 @@ import {
 } from "./SavedChatsPanel";
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
+
+export type { IndexSearchOptions };
 
 export interface IxplorerChatViewServices {
   createResearchService(chatModelProfileId?: string, indexProfileId?: string): ResearchService;
@@ -75,20 +77,13 @@ export interface IxplorerChatViewServices {
   setChatIndexControlShown(shown: boolean): Promise<void>;
 }
 
-export interface IndexSearchOptions {
-  profileId: string;
-  query: string;
-  limit: number;
-  minScore?: number;
-  extension?: string;
-}
-
 export class IxplorerChatView extends ItemView {
   private readonly services: IxplorerChatViewServices;
   private readonly citationPopover: CitationPopoverController;
   private readonly diagnosticModal: DiagnosticReportModalController;
   private readonly answerNoteWriter: AnswerNoteWriter;
   private readonly researchController: ResearchQuestionController;
+  private readonly indexSearch: IndexSearchController;
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
   private attachedContextPaths: string[] = [];
@@ -99,14 +94,10 @@ export class IxplorerChatView extends ItemView {
   private savedChatSummaries: SavedChatSummary[] = [];
   private historySearchQuery = "";
   private activePanel: IxplorerPanel = "chat";
-  private indexSearchResults: RetrievedChunk[] = [];
-  private indexSearchError: string | null = null;
-  private isSearchingIndex = false;
   private isRunning = false;
   private editingMessageIndex: number | null = null;
 
   private transcriptEl: HTMLElement | null = null;
-  private indexControlEl: HTMLElement | null = null;
   private answerActionsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
@@ -120,9 +111,6 @@ export class IxplorerChatView extends ItemView {
   private deepResearchEl: HTMLInputElement | null = null;
   private attachedContextEl: HTMLElement | null = null;
   private composerRefs: ChatComposerRefs | null = null;
-  private indexSearchRootEl: HTMLElement | null = null;
-  private indexSearchRefs: IndexSearchPanelRefs | null = null;
-  private indexSearchResultsEl: HTMLElement | null = null;
   private historyPopoverEl: HTMLElement | null = null;
   private historyPopoverAnchorEl: HTMLElement | null = null;
   private activeMessageRenderFrame: number | null = null;
@@ -197,9 +185,20 @@ export class IxplorerChatView extends ItemView {
       renderMessages: () => this.renderMessages(),
       renderActiveMessage: () => this.scheduleActiveMessageRender(),
       renderAnswerDetails: () => this.renderAnswerDetails(),
-      renderIndexControl: () => this.renderIndexControl(),
+      renderIndexControl: () => this.indexSearch.renderIndexControl(),
     });
-    this.currentChatSettings = this.createDefaultChatSettings();
+    this.indexSearch = new IndexSearchController({
+      getIndexProfiles: () => this.services.getIndexProfiles(),
+      getSelectedIndexProfileId: () => this.currentChatSettings.indexProfileId ?? "",
+      getActivePanel: () => this.activePanel,
+      getIndexingState: this.services.getIndexingState
+        ? (indexProfileId) => this.services.getIndexingState?.(indexProfileId)
+        : undefined,
+      indexingActions: this.services.indexingActions,
+      searchIndex: (options) => this.services.searchIndex(options),
+      onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
+    });
+    this.currentChatSettings = createDefaultChatSettings(this.services);
   }
 
   getViewType(): string {
@@ -300,17 +299,17 @@ export class IxplorerChatView extends ItemView {
     this.updateDeepResearchAvailability();
     this.updateSubmitAvailability();
 
-    this.indexSearchRootEl = root.createDiv({
+    const indexSearchRoot = root.createDiv({
       cls: `ixplorer-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
     });
-    this.renderIndexSearchPanel();
+    this.indexSearch.render(indexSearchRoot);
 
     this.unsubscribeIndexing?.();
     this.unsubscribeIndexing =
       this.services.subscribeToIndexingState?.(this.currentChatSettings.indexProfileId, () => {
-        this.renderIndexControl();
+        this.indexSearch.renderIndexControl();
       }) ?? null;
-    this.renderIndexControl();
+    this.indexSearch.renderIndexControl();
     this.renderMessages();
     this.renderAnswerDetails();
   }
@@ -340,7 +339,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = null;
     this.attachedContextPaths = [];
     this.expandedCitationContexts = [];
-    this.currentChatSettings = this.createDefaultChatSettings();
+    this.currentChatSettings = createDefaultChatSettings(this.services);
     this.currentChatId = null;
     this.currentChatCreatedAt = null;
     this.editingMessageIndex = null;
@@ -376,29 +375,6 @@ export class IxplorerChatView extends ItemView {
       );
       this.renderAttachedContext();
       void this.saveCurrentChat();
-    });
-  }
-
-  private renderIndexControl(): void {
-    if (!this.indexControlEl) {
-      return;
-    }
-
-    if (this.activePanel !== "indexSearch") {
-      this.indexControlEl.empty();
-      return;
-    }
-
-    renderIndexControl(this.indexControlEl, {
-      compact: true,
-      profileId: this.indexSearchRefs?.profileEl.value,
-      state: this.services.getIndexingState?.(this.indexSearchRefs?.profileEl.value),
-      actions: this.services.indexingActions ?? {
-        start: () => undefined,
-        pause: () => undefined,
-        resume: () => undefined,
-        rebuild: () => undefined,
-      },
     });
   }
 
@@ -488,40 +464,6 @@ export class IxplorerChatView extends ItemView {
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
       onRenameChat: (id, title) => this.renameSavedChat(id, title),
       onDeleteChat: (id) => this.deleteSavedChat(id),
-    });
-  }
-
-  private renderIndexSearchPanel(): void {
-    if (!this.indexSearchRootEl) {
-      return;
-    }
-
-    const refs = renderIndexSearchPanel(this.indexSearchRootEl, {
-      profiles: this.services.getIndexProfiles(),
-      selectedProfileId: this.currentChatSettings.indexProfileId,
-      results: this.indexSearchResults,
-      error: this.indexSearchError,
-      isSearching: this.isSearchingIndex,
-      onSubmit: () => void this.submitIndexSearch(),
-      onProfileChange: () => this.renderIndexControl(),
-      onOpenResult: (chunk) => void this.openRetrievedChunk(chunk),
-    });
-    this.indexSearchRefs = refs;
-    this.indexControlEl = refs.indexControlEl;
-    this.indexSearchResultsEl = refs.resultsEl;
-    this.renderIndexControl();
-  }
-
-  private renderIndexSearchResults(): void {
-    if (!this.indexSearchResultsEl) {
-      return;
-    }
-
-    renderIndexSearchResults(this.indexSearchResultsEl, {
-      results: this.indexSearchResults,
-      error: this.indexSearchError,
-      isSearching: this.isSearchingIndex,
-      onOpenResult: (chunk) => void this.openRetrievedChunk(chunk),
     });
   }
 
@@ -634,7 +576,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
     this.expandedCitationContexts = [...(chat.expandedCitationContexts ?? [])];
-    this.currentChatSettings = this.resolveChatSettings(chat.chatSettings);
+    this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
     await this.refreshSavedChatSummaries();
@@ -670,7 +612,7 @@ export class IxplorerChatView extends ItemView {
   }
 
   private async updateChatModel(model: string): Promise<void> {
-    const normalizedModel = model.trim() || this.createDefaultChatSettings().chatModelProfileId;
+    const normalizedModel = model.trim() || createDefaultChatSettings(this.services).chatModelProfileId;
     this.currentChatSettings = {
       ...this.currentChatSettings,
       chatModelProfileId: normalizedModel,
@@ -688,7 +630,7 @@ export class IxplorerChatView extends ItemView {
 
   private async updateIndexProfile(indexProfileId: string): Promise<void> {
     const normalizedIndex =
-      indexProfileId.trim() || (this.createDefaultChatSettings().indexProfileId ?? "");
+      indexProfileId.trim() || (createDefaultChatSettings(this.services).indexProfileId ?? "");
     this.currentChatSettings = {
       ...this.currentChatSettings,
       indexProfileId: normalizedIndex,
@@ -717,45 +659,6 @@ export class IxplorerChatView extends ItemView {
     await this.saveCurrentChat();
   }
 
-  private createDefaultChatSettings(): SavedChatSettings {
-    const indexProfiles = this.services.getIndexProfiles();
-    return {
-      chatModelProfileId: resolveAvailableChatModelProfileId(
-        this.services.getChatModelProfiles(),
-        this.services.getDefaultChatModelProfileId(),
-        "",
-      ),
-      indexProfileId: resolveAvailableIndexProfileId(
-        indexProfiles,
-        this.services.getDefaultIndexProfileId(),
-        indexProfiles.find((profile) => !profile.isSuspended)?.id ?? "",
-      ),
-      searchMode: "indexOnly",
-      contextMode: "include",
-      deepResearch: false,
-    };
-  }
-
-  private resolveChatSettings(settings: SavedChatSettings | undefined): SavedChatSettings {
-    const defaults = this.createDefaultChatSettings();
-
-    return {
-      chatModelProfileId: resolveAvailableChatModelProfileId(
-        this.services.getChatModelProfiles(),
-        settings?.chatModelProfileId,
-        defaults.chatModelProfileId,
-      ),
-      indexProfileId: resolveAvailableIndexProfileId(
-        this.services.getIndexProfiles(),
-        settings?.indexProfileId,
-        defaults.indexProfileId ?? "",
-      ),
-      searchMode: settings?.searchMode ?? defaults.searchMode,
-      contextMode: settings?.contextMode ?? defaults.contextMode,
-      deepResearch: settings?.deepResearch ?? defaults.deepResearch,
-    };
-  }
-
   private updateStoppingState(): void {
     if (!this.isRunning) {
       return;
@@ -766,53 +669,6 @@ export class IxplorerChatView extends ItemView {
       this.submitButtonEl.dataset.mode = "stop";
       this.submitButtonEl.empty();
       setIcon(this.submitButtonEl, "loader");
-    }
-  }
-
-  private async submitIndexSearch(): Promise<void> {
-    const query = this.indexSearchRefs?.queryEl.value.trim() ?? "";
-
-    if (!query || this.isSearchingIndex) {
-      return;
-    }
-
-    this.isSearchingIndex = true;
-    this.indexSearchError = null;
-    this.indexSearchResults = [];
-    this.setIndexSearchDisabled(true);
-    this.renderIndexSearchResults();
-
-    try {
-      this.indexSearchResults = await this.services.searchIndex({
-        profileId:
-          this.indexSearchRefs?.profileEl.value ?? this.services.getIndexProfiles()[0]?.id ?? "",
-        query,
-        limit: readPositiveInteger(this.indexSearchRefs?.topKEl.value, 5),
-        minScore: readOptionalNumber(this.indexSearchRefs?.minScoreEl.value),
-        extension: normalizeExtensionFilter(this.indexSearchRefs?.extensionEl.value ?? ""),
-      });
-    } catch (error) {
-      this.indexSearchError = toUserMessage(error);
-      new Notice(toUserMessage(error));
-    } finally {
-      this.isSearchingIndex = false;
-      this.setIndexSearchDisabled(false);
-      this.renderIndexSearchResults();
-    }
-  }
-
-  private setIndexSearchDisabled(disabled: boolean): void {
-    for (const element of [
-      this.indexSearchRefs?.profileEl,
-      this.indexSearchRefs?.queryEl,
-      this.indexSearchRefs?.topKEl,
-      this.indexSearchRefs?.minScoreEl,
-      this.indexSearchRefs?.extensionEl,
-      this.indexSearchRefs?.buttonEl,
-    ]) {
-      if (element) {
-        element.disabled = disabled;
-      }
     }
   }
 
@@ -1085,94 +941,4 @@ export class IxplorerChatView extends ItemView {
 
     await this.answerNoteWriter.appendAnswerToActiveNote(this.lastAnswer);
   }
-}
-
-function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
-  if (!answer?.contextDiagnostics) {
-    return answer;
-  }
-
-  const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
-  return rest;
-}
-
-function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
-  const seen = new Set<string>();
-  const unique: RetrievedChunk[] = [];
-
-  for (const chunk of chunks) {
-    if (seen.has(chunk.id)) {
-      continue;
-    }
-
-    seen.add(chunk.id);
-    unique.push(chunk);
-  }
-
-  return unique;
-}
-
-function readPositiveInteger(value: string | undefined, fallback: number): number {
-  return parsePositiveInteger(value) ?? fallback;
-}
-
-function readOptionalNumber(value: string | undefined): number | undefined {
-  if (value === undefined || value.trim() === "") {
-    return undefined;
-  }
-
-  const parsed = Number.parseFloat(value.replace(",", "."));
-
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function resolveAvailableChatModelProfileId(
-  profiles: ChatModelSelectOption[],
-  requestedId: string | undefined,
-  fallbackId: string,
-): string {
-  if (
-    requestedId &&
-    profiles.some((profile) => profile.id === requestedId && !profile.isSuspended)
-  ) {
-    return requestedId;
-  }
-
-  if (fallbackId && profiles.some((profile) => profile.id === fallbackId && !profile.isSuspended)) {
-    return fallbackId;
-  }
-
-  return profiles.find((profile) => !profile.isSuspended)?.id ?? "";
-}
-
-function resolveAvailableIndexProfileId(
-  profiles: IndexProfileSelectOption[],
-  requestedId: string | undefined,
-  fallbackId: string,
-): string {
-  if (
-    requestedId &&
-    profiles.some(
-      (profile) => profile.id === requestedId && !profile.isSuspended && profile.isIndexed,
-    )
-  ) {
-    return requestedId;
-  }
-
-  if (
-    fallbackId &&
-    profiles.some(
-      (profile) => profile.id === fallbackId && !profile.isSuspended && profile.isIndexed,
-    )
-  ) {
-    return fallbackId;
-  }
-
-  return profiles.find((profile) => !profile.isSuspended && profile.isIndexed)?.id ?? "";
-}
-
-function normalizeExtensionFilter(value: string): string | undefined {
-  const normalized = value.trim().replace(/^\./, "").toLowerCase();
-
-  return normalized || undefined;
 }
