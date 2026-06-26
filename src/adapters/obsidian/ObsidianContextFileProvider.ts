@@ -1,7 +1,7 @@
 import { TFile, Vault } from "obsidian";
+import { ContextFileProvider } from "../../application/ports/vault";
 
 import { normalizeVaultPath, isSupportedContextDocumentPath } from "../../shared/pathFilters";
-import { ContextFileProvider } from "../../research/ContextAssembler";
 
 export class ObsidianContextFileProvider implements ContextFileProvider {
   constructor(private readonly vault: Vault) { }

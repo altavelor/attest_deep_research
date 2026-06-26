@@ -1,4 +1,4 @@
-import { InlineReasoningParser } from "../../src/client/chat/InlineReasoningParser";
+import { InlineReasoningParser } from "../../src/adapters/model-provider/chat/InlineReasoningParser";
 
 function parse(chunks: string[]): Array<{ type: string; text?: string }> {
   const parser = new InlineReasoningParser();

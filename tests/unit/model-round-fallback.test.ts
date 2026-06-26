@@ -1,6 +1,6 @@
-import { FallbackModelRoundProvider } from "../../src/client/chat/FallbackModelRoundProvider";
-import { IxplorerError } from "../../src/shared/errors";
-import { ModelRoundProvider } from "../../src/shared/types";
+import { FallbackModelRoundProvider } from "../../src/adapters/model-provider/chat/FallbackModelRoundProvider";
+import { IxplorerError } from "../../src/core/errors";
+import { ModelRoundProvider } from "../../src/core/agent/protocol";
 
 function provider(runRound: ModelRoundProvider["runRound"]): ModelRoundProvider {
   return { listModels: async () => ["m"], runRound };

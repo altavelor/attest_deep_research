@@ -40,8 +40,42 @@ export interface ToolError {
 // discovers and dispatches them. Adding a capability = implement Tool + register;
 // the loop/core never changes.
 
+/** Progress/streaming event a tool can surface mid-execution (forwarded by the caller). */
+export interface ToolEvent {
+  type: string;
+  message?: string;
+  data?: Record<string, unknown>;
+}
+
 export interface ToolContext {
   callId: string;
+  /** Cancellation for long-running tools (e.g. web fetch); honoured by the tool. */
+  signal: AbortSignal;
+  /** Surface progress out of the tool; the dispatcher decides where it goes. */
+  emit(event: ToolEvent): void;
+}
+
+/** What a dispatcher (loop / runner) optionally supplies when executing a tool. */
+export interface ToolDispatchContext {
+  signal?: AbortSignal;
+  emit?: (event: ToolEvent) => void;
+}
+
+// A signal that never aborts, for callers that don't supply one. Cast keeps this
+// platform-neutral: core only relies on the minimal AbortSignal surface.
+const NEVER_ABORT_SIGNAL = {
+  aborted: false,
+  addEventListener() {},
+  removeEventListener() {},
+} as unknown as AbortSignal;
+const NOOP_EMIT = (): void => {};
+
+function resolveToolContext(callId: string, context: ToolDispatchContext): ToolContext {
+  return {
+    callId,
+    signal: context.signal ?? NEVER_ABORT_SIGNAL,
+    emit: context.emit ?? NOOP_EMIT,
+  };
 }
 
 export type ToolParseResult<T> = { ok: true; value: T } | { ok: false; error: ToolError };
@@ -59,6 +93,7 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
 export async function executeTool<TInput, TOutput>(
   handler: Tool<TInput, TOutput>,
   call: ChatToolCall,
+  context: ToolDispatchContext = {},
 ): Promise<ToolExecution<TOutput>> {
   if (call.name !== handler.definition.function.name) {
     return toolFailure(
@@ -72,7 +107,7 @@ export async function executeTool<TInput, TOutput>(
     return parsed;
   }
 
-  return handler.execute(parsed.value, { callId: call.id });
+  return handler.execute(parsed.value, resolveToolContext(call.id, context));
 }
 
 export function toolFailure(
@@ -131,11 +166,14 @@ export class ToolManager {
     return Array.from(this.handlers.values(), (handler) => handler.definition);
   }
 
-  async execute(call: ChatToolCall): Promise<ToolExecution<unknown>> {
+  async execute(
+    call: ChatToolCall,
+    context: ToolDispatchContext = {},
+  ): Promise<ToolExecution<unknown>> {
     const handler = this.handlers.get(call.name);
     if (!handler) {
       return toolFailure("unknown-tool", `Unknown or unavailable tool: ${call.name}.`);
     }
-    return executeTool(handler, call);
+    return executeTool(handler, call, context);
   }
 }

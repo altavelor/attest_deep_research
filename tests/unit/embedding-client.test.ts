@@ -1,5 +1,5 @@
-import { EmbeddingClient } from "../../src/client/embeddings/EmbeddingClient";
-import { IxplorerError } from "../../src/shared/errors";
+import { EmbeddingClient } from "../../src/adapters/model-provider/embeddings/EmbeddingClient";
+import { IxplorerError } from "../../src/core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {

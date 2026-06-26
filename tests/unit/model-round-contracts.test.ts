@@ -1,11 +1,6 @@
-import type {
-  ChatRequest,
-  ChatToolChoice,
-  ModelRoundProvider,
-  ModelRoundResult,
-  ToolCallingCapabilities,
-} from "../../src/shared/types";
-import { ChatCompletionsRoundAdapter } from "../../src/client/chat/ChatCompletionsRoundAdapter";
+import type { ChatRequest, ModelRoundProvider, ModelRoundResult } from "../../src/core/agent/protocol";
+import type { ChatToolChoice, ToolCallingCapabilities } from "../../src/core/agent/tool";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
 
 describe("future model-round contracts", () => {
   it("represents provider-neutral tool choice and ordered output without changing ChatRequest", () => {

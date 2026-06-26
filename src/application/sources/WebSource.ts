@@ -4,20 +4,20 @@
 import { Tool } from "../../core/agent/tool";
 import { SearchProvider } from "../ports/web";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { ResearchEvidenceRegistry } from "../../research/tools/ResearchEvidenceRegistry";
-import { WebSearchResearchTool } from "../../research/tools/WebSearchResearchTool";
-import { WebFetchResearchTool } from "../../research/tools/WebFetchResearchTool";
+import { EvidenceRegistry } from "./evidence";
+import { WebSearchResearchTool } from "./tools/WebSearchResearchTool";
+import { WebFetchResearchTool } from "./tools/WebFetchResearchTool";
 
 export interface WebSourceOptions {
   provider: SearchProvider;
-  evidence: ResearchEvidenceRegistry;
+  evidence: EvidenceRegistry;
   available?: boolean;
 }
 
 export class WebSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
   private readonly provider: SearchProvider;
-  private readonly evidence: ResearchEvidenceRegistry;
+  private readonly evidence: EvidenceRegistry;
 
   constructor(options: WebSourceOptions) {
     this.provider = options.provider;

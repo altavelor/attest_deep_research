@@ -1,4 +1,4 @@
-import { ResearchEvidenceRegistry } from "../../src/research/tools/ResearchEvidenceRegistry";
+import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { markdownSource, retrieved } from "../helpers/factories";
 
 describe("ResearchEvidenceRegistry", () => {

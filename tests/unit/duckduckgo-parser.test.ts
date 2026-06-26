@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { extractReadableText, parseDuckDuckGoResults } from "../../src/web/DuckDuckGoParser";
+import { extractReadableText, parseDuckDuckGoResults } from "../../src/adapters/web/DuckDuckGoParser";
 
 describe("DuckDuckGoParser", () => {
   it("parses block result fixtures with decoded redirect urls and cleaned text", () => {

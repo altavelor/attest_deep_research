@@ -1,9 +1,6 @@
 import { TFile, Vault } from "obsidian";
 
-import {
-  VaultFileProvider,
-  VaultFileSummary,
-} from "../../indexing/IndexingService";
+import { VaultFileProvider, VaultFileSummary } from "../../application/ports/vault";
 import { normalizeVaultPath, vaultPathMatchesGlob } from "../../shared/pathFilters";
 
 export class ObsidianVaultFileProvider implements VaultFileProvider {

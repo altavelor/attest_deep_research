@@ -1,5 +1,5 @@
-import { getMentionCandidates } from "../../src/ui/mentionAutocomplete";
-import { nextHorizontalWheelScrollLeft } from "../../src/ui/horizontalWheelScroll";
+import { getMentionCandidates } from "../../src/apps/obsidian/ui/mentionAutocomplete";
+import { nextHorizontalWheelScrollLeft } from "../../src/apps/obsidian/ui/horizontalWheelScroll";
 import { isSupportedContextDocumentPath } from "../../src/shared/pathFilters";
 
 describe("chat composer", () => {

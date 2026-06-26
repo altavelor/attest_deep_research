@@ -1,5 +1,5 @@
-import { applyNoteCitations, maxFootnoteNumber } from "../../src/research/tools/noteCitations";
-import { Citation } from "../../src/shared/types";
+import { applyNoteCitations, maxFootnoteNumber } from "../../src/adapters/research-tools/noteCitations";
+import { Citation } from "../../src/core/model/citation";
 
 const WEB_ID = "web:2ae04bc10163edbd0a7a2a54f16906c4b56a06af8da0df2ec44ca23e9b81abe5";
 

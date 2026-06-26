@@ -1,10 +1,10 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 
-import { DocxExtractor } from "../../src/extractors/DocxExtractor";
-import { EpubExtractor } from "../../src/extractors/EpubExtractor";
-import { Fb2Extractor } from "../../src/extractors/Fb2Extractor";
-import { TextExtractor } from "../../src/extractors/TextExtractor";
+import { DocxExtractor } from "../../src/adapters/extractors/DocxExtractor";
+import { EpubExtractor } from "../../src/adapters/extractors/EpubExtractor";
+import { Fb2Extractor } from "../../src/adapters/extractors/Fb2Extractor";
+import { TextExtractor } from "../../src/adapters/extractors/TextExtractor";
 
 const fixturesDir = join(__dirname, "../fixtures/documents");
 

@@ -1,4 +1,4 @@
-import { validatePublicWebUrl } from "../../src/web/WebUrlPolicy";
+import { validatePublicWebUrl } from "../../src/application/sources/WebUrlPolicy";
 
 describe("validatePublicWebUrl", () => {
   it.each([

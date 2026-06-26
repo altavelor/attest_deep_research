@@ -4,8 +4,8 @@ import {
   buildMinimalIndexDescription,
   resolveIndexDescriptionForPrompt,
   refreshIndexDescriptionAfterRun,
-} from "../../src/indexing/IndexDescription";
-import { createIndexProfile } from "../../src/settings/settings";
+} from "../../src/adapters/indexing/IndexDescription";
+import { createIndexProfile } from "../../src/adapters/settings/settings";
 
 const profile = createIndexProfile({
   id: "research",

@@ -1,4 +1,4 @@
-import { contextLengthFromModelMetadata } from "../../src/client/common/models";
+import { contextLengthFromModelMetadata } from "../../src/adapters/model-provider/common/models";
 
 describe("contextLengthFromModelMetadata", () => {
   it.each([

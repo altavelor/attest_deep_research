@@ -1,15 +1,9 @@
-import { AgenticResearchRunner } from "../../src/research/AgenticResearchRunner";
-import { ResearchExecutionPolicy } from "../../src/research/ResearchExecutionPolicy";
-import { ResearchToolRegistry } from "../../src/research/tools/ResearchToolRegistry";
-import { ResearchToolHandler } from "../../src/research/tools/ResearchTools";
-import {
-  ChatModelProvider,
-  ChatRequest,
-  ChatResponseChunk,
-  ModelRoundProvider,
-  ModelRoundRequest,
-  ProviderContinuationState,
-} from "../../src/shared/types";
+import { AgenticResearchRunner } from "../../src/application/use-cases/AgenticResearchRunner";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
+import { ResearchExecutionPolicy } from "../../src/core/research/ResearchExecutionPolicy";
+import { ToolManager } from "../../src/core/agent/tool";
+import { ResearchToolHandler } from "../../src/application/research/ResearchTools";
+import { ChatModelProvider, ChatRequest, ChatResponseChunk, ModelRoundProvider, ModelRoundRequest, ProviderContinuationState } from "../../src/core/agent/protocol";
 
 class ScriptedProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -79,11 +73,10 @@ describe("AgenticResearchRunner", () => {
       }),
     };
     const result = await new AgenticResearchRunner({
-      chatModel: new ScriptedProvider([]),
       modelRound: roundProvider,
       model: "m",
       messages: [{ role: "user", content: "q" }],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
 
@@ -113,11 +106,10 @@ describe("AgenticResearchRunner", () => {
       }),
     };
     const result = await new AgenticResearchRunner({
-      chatModel: new ScriptedProvider([]),
       modelRound: roundProvider,
       model: "m",
       messages: [{ role: "user", content: "q" }],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
 
@@ -141,10 +133,10 @@ describe("AgenticResearchRunner", () => {
       [{ content: "final answer", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
-      chatModel: provider,
+      modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [{ role: "user", content: "q" }],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
     expect(result).toMatchObject({
@@ -173,10 +165,10 @@ describe("AgenticResearchRunner", () => {
       [{ content: "done", isComplete: true }],
     ]);
     const repaired = await new AgenticResearchRunner({
-      chatModel: repairProvider,
+      modelRound: new ChatCompletionsRoundAdapter(repairProvider),
       model: "m",
       messages: [],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
     expect(repaired).toMatchObject({ ok: true, repairedTools: ["search_index"] });
@@ -186,10 +178,10 @@ describe("AgenticResearchRunner", () => {
     });
 
     const failed = await new AgenticResearchRunner({
-      chatModel: new ScriptedProvider([[{ content: "no tools", isComplete: true }]]),
+      modelRound: new ChatCompletionsRoundAdapter(new ScriptedProvider([[{ content: "no tools", isComplete: true }]])),
       model: "m",
       messages: [],
-      tools: new ResearchToolRegistry([search.handler, tool("search_web").handler]),
+      tools: new ToolManager([search.handler, tool("search_web").handler]),
       policy: policy(["search_index", "search_web"]),
     }).run();
     expect(failed).toMatchObject({ ok: false, reason: "multiple-mandatory-tools-unresolved" });
@@ -204,10 +196,10 @@ describe("AgenticResearchRunner", () => {
       [{ content: "done", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
-      chatModel: provider,
+      modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
     expect(result).toMatchObject({ ok: true, totalCalls: 2, duplicateCalls: 1 });
@@ -230,10 +222,10 @@ describe("AgenticResearchRunner", () => {
       [{ content: "done", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
-      chatModel: provider,
+      modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
     expect(result).toMatchObject({ ok: true, repairedTools: ["search_index"], duplicateCalls: 0 });
@@ -254,10 +246,10 @@ describe("AgenticResearchRunner", () => {
       [{ content: "should never run", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
-      chatModel: provider,
+      modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
-      tools: new ResearchToolRegistry([search.handler]),
+      tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
     expect(result).toMatchObject({ ok: false, reason: "loop-detected", duplicateCalls: 0 });

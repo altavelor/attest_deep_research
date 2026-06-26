@@ -1,13 +1,11 @@
-import { MarkdownExtractor } from "../../src/extractors/MarkdownExtractor";
-import { ContextFileProvider } from "../../src/research/ContextAssembler";
-import { IndexResearchTool } from "../../src/research/tools/IndexResearchTool";
-import { NoteToolService } from "../../src/research/tools/NoteTools";
-import { ResearchEvidenceRegistry } from "../../src/research/tools/ResearchEvidenceRegistry";
-import {
-  adaptNoteToolHandlers,
-  ResearchToolRegistry,
-} from "../../src/research/tools/ResearchToolRegistry";
-import { ResearchRetriever } from "../../src/research/types";
+import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
+import { ContextFileProvider } from "../../src/application/ports/vault";
+import { IndexResearchTool } from "../../src/application/sources/tools/IndexResearchTool";
+import { NoteToolService } from "../../src/adapters/research-tools/NoteTools";
+import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { ToolManager } from "../../src/core/agent/tool";
+import { adaptNoteToolHandlers } from "../../src/application/sources/tools/noteToolHandlers";
+import { ResearchRetriever } from "../../src/application/contracts/research";
 
 class MemoryFiles implements ContextFileProvider {
   async listPaths(): Promise<string[]> {
@@ -18,18 +16,18 @@ class MemoryFiles implements ContextFileProvider {
   }
 }
 
-describe("ResearchToolRegistry", () => {
+describe("ToolManager", () => {
   it("returns unknown-tool when note access is disabled", async () => {
     const service = {
       definitions: () => [],
       execute: vi.fn(),
-    } as unknown as import("../../src/research/tools/NoteTools").NoteToolService;
+    } as unknown as import("../../src/adapters/research-tools/NoteTools").NoteToolService;
     const handlers = adaptNoteToolHandlers(service, {
       noteAccess: false,
       activeFileAccess: false,
       noteMutationAccess: false,
     });
-    const registry = new ResearchToolRegistry(handlers);
+    const registry = new ToolManager(handlers);
     const result = await registry.execute({ id: "x", name: "read_note", arguments: { path: "Private.md" } });
     expect(result).toMatchObject({ ok: false, error: { code: "unknown-tool" } });
     expect(service.execute).not.toHaveBeenCalled();
@@ -44,11 +42,11 @@ describe("ResearchToolRegistry", () => {
       evidence: new ResearchEvidenceRegistry(),
     });
 
-    expect(() => new ResearchToolRegistry([handler, handler])).toThrow(/Duplicate research tool/);
+    expect(() => new ToolManager([handler, handler])).toThrow(/Duplicate tool/);
   });
 
   it("returns a uniform error for unknown tools", async () => {
-    const registry = new ResearchToolRegistry([]);
+    const registry = new ToolManager([]);
 
     await expect(
       registry.execute({ id: "unknown", name: "invented_tool", arguments: {} }),
@@ -56,7 +54,7 @@ describe("ResearchToolRegistry", () => {
       ok: false,
       error: {
         code: "unknown-tool",
-        message: "Unknown or unavailable research tool: invented_tool.",
+        message: "Unknown or unavailable tool: invented_tool.",
         retryable: false,
       },
     });
@@ -67,7 +65,7 @@ describe("ResearchToolRegistry", () => {
       files: new MemoryFiles(),
       extractors: [new MarkdownExtractor()],
     });
-    const registry = new ResearchToolRegistry(
+    const registry = new ToolManager(
       adaptNoteToolHandlers(notes, {
         noteAccess: true,
         activeFileAccess: false,

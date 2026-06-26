@@ -1,9 +1,9 @@
 import {
   IndexingProfileController,
   createIndexingStateFromProfile,
-} from "../../src/indexing/IndexingProfileController";
-import { IndexingService, IndexingState } from "../../src/indexing/IndexingService";
-import { IndexProfile } from "../../src/indexing/FileVectorIndexStore";
+} from "../../src/adapters/indexing/IndexingProfileController";
+import { IndexingService, IndexingState } from "../../src/adapters/indexing/IndexingService";
+import { IndexProfile } from "../../src/adapters/indexing/FileVectorIndexStore";
 
 describe("IndexingProfileController", () => {
   it("builds an initial state from profile summary fields", () => {

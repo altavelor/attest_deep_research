@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 describe("chat model settings surface", () => {
-  const source = readFileSync(resolve("src/settings/SettingsTab.ts"), "utf8");
+  const source = readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8");
 
   it("keeps Tools and reasoning controls while hiding protocol selection", () => {
     expect(source).toContain('.setName("Tools")');

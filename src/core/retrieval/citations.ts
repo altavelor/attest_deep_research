@@ -1,4 +1,7 @@
-// Core retrieval: citation formatting (stage 2). Pure domain logic.
+// Core retrieval: citation formation (stage 2). Pure domain logic — builds the
+// domain Citation (id/source/label). The clickable link TARGET (Obsidian `#^` /
+// `#page=` syntax) is presentation knowledge and lives outside core, in
+// application/use-cases/citationLinks.
 
 import { Citation } from "../model/citation";
 import { SourceReference } from "../model/source";
@@ -9,12 +12,6 @@ export function formatCitation(source: SourceReference): Citation {
     source,
     label: citationLabel(source),
   };
-}
-
-export function formatCitationLink(source: SourceReference): string {
-  const citation = formatCitation(source);
-
-  return `[${citation.label}](${citationTarget(source)})`;
 }
 
 function citationLabel(source: SourceReference): string {
@@ -29,18 +26,5 @@ function citationLabel(source: SourceReference): string {
       return source.path;
     case "web":
       return source.title;
-  }
-}
-
-function citationTarget(source: SourceReference): string {
-  switch (source.kind) {
-    case "markdown":
-      return source.blockId ? `${source.path}#^${source.blockId}` : source.path;
-    case "pdf":
-      return `${source.path}#page=${source.pageNumber}`;
-    case "document":
-      return source.path;
-    case "web":
-      return source.url;
   }
 }

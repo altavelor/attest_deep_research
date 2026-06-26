@@ -2,8 +2,8 @@ import {
   isResponsesCapabilityCurrent,
   probeResponsesCapabilities,
   responsesProbeCacheKey,
-} from "../../src/settings/responsesCapabilityProbe";
-import { ServerProfile } from "../../src/settings/settings";
+} from "../../src/adapters/settings/responsesCapabilityProbe";
+import { ServerProfile } from "../../src/adapters/settings/settings";
 
 function streamResponse(output: unknown[]): Response {
   const body = JSON.stringify({

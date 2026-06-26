@@ -1,7 +1,7 @@
-import { ResearchEvidenceRegistry } from "../../src/research/tools/ResearchEvidenceRegistry";
-import { executeResearchTool } from "../../src/research/tools/ResearchTools";
-import { WebFetchResearchTool } from "../../src/research/tools/WebFetchResearchTool";
-import { SearchProvider } from "../../src/shared/types";
+import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { WebFetchResearchTool } from "../../src/application/sources/tools/WebFetchResearchTool";
+import { SearchProvider } from "../../src/application/ports/web";
 
 describe("WebFetchResearchTool", () => {
   it("rejects unknown and cross-registry handles before network access", async () => {

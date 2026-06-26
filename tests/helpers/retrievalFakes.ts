@@ -1,9 +1,6 @@
-import {
-  EmbeddingProviderClient,
-  IndexStore,
-  RetrievedChunk,
-  SourceReference,
-} from "../../src/shared/types";
+import { IndexStore } from "../../src/application/ports/indexing";
+import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { RetrievedChunk, SourceReference } from "../../src/core/model/source";
 
 export class FakeEmbeddingProvider implements EmbeddingProviderClient {
   constructor(private readonly embeddings: number[][]) { }

@@ -3,7 +3,7 @@ import {
   parseBoundedSearchInput,
   researchToolExecutionPayload,
   ResearchToolHandler,
-} from "../../src/research/tools/ResearchTools";
+} from "../../src/application/research/ResearchTools";
 
 describe("research tool contracts", () => {
   it("normalizes a bounded search input and clamps integer limits", () => {
