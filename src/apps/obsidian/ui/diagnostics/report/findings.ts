@@ -1,0 +1,203 @@
+import {
+  AnswerSection,
+  Finding,
+  FindingsSection,
+  ModelSection,
+  PreflightSection,
+  ReasoningSection,
+  RequestSection,
+} from "./types";
+
+interface ReportSections {
+  model: ModelSection;
+  preflight: PreflightSection;
+  request: RequestSection;
+  reasoning: ReasoningSection;
+  answer: AnswerSection;
+}
+
+export function computeFindings(sections: ReportSections): FindingsSection {
+  const findings: Finding[] = [];
+  const { model, preflight, request, reasoning, answer } = sections;
+
+  // error: tool-calls-blocked
+  if (model.toolCapabilities.calls === false && model.executionStrategy !== "eager-forced") {
+    findings.push({
+      severity: "error",
+      code: "tool-calls-blocked",
+      title: "Tool calls unavailable for this model",
+      detail: "The model does not support tool calling. Agentic research requires tool calls. Run the capability probe in Settings to check support, or set tool capabilities manually.",
+      affectedSection: "model",
+      evidence: { calls: false, provenance: model.toolCapabilities.provenance },
+    });
+  }
+
+  // error: agentic-policy-fallback
+  if (request.agenticPolicy.policyReason !== "eligible" && request.agenticPolicy.policyReason !== "forced-eager") {
+    findings.push({
+      severity: "error",
+      code: "agentic-policy-fallback",
+      title: `Agentic mode blocked: ${request.agenticPolicy.policyReason}`,
+      detail: `The research request fell back to deterministic mode because: ${request.agenticPolicy.policyReason}. Check model capabilities and search provider configuration.`,
+      affectedSection: "request",
+      evidence: { policyReason: request.agenticPolicy.policyReason },
+    });
+  }
+
+  // error: mandatory-tool-unsatisfied
+  if (reasoning.agenticLoop) {
+    const unsatisfied = reasoning.agenticLoop.satisfiedTools !== undefined
+      ? request.agenticPolicy.requiredTools.filter(
+        (t) => !reasoning.agenticLoop!.satisfiedTools.includes(t),
+      )
+      : [];
+    if (unsatisfied.length > 0) {
+      findings.push({
+        severity: "error",
+        code: "mandatory-tool-unsatisfied",
+        title: "Required tools were not satisfied",
+        detail: `The agentic loop finished without satisfying required tools: ${unsatisfied.join(", ")}. Check tool availability and model behavior.`,
+        affectedSection: "reasoning",
+        evidence: { unsatisfied, satisfiedTools: reasoning.agenticLoop.satisfiedTools, fallbackReason: reasoning.agenticLoop.fallbackReason },
+      });
+    }
+  }
+
+  // warning: all-chunks-dropped
+  if (request.retrieval) {
+    const ranked = request.retrieval.rankedChunks;
+    if (ranked.length > 0 && ranked.every((c) => c.status === "dropped")) {
+      findings.push({
+        severity: "warning",
+        code: "all-chunks-dropped",
+        title: "All retrieved chunks were dropped by the evidence planner",
+        detail: "Every chunk returned by the index was dropped. Check score thresholds, evidence planner policy, and budget settings.",
+        affectedSection: "request",
+        evidence: { droppedCount: ranked.length, policyReason: request.evidencePlanner?.budget.policy },
+      });
+    }
+  }
+
+  // warning: low-retrieval-scores
+  if (request.retrieval?.scoreStats) {
+    const { avg, threshold } = request.retrieval.scoreStats;
+    if (threshold !== null && avg < threshold) {
+      findings.push({
+        severity: "warning",
+        code: "low-retrieval-scores",
+        title: "Average retrieval score is below threshold",
+        detail: `Mean score ${avg.toFixed(3)} is below the threshold ${threshold.toFixed(3)}. The retrieved chunks may not be relevant. Consider expanding the index or rephrasing the query.`,
+        affectedSection: "request",
+        evidence: { avg, threshold, min: request.retrieval.scoreStats.min, max: request.retrieval.scoreStats.max },
+      });
+    }
+  }
+
+  // warning: index-files-zero-but-chunks-found
+  if (
+    preflight.index &&
+    (preflight.index.indexedFiles === 0) &&
+    (request.retrieval?.rankedChunks.length ?? 0) > 0
+  ) {
+    findings.push({
+      severity: "warning",
+      code: "index-files-zero-but-chunks-found",
+      title: "Index reports 0 files but retrieval returned chunks",
+      detail: "The index status shows indexedFiles=0, yet retrieval found chunks. This may indicate a stale index status counter. Re-index the vault to resolve.",
+      affectedSection: "preflight",
+      evidence: { indexedFiles: 0, chunksFound: request.retrieval?.rankedChunks.length },
+    });
+  }
+
+  // warning: agentic-loop-zero-tool-calls
+  if (
+    reasoning.agenticLoop &&
+    reasoning.agenticLoop.totalCalls === 0 &&
+    reasoning.agenticLoop.totalRounds > 0
+  ) {
+    findings.push({
+      severity: "warning",
+      code: "agentic-loop-zero-tool-calls",
+      title: "Agentic loop ran but made no tool calls",
+      detail: "The model completed all rounds without calling any tools. The answer may be based on context alone, without retrieval.",
+      affectedSection: "reasoning",
+      evidence: { rounds: reasoning.agenticLoop.totalRounds, totalCalls: 0 },
+    });
+  }
+
+  // warning: context-near-limit
+  if (
+    preflight.context.budget.utilizationPct !== null &&
+    preflight.context.budget.utilizationPct > 90
+  ) {
+    findings.push({
+      severity: "warning",
+      code: "context-near-limit",
+      title: "Context window above 90% utilization",
+      detail: `Context is at ${preflight.context.budget.utilizationPct}% of the model's context limit. Some evidence may have been dropped. Consider reducing evidence limit or using a model with a larger context window.`,
+      affectedSection: "preflight",
+      evidence: {
+        utilizationPct: preflight.context.budget.utilizationPct,
+        usedTokens: preflight.context.budget.usedTokens,
+        limitTokens: preflight.context.budget.limitTokens,
+      },
+    });
+  }
+
+
+  // warning: stream-terminal-missing
+  if (reasoning.stream && !reasoning.stream.terminalEventObserved) {
+    findings.push({
+      severity: "warning",
+      code: "stream-terminal-missing",
+      title: "Stream ended without a terminal event",
+      detail: "The model's streaming response did not produce a recognized terminal event (done/stop). The response may be truncated.",
+      affectedSection: "reasoning",
+      evidence: { terminalEventObserved: false, frameCount: reasoning.stream.frameCount },
+    });
+  }
+
+  // info: unknown-citations
+  if (answer.unknownCitationIds.length > 0) {
+    findings.push({
+      severity: "info",
+      code: "unknown-citations",
+      title: "Answer contains citation IDs not found in evidence",
+      detail: `The model cited ${answer.unknownCitationIds.length} ID(s) that do not correspond to any retrieved evidence chunk. These citations are dropped from the final answer.`,
+      affectedSection: "answer",
+      evidence: { ids: answer.unknownCitationIds },
+    });
+  }
+
+  // info: index-stale
+  if (preflight.index?.isStale) {
+    findings.push({
+      severity: "info",
+      code: "index-stale",
+      title: "Index is stale",
+      detail: "The vault index has not been refreshed since files were modified. Retrieval results may not reflect recent changes. Re-index to update.",
+      affectedSection: "preflight",
+      evidence: { isStale: true },
+    });
+  }
+
+  // Sort: errors first, then warnings, then info
+  const order = { error: 0, warning: 1, info: 2 } as const;
+  findings.sort((a, b) => order[a.severity] - order[b.severity]);
+
+  const summary = buildSummary(findings);
+  return { summary, findings };
+}
+
+function buildSummary(findings: Finding[]): string {
+  const errors = findings.filter((f) => f.severity === "error");
+  const warnings = findings.filter((f) => f.severity === "warning");
+
+  if (errors.length > 0) {
+    return `${errors.length} error(s) found: ${errors.map((e) => e.code).join(", ")}.`;
+  }
+  if (warnings.length > 0) {
+    return `No errors. ${warnings.length} warning(s): ${warnings.map((w) => w.code).join(", ")}.`;
+  }
+  return "No issues detected.";
+}
