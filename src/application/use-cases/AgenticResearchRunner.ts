@@ -2,7 +2,7 @@ import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRou
 import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "../../core/agent/tool";
 import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "../../core/diagnostics";
 import { ResearchExecutionPolicy } from "../../core/research/ResearchExecutionPolicy";
-import { ToolManager } from "../../core/agent/tool";
+import { ToolManager } from "../tools/ToolManager";
 import {
   toolCallChainLabel,
   resolveLabelFromResult,

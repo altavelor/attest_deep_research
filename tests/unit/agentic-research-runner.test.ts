@@ -1,7 +1,8 @@
 import { AgenticResearchRunner } from "../../src/application/use-cases/AgenticResearchRunner";
 import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
 import { ResearchExecutionPolicy } from "../../src/core/research/ResearchExecutionPolicy";
-import { Tool, ToolManager } from "../../src/core/agent/tool";
+import { Tool } from "../../src/core/agent/tool";
+import { ToolManager } from "../../src/application/tools/ToolManager";
 import { ChatModelProvider, ChatRequest, ChatResponseChunk, ModelRoundProvider, ModelRoundRequest, ProviderContinuationState } from "../../src/core/agent/protocol";
 
 class ScriptedProvider implements ChatModelProvider {

@@ -17,7 +17,7 @@ import type {
   AgentLoopEvent,
   AgentLoopResult,
 } from "../../core/agent/AgentLoop";
-import type { ToolManager } from "../../core/agent/tool";
+import type { ToolManager } from "../tools/ToolManager";
 import type { ResearchSearchMode } from "../contracts/research";
 
 /** Which research tools are exposed for a run (gating policy). */

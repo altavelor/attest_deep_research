@@ -1,26 +1,22 @@
-// Attachment data source (stage 1, task 5.3). Wraps the note tool service
-// (explicit notes / active file) and contributes its read/mutation tools.
+// Attachment data source (stage 1, task 5.3). Surfaces the note/attachment tools
+// as a registered source. The tools are built by the composition root (which
+// binds the concrete note service) and gated per-tool via permissions in the
+// ToolManager, so this source is now just a thin descriptor + tool holder.
 
 import { Tool } from "../../core/agent/tool";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { NoteToolService } from "../research/toolPorts";
-import { NoteToolAvailability } from "../research/toolPorts";
-import { adaptNoteToolHandlers } from "./tools/noteToolHandlers";
 
 export interface AttachmentSourceOptions {
-  service: NoteToolService;
-  availability: NoteToolAvailability;
+  tools: Tool[];
   available?: boolean;
 }
 
 export class AttachmentSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
-  private readonly service: NoteToolService;
-  private readonly availability: NoteToolAvailability;
+  private readonly toolList: Tool[];
 
   constructor(options: AttachmentSourceOptions) {
-    this.service = options.service;
-    this.availability = options.availability;
+    this.toolList = options.tools;
     this.descriptor = {
       id: "attachments",
       kind: "attachments",
@@ -30,6 +26,6 @@ export class AttachmentSource implements DataSource {
   }
 
   tools(): Tool[] {
-    return adaptNoteToolHandlers(this.service, this.availability);
+    return this.toolList;
   }
 }

@@ -84,10 +84,23 @@ export type ToolExecution<T> =
   | { ok: true; value: T; diagnostic?: Record<string, unknown> }
   | { ok: false; error: ToolError; diagnostic?: Record<string, unknown> };
 
+/**
+ * Permissions granted for a run, as an opaque set of capability names. Neutral by
+ * design: core defines the shape, the application maps its own gating policy onto
+ * the names and a tool's {@link Tool.requires} predicate decides against them.
+ */
+export type ToolPermissions = ReadonlySet<string>;
+
 export interface Tool<TInput = unknown, TOutput = unknown> {
   definition: ChatToolDefinition;
   parseInput(input: Record<string, unknown>): ToolParseResult<TInput>;
   execute(input: TInput, context: ToolContext): Promise<ToolExecution<TOutput>>;
+  /**
+   * Optional permission gate. When present and the granted permissions do not
+   * satisfy it, the dispatcher (e.g. ToolManager) hides the tool from the model
+   * and refuses to execute it. Absent ⇒ always available.
+   */
+  requires?(permissions: ToolPermissions): boolean;
 }
 
 export async function executeTool<TInput, TOutput>(
@@ -134,46 +147,4 @@ export function toolExecutionPayload(execution: ToolExecution<unknown>): Record<
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Generic registry the agent loop queries for tools. Holds the handler map,
- * exposes definitions to send to the model, and dispatches calls by name.
- * Layers above (e.g. SourceManager) contribute tools into a ToolManager.
- */
-export class ToolManager {
-  private readonly handlers = new Map<string, Tool<any, any>>();
-
-  constructor(tools: Tool<any, any>[] = []) {
-    for (const tool of tools) {
-      this.register(tool);
-    }
-  }
-
-  register(tool: Tool<any, any>): void {
-    const name = tool.definition.function.name;
-    if (this.handlers.has(name)) {
-      throw new Error(`Duplicate tool: ${name}.`);
-    }
-    this.handlers.set(name, tool);
-  }
-
-  has(name: string): boolean {
-    return this.handlers.has(name);
-  }
-
-  definitions(): ChatToolDefinition[] {
-    return Array.from(this.handlers.values(), (handler) => handler.definition);
-  }
-
-  async execute(
-    call: ChatToolCall,
-    context: ToolDispatchContext = {},
-  ): Promise<ToolExecution<unknown>> {
-    const handler = this.handlers.get(call.name);
-    if (!handler) {
-      return toolFailure("unknown-tool", `Unknown or unavailable tool: ${call.name}.`);
-    }
-    return executeTool(handler, call, context);
-  }
 }
