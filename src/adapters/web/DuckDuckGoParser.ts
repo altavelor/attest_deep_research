@@ -19,6 +19,87 @@ export function parseDuckDuckGoResults(html: string): DuckDuckGoResult[] {
   return blockResults.length > 0 ? blockResults : parseLegacyDuckDuckGoResults(html);
 }
 
+export interface PageMetadata {
+  title?: string;
+  description?: string;
+  siteName?: string;
+  author?: string;
+  publishedTime?: string;
+  language?: string;
+  canonicalUrl?: string;
+}
+
+/** Parse lightweight head metadata (title / Open Graph / author / published) from raw HTML. */
+export function extractPageMetadata(html: string): PageMetadata {
+  const head = html.split(/<\/head>/i, 1)[0] ?? html;
+  const metas = parseMetaTags(head);
+
+  const pick = (...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const value = metas.get(key);
+      if (value) return value;
+    }
+    return undefined;
+  };
+
+  const metadata: PageMetadata = {
+    title: pick("og:title", "twitter:title") ?? parseTitleTag(head),
+    description: pick("og:description", "twitter:description", "description"),
+    siteName: pick("og:site_name", "application-name"),
+    author: pick("author", "article:author"),
+    publishedTime: pick("article:published_time", "datepublished", "date"),
+    language: parseHtmlLang(html),
+    canonicalUrl: parseCanonicalLink(head) ?? pick("og:url"),
+  };
+
+  // Drop empty fields so callers see only present metadata.
+  for (const key of Object.keys(metadata) as (keyof PageMetadata)[]) {
+    if (!metadata[key]) delete metadata[key];
+  }
+  return metadata;
+}
+
+function parseMetaTags(html: string): Map<string, string> {
+  const metas = new Map<string, string>();
+  const pattern = /<meta\b([^>]*)>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const attributes = parseAttributes(match[1]);
+    const key = (attributes.property ?? attributes.name ?? attributes.itemprop)?.toLowerCase();
+    const content = attributes.content;
+    if (key && content && !metas.has(key)) {
+      metas.set(key, normalizeInlineWhitespace(content));
+    }
+  }
+  return metas;
+}
+
+function parseTitleTag(html: string): string | undefined {
+  const match = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  if (!match) return undefined;
+  const title = normalizeInlineWhitespace(stripHtml(match[1]));
+  return title.length > 0 ? title : undefined;
+}
+
+function parseHtmlLang(html: string): string | undefined {
+  const match = /<html\b[^>]*\blang\s*=\s*(["'])(.*?)\1/i.exec(html);
+  const lang = match ? normalizeInlineWhitespace(match[2]) : "";
+  return lang.length > 0 ? lang : undefined;
+}
+
+function parseCanonicalLink(html: string): string | undefined {
+  const pattern = /<link\b([^>]*)>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const attributes = parseAttributes(match[1]);
+    if (attributes.rel?.toLowerCase() === "canonical" && attributes.href) {
+      const href = attributes.href.trim();
+      if (href.length > 0) return href;
+    }
+  }
+  return undefined;
+}
+
 export function extractReadableText(html: string, maxLength: number): string {
   const withoutIgnoredContent = html
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")

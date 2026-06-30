@@ -6,7 +6,7 @@ import {
 } from "../../src/core/research/deepResearch/deepResearchReport";
 import { parseDeepResearchReport } from "../../src/application/use-cases/research/deep-research/parseDeepResearchReport";
 import { DeepResearchAgent } from "../../src/application/use-cases/research/deep-research/DeepResearchAgent";
-import { DeepSearchTool } from "../../src/application/sources/tools/DeepSearchTool";
+import { DeepSearchTool } from "../../src/adapters/research-tools/deep-research/DeepSearchTool";
 import { DeepResearchRunner } from "../../src/application/research/deepResearchPort";
 import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";

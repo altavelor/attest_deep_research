@@ -3,7 +3,7 @@ import {
   IndexedUrlInventoryResult,
   ResearchRetriever,
   UrlStatusChecker,
-} from "../../contracts/research";
+} from "../../../application/contracts/research";
 import {
   Tool as ResearchToolHandler,
   ToolContext as ResearchToolExecutionContext,

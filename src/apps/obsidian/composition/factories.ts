@@ -25,7 +25,7 @@ import { stableId } from "../../../adapters/extractors/common";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "../../../core/research/GraphContext";
 import { ObsidianContextFileProvider } from "../../../adapters/obsidian/ObsidianContextFileProvider";
 import { ObsidianGraphContextProvider } from "../../../adapters/obsidian/ObsidianGraphContextProvider";
-import { NoteToolService } from "../../../adapters/research-tools/NoteTools";
+import { NoteToolService } from "../../../adapters/research-tools/note/NoteTools";
 import { createResearchToolRegistry } from "../../../adapters/research-tools/createResearchToolRegistry";
 import { runToolLoop } from "../../../adapters/research-tools/ToolLoopRunner";
 import { ObsidianVaultWriter } from "../../../adapters/obsidian/ObsidianVaultWriter";

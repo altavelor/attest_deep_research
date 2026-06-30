@@ -336,12 +336,13 @@ function outlineSections(chunks: StoredChunk[]): IndexSectionOutline[] {
 
 function pageItems<T>(items: T[], start: number, limit: number): IndexCursorPage<T> {
   if (limit <= 0) {
-    return { items: [] };
+    return { items: [], totalCount: items.length };
   }
   const selected = items.slice(start, start + limit);
   const next = start + selected.length;
   return {
     items: selected,
+    totalCount: items.length,
     ...(next < items.length ? { nextCursor: String(next) } : {}),
   };
 }

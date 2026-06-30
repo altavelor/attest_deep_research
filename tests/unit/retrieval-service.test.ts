@@ -423,6 +423,80 @@ describe("RetrievalService", () => {
     });
     expect(source).toMatchObject({ kind: "markdown" });
   });
+
+  it("restricts results to a single source via sourcePaths", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("a", markdownSource("Books/a.md"), "alpha", 0.9),
+      retrieved("b", markdownSource("Books/b.md"), "beta", 0.8),
+    ]);
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 5,
+      includeWebResults: false,
+      sourcePaths: ["Books/a.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["a"]);
+  });
+
+  it("diversifies to at most one chunk per source", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("a1", markdownSource("Books/a.md"), "alpha one", 0.9),
+      retrieved("a2", markdownSource("Books/a.md"), "alpha two", 0.8),
+      retrieved("b1", markdownSource("Books/b.md"), "beta one", 0.7),
+    ]);
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const diversified = await service.search("x", {
+      limit: 2,
+      includeWebResults: false,
+      diversify: true,
+    });
+    expect(diversified.chunks.map((chunk) => chunk.id)).toEqual(["a1", "b1"]);
+
+    const plain = await service.search("x", { limit: 2, includeWebResults: false });
+    expect(plain.chunks.map((chunk) => chunk.id)).toEqual(["a1", "a2"]);
+  });
+
+  it("scopes a search to the sources indexed in a language", async () => {
+    const indexStore = Object.assign(
+      new FakeIndexStore([
+        retrieved("ru", markdownSource("Books/ru.md"), "текст", 0.9),
+        retrieved("en", markdownSource("Books/en.md"), "text", 0.8),
+      ]),
+      {
+        listIndexSources: vi.fn(),
+        searchIndexByMetadata: vi
+          .fn()
+          .mockResolvedValue({ items: [{ sourcePath: "Books/ru.md" }] }),
+      },
+    );
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 5,
+      includeWebResults: false,
+      language: "ru",
+    });
+
+    expect(indexStore.searchIndexByMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ language: "ru" }),
+    );
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["ru"]);
+  });
 });
 
 describe("rankKeywordMatches", () => {

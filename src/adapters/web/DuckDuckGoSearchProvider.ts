@@ -1,7 +1,15 @@
 import { IxplorerError } from "../../core/errors";
-import { SearchProvider, SearchProviderResult, WebPageFetchOptions, WebPageFetchResult, WebSearchOptions } from "../../application/ports/web";
+import {
+  SearchProvider,
+  SearchProviderResult,
+  WebPageFetchOptions,
+  WebPageFetchFailure,
+  WebPageFetchResult,
+  WebPageMetadataResult,
+  WebSearchOptions,
+} from "../../application/ports/web";
 import type { PluginRequestLogger } from "../settings/debugLogger";
-import { extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
+import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
 import { validatePublicWebUrl } from "../../application/sources/WebUrlPolicy";
 
 export interface DuckDuckGoSearchProviderOptions {
@@ -140,16 +148,66 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 
   async fetchPage(url: string, options: WebPageFetchOptions = {}): Promise<WebPageFetchResult> {
+    const raw = await this.fetchRawPage(url, options);
+    if (!raw.ok) {
+      return raw.result;
+    }
+
+    const maxContentChars = positiveInteger(options.maxContentChars, this.maxExtractedTextLength);
+    const extracted =
+      raw.contentType === "text/plain"
+        ? raw.rawText.replace(/\s+/g, " ").trim()
+        : extractReadableText(raw.rawText, maxContentChars + 1);
+    if (!extracted) {
+      return pageFailure("web-fetch-empty-content", "Page contained no readable text.", false);
+    }
+    const content = extracted.slice(0, maxContentChars);
+
+    return {
+      ok: true,
+      url: raw.url,
+      finalUrl: raw.finalUrl,
+      content,
+      contentType: raw.contentType,
+      bytes: raw.byteLength,
+      truncated: extracted.length > maxContentChars,
+      redirects: raw.redirects,
+    };
+  }
+
+  async fetchMetadata(url: string, options: WebPageFetchOptions = {}): Promise<WebPageMetadataResult> {
+    const raw = await this.fetchRawPage(url, options);
+    if (!raw.ok) {
+      return raw.result;
+    }
+    if (raw.contentType === "text/plain") {
+      return { ok: true, url: raw.url, finalUrl: raw.finalUrl, metadata: {} };
+    }
+    return {
+      ok: true,
+      url: raw.url,
+      finalUrl: raw.finalUrl,
+      metadata: extractPageMetadata(raw.rawText),
+    };
+  }
+
+  /** Shared fetch core for fetchPage/fetchMetadata: follows redirects, reads bounded HTML. */
+  private async fetchRawPage(
+    url: string,
+    options: WebPageFetchOptions,
+  ): Promise<RawPageResult> {
     const initial = validatePublicWebUrl(url);
     if (!initial.ok) {
-      return pageFailure("unsafe-web-url", "The registered web URL is not allowed.", false, {
-        reason: initial.reason,
-      });
+      return {
+        ok: false,
+        result: pageFailure("unsafe-web-url", "The registered web URL is not allowed.", false, {
+          reason: initial.reason,
+        }),
+      };
     }
 
     const timeoutMs = positiveInteger(options.timeoutMs, this.timeoutMs);
     const maxResponseBytes = positiveInteger(options.maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES);
-    const maxContentChars = positiveInteger(options.maxContentChars, this.maxExtractedTextLength);
     const maxRedirects = nonNegativeInteger(options.maxRedirects, DEFAULT_MAX_REDIRECTS);
     const redirects: string[] = [];
     let currentUrl = initial.url;
@@ -160,25 +218,34 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         response = await this.requestPage(currentUrl, timeoutMs);
       } catch (error) {
         if (isAbortError(error)) {
-          return pageFailure("web-fetch-timeout", "Page fetch timed out.", true);
+          return { ok: false, result: pageFailure("web-fetch-timeout", "Page fetch timed out.", true) };
         }
-        return pageFailure("web-fetch-network", "Page fetch failed.", true);
+        return { ok: false, result: pageFailure("web-fetch-network", "Page fetch failed.", true) };
       }
 
       if (isRedirect(response.status)) {
         const location = response.headers.get("location");
         await response.body?.cancel();
         if (!location) {
-          return pageFailure("web-fetch-redirect", "Redirect response had no location.", false);
+          return {
+            ok: false,
+            result: pageFailure("web-fetch-redirect", "Redirect response had no location.", false),
+          };
         }
         if (redirectCount === maxRedirects) {
-          return pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false);
+          return {
+            ok: false,
+            result: pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false),
+          };
         }
         const redirected = validatePublicWebUrl(new URL(location, currentUrl).toString());
         if (!redirected.ok) {
-          return pageFailure("web-fetch-redirect", "Redirect target is not allowed.", false, {
-            reason: redirected.reason,
-          });
+          return {
+            ok: false,
+            result: pageFailure("web-fetch-redirect", "Redirect target is not allowed.", false, {
+              reason: redirected.reason,
+            }),
+          };
         }
         currentUrl = redirected.url;
         redirects.push(currentUrl);
@@ -186,53 +253,55 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       }
 
       if (!response.ok) {
-        return pageFailure(
-          "web-fetch-http",
-          `Page fetch returned HTTP ${response.status}.`,
-          response.status === 429 || response.status >= 500,
-          { status: response.status },
-        );
+        return {
+          ok: false,
+          result: pageFailure(
+            "web-fetch-http",
+            `Page fetch returned HTTP ${response.status}.`,
+            response.status === 429 || response.status >= 500,
+            { status: response.status },
+          ),
+        };
       }
 
       const contentType = normalizedContentType(response.headers.get("content-type"));
       if (!isSupportedPageContentType(contentType)) {
-        return pageFailure("web-fetch-content-type", "Page content type is not supported.", false, {
-          contentType,
-        });
+        return {
+          ok: false,
+          result: pageFailure("web-fetch-content-type", "Page content type is not supported.", false, {
+            contentType,
+          }),
+        };
       }
 
       let body: Awaited<ReturnType<typeof readBoundedBody>>;
       try {
         body = await readBoundedBody(response, maxResponseBytes);
       } catch {
-        return pageFailure("web-fetch-network", "Page response could not be read.", true);
+        return {
+          ok: false,
+          result: pageFailure("web-fetch-network", "Page response could not be read.", true),
+        };
       }
       if (!body.ok) {
-        return body.result;
+        return { ok: false, result: body.result };
       }
-      const rawText = new TextDecoder().decode(body.bytes);
-      const extracted =
-        contentType === "text/plain"
-          ? rawText.replace(/\s+/g, " ").trim()
-          : extractReadableText(rawText, maxContentChars + 1);
-      if (!extracted) {
-        return pageFailure("web-fetch-empty-content", "Page contained no readable text.", false);
-      }
-      const content = extracted.slice(0, maxContentChars);
 
       return {
         ok: true,
         url: initial.url,
         finalUrl: currentUrl,
-        content,
+        rawText: new TextDecoder().decode(body.bytes),
         contentType,
-        bytes: body.bytes.byteLength,
-        truncated: extracted.length > maxContentChars,
+        byteLength: body.bytes.byteLength,
         redirects,
       };
     }
 
-    return pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false);
+    return {
+      ok: false,
+      result: pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false),
+    };
   }
 
   private async fetchSearchResults(query: string): Promise<string> {
@@ -349,6 +418,18 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 }
 
+type RawPageResult =
+  | {
+      ok: true;
+      url: string;
+      finalUrl: string;
+      rawText: string;
+      contentType: string;
+      byteLength: number;
+      redirects: string[];
+    }
+  | { ok: false; result: WebPageFetchFailure };
+
 function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
   if (value === undefined || !Number.isFinite(value)) {
     return fallback;
@@ -400,7 +481,7 @@ function isSupportedPageContentType(contentType: string): boolean {
 async function readBoundedBody(
   response: Response,
   maxBytes: number,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchResult }> {
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchFailure }> {
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
     return {
@@ -456,7 +537,7 @@ function pageFailure(
   message: string,
   retryable: boolean,
   details?: Record<string, unknown>,
-): WebPageFetchResult {
+): WebPageFetchFailure {
   return {
     ok: false,
     error: { code, message, retryable, ...(details ? { details } : {}) },

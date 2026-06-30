@@ -4,8 +4,8 @@ import {
   IndexChunkReadOptions,
   IndexMetadataSearchOptions,
   IndexSourceInventoryOptions,
-} from "../../ports/retrieval";
-import { ResearchRetriever } from "../../contracts/research";
+} from "../../../application/ports/retrieval";
+import { ResearchRetriever } from "../../../application/contracts/research";
 import { Tool } from "../../../core/agent/tool";
 import { SourceKind } from "../../../core/model/source";
 import {
@@ -17,7 +17,7 @@ import {
   okPage,
   str,
   strArray,
-} from "./toolFactory";
+} from "../../../application/sources/tools/toolFactory";
 
 const SOURCE_KINDS: SourceKind[] = ["markdown", "pdf", "document", "web"];
 const MAX_CURSOR_CHARS = 200;
@@ -100,12 +100,13 @@ export const FindInIndexTool = defineInventoryTool<FindInIndexOptions>({
     caseSensitive: bool(),
     cursor: str(MAX_CURSOR_CHARS),
     limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+    countOnly: bool({ description: "Return only the total match count, not the matches." }),
   },
   capability: "findInIndex",
   errorCode: "find-in-index-failed",
   errorMessage: "Index text search failed.",
   run: (retriever, input) => retriever.findInIndex!(input),
-  wrap: (result, input) => okPage(result as { items: unknown[] }, input.limit),
+  wrap: (result, input) => pageOrCount(result, input),
 });
 
 export const SummarizeIndexSourceTool = defineInventoryTool<{
@@ -156,13 +157,27 @@ export const SearchIndexByMetadataTool = defineInventoryTool<IndexMetadataSearch
     language: str(40),
     cursor: str(MAX_CURSOR_CHARS),
     limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+    countOnly: bool({ description: "Return only the total count of matched sources, not the sources." }),
   },
   capability: "searchIndexByMetadata",
   errorCode: "index-metadata-search-failed",
   errorMessage: "Index metadata search failed.",
   run: (retriever, input) => retriever.searchIndexByMetadata!(input),
-  wrap: (result, input) => okPage(result as { items: unknown[] }, input.limit),
+  wrap: (result, input) => pageOrCount(result, input),
 });
+
+/** Page result, or — when the caller asked for `countOnly` — just the total match count. */
+function pageOrCount(
+  result: unknown,
+  input: { limit: number; countOnly?: boolean },
+): unknown {
+  const page = result as { items: unknown[]; totalCount?: number };
+  if (input.countOnly) {
+    const count = page.totalCount ?? page.items.length;
+    return { count, diagnostics: diagnostics(count, input.limit) };
+  }
+  return okPage(page, input.limit);
+}
 
 /** Registry of retriever-backed index inventory tools; the single source of truth. */
 export const INDEX_INVENTORY_TOOLS: ReadonlyArray<

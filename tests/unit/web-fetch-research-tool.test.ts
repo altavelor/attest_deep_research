@@ -1,6 +1,6 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "../../src/core/agent/tool";
-import { WebFetchResearchTool } from "../../src/application/sources/tools/WebFetchResearchTool";
+import { WebFetchResearchTool } from "../../src/adapters/research-tools/web/WebFetchResearchTool";
 import { SearchProvider } from "../../src/application/ports/web";
 
 describe("WebFetchResearchTool", () => {

@@ -3,11 +3,11 @@
 // WebSource so it can be gated independently (it needs a DeepResearchRunner, not
 // just a search provider).
 
-import { Tool } from "../../core/agent/tool";
-import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { DeepResearchRunner } from "../research/deepResearchPort";
-import { EvidenceRegistry } from "./evidence";
-import { DeepSearchTool } from "./tools/DeepSearchTool";
+import { Tool } from "../../../core/agent/tool";
+import { DataSource, DataSourceDescriptor } from "../../../application/sources/DataSource";
+import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
+import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { DeepSearchTool } from "./DeepSearchTool";
 
 export interface DeepResearchSourceOptions {
   runner: DeepResearchRunner;

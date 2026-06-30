@@ -1,4 +1,4 @@
-import { IndexResearchTool } from "../../src/application/sources/tools/IndexResearchTool";
+import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "../../src/core/agent/tool";
 import { ResearchRetriever } from "../../src/application/contracts/research";
