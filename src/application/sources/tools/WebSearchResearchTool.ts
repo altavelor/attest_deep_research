@@ -2,12 +2,14 @@ import { SearchProvider } from "../../ports/web";
 import { EvidenceRegistry } from "../evidence";
 import {
   BoundedSearchInput,
-  failure,
   parseBoundedSearchInput,
-  ResearchToolExecution,
-  ResearchToolExecutionContext,
-  ResearchToolHandler,
-} from "../../research/ResearchTools";
+} from "../../research/boundedSearchInput";
+import {
+  Tool as ResearchToolHandler,
+  ToolContext as ResearchToolExecutionContext,
+  ToolExecution as ResearchToolExecution,
+  toolFailure,
+} from "../../../core/agent/tool";
 
 export interface SearchWebOutput {
   query: string;
@@ -71,10 +73,10 @@ export class WebSearchResearchTool implements ResearchToolHandler<
         maxFetches: 0,
       });
     } catch {
-      return failure("web-search-failed", "Web search failed.", true);
+      return toolFailure("web-search-failed", "Web search failed.", true);
     }
     if (!Array.isArray(providerResults)) {
-      return failure("web-search-invalid-response", "Web search returned an invalid response.");
+      return toolFailure("web-search-invalid-response", "Web search returned an invalid response.");
     }
 
     const results: SearchWebOutput["results"] = [];

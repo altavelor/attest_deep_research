@@ -122,22 +122,22 @@ export function createDefaultChatSettings(services: ChatSettingsServices): Saved
 
 export function resolveChatSettings(
   services: ChatSettingsServices,
-  settings: SavedChatSettings | undefined,
+  settings: SavedChatSettings,
 ): SavedChatSettings {
   const defaults = createDefaultChatSettings(services);
 
   return {
     chatModelProfileId: resolveAvailableChatModelProfileId(
       services.getChatModelProfiles(),
-      settings?.chatModelProfileId,
+      settings.chatModelProfileId,
       defaults.chatModelProfileId,
     ),
     indexProfileId: resolveAvailableIndexProfileId(
       services.getIndexProfiles(),
-      settings?.indexProfileId,
+      settings.indexProfileId,
       defaults.indexProfileId ?? "",
     ),
-    searchMode: settings?.searchMode ?? defaults.searchMode,
-    contextMode: settings?.contextMode ?? defaults.contextMode,
+    searchMode: settings.searchMode,
+    contextMode: settings.contextMode ?? defaults.contextMode,
   };
 }

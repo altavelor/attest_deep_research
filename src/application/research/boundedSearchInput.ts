@@ -1,27 +1,4 @@
-// Research tool helpers. The universal tool abstraction now lives in core/agent
-// (stage 1, task 4.1) and is re-exported here under the established names so the
-// research tool implementations keep working unchanged. Only research-specific
-// input parsing (bounded search queries) remains defined here.
-
-import {
-  Tool,
-  ToolContext,
-  ToolExecution,
-  ToolParseResult,
-  executeTool,
-  toolExecutionPayload,
-  toolFailure,
-} from "../../core/agent/tool";
-
-// Established research-facing aliases of the core tool abstraction.
-export type ResearchToolHandler<TInput = unknown, TOutput = unknown> = Tool<TInput, TOutput>;
-export type ResearchToolExecutionContext = ToolContext;
-export type ResearchToolParseResult<T> = ToolParseResult<T>;
-export type ResearchToolExecution<T> = ToolExecution<T>;
-
-export const executeResearchTool = executeTool;
-export const failure = toolFailure;
-export const researchToolExecutionPayload = toolExecutionPayload;
+import { ToolParseResult, toolFailure } from "../../core/agent/tool";
 
 export interface BoundedSearchInput {
   query: string;
@@ -34,20 +11,20 @@ export const MAX_RESEARCH_QUERY_CHARS = 240;
 
 export function parseBoundedSearchInput(
   input: Record<string, unknown>,
-): ResearchToolParseResult<BoundedSearchInput> {
+): ToolParseResult<BoundedSearchInput> {
   const unknownProperty = Object.keys(input).find((key) => key !== "query" && key !== "limit");
   if (unknownProperty) {
-    return failure("unknown-property", `Unknown property: ${unknownProperty}.`, false, {
+    return toolFailure("unknown-property", `Unknown property: ${unknownProperty}.`, false, {
       property: unknownProperty,
     });
   }
 
   const query = typeof input.query === "string" ? normalizeQuery(input.query) : "";
   if (!query) {
-    return failure("missing-query", "Query is required.");
+    return toolFailure("missing-query", "Query is required.");
   }
   if (query.length > MAX_RESEARCH_QUERY_CHARS) {
-    return failure(
+    return toolFailure(
       "query-too-long",
       `Query must not exceed ${MAX_RESEARCH_QUERY_CHARS} characters.`,
       false,
@@ -63,7 +40,7 @@ export function parseBoundedSearchInput(
       !Number.isFinite(input.limit) ||
       !Number.isInteger(input.limit))
   ) {
-    return failure("invalid-limit", "Limit must be an integer.");
+    return toolFailure("invalid-limit", "Limit must be an integer.");
   }
 
   return {

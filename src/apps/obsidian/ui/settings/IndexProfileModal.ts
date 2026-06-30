@@ -2,15 +2,10 @@ import { App, Modal, Notice, Setting } from "obsidian";
 
 import { IndexProfile } from "../../../../adapters/indexing/FileVectorIndexStore";
 import { parseNonNegativeInteger, parsePositiveInteger } from "../../../../shared/numbers";
-import {
-  DEFAULT_INDEX_PROFILE,
-  EmbeddingModelProfile,
-  MAX_PROFILE_NAME_LENGTH,
-  createIndexProfile,
-  createProfileId,
-  hasDuplicateProfileName,
-  isValidIndexProfileName,
-} from "../../../../adapters/settings/settings";
+import { MAX_PROFILE_NAME_LENGTH } from "../../../../adapters/settings/constants";
+import { DEFAULT_INDEX_PROFILE, createIndexProfile } from "../../../../adapters/settings/defaults";
+import { createProfileId, hasDuplicateProfileName, isValidIndexProfileName } from "../../../../adapters/settings/profileQueries";
+import { EmbeddingModelProfile } from "../../../../adapters/settings/types";
 import { IndexPathPickerModal } from "./IndexPathPickerModal";
 import { renderModalActions } from "./shared";
 

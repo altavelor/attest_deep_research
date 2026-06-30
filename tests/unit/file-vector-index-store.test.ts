@@ -368,16 +368,14 @@ describe("FileVectorIndexStore", () => {
     ).rejects.toMatchObject({ code: "INDEX_REBUILD_REQUIRED" });
   });
 
-  it("treats legacy or unknown index files without a manifest as rebuild-required", async () => {
-    writeFileSync(join(folder, "legacy-lancedb-file"), "not a file-backed manifest");
+  it("initializes a current manifest when files exist without a manifest", async () => {
+    writeFileSync(join(folder, "unknown-file"), "not a file-backed manifest");
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 
     await expect(
       store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 }),
-    ).rejects.toMatchObject({
-      code: "INDEX_REBUILD_REQUIRED",
-      details: expect.objectContaining({ reason: "legacy-or-unknown-index-files" }),
-    });
+    ).resolves.toBeUndefined();
+    expect(existsSync(join(folder, "manifest.json"))).toBe(true);
   });
 });
 

@@ -41,10 +41,8 @@ export interface ResolvedCitationTokens {
 /**
  * Resolve the answer's `[…]` citation tokens against gathered evidence. Models
  * cite web sources by `[url:https://…]` — a human-readable, derivable handle —
- * rather than opaque `web:<hash>` ids they previously confused with fetch
- * handles. Each URL token is canonicalized the same way the registry canonicalizes
- * results, then mapped to its evidence id. Bare tokens are kept verbatim so legacy
- * `[web:<hash>]` / index ids still resolve.
+ * rather than opaque evidence ids. Each URL token is canonicalized the same way
+ * the registry canonicalizes results, then mapped to its evidence id.
  */
 export function resolveCitationTokens(
   text: string,
@@ -55,7 +53,6 @@ export function resolveCitationTokens(
 
   for (const token of citationIdsFromText(text)) {
     if (!token.startsWith("url:")) {
-      ids.add(token);
       continue;
     }
     const validated = validatePublicWebUrl(token.slice("url:".length).trim());
@@ -71,7 +68,7 @@ export function resolveCitationTokens(
 /**
  * Map canonical web URL → evidence id over gathered evidence, so the answer's
  * `[url:…]` citations can be resolved back to their registered ids. Non-web
- * chunks (index/notes) carry no URL and are skipped — they keep citing by id.
+ * chunks (index/notes) carry no URL and are skipped.
  */
 export function webUrlEvidenceIndex(
   evidence: readonly RetrievedChunk[],

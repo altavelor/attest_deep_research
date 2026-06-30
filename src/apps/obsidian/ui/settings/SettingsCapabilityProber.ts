@@ -24,7 +24,7 @@ import {
   unknownSnapshot,
 } from "../../../../adapters/settings/modelCapabilityCache";
 import { probeReasoningVisibility } from "../../../../adapters/settings/reasoningVisibilityProbe";
-import { ChatModelProfile, ServerProfile } from "../../../../adapters/settings/settings";
+import { ChatModelProfile, ServerProfile } from "../../../../adapters/settings/types";
 
 /** What the prober needs from the settings tab that hosts it. */
 export interface CapabilityProberHost {

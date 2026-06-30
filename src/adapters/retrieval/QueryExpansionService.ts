@@ -1,4 +1,4 @@
-import { RetrievalQueryVariant } from "../../application/ports/retrieval";
+import { RetrievalQueryVariant } from "../../core/retrieval/query";
 import { ChatModelProvider, ChatRequest } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { detectTextLanguages } from "../indexing/languageDetection";

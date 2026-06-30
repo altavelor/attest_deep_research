@@ -2,12 +2,14 @@ import { RetrievedChunk } from "../../../core/model/source";
 import { EvidenceRegistry } from "../evidence";
 import {
   BoundedSearchInput,
-  failure,
   parseBoundedSearchInput,
-  ResearchToolExecution,
-  ResearchToolExecutionContext,
-  ResearchToolHandler,
-} from "../../research/ResearchTools";
+} from "../../research/boundedSearchInput";
+import {
+  Tool as ResearchToolHandler,
+  ToolContext as ResearchToolExecutionContext,
+  ToolExecution as ResearchToolExecution,
+  toolFailure,
+} from "../../../core/agent/tool";
 import { ResearchRetriever } from "../../contracts/research";
 
 export interface SearchIndexOutput {
@@ -82,7 +84,7 @@ export class IndexResearchTool implements ResearchToolHandler<
       });
       chunks = retrieval.chunks;
     } catch {
-      return failure("index-search-failed", "Index search failed.", true);
+      return toolFailure("index-search-failed", "Index search failed.", true);
     }
 
     const visibleChunks = chunks.slice(0, input.limit);

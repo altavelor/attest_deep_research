@@ -1,11 +1,18 @@
 import { existsSync, mkdtempSync, rmSync } from "fs";
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
 import { FileChatRepository as FileChatStore } from "../../src/adapters/filesystem/FileChatRepository";
 import { inferChatTitle } from "../../src/core/chat/savedChat";
 import { markdownSource, retrieved } from "../helpers/factories";
+
+const CHAT_SETTINGS = {
+  chatModelProfileId: "chat-model",
+  indexProfileId: "index-default",
+  searchMode: "indexOnly" as const,
+  contextMode: "include" as const,
+};
 
 describe("FileChatStore", () => {
   let folder: string;
@@ -90,6 +97,7 @@ describe("FileChatStore", () => {
       messages: [{ role: "user", content: "Older chat", createdAt: now.toISOString() }],
       lastAnswer: null,
       attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
     });
 
     const summaries = await store.listChats();
@@ -122,6 +130,7 @@ describe("FileChatStore", () => {
       messages: [{ role: "user", content: "First title", createdAt: now.toISOString() }],
       lastAnswer: null,
       attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
     });
 
     now = new Date("2026-06-10T10:15:00.000Z");
@@ -133,6 +142,7 @@ describe("FileChatStore", () => {
       ],
       lastAnswer: null,
       attachedContextPaths: ["Manual.md"],
+      chatSettings: CHAT_SETTINGS,
     });
 
     expect(second.createdAt).toBe("2026-06-10T10:00:00.000Z");
@@ -159,6 +169,7 @@ describe("FileChatStore", () => {
       ],
       lastAnswer: null,
       attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
     });
 
     expect((await store.loadChat("reasoning"))?.messages[0]).toMatchObject({
@@ -182,6 +193,7 @@ describe("FileChatStore", () => {
       messages: [{ role: "user", content: "Atomic write", createdAt: "2026-06-10T10:00:00.000Z" }],
       lastAnswer: null,
       attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
     });
 
     expect(existsSync(join(folder, "atomic.json.tmp"))).toBe(false);
@@ -219,6 +231,7 @@ describe("FileChatStore", () => {
       ],
       lastAnswer: null,
       attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
     });
 
     const [summary] = await store.listChats();
@@ -231,19 +244,26 @@ describe("FileChatStore", () => {
     });
   });
 
-  it("loads legacy chats without saved chat settings", async () => {
+  it("ignores chats without saved chat settings", async () => {
     const store = new FileChatStore({ folder });
-    await store.saveChat({
-      id: "legacy",
-      messages: [{ role: "user", content: "Legacy chat", createdAt: "2026-06-10T10:00:00.000Z" }],
-      lastAnswer: null,
-      attachedContextPaths: [],
-    });
+    await writeFile(
+      join(folder, "missing-settings.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: "missing-settings",
+        title: "Missing settings",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [
+          { role: "user", content: "Current chat?", createdAt: "2026-06-10T10:00:00.000Z" },
+        ],
+        lastAnswer: null,
+        attachedContextPaths: [],
+      }),
+      "utf8",
+    );
 
-    const loaded = await store.loadChat("legacy");
-
-    expect(loaded).toMatchObject({ id: "legacy" });
-    expect(loaded).not.toHaveProperty("chatSettings");
+    await expect(store.loadChat("missing-settings")).resolves.toBeNull();
   });
 
   it("rejects unsafe chat ids", async () => {
@@ -256,6 +276,7 @@ describe("FileChatStore", () => {
         messages: [],
         lastAnswer: null,
         attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
       }),
     ).rejects.toThrow("Unsafe chat id");
   });

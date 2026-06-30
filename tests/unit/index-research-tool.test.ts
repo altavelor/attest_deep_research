@@ -1,6 +1,6 @@
 import { IndexResearchTool } from "../../src/application/sources/tools/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { executeTool } from "../../src/core/agent/tool";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 import { markdownSource, retrieved } from "../helpers/factories";
 
@@ -19,7 +19,7 @@ describe("IndexResearchTool", () => {
     const registry = new ResearchEvidenceRegistry();
     const tool = new IndexResearchTool({ retriever, evidence: registry });
 
-    const execution = await executeResearchTool(tool, {
+    const execution = await executeTool(tool, {
       id: "call-1",
       name: "search_index",
       arguments: { query: "  local   research  ", limit: 9 },
@@ -52,7 +52,7 @@ describe("IndexResearchTool", () => {
     const tool = new IndexResearchTool({ retriever, evidence: new ResearchEvidenceRegistry() });
 
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "call-empty",
         name: "search_index",
         arguments: { query: "nothing" },
@@ -67,7 +67,7 @@ describe("IndexResearchTool", () => {
     const tool = new IndexResearchTool({ retriever, evidence: new ResearchEvidenceRegistry() });
 
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "call-failed",
         name: "search_index",
         arguments: { query: "research" },

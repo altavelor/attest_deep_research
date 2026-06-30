@@ -1,4 +1,4 @@
-import { IxplorerSettings } from "../settings/settings";
+import { IxplorerSettings } from "../settings/types";
 import { Extractor, ExtractorInput } from "../../application/ports/indexing";
 import { ExtractedChunk } from "../../core/model/source";
 import { chunkMarkdown } from "../indexing/chunker";

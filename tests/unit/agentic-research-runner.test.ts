@@ -1,8 +1,7 @@
 import { AgenticResearchRunner } from "../../src/application/use-cases/AgenticResearchRunner";
 import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
 import { ResearchExecutionPolicy } from "../../src/core/research/ResearchExecutionPolicy";
-import { ToolManager } from "../../src/core/agent/tool";
-import { ResearchToolHandler } from "../../src/application/research/ResearchTools";
+import { Tool, ToolManager } from "../../src/core/agent/tool";
 import { ChatModelProvider, ChatRequest, ChatResponseChunk, ModelRoundProvider, ModelRoundRequest, ProviderContinuationState } from "../../src/core/agent/protocol";
 
 class ScriptedProvider implements ChatModelProvider {
@@ -21,7 +20,7 @@ function tool(
   name: string,
   execute = vi.fn().mockResolvedValue({ ok: true, value: { results: [] } }),
 ) {
-  const handler: ResearchToolHandler<Record<string, unknown>, unknown> = {
+  const handler: Tool<Record<string, unknown>, unknown> = {
     definition: {
       type: "function",
       function: { name, description: name, parameters: { type: "object", properties: {} } },

@@ -1,5 +1,5 @@
 import { RetrievalResult } from "./retrieval";
-import { RetrievalOptions, RetrievalQueryVariant } from "../ports/retrieval";
+import { RetrievalOptions, RetrievalQueryVariant } from "../../core/retrieval/query";
 import { ResearchAnswer } from "../../core/answer";
 import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
 import { LanguageInventoryItem } from "../../core/model/citation";

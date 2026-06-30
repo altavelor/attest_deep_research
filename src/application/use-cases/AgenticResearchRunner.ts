@@ -1,9 +1,8 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "../../core/agent/protocol";
-import { ChatToolCall, ToolEvent } from "../../core/agent/tool";
+import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "../../core/agent/tool";
 import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "../../core/diagnostics";
 import { ResearchExecutionPolicy } from "../../core/research/ResearchExecutionPolicy";
 import { ToolManager } from "../../core/agent/tool";
-import { researchToolExecutionPayload, ResearchToolExecution } from "../research/ResearchTools";
 import {
   toolCallChainLabel,
   resolveLabelFromResult,
@@ -529,7 +528,7 @@ function serializeExecution(execution: ResearchToolExecution<unknown>): CachedEx
   return {
     ok: execution.ok,
     retryable: execution.ok ? false : execution.error.retryable,
-    result: JSON.stringify(researchToolExecutionPayload(execution)),
+    result: JSON.stringify(toolExecutionPayload(execution)),
     ...(execution.diagnostic ? { diagnostic: execution.diagnostic } : {}),
   };
 }

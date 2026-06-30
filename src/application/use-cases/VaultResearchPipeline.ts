@@ -1,6 +1,6 @@
 import { RetrievalResult } from "../../application/contracts/retrieval";
 import { QueryExpansion } from "../contracts/research";
-import { RetrievalQueryVariant } from "../ports/retrieval";
+import { RetrievalQueryVariant } from "../../core/retrieval/query";
 import { ResearchRetriever, ResearchStreamEvent } from "../contracts/research";
 
 export interface VaultResearchPipelineOptions {

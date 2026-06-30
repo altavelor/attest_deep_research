@@ -41,10 +41,12 @@ import {
   EmbeddingModelProfile,
   IxplorerSettings,
   ServerProfile,
+} from "../../../adapters/settings/types";
+import {
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
   resolveEffectiveTools,
-} from "../../../adapters/settings/settings";
+} from "../../../adapters/settings/profileQueries";
 import { DuckDuckGoSearchProvider } from "../../../adapters/web/DuckDuckGoSearchProvider";
 import { FetchUrlStatusChecker } from "../../../adapters/web/FetchUrlStatusChecker";
 import { resolveIndexDescriptionForPrompt } from "../../../adapters/indexing/IndexDescription";

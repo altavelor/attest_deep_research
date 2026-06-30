@@ -242,7 +242,7 @@ describe("ResearchService", () => {
       type: "complete",
       answer: {
         answer: "Agentic answer [idx-1]",
-        citations: [{ id: "idx-1" }],
+        citations: [],
         contextDiagnostics: {
           executionStrategy: "agentic",
           agentic: { requiredTools: [] },

@@ -91,7 +91,7 @@ export class FileChatRepository implements ChatRepository {
       ...(input.expandedCitationContexts && input.expandedCitationContexts.length > 0
         ? { expandedCitationContexts: input.expandedCitationContexts }
         : {}),
-      ...(input.chatSettings ? { chatSettings: input.chatSettings } : {}),
+      chatSettings: input.chatSettings,
     };
 
     await writeJsonAtomically(this.chatPath(id), chat);

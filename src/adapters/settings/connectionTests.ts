@@ -10,7 +10,7 @@ import {
 import { toUserMessage } from "../../core/errors";
 import { ApiFormat } from "../../core/agent/protocol";
 import type { PluginRequestLogger } from "./debugLogger";
-import { ModelCapability, ServerProfile } from "./settings";
+import { ModelCapability, ServerProfile } from "./types";
 import type { ModelCapabilitySnapshot } from "./modelCapabilityCache";
 import { resolveCapabilityMetadata } from "./capabilityMetadataResolver";
 

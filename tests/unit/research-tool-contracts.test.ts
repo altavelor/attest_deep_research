@@ -1,9 +1,5 @@
-import {
-  executeResearchTool,
-  parseBoundedSearchInput,
-  researchToolExecutionPayload,
-  ResearchToolHandler,
-} from "../../src/application/research/ResearchTools";
+import { executeTool, Tool, toolExecutionPayload } from "../../src/core/agent/tool";
+import { parseBoundedSearchInput } from "../../src/application/research/boundedSearchInput";
 
 describe("research tool contracts", () => {
   it("normalizes a bounded search input and clamps integer limits", () => {
@@ -26,7 +22,7 @@ describe("research tool contracts", () => {
     [{ query: "x", extra: true }, "unknown-property"],
   ])("rejects invalid input without executing the handler", async (input, code) => {
     const execute = vi.fn();
-    const handler: ResearchToolHandler<{ query: string; limit: number }, { count: number }> = {
+    const handler: Tool<{ query: string; limit: number }, { count: number }> = {
       definition: {
         type: "function",
         function: {
@@ -39,7 +35,7 @@ describe("research tool contracts", () => {
       execute,
     };
 
-    const result = await executeResearchTool(handler, {
+    const result = await executeTool(handler, {
       id: "call-1",
       name: "search_index",
       arguments: input,
@@ -51,7 +47,7 @@ describe("research tool contracts", () => {
 
   it("rejects a mismatched tool name before execution", async () => {
     const execute = vi.fn();
-    const handler: ResearchToolHandler<{ query: string; limit: number }, { count: number }> = {
+    const handler: Tool<{ query: string; limit: number }, { count: number }> = {
       definition: {
         type: "function",
         function: { name: "search_index", description: "Search", parameters: {} },
@@ -60,7 +56,7 @@ describe("research tool contracts", () => {
       execute,
     };
 
-    const result = await executeResearchTool(handler, {
+    const result = await executeTool(handler, {
       id: "call-1",
       name: "search_web",
       arguments: { query: "models" },
@@ -70,18 +66,18 @@ describe("research tool contracts", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("serializes new typed output and preserves legacy note payloads", () => {
+  it("serializes tool output payloads", () => {
     expect(
-      researchToolExecutionPayload({ ok: true, value: { query: "models", results: [] } }),
+      toolExecutionPayload({ ok: true, value: { query: "models", results: [] } }),
     ).toEqual({ ok: true, query: "models", results: [] });
     expect(
-      researchToolExecutionPayload({
+      toolExecutionPayload({
         ok: true,
         value: { ok: false, reason: "no-active-note" },
       }),
     ).toEqual({ ok: false, reason: "no-active-note" });
     expect(
-      researchToolExecutionPayload({
+      toolExecutionPayload({
         ok: false,
         error: { code: "failed", message: "Failed.", retryable: false },
       }),

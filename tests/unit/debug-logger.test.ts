@@ -1,5 +1,6 @@
 import { PluginDebugLogger } from "../../src/adapters/settings/debugLogger";
-import { DEFAULT_SETTINGS, IxplorerSettings } from "../../src/adapters/settings/settings";
+import { DEFAULT_SETTINGS } from "../../src/adapters/settings/defaults";
+import { IxplorerSettings } from "../../src/adapters/settings/types";
 import { IxplorerError } from "../../src/core/errors";
 
 function createSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {

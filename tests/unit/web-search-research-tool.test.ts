@@ -1,5 +1,5 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { executeTool } from "../../src/core/agent/tool";
 import { WebSearchResearchTool } from "../../src/application/sources/tools/WebSearchResearchTool";
 import { SearchProvider } from "../../src/application/ports/web";
 
@@ -16,7 +16,7 @@ describe("WebSearchResearchTool", () => {
     const registry = new ResearchEvidenceRegistry({ createHandle: () => "opaque-result" });
     const tool = new WebSearchResearchTool({ provider, evidence: registry });
 
-    const execution = await executeResearchTool(tool, {
+    const execution = await executeTool(tool, {
       id: "call-web",
       name: "search_web",
       arguments: { query: "  current   research  ", limit: 5 },
@@ -54,7 +54,7 @@ describe("WebSearchResearchTool", () => {
     });
 
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "empty",
         name: "search_web",
         arguments: { query: "nothing" },
@@ -63,7 +63,7 @@ describe("WebSearchResearchTool", () => {
 
     vi.mocked(provider.search).mockRejectedValue(new Error("network detail"));
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "failed",
         name: "search_web",
         arguments: { query: "research" },

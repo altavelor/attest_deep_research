@@ -7,15 +7,13 @@ import {
   resolveToolCapabilities,
   ToolCapabilitySettings,
 } from "../../../../adapters/settings/toolCapabilities";
+import { MAX_PROFILE_NAME_LENGTH } from "../../../../adapters/settings/constants";
+import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "../../../../adapters/settings/types";
 import {
-  ChatModelProfile,
-  EmbeddingModelProfile,
-  ServerProfile,
-  MAX_PROFILE_NAME_LENGTH,
   createProfileId,
   hasDuplicateProfileName,
   isValidProfileName,
-} from "../../../../adapters/settings/settings";
+} from "../../../../adapters/settings/profileQueries";
 import { parsePositiveInteger } from "../../../../shared/numbers";
 import { optionalNumber, renderModalActions } from "./shared";
 

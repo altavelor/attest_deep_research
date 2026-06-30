@@ -3,14 +3,14 @@ import {
   formatDeepResearchReport,
   remapReportEvidenceIds,
 } from "../../../core/research/deepResearch/deepResearchReport";
-import { DeepResearchRunner } from "../../research/deepResearchPort";
 import {
-  failure,
-  ResearchToolExecution,
-  ResearchToolExecutionContext,
-  ResearchToolHandler,
-  ResearchToolParseResult,
-} from "../../research/ResearchTools";
+  Tool as ResearchToolHandler,
+  ToolContext as ResearchToolExecutionContext,
+  ToolExecution as ResearchToolExecution,
+  ToolParseResult as ResearchToolParseResult,
+  toolFailure,
+} from "../../../core/agent/tool";
+import { DeepResearchRunner } from "../../research/deepResearchPort";
 import { EvidenceRegistry } from "../evidence";
 
 export interface DeepSearchInput {
@@ -71,25 +71,25 @@ export class DeepSearchTool implements ResearchToolHandler<DeepSearchInput, Deep
       (key) => key !== "question" && key !== "scope",
     );
     if (unknownProperty) {
-      return failure("unknown-property", `Unknown property: ${unknownProperty}.`, false, {
+      return toolFailure("unknown-property", `Unknown property: ${unknownProperty}.`, false, {
         property: unknownProperty,
       });
     }
 
     const question = typeof input.question === "string" ? input.question.trim() : "";
     if (!question) {
-      return failure("missing-question", "A research question is required.");
+      return toolFailure("missing-question", "A research question is required.");
     }
     if (question.length > MAX_QUESTION_CHARS) {
-      return failure("question-too-long", `Question must not exceed ${MAX_QUESTION_CHARS} characters.`);
+      return toolFailure("question-too-long", `Question must not exceed ${MAX_QUESTION_CHARS} characters.`);
     }
 
     if (input.scope !== undefined && typeof input.scope !== "string") {
-      return failure("invalid-scope", "Scope must be a string.");
+      return toolFailure("invalid-scope", "Scope must be a string.");
     }
     const scope = typeof input.scope === "string" ? input.scope.trim() : undefined;
     if (scope && scope.length > MAX_SCOPE_CHARS) {
-      return failure("scope-too-long", `Scope must not exceed ${MAX_SCOPE_CHARS} characters.`);
+      return toolFailure("scope-too-long", `Scope must not exceed ${MAX_SCOPE_CHARS} characters.`);
     }
 
     return { ok: true, value: { question, ...(scope ? { scope } : {}) } };
@@ -108,7 +108,7 @@ export class DeepSearchTool implements ResearchToolHandler<DeepSearchInput, Deep
         onEvent: (event) => context.emit(event),
       });
     } catch {
-      return failure("deep-research-failed", "Deep research session failed.", true);
+      return toolFailure("deep-research-failed", "Deep research session failed.", true);
     }
 
     // Re-register the sub-agent's web evidence into the parent run so the

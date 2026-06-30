@@ -3,7 +3,7 @@ import {
   probeResponsesCapabilities,
   responsesProbeCacheKey,
 } from "../../src/adapters/settings/responsesCapabilityProbe";
-import { ServerProfile } from "../../src/adapters/settings/settings";
+import { ServerProfile } from "../../src/adapters/settings/types";
 
 function streamResponse(output: unknown[]): Response {
   const body = JSON.stringify({

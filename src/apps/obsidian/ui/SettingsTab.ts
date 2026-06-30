@@ -4,14 +4,14 @@ import type IxplorerPlugin from "../main";
 import { IndexProfile } from "../../../adapters/indexing/FileVectorIndexStore";
 import { formatIndexSize } from "../../../adapters/indexing/indexSize";
 import { DiscoveredModel } from "../../../adapters/settings/connectionTests";
+import { MAX_INDEX_PROFILE_COUNT } from "../../../adapters/settings/constants";
+import { normalizeSettingsState } from "../../../adapters/settings/normalization";
 import { DUCK_DUCK_GO_DESCRIPTION } from "../../../adapters/settings/privacyCopy";
 import {
-  MAX_INDEX_PROFILE_COUNT,
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
   getActiveIndexProfile,
-  normalizeSettingsState,
-} from "../../../adapters/settings/settings";
+} from "../../../adapters/settings/profileQueries";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexReportModal } from "./settings/IndexReportModal";
 import { IndexProfileModal } from "./settings/IndexProfileModal";

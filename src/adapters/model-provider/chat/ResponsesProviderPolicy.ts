@@ -5,7 +5,7 @@
 
 import { ApiFormat } from "../../../core/agent/protocol";
 import { IxplorerError } from "../../../core/errors";
-import { ReasoningCapabilitySettings } from "../../settings/settings";
+import { ReasoningCapabilitySettings } from "../../settings/types";
 
 export interface ResponsesPolicyInput {
   apiFormat: ApiFormat;
