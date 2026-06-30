@@ -4,6 +4,15 @@
 import { Tool } from "../../core/agent/tool";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
 import { IndexResearchTool } from "./tools/IndexResearchTool";
+import {
+  FindInIndexTool,
+  GetIndexSourceOutlineTool,
+  ListIndexChunksTool,
+  ListIndexSourcesTool,
+  ReadIndexChunkTool,
+  SearchIndexByMetadataTool,
+  SummarizeIndexSourceTool,
+} from "./tools/IndexInventoryTools";
 import { CheckUrlsTool, ListIndexUrlsTool } from "./tools/IndexUrlTools";
 import { EvidenceRegistry } from "./evidence";
 import { ResearchRetriever, UrlStatusChecker } from "../contracts/research";
@@ -39,6 +48,13 @@ export class RagSource implements DataSource {
   tools(): Tool[] {
     return [
       new IndexResearchTool({ retriever: this.retriever, evidence: this.evidence }),
+      new ListIndexSourcesTool(this.retriever),
+      new ListIndexChunksTool(this.retriever),
+      new ReadIndexChunkTool(this.retriever),
+      new FindInIndexTool(this.retriever),
+      new SummarizeIndexSourceTool(this.retriever),
+      new GetIndexSourceOutlineTool(this.retriever),
+      new SearchIndexByMetadataTool(this.retriever),
       new ListIndexUrlsTool(this.retriever, { allowedSourcePaths: this.indexSourcePaths }),
       ...(this.urlStatusChecker ? [new CheckUrlsTool(this.urlStatusChecker)] : []),
     ];

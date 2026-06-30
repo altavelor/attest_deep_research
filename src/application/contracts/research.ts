@@ -5,6 +5,20 @@ import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { SourceReference } from "../../core/model/source";
 import { ResearchChatHistoryMessage } from "../../core/research/prompts";
+import {
+  FindInIndexOptions,
+  FindInIndexMatch,
+  IndexChunkListItem,
+  IndexChunkListOptions,
+  IndexChunkReadOptions,
+  IndexChunkReadResult,
+  IndexCursorPage,
+  IndexMetadataSearchOptions,
+  IndexSourceInventoryItem,
+  IndexSourceInventoryOptions,
+  IndexSourceOutline,
+  IndexSourceSummary,
+} from "../ports/retrieval";
 
 export interface IndexedUrlReference {
   id: string;
@@ -52,6 +66,17 @@ export interface ResearchRetriever {
   search(query: string, options: RetrievalOptions): Promise<RetrievalResult>;
   getLanguageInventory?(): Promise<LanguageInventoryItem[]>;
   listIndexedUrls?(options: IndexedUrlInventoryOptions): Promise<IndexedUrlInventoryResult>;
+  listIndexSources?(
+    options: IndexSourceInventoryOptions,
+  ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
+  listIndexChunks?(options: IndexChunkListOptions): Promise<IndexCursorPage<IndexChunkListItem>>;
+  readIndexChunk?(options: IndexChunkReadOptions): Promise<IndexChunkReadResult>;
+  findInIndex?(options: FindInIndexOptions): Promise<IndexCursorPage<FindInIndexMatch>>;
+  summarizeIndexSource?(sourcePath: string, maxSections: number): Promise<IndexSourceSummary | null>;
+  getIndexSourceOutline?(sourcePath: string): Promise<IndexSourceOutline | null>;
+  searchIndexByMetadata?(
+    options: IndexMetadataSearchOptions,
+  ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
   expandAdjacentEvidence?(
     chunks: RetrievalResult["chunks"],
     radius: number,

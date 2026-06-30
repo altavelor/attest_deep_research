@@ -12,7 +12,16 @@ import {
   LanguageInventoryIndexStore,
   SourceSnapshotIndexStore,
 } from "../../application/ports/indexing";
-import { AdjacentChunkIndexStore, KeywordSearchIndexStore } from "../../application/ports/retrieval";
+import {
+  AdjacentChunkIndexStore,
+  FindInIndexOptions,
+  IndexChunkListOptions,
+  IndexChunkReadOptions,
+  IndexInventoryStore,
+  IndexMetadataSearchOptions,
+  IndexSourceInventoryOptions,
+  KeywordSearchIndexStore,
+} from "../../application/ports/retrieval";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "../../core/model/source";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
@@ -27,6 +36,15 @@ import {
   FileVectorIndexPersistence,
   FileVectorIndexPersistenceEvent,
 } from "./FileVectorIndexPersistence";
+import {
+  findInFileVectorIndex,
+  getFileVectorIndexSourceOutline,
+  listFileVectorIndexChunks,
+  listFileVectorIndexSources,
+  readFileVectorIndexChunk,
+  searchFileVectorIndexByMetadata,
+  summarizeFileVectorIndexSource,
+} from "./FileVectorIndexInventory";
 import {
   expandAdjacentFileVectorChunks,
   getAdjacentFileVectorChunks,
@@ -88,7 +106,8 @@ export class FileVectorIndexStore
   KeywordSearchIndexStore,
   AdjacentChunkIndexStore,
   IndexChunkInventoryStore,
-  LanguageInventoryIndexStore {
+  LanguageInventoryIndexStore,
+  IndexInventoryStore {
   private readonly folder: string;
   private readonly profileId: string;
   private readonly shardCount: number;
@@ -449,6 +468,83 @@ export class FileVectorIndexStore
 
     this.state = state;
     return getAdjacentFileVectorChunks(state, source, chunkId, radius);
+  }
+
+  async listIndexSources(options: IndexSourceInventoryOptions) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return { items: [] };
+    }
+
+    this.state = state;
+    return listFileVectorIndexSources(state, options);
+  }
+
+  async listIndexChunks(options: IndexChunkListOptions) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return { items: [] };
+    }
+
+    this.state = state;
+    return listFileVectorIndexChunks(state, options);
+  }
+
+  async readIndexChunk(options: IndexChunkReadOptions) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return { chunks: [] };
+    }
+
+    this.state = state;
+    return readFileVectorIndexChunk(state, options);
+  }
+
+  async findInIndex(options: FindInIndexOptions) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return { items: [] };
+    }
+
+    this.state = state;
+    return findInFileVectorIndex(state, options);
+  }
+
+  async summarizeIndexSource(sourcePath: string, maxSections: number) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return null;
+    }
+
+    this.state = state;
+    return summarizeFileVectorIndexSource(state, sourcePath, maxSections);
+  }
+
+  async getIndexSourceOutline(sourcePath: string) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return null;
+    }
+
+    this.state = state;
+    return getFileVectorIndexSourceOutline(state, sourcePath);
+  }
+
+  async searchIndexByMetadata(options: IndexMetadataSearchOptions) {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return { items: [] };
+    }
+
+    this.state = state;
+    return searchFileVectorIndexByMetadata(state, options);
   }
 
   private assertManifestMatchesStore(

@@ -28,6 +28,13 @@ describe("createResearchToolRegistry", () => {
 
     expect(first.tools.definitions().map((definition) => definition.function.name)).toEqual([
       "search_index",
+      "list_index_sources",
+      "list_index_chunks",
+      "read_index_chunk",
+      "find_in_index",
+      "summarize_index_source",
+      "get_index_source_outline",
+      "search_index_by_metadata",
       "list_index_urls",
       "check_urls",
       "search_web",
@@ -70,6 +77,13 @@ describe("createResearchToolRegistry", () => {
 
     expect(created.tools.definitions().map((definition) => definition.function.name)).toEqual([
       "search_index",
+      "list_index_sources",
+      "list_index_chunks",
+      "read_index_chunk",
+      "find_in_index",
+      "summarize_index_source",
+      "get_index_source_outline",
+      "search_index_by_metadata",
       "list_index_urls",
       "check_urls",
     ]);

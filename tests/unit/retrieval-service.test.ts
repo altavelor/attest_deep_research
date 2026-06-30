@@ -355,6 +355,52 @@ describe("RetrievalService", () => {
     expect(first.items.map((item) => item.normalizedUrl)).toEqual(["https://one.example/"]);
     expect(second.items.map((item) => item.normalizedUrl)).toEqual(["https://two.example/"]);
   });
+
+  it("delegates index inventory operations to stores that support them", async () => {
+    const source = markdownSource("Books/book.md", ["Intro"]);
+    const indexStore = Object.assign(new FakeIndexStore([]), {
+      listIndexSources: vi.fn().mockResolvedValue({ items: [{ sourcePath: "Books/book.md" }] }),
+      listIndexChunks: vi.fn().mockResolvedValue({ items: [{ chunkId: "chunk-a" }] }),
+      readIndexChunk: vi.fn().mockResolvedValue({ chunks: [{ chunkId: "chunk-a" }] }),
+      findInIndex: vi.fn().mockResolvedValue({ items: [{ chunkId: "chunk-a" }] }),
+      summarizeIndexSource: vi.fn().mockResolvedValue({ sourcePath: "Books/book.md" }),
+      getIndexSourceOutline: vi.fn().mockResolvedValue({ sourcePath: "Books/book.md" }),
+      searchIndexByMetadata: vi.fn().mockResolvedValue({ items: [{ sourcePath: "Books/book.md" }] }),
+    });
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    await expect(service.listIndexSources({ limit: 5 })).resolves.toMatchObject({
+      items: [{ sourcePath: "Books/book.md" }],
+    });
+    await expect(
+      service.listIndexChunks({ sourcePath: "Books/book.md", limit: 5 }),
+    ).resolves.toMatchObject({ items: [{ chunkId: "chunk-a" }] });
+    await expect(
+      service.readIndexChunk({ chunkId: "chunk-a", before: 1, after: 1, maxChars: 100 }),
+    ).resolves.toMatchObject({ chunks: [{ chunkId: "chunk-a" }] });
+    await expect(
+      service.findInIndex({ pattern: "alpha", mode: "literal", limit: 5 }),
+    ).resolves.toMatchObject({ items: [{ chunkId: "chunk-a" }] });
+    await expect(service.summarizeIndexSource("Books/book.md", 5)).resolves.toMatchObject({
+      sourcePath: "Books/book.md",
+    });
+    await expect(service.getIndexSourceOutline("Books/book.md")).resolves.toMatchObject({
+      sourcePath: "Books/book.md",
+    });
+    await expect(service.searchIndexByMetadata({ heading: "Intro", limit: 5 })).resolves.toMatchObject({
+      items: [{ sourcePath: "Books/book.md" }],
+    });
+
+    expect(indexStore.listIndexChunks).toHaveBeenCalledWith({
+      sourcePath: "Books/book.md",
+      limit: 5,
+    });
+    expect(source).toMatchObject({ kind: "markdown" });
+  });
 });
 
 describe("rankKeywordMatches", () => {

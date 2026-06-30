@@ -3,7 +3,16 @@ import {
   IndexStore,
   LanguageInventoryIndexStore,
 } from "../../application/ports/indexing";
-import { AdjacentChunkIndexStore, KeywordSearchIndexStore } from "../../application/ports/retrieval";
+import {
+  AdjacentChunkIndexStore,
+  FindInIndexOptions,
+  IndexChunkListOptions,
+  IndexChunkReadOptions,
+  IndexInventoryStore,
+  IndexMetadataSearchOptions,
+  IndexSourceInventoryOptions,
+  KeywordSearchIndexStore,
+} from "../../application/ports/retrieval";
 import { RetrievalOptions } from "../../core/retrieval/query";
 import { EmbeddingProviderClient } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
@@ -83,6 +92,55 @@ export class RetrievalService {
       return this.listIndexedUrlsFromStore(this.indexStore, options);
     }
     return { items: [] };
+  }
+
+  async listIndexSources(options: IndexSourceInventoryOptions) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return { items: [] };
+    }
+    return this.indexStore.listIndexSources(options);
+  }
+
+  async listIndexChunks(options: IndexChunkListOptions) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return { items: [] };
+    }
+    return this.indexStore.listIndexChunks(options);
+  }
+
+  async readIndexChunk(options: IndexChunkReadOptions) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return { chunks: [] };
+    }
+    return this.indexStore.readIndexChunk(options);
+  }
+
+  async findInIndex(options: FindInIndexOptions) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return { items: [] };
+    }
+    return this.indexStore.findInIndex(options);
+  }
+
+  async summarizeIndexSource(sourcePath: string, maxSections: number) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return null;
+    }
+    return this.indexStore.summarizeIndexSource(sourcePath, maxSections);
+  }
+
+  async getIndexSourceOutline(sourcePath: string) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return null;
+    }
+    return this.indexStore.getIndexSourceOutline(sourcePath);
+  }
+
+  async searchIndexByMetadata(options: IndexMetadataSearchOptions) {
+    if (!isIndexInventoryStore(this.indexStore)) {
+      return { items: [] };
+    }
+    return this.indexStore.searchIndexByMetadata(options);
   }
 
   async expandAdjacentEvidence(
@@ -320,6 +378,10 @@ function isIndexChunkInventoryStore(
   indexStore: IndexStore,
 ): indexStore is IndexStore & IndexChunkInventoryStore {
   return "listIndexedChunks" in indexStore && typeof indexStore.listIndexedChunks === "function";
+}
+
+function isIndexInventoryStore(indexStore: IndexStore): indexStore is IndexStore & IndexInventoryStore {
+  return "listIndexSources" in indexStore && typeof indexStore.listIndexSources === "function";
 }
 
 function fuseRetrievedChunks(
