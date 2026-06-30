@@ -3,8 +3,11 @@ import { ContextFileProvider } from "../../src/application/ports/vault";
 import { IndexResearchTool } from "../../src/application/sources/tools/IndexResearchTool";
 import { NoteToolService } from "../../src/adapters/research-tools/NoteTools";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { ToolManager } from "../../src/core/agent/tool";
-import { adaptNoteToolHandlers } from "../../src/application/sources/tools/noteToolHandlers";
+import { ToolManager } from "../../src/application/tools/ToolManager";
+import {
+  NOTE_PERMISSIONS,
+  createNoteTools,
+} from "../../src/adapters/research-tools/createNoteTools";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 
 class MemoryFiles implements ContextFileProvider {
@@ -17,20 +20,38 @@ class MemoryFiles implements ContextFileProvider {
 }
 
 describe("ToolManager", () => {
-  it("returns unknown-tool when note access is disabled", async () => {
+  it("refuses a tool whose permission is not granted, without invoking the service", async () => {
     const service = {
       definitions: () => [],
       execute: vi.fn(),
-    } as unknown as import("../../src/adapters/research-tools/NoteTools").NoteToolService;
-    const handlers = adaptNoteToolHandlers(service, {
-      noteAccess: false,
-      activeFileAccess: false,
-      noteMutationAccess: false,
+    } as unknown as NoteToolService;
+    // No permissions granted for this run.
+    const registry = new ToolManager(createNoteTools(service), new Set());
+
+    const result = await registry.execute({
+      id: "x",
+      name: "read_note",
+      arguments: { path: "Private.md" },
     });
-    const registry = new ToolManager(handlers);
-    const result = await registry.execute({ id: "x", name: "read_note", arguments: { path: "Private.md" } });
-    expect(result).toMatchObject({ ok: false, error: { code: "unknown-tool" } });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "tool-not-permitted" } });
     expect(service.execute).not.toHaveBeenCalled();
+  });
+
+  it("hides unpermitted tools from definitions but exposes permitted ones", () => {
+    const service = { definitions: () => [], execute: vi.fn() } as unknown as NoteToolService;
+    const registry = new ToolManager(
+      createNoteTools(service),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    expect(registry.definitions().map((definition) => definition.function.name)).toEqual([
+      "read_note",
+      "search_notes",
+      "list_notes",
+    ]);
+    expect(registry.has("read_note")).toBe(true);
+    expect(registry.has("create_note")).toBe(false);
   });
 
   it("rejects duplicate names during construction", () => {
@@ -60,29 +81,19 @@ describe("ToolManager", () => {
     });
   });
 
-  it("adapts existing note schemas and execution payloads without changing them", async () => {
+  it("delegates a permitted note tool to the service and adapts its payload", async () => {
     const notes = new NoteToolService({
       files: new MemoryFiles(),
       extractors: [new MarkdownExtractor()],
     });
-    const registry = new ToolManager(
-      adaptNoteToolHandlers(notes, {
-        noteAccess: true,
-        activeFileAccess: false,
-        noteMutationAccess: false,
-      }),
-    );
+    const registry = new ToolManager(createNoteTools(notes), new Set([NOTE_PERMISSIONS.read]));
 
-    expect(registry.definitions().map((definition) => definition.function.name)).toEqual([
-      "read_note",
-      "search_notes",
-      "list_notes",
-    ]);
     const execution = await registry.execute({
       id: "read",
       name: "read_note",
       arguments: { path: "Notes/One.md" },
     });
+
     expect(execution).toMatchObject({
       ok: true,
       value: { ok: true, path: "Notes/One.md", content: expect.stringContaining("Note content") },

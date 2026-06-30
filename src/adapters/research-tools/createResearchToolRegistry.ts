@@ -1,4 +1,4 @@
-import { ToolManager } from "../../core/agent/tool";
+import { ToolManager } from "../../application/tools/ToolManager";
 import { ResearchEvidenceRegistry } from "./ResearchEvidenceRegistry";
 import {
   ResearchToolAvailability,
@@ -6,6 +6,7 @@ import {
   ResearchToolsetOptions,
 } from "../../application/research/toolPorts";
 import { AttachmentSource } from "../../application/sources/AttachmentSource";
+import { NOTE_PERMISSIONS, createNoteTools } from "./createNoteTools";
 import { RagSource } from "../../application/sources/RagSource";
 import { SourceManager } from "../../application/sources/DataSource";
 import { WebSource } from "../../application/sources/WebSource";
@@ -30,20 +31,12 @@ export function createResearchToolRegistry(
   };
 
   const sources = new SourceManager();
+  const permissions = grantedPermissions(availability);
 
   if (options.noteTools) {
     // Lets create_note/update_note rewrite raw evidence-ID tokens into footnote links.
     options.noteTools.setCitationProvider(() => evidence.snapshot().citations);
-    sources.register(
-      new AttachmentSource({
-        service: options.noteTools,
-        availability: {
-          noteAccess: availability.noteAccess,
-          activeFileAccess: availability.activeFileAccess,
-          noteMutationAccess: availability.noteMutationAccess,
-        },
-      }),
-    );
+    sources.register(new AttachmentSource({ tools: createNoteTools(options.noteTools) }));
   }
 
   if (
@@ -83,9 +76,19 @@ export function createResearchToolRegistry(
   }
 
   // SourceManager -> ToolManager bridge (SPEC R5 diagram): each registered
-  // source contributes its Tool handlers into the manager the agent loop queries.
-  const tools = new ToolManager();
+  // source contributes its Tool handlers; the manager gates them by the run's
+  // granted permissions (each tool's `requires`).
+  const tools = new ToolManager([], permissions);
   sources.contributeTools(tools);
 
   return { evidence, tools, sources };
+}
+
+/** Map the availability policy onto the opaque permission names tools check. */
+function grantedPermissions(availability: ResearchToolAvailability): ReadonlySet<string> {
+  const granted = new Set<string>();
+  if (availability.noteAccess) granted.add(NOTE_PERMISSIONS.read);
+  if (availability.activeFileAccess) granted.add(NOTE_PERMISSIONS.active);
+  if (availability.noteMutationAccess) granted.add(NOTE_PERMISSIONS.mutate);
+  return granted;
 }
