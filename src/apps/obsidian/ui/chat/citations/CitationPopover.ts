@@ -14,23 +14,17 @@ export interface ChatCitationRef {
 export interface CitationPopoverControllerOptions {
   hostEl: HTMLElement;
   onOpenChunk(chunk: RetrievedChunk): void;
-  onExpandCitation?(ref: ChatCitationRef): void;
-  getExpansionStatus?(ref: ChatCitationRef): string | undefined;
 }
 
 export class CitationPopoverController {
   private readonly hostEl: HTMLElement;
   private readonly onOpenChunk: (chunk: RetrievedChunk) => void;
-  private readonly onExpandCitation?: (ref: ChatCitationRef) => void;
-  private readonly getExpansionStatus?: (ref: ChatCitationRef) => string | undefined;
   private popoverEl: HTMLElement | null = null;
   private closeTimer: number | null = null;
 
   constructor(options: CitationPopoverControllerOptions) {
     this.hostEl = options.hostEl;
     this.onOpenChunk = options.onOpenChunk;
-    this.onExpandCitation = options.onExpandCitation;
-    this.getExpansionStatus = options.getExpansionStatus;
   }
 
   open(anchorEl: HTMLElement, ref: ChatCitationRef): void {
@@ -51,13 +45,7 @@ export class CitationPopoverController {
       this.setHighlight(ref.key, true);
     });
     popover.addEventListener("focusout", () => this.scheduleClose(ref.key));
-    renderCitationPopoverContent(
-      popover,
-      ref,
-      (chunk) => this.onOpenChunk(chunk),
-      this.onExpandCitation,
-      this.getExpansionStatus,
-    );
+    renderCitationPopoverContent(popover, ref, (chunk) => this.onOpenChunk(chunk));
     this.popoverEl = popover;
     this.position(anchorEl, popover);
   }
@@ -198,8 +186,6 @@ function renderCitationPopoverContent(
   containerEl: HTMLElement,
   ref: ChatCitationRef,
   onOpenChunk: (chunk: RetrievedChunk) => void,
-  onExpandCitation: ((ref: ChatCitationRef) => void) | undefined,
-  getExpansionStatus: ((ref: ChatCitationRef) => string | undefined) | undefined,
 ): void {
   const block = containerEl.createDiv({
     cls: "ixplorer-chat__citation-popover-card",
@@ -217,27 +203,6 @@ function renderCitationPopoverContent(
     onOpenChunk(ref.chunk);
   });
   renderCitationCard(block, ref, onOpenChunk, { cardClass: "", linkRole: true });
-  const actions = containerEl.createDiv({ cls: "ixplorer-chat__citation-popover-actions" });
-  const expandButton = actions.createEl("button", {
-    cls: "ixplorer-chat__citation-action",
-    text: "Expand around this",
-    attr: {
-      type: "button",
-      title:
-        ref.chunk.source.kind === "web"
-          ? "Adjacent expansion is unavailable for web citations"
-          : "Add neighboring vault chunks for regeneration",
-    },
-  });
-  expandButton.disabled = ref.chunk.source.kind === "web" || !onExpandCitation;
-  expandButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onExpandCitation?.(ref);
-  });
-  const status = getExpansionStatus?.(ref);
-  if (status) {
-    actions.createSpan({ cls: "ixplorer-chat__citation-action-status", text: status });
-  }
 }
 
 function renderCitationCard(

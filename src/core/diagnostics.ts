@@ -62,10 +62,6 @@ export interface EvidencePlannerDiagnostics {
     retrievalChunkIds: string[];
     webChunkIds: string[];
   };
-  expandedCitations: {
-    citationKeys: string[];
-    addedChunkIds: string[];
-  };
 }
 
 export type GraphEdgeType = "forward_link" | "embed" | "backlink" | "question_link";

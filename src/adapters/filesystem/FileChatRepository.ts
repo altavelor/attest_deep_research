@@ -88,9 +88,6 @@ export class FileChatRepository implements ChatRepository {
       messages: input.messages,
       lastAnswer: input.lastAnswer,
       attachedContextPaths: [...input.attachedContextPaths],
-      ...(input.expandedCitationContexts && input.expandedCitationContexts.length > 0
-        ? { expandedCitationContexts: input.expandedCitationContexts }
-        : {}),
       chatSettings: input.chatSettings,
     };
 

@@ -113,8 +113,6 @@ export class EagerResearchStrategy implements ResearchStrategy {
       graphEvidence: rawGraphEvidence,
       retrievalEvidence: rawRetrievalEvidence,
       webEvidence: webEvidence.chunks,
-      expandedEvidence: searchMode === "none" ? undefined : request.expandedEvidence,
-      expandedCitationKeys: searchMode === "none" ? undefined : request.expandedCitationKeys,
     });
     const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
       ...formatCitation(chunk.source),

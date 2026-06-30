@@ -15,7 +15,6 @@ import type { ResearchSearchMode } from "../../../../../application/use-cases/re
 import type { ContextMode } from "../../../../../core/diagnostics";
 import { toUserMessage } from "../../../../../core/errors";
 import { ResearchAnswer } from "../../../../../core/answer";
-import { RetrievedChunk } from "../../../../../core/model/source";
 import { ChatDisplayMessage } from "../../../../../core/conversation/model";
 import { attachAnswerDetailsToLastAssistantMessage, completeAssistantCheckpoint, finalizeLastAssistantReasoning, interruptLastAssistantProgress, nextAssistantCheckpoint, nextAssistantMessage, nextAssistantReasoning, nextChainDeepResearchPhase, nextChainReasoningSegment, nextChainToolCallEnd, nextChainToolCallStart, resetLastAssistantContent, stampLastAssistantModel } from "../../../../../core/conversation/reducers";
 
@@ -39,9 +38,6 @@ export interface ResearchQuestionControllerOptions {
   getActiveFilePath(): string | undefined;
   shouldIncludeActiveFileContext(): boolean;
   shouldIncludeContextDiagnostics(): boolean;
-  getExpandedEvidence(): RetrievedChunk[];
-  getExpandedCitationKeys(): string[];
-  clearExpandedCitationContexts(): Promise<void>;
   getContextPaths(): string[];
   getSearchUnavailableMessage(): string | null;
   setEditingMessageIndex(index: number | null): void;
@@ -145,26 +141,6 @@ export class ResearchQuestionController {
     this.activeAbortController?.abort(new DOMException("Cancelled by user", "AbortError"));
   }
 
-  async regenerateWithExpandedContext(): Promise<void> {
-    if (this.running || this.options.getExpandedEvidence().length === 0) {
-      return;
-    }
-
-    const messages = this.options.getMessages();
-    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-    const question = lastUserMessage?.content.trim() ?? "";
-
-    if (await this.compactIfNeeded(question)) {
-      return;
-    }
-
-    if (!question || this.rejectIfContextWindowExceeded(question, messages)) {
-      return;
-    }
-
-    await this.runQuestion(question, { appendQuestion: true, chatHistory: messages });
-  }
-
   private async runQuestion(
     question: string,
     options: {
@@ -201,8 +177,6 @@ export class ResearchQuestionController {
     try {
       const service = this.options.createResearchService();
       const contextPaths = this.options.getContextPaths();
-      const expandedEvidence = this.options.getExpandedEvidence();
-      const expandedCitationKeys = this.options.getExpandedCitationKeys();
       const { forceDeepSearch, cleanedQuestion } = parseDeepResearchDirective(question);
       let completed = false;
 
@@ -215,8 +189,6 @@ export class ResearchQuestionController {
         activeFilePath: this.options.getActiveFilePath(),
         includeActiveFile: this.options.shouldIncludeActiveFileContext(),
         includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
-        expandedEvidence: expandedEvidence.length > 0 ? expandedEvidence : undefined,
-        expandedCitationKeys: expandedCitationKeys.length > 0 ? expandedCitationKeys : undefined,
         chatHistory: chatHistoryForPrompt(options.chatHistory),
         signal: this.activeAbortController.signal,
       })) {
@@ -231,9 +203,6 @@ export class ResearchQuestionController {
         if (event.type === "complete") {
           completed = true;
         }
-      }
-      if (completed && expandedEvidence.length > 0) {
-        await this.options.clearExpandedCitationContexts();
       }
       if (!completed) {
         this.options.setMessages(interruptLastAssistantProgress(this.options.getMessages()));

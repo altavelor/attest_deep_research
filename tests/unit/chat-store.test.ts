@@ -5,7 +5,6 @@ import { join } from "path";
 
 import { FileChatRepository as FileChatStore } from "../../src/adapters/filesystem/FileChatRepository";
 import { inferChatTitle } from "../../src/core/chat/savedChat";
-import { markdownSource, retrieved } from "../helpers/factories";
 
 const CHAT_SETTINGS = {
   chatModelProfileId: "chat-model",
@@ -55,13 +54,6 @@ describe("FileChatStore", () => {
       ],
       lastAnswer: null,
       attachedContextPaths: ["Docs/source.pdf"],
-      expandedCitationContexts: [
-        {
-          citationKey: "markdown:Docs/source.md::",
-          radius: 1,
-          chunks: [retrieved("adjacent-1", markdownSource("Docs/source.md"), "Adjacent text")],
-        },
-      ],
       chatSettings: {
         chatModelProfileId: "chat-granite",
         indexProfileId: "index-research",
@@ -76,13 +68,6 @@ describe("FileChatStore", () => {
       createdAt: "2026-06-10T10:00:00.000Z",
       updatedAt: "2026-06-10T10:00:00.000Z",
       attachedContextPaths: ["Docs/source.pdf"],
-      expandedCitationContexts: [
-        expect.objectContaining({
-          citationKey: "markdown:Docs/source.md::",
-          radius: 1,
-          chunks: [expect.objectContaining({ id: "adjacent-1" })],
-        }),
-      ],
       chatSettings: {
         chatModelProfileId: "chat-granite",
         indexProfileId: "index-research",

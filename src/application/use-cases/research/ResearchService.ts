@@ -4,7 +4,6 @@ import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from ".
 import { ToolCallingCapabilities } from "../../../core/agent/tool";
 import { ResearchAnswer } from "../../../core/answer";
 import { ContextIndexDiagnostics, IndexDescriptionPromptContext, ResearchExecutionStrategy, ToolCapabilityProbeAudit } from "../../../core/diagnostics";
-import { RetrievedChunk } from "../../../core/model/source";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "../chat/ContextAssembler";
 import { EvidencePlanner, EvidencePlannerOptions } from "../../../core/research/evidence-planner/EvidencePlanner";
@@ -248,18 +247,6 @@ export class ResearchService implements ConversationEngine {
     }
 
     yield* this.eager.execute({ ...ctx, executionStrategy, failedAgenticAttempt });
-  }
-
-  async expandAdjacentEvidence(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]> {
-    if (!this.vaultPipeline.expandAdjacentEvidence) {
-      return chunks.slice(0, limit);
-    }
-
-    return this.vaultPipeline.expandAdjacentEvidence(chunks, radius, limit);
   }
 
   async summarizeChatHistoryForCompaction(

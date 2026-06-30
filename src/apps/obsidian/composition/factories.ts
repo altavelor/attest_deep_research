@@ -253,7 +253,6 @@ export function createRetrieverForProfile(
     indexStore,
     embeddingModel: embeddingProfile.modelName,
     keyword: reader,
-    adjacent: reader,
     chunkInventory: reader,
     languageInventory: reader,
     inventory: new FileVectorInventoryStore(indexStore),

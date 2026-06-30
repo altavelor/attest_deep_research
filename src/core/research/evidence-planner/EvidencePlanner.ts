@@ -14,8 +14,6 @@ export interface EvidencePlannerInput {
   graphEvidence: RetrievedChunk[];
   retrievalEvidence: RetrievedChunk[];
   webEvidence: RetrievedChunk[];
-  expandedEvidence?: RetrievedChunk[];
-  expandedCitationKeys?: string[];
 }
 
 export interface EvidencePlannerOutput {
@@ -23,7 +21,6 @@ export interface EvidencePlannerOutput {
   graphEvidence: RetrievedChunk[];
   retrievedEvidence: RetrievedChunk[];
   webEvidence: RetrievedChunk[];
-  expandedEvidence: RetrievedChunk[];
   finalEvidence: RetrievedChunk[];
   diagnostics: EvidencePlannerDiagnostics;
 }
@@ -106,16 +103,7 @@ export class EvidencePlanner {
     }
 
     const explicit = takeGroup(input.explicitEvidence, slots.explicit, tokenBudget.explicit, seen);
-    const expanded = takeGroup(
-      input.expandedEvidence ?? [],
-      Math.max(0, input.evidenceLimit - explicit.included.length),
-      tokenBudget.retrieval,
-      seen,
-    );
-    const remainingAfterExplicit = Math.max(
-      0,
-      input.evidenceLimit - explicit.included.length - expanded.included.length,
-    );
+    const remainingAfterExplicit = Math.max(0, input.evidenceLimit - explicit.included.length);
     const webSlots = Math.min(slots.web, remainingAfterExplicit);
     const localSlots =
       input.searchMode === "indexOnly" || input.searchMode === "none"
@@ -160,7 +148,6 @@ export class EvidencePlanner {
         retrieval: groups.retrieval,
         web: groups.web,
       },
-      expandedEvidence: expanded.included,
       dropped,
     });
   }
@@ -227,13 +214,10 @@ function buildOutput(input: {
   slots: Record<EvidenceGroupName, number>;
   tokenBudget: Record<EvidenceGroupName, number>;
   groups: Record<EvidenceGroupName, RetrievedChunk[]>;
-  expandedEvidence?: RetrievedChunk[];
   dropped: EvidencePlannerDiagnostics["dropped"];
 }): EvidencePlannerOutput {
-  const expandedEvidence = input.expandedEvidence ?? [];
   const finalEvidence = uniqueChunks([
     ...input.groups.explicit,
-    ...expandedEvidence,
     ...(input.policy === "freshness" ? input.groups.web : []),
     ...input.groups.graph,
     ...input.groups.retrieval,
@@ -246,7 +230,6 @@ function buildOutput(input: {
     retrieval: input.groups.retrieval.filter((chunk) => finalIds.has(chunk.id)),
     web: input.groups.web.filter((chunk) => finalIds.has(chunk.id)),
   };
-  const outputExpandedEvidence = expandedEvidence.filter((chunk) => finalIds.has(chunk.id));
   const dropped = {
     explicitChunkIds: uniqueIds([
       ...input.dropped.explicitChunkIds,
@@ -270,7 +253,6 @@ function buildOutput(input: {
 
   return {
     explicitEvidence: outputGroups.explicit,
-    expandedEvidence: outputExpandedEvidence,
     graphEvidence: outputGroups.graph,
     retrievedEvidence: outputGroups.retrieval,
     webEvidence: outputGroups.web,
@@ -292,10 +274,6 @@ function buildOutput(input: {
         })),
       },
       dropped,
-      expandedCitations: {
-        citationKeys: input.input.expandedCitationKeys ?? [],
-        addedChunkIds: outputExpandedEvidence.map((chunk) => chunk.id),
-      },
     },
   };
 }

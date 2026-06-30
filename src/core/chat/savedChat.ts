@@ -5,7 +5,6 @@
 
 import { ChatDisplayMessage } from "../conversation/model";
 import { ResearchAnswer } from "../answer";
-import { RetrievedChunk } from "../model/source";
 import { ResearchSearchMode } from "../research/searchMode";
 import { ContextMode } from "../diagnostics";
 
@@ -19,12 +18,6 @@ export interface SavedChatSettings {
   contextMode?: ContextMode;
 }
 
-export interface ExpandedCitationContext {
-  citationKey: string;
-  radius: number;
-  chunks: RetrievedChunk[];
-}
-
 export interface SavedChat {
   schemaVersion: 2;
   id: string;
@@ -34,7 +27,6 @@ export interface SavedChat {
   messages: ChatDisplayMessage[];
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
-  expandedCitationContexts?: ExpandedCitationContext[];
   chatSettings: SavedChatSettings;
 }
 
@@ -52,7 +44,6 @@ export interface SaveChatInput {
   messages: ChatDisplayMessage[];
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
-  expandedCitationContexts?: ExpandedCitationContext[];
   chatSettings: SavedChatSettings;
 }
 
@@ -92,7 +83,6 @@ export function isSavedChat(value: unknown): value is SavedChat {
     typeof chat.updatedAt === "string" &&
     Array.isArray(chat.messages) &&
     Array.isArray(chat.attachedContextPaths) &&
-    (chat.expandedCitationContexts === undefined || Array.isArray(chat.expandedCitationContexts)) &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
     isSavedChatSettings(chat.chatSettings)
   );
