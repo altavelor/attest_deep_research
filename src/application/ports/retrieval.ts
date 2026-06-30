@@ -127,19 +127,6 @@ export interface KeywordSearchIndexStore {
   searchKeywords(query: string, options: RetrievalOptions): Promise<RetrievedChunk[]>;
 }
 
-export interface AdjacentChunkIndexStore {
-  expandAdjacentChunks(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]>;
-  getAdjacentChunks(
-    source: SourceReference,
-    chunkId: string,
-    radius: number,
-  ): Promise<RetrievedChunk[]>;
-}
-
 export interface IndexInventoryStore {
   listIndexSources(
     options: IndexSourceInventoryOptions,

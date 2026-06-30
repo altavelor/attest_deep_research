@@ -1,6 +1,6 @@
 import { IndexStore } from "../../src/application/ports/indexing";
 import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
-import { RetrievedChunk, SourceReference } from "../../src/core/model/source";
+import { RetrievedChunk } from "../../src/core/model/source";
 import { RetrievalOptions } from "../../src/core/retrieval/query";
 import { filterRetrievedChunks } from "../../src/core/retrieval/filters";
 
@@ -32,9 +32,6 @@ export class FakeIndexStore implements IndexStore {
   keywordQueries: string[] = [];
   keywordResults: RetrievedChunk[] = [];
   keywordResultsByQuery = new Map<string, RetrievedChunk[]>();
-  adjacentResults: RetrievedChunk[] = [];
-  directAdjacentResults: RetrievedChunk[] = [];
-  directAdjacentRequests: Array<{ source: SourceReference; chunkId: string; radius: number }> = [];
 
   constructor(private readonly chunks: RetrievedChunk[]) { }
 
@@ -61,18 +58,5 @@ export class FakeIndexStore implements IndexStore {
     const queryResults = this.keywordResultsByQuery.get(query);
     const results = queryResults ?? this.keywordResults;
     return options ? filterRetrievedChunks(results, options) : results;
-  }
-
-  async expandAdjacentChunks(chunks: RetrievedChunk[]): Promise<RetrievedChunk[]> {
-    return this.adjacentResults.length > 0 ? this.adjacentResults : chunks;
-  }
-
-  async getAdjacentChunks(
-    source: SourceReference,
-    chunkId: string,
-    radius: number,
-  ): Promise<RetrievedChunk[]> {
-    this.directAdjacentRequests.push({ source, chunkId, radius });
-    return this.directAdjacentResults;
   }
 }

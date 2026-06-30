@@ -292,57 +292,6 @@ describe("FileVectorIndexStore", () => {
       }),
     ]);
   });
-
-  it("expands adjacent chunks from the same source path", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
-
-    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
-    await store.upsert([
-      chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a"),
-      chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"),
-      chunk("chunk-c", "Research/a.md", "third", [1, 0], "hash-c"),
-    ]);
-
-    const expanded = await new FileVectorIndexReader(store, store).expandAdjacentChunks(
-      [{ ...chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"), score: 0.9 }],
-      1,
-      3,
-    );
-
-    expect(expanded.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
-  });
-
-  it("returns adjacent chunks by source and chunk id", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
-
-    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
-    await store.upsert([
-      chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a"),
-      chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"),
-      chunk("chunk-c", "Research/a.md", "third", [1, 0], "hash-c"),
-      chunk("chunk-d", "Research/other.md", "other", [1, 0], "hash-d"),
-    ]);
-
-    const adjacent = await new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/a.md"), "chunk-b", 1);
-
-    expect(adjacent.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
-    expect(adjacent.map((chunk) => chunk.text)).toEqual(["first", "second", "third"]);
-  });
-
-  it("returns no adjacent chunks when the source or chunk id is missing", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
-
-    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
-    await store.upsert([chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a")]);
-
-    await expect(
-      new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/a.md"), "missing", 1),
-    ).resolves.toEqual([]);
-    await expect(
-      new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/other.md"), "chunk-a", 1),
-    ).resolves.toEqual([]);
-  });
-
   it("lists indexed sources with filters and cursor pagination", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 

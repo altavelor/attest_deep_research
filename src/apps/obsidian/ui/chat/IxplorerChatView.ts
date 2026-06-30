@@ -1,6 +1,6 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
-import { ExpandedCitationContext, SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferChatTitle } from "../../../../core/chat/savedChat";
+import { SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferChatTitle } from "../../../../core/chat/savedChat";
 import { chatHistoryForPrompt } from "../../../../application/use-cases/chat/ChatCompaction";
 import { IndexingState } from "../../../../adapters/indexing/IndexingService";
 import { estimateResearchRequestTokens } from "../../../../core/research/prompts";
@@ -24,7 +24,7 @@ import {
   renderFollowUps as renderChatFollowUps,
 } from "./ChatTranscript";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
-import { ChatCitationRef, CitationPopoverController } from "./citations/CitationPopover";
+import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
 import { DiagnosticReportModalController } from "../DiagnosticReportModal";
@@ -36,7 +36,6 @@ import {
   createDefaultChatSettings,
   resolveChatSettings,
   stripContextDiagnostics,
-  uniqueChunks,
 } from "./chatViewHelpers";
 import { ChatDisplayMessage } from "../../../../core/conversation/model";
 import { stripMessageDiagnostics } from "../../../../core/conversation/reducers";
@@ -88,7 +87,6 @@ export class IxplorerChatView extends ItemView {
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
   private attachedContextPaths: string[] = [];
-  private expandedCitationContexts: ExpandedCitationContext[] = [];
   private currentChatSettings: SavedChatSettings;
   private currentChatId: string | null = null;
   private currentChatCreatedAt: string | null = null;
@@ -99,7 +97,6 @@ export class IxplorerChatView extends ItemView {
   private editingMessageIndex: number | null = null;
 
   private transcriptEl: HTMLElement | null = null;
-  private answerActionsEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private progressStatusEl: HTMLElement | null = null;
@@ -123,8 +120,6 @@ export class IxplorerChatView extends ItemView {
     this.citationPopover = new CitationPopoverController({
       hostEl: this.contentEl,
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
-      onExpandCitation: (ref) => void this.expandCitationContext(ref),
-      getExpansionStatus: (ref) => this.expansionStatus(ref.key),
     });
     this.diagnosticModal = new DiagnosticReportModalController(this.app);
     this.answerNoteWriter = new AnswerNoteWriter(this.app);
@@ -161,14 +156,6 @@ export class IxplorerChatView extends ItemView {
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
-      getExpandedEvidence: () => this.expandedCitationContexts.flatMap((context) => context.chunks),
-      getExpandedCitationKeys: () =>
-        this.expandedCitationContexts.map((context) => context.citationKey),
-      clearExpandedCitationContexts: async () => {
-        this.expandedCitationContexts = [];
-        await this.saveCurrentChat();
-        this.renderAnswerDetails();
-      },
       getContextPaths: () => this.attachedContextPaths,
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
@@ -251,9 +238,6 @@ export class IxplorerChatView extends ItemView {
     });
 
     const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
-    this.answerActionsEl = results.createDiv({
-      cls: "ixplorer-chat__answer-actions is-hidden",
-    });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
 
     this.composerRefs = renderChatComposer(chatPanel, {
@@ -329,7 +313,6 @@ export class IxplorerChatView extends ItemView {
     this.messages = [];
     this.lastAnswer = null;
     this.attachedContextPaths = [];
-    this.expandedCitationContexts = [];
     this.currentChatSettings = createDefaultChatSettings(this.services);
     this.currentChatId = null;
     this.currentChatCreatedAt = null;
@@ -417,36 +400,7 @@ export class IxplorerChatView extends ItemView {
   }
 
   private renderAnswerDetails(): void {
-    this.renderExpandedCitationActions();
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
-  }
-
-  private renderExpandedCitationActions(): void {
-    if (!this.answerActionsEl) {
-      return;
-    }
-
-    this.answerActionsEl.empty();
-    this.answerActionsEl.toggleClass("is-hidden", this.expandedCitationContexts.length === 0);
-    if (this.expandedCitationContexts.length === 0) {
-      return;
-    }
-
-    const totalChunks = uniqueChunks(
-      this.expandedCitationContexts.flatMap((context) => context.chunks),
-    ).length;
-    const panel = this.answerActionsEl.createDiv({ cls: "ixplorer-chat__expanded-context" });
-    panel.createSpan({
-      text: `${this.expandedCitationContexts.length} expanded citation(s), ${totalChunks} added chunk(s)`,
-    });
-    const regenerateButton = panel.createEl("button", {
-      cls: "ixplorer-chat__expanded-context-action",
-      text: "Regenerate with expanded context",
-      attr: { type: "button" },
-    });
-    regenerateButton.addEventListener("click", () => {
-      void this.researchController.regenerateWithExpandedContext();
-    });
   }
 
   private renderEmptyChatState(containerEl: HTMLElement): void {
@@ -567,7 +521,6 @@ export class IxplorerChatView extends ItemView {
     this.messages = chat.messages;
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
-    this.expandedCitationContexts = [...(chat.expandedCitationContexts ?? [])];
     this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
@@ -591,7 +544,6 @@ export class IxplorerChatView extends ItemView {
         ? this.lastAnswer
         : stripContextDiagnostics(this.lastAnswer),
       attachedContextPaths: this.attachedContextPaths,
-      expandedCitationContexts: this.expandedCitationContexts,
       chatSettings: this.currentChatSettings,
     });
     this.currentChatId = saved.id;
@@ -813,69 +765,6 @@ export class IxplorerChatView extends ItemView {
       ...formatCitationForChunk(chunk),
       id: chunk.id,
     });
-  }
-
-  private async expandCitationContext(ref: ChatCitationRef): Promise<void> {
-    if (ref.chunk.source.kind === "web") {
-      new Notice("Adjacent expansion is unavailable for web citations.");
-      return;
-    }
-
-    const currentEvidence = this.currentEvidence();
-    const sourceChunks = currentEvidence.filter((chunk) => ref.chunkIds.has(chunk.id));
-    const existing = this.expandedCitationContexts.find(
-      (context) => context.citationKey === ref.key,
-    );
-    const nextRadius = Math.min(3, (existing?.radius ?? 0) + 1);
-
-    if (existing?.radius === nextRadius) {
-      new Notice("This citation is already expanded to the maximum radius.");
-      return;
-    }
-
-    const expanded = await this.services
-      .createResearchService(
-        this.currentChatSettings.chatModelProfileId,
-        this.currentChatSettings.indexProfileId,
-      )
-      .expandAdjacentEvidence(sourceChunks.length > 0 ? sourceChunks : [ref.chunk], nextRadius, 16);
-    const baseIds = new Set(
-      [...currentEvidence, ...(existing?.chunks ?? [])].map((chunk) => chunk.id),
-    );
-    const added = expanded.filter((chunk) => !baseIds.has(chunk.id));
-
-    if (added.length === 0) {
-      new Notice("No adjacent chunks were found for this citation.");
-      return;
-    }
-
-    const nextContext: ExpandedCitationContext = {
-      citationKey: ref.key,
-      radius: nextRadius,
-      chunks: uniqueChunks([...(existing?.chunks ?? []), ...added]),
-    };
-    this.expandedCitationContexts = [
-      ...this.expandedCitationContexts.filter((context) => context.citationKey !== ref.key),
-      nextContext,
-    ];
-    await this.saveCurrentChat();
-    this.renderAnswerDetails();
-    new Notice(`Added ${added.length} adjacent chunk(s).`);
-  }
-
-  private currentEvidence(): RetrievedChunk[] {
-    return uniqueChunks([
-      ...(this.lastAnswer?.evidence ?? []),
-      ...this.messages.flatMap((message) => message.evidence ?? []),
-    ]);
-  }
-
-  private expansionStatus(citationKey: string): string | undefined {
-    const context = this.expandedCitationContexts.find(
-      (candidate) => candidate.citationKey === citationKey,
-    );
-
-    return context ? `Expanded +${context.chunks.length} chunks` : undefined;
   }
 
   private async saveAnswerToNewNote(): Promise<void> {

@@ -30,7 +30,6 @@ function makeRetrievalService(options: {
   return new RetrievalService({
     ...options,
     ...(has("searchKeywords") ? { keyword: options.indexStore as never } : {}),
-    ...(has("expandAdjacentChunks") ? { adjacent: options.indexStore as never } : {}),
     ...(has("listIndexedChunks") ? { chunkInventory: options.indexStore as never } : {}),
     ...(has("getLanguageInventory") ? { languageInventory: options.indexStore as never } : {}),
     ...(has("listIndexSources") ? { inventory: options.indexStore as never } : {}),
@@ -198,64 +197,6 @@ describe("RetrievalService", () => {
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["english-sorting"]);
     expect(result.usedFallback).toBe(true);
-  });
-
-  it("expands adjacent chunks when the index store supports it", async () => {
-    const indexStore = new FakeIndexStore([
-      retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
-    ]);
-    indexStore.adjacentResults = [
-      retrieved("before", markdownSource("Research/a.md"), "before", 0.8),
-      retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
-    ];
-    const service = makeRetrievalService({
-      embeddings: new FakeEmbeddingProvider([[1, 0]]),
-      indexStore,
-      embeddingModel: "nomic",
-    });
-
-    const result = await service.search("local", { limit: 2, includeWebResults: false });
-
-    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["before", "hit"]);
-  });
-
-  it("expands adjacent evidence on demand", async () => {
-    const hit = retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9);
-    const indexStore = new FakeIndexStore([hit]);
-    indexStore.adjacentResults = [
-      retrieved("before", markdownSource("Research/a.md"), "before", 0.8),
-      hit,
-      retrieved("after", markdownSource("Research/a.md"), "after", 0.7),
-    ];
-    const service = makeRetrievalService({
-      embeddings: new FakeEmbeddingProvider([[1, 0]]),
-      indexStore,
-      embeddingModel: "nomic",
-    });
-
-    const expanded = await service.expandAdjacentEvidence([hit], 2, 3);
-
-    expect(expanded.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
-  });
-
-  it("loads adjacent chunks by source and chunk id on demand", async () => {
-    const source = markdownSource("Research/a.md");
-    const indexStore = new FakeIndexStore([]);
-    indexStore.directAdjacentResults = [
-      retrieved("before", source, "before", 0),
-      retrieved("hit", source, "hit", 0),
-      retrieved("after", source, "after", 0),
-    ];
-    const service = makeRetrievalService({
-      embeddings: new FakeEmbeddingProvider([[1, 0]]),
-      indexStore,
-      embeddingModel: "nomic",
-    });
-
-    const adjacent = await service.getAdjacentChunks(source, "hit", 2);
-
-    expect(adjacent.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
-    expect(indexStore.directAdjacentRequests).toEqual([{ source, chunkId: "hit", radius: 2 }]);
   });
 
   it("lists URL references from indexed chunks with context and cursor pagination", async () => {

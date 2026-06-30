@@ -77,11 +77,6 @@ export interface ResearchRetriever {
   searchIndexByMetadata?(
     options: IndexMetadataSearchOptions,
   ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
-  expandAdjacentEvidence?(
-    chunks: RetrievalResult["chunks"],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievalResult["chunks"]>;
 }
 
 /** Port for query expansion (concrete LLM-backed impl lives in adapters/retrieval). */
@@ -106,8 +101,6 @@ export interface ResearchRequest {
   activeFilePath?: string;
   includeActiveFile?: boolean;
   includeContextDiagnostics?: boolean;
-  expandedEvidence?: RetrievalResult["chunks"];
-  expandedCitationKeys?: string[];
   /** Set when the user explicitly requested deep research via an `@deep_search` mention. */
   forceDeepSearch?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];

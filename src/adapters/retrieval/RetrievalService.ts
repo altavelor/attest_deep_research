@@ -4,7 +4,6 @@ import {
   LanguageInventoryIndexStore,
 } from "../../application/ports/indexing";
 import {
-  AdjacentChunkIndexStore,
   FindInIndexOptions,
   IndexChunkListOptions,
   IndexChunkReadOptions,
@@ -39,7 +38,6 @@ export interface RetrievalServiceOptions {
    * to empty results.
    */
   keyword?: KeywordSearchIndexStore;
-  adjacent?: AdjacentChunkIndexStore;
   chunkInventory?: IndexChunkInventoryStore;
   languageInventory?: LanguageInventoryIndexStore;
   inventory?: IndexInventoryStore;
@@ -50,7 +48,6 @@ export class RetrievalService {
   private readonly indexStore: IndexStore;
   private readonly embeddingModel: string;
   private readonly keyword?: KeywordSearchIndexStore;
-  private readonly adjacent?: AdjacentChunkIndexStore;
   private readonly chunkInventory?: IndexChunkInventoryStore;
   private readonly languageInventory?: LanguageInventoryIndexStore;
   private readonly inventory?: IndexInventoryStore;
@@ -60,7 +57,6 @@ export class RetrievalService {
     this.indexStore = options.indexStore;
     this.embeddingModel = options.embeddingModel;
     this.keyword = options.keyword;
-    this.adjacent = options.adjacent;
     this.chunkInventory = options.chunkInventory;
     this.languageInventory = options.languageInventory;
     this.inventory = options.inventory;
@@ -94,11 +90,7 @@ export class RetrievalService {
     const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
     const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
-    const chunks = await this.expandAdjacentChunks(
-      ranked.slice(0, options.limit),
-      1,
-      options.limit,
-    );
+    const chunks = ranked.slice(0, options.limit);
 
     return {
       chunks,
@@ -169,22 +161,6 @@ export class RetrievalService {
     return this.inventory?.searchIndexByMetadata(options) ?? { items: [] };
   }
 
-  async expandAdjacentEvidence(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]> {
-    return this.expandAdjacentChunks(chunks, radius, limit);
-  }
-
-  async getAdjacentChunks(
-    source: SourceReference,
-    chunkId: string,
-    radius: number,
-  ): Promise<RetrievedChunk[]> {
-    return this.adjacent?.getAdjacentChunks(source, chunkId, radius) ?? [];
-  }
-
   private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
     try {
       const response = await this.embeddings.embed({
@@ -213,14 +189,6 @@ export class RetrievalService {
     options: RetrievalOptions,
   ): Promise<RetrievedChunk[]> {
     return this.keyword?.searchKeywords(query, options) ?? [];
-  }
-
-  private async expandAdjacentChunks(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]> {
-    return this.adjacent?.expandAdjacentChunks(chunks, radius, limit) ?? chunks.slice(0, limit);
   }
 
   private async listIndexedUrlsFromStore(

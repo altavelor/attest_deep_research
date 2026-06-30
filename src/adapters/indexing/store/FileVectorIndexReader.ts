@@ -3,19 +3,12 @@ import {
   IndexChunkInventoryStore,
   LanguageInventoryIndexStore,
 } from "../../../application/ports/indexing";
-import {
-  AdjacentChunkIndexStore,
-  KeywordSearchIndexStore,
-} from "../../../application/ports/retrieval";
+import { KeywordSearchIndexStore } from "../../../application/ports/retrieval";
 import { LanguageInventoryItem } from "../../../core/model/citation";
-import { RetrievedChunk, SourceReference } from "../../../core/model/source";
+import { RetrievedChunk } from "../../../core/model/source";
 import { RetrievalOptions } from "../../../core/retrieval/query";
 import { languageInventoryFromStoredChunks } from "./FileVectorIndexLanguage";
-import {
-  expandAdjacentFileVectorChunks,
-  getAdjacentFileVectorChunks,
-  searchFileVectorKeywords,
-} from "./FileVectorIndexQuery";
+import { searchFileVectorKeywords } from "./FileVectorIndexQuery";
 import type { FileVectorStateAccess } from "./FileVectorIndexState";
 import { sourcePathFromReference } from "./FileVectorIndexVector";
 
@@ -25,15 +18,14 @@ export interface FileVectorPathResolver {
 }
 
 /**
- * Read-only retrieval capabilities over a file-backed index (keyword, adjacency,
- * chunk inventory, language inventory). Kept separate from the write/lifecycle
+ * Read-only retrieval capabilities over a file-backed index (keyword, chunk
+ * inventory, language inventory). Kept separate from the write/lifecycle
  * store; reads committed state through the injected {@link FileVectorStateAccess}
  * so it shares the store's in-memory cache.
  */
 export class FileVectorIndexReader
   implements
     KeywordSearchIndexStore,
-    AdjacentChunkIndexStore,
     IndexChunkInventoryStore,
     LanguageInventoryIndexStore
 {
@@ -100,33 +92,6 @@ export class FileVectorIndexReader
     });
   }
 
-  async expandAdjacentChunks(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]> {
-    if (radius <= 0 || chunks.length === 0 || limit <= 0) {
-      return chunks.slice(0, limit);
-    }
-
-    return this.state.withState(chunks.slice(0, limit), (state) =>
-      expandAdjacentFileVectorChunks(state, chunks, radius, limit),
-    );
-  }
-
-  async getAdjacentChunks(
-    source: SourceReference,
-    chunkId: string,
-    radius: number,
-  ): Promise<RetrievedChunk[]> {
-    if (radius < 0) {
-      return [];
-    }
-
-    return this.state.withState([], (state) =>
-      getAdjacentFileVectorChunks(state, source, chunkId, radius),
-    );
-  }
 }
 
 function parseInventoryCursor(cursor: string | undefined): number {

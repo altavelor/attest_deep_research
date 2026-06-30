@@ -49,18 +49,6 @@ export class VaultResearchPipeline {
     return { ...mergeRetrievalResults(primary, graph, this.evidenceLimit), queryVariants };
   }
 
-  async expandAdjacentEvidence(
-    chunks: RetrievalResult["chunks"],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievalResult["chunks"]> {
-    if (!this.retriever.expandAdjacentEvidence) {
-      return chunks.slice(0, limit);
-    }
-
-    return this.retriever.expandAdjacentEvidence(chunks, radius, limit);
-  }
-
   private async *buildQueryVariants(
     question: string,
   ): AsyncGenerator<ResearchStreamEvent, RetrievalQueryVariant[] | undefined> {
