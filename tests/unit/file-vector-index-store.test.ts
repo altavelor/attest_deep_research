@@ -6,10 +6,10 @@ import { join } from "path";
 import {
   FileVectorIndexStore,
   isFileVectorManifest,
-} from "../../src/adapters/indexing/FileVectorIndexStore";
-import { FileVectorInventoryStore } from "../../src/adapters/indexing/FileVectorInventoryStore";
-import { FileVectorIndexReader } from "../../src/adapters/indexing/FileVectorIndexReader";
-import { shardIdForSourcePath } from "../../src/adapters/indexing/sourcePathShard";
+} from "../../src/adapters/indexing/store/FileVectorIndexStore";
+import { FileVectorInventoryStore } from "../../src/adapters/indexing/inventory/FileVectorInventoryStore";
+import { FileVectorIndexReader } from "../../src/adapters/indexing/store/FileVectorIndexReader";
+import { shardIdForSourcePath } from "../../src/adapters/indexing/inventory/sourcePathShard";
 import { EmbeddedChunk, SourceReference } from "../../src/core/model/source";
 
 describe("FileVectorIndexStore", () => {

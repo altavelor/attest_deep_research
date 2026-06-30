@@ -1,5 +1,5 @@
-import { AgenticResearchRunner } from "../../src/application/use-cases/AgenticResearchRunner";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
+import { AgenticResearchRunner } from "../../src/application/use-cases/research/AgenticResearchRunner";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
 import { ResearchExecutionPolicy } from "../../src/core/research/ResearchExecutionPolicy";
 import { Tool } from "../../src/core/agent/tool";
 import { ToolManager } from "../../src/application/tools/ToolManager";

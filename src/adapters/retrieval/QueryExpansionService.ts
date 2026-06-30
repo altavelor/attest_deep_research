@@ -1,7 +1,7 @@
 import { RetrievalQueryVariant } from "../../core/retrieval/query";
 import { ChatModelProvider, ChatRequest } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
-import { detectTextLanguages } from "../indexing/languageDetection";
+import { detectTextLanguages } from "../indexing/pipeline/languageDetection";
 import {
   collectChatText,
   parseLlmJsonObject,

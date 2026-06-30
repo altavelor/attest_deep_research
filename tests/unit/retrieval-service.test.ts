@@ -1,5 +1,5 @@
 import { formatCitation } from "../../src/core/retrieval/citations";
-import { formatCitationLink } from "../../src/application/use-cases/citationLinks";
+import { formatCitationLink } from "../../src/application/use-cases/research/citationLinks";
 import { rankKeywordMatches } from "../../src/adapters/retrieval/keywordRanking";
 import { RetrievalService } from "../../src/adapters/retrieval/RetrievalService";
 import {

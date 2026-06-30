@@ -3,7 +3,7 @@
 // filesystem persistence lives in adapters/filesystem; the repository port lives
 // in application/ports.
 
-import { ChatDisplayMessage } from "../conversation";
+import { ChatDisplayMessage } from "../conversation/model";
 import { ResearchAnswer } from "../answer";
 import { RetrievedChunk } from "../model/source";
 import { ResearchSearchMode } from "../research/searchMode";

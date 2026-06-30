@@ -1,4 +1,4 @@
-import { OpenAiResponsesClient } from "../model-provider/chat/OpenAiResponsesClient";
+import { OpenAiResponsesClient } from "../model-provider/chat/responses/OpenAiResponsesClient";
 import { ReasoningCapabilitySettings, ServerProfile } from "./types";
 import type { PluginRequestLogger } from "./debugLogger";
 import { isIxplorerError } from "../../core/errors";

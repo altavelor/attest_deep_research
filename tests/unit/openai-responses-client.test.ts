@@ -1,4 +1,4 @@
-import { OpenAiResponsesClient } from "../../src/adapters/model-provider/chat/OpenAiResponsesClient";
+import { OpenAiResponsesClient } from "../../src/adapters/model-provider/chat/responses/OpenAiResponsesClient";
 
 function streamResponse(events: unknown[]): Response {
   const encoder = new TextEncoder();

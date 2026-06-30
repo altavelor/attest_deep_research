@@ -1,7 +1,7 @@
 import {
   resolveResponsesProviderPolicy,
   ResponsesPolicyInput,
-} from "../../src/adapters/model-provider/chat/ResponsesProviderPolicy";
+} from "../../src/adapters/model-provider/chat/responses/ResponsesProviderPolicy";
 import { ReasoningCapabilitySettings } from "../../src/adapters/settings/types";
 
 const capabilities: ReasoningCapabilitySettings = {

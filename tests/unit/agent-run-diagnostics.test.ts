@@ -1,4 +1,4 @@
-import { AgentRunDiagnosticCollector } from "../../src/application/use-cases/AgentRunDiagnostics";
+import { AgentRunDiagnosticCollector } from "../../src/application/use-cases/research/AgentRunDiagnostics";
 import { ContextDiagnostics } from "../../src/core/diagnostics";
 
 function emptyDiagnostics(): ContextDiagnostics {

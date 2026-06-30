@@ -3,8 +3,8 @@ import {
   createFileVectorManifest,
   isFileVectorManifest,
   validateFileVectorIndexFormat,
-} from "../../src/adapters/indexing/FileVectorIndexStore";
-import { shardIdForSourcePath } from "../../src/adapters/indexing/sourcePathShard";
+} from "../../src/adapters/indexing/store/FileVectorIndexStore";
+import { shardIdForSourcePath } from "../../src/adapters/indexing/inventory/sourcePathShard";
 
 describe("file vector index format", () => {
   it("creates a versioned manifest for 32 source-path hash shards", () => {

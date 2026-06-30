@@ -1,4 +1,4 @@
-import { IndexProfile } from "../indexing/FileVectorIndexStore";
+import { IndexProfile } from "../indexing/store/FileVectorIndexStore";
 import { DEFAULT_INDEX_PROFILE_ID } from "./constants";
 import { normalizeIndexProfileNumbers } from "./parsers";
 import { IxplorerSettings } from "./types";

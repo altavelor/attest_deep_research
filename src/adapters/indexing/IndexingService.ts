@@ -3,11 +3,11 @@ import { VaultFileSummary } from "../../application/ports/vault";
 import { positiveIntegerOrDefault } from "../../shared/numbers";
 import type { IndexFailedSourceSnapshot } from "../../application/ports/indexing";
 import type { ExtractedChunk } from "../../core/model/source";
-import type { FileSnapshot } from "./changeDetection";
-import { EmbeddingBatcher } from "./EmbeddingBatcher";
-import { FileProcessor } from "./FileProcessor";
-import { IndexingProgressState } from "./IndexingProgressState";
-import { IndexWriteCoordinator } from "./IndexWriteCoordinator";
+import type { FileSnapshot } from "./pipeline/changeDetection";
+import { EmbeddingBatcher } from "./pipeline/EmbeddingBatcher";
+import { FileProcessor } from "./pipeline/FileProcessor";
+import { IndexingProgressState } from "./controller/IndexingProgressState";
+import { IndexWriteCoordinator } from "./pipeline/IndexWriteCoordinator";
 import type { IndexedFileResult, IndexingServiceOptions, IndexingState, PendingIndexedFile } from "./types";
 
 export type {
