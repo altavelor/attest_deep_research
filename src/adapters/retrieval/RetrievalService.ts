@@ -32,17 +32,38 @@ export interface RetrievalServiceOptions {
   embeddings: EmbeddingProviderClient;
   indexStore: IndexStore;
   embeddingModel: string;
+  /**
+   * Optional retrieval capabilities, injected explicitly by the composition root
+   * rather than discovered by sniffing methods on {@link indexStore}. A single
+   * concrete store may be passed into several slots; absent capabilities degrade
+   * to empty results.
+   */
+  keyword?: KeywordSearchIndexStore;
+  adjacent?: AdjacentChunkIndexStore;
+  chunkInventory?: IndexChunkInventoryStore;
+  languageInventory?: LanguageInventoryIndexStore;
+  inventory?: IndexInventoryStore;
 }
 
 export class RetrievalService {
   private readonly embeddings: EmbeddingProviderClient;
   private readonly indexStore: IndexStore;
   private readonly embeddingModel: string;
+  private readonly keyword?: KeywordSearchIndexStore;
+  private readonly adjacent?: AdjacentChunkIndexStore;
+  private readonly chunkInventory?: IndexChunkInventoryStore;
+  private readonly languageInventory?: LanguageInventoryIndexStore;
+  private readonly inventory?: IndexInventoryStore;
 
   constructor(options: RetrievalServiceOptions) {
     this.embeddings = options.embeddings;
     this.indexStore = options.indexStore;
     this.embeddingModel = options.embeddingModel;
+    this.keyword = options.keyword;
+    this.adjacent = options.adjacent;
+    this.chunkInventory = options.chunkInventory;
+    this.languageInventory = options.languageInventory;
+    this.inventory = options.inventory;
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
@@ -80,67 +101,42 @@ export class RetrievalService {
   }
 
   async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
-    if (!isLanguageInventoryIndexStore(this.indexStore)) {
-      return [];
-    }
-
-    return this.indexStore.getLanguageInventory();
+    return this.languageInventory?.getLanguageInventory() ?? [];
   }
 
   async listIndexedUrls(options: IndexedUrlInventoryOptions): Promise<IndexedUrlInventoryResult> {
-    if (isIndexChunkInventoryStore(this.indexStore)) {
-      return this.listIndexedUrlsFromStore(this.indexStore, options);
+    if (!this.chunkInventory) {
+      return { items: [] };
     }
-    return { items: [] };
+    return this.listIndexedUrlsFromStore(this.chunkInventory, options);
   }
 
   async listIndexSources(options: IndexSourceInventoryOptions) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return { items: [] };
-    }
-    return this.indexStore.listIndexSources(options);
+    return this.inventory?.listIndexSources(options) ?? { items: [] };
   }
 
   async listIndexChunks(options: IndexChunkListOptions) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return { items: [] };
-    }
-    return this.indexStore.listIndexChunks(options);
+    return this.inventory?.listIndexChunks(options) ?? { items: [] };
   }
 
   async readIndexChunk(options: IndexChunkReadOptions) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return { chunks: [] };
-    }
-    return this.indexStore.readIndexChunk(options);
+    return this.inventory?.readIndexChunk(options) ?? { chunks: [] };
   }
 
   async findInIndex(options: FindInIndexOptions) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return { items: [] };
-    }
-    return this.indexStore.findInIndex(options);
+    return this.inventory?.findInIndex(options) ?? { items: [] };
   }
 
   async summarizeIndexSource(sourcePath: string, maxSections: number) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return null;
-    }
-    return this.indexStore.summarizeIndexSource(sourcePath, maxSections);
+    return this.inventory?.summarizeIndexSource(sourcePath, maxSections) ?? null;
   }
 
   async getIndexSourceOutline(sourcePath: string) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return null;
-    }
-    return this.indexStore.getIndexSourceOutline(sourcePath);
+    return this.inventory?.getIndexSourceOutline(sourcePath) ?? null;
   }
 
   async searchIndexByMetadata(options: IndexMetadataSearchOptions) {
-    if (!isIndexInventoryStore(this.indexStore)) {
-      return { items: [] };
-    }
-    return this.indexStore.searchIndexByMetadata(options);
+    return this.inventory?.searchIndexByMetadata(options) ?? { items: [] };
   }
 
   async expandAdjacentEvidence(
@@ -156,11 +152,7 @@ export class RetrievalService {
     chunkId: string,
     radius: number,
   ): Promise<RetrievedChunk[]> {
-    if (!isDirectAdjacentChunkIndexStore(this.indexStore)) {
-      return [];
-    }
-
-    return this.indexStore.getAdjacentChunks(source, chunkId, radius);
+    return this.adjacent?.getAdjacentChunks(source, chunkId, radius) ?? [];
   }
 
   private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
@@ -190,11 +182,7 @@ export class RetrievalService {
     query: string,
     options: RetrievalOptions,
   ): Promise<RetrievedChunk[]> {
-    if (isKeywordSearchIndexStore(this.indexStore)) {
-      return this.indexStore.searchKeywords(query, options);
-    }
-
-    return [];
+    return this.keyword?.searchKeywords(query, options) ?? [];
   }
 
   private async expandAdjacentChunks(
@@ -202,18 +190,14 @@ export class RetrievalService {
     radius: number,
     limit: number,
   ): Promise<RetrievedChunk[]> {
-    if (!isAdjacentChunkIndexStore(this.indexStore)) {
-      return chunks.slice(0, limit);
-    }
-
-    return this.indexStore.expandAdjacentChunks(chunks, radius, limit);
+    return this.adjacent?.expandAdjacentChunks(chunks, radius, limit) ?? chunks.slice(0, limit);
   }
 
   private async listIndexedUrlsFromStore(
-    indexStore: IndexStore & IndexChunkInventoryStore,
+    chunkInventory: IndexChunkInventoryStore,
     options: IndexedUrlInventoryOptions,
   ): Promise<IndexedUrlInventoryResult> {
-    const batch = await indexStore.listIndexedChunks({
+    const batch = await chunkInventory.listIndexedChunks({
       limit: Number.MAX_SAFE_INTEGER,
       ...(options.sourcePath ? { sourcePath: options.sourcePath } : {}),
     });
@@ -344,44 +328,6 @@ function normalizedQueryVariants(
     .filter(Boolean);
 
   return Array.from(new Set(normalized)).slice(0, 8);
-}
-
-function isKeywordSearchIndexStore(
-  indexStore: IndexStore,
-): indexStore is IndexStore & KeywordSearchIndexStore {
-  return "searchKeywords" in indexStore && typeof indexStore.searchKeywords === "function";
-}
-
-function isAdjacentChunkIndexStore(
-  indexStore: IndexStore,
-): indexStore is IndexStore & AdjacentChunkIndexStore {
-  return (
-    "expandAdjacentChunks" in indexStore && typeof indexStore.expandAdjacentChunks === "function"
-  );
-}
-
-function isDirectAdjacentChunkIndexStore(
-  indexStore: IndexStore,
-): indexStore is IndexStore & AdjacentChunkIndexStore {
-  return "getAdjacentChunks" in indexStore && typeof indexStore.getAdjacentChunks === "function";
-}
-
-function isLanguageInventoryIndexStore(
-  indexStore: IndexStore,
-): indexStore is IndexStore & LanguageInventoryIndexStore {
-  return (
-    "getLanguageInventory" in indexStore && typeof indexStore.getLanguageInventory === "function"
-  );
-}
-
-function isIndexChunkInventoryStore(
-  indexStore: IndexStore,
-): indexStore is IndexStore & IndexChunkInventoryStore {
-  return "listIndexedChunks" in indexStore && typeof indexStore.listIndexedChunks === "function";
-}
-
-function isIndexInventoryStore(indexStore: IndexStore): indexStore is IndexStore & IndexInventoryStore {
-  return "listIndexSources" in indexStore && typeof indexStore.listIndexSources === "function";
 }
 
 function fuseRetrievedChunks(

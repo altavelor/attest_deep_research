@@ -2,27 +2,13 @@ import { rm } from "fs/promises";
 
 import { IxplorerError } from "../../core/errors";
 import {
-  IndexChunkInventoryOptions,
-  IndexChunkInventoryStore,
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,
   IndexStore,
   IndexStoreMetadata,
   IndexStoreWriteSession,
-  LanguageInventoryIndexStore,
   SourceSnapshotIndexStore,
 } from "../../application/ports/indexing";
-import {
-  AdjacentChunkIndexStore,
-  FindInIndexOptions,
-  IndexChunkListOptions,
-  IndexChunkReadOptions,
-  IndexInventoryStore,
-  IndexMetadataSearchOptions,
-  IndexSourceInventoryOptions,
-  KeywordSearchIndexStore,
-} from "../../application/ports/retrieval";
-import { LanguageInventoryItem } from "../../core/model/citation";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "../../core/model/source";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
@@ -31,26 +17,12 @@ import {
   INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS,
   type IndexDescriptionSource,
 } from "./IndexDescription";
-import { languageInventoryFromStoredChunks } from "./FileVectorIndexLanguage";
+import type { FileVectorPathResolver } from "./FileVectorIndexReader";
 import {
   FileVectorIndexPersistence,
   FileVectorIndexPersistenceEvent,
 } from "./FileVectorIndexPersistence";
-import {
-  findInFileVectorIndex,
-  getFileVectorIndexSourceOutline,
-  listFileVectorIndexChunks,
-  listFileVectorIndexSources,
-  readFileVectorIndexChunk,
-  searchFileVectorIndexByMetadata,
-  summarizeFileVectorIndexSource,
-} from "./FileVectorIndexInventory";
-import {
-  expandAdjacentFileVectorChunks,
-  getAdjacentFileVectorChunks,
-  queryFileVectorState,
-  searchFileVectorKeywords,
-} from "./FileVectorIndexQuery";
+import { queryFileVectorState } from "./FileVectorIndexQuery";
 import {
   applyFailedSourceSnapshots,
   applySourceSnapshotUpdates,
@@ -58,9 +30,9 @@ import {
   createEmptyState,
   createWriteChanges,
   FileVectorIndexState,
+  FileVectorStateAccess,
   removeSourcePathFromState,
 } from "./FileVectorIndexState";
-import { sourcePathFromReference } from "./FileVectorIndexVector";
 import type { IndexSourceReportItem } from "./types";
 
 export {
@@ -103,11 +75,8 @@ export class FileVectorIndexStore
   implements
   IndexStore,
   SourceSnapshotIndexStore,
-  KeywordSearchIndexStore,
-  AdjacentChunkIndexStore,
-  IndexChunkInventoryStore,
-  LanguageInventoryIndexStore,
-  IndexInventoryStore {
+  FileVectorPathResolver,
+  FileVectorStateAccess {
   private readonly folder: string;
   private readonly profileId: string;
   private readonly shardCount: number;
@@ -326,146 +295,13 @@ export class FileVectorIndexStore
     });
   }
 
-  async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
-    return this.withState([], (state) => {
-      const inventory = state.manifest.languageInventory ?? [];
-
-      if (inventory.length > 0 && inventory.some((item) => item.language !== "unknown")) {
-        return [...inventory];
-      }
-
-      return languageInventoryFromStoredChunks(state);
-    });
-  }
-
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
     return queryFileVectorState(this.requireState(), embedding, limit);
   }
 
-  async searchKeywords(
-    query: string,
-    options: {
-      limit: number;
-      includeWebResults: boolean;
-      minScore?: number;
-      sourceKinds?: Array<SourceReference["kind"]>;
-      fileExtensions?: string[];
-    },
-  ): Promise<RetrievedChunk[]> {
-    return this.withState([], (state) =>
-      searchFileVectorKeywords(state, query, options, (relativePath) =>
-        this.persistence.pathFor(relativePath),
-      ),
-    );
-  }
-
-  async listIndexedChunks(options: IndexChunkInventoryOptions): Promise<{
-    chunks: RetrievedChunk[];
-    nextCursor?: string;
-  }> {
-    if (options.limit <= 0) {
-      return { chunks: [] };
-    }
-
-    return this.withState({ chunks: [] as RetrievedChunk[] }, (state) => {
-    const start = parseInventoryCursor(options.cursor);
-    const rows = [...state.chunksByShard.values()]
-      .flat()
-      .map((chunk) => chunk.row)
-      .filter((row) => !options.sourcePath || row.sourcePath === options.sourcePath)
-      .sort((left, right) => {
-        const leftPath = left.sourcePath ?? sourcePathFromReference(left.source);
-        const rightPath = right.sourcePath ?? sourcePathFromReference(right.source);
-        return (
-          leftPath.localeCompare(rightPath) ||
-          (left.chunkIndex ?? 0) - (right.chunkIndex ?? 0) ||
-          left.id.localeCompare(right.id)
-        );
-      });
-    const selected = rows.slice(start, start + options.limit);
-    const next = start + selected.length;
-
-    return {
-      chunks: selected.map((row) => ({
-        id: row.id,
-        source: row.source,
-        text: row.text,
-        contentHash: row.contentHash,
-        score: 1,
-      })),
-      ...(next < rows.length ? { nextCursor: String(next) } : {}),
-    };
-    });
-  }
-
-  async expandAdjacentChunks(
-    chunks: RetrievedChunk[],
-    radius: number,
-    limit: number,
-  ): Promise<RetrievedChunk[]> {
-    if (radius <= 0 || chunks.length === 0 || limit <= 0) {
-      return chunks.slice(0, limit);
-    }
-
-    return this.withState(chunks.slice(0, limit), (state) =>
-      expandAdjacentFileVectorChunks(state, chunks, radius, limit),
-    );
-  }
-
-  async getAdjacentChunks(
-    source: SourceReference,
-    chunkId: string,
-    radius: number,
-  ): Promise<RetrievedChunk[]> {
-    if (radius < 0) {
-      return [];
-    }
-
-    return this.withState([], (state) =>
-      getAdjacentFileVectorChunks(state, source, chunkId, radius),
-    );
-  }
-
-  async listIndexSources(options: IndexSourceInventoryOptions) {
-    return this.withState({ items: [] }, (state) =>
-      listFileVectorIndexSources(state, options),
-    );
-  }
-
-  async listIndexChunks(options: IndexChunkListOptions) {
-    return this.withState({ items: [] }, (state) =>
-      listFileVectorIndexChunks(state, options),
-    );
-  }
-
-  async readIndexChunk(options: IndexChunkReadOptions) {
-    return this.withState({ chunks: [] }, (state) =>
-      readFileVectorIndexChunk(state, options),
-    );
-  }
-
-  async findInIndex(options: FindInIndexOptions) {
-    return this.withState({ items: [] }, (state) =>
-      findInFileVectorIndex(state, options),
-    );
-  }
-
-  async summarizeIndexSource(sourcePath: string, maxSections: number) {
-    return this.withState(null, (state) =>
-      summarizeFileVectorIndexSource(state, sourcePath, maxSections),
-    );
-  }
-
-  async getIndexSourceOutline(sourcePath: string) {
-    return this.withState(null, (state) =>
-      getFileVectorIndexSourceOutline(state, sourcePath),
-    );
-  }
-
-  async searchIndexByMetadata(options: IndexMetadataSearchOptions) {
-    return this.withState({ items: [] }, (state) =>
-      searchFileVectorIndexByMetadata(state, options),
-    );
+  /** Resolve an index-relative path to an absolute path; used by read collaborators. */
+  pathFor(relativePath: string): string {
+    return this.persistence.pathFor(relativePath);
   }
 
   private assertManifestMatchesStore(
@@ -495,9 +331,11 @@ export class FileVectorIndexStore
   /**
    * Resolve the committed state from cache or disk, cache it, and run `run`.
    * Returns `fallback` when no committed index exists. Centralizes the
-   * load-or-null + cache dance shared by every read/inventory method.
+   * load-or-null + cache dance shared by every read/inventory method. Public so
+   * read-only collaborators (e.g. the inventory store) can share this cache via
+   * the {@link FileVectorStateAccess} port.
    */
-  private async withState<T>(
+  async withState<T>(
     fallback: T,
     run: (state: FileVectorIndexState) => T | Promise<T>,
   ): Promise<T> {
@@ -529,10 +367,4 @@ function sourcePathForDescription(source: SourceReference): string {
 
 function createWriteId(now: () => Date): string {
   return `${now().getTime().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function parseInventoryCursor(cursor: string | undefined): number {
-  if (!cursor) return 0;
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }

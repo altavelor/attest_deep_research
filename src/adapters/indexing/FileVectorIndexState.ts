@@ -17,6 +17,15 @@ export interface FileVectorIndexState {
   chunksByShard: Map<string, StoredChunk[]>;
 }
 
+/**
+ * Narrow read port over the committed state: resolve it (from cache or disk),
+ * run `run`, or return `fallback` when no committed index exists. Lets read-only
+ * collaborators (inventory) share the store's cache without depending on the store.
+ */
+export interface FileVectorStateAccess {
+  withState<T>(fallback: T, run: (state: FileVectorIndexState) => T | Promise<T>): Promise<T>;
+}
+
 export interface FileVectorIndexWriteChanges {
   dirtyShardIds: Set<string>;
   dirtySourcePaths: Set<string>;
