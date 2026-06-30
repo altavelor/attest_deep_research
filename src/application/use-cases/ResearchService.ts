@@ -21,6 +21,7 @@ import {
   ResearchSearchMode,
   ResearchStreamEvent,
   QueryExpansion,
+  UrlStatusChecker,
 } from "../contracts/research";
 import { ConversationEngine } from "../contracts/conversationView";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../../core/conversation";
@@ -42,6 +43,7 @@ export interface ResearchServiceOptions {
   chatModelName: string;
   chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   searchProvider?: SearchProvider;
+  urlStatusChecker?: UrlStatusChecker;
   queryExpansion?: QueryExpansion;
   contextAssembler?: ContextAssembler;
   graphContext?: ContextAssembleRequest["graph"];
@@ -179,6 +181,7 @@ export class ResearchService implements ConversationEngine {
       webPipeline,
       answerSynthesis: this.answerSynthesis,
       retriever: options.retriever,
+      urlStatusChecker: options.urlStatusChecker,
       searchProvider: options.searchProvider,
       noteTools: options.noteTools,
       toolsetFactory: options.toolsetFactory,

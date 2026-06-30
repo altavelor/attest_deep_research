@@ -51,7 +51,14 @@ export function createResearchToolRegistry(
     availability.retrieverAvailable &&
     (availability.searchMode === "indexOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    sources.register(new RagSource({ retriever: options.retriever, evidence }));
+    sources.register(
+      new RagSource({
+        retriever: options.retriever,
+        urlStatusChecker: options.urlStatusChecker,
+        indexSourcePaths: options.indexSourcePaths,
+        evidence,
+      }),
+    );
   }
 
   if (

@@ -131,6 +131,8 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       },
       noteTools: this.deps.noteTools,
       retriever: this.deps.retriever,
+      urlStatusChecker: this.deps.urlStatusChecker,
+      indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
       deepResearchRunner: this.deps.deepResearchRunner,
     });
@@ -157,9 +159,13 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       estimateTextTokens(messages.map((message) => message.content).join("\n")) +
       estimateTextTokens(JSON.stringify(created.tools.definitions())) +
       (this.deps.reservedOutputTokens ?? 0);
+    const maxResultChars = resolveAgenticMaxResultChars({
+      contextLimitTokens: this.deps.contextLimitTokens,
+      usedTokens: estimatedTokens,
+    });
     let result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
     if (this.deps.contextLimitTokens && estimatedTokens > this.deps.contextLimitTokens) {
-      result = emptyAgenticFailure("context-limit-exceeded");
+      result = emptyAgenticFailure("context-limit-exceeded", maxResultChars);
     } else {
       result = await new AgenticResearchRunner({
         modelRound: this.deps.modelRound ?? this.deps.modelRoundFactory(this.deps.chatModel),
@@ -167,6 +173,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
         messages,
         tools: created.tools,
         policy: effectivePolicy,
+        maxResultChars,
         temperature: this.deps.chatOptions.temperature,
         maxTokens: this.deps.chatOptions.maxTokens,
         reasoning: this.deps.reasoning,
@@ -255,7 +262,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       phases: result.phases,
       reasoningSegments: result.reasoningSegments,
       stopReasons: result.stopReasons,
-      budgets: agenticBudgets(result.totalResultChars),
+      budgets: agenticBudgets(result.totalResultChars, result.maxResultChars),
     };
     if (this.deps.reasoningDiagnostics) {
       diagnostics.reasoning = {
@@ -325,7 +332,24 @@ function emitNestedDeepResearchEvent(
   }
 }
 
-function emptyAgenticFailure(reason: AgenticResearchFailure["reason"]): AgenticResearchFailure {
+export function resolveAgenticMaxResultChars(input: {
+  contextLimitTokens?: number;
+  usedTokens: number;
+}): number {
+  const fallback = 80_000;
+  if (!input.contextLimitTokens || input.contextLimitTokens <= 0) {
+    return fallback;
+  }
+
+  const availableTokens = Math.max(0, input.contextLimitTokens - input.usedTokens);
+  const targetChars = Math.floor(availableTokens * 4 * 0.25);
+  return Math.max(fallback, Math.min(1_000_000, targetChars));
+}
+
+function emptyAgenticFailure(
+  reason: AgenticResearchFailure["reason"],
+  maxResultChars: number,
+): AgenticResearchFailure {
   return {
     ok: false,
     reason,
@@ -337,6 +361,7 @@ function emptyAgenticFailure(reason: AgenticResearchFailure["reason"]): AgenticR
     duplicateCalls: 0,
     phases: [],
     stopReasons: [],
+    maxResultChars,
     totalResultChars: 0,
     reasoningItemCount: 0,
     reasoningSegments: [],

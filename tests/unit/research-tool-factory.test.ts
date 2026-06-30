@@ -8,9 +8,11 @@ describe("createResearchToolRegistry", () => {
       search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
     };
     const provider: SearchProvider = { search: vi.fn().mockResolvedValue([]) };
+    const urlStatusChecker = { checkUrls: vi.fn().mockResolvedValue([]) };
     const options = {
       retriever,
       searchProvider: provider,
+      urlStatusChecker,
       availability: {
         searchMode: "indexAndWeb" as const,
         noteAccess: false,
@@ -26,6 +28,8 @@ describe("createResearchToolRegistry", () => {
 
     expect(first.tools.definitions().map((definition) => definition.function.name)).toEqual([
       "search_index",
+      "list_index_urls",
+      "check_urls",
       "search_web",
     ]);
     expect(first.evidence).not.toBe(second.evidence);  });
@@ -43,4 +47,31 @@ describe("createResearchToolRegistry", () => {
     });
 
     expect(created.tools.definitions()).toEqual([]);  });
+
+  it("exposes URL inventory tools in index-only mode when index dependencies exist", () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+      listIndexedUrls: vi.fn().mockResolvedValue({ items: [] }),
+    };
+    const urlStatusChecker = { checkUrls: vi.fn().mockResolvedValue([]) };
+
+    const created = createResearchToolRegistry({
+      retriever,
+      urlStatusChecker,
+      availability: {
+        searchMode: "indexOnly",
+        noteAccess: false,
+        activeFileAccess: false,
+        noteMutationAccess: false,
+        retrieverAvailable: true,
+        webProviderAvailable: false,
+      },
+    });
+
+    expect(created.tools.definitions().map((definition) => definition.function.name)).toEqual([
+      "search_index",
+      "list_index_urls",
+      "check_urls",
+    ]);
+  });
 });

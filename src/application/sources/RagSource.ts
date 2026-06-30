@@ -4,11 +4,14 @@
 import { Tool } from "../../core/agent/tool";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
 import { IndexResearchTool } from "./tools/IndexResearchTool";
+import { CheckUrlsTool, ListIndexUrlsTool } from "./tools/IndexUrlTools";
 import { EvidenceRegistry } from "./evidence";
-import { ResearchRetriever } from "../contracts/research";
+import { ResearchRetriever, UrlStatusChecker } from "../contracts/research";
 
 export interface RagSourceOptions {
   retriever: ResearchRetriever;
+  urlStatusChecker?: UrlStatusChecker;
+  indexSourcePaths?: readonly string[];
   evidence: EvidenceRegistry;
   available?: boolean;
 }
@@ -16,10 +19,14 @@ export interface RagSourceOptions {
 export class RagSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
   private readonly retriever: ResearchRetriever;
+  private readonly urlStatusChecker?: UrlStatusChecker;
+  private readonly indexSourcePaths: readonly string[];
   private readonly evidence: EvidenceRegistry;
 
   constructor(options: RagSourceOptions) {
     this.retriever = options.retriever;
+    this.urlStatusChecker = options.urlStatusChecker;
+    this.indexSourcePaths = options.indexSourcePaths ?? [];
     this.evidence = options.evidence;
     this.descriptor = {
       id: "rag",
@@ -30,6 +37,10 @@ export class RagSource implements DataSource {
   }
 
   tools(): Tool[] {
-    return [new IndexResearchTool({ retriever: this.retriever, evidence: this.evidence })];
+    return [
+      new IndexResearchTool({ retriever: this.retriever, evidence: this.evidence }),
+      new ListIndexUrlsTool(this.retriever, { allowedSourcePaths: this.indexSourcePaths }),
+      ...(this.urlStatusChecker ? [new CheckUrlsTool(this.urlStatusChecker)] : []),
+    ];
   }
 }
