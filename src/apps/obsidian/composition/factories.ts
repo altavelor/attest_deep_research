@@ -248,7 +248,6 @@ export function createRetrieverForProfile(
     embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
     indexStore: createVectorIndexStoreForProfile(ctx, indexProfile),
     embeddingModel: embeddingProfile.modelName,
-    keywordCorpus: [],
   });
 }
 
