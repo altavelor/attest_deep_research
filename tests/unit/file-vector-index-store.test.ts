@@ -341,6 +341,165 @@ describe("FileVectorIndexStore", () => {
     ).resolves.toEqual([]);
   });
 
+  it("lists indexed sources with filters and cursor pagination", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("book-a", "Books/Alpha.md", "alpha text", [1, 0], "hash-a"),
+      chunk("note-b", "Notes/Beta.md", "beta text", [0, 1], "hash-b"),
+    ]);
+    await store.updateSourceSnapshots([
+      {
+        sourcePath: "Books/Alpha.md",
+        modifiedTime: 10,
+        contentHash: "file-a",
+        languages: ["en"],
+      },
+    ]);
+
+    await expect(
+      store.listIndexSources({ limit: 10, pathPrefix: "Books/", query: "alpha" }),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          sourcePath: "Books/Alpha.md",
+          title: "Books/Alpha.md",
+          kind: "markdown",
+          chunkCount: 1,
+          languages: ["en"],
+        },
+      ],
+    });
+
+    const first = await store.listIndexSources({ limit: 1 });
+    const second = await store.listIndexSources({ limit: 1, cursor: first.nextCursor });
+
+    expect(first.items.map((item) => item.sourcePath)).toEqual(["Books/Alpha.md"]);
+    expect(second.items.map((item) => item.sourcePath)).toEqual(["Notes/Beta.md"]);
+  });
+
+  it("lists chunks for one source in document order and filters by heading path", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("intro", "Books/Guide.md", "intro", [1, 0], "hash-1", ["Intro"]),
+      chunk("chapter-a", "Books/Guide.md", "chapter alpha", [1, 0], "hash-2", ["Chapter 1"]),
+      chunk("chapter-b", "Books/Guide.md", "chapter beta", [1, 0], "hash-3", ["Chapter 1"]),
+      chunk("other", "Books/Other.md", "other", [1, 0], "hash-4", ["Chapter 1"]),
+    ]);
+
+    await expect(
+      store.listIndexChunks({
+        sourcePath: "Books/Guide.md",
+        headingPath: ["Chapter 1"],
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({
+      items: [
+        { chunkId: "chapter-a", chunkIndex: 1, headingPath: ["Chapter 1"] },
+        { chunkId: "chapter-b", chunkIndex: 2, headingPath: ["Chapter 1"] },
+      ],
+    });
+  });
+
+  it("reads a bounded chunk window and marks truncated chunks", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("before", "Books/Guide.md", "before text", [1, 0], "hash-1"),
+      chunk("hit", "Books/Guide.md", "hit text is long", [1, 0], "hash-2"),
+      chunk("after", "Books/Guide.md", "after text", [1, 0], "hash-3"),
+    ]);
+
+    const result = await store.readIndexChunk({ chunkId: "hit", before: 1, after: 1, maxChars: 27 });
+
+    expect(result.chunks.map((item) => item.chunkId)).toEqual(["before", "hit"]);
+    expect(result.chunks.map((item) => item.text)).toEqual(["before text", "hit text is long"]);
+    expect(result.chunks[1]).toMatchObject({ truncated: false, charCount: 16 });
+  });
+
+  it("finds literal and regex matches without semantic ranking", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("a", "Books/Guide.md", "ISBN 978-1-4028-9462-6 and email Test@Example.com", [1, 0], "hash-a"),
+      chunk("b", "Books/Other.md", "test@example.com outside scope", [1, 0], "hash-b"),
+    ]);
+
+    await expect(
+      store.findInIndex({
+        pattern: "test@example.com",
+        mode: "literal",
+        sourcePath: "Books/Guide.md",
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({
+      items: [{ chunkId: "a", match: "Test@Example.com" }],
+    });
+    await expect(
+      store.findInIndex({
+        pattern: "test@example.com",
+        mode: "literal",
+        sourcePath: "Books/Guide.md",
+        caseSensitive: true,
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({ items: [] });
+    await expect(
+      store.findInIndex({ pattern: "ISBN\\s+[0-9-]+", mode: "regex", limit: 10 }),
+    ).resolves.toMatchObject({
+      items: [{ chunkId: "a", match: "ISBN 978-1-4028-9462-6" }],
+    });
+  });
+
+  it("returns source outline, summary topics, and metadata search results", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([
+      chunk("a", "Books/Guide.md", "alpha alpha retrieval topic", [1, 0], "hash-a", ["Intro"]),
+      chunk("b", "Books/Guide.md", "beta retrieval topic", [1, 0], "hash-b", ["Chapter 1"]),
+    ]);
+    await store.updateSourceSnapshots([
+      {
+        sourcePath: "Books/Guide.md",
+        modifiedTime: 20,
+        contentHash: "file-guide",
+        languages: ["en"],
+      },
+    ]);
+
+    await expect(store.getIndexSourceOutline("Books/Guide.md")).resolves.toMatchObject({
+      sourcePath: "Books/Guide.md",
+      chunkCount: 2,
+      sections: [
+        { headingPath: ["Intro"], chunkStart: 0, chunkEnd: 0 },
+        { headingPath: ["Chapter 1"], chunkStart: 1, chunkEnd: 1 },
+      ],
+    });
+    await expect(store.summarizeIndexSource("Books/Guide.md", 1)).resolves.toMatchObject({
+      sections: [{ headingPath: ["Intro"] }],
+      topics: expect.arrayContaining([{ term: "retrieval", count: 2 }]),
+    });
+    await expect(
+      store.searchIndexByMetadata({
+        sourceKind: "markdown",
+        pathPrefix: "Books/",
+        extension: "md",
+        heading: "chapter",
+        language: "en",
+        indexedAfter: "2025-12-31T00:00:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({
+      items: [{ sourcePath: "Books/Guide.md" }],
+    });
+  });
+
   it("deletes by source path and fully clears profile files", async () => {
     const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
 
@@ -385,10 +544,11 @@ function chunk(
   text: string,
   embedding: number[],
   contentHash: string,
+  headingPath: string[] = [],
 ): EmbeddedChunk {
   return {
     id,
-    source: markdownSource(path),
+    source: markdownSource(path, headingPath),
     text,
     contentHash,
     embedding,
@@ -396,13 +556,13 @@ function chunk(
   };
 }
 
-function markdownSource(path: string): SourceReference {
+function markdownSource(path: string, headingPath: string[] = []): SourceReference {
   return {
     id: `source-${path}`,
     kind: "markdown",
     title: path,
     path,
-    headingPath: [],
+    headingPath,
   };
 }
 
