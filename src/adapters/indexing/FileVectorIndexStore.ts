@@ -156,23 +156,15 @@ export class FileVectorIndexStore
   }
 
   async deleteBySourcePath(path: string): Promise<void> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+    await this.withState(undefined, async (state) => {
+      const changes = createWriteChanges();
+      if (!removeSourcePathFromState(state, path, changes)) {
+        return;
+      }
 
-    if (state === null) {
-      return;
-    }
-
-    const changes = createWriteChanges();
-    const removed = removeSourcePathFromState(state, path, changes);
-
-    if (!removed) {
-      this.state = state;
-      return;
-    }
-
-    changes.sourcesDirty = true;
-    await this.persistence.persistState(state, changes);
-    this.state = state;
+      changes.sourcesDirty = true;
+      await this.persistence.persistState(state, changes);
+    });
   }
 
   async beginWrite(): Promise<IndexStoreWriteSession> {
@@ -232,32 +224,21 @@ export class FileVectorIndexStore
   }
 
   async loadSourceSnapshots(): Promise<IndexSourceSnapshot[]> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return [];
-    }
-
-    this.state = state;
-    return state.sources
-      .filter((source) => source.failed !== true)
-      .map(({ sourcePath, modifiedTime, contentHash, languages }) => ({
-        sourcePath,
-        modifiedTime,
-        contentHash,
-        ...(languages ? { languages } : {}),
-      }));
+    return this.withState([], (state) =>
+      state.sources
+        .filter((source) => source.failed !== true)
+        .map(({ sourcePath, modifiedTime, contentHash, languages }) => ({
+          sourcePath,
+          modifiedTime,
+          contentHash,
+          ...(languages ? { languages } : {}),
+        })),
+    );
   }
 
   async loadSourceReport(): Promise<IndexSourceReportItem[]> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return [];
-    }
-
-    this.state = state;
-    return state.sources
+    return this.withState([], (state) =>
+      state.sources
       .map((source) => ({
         sourcePath: source.sourcePath,
         status: source.failed === true ? ("failed" as const) : ("indexed" as const),
@@ -267,7 +248,8 @@ export class FileVectorIndexStore
         errorMessage: source.errorMessage,
         languages: source.languages,
       }))
-      .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
+      .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath)),
+    );
   }
 
   async loadIndexDescriptionSource(): Promise<IndexDescriptionSource> {
@@ -336,34 +318,24 @@ export class FileVectorIndexStore
       return;
     }
 
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return;
-    }
-
-    applyFailedSourceSnapshots(state, snapshots);
-    const changes = createWriteChanges();
-    changes.sourcesDirty = true;
-    await this.persistence.persistState(state, changes);
-    this.state = state;
+    await this.withState(undefined, async (state) => {
+      applyFailedSourceSnapshots(state, snapshots);
+      const changes = createWriteChanges();
+      changes.sourcesDirty = true;
+      await this.persistence.persistState(state, changes);
+    });
   }
 
   async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+    return this.withState([], (state) => {
+      const inventory = state.manifest.languageInventory ?? [];
 
-    if (state === null) {
-      return [];
-    }
+      if (inventory.length > 0 && inventory.some((item) => item.language !== "unknown")) {
+        return [...inventory];
+      }
 
-    this.state = state;
-    const inventory = state.manifest.languageInventory ?? [];
-
-    if (inventory.length > 0 && inventory.some((item) => item.language !== "unknown")) {
-      return [...inventory];
-    }
-
-    return languageInventoryFromStoredChunks(state);
+      return languageInventoryFromStoredChunks(state);
+    });
   }
 
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
@@ -380,15 +352,10 @@ export class FileVectorIndexStore
       fileExtensions?: string[];
     },
   ): Promise<RetrievedChunk[]> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return [];
-    }
-
-    this.state = state;
-    return searchFileVectorKeywords(state, query, options, (relativePath) =>
-      this.persistence.pathFor(relativePath),
+    return this.withState([], (state) =>
+      searchFileVectorKeywords(state, query, options, (relativePath) =>
+        this.persistence.pathFor(relativePath),
+      ),
     );
   }
 
@@ -396,13 +363,11 @@ export class FileVectorIndexStore
     chunks: RetrievedChunk[];
     nextCursor?: string;
   }> {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null || options.limit <= 0) {
+    if (options.limit <= 0) {
       return { chunks: [] };
     }
 
-    this.state = state;
+    return this.withState({ chunks: [] as RetrievedChunk[] }, (state) => {
     const start = parseInventoryCursor(options.cursor);
     const rows = [...state.chunksByShard.values()]
       .flat()
@@ -430,6 +395,7 @@ export class FileVectorIndexStore
       })),
       ...(next < rows.length ? { nextCursor: String(next) } : {}),
     };
+    });
   }
 
   async expandAdjacentChunks(
@@ -441,14 +407,9 @@ export class FileVectorIndexStore
       return chunks.slice(0, limit);
     }
 
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return chunks.slice(0, limit);
-    }
-
-    this.state = state;
-    return expandAdjacentFileVectorChunks(state, chunks, radius, limit);
+    return this.withState(chunks.slice(0, limit), (state) =>
+      expandAdjacentFileVectorChunks(state, chunks, radius, limit),
+    );
   }
 
   async getAdjacentChunks(
@@ -460,91 +421,51 @@ export class FileVectorIndexStore
       return [];
     }
 
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return [];
-    }
-
-    this.state = state;
-    return getAdjacentFileVectorChunks(state, source, chunkId, radius);
+    return this.withState([], (state) =>
+      getAdjacentFileVectorChunks(state, source, chunkId, radius),
+    );
   }
 
   async listIndexSources(options: IndexSourceInventoryOptions) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return { items: [] };
-    }
-
-    this.state = state;
-    return listFileVectorIndexSources(state, options);
+    return this.withState({ items: [] }, (state) =>
+      listFileVectorIndexSources(state, options),
+    );
   }
 
   async listIndexChunks(options: IndexChunkListOptions) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return { items: [] };
-    }
-
-    this.state = state;
-    return listFileVectorIndexChunks(state, options);
+    return this.withState({ items: [] }, (state) =>
+      listFileVectorIndexChunks(state, options),
+    );
   }
 
   async readIndexChunk(options: IndexChunkReadOptions) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return { chunks: [] };
-    }
-
-    this.state = state;
-    return readFileVectorIndexChunk(state, options);
+    return this.withState({ chunks: [] }, (state) =>
+      readFileVectorIndexChunk(state, options),
+    );
   }
 
   async findInIndex(options: FindInIndexOptions) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return { items: [] };
-    }
-
-    this.state = state;
-    return findInFileVectorIndex(state, options);
+    return this.withState({ items: [] }, (state) =>
+      findInFileVectorIndex(state, options),
+    );
   }
 
   async summarizeIndexSource(sourcePath: string, maxSections: number) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return null;
-    }
-
-    this.state = state;
-    return summarizeFileVectorIndexSource(state, sourcePath, maxSections);
+    return this.withState(null, (state) =>
+      summarizeFileVectorIndexSource(state, sourcePath, maxSections),
+    );
   }
 
   async getIndexSourceOutline(sourcePath: string) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return null;
-    }
-
-    this.state = state;
-    return getFileVectorIndexSourceOutline(state, sourcePath);
+    return this.withState(null, (state) =>
+      getFileVectorIndexSourceOutline(state, sourcePath),
+    );
   }
 
   async searchIndexByMetadata(options: IndexMetadataSearchOptions) {
-    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
-
-    if (state === null) {
-      return { items: [] };
-    }
-
-    this.state = state;
-    return searchFileVectorIndexByMetadata(state, options);
+    return this.withState({ items: [] }, (state) =>
+      searchFileVectorIndexByMetadata(state, options),
+    );
   }
 
   private assertManifestMatchesStore(
@@ -569,6 +490,25 @@ export class FileVectorIndexStore
         expectedShardCount: this.shardCount,
       });
     }
+  }
+
+  /**
+   * Resolve the committed state from cache or disk, cache it, and run `run`.
+   * Returns `fallback` when no committed index exists. Centralizes the
+   * load-or-null + cache dance shared by every read/inventory method.
+   */
+  private async withState<T>(
+    fallback: T,
+    run: (state: FileVectorIndexState) => T | Promise<T>,
+  ): Promise<T> {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null) {
+      return fallback;
+    }
+
+    this.state = state;
+    return run(state);
   }
 
   private requireState(): FileVectorIndexState {
