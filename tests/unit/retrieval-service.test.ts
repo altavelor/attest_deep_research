@@ -14,6 +14,28 @@ import {
   FakeEmbeddingProvider,
   FakeIndexStore,
 } from "../helpers/retrievalFakes";
+import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { IndexStore } from "../../src/application/ports/indexing";
+
+// A single fake store stands in for every retrieval capability here; the
+// composition root wires capabilities explicitly, so the test mirrors that by
+// routing the one fake into each slot it structurally supports.
+function makeRetrievalService(options: {
+  embeddings: EmbeddingProviderClient;
+  indexStore: IndexStore;
+  embeddingModel: string;
+}): RetrievalService {
+  const store = options.indexStore as unknown as Record<string, unknown>;
+  const has = (method: string) => typeof store[method] === "function";
+  return new RetrievalService({
+    ...options,
+    ...(has("searchKeywords") ? { keyword: options.indexStore as never } : {}),
+    ...(has("expandAdjacentChunks") ? { adjacent: options.indexStore as never } : {}),
+    ...(has("listIndexedChunks") ? { chunkInventory: options.indexStore as never } : {}),
+    ...(has("getLanguageInventory") ? { languageInventory: options.indexStore as never } : {}),
+    ...(has("listIndexSources") ? { inventory: options.indexStore as never } : {}),
+  });
+}
 
 describe("RetrievalService", () => {
   it("returns ranked semantic chunks with citation references", async () => {
@@ -21,7 +43,7 @@ describe("RetrievalService", () => {
       retrieved("semantic-near", markdownSource("Research/ai.md", ["Models"]), "local models", 0.9),
       retrieved("semantic-far", documentSource("Docs/manual.txt", "txt"), "manual docs", 0.4),
     ]);
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -56,7 +78,7 @@ describe("RetrievalService", () => {
         0,
       ),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -77,7 +99,7 @@ describe("RetrievalService", () => {
       retrieved("web", webSource("https://example.com/a"), "local retrieval web result", 0),
       retrieved("vault", markdownSource("Research/local.md"), "local retrieval vault result", 0),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -94,7 +116,7 @@ describe("RetrievalService", () => {
       retrieved("pdf", pdfSource("Papers/report.pdf", 4), "pdf", 0.7),
       retrieved("txt", documentSource("Docs/manual.txt", "txt"), "txt", 0.2),
     ]);
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -116,7 +138,7 @@ describe("RetrievalService", () => {
     indexStore.keywordResults = [
       retrieved("store-keyword", markdownSource("Research/store.md"), "local keyword", 2),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -135,7 +157,7 @@ describe("RetrievalService", () => {
     indexStore.keywordResults = [
       retrieved("keyword", markdownSource("Research/keyword.md"), "keyword match", 3),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -156,7 +178,7 @@ describe("RetrievalService", () => {
         0,
       ),
     ]);
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -186,7 +208,7 @@ describe("RetrievalService", () => {
       retrieved("before", markdownSource("Research/a.md"), "before", 0.8),
       retrieved("hit", markdownSource("Research/a.md"), "hit", 0.9),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -205,7 +227,7 @@ describe("RetrievalService", () => {
       hit,
       retrieved("after", markdownSource("Research/a.md"), "after", 0.7),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -224,7 +246,7 @@ describe("RetrievalService", () => {
       retrieved("hit", source, "hit", 0),
       retrieved("after", source, "after", 0),
     ];
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
@@ -265,7 +287,7 @@ describe("RetrievalService", () => {
         };
       },
     });
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -312,7 +334,7 @@ describe("RetrievalService", () => {
         return { chunks: inventoryResults };
       },
     });
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -343,7 +365,7 @@ describe("RetrievalService", () => {
         return { chunks: inventoryResults };
       },
     });
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
@@ -367,7 +389,7 @@ describe("RetrievalService", () => {
       getIndexSourceOutline: vi.fn().mockResolvedValue({ sourcePath: "Books/book.md" }),
       searchIndexByMetadata: vi.fn().mockResolvedValue({ items: [{ sourcePath: "Books/book.md" }] }),
     });
-    const service = new RetrievalService({
+    const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",

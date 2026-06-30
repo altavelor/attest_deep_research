@@ -7,6 +7,8 @@ import {
   FileVectorIndexStore,
   isFileVectorManifest,
 } from "../../src/adapters/indexing/FileVectorIndexStore";
+import { FileVectorInventoryStore } from "../../src/adapters/indexing/FileVectorInventoryStore";
+import { FileVectorIndexReader } from "../../src/adapters/indexing/FileVectorIndexReader";
 import { shardIdForSourcePath } from "../../src/adapters/indexing/sourcePathShard";
 import { EmbeddedChunk, SourceReference } from "../../src/core/model/source";
 
@@ -146,7 +148,7 @@ describe("FileVectorIndexStore", () => {
         languages: ["en"],
       },
     ]);
-    await expect(reopened.getLanguageInventory()).resolves.toEqual([
+    await expect(new FileVectorIndexReader(reopened, reopened).getLanguageInventory()).resolves.toEqual([
       { language: "en", chunkCount: 1, sourceCount: 1 },
     ]);
   });
@@ -200,7 +202,7 @@ describe("FileVectorIndexStore", () => {
 
     const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
 
-    await expect(reopened.getLanguageInventory()).resolves.toEqual([
+    await expect(new FileVectorIndexReader(reopened, reopened).getLanguageInventory()).resolves.toEqual([
       { language: "en", chunkCount: 1, sourceCount: 1 },
     ]);
   });
@@ -215,7 +217,7 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      store.searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([expect.objectContaining({ id: "chunk-a", score: 3 })]);
 
     await store.deleteBySourcePath("Research/a.md");
@@ -224,7 +226,7 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      store.searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([]);
   });
 
@@ -246,10 +248,10 @@ describe("FileVectorIndexStore", () => {
     await writer.commit();
 
     await expect(
-      store.searchKeywords("old privacy", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("old privacy", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([]);
     await expect(
-      store.searchKeywords("stable keyword", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("stable keyword", { limit: 5, includeWebResults: false }),
     ).resolves.toEqual([expect.objectContaining({ id: "chunk-right" })]);
   });
 
@@ -301,7 +303,7 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-c", "Research/a.md", "third", [1, 0], "hash-c"),
     ]);
 
-    const expanded = await store.expandAdjacentChunks(
+    const expanded = await new FileVectorIndexReader(store, store).expandAdjacentChunks(
       [{ ...chunk("chunk-b", "Research/a.md", "second", [1, 0], "hash-b"), score: 0.9 }],
       1,
       3,
@@ -321,7 +323,7 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-d", "Research/other.md", "other", [1, 0], "hash-d"),
     ]);
 
-    const adjacent = await store.getAdjacentChunks(markdownSource("Research/a.md"), "chunk-b", 1);
+    const adjacent = await new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/a.md"), "chunk-b", 1);
 
     expect(adjacent.map((chunk) => chunk.id)).toEqual(["chunk-a", "chunk-b", "chunk-c"]);
     expect(adjacent.map((chunk) => chunk.text)).toEqual(["first", "second", "third"]);
@@ -334,10 +336,10 @@ describe("FileVectorIndexStore", () => {
     await store.upsert([chunk("chunk-a", "Research/a.md", "first", [1, 0], "hash-a")]);
 
     await expect(
-      store.getAdjacentChunks(markdownSource("Research/a.md"), "missing", 1),
+      new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/a.md"), "missing", 1),
     ).resolves.toEqual([]);
     await expect(
-      store.getAdjacentChunks(markdownSource("Research/other.md"), "chunk-a", 1),
+      new FileVectorIndexReader(store, store).getAdjacentChunks(markdownSource("Research/other.md"), "chunk-a", 1),
     ).resolves.toEqual([]);
   });
 
@@ -359,7 +361,7 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      store.listIndexSources({ limit: 10, pathPrefix: "Books/", query: "alpha" }),
+      new FileVectorInventoryStore(store).listIndexSources({ limit: 10, pathPrefix: "Books/", query: "alpha" }),
     ).resolves.toMatchObject({
       items: [
         {
@@ -372,8 +374,8 @@ describe("FileVectorIndexStore", () => {
       ],
     });
 
-    const first = await store.listIndexSources({ limit: 1 });
-    const second = await store.listIndexSources({ limit: 1, cursor: first.nextCursor });
+    const first = await new FileVectorInventoryStore(store).listIndexSources({ limit: 1 });
+    const second = await new FileVectorInventoryStore(store).listIndexSources({ limit: 1, cursor: first.nextCursor });
 
     expect(first.items.map((item) => item.sourcePath)).toEqual(["Books/Alpha.md"]);
     expect(second.items.map((item) => item.sourcePath)).toEqual(["Notes/Beta.md"]);
@@ -391,7 +393,7 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      store.listIndexChunks({
+      new FileVectorInventoryStore(store).listIndexChunks({
         sourcePath: "Books/Guide.md",
         headingPath: ["Chapter 1"],
         limit: 10,
@@ -414,7 +416,7 @@ describe("FileVectorIndexStore", () => {
       chunk("after", "Books/Guide.md", "after text", [1, 0], "hash-3"),
     ]);
 
-    const result = await store.readIndexChunk({ chunkId: "hit", before: 1, after: 1, maxChars: 27 });
+    const result = await new FileVectorInventoryStore(store).readIndexChunk({ chunkId: "hit", before: 1, after: 1, maxChars: 27 });
 
     expect(result.chunks.map((item) => item.chunkId)).toEqual(["before", "hit"]);
     expect(result.chunks.map((item) => item.text)).toEqual(["before text", "hit text is long"]);
@@ -431,7 +433,7 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      store.findInIndex({
+      new FileVectorInventoryStore(store).findInIndex({
         pattern: "test@example.com",
         mode: "literal",
         sourcePath: "Books/Guide.md",
@@ -441,7 +443,7 @@ describe("FileVectorIndexStore", () => {
       items: [{ chunkId: "a", match: "Test@Example.com" }],
     });
     await expect(
-      store.findInIndex({
+      new FileVectorInventoryStore(store).findInIndex({
         pattern: "test@example.com",
         mode: "literal",
         sourcePath: "Books/Guide.md",
@@ -450,7 +452,7 @@ describe("FileVectorIndexStore", () => {
       }),
     ).resolves.toMatchObject({ items: [] });
     await expect(
-      store.findInIndex({ pattern: "ISBN\\s+[0-9-]+", mode: "regex", limit: 10 }),
+      new FileVectorInventoryStore(store).findInIndex({ pattern: "ISBN\\s+[0-9-]+", mode: "regex", limit: 10 }),
     ).resolves.toMatchObject({
       items: [{ chunkId: "a", match: "ISBN 978-1-4028-9462-6" }],
     });
@@ -473,7 +475,7 @@ describe("FileVectorIndexStore", () => {
       },
     ]);
 
-    await expect(store.getIndexSourceOutline("Books/Guide.md")).resolves.toMatchObject({
+    await expect(new FileVectorInventoryStore(store).getIndexSourceOutline("Books/Guide.md")).resolves.toMatchObject({
       sourcePath: "Books/Guide.md",
       chunkCount: 2,
       sections: [
@@ -481,12 +483,12 @@ describe("FileVectorIndexStore", () => {
         { headingPath: ["Chapter 1"], chunkStart: 1, chunkEnd: 1 },
       ],
     });
-    await expect(store.summarizeIndexSource("Books/Guide.md", 1)).resolves.toMatchObject({
+    await expect(new FileVectorInventoryStore(store).summarizeIndexSource("Books/Guide.md", 1)).resolves.toMatchObject({
       sections: [{ headingPath: ["Intro"] }],
       topics: expect.arrayContaining([{ term: "retrieval", count: 2 }]),
     });
     await expect(
-      store.searchIndexByMetadata({
+      new FileVectorInventoryStore(store).searchIndexByMetadata({
         sourceKind: "markdown",
         pathPrefix: "Books/",
         extension: "md",

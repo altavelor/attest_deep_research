@@ -15,6 +15,8 @@ import { PdfTextCache } from "../../../adapters/extractors/PdfTextCache";
 import { TextExtractor } from "../../../adapters/extractors/TextExtractor";
 import { IndexingService, IndexingState } from "../../../adapters/indexing/IndexingService";
 import { FileVectorIndexStore, IndexProfile } from "../../../adapters/indexing/FileVectorIndexStore";
+import { FileVectorInventoryStore } from "../../../adapters/indexing/FileVectorInventoryStore";
+import { FileVectorIndexReader } from "../../../adapters/indexing/FileVectorIndexReader";
 import { ObsidianVaultFileProvider } from "../../../adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "../../../adapters/retrieval/RetrievalService";
 import { QueryExpansionService } from "../../../adapters/retrieval/QueryExpansionService";
@@ -244,10 +246,17 @@ export function createRetrieverForProfile(
     ctx.getSettings(),
     indexProfile.embeddingModelProfileId,
   );
+  const indexStore = createVectorIndexStoreForProfile(ctx, indexProfile);
+  const reader = new FileVectorIndexReader(indexStore, indexStore);
   return new RetrievalService({
     embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
-    indexStore: createVectorIndexStoreForProfile(ctx, indexProfile),
+    indexStore,
     embeddingModel: embeddingProfile.modelName,
+    keyword: reader,
+    adjacent: reader,
+    chunkInventory: reader,
+    languageInventory: reader,
+    inventory: new FileVectorInventoryStore(indexStore),
   });
 }
 
