@@ -9,7 +9,6 @@ import { EmbeddingProviderClient } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { RetrievedChunk, SourceReference } from "../../core/model/source";
 import { formatCitation } from "../../core/retrieval/citations";
-import { rankKeywordMatches } from "./keywordRanking";
 import { filterRetrievedChunks } from "../../core/retrieval/filters";
 import { RetrievalResult } from "../../application/contracts/retrieval";
 import {
@@ -24,20 +23,17 @@ export interface RetrievalServiceOptions {
   embeddings: EmbeddingProviderClient;
   indexStore: IndexStore;
   embeddingModel: string;
-  keywordCorpus: RetrievedChunk[];
 }
 
 export class RetrievalService {
   private readonly embeddings: EmbeddingProviderClient;
   private readonly indexStore: IndexStore;
   private readonly embeddingModel: string;
-  private readonly keywordCorpus: RetrievedChunk[];
 
   constructor(options: RetrievalServiceOptions) {
     this.embeddings = options.embeddings;
     this.indexStore = options.indexStore;
     this.embeddingModel = options.embeddingModel;
-    this.keywordCorpus = options.keywordCorpus;
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
@@ -86,7 +82,7 @@ export class RetrievalService {
     if (isIndexChunkInventoryStore(this.indexStore)) {
       return this.listIndexedUrlsFromStore(this.indexStore, options);
     }
-    return this.listIndexedUrlsFromCorpus(options);
+    return { items: [] };
   }
 
   async expandAdjacentEvidence(
@@ -132,23 +128,15 @@ export class RetrievalService {
     }
   }
 
-  private keywordCorpusForOptions(options: RetrievalOptions): RetrievedChunk[] {
-    return filterRetrievedChunks(this.keywordCorpus, options);
-  }
-
   private async searchKeywords(
     query: string,
     options: RetrievalOptions,
   ): Promise<RetrievedChunk[]> {
     if (isKeywordSearchIndexStore(this.indexStore)) {
-      const chunks = await this.indexStore.searchKeywords(query, options);
-
-      if (chunks.length > 0) {
-        return chunks;
-      }
+      return this.indexStore.searchKeywords(query, options);
     }
 
-    return rankKeywordMatches(query, this.keywordCorpusForOptions(options), options.limit);
+    return [];
   }
 
   private async expandAdjacentChunks(
@@ -173,20 +161,6 @@ export class RetrievalService {
     });
     const start = parseCursor(options.cursor);
     const refs = indexedUrlReferences(batch.chunks);
-    const items = refs.slice(start, start + options.limit);
-    const next = start + items.length;
-
-    return {
-      items,
-      ...(next < refs.length ? { nextCursor: String(next) } : {}),
-    };
-  }
-
-  private listIndexedUrlsFromCorpus(
-    options: IndexedUrlInventoryOptions,
-  ): IndexedUrlInventoryResult {
-    const start = parseCursor(options.cursor);
-    const refs = indexedUrlReferences(this.keywordCorpus, options.sourcePath);
     const items = refs.slice(start, start + options.limit);
     const next = start + items.length;
 

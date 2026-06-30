@@ -25,7 +25,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     await expect(
@@ -47,20 +46,20 @@ describe("RetrievalService", () => {
     ]);
   });
 
-  it("uses keyword fallback when embeddings are unavailable or semantic results are empty", async () => {
+  it("uses store-backed keyword fallback when embeddings are unavailable or semantic results are empty", async () => {
+    const indexStore = new FakeIndexStore([]);
+    indexStore.keywordResults = [
+      retrieved(
+        "fallback-match",
+        markdownSource("Research/local.md"),
+        "Local model retrieval guide",
+        0,
+      ),
+    ];
     const service = new RetrievalService({
       embeddings: new FailingEmbeddingProvider(),
-      indexStore: new FakeIndexStore([]),
+      indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [
-        retrieved(
-          "fallback-match",
-          markdownSource("Research/local.md"),
-          "Local model retrieval guide",
-          0,
-        ),
-        retrieved("fallback-miss", markdownSource("Research/remote.md"), "Remote server notes", 0),
-      ],
     });
 
     await expect(
@@ -73,14 +72,15 @@ describe("RetrievalService", () => {
   });
 
   it("omits web fallback chunks when web results are disabled", async () => {
+    const indexStore = new FakeIndexStore([]);
+    indexStore.keywordResults = [
+      retrieved("web", webSource("https://example.com/a"), "local retrieval web result", 0),
+      retrieved("vault", markdownSource("Research/local.md"), "local retrieval vault result", 0),
+    ];
     const service = new RetrievalService({
       embeddings: new FailingEmbeddingProvider(),
-      indexStore: new FakeIndexStore([]),
+      indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [
-        retrieved("web", webSource("https://example.com/a"), "local retrieval web result", 0),
-        retrieved("vault", markdownSource("Research/local.md"), "local retrieval vault result", 0),
-      ],
     });
 
     const result = await service.search("local retrieval", { limit: 5, includeWebResults: false });
@@ -98,7 +98,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const result = await service.search("local", {
@@ -112,7 +111,7 @@ describe("RetrievalService", () => {
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["md"]);
   });
 
-  it("uses store-backed keyword search before the static fallback corpus", async () => {
+  it("uses store-backed keyword search", async () => {
     const indexStore = new FakeIndexStore([]);
     indexStore.keywordResults = [
       retrieved("store-keyword", markdownSource("Research/store.md"), "local keyword", 2),
@@ -121,9 +120,6 @@ describe("RetrievalService", () => {
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [
-        retrieved("static-keyword", markdownSource("Research/static.md"), "local keyword", 0),
-      ],
     });
 
     const result = await service.search("local", { limit: 5, includeWebResults: false });
@@ -143,7 +139,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const result = await service.search("local", { limit: 2, includeWebResults: false });
@@ -152,18 +147,19 @@ describe("RetrievalService", () => {
   });
 
   it("uses query variants to find chunks written in a different language", async () => {
+    const indexStore = new FakeIndexStore([]);
+    indexStore.keywordResultsByQuery.set("sorting algorithms advantages disadvantages", [
+      retrieved(
+        "english-sorting",
+        markdownSource("Books/algorithms.md"),
+        "Sorting algorithms include quicksort and merge sort advantages disadvantages",
+        0,
+      ),
+    ]);
     const service = new RetrievalService({
       embeddings: new FailingEmbeddingProvider(),
-      indexStore: new FakeIndexStore([]),
+      indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [
-        retrieved(
-          "english-sorting",
-          markdownSource("Books/algorithms.md"),
-          "Sorting algorithms include quicksort and merge sort advantages disadvantages",
-          0,
-        ),
-      ],
     });
 
     const result = await service.search("методы сортировки плюсы минусы", {
@@ -194,7 +190,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const result = await service.search("local", { limit: 2, includeWebResults: false });
@@ -214,7 +209,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const expanded = await service.expandAdjacentEvidence([hit], 2, 3);
@@ -234,7 +228,6 @@ describe("RetrievalService", () => {
       embeddings: new FakeEmbeddingProvider([[1, 0]]),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const adjacent = await service.getAdjacentChunks(source, "hit", 2);
@@ -243,25 +236,39 @@ describe("RetrievalService", () => {
     expect(indexStore.directAdjacentRequests).toEqual([{ source, chunkId: "hit", radius: 2 }]);
   });
 
-  it("lists URL references from the indexed keyword corpus with context and cursor pagination", async () => {
+  it("lists URL references from indexed chunks with context and cursor pagination", async () => {
+    const indexedChunks = [
+      retrieved(
+        "book-1",
+        markdownSource("Books/book.md", ["References"]),
+        "Read the official documentation at https://Example.com/docs#intro for API details. See also https://second.example/path.",
+        0,
+      ),
+      retrieved(
+        "other-1",
+        markdownSource("Other/note.md"),
+        "Outside scope https://outside.example",
+        0,
+      ),
+    ];
+    const indexStore = Object.assign(new FakeIndexStore([]), {
+      async listIndexedChunks(options: {
+        limit: number;
+        sourcePath?: string;
+      }): Promise<{ chunks: typeof indexedChunks; nextCursor?: string }> {
+        return {
+          chunks: indexedChunks.filter(
+            (chunk) =>
+              !options.sourcePath ||
+              ("path" in chunk.source && chunk.source.path === options.sourcePath),
+          ),
+        };
+      },
+    });
     const service = new RetrievalService({
       embeddings: new FailingEmbeddingProvider(),
-      indexStore: new FakeIndexStore([]),
+      indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [
-        retrieved(
-          "book-1",
-          markdownSource("Books/book.md", ["References"]),
-          "Read the official documentation at https://Example.com/docs#intro for API details. See also https://second.example/path.",
-          0,
-        ),
-        retrieved(
-          "other-1",
-          markdownSource("Other/note.md"),
-          "Outside scope https://outside.example",
-          0,
-        ),
-      ],
     });
 
     const first = await service.listIndexedUrls({ limit: 1, sourcePath: "Books/book.md" });
@@ -291,7 +298,7 @@ describe("RetrievalService", () => {
     expect(second.nextCursor).toBeUndefined();
   });
 
-  it("lists URL references from the index store when the in-memory keyword corpus is empty", async () => {
+  it("lists URL references from the index store", async () => {
     const inventoryResults = [
       retrieved(
         "stored-1",
@@ -309,7 +316,6 @@ describe("RetrievalService", () => {
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const result = await service.listIndexedUrls({ limit: 100 });
@@ -341,7 +347,6 @@ describe("RetrievalService", () => {
       embeddings: new FailingEmbeddingProvider(),
       indexStore,
       embeddingModel: "nomic",
-      keywordCorpus: [],
     });
 
     const first = await service.listIndexedUrls({ limit: 1 });
