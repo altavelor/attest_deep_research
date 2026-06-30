@@ -4,9 +4,9 @@ import {
   remapReportEvidenceIds,
 } from "../../../core/research/deepResearch/deepResearchReport";
 import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
-import { DeepResearchRunner } from "../../research/deepResearchPort";
-import { EvidenceRegistry } from "../evidence";
-import { defineTool, str } from "./toolFactory";
+import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
+import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { defineTool, str } from "../../../application/sources/tools/toolFactory";
 
 export interface DeepSearchInput {
   question: string;

@@ -1,13 +1,13 @@
 import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
 import { ContextFileProvider } from "../../src/application/ports/vault";
-import { IndexResearchTool } from "../../src/application/sources/tools/IndexResearchTool";
-import { NoteToolService } from "../../src/adapters/research-tools/NoteTools";
+import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
+import { NoteToolService } from "../../src/adapters/research-tools/note/NoteTools";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { ToolManager } from "../../src/application/tools/ToolManager";
 import {
   NOTE_PERMISSIONS,
   createNoteTools,
-} from "../../src/adapters/research-tools/createNoteTools";
+} from "../../src/adapters/research-tools/note/createNoteTools";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 
 class MemoryFiles implements ContextFileProvider {

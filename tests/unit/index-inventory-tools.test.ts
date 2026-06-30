@@ -1,4 +1,4 @@
-import { FindInIndexTool, ListIndexChunksTool } from "../../src/application/sources/tools/IndexInventoryTools";
+import { FindInIndexTool, ListIndexChunksTool } from "../../src/adapters/research-tools/index/IndexInventoryTools";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 import { executeTool } from "../../src/core/agent/tool";
 
@@ -56,5 +56,26 @@ describe("IndexInventoryTools", () => {
       error: { code: "unknown-property" },
     });
     expect(retriever.findInIndex).not.toHaveBeenCalled();
+  });
+
+  it("returns only the total count when countOnly is set", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+      findInIndex: vi.fn().mockResolvedValue({
+        items: [{ chunkId: "chunk-a" }],
+        nextCursor: "1",
+        totalCount: 42,
+      }),
+    };
+    const tool = new FindInIndexTool(retriever);
+
+    const result = await executeTool(tool, {
+      id: "call-3",
+      name: "find_in_index",
+      arguments: { pattern: "TODO", mode: "literal", countOnly: true, limit: 10 },
+    });
+
+    expect(result).toMatchObject({ ok: true, value: { count: 42 } });
+    expect((result as { value: Record<string, unknown> }).value).not.toHaveProperty("items");
   });
 });

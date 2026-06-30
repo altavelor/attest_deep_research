@@ -41,7 +41,29 @@ export interface WebPageFetchFailure {
 
 export type WebPageFetchResult = WebPageFetchSuccess | WebPageFetchFailure;
 
+/** Lightweight page metadata for source triage, parsed from the raw HTML head. */
+export interface WebPageMetadata {
+  title?: string;
+  description?: string;
+  siteName?: string;
+  author?: string;
+  publishedTime?: string;
+  language?: string;
+  canonicalUrl?: string;
+}
+
+export interface WebPageMetadataSuccess {
+  ok: true;
+  url: string;
+  finalUrl: string;
+  metadata: WebPageMetadata;
+}
+
+export type WebPageMetadataResult = WebPageMetadataSuccess | WebPageFetchFailure;
+
 export interface SearchProvider {
   search(query: string, options?: WebSearchOptions): Promise<SearchProviderResult[]>;
   fetchPage?(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult>;
+  /** Fetch only head metadata (title/OG/author/published) without page text. */
+  fetchMetadata?(url: string, options?: WebPageFetchOptions): Promise<WebPageMetadataResult>;
 }

@@ -7,7 +7,7 @@ import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtract
 import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
 import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
 import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
-import { NoteToolService } from "../../src/adapters/research-tools/NoteTools";
+import { NoteToolService } from "../../src/adapters/research-tools/note/NoteTools";
 import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
 import { stableId } from "../../src/adapters/extractors/common";
 import { QueryExpansionService } from "../../src/adapters/retrieval/QueryExpansionService";

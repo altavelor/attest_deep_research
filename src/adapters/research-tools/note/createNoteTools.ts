@@ -9,8 +9,8 @@ import {
   ToolExecution,
   ToolPermissions,
   toolFailure,
-} from "../../core/agent/tool";
-import { NoteToolService } from "../../application/research/toolPorts";
+} from "../../../core/agent/tool";
+import { NoteToolService } from "../../../application/research/toolPorts";
 import {
   bool,
   defineTool,
@@ -19,7 +19,7 @@ import {
   num,
   str,
   text,
-} from "../../application/sources/tools/toolFactory";
+} from "../../../application/sources/tools/toolFactory";
 
 /** Permission names a run may grant; mapped from availability by the composition. */
 export const NOTE_PERMISSIONS = {

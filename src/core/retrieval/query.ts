@@ -13,6 +13,10 @@ export interface RetrievalOptions {
   fileExtensions?: string[];
   sourcePaths?: string[];
   boostedSourcePaths?: string[];
+  /** Restrict results to sources indexed in this language (resolved to sourcePaths by the retriever). */
+  language?: string;
+  /** Prefer breadth: keep at most one (top-scored) chunk per source. */
+  diversify?: boolean;
   queryVariants?: RetrievalQueryVariant[];
 }
 

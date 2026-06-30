@@ -6,11 +6,11 @@ import {
   ResearchToolsetOptions,
 } from "../../application/research/toolPorts";
 import { AttachmentSource } from "../../application/sources/AttachmentSource";
-import { NOTE_PERMISSIONS, createNoteTools } from "./createNoteTools";
-import { RagSource } from "../../application/sources/RagSource";
+import { NOTE_PERMISSIONS, createNoteTools } from "./note/createNoteTools";
+import { RagSource } from "./index/RagSource";
 import { SourceManager } from "../../application/sources/DataSource";
-import { WebSource } from "../../application/sources/WebSource";
-import { DeepResearchSource } from "../../application/sources/DeepResearchSource";
+import { WebSource } from "./web/WebSource";
+import { DeepResearchSource } from "./deep-research/DeepResearchSource";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;

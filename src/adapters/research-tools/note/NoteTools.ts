@@ -1,17 +1,17 @@
-import { stableId } from "../extractors/common";
-import { ContextFileProvider } from "../../application/ports/vault";
-import { VaultWriter } from "../../application/ports/vault";
-import { normalizeVaultPath } from "../../shared/pathFilters";
-import { Extractor } from "../../application/ports/indexing";
-import { ChatToolCall, ChatToolDefinition } from "../../core/agent/tool";
-import { Citation } from "../../core/model/citation";
-import { ExtractedChunk, RetrievedChunk } from "../../core/model/source";
-import { estimateTextTokens } from "../../core/research/prompts";
+import { stableId } from "../../extractors/common";
+import { ContextFileProvider } from "../../../application/ports/vault";
+import { VaultWriter } from "../../../application/ports/vault";
+import { normalizeVaultPath } from "../../../shared/pathFilters";
+import { Extractor } from "../../../application/ports/indexing";
+import { ChatToolCall, ChatToolDefinition } from "../../../core/agent/tool";
+import { Citation } from "../../../core/model/citation";
+import { ExtractedChunk, RetrievedChunk } from "../../../core/model/source";
+import { estimateTextTokens } from "../../../core/research/prompts";
 import { applyNoteCitations, maxFootnoteNumber } from "./noteCitations";
 import {
   NOTE_MUTATION_TOOL_DEFINITIONS,
   NOTE_TOOL_DEFINITIONS,
-} from "../../application/sources/tools/noteToolDefinitions";
+} from "./noteToolDefinitions";
 
 export type NoteActionType = "create" | "update" | "delete";
 

@@ -4,6 +4,8 @@ import { RetrievalOptions } from "../../core/retrieval/query";
 export interface IndexCursorPage<T> {
   items: T[];
   nextCursor?: string;
+  /** Total number of matches before pagination (cheap to compute; lets callers report breadth). */
+  totalCount?: number;
 }
 
 export interface IndexSourceInventoryOptions {
@@ -68,6 +70,8 @@ export interface FindInIndexOptions {
   caseSensitive?: boolean;
   cursor?: string;
   limit: number;
+  /** Caller intent only: return just the total count, not the matches. */
+  countOnly?: boolean;
 }
 
 export interface FindInIndexMatch {
@@ -115,6 +119,8 @@ export interface IndexMetadataSearchOptions {
   language?: string;
   cursor?: string;
   limit: number;
+  /** Caller intent only: return just the total count, not the matched sources. */
+  countOnly?: boolean;
 }
 
 export interface KeywordSearchIndexStore {

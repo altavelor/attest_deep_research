@@ -67,6 +67,12 @@ export class RetrievalService {
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
+    const scoped = await this.resolveLanguageScope(options);
+    // A language was requested but no source matches it ⇒ nothing to return.
+    if (options.language && this.inventory && (scoped.sourcePaths?.length ?? 0) === 0) {
+      return { chunks: [], citations: [], usedFallback: false };
+    }
+
     const candidateLimit = Math.max(options.limit, options.limit * 4);
     const queryVariants = normalizedQueryVariants(query, options.queryVariants);
     const semanticChunksByVariant: RetrievedChunk[] = [];
@@ -74,18 +80,22 @@ export class RetrievalService {
 
     for (const variant of queryVariants) {
       semanticChunksByVariant.push(
-        ...filterRetrievedChunks(await this.searchSemantic(variant, candidateLimit), options),
+        ...filterRetrievedChunks(await this.searchSemantic(variant, candidateLimit), scoped),
       );
       keywordChunksByVariant.push(
-        ...(await this.searchKeywords(variant, { ...options, limit: candidateLimit })),
+        ...filterRetrievedChunks(
+          await this.searchKeywords(variant, { ...scoped, limit: candidateLimit }),
+          scoped,
+        ),
       );
     }
 
     const semanticChunks = fuseRetrievedChunks(semanticChunksByVariant, [], candidateLimit);
     const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
-    const fusedChunks = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
+    const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
+    const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
     const chunks = await this.expandAdjacentChunks(
-      fusedChunks.slice(0, options.limit),
+      ranked.slice(0, options.limit),
       1,
       options.limit,
     );
@@ -98,6 +108,26 @@ export class RetrievalService {
       })),
       usedFallback: semanticChunks.length === 0 && keywordChunks.length > 0,
     };
+  }
+
+  /**
+   * When a language is requested, resolve it to the set of sources indexed in
+   * that language (via metadata search) and narrow `sourcePaths` accordingly,
+   * intersecting with any caller-provided paths.
+   */
+  private async resolveLanguageScope(options: RetrievalOptions): Promise<RetrievalOptions> {
+    if (!options.language || !this.inventory) {
+      return options;
+    }
+    const page = await this.inventory.searchIndexByMetadata({
+      language: options.language,
+      limit: LANGUAGE_SCOPE_LIMIT,
+    });
+    const languagePaths = page.items.map((item) => item.sourcePath);
+    const sourcePaths = options.sourcePaths
+      ? options.sourcePaths.filter((path) => languagePaths.includes(path))
+      : languagePaths;
+    return { ...options, sourcePaths };
   }
 
   async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
@@ -317,6 +347,24 @@ function nearestSentence(value: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Upper bound on sources resolved for a language scope; ample for real vaults.
+const LANGUAGE_SCOPE_LIMIT = 1000;
+
+/** Keep only the first (highest-ranked) chunk per source. Input must be score-sorted. */
+function oneChunkPerSource(chunks: RetrievedChunk[]): RetrievedChunk[] {
+  const seen = new Set<string>();
+  const result: RetrievedChunk[] = [];
+  for (const chunk of chunks) {
+    const key = chunk.source.kind === "web" ? chunk.source.url : chunk.source.path;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(chunk);
+  }
+  return result;
 }
 
 function normalizedQueryVariants(

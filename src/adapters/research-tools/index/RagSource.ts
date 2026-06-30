@@ -1,13 +1,13 @@
 // RAG data source (stage 1, task 5.1). Wraps vault retrieval and contributes the
 // index search tool to the agent loop.
 
-import { Tool } from "../../core/agent/tool";
-import { DataSource, DataSourceDescriptor } from "./DataSource";
-import { IndexResearchTool } from "./tools/IndexResearchTool";
-import { INDEX_INVENTORY_TOOLS } from "./tools/IndexInventoryTools";
-import { CheckUrlsTool, ListIndexUrlsTool } from "./tools/IndexUrlTools";
-import { EvidenceRegistry } from "./evidence";
-import { ResearchRetriever, UrlStatusChecker } from "../contracts/research";
+import { Tool } from "../../../core/agent/tool";
+import { DataSource, DataSourceDescriptor } from "../../../application/sources/DataSource";
+import { IndexResearchTool } from "./IndexResearchTool";
+import { INDEX_INVENTORY_TOOLS } from "./IndexInventoryTools";
+import { CheckUrlsTool, ListIndexUrlsTool } from "./IndexUrlTools";
+import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { ResearchRetriever, UrlStatusChecker } from "../../../application/contracts/research";
 
 export interface RagSourceOptions {
   retriever: ResearchRetriever;

@@ -1,4 +1,4 @@
-import { CheckUrlsTool, ListIndexUrlsTool } from "../../src/application/sources/tools/IndexUrlTools";
+import { CheckUrlsTool, ListIndexUrlsTool } from "../../src/adapters/research-tools/index/IndexUrlTools";
 import { executeTool } from "../../src/core/agent/tool";
 import type { ResearchRetriever, UrlStatusChecker } from "../../src/application/contracts/research";
 import { markdownSource } from "../helpers/factories";
