@@ -12,7 +12,7 @@ import {
   normalizeVaultPath,
   vaultPathMatchesGlob,
 } from "../../src/shared/pathFilters";
-import { stripRenderedCitationIds } from "../../src/apps/obsidian/ui/citationText";
+import { stripRenderedCitationIds } from "../../src/apps/obsidian/ui/chat/citations/citationText";
 
 describe("shared helpers", () => {
   it("checks plain records", () => {

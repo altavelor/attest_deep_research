@@ -10,8 +10,6 @@ import {
 import { computeFindings } from "./diagnostics/report/findings";
 import { DiagnosticReportV3 } from "./diagnostics/report/types";
 
-export * from "./diagnostics/report/types";
-
 export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): DiagnosticReportV3 {
   const model = buildModelSection(diagnostics);
   const preflight = buildPreflightSection(diagnostics);

@@ -1,4 +1,4 @@
-import { IndexingController } from "../../src/adapters/indexing/IndexingController";
+import { IndexingController } from "../../src/adapters/indexing/controller/IndexingController";
 import { IndexingService, IndexingState } from "../../src/adapters/indexing/IndexingService";
 
 describe("IndexingController", () => {

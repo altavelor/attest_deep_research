@@ -1,4 +1,4 @@
-import { FallbackModelRoundProvider } from "../../src/adapters/model-provider/chat/FallbackModelRoundProvider";
+import { FallbackModelRoundProvider } from "../../src/adapters/model-provider/chat/rounds/FallbackModelRoundProvider";
 import { IxplorerError } from "../../src/core/errors";
 import { ModelRoundProvider } from "../../src/core/agent/protocol";
 

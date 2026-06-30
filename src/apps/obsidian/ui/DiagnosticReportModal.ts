@@ -1,7 +1,7 @@
 import { App, Modal, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "../../../core/diagnostics";
-import { copyToClipboard } from "./clipboard";
+import { copyToClipboard } from "./shared/clipboard";
 import { formatDiagnosticReport } from "./diagnosticFormatting";
 import { buildDiagnosticReportViewModel } from "./diagnosticFormatting";
 import { formatDiagnosticReportHtml } from "./diagnosticHtml";

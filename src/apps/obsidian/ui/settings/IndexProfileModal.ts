@@ -1,6 +1,6 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 
-import { IndexProfile } from "../../../../adapters/indexing/FileVectorIndexStore";
+import { IndexProfile } from "../../../../adapters/indexing/store/FileVectorIndexStore";
 import { parseNonNegativeInteger, parsePositiveInteger } from "../../../../shared/numbers";
 import { MAX_PROFILE_NAME_LENGTH } from "../../../../adapters/settings/constants";
 import { DEFAULT_INDEX_PROFILE, createIndexProfile } from "../../../../adapters/settings/defaults";

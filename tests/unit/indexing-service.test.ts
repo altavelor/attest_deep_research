@@ -7,7 +7,7 @@ import {
   IndexingFileLogEvent,
 } from "../../src/adapters/indexing/IndexingService";
 import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
-import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/adapters/indexing/changeDetection";
+import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/adapters/indexing/pipeline/changeDetection";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {

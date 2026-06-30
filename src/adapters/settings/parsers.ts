@@ -4,14 +4,14 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "../indexing/FileVectorIndexStore";
+} from "../indexing/store/FileVectorIndexStore";
 import { ApiFormat } from "../../core/agent/protocol";
 import { isRecord } from "../../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../../shared/numbers";
 import {
   INDEX_DESCRIPTION_MAX_CHARACTERS,
   type IndexDescription,
-} from "../indexing/IndexDescription";
+} from "../indexing/inventory/IndexDescription";
 import { DEFAULT_INDEX_FOLDER, DEFAULT_INDEX_PROFILE_ID } from "./constants";
 
 export function normalizeListInput(value: string): string[] {

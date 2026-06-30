@@ -8,7 +8,7 @@ import {
   readJsonIndexFile,
   readJsonlIndexFile,
   readFirstJsonlIndexRows,
-} from "../../src/adapters/indexing/fileIndexFiles";
+} from "../../src/adapters/indexing/inventory/fileIndexFiles";
 
 describe("file index files", () => {
   let folder: string;

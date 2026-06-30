@@ -6,7 +6,7 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "../indexing/FileVectorIndexStore";
+} from "../indexing/store/FileVectorIndexStore";
 import { DEFAULT_INDEX_FOLDER, DEFAULT_INDEX_PROFILE_ID, DEFAULT_PROFILE_TIMESTAMP } from "./constants";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";

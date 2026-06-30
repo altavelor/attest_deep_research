@@ -1,5 +1,5 @@
-import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "../../src/core/conversation";
-import { citationTarget, formatIndexControlSummary, formatIndexingStatus, formatProgressPercent, messageDisplayContent } from "../../src/apps/obsidian/ui/conversationFormatting";
+import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "../../src/core/conversation/reducers";
+import { citationTarget, formatIndexControlSummary, formatIndexingStatus, formatProgressPercent, messageDisplayContent } from "../../src/apps/obsidian/ui/chat/conversationFormatting";
 import { ContextDiagnostics } from "../../src/core/diagnostics";
 import { Citation } from "../../src/core/model/citation";
 import { SourceReference } from "../../src/core/model/source";

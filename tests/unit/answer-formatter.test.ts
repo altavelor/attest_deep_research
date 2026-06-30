@@ -1,7 +1,7 @@
 import {
   formatResearchAnswerNote,
   researchAnswerNotePath,
-} from "../../src/application/use-cases/answerFormatter";
+} from "../../src/application/use-cases/research/answerFormatter";
 import { ResearchAnswer } from "../../src/core/answer";
 import { SourceReference } from "../../src/core/model/source";
 

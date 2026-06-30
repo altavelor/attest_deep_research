@@ -23,7 +23,7 @@ import {
   DeepResearchRunResult,
   DeepResearchRunner,
 } from "../../../research/deepResearchPort";
-import { AgenticResearchRunner } from "../../AgenticResearchRunner";
+import { AgenticResearchRunner } from "../AgenticResearchRunner";
 import { looksLikeLeakedToolCall, parseDeepResearchReport } from "./parseDeepResearchReport";
 
 export interface DeepResearchAgentDeps {

@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync } from "fs";
 import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
 import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
 import { join } from "path";
 
-import { ResearchService } from "../../src/application/use-cases/ResearchService";
+import { ResearchService } from "../../src/application/use-cases/research/ResearchService";
 import {
   CHAT_PROVIDER_DESCRIPTION,
   DUCK_DUCK_GO_DESCRIPTION,

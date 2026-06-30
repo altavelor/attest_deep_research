@@ -13,11 +13,11 @@ import { isRecord } from "../../../shared/guards";
 import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "../../../core/agent/protocol";
 import { ChatToolCall } from "../../../core/agent/tool";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
-import { InlineReasoningParser } from "./InlineReasoningParser";
-import { createOpenAiClient, translateOpenAiError } from "./openAiSdk";
-import { createAnthropicClient, createLoggingFetch, translateAnthropicError } from "./anthropicSdk";
-import { parseTextToolCalls } from "./textToolCalls";
-import { RepetitionDetector } from "./repetitionDetector";
+import { InlineReasoningParser } from "./streaming/InlineReasoningParser";
+import { createOpenAiClient, translateOpenAiError } from "./providers/openAiSdk";
+import { createAnthropicClient, createLoggingFetch, translateAnthropicError } from "./providers/anthropicSdk";
+import { parseTextToolCalls } from "./streaming/textToolCalls";
+import { RepetitionDetector } from "./streaming/repetitionDetector";
 
 export interface ChatModelClientOptions {
   apiFormat?: ApiFormat;

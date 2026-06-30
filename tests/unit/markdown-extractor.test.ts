@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
-import { chunkMarkdown } from "../../src/adapters/indexing/chunker";
+import { chunkMarkdown } from "../../src/adapters/indexing/pipeline/chunker";
 
 const fixturePath = join(__dirname, "../fixtures/markdown/research-note.md");
 

@@ -10,7 +10,7 @@ import { DeepSearchTool } from "../../src/application/sources/tools/DeepSearchTo
 import { DeepResearchRunner } from "../../src/application/research/deepResearchPort";
 import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
 import { FakeChatModel, FakeSearchProvider } from "../helpers/researchFakes";
 import { retrieved, webSource } from "../helpers/factories";
 import type { ToolContext } from "../../src/core/agent/tool";
