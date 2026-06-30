@@ -3,11 +3,55 @@ import { RetrievalOptions, RetrievalQueryVariant } from "../ports/retrieval";
 import { ResearchAnswer } from "../../core/answer";
 import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
 import { LanguageInventoryItem } from "../../core/model/citation";
+import { SourceReference } from "../../core/model/source";
 import { ResearchChatHistoryMessage } from "../../core/research/prompts";
+
+export interface IndexedUrlReference {
+  id: string;
+  url: string;
+  normalizedUrl: string;
+  purpose: string | null;
+  context: string;
+  chunkId: string;
+  source: SourceReference;
+}
+
+export interface IndexedUrlInventoryOptions {
+  cursor?: string;
+  limit: number;
+  sourcePath?: string;
+}
+
+export interface IndexedUrlInventoryResult {
+  items: IndexedUrlReference[];
+  nextCursor?: string;
+}
+
+export interface UrlStatusCheckRequest {
+  url: string;
+}
+
+export interface UrlStatusCheckResult {
+  url: string;
+  state: "reachable" | "unreachable" | "unknown";
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  finalUrl?: string;
+  error?: string;
+}
+
+export interface UrlStatusChecker {
+  checkUrls(
+    urls: UrlStatusCheckRequest[],
+    options: { timeoutMs: number; signal: AbortSignal },
+  ): Promise<UrlStatusCheckResult[]>;
+}
 
 export interface ResearchRetriever {
   search(query: string, options: RetrievalOptions): Promise<RetrievalResult>;
   getLanguageInventory?(): Promise<LanguageInventoryItem[]>;
+  listIndexedUrls?(options: IndexedUrlInventoryOptions): Promise<IndexedUrlInventoryResult>;
   expandAdjacentEvidence?(
     chunks: RetrievalResult["chunks"],
     radius: number,

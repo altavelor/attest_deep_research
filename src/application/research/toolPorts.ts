@@ -11,6 +11,7 @@ import type { ChatToolCall, ChatToolDefinition } from "../../core/agent/tool";
 import type { Citation } from "../../core/model/citation";
 import type { ResearchEvidenceSnapshot } from "../sources/evidence";
 import type { ResearchRetriever } from "../contracts/research";
+import type { UrlStatusChecker } from "../contracts/research";
 import type {
   AgentLoopOptions,
   AgentLoopEvent,
@@ -59,6 +60,8 @@ export interface ResearchToolsetOptions {
   availability: ResearchToolAvailability;
   noteTools?: NoteToolService;
   retriever?: ResearchRetriever;
+  urlStatusChecker?: UrlStatusChecker;
+  indexSourcePaths?: readonly string[];
   searchProvider?: SearchProvider;
   /** Enables the `deep_search` tool when present (and a web provider exists). */
   deepResearchRunner?: DeepResearchRunner;

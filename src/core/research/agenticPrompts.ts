@@ -60,6 +60,11 @@ using authoritative sources retrieved by evidence tools.
 - Never invent a URL or an evidenceId. Only cite URLs/ids that appear in tool results.
 - Evidence from search_index and search_web has equal authority.
 
+### Index URL audit tools (list_index_urls, check_urls)
+- Use these tools for link inventories and reachability reports over indexed material.
+- Preserve URL purpose/context/source metadata in markdown reports.
+- These tools support audits; they do not replace evidence citations for factual claims.
+
 ### Editing tools (search_notes, read_note, list_notes, get_active_note)
 - Use these only when the user explicitly asks to read, create, update, or delete vault notes.
 - Results from editing tools are NOT evidence. Do not cite them. Do not use them to reason
@@ -133,6 +138,8 @@ ${indexDescription}
 </index-description>
 
 Use search_index to find content from this index that is relevant to the question.
+Use list_index_urls when the user asks for an exhaustive URL/link inventory from the
+indexed material. Use check_urls to verify HTTP(S) URL reachability in batches.
 
 ### Strategy
 - Formulate queries as concise phrases (≤240 chars) that capture the intent of the question.
@@ -140,6 +147,12 @@ Use search_index to find content from this index that is relevant to the questio
 - Use the returned \`evidenceId\` to cite results in your answer.
 - If results are insufficient, rephrase the query — do not call search_index with the same query twice.
 - \`limit\` controls how many results to return (max 5). Start with 3–5; increase only if needed.
+- For URL audits, page through \`list_index_urls\` with \`cursor\` until no \`nextCursor\`
+  remains. Its \`limit\` is capped at 100. Preserve each URL's \`purpose\`, \`context\`,
+  and source metadata when writing a markdown report.
+- For reachability checks, pass URLs from \`list_index_urls\` to \`check_urls\` in batches
+  of up to 100 and record state/status/finalUrl/error without inventing missing data.
+  Treat \`state: "unknown"\` as inconclusive, not as a dead link.
 
 ### Reading results
 Each result has:

@@ -1,4 +1,8 @@
-import { IndexStore, LanguageInventoryIndexStore } from "../../application/ports/indexing";
+import {
+  IndexChunkInventoryStore,
+  IndexStore,
+  LanguageInventoryIndexStore,
+} from "../../application/ports/indexing";
 import { AdjacentChunkIndexStore, KeywordSearchIndexStore, RetrievalOptions } from "../../application/ports/retrieval";
 import { EmbeddingProviderClient } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
@@ -7,6 +11,11 @@ import { formatCitation } from "../../core/retrieval/citations";
 import { rankKeywordMatches } from "./keywordRanking";
 import { filterRetrievedChunks } from "../../core/retrieval/filters";
 import { RetrievalResult } from "../../application/contracts/retrieval";
+import {
+  IndexedUrlInventoryOptions,
+  IndexedUrlInventoryResult,
+  IndexedUrlReference,
+} from "../../application/contracts/research";
 
 export type { RetrievalResult };
 
@@ -70,6 +79,13 @@ export class RetrievalService {
     }
 
     return this.indexStore.getLanguageInventory();
+  }
+
+  async listIndexedUrls(options: IndexedUrlInventoryOptions): Promise<IndexedUrlInventoryResult> {
+    if (isIndexChunkInventoryStore(this.indexStore)) {
+      return this.listIndexedUrlsFromStore(this.indexStore, options);
+    }
+    return this.listIndexedUrlsFromCorpus(options);
   }
 
   async expandAdjacentEvidence(
@@ -145,6 +161,145 @@ export class RetrievalService {
 
     return this.indexStore.expandAdjacentChunks(chunks, radius, limit);
   }
+
+  private async listIndexedUrlsFromStore(
+    indexStore: IndexStore & IndexChunkInventoryStore,
+    options: IndexedUrlInventoryOptions,
+  ): Promise<IndexedUrlInventoryResult> {
+    const batch = await indexStore.listIndexedChunks({
+      limit: Number.MAX_SAFE_INTEGER,
+      ...(options.sourcePath ? { sourcePath: options.sourcePath } : {}),
+    });
+    const start = parseCursor(options.cursor);
+    const refs = indexedUrlReferences(batch.chunks);
+    const items = refs.slice(start, start + options.limit);
+    const next = start + items.length;
+
+    return {
+      items,
+      ...(next < refs.length ? { nextCursor: String(next) } : {}),
+    };
+  }
+
+  private listIndexedUrlsFromCorpus(
+    options: IndexedUrlInventoryOptions,
+  ): IndexedUrlInventoryResult {
+    const start = parseCursor(options.cursor);
+    const refs = indexedUrlReferences(this.keywordCorpus, options.sourcePath);
+    const items = refs.slice(start, start + options.limit);
+    const next = start + items.length;
+
+    return {
+      items,
+      ...(next < refs.length ? { nextCursor: String(next) } : {}),
+    };
+  }
+}
+
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`)\]}]+/gi;
+const CONTEXT_CHARS = 180;
+
+function indexedUrlReferences(
+  chunks: readonly RetrievedChunk[],
+  sourcePath?: string,
+): IndexedUrlReference[] {
+  const refs: IndexedUrlReference[] = [];
+
+  for (const chunk of chunks) {
+    if (sourcePath && sourcePathFor(chunk.source) !== sourcePath) {
+      continue;
+    }
+
+    let match: RegExpExecArray | null;
+    URL_PATTERN.lastIndex = 0;
+    let indexInChunk = 0;
+    while ((match = URL_PATTERN.exec(chunk.text)) !== null) {
+      const url = stripTrailingPunctuation(match[0]);
+      const normalizedUrl = normalizeUrl(url);
+      if (!normalizedUrl) {
+        continue;
+      }
+      const context = extractContext(chunk.text, match.index, url.length);
+      refs.push({
+        id: `${chunk.id}:url:${indexInChunk}`,
+        url,
+        normalizedUrl,
+        purpose: purposeFromContext(context, url),
+        context,
+        chunkId: chunk.id,
+        source: chunk.source,
+      });
+      indexInChunk += 1;
+    }
+  }
+
+  return refs;
+}
+
+function parseCursor(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const parsed = Number.parseInt(cursor, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function sourcePathFor(source: SourceReference): string | undefined {
+  return "path" in source ? source.path : undefined;
+}
+
+function stripTrailingPunctuation(value: string): string {
+  return value.replace(/[.,;:!?]+$/g, "");
+}
+
+function normalizeUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return undefined;
+    }
+    url.hash = "";
+    url.protocol = url.protocol.toLowerCase();
+    url.hostname = url.hostname.toLowerCase();
+    if (
+      (url.protocol === "https:" && url.port === "443") ||
+      (url.protocol === "http:" && url.port === "80")
+    ) {
+      url.port = "";
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function extractContext(text: string, start: number, length: number): string {
+  const left = Math.max(0, start - CONTEXT_CHARS);
+  const right = Math.min(text.length, start + length + CONTEXT_CHARS);
+  return text.slice(left, right).replace(/\s+/g, " ").trim();
+}
+
+function purposeFromContext(context: string, url: string): string | null {
+  const escapedUrl = escapeRegExp(url);
+  const withoutUrl = context.replace(new RegExp(escapedUrl, "g"), "").replace(/\s+/g, " ").trim();
+  if (!withoutUrl) {
+    return null;
+  }
+  const sentence = nearestSentence(withoutUrl);
+  return sentence.length > 160 ? `${sentence.slice(0, 157)}...` : sentence;
+}
+
+function nearestSentence(value: string): string {
+  const sentences = value
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (sentences.length === 0) return value;
+  return sentences.reduce((best, current) =>
+    Math.abs(current.length - 120) < Math.abs(best.length - 120) ? current : best,
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizedQueryVariants(
@@ -184,6 +339,12 @@ function isLanguageInventoryIndexStore(
   return (
     "getLanguageInventory" in indexStore && typeof indexStore.getLanguageInventory === "function"
   );
+}
+
+function isIndexChunkInventoryStore(
+  indexStore: IndexStore,
+): indexStore is IndexStore & IndexChunkInventoryStore {
+  return "listIndexedChunks" in indexStore && typeof indexStore.listIndexedChunks === "function";
 }
 
 function fuseRetrievedChunks(

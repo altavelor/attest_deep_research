@@ -182,7 +182,10 @@ export class EagerResearchStrategy implements ResearchStrategy {
         phases: failedAgenticAttempt.phases,
         reasoningSegments: failedAgenticAttempt.reasoningSegments,
         stopReasons: failedAgenticAttempt.stopReasons,
-        budgets: agenticBudgets(failedAgenticAttempt.totalResultChars),
+        budgets: agenticBudgets(
+          failedAgenticAttempt.totalResultChars,
+          failedAgenticAttempt.maxResultChars,
+        ),
       };
     } else if (policy.strategy === "deterministic-fallback") {
       diagnostics.agentic = {

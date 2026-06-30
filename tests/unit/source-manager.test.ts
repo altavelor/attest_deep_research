@@ -32,7 +32,8 @@ describe("SourceManager", () => {
     sources.contributeTools(manager);
 
     const definitions = manager.definitions();
-    expect(definitions.length).toBeGreaterThanOrEqual(1);
+    expect(definitions.map((definition) => definition.function.name)).toContain("search_index");
+    expect(definitions.map((definition) => definition.function.name)).toContain("list_index_urls");
     // The contributed tool is dispatchable by its registered name.
     expect(manager.has(definitions[0].function.name)).toBe(true);
   });

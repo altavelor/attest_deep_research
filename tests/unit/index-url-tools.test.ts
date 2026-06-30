@@ -1,0 +1,122 @@
+import { CheckUrlsTool, ListIndexUrlsTool } from "../../src/application/sources/tools/IndexUrlTools";
+import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import type { ResearchRetriever, UrlStatusChecker } from "../../src/application/contracts/research";
+import { markdownSource } from "../helpers/factories";
+
+describe("index URL tools", () => {
+  it("lists indexed URLs with pagination inputs clamped to the tool maximum", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn(),
+      listIndexedUrls: vi.fn().mockResolvedValue({
+        items: [
+          {
+            id: "url-1",
+            url: "https://example.com/docs",
+            normalizedUrl: "https://example.com/docs",
+            purpose: "official documentation",
+            context: "See the official documentation at https://example.com/docs.",
+            chunkId: "chunk-1",
+            source: markdownSource("Books/Book.md", ["Chapter 1"]),
+          },
+        ],
+        nextCursor: "1",
+      }),
+    };
+    const tool = new ListIndexUrlsTool(retriever);
+
+    const execution = await executeResearchTool(tool, {
+      id: "call-urls",
+      name: "list_index_urls",
+      arguments: { limit: 500, sourcePath: " Books/Book.md " },
+    });
+
+    expect(retriever.listIndexedUrls).toHaveBeenCalledWith({
+      limit: 100,
+      sourcePath: "Books/Book.md",
+    });
+    expect(execution).toMatchObject({
+      ok: true,
+      value: {
+        items: [{ url: "https://example.com/docs", purpose: "official documentation" }],
+        nextCursor: "1",
+        diagnostics: { resultCount: 1, limit: 100, untrustedEvidence: true },
+      },
+    });
+  });
+
+  it("defaults URL inventory to the single attached index source", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn(),
+      listIndexedUrls: vi.fn().mockResolvedValue({ items: [] }),
+    };
+    const tool = new ListIndexUrlsTool(retriever, {
+      allowedSourcePaths: ["Books/Attached.pdf"],
+    });
+
+    await executeResearchTool(tool, {
+      id: "call-scoped",
+      name: "list_index_urls",
+      arguments: { limit: 10 },
+    });
+
+    expect(retriever.listIndexedUrls).toHaveBeenCalledWith({
+      limit: 10,
+      sourcePath: "Books/Attached.pdf",
+    });
+  });
+
+  it("rejects URL inventory outside the attached index source scope", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn(),
+      listIndexedUrls: vi.fn(),
+    };
+    const tool = new ListIndexUrlsTool(retriever, {
+      allowedSourcePaths: ["Books/Attached.pdf"],
+    });
+
+    await expect(
+      executeResearchTool(tool, {
+        id: "call-out-of-scope",
+        name: "list_index_urls",
+        arguments: { sourcePath: "Books/Other.pdf" },
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "source-path-out-of-scope" },
+    });
+    expect(retriever.listIndexedUrls).not.toHaveBeenCalled();
+  });
+
+  it("checks URL reachability through the injected checker", async () => {
+    const checker: UrlStatusChecker = {
+      checkUrls: vi.fn().mockResolvedValue([
+        {
+          url: "https://example.com",
+          state: "reachable",
+          ok: true,
+          status: 200,
+          finalUrl: "https://example.com/",
+        },
+      ]),
+    };
+    const tool = new CheckUrlsTool(checker);
+
+    const execution = await executeResearchTool(tool, {
+      id: "call-check",
+      name: "check_urls",
+      arguments: { urls: ["https://example.com"], timeoutMs: 500 },
+    });
+
+    expect(checker.checkUrls).toHaveBeenCalledWith(
+      [{ url: "https://example.com" }],
+      expect.objectContaining({ timeoutMs: 1_000 }),
+    );
+    expect(execution).toMatchObject({
+      ok: true,
+      value: {
+        results: [{ url: "https://example.com", state: "reachable", ok: true, status: 200 }],
+        diagnostics: { checkedCount: 1, timeoutMs: 1_000 },
+      },
+    });
+  });
+});

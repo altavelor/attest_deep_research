@@ -66,6 +66,7 @@ export interface AgenticResearchSuccess {
   duplicateCalls: number;
   phases: string[];
   stopReasons: string[];
+  maxResultChars: number;
   totalResultChars: number;
   reasoningItemCount: number;
   reasoningSegments: ReasoningSegmentAttribution[];
@@ -84,6 +85,7 @@ export interface AgenticResearchFailure {
   duplicateCalls: number;
   phases: string[];
   stopReasons: string[];
+  maxResultChars: number;
   totalResultChars: number;
   reasoningItemCount: number;
   reasoningSegments: ReasoningSegmentAttribution[];
@@ -166,6 +168,7 @@ export class AgenticResearchRunner {
       duplicateCalls,
       phases,
       stopReasons,
+      maxResultChars,
       totalResultChars,
       reasoningItemCount,
       reasoningSegments,
@@ -234,6 +237,7 @@ export class AgenticResearchRunner {
               duplicateCalls,
               phases,
               stopReasons,
+              maxResultChars,
               totalResultChars,
               reasoningItemCount,
               reasoningSegments,

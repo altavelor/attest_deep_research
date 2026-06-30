@@ -46,6 +46,7 @@ import {
   resolveEffectiveTools,
 } from "../../../adapters/settings/settings";
 import { DuckDuckGoSearchProvider } from "../../../adapters/web/DuckDuckGoSearchProvider";
+import { FetchUrlStatusChecker } from "../../../adapters/web/FetchUrlStatusChecker";
 import { resolveIndexDescriptionForPrompt } from "../../../adapters/indexing/IndexDescription";
 import type { ModelRoundProvider } from "../../../core/agent/protocol";
 import { obsidianRequestFetch } from "../obsidianFetch";
@@ -155,6 +156,7 @@ export function createResearchService(
       useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
     },
     searchProvider: createSearchProvider(ctx),
+    urlStatusChecker: new FetchUrlStatusChecker({ fetch: obsidianRequestFetch }),
     toolsEnabled,
     forceEagerResearch: settings.forceEagerResearch,
     toolCapabilities: toolResolution.capabilities,
@@ -386,4 +388,3 @@ function buildExtractors(
     new DocxExtractor({ ...chunk }),
   ];
 }
-

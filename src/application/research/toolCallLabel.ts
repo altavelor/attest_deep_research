@@ -18,6 +18,12 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
       return typeof args.query === "string" && args.query ? truncate(args.query) : name;
     case "fetch_web_page":
       return "Fetching page";
+    case "list_index_urls":
+      return typeof args.sourcePath === "string" && args.sourcePath
+        ? `URLs: ${truncate(args.sourcePath)}`
+        : "Index URLs";
+    case "check_urls":
+      return Array.isArray(args.urls) ? `Checking ${args.urls.length} URLs` : "Checking URLs";
     case "deep_search":
       return typeof args.question === "string" && args.question
         ? `Deep research: ${truncate(args.question)}`
@@ -59,13 +65,27 @@ export function resolveResultSummary(name: string, resultJson: string): string |
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const root = parsed as Record<string, unknown>;
 
-    if (name === "search_index" || name === "search_web" || name === "search_notes") {
+    if (
+      name === "search_index" ||
+      name === "search_web" ||
+      name === "search_notes" ||
+      name === "list_index_urls"
+    ) {
       const value = root.value as Record<string, unknown> | undefined;
-      const results = value?.results;
+      const results = name === "list_index_urls" ? value?.items : value?.results;
       if (Array.isArray(results)) {
-        return results.length === 0 ? "no results" : `${results.length} results`;
+        const noun = name === "list_index_urls" ? "URLs" : "results";
+        return results.length === 0 ? `no ${noun}` : `${results.length} ${noun}`;
       }
       return undefined;
+    }
+
+    if (name === "check_urls") {
+      const value = root.value as Record<string, unknown> | undefined;
+      const results = value?.results;
+      if (!Array.isArray(results)) return undefined;
+      const ok = results.filter((item) => (item as Record<string, unknown>).ok === true).length;
+      return `${ok}/${results.length} reachable`;
     }
 
     if (name === "fetch_web_page") {

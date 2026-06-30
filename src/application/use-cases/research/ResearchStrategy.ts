@@ -16,6 +16,7 @@ import {
   ResearchRetriever,
   ResearchSearchMode,
   ResearchStreamEvent,
+  UrlStatusChecker,
 } from "../../contracts/research";
 import { NoteToolService, ResearchToolsetFactory } from "../../research/toolPorts";
 import { DeepResearchRunner } from "../../research/deepResearchPort";
@@ -49,6 +50,7 @@ export interface ResearchStrategyDeps {
   webPipeline: WebResearchPipeline;
   answerSynthesis: AnswerSynthesisService;
   retriever: ResearchRetriever;
+  urlStatusChecker?: UrlStatusChecker;
   searchProvider?: SearchProvider;
   noteTools?: NoteToolService;
   toolsetFactory: ResearchToolsetFactory;

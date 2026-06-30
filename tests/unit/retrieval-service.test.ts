@@ -242,6 +242,114 @@ describe("RetrievalService", () => {
     expect(adjacent.map((chunk) => chunk.id)).toEqual(["before", "hit", "after"]);
     expect(indexStore.directAdjacentRequests).toEqual([{ source, chunkId: "hit", radius: 2 }]);
   });
+
+  it("lists URL references from the indexed keyword corpus with context and cursor pagination", async () => {
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore: new FakeIndexStore([]),
+      embeddingModel: "nomic",
+      keywordCorpus: [
+        retrieved(
+          "book-1",
+          markdownSource("Books/book.md", ["References"]),
+          "Read the official documentation at https://Example.com/docs#intro for API details. See also https://second.example/path.",
+          0,
+        ),
+        retrieved(
+          "other-1",
+          markdownSource("Other/note.md"),
+          "Outside scope https://outside.example",
+          0,
+        ),
+      ],
+    });
+
+    const first = await service.listIndexedUrls({ limit: 1, sourcePath: "Books/book.md" });
+    const second = await service.listIndexedUrls({
+      limit: 10,
+      sourcePath: "Books/book.md",
+      cursor: first.nextCursor,
+    });
+
+    expect(first).toMatchObject({
+      items: [
+        {
+          id: "book-1:url:0",
+          url: "https://Example.com/docs#intro",
+          normalizedUrl: "https://example.com/docs",
+          purpose: expect.stringContaining("official documentation"),
+          context: expect.stringContaining("API details"),
+          chunkId: "book-1",
+          source: expect.objectContaining({ path: "Books/book.md" }),
+        },
+      ],
+      nextCursor: "1",
+    });
+    expect(second.items.map((item) => item.normalizedUrl)).toEqual([
+      "https://second.example/path",
+    ]);
+    expect(second.nextCursor).toBeUndefined();
+  });
+
+  it("lists URL references from the index store when the in-memory keyword corpus is empty", async () => {
+    const inventoryResults = [
+      retrieved(
+        "stored-1",
+        markdownSource("Books/book.md", ["Links"]),
+        "Project page: https://stored.example/project explains the dataset.",
+        0,
+      ),
+    ];
+    const indexStore = Object.assign(new FakeIndexStore([]), {
+      async listIndexedChunks(): Promise<{ chunks: typeof inventoryResults; nextCursor?: string }> {
+        return { chunks: inventoryResults };
+      },
+    });
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const result = await service.listIndexedUrls({ limit: 100 });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        url: "https://stored.example/project",
+        normalizedUrl: "https://stored.example/project",
+        chunkId: "stored-1",
+      }),
+    ]);
+  });
+
+  it("paginates indexed URL references without skipping multiple URLs in one stored chunk", async () => {
+    const inventoryResults = [
+      retrieved(
+        "stored-1",
+        markdownSource("Books/book.md", ["Links"]),
+        "First https://one.example and second https://two.example.",
+        0,
+      ),
+    ];
+    const indexStore = Object.assign(new FakeIndexStore([]), {
+      async listIndexedChunks(): Promise<{ chunks: typeof inventoryResults; nextCursor?: string }> {
+        return { chunks: inventoryResults };
+      },
+    });
+    const service = new RetrievalService({
+      embeddings: new FailingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      keywordCorpus: [],
+    });
+
+    const first = await service.listIndexedUrls({ limit: 1 });
+    const second = await service.listIndexedUrls({ limit: 1, cursor: first.nextCursor });
+
+    expect(first.items.map((item) => item.normalizedUrl)).toEqual(["https://one.example/"]);
+    expect(second.items.map((item) => item.normalizedUrl)).toEqual(["https://two.example/"]);
+  });
 });
 
 describe("rankKeywordMatches", () => {

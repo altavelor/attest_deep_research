@@ -1,7 +1,17 @@
 import { readdir, rm } from "fs/promises";
 
 import { IxplorerError } from "../../core/errors";
-import { IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, IndexStoreMetadata, IndexStoreWriteSession, LanguageInventoryIndexStore, SourceSnapshotIndexStore } from "../../application/ports/indexing";
+import {
+  IndexChunkInventoryOptions,
+  IndexChunkInventoryStore,
+  IndexFailedSourceSnapshot,
+  IndexSourceSnapshot,
+  IndexStore,
+  IndexStoreMetadata,
+  IndexStoreWriteSession,
+  LanguageInventoryIndexStore,
+  SourceSnapshotIndexStore,
+} from "../../application/ports/indexing";
 import { AdjacentChunkIndexStore, KeywordSearchIndexStore } from "../../application/ports/retrieval";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "../../core/model/source";
@@ -32,6 +42,7 @@ import {
   FileVectorIndexState,
   removeSourcePathFromState,
 } from "./FileVectorIndexState";
+import { sourcePathFromReference } from "./FileVectorIndexVector";
 import type { IndexSourceReportItem } from "./types";
 
 export {
@@ -76,6 +87,7 @@ export class FileVectorIndexStore
   SourceSnapshotIndexStore,
   KeywordSearchIndexStore,
   AdjacentChunkIndexStore,
+  IndexChunkInventoryStore,
   LanguageInventoryIndexStore {
   private readonly folder: string;
   private readonly profileId: string;
@@ -365,6 +377,46 @@ export class FileVectorIndexStore
     );
   }
 
+  async listIndexedChunks(options: IndexChunkInventoryOptions): Promise<{
+    chunks: RetrievedChunk[];
+    nextCursor?: string;
+  }> {
+    const state = this.state ?? (await this.persistence.loadExistingStateOrNull());
+
+    if (state === null || options.limit <= 0) {
+      return { chunks: [] };
+    }
+
+    this.state = state;
+    const start = parseInventoryCursor(options.cursor);
+    const rows = [...state.chunksByShard.values()]
+      .flat()
+      .map((chunk) => chunk.row)
+      .filter((row) => !options.sourcePath || row.sourcePath === options.sourcePath)
+      .sort((left, right) => {
+        const leftPath = left.sourcePath ?? sourcePathFromReference(left.source);
+        const rightPath = right.sourcePath ?? sourcePathFromReference(right.source);
+        return (
+          leftPath.localeCompare(rightPath) ||
+          (left.chunkIndex ?? 0) - (right.chunkIndex ?? 0) ||
+          left.id.localeCompare(right.id)
+        );
+      });
+    const selected = rows.slice(start, start + options.limit);
+    const next = start + selected.length;
+
+    return {
+      chunks: selected.map((row) => ({
+        id: row.id,
+        source: row.source,
+        text: row.text,
+        contentHash: row.contentHash,
+        score: 1,
+      })),
+      ...(next < rows.length ? { nextCursor: String(next) } : {}),
+    };
+  }
+
   async expandAdjacentChunks(
     chunks: RetrievedChunk[],
     radius: number,
@@ -461,4 +513,10 @@ function sourcePathForDescription(source: SourceReference): string {
 
 function createWriteId(now: () => Date): string {
   return `${now().getTime().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseInventoryCursor(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const parsed = Number.parseInt(cursor, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }

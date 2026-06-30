@@ -7,7 +7,6 @@ import {
 } from "../../../core/diagnostics";
 import { RetrievedChunk } from "../../../core/model/source";
 import { estimateTextTokens } from "../../../core/research/prompts";
-import { DEFAULT_MAX_RESULT_CHARS } from "../AgenticResearchRunner";
 
 export function withRetrievalDiagnostics(
   diagnostics: ContextDiagnostics,
@@ -144,10 +143,10 @@ export function createEmptyContextDiagnostics(
   };
 }
 
-export function agenticBudgets(usedResultChars: number) {
+export function agenticBudgets(usedResultChars: number, maxResultChars: number) {
   return {
     maxRounds: 30,
-    maxResultChars: DEFAULT_MAX_RESULT_CHARS,
+    maxResultChars,
     usedResultChars,
   };
 }

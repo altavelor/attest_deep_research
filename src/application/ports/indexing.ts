@@ -62,3 +62,16 @@ export interface SourceSnapshotIndexStore {
 export interface LanguageInventoryIndexStore {
   getLanguageInventory(): Promise<LanguageInventoryItem[]>;
 }
+
+export interface IndexChunkInventoryOptions {
+  cursor?: string;
+  limit: number;
+  sourcePath?: string;
+}
+
+export interface IndexChunkInventoryStore {
+  listIndexedChunks(options: IndexChunkInventoryOptions): Promise<{
+    chunks: RetrievedChunk[];
+    nextCursor?: string;
+  }>;
+}
