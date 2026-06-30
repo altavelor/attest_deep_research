@@ -236,8 +236,7 @@ function renderWorkflowNodes(
   uiState?: WorkflowUiState,
 ): boolean {
   const progress = message.researchProgress;
-  const legacySegments = message.reasoning ?? [];
-  const segments = progress?.reasoning.segments ?? legacySegments;
+  const segments = progress?.reasoning.segments ?? [];
   const checkpoints = progress?.checkpoints ?? [];
   const chain = progress?.chain ?? [];
   const hasChain = chain.length > 0;

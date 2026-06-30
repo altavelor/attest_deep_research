@@ -1,6 +1,6 @@
 import { ContextFileProvider } from "../../application/ports/vault";
 import { Extractor } from "../ports/indexing";
-import { RetrievalOptions } from "../ports/retrieval";
+import { RetrievalOptions } from "../../core/retrieval/query";
 import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "../../core/diagnostics";
 import { ExtractedChunk, RetrievedChunk } from "../../core/model/source";
 

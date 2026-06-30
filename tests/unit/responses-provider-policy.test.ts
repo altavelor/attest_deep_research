@@ -2,7 +2,7 @@ import {
   resolveResponsesProviderPolicy,
   ResponsesPolicyInput,
 } from "../../src/adapters/model-provider/chat/ResponsesProviderPolicy";
-import { ReasoningCapabilitySettings } from "../../src/adapters/settings/settings";
+import { ReasoningCapabilitySettings } from "../../src/adapters/settings/types";
 
 const capabilities: ReasoningCapabilitySettings = {
   source: "probe",

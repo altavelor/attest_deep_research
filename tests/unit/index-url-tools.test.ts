@@ -1,5 +1,5 @@
 import { CheckUrlsTool, ListIndexUrlsTool } from "../../src/application/sources/tools/IndexUrlTools";
-import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { executeTool } from "../../src/core/agent/tool";
 import type { ResearchRetriever, UrlStatusChecker } from "../../src/application/contracts/research";
 import { markdownSource } from "../helpers/factories";
 
@@ -24,7 +24,7 @@ describe("index URL tools", () => {
     };
     const tool = new ListIndexUrlsTool(retriever);
 
-    const execution = await executeResearchTool(tool, {
+    const execution = await executeTool(tool, {
       id: "call-urls",
       name: "list_index_urls",
       arguments: { limit: 500, sourcePath: " Books/Book.md " },
@@ -53,7 +53,7 @@ describe("index URL tools", () => {
       allowedSourcePaths: ["Books/Attached.pdf"],
     });
 
-    await executeResearchTool(tool, {
+    await executeTool(tool, {
       id: "call-scoped",
       name: "list_index_urls",
       arguments: { limit: 10 },
@@ -75,7 +75,7 @@ describe("index URL tools", () => {
     });
 
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "call-out-of-scope",
         name: "list_index_urls",
         arguments: { sourcePath: "Books/Other.pdf" },
@@ -101,7 +101,7 @@ describe("index URL tools", () => {
     };
     const tool = new CheckUrlsTool(checker);
 
-    const execution = await executeResearchTool(tool, {
+    const execution = await executeTool(tool, {
       id: "call-check",
       name: "check_urls",
       arguments: { urls: ["https://example.com"], timeoutMs: 500 },

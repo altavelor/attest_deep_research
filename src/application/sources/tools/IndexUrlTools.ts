@@ -5,12 +5,12 @@ import {
   UrlStatusChecker,
 } from "../../contracts/research";
 import {
-  failure,
-  ResearchToolExecution,
-  ResearchToolExecutionContext,
-  ResearchToolHandler,
-  ResearchToolParseResult,
-} from "../../research/ResearchTools";
+  Tool as ResearchToolHandler,
+  ToolContext as ResearchToolExecutionContext,
+  ToolExecution as ResearchToolExecution,
+  ToolParseResult as ResearchToolParseResult,
+  toolFailure,
+} from "../../../core/agent/tool";
 
 interface ListIndexUrlsInput {
   cursor?: string;
@@ -88,16 +88,16 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
       (key) => key !== "cursor" && key !== "limit" && key !== "sourcePath",
     );
     if (unknown) {
-      return failure("unknown-property", `Unknown property: ${unknown}.`);
+      return toolFailure("unknown-property", `Unknown property: ${unknown}.`);
     }
 
     const cursor = readOptionalString(input.cursor, MAX_CURSOR_CHARS);
     if (cursor === false) {
-      return failure("invalid-cursor", "Cursor must be a bounded string.");
+      return toolFailure("invalid-cursor", "Cursor must be a bounded string.");
     }
     const sourcePath = readOptionalString(input.sourcePath, MAX_SOURCE_PATH_CHARS);
     if (sourcePath === false) {
-      return failure("invalid-source-path", "sourcePath must be a bounded string.");
+      return toolFailure("invalid-source-path", "sourcePath must be a bounded string.");
     }
     const resolvedSourcePath = this.resolveSourcePath(sourcePath);
     if (!resolvedSourcePath.ok) {
@@ -105,7 +105,7 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
     }
     const limit = readLimit(input.limit);
     if (limit === undefined) {
-      return failure("invalid-limit", "Limit must be an integer.");
+      return toolFailure("invalid-limit", "Limit must be an integer.");
     }
 
     return {
@@ -123,14 +123,14 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
     _context: ResearchToolExecutionContext,
   ): Promise<ResearchToolExecution<ListIndexUrlsOutput>> {
     if (!this.retriever.listIndexedUrls) {
-      return failure("index-url-inventory-unsupported", "The selected index cannot list URLs.");
+      return toolFailure("index-url-inventory-unsupported", "The selected index cannot list URLs.");
     }
 
     let result: IndexedUrlInventoryResult;
     try {
       result = await this.retriever.listIndexedUrls(input satisfies IndexedUrlInventoryOptions);
     } catch {
-      return failure("index-url-inventory-failed", "Index URL inventory failed.", true);
+      return toolFailure("index-url-inventory-failed", "Index URL inventory failed.", true);
     }
 
     return {
@@ -156,12 +156,12 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
     if (sourcePath) {
       return this.allowedSourcePaths.includes(sourcePath)
         ? { ok: true, value: sourcePath }
-        : failure("source-path-out-of-scope", "sourcePath is outside the attached context.");
+        : toolFailure("source-path-out-of-scope", "sourcePath is outside the attached context.");
     }
     if (this.allowedSourcePaths.length === 1) {
       return { ok: true, value: this.allowedSourcePaths[0] };
     }
-    return failure(
+    return toolFailure(
       "source-path-required",
       "sourcePath is required when multiple attached index sources are in scope.",
     );
@@ -197,21 +197,21 @@ export class CheckUrlsTool implements ResearchToolHandler<CheckUrlsInput, CheckU
   parseInput(input: Record<string, unknown>): ResearchToolParseResult<CheckUrlsInput> {
     const unknown = Object.keys(input).find((key) => key !== "urls" && key !== "timeoutMs");
     if (unknown) {
-      return failure("unknown-property", `Unknown property: ${unknown}.`);
+      return toolFailure("unknown-property", `Unknown property: ${unknown}.`);
     }
     if (!Array.isArray(input.urls) || input.urls.length === 0) {
-      return failure("invalid-urls", "urls must be a non-empty array.");
+      return toolFailure("invalid-urls", "urls must be a non-empty array.");
     }
     const urls = input.urls
       .slice(0, MAX_URLS_PER_CHECK)
       .map((url) => (typeof url === "string" ? url.trim() : ""))
       .filter((url) => url.length > 0 && url.length <= 2_000);
     if (urls.length !== input.urls.length && input.urls.length <= MAX_URLS_PER_CHECK) {
-      return failure("invalid-urls", "Every URL must be a bounded string.");
+      return toolFailure("invalid-urls", "Every URL must be a bounded string.");
     }
     const timeoutMs = readTimeout(input.timeoutMs);
     if (timeoutMs === undefined) {
-      return failure("invalid-timeout", "timeoutMs must be an integer.");
+      return toolFailure("invalid-timeout", "timeoutMs must be an integer.");
     }
 
     return { ok: true, value: { urls, timeoutMs } };
@@ -234,7 +234,7 @@ export class CheckUrlsTool implements ResearchToolHandler<CheckUrlsInput, CheckU
         },
       };
     } catch {
-      return failure("url-check-failed", "URL status check failed.", true);
+      return toolFailure("url-check-failed", "URL status check failed.", true);
     }
   }
 }

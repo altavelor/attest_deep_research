@@ -1,4 +1,4 @@
-import { readdir, rm } from "fs/promises";
+import { rm } from "fs/promises";
 
 import { IxplorerError } from "../../core/errors";
 import {
@@ -15,7 +15,7 @@ import {
 import { AdjacentChunkIndexStore, KeywordSearchIndexStore } from "../../application/ports/retrieval";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "../../core/model/source";
-import { throwRebuildRequired, isMissingFileError } from "./FileVectorIndexErrors";
+import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";
 import {
@@ -113,10 +113,6 @@ export class FileVectorIndexStore
     const manifest = await this.persistence.readManifest();
 
     if (manifest === null) {
-      if (await this.hasLegacyOrUnknownFiles()) {
-        throwRebuildRequired({ reason: "legacy-or-unknown-index-files", folder: this.folder });
-      }
-
       this.state = createEmptyState({
         profileId: this.profileId,
         metadata,
@@ -453,22 +449,6 @@ export class FileVectorIndexStore
 
     this.state = state;
     return getAdjacentFileVectorChunks(state, source, chunkId, radius);
-  }
-
-  private async hasLegacyOrUnknownFiles(): Promise<boolean> {
-    let entries: string[];
-
-    try {
-      entries = await readdir(this.folder);
-    } catch (error) {
-      if (isMissingFileError(error)) {
-        return false;
-      }
-
-      throw error;
-    }
-
-    return entries.some((entry) => !entry.endsWith(".tmp"));
   }
 
   private assertManifestMatchesStore(

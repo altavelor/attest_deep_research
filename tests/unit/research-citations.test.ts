@@ -4,7 +4,7 @@ import {
   resolveCitationTokens,
 } from "../../src/application/use-cases/research/citations";
 
-describe("citationIdsFromText (legacy raw tokens)", () => {
+describe("citationIdsFromText", () => {
   it("extracts bracketed tokens verbatim", () => {
     const ids = citationIdsFromText("Claim [web:abc] and [doc:1] cite [web:abc].");
     expect([...ids].sort()).toEqual(["doc:1", "web:abc"]);
@@ -43,9 +43,9 @@ describe("resolveCitationTokens", () => {
     expect(unresolvedUrls).toEqual(["https://example.com/unseen"]);
   });
 
-  it("still accepts legacy raw evidence-id tokens", () => {
-    const { ids } = resolveCitationTokens("legacy [web:hash-gemini] cite", urlToEvidenceId);
-    expect([...ids]).toEqual(["web:hash-gemini"]);
+  it("ignores raw evidence-id tokens", () => {
+    const { ids } = resolveCitationTokens("raw [web:hash-gemini] cite", urlToEvidenceId);
+    expect([...ids]).toEqual([]);
   });
 
   it("ignores malformed url tokens", () => {

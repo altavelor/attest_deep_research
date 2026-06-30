@@ -8,7 +8,7 @@ import type {
   IndexingLogger,
   IndexingPerformanceLogEvent,
 } from "../indexing/IndexingService";
-import type { IxplorerSettings } from "./settings";
+import type { IxplorerSettings } from "./types";
 
 export interface RequestLogContext {
   url: string;

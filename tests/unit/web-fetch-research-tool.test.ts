@@ -1,5 +1,5 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { executeResearchTool } from "../../src/application/research/ResearchTools";
+import { executeTool } from "../../src/core/agent/tool";
 import { WebFetchResearchTool } from "../../src/application/sources/tools/WebFetchResearchTool";
 import { SearchProvider } from "../../src/application/ports/web";
 
@@ -17,7 +17,7 @@ describe("WebFetchResearchTool", () => {
 
     for (const resultId of [registered.resultId, "missing-handle"]) {
       await expect(
-        executeResearchTool(tool, {
+        executeTool(tool, {
           id: "fetch",
           name: "fetch_web_page",
           arguments: { resultId },
@@ -52,7 +52,7 @@ describe("WebFetchResearchTool", () => {
     const beforeCitationId = evidence.snapshot().citations[0]?.id;
     const tool = new WebFetchResearchTool({ provider, evidence });
 
-    const execution = await executeResearchTool(tool, {
+    const execution = await executeTool(tool, {
       id: "fetch",
       name: "fetch_web_page",
       arguments: { resultId: registered.resultId },
@@ -92,7 +92,7 @@ describe("WebFetchResearchTool", () => {
     const tool = new WebFetchResearchTool({ provider, evidence });
 
     await expect(
-      executeResearchTool(tool, {
+      executeTool(tool, {
         id: "fetch",
         name: "fetch_web_page",
         arguments: { resultId: "timeout-handle" },

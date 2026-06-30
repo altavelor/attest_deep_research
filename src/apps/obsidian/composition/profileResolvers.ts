@@ -1,14 +1,11 @@
 import { IndexProfile } from "../../../adapters/indexing/FileVectorIndexStore";
+import { ChatModelProfile, EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "../../../adapters/settings/types";
 import {
-  ChatModelProfile,
-  EmbeddingModelProfile,
-  IxplorerSettings,
-  ServerProfile,
   getActiveIndexProfile,
   resolveChatModelProfile,
   resolveEmbeddingModelProfile,
   resolveServerProfile,
-} from "../../../adapters/settings/settings";
+} from "../../../adapters/settings/profileQueries";
 
 export function requireChatModelProfile(
   settings: IxplorerSettings,

@@ -4,7 +4,7 @@ import {
   fetchModelContextLength,
   verifyEmbeddingCapability,
 } from "../../src/adapters/settings/connectionTests";
-import { ServerProfile } from "../../src/adapters/settings/settings";
+import { ServerProfile } from "../../src/adapters/settings/types";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {

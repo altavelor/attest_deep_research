@@ -26,7 +26,7 @@ export interface ExpandedCitationContext {
 }
 
 export interface SavedChat {
-  schemaVersion: 1 | 2;
+  schemaVersion: 2;
   id: string;
   title: string;
   createdAt: string;
@@ -35,7 +35,7 @@ export interface SavedChat {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   expandedCitationContexts?: ExpandedCitationContext[];
-  chatSettings?: SavedChatSettings;
+  chatSettings: SavedChatSettings;
 }
 
 export interface SavedChatSummary {
@@ -53,7 +53,7 @@ export interface SaveChatInput {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   expandedCitationContexts?: ExpandedCitationContext[];
-  chatSettings?: SavedChatSettings;
+  chatSettings: SavedChatSettings;
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
@@ -84,7 +84,7 @@ export function isSavedChat(value: unknown): value is SavedChat {
   const chat = value as Partial<SavedChat>;
 
   return (
-    (chat.schemaVersion === 1 || chat.schemaVersion === CHAT_SCHEMA_VERSION) &&
+    chat.schemaVersion === CHAT_SCHEMA_VERSION &&
     typeof chat.id === "string" &&
     isSafeChatId(chat.id) &&
     typeof chat.title === "string" &&
@@ -94,7 +94,7 @@ export function isSavedChat(value: unknown): value is SavedChat {
     Array.isArray(chat.attachedContextPaths) &&
     (chat.expandedCitationContexts === undefined || Array.isArray(chat.expandedCitationContexts)) &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
-    (chat.chatSettings === undefined || isSavedChatSettings(chat.chatSettings))
+    isSavedChatSettings(chat.chatSettings)
   );
 }
 

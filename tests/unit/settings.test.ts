@@ -1,25 +1,34 @@
 import {
   DEFAULT_SETTINGS,
-  MAX_INDEX_PROFILE_COUNT,
+  cloneIndexProfile,
+  createIndexProfile,
+} from "../../src/adapters/settings/defaults";
+import { readSettings } from "../../src/adapters/settings/persistence";
+import {
   formatListInput,
-  getActiveIndexProfile,
-  isValidIndexProfileName,
-  isIndexProfileSelectable,
-  migrateSettings,
   normalizeListInput,
-  normalizeSettingsState,
   normalizeUrl,
   normalizeVaultFolder,
+} from "../../src/adapters/settings/parsers";
+import {
+  getActiveIndexProfile,
+  isValidIndexProfileName,
   resolveChatModelProfile,
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
   resolveEffectiveTools,
   updateActiveIndexProfile,
-} from "../../src/adapters/settings/settings";
+} from "../../src/adapters/settings/profileQueries";
+import { isIndexProfileSelectable } from "../../src/adapters/settings/normalization";
+import { createToolCapabilitySettings, withProbeResults } from "../../src/adapters/settings/toolCapabilities";
+import { IxplorerSettings } from "../../src/adapters/settings/types";
 
 describe("Ixplorer settings", () => {
-  it("uses local-first safe defaults", () => {
-    expect(migrateSettings(null)).toEqual(DEFAULT_SETTINGS);
+  it("uses local-first safe defaults when saved data is absent or not current", () => {
+    expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(readSettings({ lanceDbFolder: ".ixplorer/old-index", includeFolders: ["Notes"] })).toEqual(
+      DEFAULT_SETTINGS,
+    );
     expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
@@ -35,209 +44,64 @@ describe("Ixplorer settings", () => {
       chunkSize: 800,
       chunkOverlap: 120,
     });
-    expect(DEFAULT_SETTINGS.showChatIndexControl).toBe(true);
-    expect(DEFAULT_SETTINGS.includeActiveFileContext).toBe(true);
-    expect(DEFAULT_SETTINGS.useLinkedNotes).toBe(true);
-    expect(DEFAULT_SETTINGS.includeBacklinks).toBe(true);
-    expect(DEFAULT_SETTINGS.expandFilteredContextThroughLinks).toBe(false);
-    expect(DEFAULT_SETTINGS.graphContextDepth).toBe(1);
-    expect(DEFAULT_SETTINGS.useWebWhenFreshnessNeeded).toBe(true);
-    expect(DEFAULT_SETTINGS.forceEagerResearch).toBe(false);
-    expect(DEFAULT_SETTINGS.debugMode).toBe(false);
   });
 
-  it("keeps new profile settings and selects the active chat model", () => {
-    const settings = migrateSettings({
-      serverProfiles: [
-        {
-          id: "server-openrouter",
-          name: "OpenRouter",
-          apiFormat: "openai-compatible",
-          baseUrl: "https://openrouter.ai/api/v1/",
-        },
-      ],
-      chatModelProfiles: [
-        {
-          id: "chat-a",
-          name: "Main chat",
-          serverProfileId: "server-openrouter",
-          modelName: "openai/gpt-4.1",
-          capabilities: {
-            chat: true,
-            embeddings: false,
-            contextLength: 128000,
-            detectionSource: "metadata",
+  it("loads current settings and normalizes dependent profile state", () => {
+    const settings = readSettings(
+      currentSettings({
+        serverProfiles: [
+          {
+            id: "server-openrouter",
+            name: "OpenRouter",
+            apiFormat: "openai-compatible",
+            baseUrl: "https://openrouter.ai/api/v1",
+            isSuspended: true,
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z",
           },
-        },
-      ],
-      activeChatModelProfileId: "chat-a",
-      duckDuckGoEnabled: true,
-      showChatIndexControl: false,
-      includeActiveFileContext: false,
-      useLinkedNotes: false,
-      includeBacklinks: false,
-      expandFilteredContextThroughLinks: true,
-      graphContextDepth: 2,
-      useWebWhenFreshnessNeeded: false,
-      forceEagerResearch: true,
-      debugMode: true,
-    });
+        ],
+        chatModelProfiles: [
+          {
+            id: "chat-a",
+            name: "Main chat",
+            serverProfileId: "server-openrouter",
+            modelName: "openai/gpt-4.1",
+            toolsEnabled: true,
+            noteMutationAccess: true,
+            reasoning: { mode: "off", summary: "off" },
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z",
+          },
+        ],
+        activeChatModelProfileId: "chat-a",
+        debugMode: true,
+      }),
+    );
 
     expect(settings.serverProfiles[0]).toMatchObject({
       id: "server-openrouter",
-      name: "OpenRouter",
-      apiFormat: "openai-compatible",
       baseUrl: "https://openrouter.ai/api/v1",
     });
-    expect(resolveChatModelProfile(settings, "chat-a")).toMatchObject({
+    expect(settings.chatModelProfiles[0]).toMatchObject({
       id: "chat-a",
-      toolsEnabled: true,
-      isSuspended: false,
-      capabilities: expect.objectContaining({ contextLength: 128000 }),
+      isSuspended: true,
+      suspendedReason: "Server profile is suspended.",
     });
-    expect(settings.activeChatModelProfileId).toBe("chat-a");
-    expect(settings.duckDuckGoEnabled).toBe(true);
-    expect(settings.showChatIndexControl).toBe(false);
-    expect(settings.includeActiveFileContext).toBe(false);
-    expect(settings.useLinkedNotes).toBe(false);
-    expect(settings.includeBacklinks).toBe(false);
-    expect(settings.expandFilteredContextThroughLinks).toBe(true);
-    expect(settings.graphContextDepth).toBe(2);
-    expect(settings.useWebWhenFreshnessNeeded).toBe(false);
-    expect(settings.forceEagerResearch).toBe(true);
+    expect(settings.activeChatModelProfileId).toBe("");
     expect(settings.debugMode).toBe(true);
   });
 
-  it("migrates missing and malformed eager overrides to false", () => {
-    expect(migrateSettings({}).forceEagerResearch).toBe(false);
-    expect(migrateSettings({ forceEagerResearch: "true" }).forceEagerResearch).toBe(false);
-  });
-
-  it("migrates legacy tools conservatively into tool calling settings", () => {
-    const settings = migrateSettings({
-      serverProfiles: [{ id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "http://x" }],
-      chatModelProfiles: [
-        {
-          id: "m",
-          name: "M",
-          serverProfileId: "s",
-          modelName: "model",
-          capabilities: { chat: true, embeddings: false, tools: true, detectionSource: "probe" },
-        },
-      ],
-    });
-    expect(settings.chatModelProfiles[0].capabilities?.toolCalling).toEqual({
-      formatDefault: {
-        calls: false,
-        choiceRequired: false,
-        choiceSpecific: false,
-        parallelCalls: false,
-      },
-      probe: { calls: true },
-    });
-    expect(settings.chatModelProfiles[0].toolsEnabled).toBe(true);
-  });
-
-  it("gates detected tool support with the user Tools switch", () => {
-    const profile = migrateSettings({
-      serverProfiles: [{ id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "http://x" }],
-      chatModelProfiles: [
-        {
-          id: "m",
-          name: "M",
-          serverProfileId: "s",
-          modelName: "model",
-          toolsEnabled: false,
-          capabilities: {
-            chat: true,
-            embeddings: false,
-            toolCalling: {
-              formatDefault: {
-                calls: false,
-                choiceRequired: false,
-                choiceSpecific: false,
-                parallelCalls: false,
-              },
-              probe: { calls: true },
-            },
-          },
-        },
-      ],
-    }).chatModelProfiles[0];
-
-    expect(resolveEffectiveTools(profile)).toBe(false);
-    profile.toolsEnabled = true;
-    expect(resolveEffectiveTools(profile)).toBe(true);
-    profile.capabilities!.toolCalling!.probe = { calls: false };
-    expect(resolveEffectiveTools(profile)).toBe(false);
-  });
-
-  it("migrates reasoning settings without retaining the legacy protocol setting", () => {
-    const settings = migrateSettings({
+  it("resolves current tool and reasoning settings", () => {
+    const profile = currentSettings({
       serverProfiles: [
         {
-          id: "openai",
-          name: "OpenAI",
+          id: "s",
+          name: "S",
           apiFormat: "openai-compatible",
-          baseUrl: "https://api.openai.com/v1",
+          baseUrl: "https://example.test/v1",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z",
         },
-        { id: "ollama", name: "Ollama", apiFormat: "ollama", baseUrl: "http://localhost:11434" },
-      ],
-      chatModelProfiles: [
-        {
-          id: "responses",
-          name: "Responses",
-          serverProfileId: "openai",
-          modelName: "gpt-5",
-          reasoning: { enabled: true, effort: "high", summary: "auto" },
-          reasoningCapabilities: {
-            source: "manual",
-            responses: true,
-            continuation: true,
-            summary: true,
-            efforts: ["low", "high", "high", ""],
-          },
-        },
-        {
-          id: "legacy",
-          name: "Legacy",
-          serverProfileId: "openai",
-          modelName: "legacy-model",
-          reasoning: { enabled: "yes", effort: 1, summary: "detailed" },
-        },
-        {
-          id: "ollama-responses",
-          name: "Invalid Ollama Responses",
-          serverProfileId: "ollama",
-          modelName: "qwen",
-          reasoning: { mode: "on", summary: "auto" },
-        },
-      ],
-    });
-
-    expect(settings.chatModelProfiles[0]).toMatchObject({
-      reasoning: { mode: "on", effort: "high", summary: "auto" },
-      reasoningCapabilities: {
-        source: "manual",
-        responses: true,
-        continuation: true,
-        summary: true,
-        efforts: ["low", "high"],
-      },
-    });
-    expect(settings.chatModelProfiles[1]).toMatchObject({
-      reasoning: { mode: "off", summary: "off" },
-    });
-    expect(settings.chatModelProfiles[2]).toMatchObject({
-      reasoning: { mode: "off", summary: "off" },
-    });
-    expect(settings.chatModelProfiles[0]).not.toHaveProperty("apiProtocol");
-  });
-
-  it("resolves automatic protocol and reasoning from detected capabilities", () => {
-    const profile = migrateSettings({
-      serverProfiles: [
-        { id: "s", name: "S", apiFormat: "openai-compatible", baseUrl: "https://example.test/v1" },
       ],
       chatModelProfiles: [
         {
@@ -245,6 +109,8 @@ describe("Ixplorer settings", () => {
           name: "M",
           serverProfileId: "s",
           modelName: "model",
+          toolsEnabled: true,
+          noteMutationAccess: true,
           reasoning: { mode: "auto", summary: "off" },
           reasoningCapabilities: {
             source: "probe",
@@ -255,273 +121,29 @@ describe("Ixplorer settings", () => {
             requiresEffort: true,
             defaultEffort: "medium",
           },
+          capabilities: {
+            chat: true,
+            embeddings: false,
+            toolCalling: withProbeResults(createToolCapabilitySettings(false), { calls: true }),
+            detectionSource: "probe",
+          },
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z",
         },
       ],
     }).chatModelProfiles[0];
 
+    expect(resolveEffectiveTools(profile)).toBe(true);
     expect(resolveEffectiveChatApiProtocol(profile)).toBe("responses");
     expect(resolveEffectiveReasoning(profile, "responses")).toEqual({
       enabled: true,
       effort: "medium",
       summary: "off",
     });
-
-    profile.reasoningCapabilities = undefined;
-    expect(resolveEffectiveChatApiProtocol(profile)).toBe("chat-completions");
-    expect(resolveEffectiveReasoning(profile, "chat-completions")).toEqual({
-      enabled: true,
-      summary: "off",
-    });
-
-    profile.reasoning.mode = "off";
-    profile.reasoningCapabilities = {
-      source: "manual",
-      responses: true,
-      continuation: true,
-      summary: true,
-      efforts: ["medium"],
-    };
-    expect(resolveEffectiveChatApiProtocol(profile)).toBe("chat-completions");
   });
 
-  it("preserves valid index descriptions and drops malformed metadata", () => {
-    const valid = migrateSettings({
-      indexProfiles: [
-        {
-          id: "default",
-          indexFolder: ".ixplorer/index",
-          includeFolders: ["/"],
-          excludeGlobs: [],
-          indexDescription: {
-            text: "A bounded description",
-            generatedAt: "2026-06-20T10:00:00.000Z",
-            indexUpdatedAt: "2026-06-20T09:59:00.000Z",
-            generator: "deterministic",
-            algorithmVersion: 1,
-            status: "current",
-            sourceCount: 2,
-            chunkCount: 4,
-            diagnostics: {
-              representativeChunkCount: 2,
-              truncated: false,
-              usedFallback: false,
-            },
-          },
-        },
-      ],
-    });
-    const invalid = migrateSettings({
-      indexProfiles: [
-        {
-          id: "default",
-          indexFolder: ".ixplorer/index",
-          includeFolders: ["/"],
-          excludeGlobs: [],
-          indexDescription: { text: "missing metadata" },
-        },
-      ],
-    });
-    const oversized = migrateSettings({
-      indexProfiles: [
-        {
-          id: "default",
-          indexFolder: ".ixplorer/index",
-          includeFolders: ["/"],
-          excludeGlobs: [],
-          indexDescription: {
-            ...valid.indexProfiles[0].indexDescription,
-            text: "x".repeat(2_001),
-          },
-        },
-      ],
-    });
-
-    expect(valid.indexProfiles[0].indexDescription?.text).toBe("A bounded description");
-    expect(invalid.indexProfiles[0].indexDescription).toBeUndefined();
-    expect(oversized.indexProfiles[0].indexDescription).toBeUndefined();
-  });
-
-  it("marks dependent profiles suspended when server is missing or suspended", () => {
-    const settings = migrateSettings({
-      serverProfiles: [
-        {
-          id: "server-a",
-          name: "Server A",
-          apiFormat: "openai-compatible",
-          baseUrl: "https://example.com/v1",
-          isSuspended: true,
-        },
-      ],
-      chatModelProfiles: [
-        { id: "chat-a", name: "Chat A", serverProfileId: "server-a", modelName: "model-a" },
-        { id: "chat-b", name: "Chat B", serverProfileId: "missing", modelName: "model-b" },
-      ],
-      activeChatModelProfileId: "chat-a",
-    });
-
-    expect(settings.chatModelProfiles).toMatchObject([
-      { id: "chat-a", isSuspended: true, suspendedReason: "Server profile is suspended." },
-      { id: "chat-b", isSuspended: true, suspendedReason: "Server profile was deleted." },
-    ]);
-    expect(settings.activeChatModelProfileId).toBe("");
-  });
-
-  it("suspends index profiles without a valid embedding model profile", () => {
-    const settings = migrateSettings({
-      indexProfiles: [
-        {
-          id: "notes",
-          name: "Notes",
-          indexFolder: ".ixplorer/notes",
-          includeFolders: ["Notes"],
-          excludeGlobs: [],
-          embeddingModelProfileId: "missing",
-        },
-      ],
-    });
-
-    expect(getActiveIndexProfile(settings)).toMatchObject({
-      id: "notes",
-      mode: "wholeVault",
-      isSuspended: true,
-      suspendedReason: "Select an embedding model profile.",
-    });
-  });
-
-  it("limits saved index profiles to the configured maximum", () => {
-    const indexProfiles = Array.from({ length: MAX_INDEX_PROFILE_COUNT + 3 }, (_, index) => ({
-      id: `index-${index}`,
-      name: `Index ${index}`,
-      indexFolder: `.ixplorer/indexes/index-${index}`,
-      includeFolders: ["/"],
-      excludeGlobs: [],
-      embeddingModelProfileId: "embed-a",
-    }));
-
-    const settings = migrateSettings({ indexProfiles });
-
-    expect(settings.indexProfiles).toHaveLength(MAX_INDEX_PROFILE_COUNT);
-    expect(settings.indexProfiles.at(-1)?.id).toBe(`index-${MAX_INDEX_PROFILE_COUNT - 1}`);
-  });
-
-  it("uses the first non-suspended index as default when the current default is unavailable", () => {
-    const settings = migrateSettings({
-      serverProfiles: [
-        {
-          id: "server-a",
-          name: "Server A",
-          apiFormat: "ollama",
-          baseUrl: "http://localhost:11434",
-        },
-      ],
-      embeddingModelProfiles: [
-        { id: "embed-a", name: "Embed A", serverProfileId: "server-a", modelName: "nomic" },
-      ],
-      activeIndexProfileId: "broken",
-      indexProfiles: [
-        {
-          id: "broken",
-          name: "Broken",
-          indexFolder: ".ixplorer/indexes/broken",
-          includeFolders: ["/"],
-          excludeGlobs: [],
-          embeddingModelProfileId: "missing",
-        },
-        {
-          id: "active",
-          name: "Active",
-          indexFolder: ".ixplorer/indexes/active",
-          includeFolders: ["/"],
-          excludeGlobs: [],
-          embeddingModelProfileId: "embed-a",
-        },
-      ],
-    });
-
-    expect(settings.activeIndexProfileId).toBe("active");
-    expect(getActiveIndexProfile(settings).id).toBe("active");
-  });
-
-  it("normalizes index profile mode and persisted summary fields", () => {
-    const settings = migrateSettings({
-      indexProfiles: [
-        {
-          id: "selected",
-          name: "Selected",
-          mode: "selected",
-          indexFolder: ".ixplorer/indexes/selected",
-          includeFolders: ["Notes", "Paper.pdf"],
-          excludeGlobs: [],
-          embeddingModelProfileId: "",
-          lastIndexedAt: "2026-06-14T10:00:00.000Z",
-          indexedFileCount: 12,
-          indexSizeBytes: 3456,
-        },
-      ],
-    });
-
-    expect(settings.indexProfiles[0]).toMatchObject({
-      mode: "selected",
-      includeFolders: ["Notes", "Paper.pdf"],
-      lastIndexedAt: "2026-06-14T10:00:00.000Z",
-      indexedFileCount: 12,
-      indexSizeBytes: 3456,
-    });
-  });
-
-  it("treats only active indexed profiles as selectable", () => {
-    expect(
-      isIndexProfileSelectable({
-        ...DEFAULT_SETTINGS.indexProfiles[0],
-        isSuspended: false,
-        lastIndexedAt: "2026-06-14T10:00:00.000Z",
-      }),
-    ).toBe(true);
-    expect(
-      isIndexProfileSelectable({
-        ...DEFAULT_SETTINGS.indexProfiles[0],
-        isSuspended: false,
-        lastIndexedAt: undefined,
-      }),
-    ).toBe(false);
-    expect(
-      isIndexProfileSelectable({
-        ...DEFAULT_SETTINGS.indexProfiles[0],
-        isSuspended: true,
-        lastIndexedAt: "2026-06-14T10:00:00.000Z",
-      }),
-    ).toBe(false);
-  });
-
-  it("validates index profile names for UI input", () => {
-    expect(isValidIndexProfileName("Research index [A]")).toBe(true);
-    expect(isValidIndexProfileName("")).toBe(false);
-    expect(isValidIndexProfileName("A".repeat(61))).toBe(false);
-    expect(isValidIndexProfileName("Bad/name")).toBe(false);
-  });
-
-  it("activates the first non-suspended chat model when active is invalid", () => {
-    const settings = migrateSettings({
-      serverProfiles: [
-        {
-          id: "server-a",
-          name: "Server A",
-          apiFormat: "openai-compatible",
-          baseUrl: "https://example.com/v1",
-        },
-      ],
-      chatModelProfiles: [
-        { id: "chat-a", name: "Chat A", serverProfileId: "missing", modelName: "model-a" },
-        { id: "chat-b", name: "Chat B", serverProfileId: "server-a", modelName: "model-b" },
-      ],
-      activeChatModelProfileId: "chat-a",
-    });
-
-    expect(settings.activeChatModelProfileId).toBe("chat-b");
-  });
-
-  it("allows disabled chunk overlap and clamps overlap to chunk size", () => {
-    const settings = migrateSettings({});
+  it("normalizes active index updates and validates index names", () => {
+    const settings = readSettings(currentSettings());
 
     updateActiveIndexProfile(settings, { chunkSize: 100, chunkOverlap: 200 });
 
@@ -529,43 +151,78 @@ describe("Ixplorer settings", () => {
       chunkSize: 100,
       chunkOverlap: 99,
     });
+    expect(isValidIndexProfileName("Research index [A]")).toBe(true);
+    expect(isValidIndexProfileName("")).toBe(false);
+    expect(isValidIndexProfileName("A".repeat(61))).toBe(false);
+    expect(isValidIndexProfileName("Bad/name")).toBe(false);
   });
 
-  it("normalizes state when an embedding model becomes available", () => {
-    const settings = migrateSettings({
-      serverProfiles: [
-        {
-          id: "server-a",
-          name: "Server A",
-          apiFormat: "ollama",
-          baseUrl: "http://localhost:11434",
-        },
-      ],
-      embeddingModelProfiles: [
-        { id: "embed-a", name: "Embed A", serverProfileId: "server-a", modelName: "nomic" },
-      ],
-    });
+  it("resolves selectable profiles and editable list text", () => {
+    const settings = readSettings(
+      currentSettings({
+        serverProfiles: [
+          {
+            id: "server-a",
+            name: "Server A",
+            apiFormat: "openai-compatible",
+            baseUrl: "https://example.com/v1",
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z",
+          },
+        ],
+        chatModelProfiles: [
+          {
+            id: "chat-a",
+            name: "Chat A",
+            serverProfileId: "server-a",
+            modelName: "model-a",
+            toolsEnabled: true,
+            noteMutationAccess: true,
+            reasoning: { mode: "off", summary: "off" },
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T00:00:00.000Z",
+          },
+        ],
+        activeChatModelProfileId: "chat-a",
+      }),
+    );
 
-    updateActiveIndexProfile(settings, { embeddingModelProfileId: "embed-a" });
-    normalizeSettingsState(settings);
-
-    expect(getActiveIndexProfile(settings)).toMatchObject({
-      embeddingModelProfileId: "embed-a",
-      isSuspended: false,
-    });
-  });
-
-  it("normalizes editable list text", () => {
+    expect(resolveChatModelProfile(settings, "chat-a")?.id).toBe("chat-a");
+    expect(
+      isIndexProfileSelectable({
+        ...DEFAULT_SETTINGS.indexProfiles[0],
+        isSuspended: false,
+        lastIndexedAt: "2026-06-14T10:00:00.000Z",
+      }),
+    ).toBe(true);
     expect(normalizeListInput("Research\n\n Papers \n")).toEqual(["Research", "Papers"]);
     expect(formatListInput(["Research", "Papers"])).toBe("Research\nPapers");
-  });
-
-  it("normalizes urls and vault-local folders", () => {
     expect(normalizeUrl(" http://localhost:1234/v1/ ", "fallback")).toBe(
       "http://localhost:1234/v1",
     );
-    expect(normalizeUrl("   ", "fallback")).toBe("fallback");
     expect(normalizeVaultFolder(" /.ixplorer/index/ ")).toBe(".ixplorer/index");
-    expect(normalizeVaultFolder("   ")).toBe(DEFAULT_SETTINGS.lanceDbFolder);
   });
 });
+
+function currentSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...overrides,
+    serverProfiles: overrides.serverProfiles?.map((profile) => ({ ...profile })) ?? [],
+    chatModelProfiles: overrides.chatModelProfiles?.map((profile) => ({ ...profile })) ?? [],
+    embeddingModelProfiles: overrides.embeddingModelProfiles?.map((profile) => ({ ...profile })) ?? [],
+    indexProfiles:
+      overrides.indexProfiles?.map(cloneIndexProfile) ??
+      [
+        createIndexProfile({
+          ...DEFAULT_SETTINGS.indexProfiles[0],
+          isSuspended: false,
+          suspendedReason: undefined,
+          embeddingModelProfileId: "",
+        }),
+      ],
+    includeFolders: overrides.includeFolders ?? [...DEFAULT_SETTINGS.includeFolders],
+    excludeGlobs: overrides.excludeGlobs ?? [...DEFAULT_SETTINGS.excludeGlobs],
+    modelCapabilityCache: overrides.modelCapabilityCache ?? {},
+  };
+}

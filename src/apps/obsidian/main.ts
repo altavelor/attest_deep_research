@@ -8,15 +8,15 @@ import { IndexingProfileController } from "../../adapters/indexing/IndexingProfi
 import { measureFolderSize } from "../../adapters/indexing/indexSize";
 import { IxplorerSettingTab } from "./ui/SettingsTab";
 import { PluginDebugLogger } from "../../adapters/settings/debugLogger";
+import { DEFAULT_SETTINGS } from "../../adapters/settings/defaults";
+import { normalizeSettingsState } from "../../adapters/settings/normalization";
+import { readSettings } from "../../adapters/settings/persistence";
 import {
-  DEFAULT_SETTINGS,
-  IxplorerSettings,
   getActiveIndexProfile,
-  migrateSettings,
-  normalizeSettingsState,
   resolveChatModelProfile,
   resolveServerProfile,
-} from "../../adapters/settings/settings";
+} from "../../adapters/settings/profileQueries";
+import { IxplorerSettings } from "../../adapters/settings/types";
 import { toUserMessage } from "../../core/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "../../adapters/indexing/IndexDescription";
@@ -76,7 +76,6 @@ export default class IxplorerPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    void this.migrateRemoveSkillsFolder();
     if (getActiveIndexProfile(this.settings).isSuspended !== true) {
       void this.indexing.refreshIndexSize(this.settings.activeIndexProfileId);
     }
@@ -158,7 +157,7 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = migrateSettings(await this.loadData());
+    this.settings = readSettings(await this.loadData());
     this.logger.logConfiguration("initial-load", this.settings);
   }
 
@@ -244,20 +243,4 @@ export default class IxplorerPlugin extends Plugin {
     return path;
   }
 
-  private async migrateRemoveSkillsFolder(): Promise<void> {
-    const skillsFolder = ".ixplorer/skills";
-    try {
-      const exists = await this.app.vault.adapter.exists(skillsFolder);
-      if (!exists) return;
-      const files = await this.app.vault.adapter.list(skillsFolder);
-      for (const filePath of [...files.files, ...files.folders]) {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (file) await this.app.vault.trash(file, false);
-      }
-      const folder = this.app.vault.getAbstractFileByPath(skillsFolder);
-      if (folder) await this.app.vault.trash(folder, false);
-    } catch (error) {
-      this.logger.logError(error, { url: "vault:.ixplorer/skills", method: "migrate" });
-    }
-  }
 }

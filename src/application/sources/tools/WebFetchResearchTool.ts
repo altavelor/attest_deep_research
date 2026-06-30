@@ -2,12 +2,12 @@ import { SearchProvider } from "../../ports/web";
 import { validatePublicWebUrl } from "../WebUrlPolicy";
 import { EvidenceRegistry } from "../evidence";
 import {
-  failure,
-  ResearchToolExecution,
-  ResearchToolExecutionContext,
-  ResearchToolHandler,
-  ResearchToolParseResult,
-} from "../../research/ResearchTools";
+  Tool as ResearchToolHandler,
+  ToolContext as ResearchToolExecutionContext,
+  ToolExecution as ResearchToolExecution,
+  ToolParseResult as ResearchToolParseResult,
+  toolFailure,
+} from "../../../core/agent/tool";
 
 interface FetchWebPageInput {
   resultId: string;
@@ -61,11 +61,11 @@ export class WebFetchResearchTool implements ResearchToolHandler<
   parseInput(input: Record<string, unknown>): ResearchToolParseResult<FetchWebPageInput> {
     const keys = Object.keys(input);
     if (keys.some((key) => key !== "resultId")) {
-      return failure("unknown-property", "fetch_web_page accepts only resultId.");
+      return toolFailure("unknown-property", "fetch_web_page accepts only resultId.");
     }
     const resultId = typeof input.resultId === "string" ? input.resultId.trim() : "";
     if (!resultId || resultId.length > 200) {
-      return failure("invalid-result-id", "A valid resultId is required.");
+      return toolFailure("invalid-result-id", "A valid resultId is required.");
     }
     return { ok: true, value: { resultId } };
   }
@@ -76,24 +76,24 @@ export class WebFetchResearchTool implements ResearchToolHandler<
   ): Promise<ResearchToolExecution<FetchWebPageOutput>> {
     const registered = this.evidence.resolveWebResult(input.resultId);
     if (!registered) {
-      return failure("unknown-web-result", "The web result is not registered for this answer.");
+      return toolFailure("unknown-web-result", "The web result is not registered for this answer.");
     }
     const safeUrl = validatePublicWebUrl(registered.canonicalUrl);
     if (!safeUrl.ok) {
-      return failure("unsafe-web-url", "The registered web URL is not allowed.");
+      return toolFailure("unsafe-web-url", "The registered web URL is not allowed.");
     }
     if (!this.provider.fetchPage) {
-      return failure("web-fetch-unsupported", "The web provider cannot fetch pages.");
+      return toolFailure("web-fetch-unsupported", "The web provider cannot fetch pages.");
     }
 
     let result;
     try {
       result = await this.provider.fetchPage(safeUrl.url, FETCH_OPTIONS);
     } catch {
-      return failure("web-fetch-failed", "Page fetch failed.", true);
+      return toolFailure("web-fetch-failed", "Page fetch failed.", true);
     }
     if (!result || typeof result !== "object" || typeof result.ok !== "boolean") {
-      return failure("web-fetch-invalid-response", "Page fetch returned an invalid response.");
+      return toolFailure("web-fetch-invalid-response", "Page fetch returned an invalid response.");
     }
     if (!result.ok) {
       return result;
@@ -106,7 +106,7 @@ export class WebFetchResearchTool implements ResearchToolHandler<
       typeof result.contentType !== "string" ||
       typeof result.truncated !== "boolean"
     ) {
-      return failure("web-fetch-invalid-response", "Page fetch returned unsafe metadata.");
+      return toolFailure("web-fetch-invalid-response", "Page fetch returned unsafe metadata.");
     }
 
     const content = result.content.slice(0, FETCH_OPTIONS.maxContentChars);

@@ -319,7 +319,7 @@ function researchProgressFromMessage(
     reasoning: {
       phase: "streaming",
       startedAt: now,
-      segments: (message.reasoning ?? []).map((segment) => ({ ...segment, kind: "summary" })),
+      segments: [],
     },
     checkpoints: [],
     chain: [],

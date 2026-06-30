@@ -2,15 +2,15 @@
 // adapters because it depends on the concrete NoteTools definitions; the core
 // ToolManager (application/core) stays free of this binding.
 
-import { ChatToolDefinition } from "../../../core/agent/tool";
+import {
+  ChatToolDefinition,
+  Tool as ResearchToolHandler,
+  ToolExecution as ResearchToolExecution,
+  ToolParseResult as ResearchToolParseResult,
+  toolFailure,
+} from "../../../core/agent/tool";
 import { NoteToolService } from "../../research/toolPorts";
 import { NoteToolAvailability } from "../../research/toolPorts";
-import {
-  failure,
-  ResearchToolExecution,
-  ResearchToolHandler,
-  ResearchToolParseResult,
-} from "../../research/ResearchTools";
 import {
   NOTE_MUTATION_TOOL_DEFINITIONS,
   NOTE_TOOL_DEFINITIONS,
@@ -71,7 +71,7 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
       const payload = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
       const reason = typeof payload.reason === "string" ? payload.reason : "note-tool-failed";
       const hint = typeof payload.hint === "string" ? payload.hint : undefined;
-      return failure(
+      return toolFailure(
         reason,
         `Note tool ${this.definition.function.name} failed.`,
         false,
@@ -81,10 +81,7 @@ class NoteToolHandlerAdapter implements ResearchToolHandler<Record<string, unkno
     return {
       ok: true,
       value,
-      diagnostic: {
-        legacyExecutionOk: execution.ok,
-        ...(execution.diagnostic ?? {}),
-      },
+      diagnostic: execution.diagnostic,
     };
   }
 }

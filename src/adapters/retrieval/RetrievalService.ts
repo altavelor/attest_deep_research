@@ -3,7 +3,8 @@ import {
   IndexStore,
   LanguageInventoryIndexStore,
 } from "../../application/ports/indexing";
-import { AdjacentChunkIndexStore, KeywordSearchIndexStore, RetrievalOptions } from "../../application/ports/retrieval";
+import { AdjacentChunkIndexStore, KeywordSearchIndexStore } from "../../application/ports/retrieval";
+import { RetrievalOptions } from "../../core/retrieval/query";
 import { EmbeddingProviderClient } from "../../core/agent/protocol";
 import { LanguageInventoryItem } from "../../core/model/citation";
 import { RetrievedChunk, SourceReference } from "../../core/model/source";

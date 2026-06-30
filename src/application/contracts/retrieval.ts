@@ -5,7 +5,7 @@
 
 import { Citation } from "../../core/model/citation";
 import { RetrievedChunk } from "../../core/model/source";
-import { RetrievalQueryVariant } from "../ports/retrieval";
+import { RetrievalQueryVariant } from "../../core/retrieval/query";
 
 export interface RetrievalResult {
   chunks: RetrievedChunk[];
