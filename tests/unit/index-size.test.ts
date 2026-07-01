@@ -1,4 +1,4 @@
-import { formatIndexSize } from "../../src/adapters/indexing/inventory/indexSize";
+import { formatIndexSize } from "@adapters/indexing";
 
 describe("index size formatting", () => {
   it("formats bytes using compact binary units", () => {

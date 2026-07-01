@@ -2,7 +2,7 @@ import {
   collectChatText,
   parseLlmJsonObject,
   type LlmJsonParseDiagnostic,
-} from "../../src/shared/llmOutput";
+} from "@shared";
 
 describe("llmOutput", () => {
   it("parses a valid JSON object", () => {

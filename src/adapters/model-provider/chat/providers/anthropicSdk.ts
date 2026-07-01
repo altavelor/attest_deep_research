@@ -1,7 +1,7 @@
 import Anthropic, { APIError, APIUserAbortError } from "@anthropic-ai/sdk";
 
 import { IxplorerError, IxplorerErrorCode } from "../../../../core/errors";
-import { isRecord } from "../../../../shared/guards";
+import { isRecord } from "@shared";
 import type { PluginRequestLogger } from "../../../settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 

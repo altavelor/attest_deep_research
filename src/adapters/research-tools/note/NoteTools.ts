@@ -1,8 +1,8 @@
 import { stableId } from "../../extractors/common";
-import { ContextFileProvider } from "../../../application/ports/vault";
-import { VaultWriter } from "../../../application/ports/vault";
-import { normalizeVaultPath } from "../../../shared/pathFilters";
-import { Extractor } from "../../../application/ports/indexing";
+import { ContextFileProvider } from "@application/ports";
+import { VaultWriter } from "@application/ports";
+import { normalizeVaultPath } from "@shared";
+import { Extractor } from "@application/ports";
 import { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import { Citation } from "@core/model";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";

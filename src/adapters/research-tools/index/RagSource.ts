@@ -7,7 +7,7 @@ import { IndexResearchTool } from "./IndexResearchTool";
 import { INDEX_INVENTORY_TOOLS } from "./IndexInventoryTools";
 import { CheckUrlsTool, ListIndexUrlsTool } from "./IndexUrlTools";
 import { EvidenceRegistry } from "@application/sources";
-import { ResearchRetriever, UrlStatusChecker } from "../../../application/contracts/research";
+import { ResearchRetriever, UrlStatusChecker } from "@application/contracts";
 
 export interface RagSourceOptions {
   retriever: ResearchRetriever;

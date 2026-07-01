@@ -19,7 +19,7 @@ import {
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
 } from "@core/agent";
-import { NoteToolService } from "../../../application/research/toolPorts";
+import { NoteToolService } from "@application/research";
 import {
   bool,
   defineTool,

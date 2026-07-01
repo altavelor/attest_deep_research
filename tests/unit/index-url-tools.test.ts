@@ -1,6 +1,6 @@
 import { CheckUrlsTool, ListIndexUrlsTool } from "../../src/adapters/research-tools/index/IndexUrlTools";
 import { executeTool } from "@core/agent";
-import type { ResearchRetriever, UrlStatusChecker } from "../../src/application/contracts/research";
+import type { ResearchRetriever, UrlStatusChecker } from "@application/contracts";
 import { markdownSource } from "../helpers/factories";
 
 describe("index URL tools", () => {

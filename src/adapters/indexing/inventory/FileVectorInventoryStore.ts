@@ -5,7 +5,7 @@ import {
   IndexInventoryStore,
   IndexMetadataSearchOptions,
   IndexSourceInventoryOptions,
-} from "../../../application/ports/retrieval";
+} from "@application/ports";
 import {
   findInFileVectorIndex,
   getFileVectorIndexSourceOutline,

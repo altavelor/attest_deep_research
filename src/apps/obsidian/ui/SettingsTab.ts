@@ -1,8 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 
 import type IxplorerPlugin from "../main";
-import { IndexProfile } from "../../../adapters/indexing/store/FileVectorIndexStore";
-import { formatIndexSize } from "../../../adapters/indexing/inventory/indexSize";
+import { IndexProfile } from "@adapters/indexing";
+import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";
 import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";

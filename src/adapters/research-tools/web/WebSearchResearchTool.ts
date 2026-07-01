@@ -1,9 +1,9 @@
-import { SearchProvider } from "../../../application/ports/web";
+import { SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import {
   BoundedSearchInput,
   parseBoundedSearchInput,
-} from "../../../application/research/boundedSearchInput";
+} from "@application/research";
 import { toolFailure } from "@core/agent";
 import { WEB_SEARCH_TOOL } from "@core/agent";
 import { defineTool, int, str } from "@application/sources/tools";

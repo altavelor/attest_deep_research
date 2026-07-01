@@ -1,4 +1,4 @@
-import { RetrievalResult } from "../../../application/contracts/retrieval";
+import { RetrievalResult } from "@application/contracts";
 import { QueryExpansion } from "../../contracts/research";
 import { uniqueChunks } from "@core/model";
 import { RetrievalQueryVariant } from "@core/retrieval";

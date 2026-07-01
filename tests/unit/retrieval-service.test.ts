@@ -15,7 +15,7 @@ import {
   FakeIndexStore,
 } from "../helpers/retrievalFakes";
 import { EmbeddingProviderClient } from "@core/agent";
-import { IndexStore } from "../../src/application/ports/indexing";
+import { IndexStore } from "@application/ports";
 
 // A single fake store stands in for every retrieval capability here; the
 // composition root wires capabilities explicitly, so the test mirrors that by

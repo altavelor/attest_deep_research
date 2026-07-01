@@ -1,7 +1,7 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
 import { WebSearchResearchTool } from "../../src/adapters/research-tools/web/WebSearchResearchTool";
-import { SearchProvider } from "../../src/application/ports/web";
+import { SearchProvider } from "@application/ports";
 
 describe("WebSearchResearchTool", () => {
   it("performs metadata-only search and collapses canonical duplicate URLs", async () => {

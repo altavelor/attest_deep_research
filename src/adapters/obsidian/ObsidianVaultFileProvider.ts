@@ -1,7 +1,7 @@
 import { TFile, Vault } from "obsidian";
 
-import { VaultFileProvider, VaultFileSummary } from "../../application/ports/vault";
-import { normalizeVaultPath, vaultPathMatchesGlob } from "../../shared/pathFilters";
+import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import { normalizeVaultPath, vaultPathMatchesGlob } from "@shared";
 
 export class ObsidianVaultFileProvider implements VaultFileProvider {
   constructor(private readonly vault: Vault) { }

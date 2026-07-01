@@ -1,5 +1,5 @@
-import { IndexingController } from "../../src/adapters/indexing/controller/IndexingController";
-import { IndexingService, IndexingState } from "../../src/adapters/indexing/IndexingService";
+import { IndexingController } from "@adapters/indexing";
+import { IndexingService, IndexingState } from "@adapters/indexing";
 
 describe("IndexingController", () => {
   it("routes lifecycle actions through one service and refreshes measured size", async () => {

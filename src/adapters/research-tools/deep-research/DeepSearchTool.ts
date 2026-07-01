@@ -5,7 +5,7 @@ import {
 } from "@core/research";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { DEEP_SEARCH_TOOL } from "@core/agent";
-import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
+import { DeepResearchRunner } from "@application/research";
 import { EvidenceRegistry } from "@application/sources";
 import { defineTool, str } from "@application/sources/tools";
 

@@ -1,9 +1,9 @@
-import { ContextFileProvider } from "../../src/application/ports/vault";
+import { ContextFileProvider } from "@application/ports";
 import { ResearchService, selectResearchExecutionStrategy } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
+import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { QueryExpansionService } from "@adapters/retrieval";
 import {

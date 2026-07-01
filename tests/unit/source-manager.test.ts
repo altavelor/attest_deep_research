@@ -2,8 +2,8 @@ import { SourceManager } from "@application/sources";
 import { RagSource } from "../../src/adapters/research-tools/index/RagSource";
 import { ToolManager } from "../../src/application/tools/ToolManager";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import type { ResearchRetriever } from "../../src/application/contracts/research";
-import type { RetrievalResult } from "../../src/application/contracts/retrieval";
+import type { ResearchRetriever } from "@application/contracts";
+import type { RetrievalResult } from "@application/contracts";
 
 const emptyResult: RetrievalResult = { chunks: [], citations: [], usedFallback: false };
 

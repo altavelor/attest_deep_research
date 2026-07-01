@@ -1,6 +1,6 @@
 import { ProviderHttpClient } from "../../common/http";
 import { parseServerSentEvents } from "../../common/streams";
-import { isRecord } from "../../../../shared/guards";
+import { isRecord } from "@shared";
 import { ChatMessage, ModelRoundProvider, ModelRoundRequest, ModelRoundResult, ModelStreamEvent, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolChoice, ChatToolDefinition } from "@core/agent";
 import type { PluginRequestLogger } from "../../../settings/debugLogger";

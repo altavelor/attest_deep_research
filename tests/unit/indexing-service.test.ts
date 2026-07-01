@@ -1,13 +1,13 @@
-import { Extractor, IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, SourceSnapshotIndexStore } from "../../src/application/ports/indexing";
+import { Extractor, IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, SourceSnapshotIndexStore } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { IxplorerError } from "../../src/core/errors";
 import {
   IndexingService,
   IndexingFileLogEvent,
-} from "../../src/adapters/indexing/IndexingService";
-import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
-import { hashFileData, shouldIndexFile, updateSnapshot } from "../../src/adapters/indexing/pipeline/changeDetection";
+} from "@adapters/indexing";
+import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {

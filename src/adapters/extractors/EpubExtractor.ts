@@ -1,4 +1,4 @@
-import { Extractor, ExtractorInput } from "../../application/ports/indexing";
+import { Extractor, ExtractorInput } from "@application/ports";
 import { ExtractedChunk } from "@core/model";
 import {
   createDocumentChunks,

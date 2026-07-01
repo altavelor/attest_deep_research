@@ -1,7 +1,7 @@
 import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
-import { ResearchRetriever } from "../../src/application/contracts/research";
+import { ResearchRetriever } from "@application/contracts";
 import { markdownSource, retrieved } from "../helpers/factories";
 
 describe("IndexResearchTool", () => {

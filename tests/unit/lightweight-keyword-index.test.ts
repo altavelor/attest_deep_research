@@ -2,8 +2,8 @@ import {
   buildKeywordPostingRows,
   rankKeywordPostings,
   tokenizeForKeywordIndex,
-} from "../../src/adapters/indexing/keyword/LightweightKeywordIndex";
-import { FileVectorChunkRow } from "../../src/adapters/indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing";
+import { FileVectorChunkRow } from "@adapters/indexing";
 
 describe("LightweightKeywordIndex", () => {
   it("tokenizes with lowercase punctuation splitting and minTokenLength only", () => {

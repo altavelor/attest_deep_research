@@ -6,8 +6,8 @@ import {
   collectChatText,
   parseLlmJsonObject,
   type LlmJsonParseDiagnostic,
-} from "../../shared/llmOutput";
-import { normalizeInlineWhitespace } from "../../shared/whitespace";
+} from "@shared";
+import { normalizeInlineWhitespace } from "@shared";
 
 export interface QueryExpansionServiceOptions {
   chatModel: ChatModelProvider;

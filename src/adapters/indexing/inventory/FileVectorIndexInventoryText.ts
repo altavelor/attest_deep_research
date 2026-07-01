@@ -1,4 +1,4 @@
-import { FindInIndexMatch, FindInIndexOptions } from "../../../application/ports/retrieval";
+import { FindInIndexMatch, FindInIndexOptions } from "@application/ports";
 import type { StoredChunk } from "../store/FileVectorIndexState";
 
 export type IndexTextMatcher = RegExp | {

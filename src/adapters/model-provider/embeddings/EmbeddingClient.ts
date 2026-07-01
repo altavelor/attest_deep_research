@@ -1,5 +1,5 @@
 import { IxplorerError } from "../../../core/errors";
-import { isRecord } from "../../../shared/guards";
+import { isRecord } from "@shared";
 import { ApiFormat, EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "@core/agent";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";

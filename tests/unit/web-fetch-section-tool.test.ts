@@ -1,7 +1,7 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
 import { WebFetchSectionTool } from "../../src/adapters/research-tools/web/WebFetchSectionTool";
-import { SearchProvider } from "../../src/application/ports/web";
+import { SearchProvider } from "@application/ports";
 
 const PAGE =
   "Intro about nothing in particular. The treaty was signed in 1815. " +

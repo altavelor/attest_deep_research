@@ -1,5 +1,5 @@
 import { MarkdownExtractor } from "@adapters/extractors";
-import { ContextFileProvider } from "../../src/application/ports/vault";
+import { ContextFileProvider } from "@application/ports";
 import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
 import { NoteToolService } from "../../src/adapters/research-tools/note/NoteTools";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
@@ -8,7 +8,7 @@ import {
   NOTE_PERMISSIONS,
   createNoteTools,
 } from "../../src/adapters/research-tools/note/createNoteTools";
-import { ResearchRetriever } from "../../src/application/contracts/research";
+import { ResearchRetriever } from "@application/contracts";
 
 class MemoryFiles implements ContextFileProvider {
   async listPaths(): Promise<string[]> {

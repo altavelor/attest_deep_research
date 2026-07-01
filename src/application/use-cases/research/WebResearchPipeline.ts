@@ -4,7 +4,7 @@ import { WebContextDiagnostics } from "../../../core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { tokenSetForSearch } from "@core/retrieval";
-import { normalizeInlineWhitespace } from "../../../shared/whitespace";
+import { normalizeInlineWhitespace } from "@shared";
 import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "../../contracts/research";
 

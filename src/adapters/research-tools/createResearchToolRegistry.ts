@@ -4,7 +4,7 @@ import {
   ResearchToolAvailability,
   ResearchToolset,
   ResearchToolsetOptions,
-} from "../../application/research/toolPorts";
+} from "@application/research";
 import { AttachmentSource } from "@application/sources";
 import { NOTE_PERMISSIONS, createNoteTools } from "./note/createNoteTools";
 import { RagSource } from "./index/RagSource";

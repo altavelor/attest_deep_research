@@ -1,6 +1,6 @@
-import { IndexingService } from "../../src/adapters/indexing/IndexingService";
-import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
-import { Extractor, IndexStore } from "../../src/application/ports/indexing";
+import { IndexingService } from "@adapters/indexing";
+import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import { Extractor, IndexStore } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 

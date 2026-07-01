@@ -13,14 +13,14 @@ import { MarkdownExtractor } from "@adapters/extractors";
 import { PdfExtractor } from "@adapters/extractors";
 import { PdfTextCache } from "@adapters/extractors";
 import { TextExtractor } from "@adapters/extractors";
-import { IndexingService, IndexingState } from "../../../adapters/indexing/IndexingService";
-import { FileVectorIndexStore, IndexProfile } from "../../../adapters/indexing/store/FileVectorIndexStore";
-import { FileVectorInventoryStore } from "../../../adapters/indexing/inventory/FileVectorInventoryStore";
-import { FileVectorIndexReader } from "../../../adapters/indexing/store/FileVectorIndexReader";
+import { IndexingService, IndexingState } from "@adapters/indexing";
+import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
+import { FileVectorInventoryStore } from "@adapters/indexing";
+import { FileVectorIndexReader } from "@adapters/indexing";
 import { ObsidianVaultFileProvider } from "../../../adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
 import { QueryExpansionService } from "@adapters/retrieval";
-import { ContextAssembler } from "../../../application/use-cases/chat/ContextAssembler";
+import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
 import { ObsidianContextFileProvider } from "../../../adapters/obsidian/ObsidianContextFileProvider";
@@ -49,7 +49,7 @@ import {
 } from "@adapters/settings";
 import { DuckDuckGoSearchProvider } from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
-import { resolveIndexDescriptionForPrompt } from "../../../adapters/indexing/inventory/IndexDescription";
+import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "../obsidianFetch";
 import {

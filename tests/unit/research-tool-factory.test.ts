@@ -1,6 +1,6 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
-import { ResearchRetriever } from "../../src/application/contracts/research";
-import { SearchProvider } from "../../src/application/ports/web";
+import { ResearchRetriever } from "@application/contracts";
+import { SearchProvider } from "@application/ports";
 
 describe("createResearchToolRegistry", () => {
   it("creates only explicitly permitted tools and a fresh answer-scoped registry", () => {

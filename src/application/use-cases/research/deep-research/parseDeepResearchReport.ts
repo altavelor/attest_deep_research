@@ -3,7 +3,7 @@
 // that is missing or malformed we degrade gracefully to a summary-only report so
 // a session never hard-fails the parent run.
 
-import { parseLlmJsonObject } from "../../../../shared/llmOutput";
+import { parseLlmJsonObject } from "@shared";
 import {
   DeepResearchFinding,
   DeepResearchReport,

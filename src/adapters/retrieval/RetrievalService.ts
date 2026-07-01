@@ -2,7 +2,7 @@ import {
   IndexChunkInventoryStore,
   IndexStore,
   LanguageInventoryIndexStore,
-} from "../../application/ports/indexing";
+} from "@application/ports";
 import {
   FindInIndexOptions,
   IndexChunkListOptions,
@@ -11,19 +11,19 @@ import {
   IndexMetadataSearchOptions,
   IndexSourceInventoryOptions,
   KeywordSearchIndexStore,
-} from "../../application/ports/retrieval";
+} from "@application/ports";
 import { RetrievalOptions } from "@core/retrieval";
 import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { formatCitation } from "@core/retrieval";
 import { filterRetrievedChunks } from "@core/retrieval";
-import { RetrievalResult } from "../../application/contracts/retrieval";
+import { RetrievalResult } from "@application/contracts";
 import {
   IndexedUrlInventoryOptions,
   IndexedUrlInventoryResult,
   IndexedUrlReference,
-} from "../../application/contracts/research";
+} from "@application/contracts";
 
 export type { RetrievalResult };
 

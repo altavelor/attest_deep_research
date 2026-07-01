@@ -1,7 +1,7 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
 import { WebFetchResearchTool } from "../../src/adapters/research-tools/web/WebFetchResearchTool";
-import { SearchProvider } from "../../src/application/ports/web";
+import { SearchProvider } from "@application/ports";
 
 describe("WebFetchResearchTool", () => {
   it("rejects unknown and cross-registry handles before network access", async () => {

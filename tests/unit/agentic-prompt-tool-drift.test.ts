@@ -1,9 +1,9 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
 import { buildAgenticResearchMessages } from "@core/research";
 import { PROMPT_TOOL_NAMES, WEB_FETCH_TOOL } from "@core/agent";
-import { ResearchRetriever } from "../../src/application/contracts/research";
-import { SearchProvider } from "../../src/application/ports/web";
-import { NoteToolService } from "../../src/application/research/toolPorts";
+import { ResearchRetriever } from "@application/contracts";
+import { SearchProvider } from "@application/ports";
+import { NoteToolService } from "@application/research";
 import { ResearchSearchMode } from "@core/research";
 
 const retriever: ResearchRetriever = {

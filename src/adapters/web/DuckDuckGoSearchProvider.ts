@@ -7,7 +7,7 @@ import {
   WebPageFetchResult,
   WebPageMetadataResult,
   WebSearchOptions,
-} from "../../application/ports/web";
+} from "@application/ports";
 import type { PluginRequestLogger } from "../settings/debugLogger";
 import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
 import { validatePublicWebUrl } from "@application/sources";

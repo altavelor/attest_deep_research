@@ -1,4 +1,4 @@
-import { normalizeInlineWhitespace } from "../../shared/whitespace";
+import { normalizeInlineWhitespace } from "@shared";
 
 export interface DuckDuckGoResult {
   title: string;

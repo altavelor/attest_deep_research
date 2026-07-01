@@ -1,17 +1,17 @@
-import { isRecord } from "../../src/shared/guards";
+import { isRecord } from "@shared";
 import {
   isNonNegativeInteger,
   isPositiveInteger,
   parseNonNegativeInteger,
   parsePositiveInteger,
   positiveIntegerOrDefault,
-} from "../../src/shared/numbers";
+} from "@shared";
 import {
   isPathIncluded,
   normalizeVaultFolder,
   normalizeVaultPath,
   vaultPathMatchesGlob,
-} from "../../src/shared/pathFilters";
+} from "@shared";
 import { stripRenderedCitationIds } from "../../src/apps/obsidian/ui/chat/citations/citationText";
 
 describe("shared helpers", () => {

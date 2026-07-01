@@ -1,5 +1,5 @@
 import { MarkdownExtractor } from "@adapters/extractors";
-import { ContextFileProvider, VaultWriter } from "../../src/application/ports/vault";
+import { ContextFileProvider, VaultWriter } from "@application/ports";
 import { AUTO_CONFIRM, NoteActionConfirmation, NoteToolService, validateMutablePath } from "@adapters/research-tools";
 
 class MemoryContextFiles implements ContextFileProvider {

@@ -2,7 +2,7 @@ import {
   UrlStatusChecker,
   UrlStatusCheckRequest,
   UrlStatusCheckResult,
-} from "../../application/contracts/research";
+} from "@application/contracts";
 import { validatePublicWebUrl } from "@application/sources";
 
 export interface FetchUrlStatusCheckerOptions {

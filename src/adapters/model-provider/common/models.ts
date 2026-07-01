@@ -1,4 +1,4 @@
-import { isRecord } from "../../../shared/guards";
+import { isRecord } from "@shared";
 
 export interface OpenAiModelsResponse {
   data: Array<{ id: string }>;
