@@ -13,6 +13,7 @@ import { isRecord } from "../../../shared/guards";
 import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "../../../core/agent/protocol";
 import { ChatToolCall } from "../../../core/agent/tool";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
+import { withLoggedErrors } from "../common/withLoggedErrors";
 import { InlineReasoningParser } from "./streaming/InlineReasoningParser";
 import { createOpenAiClient, translateOpenAiError } from "./providers/openAiSdk";
 import { createAnthropicClient, createLoggingFetch, translateAnthropicError } from "./providers/anthropicSdk";
@@ -59,12 +60,14 @@ export class ChatModelClient implements ChatModelProvider {
   }
 
   async listModels(): Promise<string[]> {
-    return this.withLoggedErrors(() =>
-      this.provider === "ollama"
-        ? this.listOllamaModels()
-        : this.provider === "anthropic"
-          ? this.listAnthropicModels()
-          : this.listOpenAiCompatibleModels(),
+    return withLoggedErrors(
+      () =>
+        this.provider === "ollama"
+          ? this.listOllamaModels()
+          : this.provider === "anthropic"
+            ? this.listAnthropicModels()
+            : this.listOpenAiCompatibleModels(),
+      this.logger,
     );
   }
 
@@ -507,14 +510,6 @@ export class ChatModelClient implements ChatModelProvider {
     yield { content: "", isComplete: true, events: [{ type: "complete", stopReason: "complete" }] };
   }
 
-  private async withLoggedErrors<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      this.logger?.logError(error);
-      throw error;
-    }
-  }
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {

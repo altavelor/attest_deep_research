@@ -11,6 +11,7 @@ import {
   ToolParseResult as ResearchToolParseResult,
   toolFailure,
 } from "../../../core/agent/tool";
+import { CHECK_URLS_TOOL, LIST_INDEX_URLS_TOOL } from "../../../core/agent/toolNames";
 
 interface ListIndexUrlsInput {
   cursor?: string;
@@ -59,7 +60,7 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
   readonly definition = {
     type: "function" as const,
     function: {
-      name: "list_index_urls",
+      name: LIST_INDEX_URLS_TOOL,
       description:
         "List URLs extracted from the selected local index, with surrounding context and purpose hints. Use this for exhaustive URL inventories; results are paginated.",
       parameters: {
@@ -172,7 +173,7 @@ export class CheckUrlsTool implements ResearchToolHandler<CheckUrlsInput, CheckU
   readonly definition = {
     type: "function" as const,
     function: {
-      name: "check_urls",
+      name: CHECK_URLS_TOOL,
       description:
         "Check whether HTTP/HTTPS URLs are reachable. Use with URLs returned by list_index_urls.",
       parameters: {

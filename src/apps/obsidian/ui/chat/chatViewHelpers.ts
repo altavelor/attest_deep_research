@@ -1,5 +1,4 @@
 import { ResearchAnswer } from "../../../../core/answer";
-import { RetrievedChunk } from "../../../../core/model/source";
 import { SavedChatSettings } from "../../../../core/chat/savedChat";
 import { parsePositiveInteger } from "../../../../shared/numbers";
 import { ChatModelSelectOption, IndexProfileSelectOption } from "./ChatComposer";
@@ -19,22 +18,6 @@ export function stripContextDiagnostics(answer: ResearchAnswer | null): Research
 
   const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
   return rest;
-}
-
-export function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
-  const seen = new Set<string>();
-  const unique: RetrievedChunk[] = [];
-
-  for (const chunk of chunks) {
-    if (seen.has(chunk.id)) {
-      continue;
-    }
-
-    seen.add(chunk.id);
-    unique.push(chunk);
-  }
-
-  return unique;
 }
 
 export function readPositiveInteger(value: string | undefined, fallback: number): number {

@@ -1,5 +1,6 @@
 import { RetrievalResult } from "../../../application/contracts/retrieval";
 import { QueryExpansion } from "../../contracts/research";
+import { uniqueChunks } from "../../../core/model/source";
 import { RetrievalQueryVariant } from "../../../core/retrieval/query";
 import { ResearchRetriever, ResearchStreamEvent } from "../../contracts/research";
 
@@ -93,22 +94,6 @@ function mergeRetrievalResults(
     citations,
     usedFallback: primary.usedFallback && graph.usedFallback,
   };
-}
-
-function uniqueChunks(chunks: RetrievalResult["chunks"]): RetrievalResult["chunks"] {
-  const seen = new Set<string>();
-  const unique: RetrievalResult["chunks"] = [];
-
-  for (const chunk of chunks) {
-    if (seen.has(chunk.id)) {
-      continue;
-    }
-
-    seen.add(chunk.id);
-    unique.push(chunk);
-  }
-
-  return unique;
 }
 
 function uniqueCitations(citations: RetrievalResult["citations"]): RetrievalResult["citations"] {

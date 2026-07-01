@@ -1,5 +1,6 @@
 import { ChatMessage } from "../agent/protocol";
 import { RetrievedChunk } from "../model/source";
+import { sourceLabel } from "../retrieval/citations";
 
 export const RESEARCH_SYSTEM_PROMPT =
   "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence. Cite only source IDs that appear in the evidence below or that were returned by a tool you actually called — never invent citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
@@ -200,7 +201,7 @@ export function extractFollowUpQuestions(answer: string): string[] {
 }
 
 function formatEvidenceItem(chunk: RetrievedChunk): string {
-  return [`[${chunk.id}] ${sourceLabel(chunk)}`, truncateEvidenceText(chunk.text)].join("\n");
+  return [`[${chunk.id}] ${sourceLabel(chunk.source)}`, truncateEvidenceText(chunk.text)].join("\n");
 }
 
 function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {
@@ -208,21 +209,6 @@ function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {
     .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`)
     .join("\n\n")
     .trim();
-}
-
-function sourceLabel(chunk: RetrievedChunk): string {
-  switch (chunk.source.kind) {
-    case "markdown":
-      return chunk.source.headingPath.length > 0
-        ? `${chunk.source.path} > ${chunk.source.headingPath.join(" > ")}`
-        : chunk.source.path;
-    case "pdf":
-      return `${chunk.source.path} p. ${chunk.source.pageNumber}`;
-    case "document":
-      return chunk.source.path;
-    case "web":
-      return chunk.source.title;
-  }
 }
 
 function truncateEvidenceText(text: string): string {

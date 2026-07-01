@@ -50,18 +50,22 @@ export class IndexPathPickerModal extends Modal {
     this.contentEl.empty();
   }
 
-  private renderTree(): void {
+  private renderTree(options: { preserveScroll?: boolean } = {}): void {
     if (!this.treeEl) {
       return;
     }
 
+    const scrollTop = options.preserveScroll ? this.treeEl.scrollTop : null;
     this.treeEl.empty();
     if (this.query) {
       this.renderSearchResults(this.treeEl);
-      return;
+    } else {
+      this.renderFolderChildren(this.treeEl, this.app.vault.getRoot(), 0);
     }
 
-    this.renderFolderChildren(this.treeEl, this.app.vault.getRoot(), 0);
+    if (scrollTop !== null) {
+      this.treeEl.scrollTop = scrollTop;
+    }
   }
 
   private renderSearchResults(containerEl: HTMLElement): void {
@@ -119,7 +123,7 @@ export class IndexPathPickerModal extends Modal {
         } else {
           this.expandedFolders.add(path);
         }
-        this.renderTree();
+        this.renderTree({ preserveScroll: true });
       });
     } else {
       row.createSpan({ cls: "ixplorer-index-path-picker__spacer" });
@@ -134,7 +138,7 @@ export class IndexPathPickerModal extends Modal {
     checkbox.checked = this.isSelected(file);
     checkbox.addEventListener("change", () => {
       this.togglePath(file, checkbox.checked);
-      this.renderTree();
+      this.renderTree({ preserveScroll: true });
     });
     row.createSpan({ text: file.path || "/" });
 

@@ -10,11 +10,12 @@ export function formatCitation(source: SourceReference): Citation {
   return {
     id: source.id,
     source,
-    label: citationLabel(source),
+    label: sourceLabel(source),
   };
 }
 
-function citationLabel(source: SourceReference): string {
+/** Human-readable label for a source (path + heading / page number / title). */
+export function sourceLabel(source: SourceReference): string {
   switch (source.kind) {
     case "markdown":
       return source.headingPath.length > 0

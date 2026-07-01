@@ -53,10 +53,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
     containerEl.addClass("ixplorer-settings");
 
     renderCategoryHeading(containerEl, "Ixplorer");
-    this.renderDebugSettings(containerEl);
     this.renderSearchEngineSettings(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
+    this.renderAdvancedSettings(containerEl);
     if (!this.metadataRefreshStarted) {
       this.metadataRefreshStarted = true;
       void this.prober.refreshMetadataCapabilities();
@@ -75,16 +75,19 @@ export class IxplorerSettingTab extends PluginSettingTab {
       );
   }
 
-  private renderSearchEngineSettings(containerEl: HTMLElement): void {
-    renderCategoryHeading(
-      containerEl,
-      "Search engine",
-      "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
-    );
+  private renderAdvancedSettings(containerEl: HTMLElement): void {
+    const details = containerEl.createEl("details", {
+      cls: "ixplorer-settings-advanced",
+    });
+    details.createEl("summary", {
+      cls: "ixplorer-settings-advanced__summary",
+      text: "Advanced",
+    });
 
-    renderSubcategoryHeading(containerEl, "Execution strategy");
+    const contentEl = details.createDiv({ cls: "ixplorer-settings-advanced__content" });
+    this.renderDebugSettings(contentEl);
 
-    new Setting(containerEl)
+    new Setting(contentEl)
       .setName("Force eager research mode")
       .setDesc(
         "Force the existing eager research pipeline for every model. Disable this to permit automatic strategy selection when agentic research becomes available.",
@@ -95,6 +98,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }),
       );
+  }
+
+  private renderSearchEngineSettings(containerEl: HTMLElement): void {
+    renderCategoryHeading(
+      containerEl,
+      "Search engine",
+      "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
+    );
 
     renderSubcategoryHeading(containerEl, "Local context");
 

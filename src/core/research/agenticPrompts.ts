@@ -1,14 +1,27 @@
 import { ChatMessage } from "../agent/protocol";
+import {
+  CHECK_URLS_TOOL,
+  DEEP_SEARCH_TOOL,
+  INDEX_SEARCH_TOOL,
+  LIST_INDEX_URLS_TOOL,
+  NOTE_EDIT_TOOLS,
+  NOTE_MUTATION_TOOLS,
+  WEB_FETCH_TOOL,
+  WEB_SEARCH_TOOL,
+} from "../agent/toolNames";
 import { RetrievedChunk } from "../model/source";
 import { ResearchChatHistoryMessage } from "./prompts";
 
-export interface ActiveSkills {
+/**
+ * What the prompt needs to know about the run. `availableTools` is the source of
+ * truth for which skills/tools the prompt advertises — it must be exactly the set
+ * of tools the runtime registered (`ToolManager.definitions()`), so the prompt can
+ * never mention a tool the model cannot actually call.
+ */
+export interface AgenticToolContext {
   coreVariant: "vault" | "research";
-  index: boolean;
-  web: boolean;
-  deepSearch: boolean;
+  availableTools: readonly string[];
   indexDescription?: string;
-  noteMutationAccess: boolean;
 }
 
 export interface BuildAgenticResearchMessagesOptions {
@@ -16,8 +29,16 @@ export interface BuildAgenticResearchMessagesOptions {
   chatHistory?: ResearchChatHistoryMessage[];
   requiredTools: readonly string[];
   explicitEvidence?: RetrievedChunk[];
-  activeSkills: ActiveSkills;
+  toolContext: AgenticToolContext;
 }
+
+type ToolSet = ReadonlySet<string>;
+
+const hasWeb = (tools: ToolSet): boolean => tools.has(WEB_SEARCH_TOOL);
+const hasIndex = (tools: ToolSet): boolean => tools.has(INDEX_SEARCH_TOOL);
+const hasDeepSearch = (tools: ToolSet): boolean => tools.has(DEEP_SEARCH_TOOL);
+const hasNoteMutation = (tools: ToolSet): boolean =>
+  NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 
 const MUTATION_RULES = `
 ### Note mutation rules (create_note, update_note, delete_note)
@@ -47,54 +68,130 @@ ${includeMutation ? `\n${MUTATION_RULES}` : ""}
 When asked to summarise or synthesise notes: read each relevant note with read_note,
 then compose the summary from the actual note content. Do not invent facts not present in the notes.`.trimStart();
 
-const CORE_RESEARCH_SKILL = (includeMutation: boolean) => `
-## Answer Principles
+// The evidence tools the profile actually registered, in advertising order.
+function evidenceToolNames(tools: ToolSet): string[] {
+  return [INDEX_SEARCH_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL].filter((name) => tools.has(name));
+}
 
-You are Ixplorer, a research assistant. Your goal is to answer the user's question
-using authoritative sources retrieved by evidence tools.
+const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
+  const includeMutation = hasNoteMutation(tools);
+  const web = hasWeb(tools);
+  const index = hasIndex(tools);
+  const evidenceTools = evidenceToolNames(tools);
+  const evidenceHeader = evidenceTools.length > 0 ? evidenceTools.join(", ") : "none available";
 
-### Evidence tools (search_index, search_web, fetch_web_page)
-- Use these to find information relevant to the question.
-- Cite web sources by their URL: \`[url:https://example.com/page]\`. Cite local index
-  results by their \`evidenceId\`: \`[evidenceId]\`. Always enclose the cite in square brackets.
-- Never invent a URL or an evidenceId. Only cite URLs/ids that appear in tool results.
-- Evidence from search_index and search_web has equal authority.
+  const citationLines: string[] = [];
+  if (web && index) {
+    citationLines.push(
+      "- Cite web sources by their URL: `[url:https://example.com/page]`. Cite local index\n  results by their `evidenceId`: `[evidenceId]`. Always enclose the cite in square brackets.",
+    );
+  } else if (web) {
+    citationLines.push(
+      "- Cite web sources by their URL: `[url:https://example.com/page]`. Always enclose the cite in square brackets.",
+    );
+  } else if (index) {
+    citationLines.push(
+      "- Cite local index results by their `evidenceId`: `[evidenceId]`. Always enclose the cite in square brackets.",
+    );
+  }
+  citationLines.push(
+    "- Never invent a URL or an evidenceId. Only cite URLs/ids that appear in tool results.",
+  );
+  if (web && index) {
+    citationLines.push("- Evidence from search_index and search_web has equal authority.");
+  }
 
-### Index URL audit tools (list_index_urls, check_urls)
-- Use these tools for link inventories and reachability reports over indexed material.
-- Preserve URL purpose/context/source metadata in markdown reports.
-- These tools support audits; they do not replace evidence citations for factual claims.
+  const sections: string[] = [
+    "## Answer Principles",
+    "You are Ixplorer, a research assistant. Your goal is to answer the user's question\nusing authoritative sources retrieved by evidence tools.",
+    [`### Evidence tools (${evidenceHeader})`, "- Use these to find information relevant to the question.", ...citationLines].join(
+      "\n",
+    ),
+  ];
 
-### Editing tools (search_notes, read_note, list_notes, get_active_note)
-- Use these only when the user explicitly asks to read, create, update, or delete vault notes.
-- Results from editing tools are NOT evidence. Do not cite them. Do not use them to reason
-  about the answer to the user's question.
-${includeMutation ? `\n${MUTATION_RULES}\n` : ""}
-### Citation format
-Cite sources inline: "The sky is blue [abc-123]." Cite at the claim, not at the end of the answer.
-If no authoritative source was found for a claim, say so explicitly — do not state it as fact.`.trimStart();
+  // Index URL audit tools register alongside search_index — advertise them only then.
+  if (tools.has(LIST_INDEX_URLS_TOOL) || tools.has(CHECK_URLS_TOOL)) {
+    const audit = [LIST_INDEX_URLS_TOOL, CHECK_URLS_TOOL].filter((name) => tools.has(name));
+    sections.push(
+      [
+        `### Index URL audit tools (${audit.join(", ")})`,
+        "- Use these tools for link inventories and reachability reports over indexed material.",
+        "- Preserve URL purpose/context/source metadata in markdown reports.",
+        "- These tools support audits; they do not replace evidence citations for factual claims.",
+      ].join("\n"),
+    );
+  }
 
-const WEB_SKILL = `
-## Using Web Search (search_web, fetch_web_page)
+  // Editing tools register only when note access is granted.
+  const editTools = NOTE_EDIT_TOOLS.filter((name) => tools.has(name));
+  if (editTools.length > 0) {
+    sections.push(
+      [
+        `### Editing tools (${editTools.join(", ")})`,
+        "- Use these only when the user explicitly asks to read, create, update, or delete vault notes.",
+        "- Results from editing tools are NOT evidence. Do not cite them. Do not use them to reason",
+        "  about the answer to the user's question.",
+      ].join("\n"),
+    );
+  }
 
-Use search_web to find current or external information not available in the local index.
+  if (includeMutation) {
+    sections.push(MUTATION_RULES);
+  }
 
-### Strategy
-- Write focused queries (≤240 chars). Avoid vague queries — be specific.
-- Cite a web result by its \`url\` in the form \`[url:<url>]\`.
-- \`limit\` controls how many results (max 5).
-- If a snippet is insufficient, call fetch_web_page with the result's \`resultId\` to get
-  the full page content. Pass the \`resultId\` returned by search_web — not its \`url\` and
-  not any \`[url:…]\` citation.
-- Do not call search_web or fetch_web_page with the same arguments twice.
+  sections.push(
+    [
+      "### Citation format",
+      'Cite sources inline: "The sky is blue [abc-123]." Cite at the claim, not at the end of the answer.',
+      "If no authoritative source was found for a claim, say so explicitly — do not state it as fact.",
+    ].join("\n"),
+  );
 
-### Reading results
-Each result has:
-- \`url\` — source URL; cite it as \`[url:<url>]\`
-- \`resultId\` — opaque handle; pass to fetch_web_page to read the full page
-- \`title\` — page title
-- \`snippet\` — short preview (may be truncated)
-- \`rank\` — position in search results (lower = higher priority)`.trimStart();
+  return sections.join("\n\n");
+};
+
+// fetch_web_page is a separate tool that only registers when the web provider can
+// fetch full pages — so its guidance is conditional on the tool actually being present.
+const WEB_SKILL = (tools: ToolSet): string => {
+  const canFetch = tools.has(WEB_FETCH_TOOL);
+  const heading = canFetch
+    ? "## Using Web Search (search_web, fetch_web_page)"
+    : "## Using Web Search (search_web)";
+
+  const strategy = [
+    "### Strategy",
+    "- Write focused queries (≤240 chars). Avoid vague queries — be specific.",
+    "- Cite a web result by its `url` in the form `[url:<url>]`.",
+    "- `limit` controls how many results (max 5).",
+  ];
+  if (canFetch) {
+    strategy.push(
+      "- If a snippet is insufficient, call fetch_web_page with the result's `resultId` to get\n" +
+        "  the full page content. Pass the `resultId` returned by search_web — not its `url` and\n" +
+        "  not any `[url:…]` citation.",
+      "- Do not call search_web or fetch_web_page with the same arguments twice.",
+    );
+  } else {
+    strategy.push("- Do not call search_web with the same arguments twice.");
+  }
+
+  const reading = [
+    "### Reading results",
+    "Each result has:",
+    "- `url` — source URL; cite it as `[url:<url>]`",
+    ...(canFetch ? ["- `resultId` — opaque handle; pass to fetch_web_page to read the full page"] : []),
+    "- `title` — page title",
+    "- `snippet` — short preview (may be truncated)",
+    "- `rank` — position in search results (lower = higher priority)",
+  ];
+
+  return [
+    heading,
+    "Use search_web to find current or external information not available in the local index.",
+    strategy.join("\n"),
+    reading.join("\n"),
+  ].join("\n\n");
+};
 
 const DEEP_SEARCH_SKILL = `
 ## Deep research (deep_search)
@@ -128,6 +225,42 @@ sub-agent's own budget, not yours.
   form \`[url:<url>]\`; read URLs straight from that line — you do not need another tool.
 - These URLs are citation handles, NOT fetch targets: never pass a deep_search source URL
   to fetch_web_page. If a finding needs deeper backing, run another deep_search.`.trimStart();
+
+// Hard limit on which evidence sources this profile exposes. Without it the model
+// assumes tools that were never granted (e.g. fetch_web_page in an index-only profile),
+// fails with unknown-tool, and silently falls back to whatever source it does have.
+function buildSourceAvailabilityRule(tools: ToolSet): string {
+  const web = hasWeb(tools);
+  const index = hasIndex(tools);
+  const active: string[] = [];
+  if (index) active.push("the local index (search_index)");
+  if (web) active.push("web search (search_web, fetch_web_page)");
+
+  const lines: string[] = ["## Source availability (hard limit)"];
+  lines.push(
+    active.length > 0
+      ? `Active evidence sources in this profile: ${active.join(" and ")}.`
+      : "This profile exposes no evidence sources: you cannot search the web or the local index.",
+  );
+  if (!web) {
+    lines.push(
+      "Web is OFF: you have no search_web / fetch_web_page tools. You cannot open URLs, browse, or search the internet.",
+    );
+  }
+  if (!index) {
+    lines.push(
+      "Local index is OFF: you have no search_index tool. You cannot search the indexed vault/library.",
+    );
+  }
+  lines.push(
+    "If the user explicitly requires a source that is OFF (e.g. asks you to open a URL or " +
+      "search the web while web is OFF, or to search the local index while it is OFF), do NOT " +
+      "silently fall back to another source and do NOT answer from memory. Reply that this " +
+      'requires switching the search mode (in the composer: "Index", "Web", or "Index + Web") ' +
+      "to the one that provides the needed source, name that mode, and stop without calling tools.",
+  );
+  return lines.join("\n");
+}
 
 function buildIndexSkill(indexDescription: string): string {
   return `## Using the Local Index (search_index)
@@ -165,7 +298,8 @@ Each result has:
 export function buildAgenticResearchMessages(
   options: BuildAgenticResearchMessagesOptions,
 ): ChatMessage[] {
-  const { activeSkills } = options;
+  const { toolContext } = options;
+  const tools: ToolSet = new Set(toolContext.availableTools);
   const required =
     options.requiredTools.length > 0 ? options.requiredTools.join(", ") : "none";
 
@@ -180,23 +314,27 @@ export function buildAgenticResearchMessages(
 
   // Core skill — always present
   systemSections.push(
-    activeSkills.coreVariant === "vault"
-      ? CORE_VAULT_SKILL(activeSkills.noteMutationAccess)
-      : CORE_RESEARCH_SKILL(activeSkills.noteMutationAccess),
+    toolContext.coreVariant === "vault"
+      ? CORE_VAULT_SKILL(hasNoteMutation(tools))
+      : CORE_RESEARCH_SKILL(tools),
   );
 
-  // Index skill — only when index is active and description is provided
-  if (activeSkills.index && activeSkills.indexDescription) {
-    systemSections.push(buildIndexSkill(sanitize(activeSkills.indexDescription)));
+  // Source availability — bound the model to the sources this profile actually grants,
+  // so it stops and asks to switch mode instead of substituting an unavailable source.
+  systemSections.push(buildSourceAvailabilityRule(tools));
+
+  // Index skill — only when the index tool is registered and a description is provided
+  if (hasIndex(tools) && toolContext.indexDescription) {
+    systemSections.push(buildIndexSkill(sanitize(toolContext.indexDescription)));
   }
 
-  // Web skill — only when web search is active
-  if (activeSkills.web) {
-    systemSections.push(WEB_SKILL);
+  // Web skill — only when the web search tool is registered
+  if (hasWeb(tools)) {
+    systemSections.push(WEB_SKILL(tools));
   }
 
-  // Deep research skill — only when the deep_search tool is available
-  if (activeSkills.deepSearch) {
+  // Deep research skill — only when the deep_search tool is registered
+  if (hasDeepSearch(tools)) {
     systemSections.push(DEEP_SEARCH_SKILL);
   }
 

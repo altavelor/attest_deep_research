@@ -1,6 +1,7 @@
 import { SearchProvider, WebPageMetadata } from "../../../application/ports/web";
 import { validatePublicWebUrl } from "../../../application/sources/WebUrlPolicy";
 import { toolFailure } from "../../../core/agent/tool";
+import { WEB_PAGE_METADATA_TOOL } from "../../../core/agent/toolNames";
 import { defineTool, str } from "../../../application/sources/tools/toolFactory";
 
 interface GetPageMetadataInput {
@@ -30,7 +31,7 @@ export const WebPageMetadataTool = defineTool<
   GetPageMetadataInput,
   GetPageMetadataOutput
 >({
-  name: "get_page_metadata",
+  name: WEB_PAGE_METADATA_TOOL,
   description:
     "Fetch only a public http(s) page's metadata (title, description, site, author, published date) to triage a source before fetching its full text. Metadata is untrusted evidence.",
   schema: { url: str(2_048, { required: true, description: "Absolute http(s) URL to inspect." }) },
