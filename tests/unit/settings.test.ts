@@ -2,14 +2,14 @@ import {
   DEFAULT_SETTINGS,
   cloneIndexProfile,
   createIndexProfile,
-} from "../../src/adapters/settings/defaults";
-import { readSettings } from "../../src/adapters/settings/persistence";
+} from "@adapters/settings";
+import { readSettings } from "@adapters/settings";
 import {
   formatListInput,
   normalizeListInput,
   normalizeUrl,
   normalizeVaultFolder,
-} from "../../src/adapters/settings/parsers";
+} from "@adapters/settings";
 import {
   getActiveIndexProfile,
   isValidIndexProfileName,
@@ -18,10 +18,10 @@ import {
   resolveEffectiveReasoning,
   resolveEffectiveTools,
   updateActiveIndexProfile,
-} from "../../src/adapters/settings/profileQueries";
-import { isIndexProfileSelectable } from "../../src/adapters/settings/normalization";
-import { createToolCapabilitySettings, withProbeResults } from "../../src/adapters/settings/toolCapabilities";
-import { IxplorerSettings } from "../../src/adapters/settings/types";
+} from "@adapters/settings";
+import { isIndexProfileSelectable } from "@adapters/settings";
+import { createToolCapabilitySettings, withProbeResults } from "@adapters/settings";
+import { IxplorerSettings } from "@adapters/settings";
 
 describe("Ixplorer settings", () => {
   it("uses local-first safe defaults when saved data is absent or not current", () => {

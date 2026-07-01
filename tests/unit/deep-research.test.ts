@@ -1,19 +1,19 @@
-import { parseDeepResearchDirective } from "../../src/core/research/deepResearch/deepResearchDirective";
+import { parseDeepResearchDirective } from "@core/research";
 import {
   DeepResearchReport,
   formatDeepResearchReport,
   remapReportEvidenceIds,
-} from "../../src/core/research/deepResearch/deepResearchReport";
+} from "@core/research";
 import { parseDeepResearchReport } from "../../src/application/use-cases/research/deep-research/parseDeepResearchReport";
 import { DeepResearchAgent } from "../../src/application/use-cases/research/deep-research/DeepResearchAgent";
 import { DeepSearchTool } from "../../src/adapters/research-tools/deep-research/DeepSearchTool";
 import { DeepResearchRunner } from "../../src/application/research/deepResearchPort";
 import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../helpers/researchFakes";
 import { retrieved, webSource } from "../helpers/factories";
-import type { ToolContext } from "../../src/core/agent/tool";
+import type { ToolContext } from "@core/agent";
 
 function toolContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {

@@ -5,7 +5,7 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "../indexing/store/FileVectorIndexStore";
-import { ApiFormat } from "../../core/agent/protocol";
+import { ApiFormat } from "@core/agent";
 import { isRecord } from "../../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../../shared/numbers";
 import {

@@ -6,7 +6,7 @@ import {
   IndexSourceInventoryOptions,
 } from "../../../application/ports/retrieval";
 import { ResearchRetriever } from "../../../application/contracts/research";
-import { Tool } from "../../../core/agent/tool";
+import { Tool } from "@core/agent";
 import {
   FIND_IN_INDEX_TOOL,
   GET_INDEX_SOURCE_OUTLINE_TOOL,
@@ -15,7 +15,7 @@ import {
   READ_INDEX_CHUNK_TOOL,
   SEARCH_INDEX_BY_METADATA_TOOL,
   SUMMARIZE_INDEX_SOURCE_TOOL,
-} from "../../../core/agent/toolNames";
+} from "@core/agent";
 import { SourceKind } from "@core/model";
 import {
   bool,

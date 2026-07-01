@@ -1,4 +1,4 @@
-import { buildAgenticResearchMessages } from "../../src/core/research/agenticPrompts";
+import { buildAgenticResearchMessages } from "@core/research";
 import {
   CREATE_NOTE_TOOL,
   DEEP_SEARCH_TOOL,
@@ -7,7 +7,7 @@ import {
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
-} from "../../src/core/agent/toolNames";
+} from "@core/agent";
 
 // Builds the system prompt text for a given tool context. `availableTools` is the
 // single source of truth for which skills the prompt advertises.

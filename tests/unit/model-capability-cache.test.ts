@@ -2,7 +2,7 @@ import {
   capabilityCacheKey,
   CapabilityRefreshCoordinator,
   recordObservedReasoningFormat,
-} from "../../src/adapters/settings/modelCapabilityCache";
+} from "@adapters/settings";
 
 describe("model capability cache", () => {
   const identity = {

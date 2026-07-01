@@ -5,7 +5,7 @@ import {
   ToolParseResult,
   ToolPermissions,
   toolFailure,
-} from "../../../core/agent/tool";
+} from "@core/agent";
 import { ResearchRetriever } from "../../contracts/research";
 
 // --- Field schema mini-DSL -------------------------------------------------

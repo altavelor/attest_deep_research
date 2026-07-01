@@ -2,7 +2,7 @@
 // application layer so both the concrete NoteToolService (adapters) and the
 // note tool-handlers can share them.
 
-import { ChatToolDefinition } from "../../../core/agent/tool";
+import { ChatToolDefinition } from "@core/agent";
 import {
   CREATE_NOTE_TOOL,
   DELETE_NOTE_TOOL,
@@ -11,7 +11,7 @@ import {
   READ_NOTE_TOOL,
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
-} from "../../../core/agent/toolNames";
+} from "@core/agent";
 
 export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {

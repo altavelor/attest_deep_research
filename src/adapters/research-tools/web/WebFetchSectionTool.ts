@@ -1,7 +1,7 @@
 import { SearchProvider } from "../../../application/ports/web";
 import { EvidenceRegistry } from "@application/sources";
-import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
-import { WEB_FETCH_SECTION_TOOL } from "../../../core/agent/toolNames";
+import { ToolParseResult, toolFailure } from "@core/agent";
+import { WEB_FETCH_SECTION_TOOL } from "@core/agent";
 import { defineTool, int, str } from "@application/sources/tools";
 import { rankSectionsByQuery } from "../../../core/web/sectionRanking";
 import { fetchRegisteredWebPage } from "./fetchRegisteredWebPage";

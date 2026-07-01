@@ -2,11 +2,11 @@ import { formatCitation } from "@core/retrieval";
 import { ResearchAnswer } from "../../../../core/answer";
 import { ContextDiagnostics } from "../../../../core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
-import { estimateTextTokens, extractFollowUpQuestions } from "../../../../core/research/prompts";
-import { buildAgenticResearchMessages } from "../../../../core/research/agenticPrompts";
+import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
+import { buildAgenticResearchMessages } from "@core/research";
 import { ResearchStreamEvent } from "../../../contracts/research";
-import { ToolEvent } from "../../../../core/agent/tool";
-import { DEEP_SEARCH_TOOL } from "../../../../core/agent/toolNames";
+import { ToolEvent } from "@core/agent";
+import { DEEP_SEARCH_TOOL } from "@core/agent";
 import {
   DEEP_RESEARCH_PHASE,
   DEEP_RESEARCH_TOOL_END,

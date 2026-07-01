@@ -1,7 +1,7 @@
 // Stage 3: the agent loop runs in core against the ModelRoundProvider port only,
 // with no client adapter and no research labeler.
-import { runAgentLoop } from "../../src/core/agent/AgentLoop";
-import type { ModelRoundProvider, ModelRoundResult } from "../../src/core/agent/protocol";
+import { runAgentLoop } from "@core/agent";
+import type { ModelRoundProvider, ModelRoundResult } from "@core/agent";
 
 function provider(rounds: ModelRoundResult[]): ModelRoundProvider {
   let i = 0;

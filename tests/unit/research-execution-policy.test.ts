@@ -1,4 +1,4 @@
-import { resolveResearchExecutionPolicy } from "../../src/core/research/ResearchExecutionPolicy";
+import { resolveResearchExecutionPolicy } from "@core/research";
 
 const fullCapabilities = {
   calls: true,

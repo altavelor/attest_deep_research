@@ -1,5 +1,5 @@
-import { ApiFormat, ChatModelProvider, ChatRequest } from "../../core/agent/protocol";
-import { ChatToolDefinition, ToolCallingCapabilities } from "../../core/agent/tool";
+import { ApiFormat, ChatModelProvider, ChatRequest } from "@core/agent";
+import { ChatToolDefinition, ToolCallingCapabilities } from "@core/agent";
 
 const PROBE_A = "ixplorer_probe_a";
 const PROBE_B = "ixplorer_probe_b";

@@ -1,6 +1,6 @@
 import { FindInIndexTool, ListIndexChunksTool } from "../../src/adapters/research-tools/index/IndexInventoryTools";
 import { ResearchRetriever } from "../../src/application/contracts/research";
-import { executeTool } from "../../src/core/agent/tool";
+import { executeTool } from "@core/agent";
 
 describe("IndexInventoryTools", () => {
   it("parses list_index_chunks input and delegates to the retriever", async () => {

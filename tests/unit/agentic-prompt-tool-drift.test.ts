@@ -1,10 +1,10 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
-import { buildAgenticResearchMessages } from "../../src/core/research/agenticPrompts";
-import { PROMPT_TOOL_NAMES, WEB_FETCH_TOOL } from "../../src/core/agent/toolNames";
+import { buildAgenticResearchMessages } from "@core/research";
+import { PROMPT_TOOL_NAMES, WEB_FETCH_TOOL } from "@core/agent";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 import { SearchProvider } from "../../src/application/ports/web";
 import { NoteToolService } from "../../src/application/research/toolPorts";
-import { ResearchSearchMode } from "../../src/core/research/searchMode";
+import { ResearchSearchMode } from "@core/research";
 
 const retriever: ResearchRetriever = {
   search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),

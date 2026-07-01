@@ -1,19 +1,19 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 
-import { DiscoveredModel } from "../../../../adapters/settings/connectionTests";
-import { contextLengthInputAfterDiscovery } from "../../../../adapters/settings/modelContext";
+import { DiscoveredModel } from "@adapters/settings";
+import { contextLengthInputAfterDiscovery } from "@adapters/settings";
 import {
   createToolCapabilitySettings,
   resolveToolCapabilities,
   ToolCapabilitySettings,
-} from "../../../../adapters/settings/toolCapabilities";
-import { MAX_PROFILE_NAME_LENGTH } from "../../../../adapters/settings/constants";
-import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "../../../../adapters/settings/types";
+} from "@adapters/settings";
+import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
+import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import {
   createProfileId,
   hasDuplicateProfileName,
   isValidProfileName,
-} from "../../../../adapters/settings/profileQueries";
+} from "@adapters/settings";
 import { parsePositiveInteger } from "../../../../shared/numbers";
 import { optionalNumber, renderModalActions } from "./shared";
 

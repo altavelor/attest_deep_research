@@ -13,7 +13,7 @@ import {
   KeywordSearchIndexStore,
 } from "../../application/ports/retrieval";
 import { RetrievalOptions } from "@core/retrieval";
-import { EmbeddingProviderClient } from "../../core/agent/protocol";
+import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { formatCitation } from "@core/retrieval";

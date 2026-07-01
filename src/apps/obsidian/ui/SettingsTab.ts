@@ -3,15 +3,15 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type IxplorerPlugin from "../main";
 import { IndexProfile } from "../../../adapters/indexing/store/FileVectorIndexStore";
 import { formatIndexSize } from "../../../adapters/indexing/inventory/indexSize";
-import { DiscoveredModel } from "../../../adapters/settings/connectionTests";
-import { MAX_INDEX_PROFILE_COUNT } from "../../../adapters/settings/constants";
-import { normalizeSettingsState } from "../../../adapters/settings/normalization";
-import { DUCK_DUCK_GO_DESCRIPTION } from "../../../adapters/settings/privacyCopy";
+import { DiscoveredModel } from "@adapters/settings";
+import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
+import { normalizeSettingsState } from "@adapters/settings";
+import { DUCK_DUCK_GO_DESCRIPTION } from "@adapters/settings";
 import {
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
   getActiveIndexProfile,
-} from "../../../adapters/settings/profileQueries";
+} from "@adapters/settings";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexReportModal } from "./settings/IndexReportModal";
 import { IndexProfileModal } from "./settings/IndexProfileModal";

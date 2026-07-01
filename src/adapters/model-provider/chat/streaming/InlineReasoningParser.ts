@@ -1,4 +1,4 @@
-import { ModelStreamEvent } from "../../../../core/agent/protocol";
+import { ModelStreamEvent } from "@core/agent";
 
 const DEFAULT_TAG_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["<think>", "</think>"],

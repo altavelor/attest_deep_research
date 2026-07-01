@@ -3,8 +3,8 @@
 // (DeepResearchAgent) lives in application/use-cases and is injected by the
 // composition root via the research toolset options.
 
-import type { ToolEvent } from "../../core/agent/tool";
-import type { DeepResearchReport } from "../../core/research/deepResearch/deepResearchReport";
+import type { ToolEvent } from "@core/agent";
+import type { DeepResearchReport } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "../sources/evidence";
 
 export interface DeepResearchRunInput {

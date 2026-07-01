@@ -1,4 +1,4 @@
-import { DEEP_SEARCH_MENTION_INSERT } from "../../../../core/research/deepResearch/deepResearchDirective";
+import { DEEP_SEARCH_MENTION_INSERT } from "@core/research";
 
 export interface MentionCandidate {
   insertText: string;

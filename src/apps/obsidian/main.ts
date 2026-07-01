@@ -7,16 +7,16 @@ import { IndexSourceReportItem } from "../../adapters/indexing/IndexingService";
 import { IndexingProfileController } from "../../adapters/indexing/controller/IndexingProfileController";
 import { measureFolderSize } from "../../adapters/indexing/inventory/indexSize";
 import { IxplorerSettingTab } from "./ui/SettingsTab";
-import { PluginDebugLogger } from "../../adapters/settings/debugLogger";
-import { DEFAULT_SETTINGS } from "../../adapters/settings/defaults";
-import { normalizeSettingsState } from "../../adapters/settings/normalization";
-import { readSettings } from "../../adapters/settings/persistence";
+import { PluginDebugLogger } from "@adapters/settings";
+import { DEFAULT_SETTINGS } from "@adapters/settings";
+import { normalizeSettingsState } from "@adapters/settings";
+import { readSettings } from "@adapters/settings";
 import {
   getActiveIndexProfile,
   resolveChatModelProfile,
   resolveServerProfile,
-} from "../../adapters/settings/profileQueries";
-import { IxplorerSettings } from "../../adapters/settings/types";
+} from "@adapters/settings";
+import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "../../core/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "../../adapters/indexing/inventory/IndexDescription";

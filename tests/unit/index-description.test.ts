@@ -5,7 +5,7 @@ import {
   resolveIndexDescriptionForPrompt,
   refreshIndexDescriptionAfterRun,
 } from "../../src/adapters/indexing/inventory/IndexDescription";
-import { createIndexProfile } from "../../src/adapters/settings/defaults";
+import { createIndexProfile } from "@adapters/settings";
 
 const profile = createIndexProfile({
   id: "research",

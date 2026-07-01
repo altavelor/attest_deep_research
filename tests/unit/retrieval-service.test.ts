@@ -14,7 +14,7 @@ import {
   FakeEmbeddingProvider,
   FakeIndexStore,
 } from "../helpers/retrievalFakes";
-import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "../../src/application/ports/indexing";
 
 // A single fake store stands in for every retrieval capability here; the

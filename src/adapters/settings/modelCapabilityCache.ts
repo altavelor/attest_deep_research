@@ -1,4 +1,4 @@
-import { ChatApiProtocol } from "../../core/agent/protocol";
+import { ChatApiProtocol } from "@core/agent";
 
 export type CapabilityState = "supported" | "unsupported" | "unknown";
 export type ReasoningResponseFormat =

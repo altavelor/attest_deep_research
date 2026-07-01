@@ -1,4 +1,4 @@
-import { executeTool, Tool, toolExecutionPayload } from "../../src/core/agent/tool";
+import { executeTool, Tool, toolExecutionPayload } from "@core/agent";
 import { parseBoundedSearchInput } from "../../src/application/research/boundedSearchInput";
 
 describe("research tool contracts", () => {

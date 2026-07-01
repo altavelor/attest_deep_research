@@ -1,6 +1,6 @@
 import { formatCitation } from "@core/retrieval";
 import { ContextDiagnostics } from "../../../../core/diagnostics";
-import { estimateTextTokens } from "../../../../core/research/prompts";
+import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "../../../contracts/research";
 import { AgenticResearchFailure } from "../AgenticResearchRunner";
 import {

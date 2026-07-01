@@ -8,9 +8,8 @@ import {
   shouldCompactForContext,
 } from "../../../../../application/use-cases/chat/ChatCompaction";
 import { AgentRunDiagnosticCollector, ResearchService, ResearchStreamEvent } from "@application/use-cases/research";
-import { estimateResearchRequestTokens } from "../../../../../core/research/prompts";
-import { parseDeepResearchDirective } from "../../../../../core/research/deepResearch/deepResearchDirective";
-import type { ResearchSearchMode } from "../../../../../application/use-cases/research/ResearchService";
+import { estimateResearchRequestTokens, parseDeepResearchDirective } from "@core/research";
+import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ContextMode } from "../../../../../core/diagnostics";
 import { toUserMessage } from "../../../../../core/errors";
 import { ResearchAnswer } from "../../../../../core/answer";

@@ -4,8 +4,8 @@ import {
   BoundedSearchInput,
   parseBoundedSearchInput,
 } from "../../../application/research/boundedSearchInput";
-import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
-import { INDEX_SEARCH_TOOL } from "../../../core/agent/toolNames";
+import { ToolParseResult, toolFailure } from "@core/agent";
+import { INDEX_SEARCH_TOOL } from "@core/agent";
 import { ResearchRetriever } from "../../../application/contracts/research";
 import { bool, defineTool, int, str } from "@application/sources/tools";
 

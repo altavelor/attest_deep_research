@@ -1,4 +1,4 @@
-import { ToolParseResult, toolFailure } from "../../core/agent/tool";
+import { ToolParseResult, toolFailure } from "@core/agent";
 
 export interface BoundedSearchInput {
   query: string;

@@ -6,7 +6,7 @@ import { PdfTextCache } from "@adapters/extractors";
 import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
 import { stableId } from "@adapters/extractors";
 import { chatHistoryForPrompt, compactChatMessages } from "../../src/application/use-cases/chat/ChatCompaction";
-import { GraphContextProvider } from "../../src/core/research/GraphContext";
+import { GraphContextProvider } from "@core/research";
 import { Extractor } from "../../src/application/ports/indexing";
 import { RetrievedChunk } from "@core/model";
 

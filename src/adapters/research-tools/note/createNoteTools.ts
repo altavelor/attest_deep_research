@@ -9,7 +9,7 @@ import {
   ToolExecution,
   ToolPermissions,
   toolFailure,
-} from "../../../core/agent/tool";
+} from "@core/agent";
 import {
   CREATE_NOTE_TOOL,
   DELETE_NOTE_TOOL,
@@ -18,7 +18,7 @@ import {
   READ_NOTE_TOOL,
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
-} from "../../../core/agent/toolNames";
+} from "@core/agent";
 import { NoteToolService } from "../../../application/research/toolPorts";
 import {
   bool,

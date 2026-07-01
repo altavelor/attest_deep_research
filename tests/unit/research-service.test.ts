@@ -2,7 +2,7 @@ import { ContextFileProvider } from "../../src/application/ports/vault";
 import { ResearchService, selectResearchExecutionStrategy } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
 import { stableId } from "@adapters/extractors";
 import { QueryExpansionService } from "@adapters/retrieval";
@@ -10,7 +10,7 @@ import {
   buildResearchPrompt,
   buildResearchSystemPrompt,
   extractFollowUpQuestions,
-} from "../../src/core/research/prompts";
+} from "@core/research";
 import {
   citation,
   emptyRetrieval,
@@ -22,7 +22,7 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
-import { ChatModelProvider } from "../../src/core/agent/protocol";
+import { ChatModelProvider } from "@core/agent";
 class MemoryContextFiles implements ContextFileProvider {
   constructor(private readonly files: Record<string, string>) { }
 

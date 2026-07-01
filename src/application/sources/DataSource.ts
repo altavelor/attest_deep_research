@@ -9,7 +9,7 @@
 // exposes descriptors so callers can present "available sources" without going
 // through the agent loop.
 
-import { Tool } from "../../core/agent/tool";
+import { Tool } from "@core/agent";
 import { ToolManager } from "../tools/ToolManager";
 
 export type SourceKind = "rag" | "web" | "attachments" | "deep-research";

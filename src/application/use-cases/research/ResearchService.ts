@@ -1,12 +1,12 @@
 import { summarizeCompactionWithModel } from "../chat/ChatCompaction";
 import { SearchProvider } from "../../ports/web";
-import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "../../../core/agent/protocol";
-import { ToolCallingCapabilities } from "../../../core/agent/tool";
+import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
+import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "../../../core/answer";
 import { ContextIndexDiagnostics, IndexDescriptionPromptContext, ResearchExecutionStrategy, ToolCapabilityProbeAudit } from "../../../core/diagnostics";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "./AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "../chat/ContextAssembler";
-import { EvidencePlanner, EvidencePlannerOptions } from "../../../core/research/evidence-planner/EvidencePlanner";
+import { EvidencePlanner, EvidencePlannerOptions } from "@core/research";
 import {
   NoteToolService,
   ResearchToolsetFactory,
@@ -24,7 +24,7 @@ import {
 } from "../../contracts/research";
 import { ConversationEngine } from "../../contracts/conversationView";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../../../core/conversation/model";
-import { resolveResearchExecutionPolicy } from "../../../core/research/ResearchExecutionPolicy";
+import { resolveResearchExecutionPolicy } from "@core/research";
 import { AgenticResearchFailure } from "./AgenticResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";

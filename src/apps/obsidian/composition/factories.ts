@@ -1,11 +1,11 @@
 import { App } from "obsidian";
 
-import { ChatModelClient } from "../../../adapters/model-provider/chat/ChatModelClient";
-import { OpenAiResponsesClient } from "../../../adapters/model-provider/chat/responses/OpenAiResponsesClient";
-import { resolveResponsesProviderPolicy } from "../../../adapters/model-provider/chat/responses/ResponsesProviderPolicy";
-import { ChatCompletionsRoundAdapter } from "../../../adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
-import { FallbackModelRoundProvider } from "../../../adapters/model-provider/chat/rounds/FallbackModelRoundProvider";
-import { EmbeddingClient } from "../../../adapters/model-provider/embeddings/EmbeddingClient";
+import { ChatModelClient } from "@adapters/model-provider";
+import { OpenAiResponsesClient } from "@adapters/model-provider";
+import { resolveResponsesProviderPolicy } from "@adapters/model-provider";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
+import { FallbackModelRoundProvider } from "@adapters/model-provider";
+import { EmbeddingClient } from "@adapters/model-provider";
 import { DocxExtractor } from "@adapters/extractors";
 import { EpubExtractor } from "@adapters/extractors";
 import { Fb2Extractor } from "@adapters/extractors";
@@ -22,35 +22,35 @@ import { RetrievalService } from "@adapters/retrieval";
 import { QueryExpansionService } from "@adapters/retrieval";
 import { ContextAssembler } from "../../../application/use-cases/chat/ContextAssembler";
 import { stableId } from "@adapters/extractors";
-import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "../../../core/research/GraphContext";
+import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
 import { ObsidianContextFileProvider } from "../../../adapters/obsidian/ObsidianContextFileProvider";
 import { ObsidianGraphContextProvider } from "../../../adapters/obsidian/ObsidianGraphContextProvider";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ObsidianVaultWriter } from "../../../adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
-import { PluginDebugLogger } from "../../../adapters/settings/debugLogger";
-import { resolveToolCapabilities } from "../../../adapters/settings/toolCapabilities";
-import { isResponsesCapabilityCurrent } from "../../../adapters/settings/responsesCapabilityProbe";
+import { PluginDebugLogger } from "@adapters/settings";
+import { resolveToolCapabilities } from "@adapters/settings";
+import { isResponsesCapabilityCurrent } from "@adapters/settings";
 import {
   capabilityCacheKey,
   recordObservedReasoningFormat,
-} from "../../../adapters/settings/modelCapabilityCache";
-import type { ReasoningResponseFormat } from "../../../adapters/settings/modelCapabilityCache";
+} from "@adapters/settings";
+import type { ReasoningResponseFormat } from "@adapters/settings";
 import {
   ChatModelProfile,
   EmbeddingModelProfile,
   IxplorerSettings,
   ServerProfile,
-} from "../../../adapters/settings/types";
+} from "@adapters/settings";
 import {
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
   resolveEffectiveTools,
-} from "../../../adapters/settings/profileQueries";
+} from "@adapters/settings";
 import { DuckDuckGoSearchProvider } from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
 import { resolveIndexDescriptionForPrompt } from "../../../adapters/indexing/inventory/IndexDescription";
-import type { ModelRoundProvider } from "../../../core/agent/protocol";
+import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "../obsidianFetch";
 import {
   requireChatModelProfile,

@@ -8,7 +8,7 @@ import {
   GraphContextRequest,
   parseMarkdownGraphLinks,
   resolveMarkdownLinkTarget,
-} from "../../core/research/GraphContext";
+} from "@core/research";
 
 type GraphCandidate = ReturnType<typeof createGraphCandidate>;
 

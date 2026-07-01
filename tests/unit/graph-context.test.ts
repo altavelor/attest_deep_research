@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseMarkdownGraphLinks,
   resolveMarkdownLinkTarget,
-} from "../../src/core/research/GraphContext";
+} from "@core/research";
 
 describe("GraphContext markdown fallback", () => {
   it("parses wiki links, embeds, heading links, and markdown links", () => {

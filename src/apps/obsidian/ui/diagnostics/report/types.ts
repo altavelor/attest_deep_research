@@ -1,5 +1,5 @@
-import { ApiFormat } from "../../../../../core/agent/protocol";
-import { ChatToolChoice } from "../../../../../core/agent/tool";
+import { ApiFormat } from "@core/agent";
+import { ChatToolChoice } from "@core/agent";
 import { ContextDiagnostics, ToolCallDiagnostic } from "../../../../../core/diagnostics";
 
 export interface DiagnosticReportV3 {

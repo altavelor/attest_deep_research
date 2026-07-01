@@ -1,7 +1,7 @@
 import { SearchProvider, WebPageMetadata } from "../../../application/ports/web";
 import { validatePublicWebUrl } from "@application/sources";
-import { toolFailure } from "../../../core/agent/tool";
-import { WEB_PAGE_METADATA_TOOL } from "../../../core/agent/toolNames";
+import { toolFailure } from "@core/agent";
+import { WEB_PAGE_METADATA_TOOL } from "@core/agent";
 import { defineTool, str } from "@application/sources/tools";
 
 interface GetPageMetadataInput {

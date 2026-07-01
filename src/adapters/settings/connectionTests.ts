@@ -8,7 +8,7 @@ import {
   modelNamesFromOpenAiModels,
 } from "../model-provider/common/models";
 import { toUserMessage } from "../../core/errors";
-import { ApiFormat } from "../../core/agent/protocol";
+import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "./debugLogger";
 import { ModelCapability, ServerProfile } from "./types";
 import type { ModelCapabilitySnapshot } from "./modelCapabilityCache";

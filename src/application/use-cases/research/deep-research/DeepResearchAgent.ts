@@ -3,13 +3,13 @@
 // orchestrating (main) model launches one or more of these via the `deep_search`
 // tool; each returns structured evidence the main model synthesizes from.
 
-import { ModelRoundProvider } from "../../../../core/agent/protocol";
-import { ResearchExecutionPolicy } from "../../../../core/research/ResearchExecutionPolicy";
+import { ModelRoundProvider } from "@core/agent";
+import { ResearchExecutionPolicy } from "@core/research";
 import {
   DeepResearchSynthesisSource,
   buildDeepResearchMessages,
   buildDeepResearchSynthesisMessages,
-} from "../../../../core/research/deepResearch/deepResearchPrompts";
+} from "@core/research";
 import { ResearchEvidenceSnapshot } from "../../../sources/evidence";
 import { SearchProvider } from "../../../ports/web";
 import { ResearchToolsetFactory } from "../../../research/toolPorts";

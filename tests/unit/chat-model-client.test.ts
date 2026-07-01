@@ -1,4 +1,4 @@
-import { ChatModelClient } from "../../src/adapters/model-provider/chat/ChatModelClient";
+import { ChatModelClient } from "@adapters/model-provider";
 import { IxplorerError } from "../../src/core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {

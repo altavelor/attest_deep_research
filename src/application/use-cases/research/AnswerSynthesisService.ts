@@ -1,4 +1,4 @@
-import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "../../../core/agent/protocol";
+import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ResearchAnswer } from "../../../core/answer";
 import { ContextDiagnostics, IndexDescriptionPromptContext, ToolCallDiagnostic } from "../../../core/diagnostics";
 import { Citation } from "@core/model";
@@ -10,7 +10,7 @@ import {
   extractFollowUpQuestions,
   buildResearchSystemPrompt,
   ResearchChatHistoryMessage,
-} from "../../../core/research/prompts";
+} from "@core/research";
 import { ResearchStreamEvent } from "../../contracts/research";
 import { createAsyncEventChannel } from "../../AsyncEventChannel";
 import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "../../research/toolPorts";

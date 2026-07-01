@@ -1,7 +1,7 @@
 import { IndexingService } from "../../src/adapters/indexing/IndexingService";
 import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
 import { Extractor, IndexStore } from "../../src/application/ports/indexing";
-import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 
 describe("IndexingService large-vault behavior", () => {
