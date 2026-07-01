@@ -1,11 +1,12 @@
 import { ChatMessage } from "@core/agent/protocol";
 import {
   CHECK_URLS_TOOL,
-  DEEP_SEARCH_TOOL,
+  SUB_AGENT_TOOL,
   INDEX_SEARCH_TOOL,
   LIST_INDEX_URLS_TOOL,
   NOTE_EDIT_TOOLS,
   NOTE_MUTATION_TOOLS,
+  READ_NOTE_TOOL,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
@@ -36,7 +37,7 @@ type ToolSet = ReadonlySet<string>;
 
 const hasWeb = (tools: ToolSet): boolean => tools.has(WEB_SEARCH_TOOL);
 const hasIndex = (tools: ToolSet): boolean => tools.has(INDEX_SEARCH_TOOL);
-const hasDeepSearch = (tools: ToolSet): boolean => tools.has(DEEP_SEARCH_TOOL);
+const hasSubAgent = (tools: ToolSet): boolean => tools.has(SUB_AGENT_TOOL);
 const hasNoteMutation = (tools: ToolSet): boolean =>
   NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 
@@ -193,38 +194,46 @@ const WEB_SKILL = (tools: ToolSet): string => {
   ].join("\n\n");
 };
 
-const DEEP_SEARCH_SKILL = `
-## Deep research (deep_search)
+// The "do it yourself instead" alternatives must be limited to tools this profile
+// actually registered — the sub-agent's own toolset (index/web/notes) always mirrors
+// the parent's, but the skill text must not name a manual tool the parent itself
+// doesn't have (e.g. search_index in a web-only profile).
+const SUB_AGENT_SKILL = (tools: ToolSet): string => {
+  const manualAlternatives = [INDEX_SEARCH_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL, READ_NOTE_TOOL].filter(
+    (name) => tools.has(name),
+  );
 
-You also have a deep_search tool that launches a dedicated research sub-agent. The
-sub-agent plans sub-queries, searches the web, reads pages, cross-checks multiple
-sources, and returns structured evidence (findings with a reliability grade + cited
-sources that you can cite directly by their URL).
+  return `
+## Delegating to a sub-agent (run_subagent)
 
-### When to prefer deep_search over manual search_web / fetch_web_page
-- The question needs breadth, comparison, or verification across several sources.
-- It asks for current/latest figures that should be cross-checked for conflicts.
-- You would otherwise fire many search_web + fetch_web_page calls yourself.
+You also have a run_subagent tool that launches an independent sub-agent with the
+same read-only tools you have (index/web/notes — no mutation, no recursion). It
+works its task end to end and returns a free-text answer that already cites
+sources in the same format you use (\`[url:<url>]\` for web, \`[evidenceId]\` for
+index/notes) — cite those tokens directly, no translation needed.
 
-Prefer deep_search for these — it is cheaper for your context (you get a compact
-structured report instead of many raw pages) and the heavy fetching runs in the
-sub-agent's own budget, not yours.
+### When to prefer run_subagent over doing it yourself
+- The task is a self-contained facet of the work: deep web research on a
+  sub-topic, cross-checking a claim across sources, reading and comparing
+  several notes.
+- Several such facets are independent of each other — issue several run_subagent
+  calls in the same round to work them in parallel (up to 3 run concurrently;
+  extra calls queue and run as a slot frees up).
+- You would otherwise fire many search/fetch/read calls yourself for one facet.
+
+Prefer run_subagent for these — the sub-agent's own tool calls run in its own
+budget, not yours, so your context stays compact.
 
 ### How to use it
-- Issue one deep_search call per distinct topic/facet; call several in parallel to
-  research independent facets at once.
-- Pass a focused \`question\` (and optional \`scope\`). Then synthesize the final answer
-  from the returned findings, citing the provided source URLs as \`[url:<url>]\`.
-- Use plain search_web / fetch_web_page only for a single quick lookup that does not
-  warrant a full research session.
-
-### Reading a deep_search result
-- Build your answer from the \`Summary\` and \`Findings\` — those are the synthesized,
-  citable substance. The \`(high|medium|low)\` tag on each finding is its reliability.
-- The \`Sources\` section lists \`- title — url\`. To cite a source, use its URL in the
-  form \`[url:<url>]\`; read URLs straight from that line — you do not need another tool.
-- These URLs are citation handles, NOT fetch targets: never pass a deep_search source URL
-  to fetch_web_page. If a finding needs deeper backing, run another deep_search.`.trimStart();
+- Pass a focused \`task\` instruction describing exactly what to accomplish and,
+  if relevant, any constraint (e.g. "using only web sources").
+- Read the returned \`answer\` and synthesize your final answer from it, citing
+  its \`[url:...]\` / \`[evidenceId]\` tokens as-is.${
+    manualAlternatives.length > 0
+      ? `\n- Use plain ${manualAlternatives.join(" / ")} yourself for a single quick lookup\n  that does not warrant delegating a whole task.`
+      : ""
+  }`.trimStart();
+};
 
 // Hard limit on which evidence sources this profile exposes. Without it the model
 // assumes tools that were never granted (e.g. fetch_web_page in an index-only profile),
@@ -333,9 +342,9 @@ export function buildAgenticResearchMessages(
     systemSections.push(WEB_SKILL(tools));
   }
 
-  // Deep research skill — only when the deep_search tool is registered
-  if (hasDeepSearch(tools)) {
-    systemSections.push(DEEP_SEARCH_SKILL);
+  // Sub-agent skill — only when the run_subagent tool is registered
+  if (hasSubAgent(tools)) {
+    systemSections.push(SUB_AGENT_SKILL(tools));
   }
 
   // Explicit evidence

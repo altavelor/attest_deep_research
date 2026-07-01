@@ -414,7 +414,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   create_note: "Create note",
   update_note: "Edit note",
   delete_note: "Delete note",
-  deep_search: "Deep research",
+  run_subagent: "Sub-agent",
 };
 
 function renderToolNode(

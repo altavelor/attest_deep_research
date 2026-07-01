@@ -101,8 +101,8 @@ export interface ResearchRequest {
   activeFilePath?: string;
   includeActiveFile?: boolean;
   includeContextDiagnostics?: boolean;
-  /** Set when the user explicitly requested deep research via an `@deep_search` mention. */
-  forceDeepSearch?: boolean;
+  /** Set when the user explicitly requested the sub-agent via an `@run_subagent` mention. */
+  forceSubAgent?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
   signal?: AbortSignal;
 }
@@ -121,7 +121,7 @@ export type ResearchStreamEvent =
     label: string;
     round: number;
     args?: Record<string, unknown>;
-    /** Set when this call is nested inside a parent tool-call (e.g. deep_search). */
+    /** Set when this call is nested inside a parent tool-call (e.g. run_subagent). */
     parentId?: string;
   }
   | {
@@ -133,7 +133,7 @@ export type ResearchStreamEvent =
     resultJson?: string;
     parentId?: string;
   }
-  | { type: "deep-research-phase"; parentId: string; phase: string }
+  | { type: "sub-agent-phase"; parentId: string; phase: string }
   | { type: "answer-reset" }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };

@@ -18,7 +18,7 @@ const provider: SearchProvider = {
   fetchMetadata: vi.fn().mockResolvedValue({ ok: false }),
 };
 const urlStatusChecker = { checkUrls: vi.fn().mockResolvedValue([]) };
-const deepResearchRunner = { run: vi.fn() };
+const subAgentRunner = { run: vi.fn() };
 // Minimal service: the registry only needs setCitationProvider + the tool declarations.
 const noteTools: NoteToolService = {
   setCitationProvider: () => {},
@@ -44,7 +44,7 @@ function registryFor(searchMode: ResearchSearchMode) {
     retriever,
     searchProvider: provider,
     urlStatusChecker,
-    deepResearchRunner,
+    subAgentRunner,
     noteTools,
     availability: {
       searchMode,

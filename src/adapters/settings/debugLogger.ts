@@ -1,7 +1,7 @@
 import { IxplorerError } from "@core/errors";
 import type {
-  DeepResearchLogEvent,
-  DeepResearchLogger,
+  SubAgentLogEvent,
+  SubAgentLogger,
 } from "@application/research";
 import type {
   IndexingFileLogEvent,
@@ -46,7 +46,7 @@ export interface PluginDebugLoggerOptions {
 }
 
 export class PluginDebugLogger
-  implements PluginRequestLogger, IndexingLogger, DeepResearchLogger
+  implements PluginRequestLogger, IndexingLogger, SubAgentLogger
 {
   private readonly getSettings: () => IxplorerSettings;
   private readonly console: Pick<Console, "debug" | "error">;
@@ -131,12 +131,12 @@ export class PluginDebugLogger
     });
   }
 
-  logDeepResearch(event: DeepResearchLogEvent): void {
+  logSubAgent(event: SubAgentLogEvent): void {
     if (!this.getSettings().debugMode) {
       return;
     }
 
-    this.console.debug(`[Ixplorer] DeepResearch ${event.type}`, redactLogValue(event));
+    this.console.debug(`[Ixplorer] SubAgent ${event.type}`, redactLogValue(event));
   }
 
   logIndexingPerformance(event: IndexingPerformanceLogEvent): void {

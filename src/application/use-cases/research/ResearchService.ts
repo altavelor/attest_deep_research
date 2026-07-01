@@ -31,8 +31,8 @@ import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";
 import { AgenticResearchStrategy } from "./strategies/AgenticResearchStrategy";
 import { EagerResearchStrategy } from "./strategies/EagerResearchStrategy";
-import { DeepResearchAgent } from "./deep-research/DeepResearchAgent";
-import { DeepResearchLogger, DeepResearchRunner } from "@application/research/deepResearchPort";
+import { SubAgentRunner } from "./sub-agent/SubAgentRunner";
+import { SubAgentLogger, SubAgentPort } from "@application/research/subAgentPort";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 export { selectResearchExecutionStrategy } from "./strategies/searchMode";
@@ -75,8 +75,8 @@ export interface ResearchServiceOptions {
   modelRound?: ModelRoundProvider;
   reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
-  /** Optional diagnostic sink for the deep-research sub-agent (gated by debug mode). */
-  deepResearchLogger?: DeepResearchLogger;
+  /** Optional diagnostic sink for the sub-agent (gated by debug mode). */
+  subAgentLogger?: SubAgentLogger;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -151,10 +151,12 @@ export class ResearchService implements ConversationEngine {
       runToolLoop: options.runToolLoop,
     });
 
-    // Deep-research sub-agent reuses the parent chat model + search provider; the
-    // `deep_search` tool it backs is only registered when a web provider exists.
-    const deepResearchRunner: DeepResearchRunner | undefined = options.searchProvider
-      ? new DeepResearchAgent({
+    // The universal sub-agent reuses the parent chat model; its fallback (web-only)
+    // toolset needs a search provider, but callers normally pass a per-turn
+    // `toolContext` so the `run_subagent` tool it backs mirrors whatever the parent
+    // has this turn (index/web/notes).
+    const subAgentRunner: SubAgentPort | undefined = options.searchProvider
+      ? new SubAgentRunner({
           toolsetFactory: options.toolsetFactory,
           searchProvider: options.searchProvider,
           modelRound: options.modelRound ?? options.modelRoundFactory(options.chatModel),
@@ -162,7 +164,7 @@ export class ResearchService implements ConversationEngine {
           temperature: chatOptions.temperature,
           maxTokens: chatOptions.maxTokens,
           reasoning: options.reasoning,
-          ...(options.deepResearchLogger ? { logger: options.deepResearchLogger } : {}),
+          ...(options.subAgentLogger ? { logger: options.subAgentLogger } : {}),
         })
       : undefined;
 
@@ -191,7 +193,7 @@ export class ResearchService implements ConversationEngine {
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
-      deepResearchRunner,
+      subAgentRunner,
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,

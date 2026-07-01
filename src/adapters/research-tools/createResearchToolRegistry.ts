@@ -10,7 +10,7 @@ import { NOTE_PERMISSIONS, createNoteTools } from "./note/createNoteTools";
 import { RagSource } from "./index/RagSource";
 import { SourceManager } from "@application/sources";
 import { WebSource } from "./web/WebSource";
-import { DeepResearchSource } from "./deep-research/DeepResearchSource";
+import { SubAgentSource } from "./sub-agent/SubAgentSource";
 import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
 
@@ -81,16 +81,25 @@ export function createResearchToolRegistry(
     );
   }
 
-  // Deep research is a web capability — only offered when web is active for this
-  // turn (same gating as WebSource), never in index-only / none modes.
-  if (
-    options.deepResearchRunner &&
-    options.searchProvider &&
-    availability.webProviderAvailable &&
-    (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
-  ) {
+  // The sub-agent is universal: offered whenever at least one read source is active
+  // this turn (web, index, or notes) — never in a fully empty profile. It always
+  // gets a read-only view of the current toolset (no mutation, no recursive
+  // run_subagent) regardless of what the parent itself is permitted to do.
+  const hasAnyReadSource =
+    (options.searchProvider !== undefined && availability.webProviderAvailable) ||
+    (options.retriever !== undefined && availability.retrieverAvailable) ||
+    (options.noteTools !== undefined && availability.noteAccess);
+  if (options.subAgentRunner && hasAnyReadSource) {
     sources.register(
-      new DeepResearchSource({ runner: options.deepResearchRunner, evidence }),
+      new SubAgentSource({
+        runner: options.subAgentRunner,
+        evidence,
+        toolContext: {
+          ...options,
+          subAgentRunner: undefined,
+          availability: { ...availability, noteMutationAccess: false },
+        },
+      }),
     );
   }
 

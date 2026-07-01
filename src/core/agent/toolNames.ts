@@ -28,8 +28,8 @@ export const WEB_FETCH_URL_TOOL = "fetch_url";
 export const WEB_FETCH_SECTION_TOOL = "fetch_web_section";
 export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
 
-// --- Deep research ---
-export const DEEP_SEARCH_TOOL = "deep_search";
+// --- Universal sub-agent ---
+export const SUB_AGENT_TOOL = "run_subagent";
 
 // --- Document download ---
 export const PROBE_DOCUMENT_URL_TOOL = "probe_document_url";
@@ -63,7 +63,7 @@ export const PROMPT_TOOL_NAMES = [
   INDEX_SEARCH_TOOL,
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
-  DEEP_SEARCH_TOOL,
+  SUB_AGENT_TOOL,
   LIST_INDEX_URLS_TOOL,
   CHECK_URLS_TOOL,
   ...NOTE_EDIT_TOOLS,

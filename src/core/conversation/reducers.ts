@@ -232,8 +232,8 @@ export function nextChainToolCallEnd(
   ];
 }
 
-/** Sets the live `phase` of a parent tool-call (e.g. a deep_search session). */
-export function nextChainDeepResearchPhase(
+/** Sets the live `phase` of a parent tool-call (e.g. a run_subagent session). */
+export function nextChainSubAgentPhase(
   messages: ChatDisplayMessage[],
   parentId: string,
   phase: string,

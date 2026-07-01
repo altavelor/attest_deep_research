@@ -70,9 +70,9 @@ export type ChainItem =
       resultSummary?: string;
       args?: Record<string, unknown>;
       resultJson?: string;
-      /** Live phase of a nested sub-agent run (e.g. deep_search). */
+      /** Live phase of a nested sub-agent run (e.g. run_subagent). */
       phase?: string;
-      /** Nested tool calls produced inside this call (e.g. a deep_search session). */
+      /** Nested tool calls produced inside this call (e.g. a run_subagent session). */
       children?: ChainItem[];
     };
 

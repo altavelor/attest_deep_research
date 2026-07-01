@@ -6,7 +6,7 @@
 
 import type { SearchProvider } from "@application/ports/web";
 import type { VaultWriter } from "@application/ports/vault";
-import type { DeepResearchRunner } from "./deepResearchPort";
+import type { SubAgentPort } from "./subAgentPort";
 import type { ChatModelProvider } from "@core/agent";
 import type { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import type { Citation } from "@core/model";
@@ -64,8 +64,8 @@ export interface ResearchToolsetOptions {
   urlStatusChecker?: UrlStatusChecker;
   indexSourcePaths?: readonly string[];
   searchProvider?: SearchProvider;
-  /** Enables the `deep_search` tool when present (and a web provider exists). */
-  deepResearchRunner?: DeepResearchRunner;
+  /** Enables the `run_subagent` tool when present (and at least one read source is active). */
+  subAgentRunner?: SubAgentPort;
   /** Enables document download tools (writes downloaded files into the vault). */
   vaultWriter?: VaultWriter;
   /** Default vault folder for downloaded documents when the agent gives no explicit path. */

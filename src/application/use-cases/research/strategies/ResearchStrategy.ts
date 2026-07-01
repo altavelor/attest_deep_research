@@ -20,7 +20,7 @@ import {
   UrlStatusChecker,
 } from "@application/contracts/research";
 import { NoteToolService, ResearchToolsetFactory } from "@application/research/toolPorts";
-import { DeepResearchRunner } from "@application/research/deepResearchPort";
+import { SubAgentPort } from "@application/research/subAgentPort";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "../AnswerSynthesisService";
 import { ContextAssembler, ContextAssembleRequest } from "@application/use-cases/chat/ContextAssembler";
 import { VaultResearchPipeline } from "../VaultResearchPipeline";
@@ -57,8 +57,8 @@ export interface ResearchStrategyDeps {
   vaultWriter?: VaultWriter;
   downloadFolder?: string;
   toolsetFactory: ResearchToolsetFactory;
-  /** Launches deep-research sub-agents for the `deep_search` tool, when available. */
-  deepResearchRunner?: DeepResearchRunner;
+  /** Launches universal sub-agents for the `run_subagent` tool, when available. */
+  subAgentRunner?: SubAgentPort;
   toolsEnabled: boolean;
   toolCapabilities: ToolCallingCapabilities;
   toolCapabilityProvenance?: Record<string, string>;

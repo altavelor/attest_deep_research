@@ -129,7 +129,7 @@ export function createResearchService(
     chatModel: createChatModelClient(ctx, chatServer, chatProfile),
     ...(modelRound ? { modelRound } : {}),
     reasoning,
-    deepResearchLogger: ctx.logger,
+    subAgentLogger: ctx.logger,
     reasoningDiagnostics: {
       protocol: effectiveProtocol,
       capabilitySource: capabilitySnapshot?.source ?? chatProfile.reasoningCapabilities?.source,

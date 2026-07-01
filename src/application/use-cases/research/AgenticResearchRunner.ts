@@ -1,5 +1,6 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
+import { SUB_AGENT_TOOL } from "@core/agent";
 import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "@application/tools/ToolManager";
@@ -8,6 +9,7 @@ import {
   resolveLabelFromResult,
   resolveResultSummary,
 } from "@application/research/toolCallLabel";
+import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
 
 export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -30,6 +32,8 @@ export interface AgenticResearchRunnerOptions {
   signal?: AbortSignal;
   maxRounds?: number;
   maxResultChars?: number;
+  /** Cap on run_subagent calls executed concurrently within one round. */
+  maxParallelSubAgents?: number;
   reasoning?: ModelRoundRequest["reasoning"];
   onDelta?(delta: ModelRoundDelta, round: number): void;
   onAnswerReset?(): void;
@@ -48,7 +52,7 @@ export interface AgenticResearchRunnerOptions {
     resultSummary?: string,
     resultJson?: string,
   ): void;
-  /** Progress emitted from inside a tool (e.g. a deep_search sub-agent's loop). */
+  /** Progress emitted from inside a tool (e.g. a run_subagent session's loop). */
   onToolEvent?(callId: string, event: ToolEvent): void;
 }
 
@@ -95,11 +99,14 @@ export interface AgenticResearchFailure {
 // maxRounds is a runaway backstop, not the active limiter; the model decides when
 // to stop (coding-loop style). Real control is maxResultChars + loop detection.
 const DEFAULT_MAX_ROUNDS = 30;
-// Parent tool-result budget. Headroom matters because a single deep_search report
+// Parent tool-result budget. Headroom matters because a single run_subagent answer
 // (or several in parallel) lands here as one large tool result; too tight a budget
 // trips the fallback before the model can synthesize.
 export const DEFAULT_MAX_RESULT_CHARS = 80_000;
 const PREVIEW_CHARS = 600;
+// How many run_subagent calls within one round may execute concurrently. The rest
+// queue and run as a slot frees up (see ConcurrencyLimiter).
+const DEFAULT_MAX_PARALLEL_SUB_AGENTS = 3;
 
 // Stub returned in place of a tool result once the loop enters synthesis mode (result
 // budget spent or the model is spinning), plus the nudge that asks it to answer from what
@@ -269,6 +276,22 @@ export class AgenticResearchRunner {
           toolOutputs = [];
         }
 
+        // Pre-launch this round's run_subagent calls up to a bounded concurrency (default
+        // 3) instead of the sequential loop below awaiting each one in turn. Calls already
+        // in the cache are left alone — the loop below resolves those the normal way — and
+        // identical duplicate calls within the same batch share one launch so they don't
+        // pay for redundant work.
+        const subAgentPool = forceSynthesis
+          ? undefined
+          : launchSubAgentPool(
+              response.toolCalls,
+              cache,
+              this.options.tools,
+              this.options.signal,
+              (id, event) => this.options.onToolEvent?.(id, event),
+              this.options.maxParallelSubAgents ?? DEFAULT_MAX_PARALLEL_SUB_AGENTS,
+            );
+
         let roundDuplicates = 0;
         let roundHadEvidence = false;
         let roundNewEvidence = false;
@@ -303,10 +326,13 @@ export class AgenticResearchRunner {
             duplicateCalls += 1;
             roundDuplicates += 1;
           } else {
-            const raw = await this.options.tools.execute(call, {
-              signal: this.options.signal,
-              emit: (event) => this.options.onToolEvent?.(call.id, event),
-            });
+            const pooled = subAgentPool?.get(call.id);
+            const raw = pooled
+              ? await pooled
+              : await this.options.tools.execute(call, {
+                  signal: this.options.signal,
+                  emit: (event) => this.options.onToolEvent?.(call.id, event),
+                });
             execution = serializeExecution(raw);
             if (!bypassCache) {
               cache.set(key, execution);
@@ -579,11 +605,42 @@ function contentBearingTool(name: string): boolean {
   return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
 }
 
-// Keyword searches whose only job is to surface evidence ids. deep_search is excluded:
-// it returns a synthesized report (rich even when it lists no parseable evidenceId), so
+// Keyword searches whose only job is to surface evidence ids. run_subagent is excluded:
+// it returns a synthesized answer (rich even when it lists no parseable evidenceId), so
 // counting it as a "fruitless search" would falsely trip loop detection.
 function searchTool(name: string): boolean {
   return name === "search_web" || name === "search_index";
+}
+
+/**
+ * Launches this round's run_subagent calls up to `limit` concurrently instead of
+ * leaving them to the sequential per-call loop. Calls already resolved in `cache`
+ * are skipped (the loop resolves those itself); identical duplicate calls within
+ * the same round share one launch. Returns a map from call id to its in-flight
+ * execution promise; the per-call loop awaits the matching entry when present.
+ */
+function launchSubAgentPool(
+  calls: ChatToolCall[],
+  cache: Map<string, CachedExecution>,
+  tools: ToolManager,
+  signal: AbortSignal | undefined,
+  onToolEvent: (id: string, event: ToolEvent) => void,
+  limit: number,
+): Map<string, Promise<ResearchToolExecution<unknown>>> {
+  const limiter = new ConcurrencyLimiter(limit);
+  const pool = new Map<string, Promise<ResearchToolExecution<unknown>>>();
+  const launchedByKey = new Map<string, Promise<ResearchToolExecution<unknown>>>();
+  for (const call of calls) {
+    if (call.name !== SUB_AGENT_TOOL) continue;
+    const key = normalizedCallKey(call);
+    if (cache.has(key)) continue;
+    const promise =
+      launchedByKey.get(key) ??
+      limiter.run(() => tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }));
+    launchedByKey.set(key, promise);
+    pool.set(call.id, promise);
+  }
+  return pool;
 }
 
 function mutationTool(name: string): boolean {
