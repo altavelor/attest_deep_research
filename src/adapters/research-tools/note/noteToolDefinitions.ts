@@ -3,12 +3,21 @@
 // note tool-handlers can share them.
 
 import { ChatToolDefinition } from "../../../core/agent/tool";
+import {
+  CREATE_NOTE_TOOL,
+  DELETE_NOTE_TOOL,
+  GET_ACTIVE_NOTE_TOOL,
+  LIST_NOTES_TOOL,
+  READ_NOTE_TOOL,
+  SEARCH_NOTES_TOOL,
+  UPDATE_NOTE_TOOL,
+} from "../../../core/agent/toolNames";
 
 export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "create_note",
+      name: CREATE_NOTE_TOOL,
       description:
         "Create a new markdown note at the given vault-relative path. Returns {ok:false, reason:'already-exists'} if the file exists — set overwrite:true to replace it, or use update_note to modify it.",
       parameters: {
@@ -33,7 +42,7 @@ export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "update_note",
+      name: UPDATE_NOTE_TOOL,
       description:
         "Update an existing markdown note. CAUTION: mode=replace (default) destroys all existing content. Prefer mode=append to add content or mode=prepend to insert at the top. mode=prepend is non-atomic: avoid when concurrent edits are likely. Returns {ok:false, reason:'not-found'} if the file does not exist — use create_note first.",
       parameters: {
@@ -60,7 +69,7 @@ export const NOTE_MUTATION_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "delete_note",
+      name: DELETE_NOTE_TOOL,
       description:
         "Move a vault note to the system trash. The file is not permanently deleted and can be recovered. Returns {ok:false, reason:'not-found'} if the file does not exist.",
       parameters: {
@@ -79,7 +88,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "read_note",
+      name: READ_NOTE_TOOL,
       description:
         "Read the raw content of a vault note by path. For editing only — returned text is NOT citable evidence. To search authoritative sources, use search_index or search_web instead.",
       parameters: {
@@ -98,7 +107,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "search_notes",
+      name: SEARCH_NOTES_TOOL,
       description:
         "Find vault notes by keyword match in path or filename. Returns matching paths for editing navigation. Results are NOT evidence and cannot be cited or used to reason about the question.",
       parameters: {
@@ -114,7 +123,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "list_notes",
+      name: LIST_NOTES_TOOL,
       description:
         "List vault notes by path prefix or keyword. For editing navigation only — results are not evidence.",
       parameters: {
@@ -131,7 +140,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "get_active_note",
+      name: GET_ACTIVE_NOTE_TOOL,
       description:
         "Return the currently open Obsidian file path and its raw content. For editing only — not citable evidence. The active note content is already provided as attached context at the start of this conversation.",
       parameters: {

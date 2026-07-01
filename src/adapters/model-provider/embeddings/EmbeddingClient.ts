@@ -3,6 +3,7 @@ import { isRecord } from "../../../shared/guards";
 import { ApiFormat, EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "../../../core/agent/protocol";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
+import { withLoggedErrors } from "../common/withLoggedErrors";
 import {
   isOllamaTagsResponse,
   isOpenAiModelsResponse,
@@ -47,8 +48,10 @@ export class EmbeddingClient implements EmbeddingProviderClient {
   }
 
   async listModels(): Promise<string[]> {
-    return this.withLoggedErrors(() =>
-      this.provider === "ollama" ? this.listOllamaModels() : this.listOpenAiCompatibleModels(),
+    return withLoggedErrors(
+      () =>
+        this.provider === "ollama" ? this.listOllamaModels() : this.listOpenAiCompatibleModels(),
+      this.logger,
     );
   }
 
@@ -60,10 +63,12 @@ export class EmbeddingClient implements EmbeddingProviderClient {
       });
     }
 
-    return this.withLoggedErrors(() =>
-      this.provider === "ollama"
-        ? this.embedWithOllama(request)
-        : this.embedWithOpenAiCompatible(request),
+    return withLoggedErrors(
+      () =>
+        this.provider === "ollama"
+          ? this.embedWithOllama(request)
+          : this.embedWithOpenAiCompatible(request),
+      this.logger,
     );
   }
 
@@ -149,14 +154,6 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     };
   }
 
-  private async withLoggedErrors<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      this.logger?.logError(error);
-      throw error;
-    }
-  }
 }
 
 function isOpenAiEmbeddingsResponse(value: unknown): value is OpenAiEmbeddingsResponse {

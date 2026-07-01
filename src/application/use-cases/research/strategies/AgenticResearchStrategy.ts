@@ -6,6 +6,7 @@ import { estimateTextTokens, extractFollowUpQuestions } from "../../../../core/r
 import { buildAgenticResearchMessages } from "../../../../core/research/agenticPrompts";
 import { ResearchStreamEvent } from "../../../contracts/research";
 import { ToolEvent } from "../../../../core/agent/tool";
+import { DEEP_SEARCH_TOOL } from "../../../../core/agent/toolNames";
 import {
   DEEP_RESEARCH_PHASE,
   DEEP_RESEARCH_TOOL_END,
@@ -138,21 +139,19 @@ export class AgenticResearchStrategy implements ResearchStrategy {
     });
     // When the user wrote @deep_search, compel at least one deep_search call.
     const effectivePolicy =
-      request.forceDeepSearch === true && created.tools.has("deep_search")
-        ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, "deep_search"]) }
+      request.forceDeepSearch === true && created.tools.has(DEEP_SEARCH_TOOL)
+        ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, DEEP_SEARCH_TOOL]) }
         : policy;
     const messages = buildAgenticResearchMessages({
       question,
       chatHistory: request.chatHistory,
       requiredTools: effectivePolicy.requiredTools,
       explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
-      activeSkills: {
+      toolContext: {
         coreVariant: searchMode === "none" ? "vault" : "research",
-        index: searchMode === "indexOnly" || searchMode === "indexAndWeb",
-        web: searchMode === "webOnly" || searchMode === "indexAndWeb",
-        deepSearch: created.tools.has("deep_search"),
+        // Source of truth: exactly the tools the runtime registered for this run.
+        availableTools: created.tools.definitions().map((d) => d.function.name),
         indexDescription: indexDescription?.text,
-        noteMutationAccess: this.deps.noteTools?.mutationEnabled() === true,
       },
     });
     const estimatedTokens =

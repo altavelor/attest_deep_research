@@ -1,5 +1,5 @@
 import { ChatModelProvider } from "../../../core/agent/protocol";
-import { RetrievedChunk } from "../../../core/model/source";
+import { sourceLabel } from "../../../core/retrieval/citations";
 import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "../../../core/research/prompts";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../../../core/conversation/model";
 
@@ -348,7 +348,7 @@ function referencesFromMessages(messages: ChatDisplayMessage[]): string[] {
 
   for (const message of messages) {
     for (const chunk of message.evidence ?? []) {
-      references.push(`${chunk.id}: ${sourceLabel(chunk)}`);
+      references.push(`${chunk.id}: ${sourceLabel(chunk.source)}`);
     }
   }
 
@@ -357,21 +357,6 @@ function referencesFromMessages(messages: ChatDisplayMessage[]): string[] {
   }
 
   return uniqueStrings(references);
-}
-
-function sourceLabel(chunk: RetrievedChunk): string {
-  switch (chunk.source.kind) {
-    case "markdown":
-      return chunk.source.headingPath.length > 0
-        ? `${chunk.source.path} > ${chunk.source.headingPath.join(" > ")}`
-        : chunk.source.path;
-    case "pdf":
-      return `${chunk.source.path} p. ${chunk.source.pageNumber}`;
-    case "document":
-      return chunk.source.path;
-    case "web":
-      return chunk.source.title;
-  }
 }
 
 function pathAndUrlReferences(content: string): string[] {

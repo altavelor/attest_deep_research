@@ -1,18 +1,45 @@
 import { buildAgenticResearchMessages } from "../../src/core/research/agenticPrompts";
+import {
+  CREATE_NOTE_TOOL,
+  DEEP_SEARCH_TOOL,
+  DELETE_NOTE_TOOL,
+  INDEX_SEARCH_TOOL,
+  UPDATE_NOTE_TOOL,
+  WEB_FETCH_TOOL,
+  WEB_SEARCH_TOOL,
+} from "../../src/core/agent/toolNames";
+
+// Builds the system prompt text for a given tool context. `availableTools` is the
+// single source of truth for which skills the prompt advertises.
+function systemText(overrides: {
+  coreVariant?: "vault" | "research";
+  availableTools?: readonly string[];
+  indexDescription?: string;
+  question?: string;
+  requiredTools?: readonly string[];
+}): string {
+  const messages = buildAgenticResearchMessages({
+    question: overrides.question ?? "Q",
+    requiredTools: overrides.requiredTools ?? [],
+    toolContext: {
+      coreVariant: overrides.coreVariant ?? "research",
+      availableTools: overrides.availableTools ?? [],
+      indexDescription: overrides.indexDescription,
+    },
+  });
+  return messages.find((m) => m.role === "system")?.content ?? "";
+}
 
 describe("agentic research prompts", () => {
   it("contains trusted policy, bounded explicit context, history, and index description", () => {
     const messages = buildAgenticResearchMessages({
       question: "Question",
       chatHistory: [{ role: "user", content: "Earlier" }],
-      requiredTools: ["search_index"],
-      activeSkills: {
+      requiredTools: [INDEX_SEARCH_TOOL],
+      toolContext: {
         coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
+        availableTools: [INDEX_SEARCH_TOOL],
         indexDescription: "Notes about systems",
-        noteMutationAccess: false,
       },
       explicitEvidence: [
         {
@@ -38,208 +65,140 @@ describe("agentic research prompts", () => {
     expect(messages.at(-1)).toEqual({ role: "user", content: "Question" });
   });
 
-  it("injects the deep_search skill only when deepSearch is available", () => {
-    const base = {
-      question: "Q",
-      requiredTools: [],
-      activeSkills: {
-        coreVariant: "research" as const,
-        index: false,
-        web: true,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
-    };
-    const without = buildAgenticResearchMessages(base)
-      .map((message) => message.content)
-      .join("\n");
+  it("injects the deep_search skill only when deep_search is available", () => {
+    const without = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
     expect(without).not.toContain("deep_search");
 
-    const withDeep = buildAgenticResearchMessages({
-      ...base,
-      activeSkills: { ...base.activeSkills, deepSearch: true },
-    })
-      .map((message) => message.content)
-      .join("\n");
+    const withDeep = systemText({
+      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, DEEP_SEARCH_TOOL],
+    });
     expect(withDeep).toContain("Deep research (deep_search)");
     expect(withDeep).toContain("When to prefer deep_search");
   });
 
   it("injects Core-Research skill when coreVariant is research", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
+    const system = systemText({
+      coreVariant: "research",
+      availableTools: [INDEX_SEARCH_TOOL, "read_note"],
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
     expect(system).toContain("Answer Principles");
     expect(system).toContain("Evidence tools");
+    // Editing tools section appears only when note tools are registered.
     expect(system).toContain("Editing tools");
     expect(system).toContain("Citation format");
     expect(system).not.toContain("Vault Assistant Principles");
   });
 
+  it("omits the Editing tools section when no note tools are registered", () => {
+    const system = systemText({ coreVariant: "research", availableTools: [INDEX_SEARCH_TOOL] });
+    expect(system).toContain("Answer Principles");
+    expect(system).not.toContain("Editing tools");
+  });
+
+  it("omits the Index URL audit section in a web-only profile", () => {
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
+    expect(system).not.toContain("Index URL audit tools");
+    expect(system).not.toContain("list_index_urls");
+  });
+
   it("injects Core-Vault skill when coreVariant is vault", () => {
-    const messages = buildAgenticResearchMessages({
+    const system = systemText({
+      coreVariant: "vault",
+      availableTools: [],
       question: "Summarise my notes",
-      requiredTools: [],
-      activeSkills: {
-        coreVariant: "vault",
-        index: false,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
     expect(system).toContain("Vault Assistant Principles");
     expect(system).toContain("Forming summaries");
     expect(system).not.toContain("Answer Principles");
     expect(system).not.toContain("Citation format");
   });
 
-  it("injects Index skill with description when index is true and indexDescription is provided", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        indexDescription: "My personal knowledge base",
-        noteMutationAccess: false,
-      },
+  it("injects Index skill with description when the index tool and a description are present", () => {
+    const system = systemText({
+      availableTools: [INDEX_SEARCH_TOOL],
+      indexDescription: "My personal knowledge base",
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
     expect(system).toContain("Using the Local Index");
     expect(system).toContain("My personal knowledge base");
     expect(system).toContain("<index-description>");
   });
 
   it("does not inject Index skill when indexDescription is absent", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
-    });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    const system = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
     expect(system).not.toContain("Using the Local Index");
   });
 
-  it("injects Web skill when web is true", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_web"],
-      activeSkills: {
-        coreVariant: "research",
-        index: false,
-        web: true,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
-    });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
+  it("injects Web skill when the web search tool is present", () => {
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
     expect(system).toContain("Using Web Search");
     expect(system).toContain("fetch_web_page");
   });
 
-  it("does not inject Web skill when web is false", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
-    });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
+  it("does not inject Web skill when web tools are absent", () => {
+    const system = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
     expect(system).not.toContain("Using Web Search");
   });
 
-  it("includes mutation rules when noteMutationAccess is true", () => {
-    const messages = buildAgenticResearchMessages({
+  it("includes mutation rules when a mutation tool is present", () => {
+    const system = systemText({
+      availableTools: [CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL, DELETE_NOTE_TOOL],
       question: "Create a note",
-      requiredTools: [],
-      activeSkills: {
-        coreVariant: "research",
-        index: false,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: true,
-      },
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
     expect(system).toContain("create_note");
     expect(system).toContain("update_note");
     expect(system).toContain("delete_note");
     expect(system).toContain("overwrite:true");
   });
 
-  it("excludes mutation rules when noteMutationAccess is false", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Research something",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: false,
-      },
-    });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
+  it("excludes mutation rules when no mutation tool is present", () => {
+    const system = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
     expect(system).not.toContain("create_note");
     expect(system).not.toContain("delete_note");
   });
 
-  it("includes mutation rules in Core-Vault skill when noteMutationAccess is true", () => {
-    const messages = buildAgenticResearchMessages({
+  it("includes mutation rules in Core-Vault skill when a mutation tool is present", () => {
+    const system = systemText({
+      coreVariant: "vault",
+      availableTools: [CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL, DELETE_NOTE_TOOL],
       question: "Write a summary note",
-      requiredTools: [],
-      activeSkills: {
-        coreVariant: "vault",
-        index: false,
-        web: false,
-        deepSearch: false,
-        noteMutationAccess: true,
-      },
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
     expect(system).toContain("Vault Assistant Principles");
     expect(system).toContain("create_note");
     expect(system).toContain("update_note");
   });
 
-  it("sanitizes indexDescription to prevent injection via HTML entities", () => {
-    const messages = buildAgenticResearchMessages({
-      question: "Q",
-      requiredTools: ["search_index"],
-      activeSkills: {
-        coreVariant: "research",
-        index: true,
-        web: false,
-        deepSearch: false,
-        indexDescription: "<script>alert(1)</script>",
-        noteMutationAccess: false,
-      },
+  it("advertises only the evidence tools the profile registered", () => {
+    const indexOnly = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
+    expect(indexOnly).toContain("### Evidence tools (search_index)");
+    // The index-only profile must not claim it has web fetch/search tools.
+    expect(indexOnly).not.toContain(
+      "### Evidence tools (search_index, search_web, fetch_web_page)",
+    );
+  });
+
+  it("tells the model to stop and switch mode when a demanded source is off", () => {
+    const indexOnly = systemText({
+      availableTools: [INDEX_SEARCH_TOOL],
+      question: "Open https://example.com and extract facts",
     });
-    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    expect(indexOnly).toContain("Source availability (hard limit)");
+    expect(indexOnly).toContain("Web is OFF");
+    expect(indexOnly).toContain("switching the search mode");
+    expect(indexOnly).not.toContain("Local index is OFF");
+
+    const webOnly = systemText({
+      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL],
+      question: "Search my vault",
+    });
+    expect(webOnly).toContain("Local index is OFF");
+    expect(webOnly).not.toContain("Web is OFF");
+  });
+
+  it("sanitizes indexDescription to prevent injection via HTML entities", () => {
+    const system = systemText({
+      availableTools: [INDEX_SEARCH_TOOL],
+      indexDescription: "<script>alert(1)</script>",
+    });
     expect(system).toContain("&lt;script&gt;");
     expect(system).not.toContain("<script>");
   });

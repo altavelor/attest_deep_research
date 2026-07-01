@@ -7,6 +7,15 @@ import {
 } from "../../../application/ports/retrieval";
 import { ResearchRetriever } from "../../../application/contracts/research";
 import { Tool } from "../../../core/agent/tool";
+import {
+  FIND_IN_INDEX_TOOL,
+  GET_INDEX_SOURCE_OUTLINE_TOOL,
+  LIST_INDEX_CHUNKS_TOOL,
+  LIST_INDEX_SOURCES_TOOL,
+  READ_INDEX_CHUNK_TOOL,
+  SEARCH_INDEX_BY_METADATA_TOOL,
+  SUMMARIZE_INDEX_SOURCE_TOOL,
+} from "../../../core/agent/toolNames";
 import { SourceKind } from "../../../core/model/source";
 import {
   bool,
@@ -35,7 +44,7 @@ const DEFAULT_MAX_SECTIONS = 40;
 const MAX_SECTIONS = 200;
 
 export const ListIndexSourcesTool = defineInventoryTool<IndexSourceInventoryOptions>({
-  name: "list_index_sources",
+  name: LIST_INDEX_SOURCES_TOOL,
   description:
     "List documents, books, and files available in the selected local index. Use before narrowing work to a specific source.",
   schema: {
@@ -53,7 +62,7 @@ export const ListIndexSourcesTool = defineInventoryTool<IndexSourceInventoryOpti
 });
 
 export const ListIndexChunksTool = defineInventoryTool<IndexChunkListOptions>({
-  name: "list_index_chunks",
+  name: LIST_INDEX_CHUNKS_TOOL,
   description:
     "Read chunks from one indexed source in document order, not semantic relevance order. Use for exhaustive passes through a book or file.",
   schema: {
@@ -70,7 +79,7 @@ export const ListIndexChunksTool = defineInventoryTool<IndexChunkListOptions>({
 });
 
 export const ReadIndexChunkTool = defineInventoryTool<IndexChunkReadOptions>({
-  name: "read_index_chunk",
+  name: READ_INDEX_CHUNK_TOOL,
   description:
     "Read the full text of one indexed chunk plus bounded neighboring chunks for exact context checks.",
   schema: {
@@ -90,7 +99,7 @@ export const ReadIndexChunkTool = defineInventoryTool<IndexChunkReadOptions>({
 });
 
 export const FindInIndexTool = defineInventoryTool<FindInIndexOptions>({
-  name: "find_in_index",
+  name: FIND_IN_INDEX_TOOL,
   description:
     "Find exact literal or regex matches in indexed text without semantic search. Use for URLs, ISBNs, DOIs, dates, TODOs, links, and exact terms.",
   schema: {
@@ -113,7 +122,7 @@ export const SummarizeIndexSourceTool = defineInventoryTool<{
   sourcePath: string;
   maxSections: number;
 }>({
-  name: "summarize_index_source",
+  name: SUMMARIZE_INDEX_SOURCE_TOOL,
   description:
     "Return a structural map of an indexed source: headings, approximate size, chunk ranges, and frequent topics.",
   schema: {
@@ -131,7 +140,7 @@ export const SummarizeIndexSourceTool = defineInventoryTool<{
 });
 
 export const GetIndexSourceOutlineTool = defineInventoryTool<{ sourcePath: string }>({
-  name: "get_index_source_outline",
+  name: GET_INDEX_SOURCE_OUTLINE_TOOL,
   description: "Return only the heading hierarchy and chunk ranges for one indexed source.",
   schema: {
     sourcePath: str(MAX_PATH_CHARS, { required: true }),
@@ -144,7 +153,7 @@ export const GetIndexSourceOutlineTool = defineInventoryTool<{ sourcePath: strin
 });
 
 export const SearchIndexByMetadataTool = defineInventoryTool<IndexMetadataSearchOptions>({
-  name: "search_index_by_metadata",
+  name: SEARCH_INDEX_BY_METADATA_TOOL,
   description:
     "Search indexed sources by metadata before semantic search: kind, path prefix, extension, title, heading, indexed date, or language.",
   schema: {

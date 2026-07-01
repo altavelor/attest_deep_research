@@ -4,6 +4,7 @@ import {
   remapReportEvidenceIds,
 } from "../../../core/research/deepResearch/deepResearchReport";
 import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
+import { DEEP_SEARCH_TOOL } from "../../../core/agent/toolNames";
 import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
 import { EvidenceRegistry } from "../../../application/sources/evidence";
 import { defineTool, str } from "../../../application/sources/tools/toolFactory";
@@ -64,7 +65,7 @@ export const DeepSearchTool = defineTool<
   DeepSearchInput,
   DeepSearchOutput
 >({
-  name: "deep_search",
+  name: DEEP_SEARCH_TOOL,
   description:
     "Launch a deep-research sub-agent that plans, searches the web, cross-checks sources, " +
     "and returns structured evidence (findings with reliability + cited sources). Use for " +

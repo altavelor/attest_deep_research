@@ -1,5 +1,5 @@
 import { EvidencePlannerDiagnostics } from "../../diagnostics";
-import { RetrievedChunk } from "../../model/source";
+import { RetrievedChunk, uniqueChunks } from "../../model/source";
 import { ResearchSearchMode } from "../searchMode";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "../prompts";
 
@@ -457,22 +457,6 @@ function resolvePolicy(
   }
 
   return weakLocalEvidence ? "weak-local" : "local-first";
-}
-
-function uniqueChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
-  const seen = new Set<string>();
-  const unique: RetrievedChunk[] = [];
-
-  for (const chunk of chunks) {
-    if (seen.has(chunk.id)) {
-      continue;
-    }
-
-    seen.add(chunk.id);
-    unique.push(chunk);
-  }
-
-  return unique;
 }
 
 function groupDroppedIds(source: RetrievedChunk[], included: RetrievedChunk[]): string[] {

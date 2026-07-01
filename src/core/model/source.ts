@@ -65,3 +65,20 @@ export interface EmbeddedChunk extends ExtractedChunk {
 export interface RetrievedChunk extends ExtractedChunk {
   score: number;
 }
+
+/** Deduplicate chunks by `id`, preserving first-seen order. */
+export function uniqueChunks<T extends { id: string }>(chunks: T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+
+  for (const chunk of chunks) {
+    if (seen.has(chunk.id)) {
+      continue;
+    }
+
+    seen.add(chunk.id);
+    unique.push(chunk);
+  }
+
+  return unique;
+}

@@ -44,4 +44,36 @@ describe("chat model settings surface", () => {
       'profile.reasoning.summary = reasoningCapabilities.summary ? "auto" : "off"',
     );
   });
+
+  it("keeps debug-only settings in the final Advanced section", () => {
+    const displayBody = source.slice(
+      source.indexOf("display(): void"),
+      source.indexOf("private renderDebugSettings"),
+    );
+    const advancedSectionIndex = source.indexOf("renderAdvancedSettings(containerEl)");
+    const indexingSectionIndex = source.indexOf("renderIndexingSettings(containerEl)");
+    expect(advancedSectionIndex).toBeGreaterThan(indexingSectionIndex);
+    expect(displayBody).not.toContain("renderDebugSettings(containerEl)");
+
+    const advancedRenderer = source.slice(
+      source.indexOf("private renderAdvancedSettings"),
+      source.indexOf("private renderProfileSettings"),
+    );
+    expect(advancedRenderer).toContain("this.renderDebugSettings(contentEl)");
+    expect(advancedRenderer).toContain("Force eager research mode");
+
+    const searchRenderer = source.slice(
+      source.indexOf("private renderSearchEngineSettings"),
+      source.indexOf("private renderProfileSettings"),
+    );
+    expect(searchRenderer).not.toContain("Debug mode");
+    expect(searchRenderer).not.toContain("Force eager research mode");
+  });
+
+  it("preserves the index path picker scroll position when checkbox selection rerenders", () => {
+    expect(source).toContain("preserveScroll?: boolean");
+    expect(source).toContain("const scrollTop = options.preserveScroll ? this.treeEl.scrollTop : null");
+    expect(source).toContain("this.treeEl.scrollTop = scrollTop");
+    expect(source).toContain("this.renderTree({ preserveScroll: true })");
+  });
 });

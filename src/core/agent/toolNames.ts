@@ -1,0 +1,67 @@
+// Canonical tool names — the single source of truth shared by tool definitions
+// (adapters), the agentic prompt (core/research), and presence checks
+// (application). Renaming a tool is a one-line change here that updates the tool's
+// schema, its prompt guidance, and every `has(...)` gate at once — so the prompt
+// can never advertise a tool the runtime does not register.
+//
+// Every registered research tool has a constant here. `PROMPT_TOOL_NAMES` (bottom)
+// is the subset the agentic prompt may reference and drives the drift-guard test.
+
+// --- Index evidence + inventory ---
+export const INDEX_SEARCH_TOOL = "search_index";
+export const LIST_INDEX_SOURCES_TOOL = "list_index_sources";
+export const LIST_INDEX_CHUNKS_TOOL = "list_index_chunks";
+export const READ_INDEX_CHUNK_TOOL = "read_index_chunk";
+export const FIND_IN_INDEX_TOOL = "find_in_index";
+export const SUMMARIZE_INDEX_SOURCE_TOOL = "summarize_index_source";
+export const GET_INDEX_SOURCE_OUTLINE_TOOL = "get_index_source_outline";
+export const SEARCH_INDEX_BY_METADATA_TOOL = "search_index_by_metadata";
+
+// --- Index URL audit ---
+export const LIST_INDEX_URLS_TOOL = "list_index_urls";
+export const CHECK_URLS_TOOL = "check_urls";
+
+// --- Web ---
+export const WEB_SEARCH_TOOL = "search_web";
+export const WEB_FETCH_TOOL = "fetch_web_page";
+export const WEB_FETCH_URL_TOOL = "fetch_url";
+export const WEB_FETCH_SECTION_TOOL = "fetch_web_section";
+export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
+
+// --- Deep research ---
+export const DEEP_SEARCH_TOOL = "deep_search";
+
+// --- Note editing (read-only) ---
+export const READ_NOTE_TOOL = "read_note";
+export const SEARCH_NOTES_TOOL = "search_notes";
+export const LIST_NOTES_TOOL = "list_notes";
+export const GET_ACTIVE_NOTE_TOOL = "get_active_note";
+
+// --- Note mutation (write) ---
+export const CREATE_NOTE_TOOL = "create_note";
+export const UPDATE_NOTE_TOOL = "update_note";
+export const DELETE_NOTE_TOOL = "delete_note";
+
+/** Web evidence tools, in the order they should be advertised. */
+export const WEB_EVIDENCE_TOOLS = [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] as const;
+/** Note editing (read-only) tools. */
+export const NOTE_EDIT_TOOLS = [
+  SEARCH_NOTES_TOOL,
+  READ_NOTE_TOOL,
+  LIST_NOTES_TOOL,
+  GET_ACTIVE_NOTE_TOOL,
+] as const;
+/** Note mutation (write) tools. */
+export const NOTE_MUTATION_TOOLS = [CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL, DELETE_NOTE_TOOL] as const;
+
+/** Every tool name the agentic prompt may reference. Drives the drift guard test. */
+export const PROMPT_TOOL_NAMES = [
+  INDEX_SEARCH_TOOL,
+  WEB_SEARCH_TOOL,
+  WEB_FETCH_TOOL,
+  DEEP_SEARCH_TOOL,
+  LIST_INDEX_URLS_TOOL,
+  CHECK_URLS_TOOL,
+  ...NOTE_EDIT_TOOLS,
+  ...NOTE_MUTATION_TOOLS,
+] as const;
