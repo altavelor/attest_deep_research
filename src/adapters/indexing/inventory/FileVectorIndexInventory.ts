@@ -13,7 +13,7 @@ import {
   IndexSourceOutline,
   IndexSourceSummary,
 } from "../../../application/ports/retrieval";
-import { SourceReference } from "../../../core/model/source";
+import { SourceReference } from "@core/model";
 import type { FileVectorIndexState, StoredChunk } from "../store/FileVectorIndexState";
 import {
   createIndexMatcher,

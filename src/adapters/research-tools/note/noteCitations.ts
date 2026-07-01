@@ -1,5 +1,5 @@
-import { Citation } from "../../../core/model/citation";
-import { SourceReference } from "../../../core/model/source";
+import { Citation } from "@core/model";
+import { SourceReference } from "@core/model";
 
 export interface NoteCitationResult {
   /** Content with citation IDs replaced by footnote markers and a reference list appended. */

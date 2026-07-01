@@ -8,7 +8,7 @@ import type { SearchProvider } from "../ports/web";
 import type { DeepResearchRunner } from "./deepResearchPort";
 import type { ChatModelProvider } from "../../core/agent/protocol";
 import type { ChatToolCall, ChatToolDefinition } from "../../core/agent/tool";
-import type { Citation } from "../../core/model/citation";
+import type { Citation } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "../sources/evidence";
 import type { ResearchRetriever } from "../contracts/research";
 import type { UrlStatusChecker } from "../contracts/research";

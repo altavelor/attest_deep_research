@@ -1,7 +1,7 @@
 import { RetrievalResult } from "../../../application/contracts/retrieval";
 import { QueryExpansion } from "../../contracts/research";
-import { uniqueChunks } from "../../../core/model/source";
-import { RetrievalQueryVariant } from "../../../core/retrieval/query";
+import { uniqueChunks } from "@core/model";
+import { RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchRetriever, ResearchStreamEvent } from "../../contracts/research";
 
 export interface VaultResearchPipelineOptions {

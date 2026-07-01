@@ -1,5 +1,5 @@
-import { RetrievedChunk } from "../../../core/model/source";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { RetrievedChunk } from "@core/model";
+import { EvidenceRegistry } from "@application/sources";
 import {
   BoundedSearchInput,
   parseBoundedSearchInput,
@@ -7,7 +7,7 @@ import {
 import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
 import { INDEX_SEARCH_TOOL } from "../../../core/agent/toolNames";
 import { ResearchRetriever } from "../../../application/contracts/research";
-import { bool, defineTool, int, str } from "../../../application/sources/tools/toolFactory";
+import { bool, defineTool, int, str } from "@application/sources/tools";
 
 const MAX_SOURCE_PATH_CHARS = 500;
 const MAX_LANGUAGE_CHARS = 40;

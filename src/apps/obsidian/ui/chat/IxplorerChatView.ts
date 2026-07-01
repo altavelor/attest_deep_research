@@ -4,11 +4,11 @@ import { SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferCha
 import { chatHistoryForPrompt } from "../../../../application/use-cases/chat/ChatCompaction";
 import { IndexingState } from "../../../../adapters/indexing/IndexingService";
 import { estimateResearchRequestTokens } from "../../../../core/research/prompts";
-import { ResearchService } from "../../../../application/use-cases/research/ResearchService";
-import type { ResearchSearchMode } from "../../../../application/use-cases/research/ResearchService";
+import { ResearchService } from "@application/use-cases/research";
+import type { ResearchSearchMode } from "@application/use-cases/research";
 import { ResearchAnswer } from "../../../../core/answer";
-import { Citation } from "../../../../core/model/citation";
-import { RetrievedChunk } from "../../../../core/model/source";
+import { Citation } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 import { AnswerNoteWriter } from "./research/AnswerNoteWriter";
 import {
   ChatComposerRefs,

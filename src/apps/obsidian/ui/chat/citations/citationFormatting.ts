@@ -1,5 +1,5 @@
-import { Citation } from "../../../../../core/model/citation";
-import { RetrievedChunk } from "../../../../../core/model/source";
+import { Citation } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 
 export function formatCitationForChunk(chunk: RetrievedChunk): Citation {
   switch (chunk.source.kind) {

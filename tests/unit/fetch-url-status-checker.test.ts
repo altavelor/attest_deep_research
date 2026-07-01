@@ -1,4 +1,4 @@
-import { FetchUrlStatusChecker } from "../../src/adapters/web/FetchUrlStatusChecker";
+import { FetchUrlStatusChecker } from "@adapters/web";
 
 describe("FetchUrlStatusChecker", () => {
   it("classifies successful responses as reachable", async () => {

@@ -1,5 +1,5 @@
-import { Citation } from "../../../../core/model/citation";
-import { RetrievedChunk } from "../../../../core/model/source";
+import { Citation } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 import { validatePublicWebUrl } from "../../../sources/WebUrlPolicy";
 
 export function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {

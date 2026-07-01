@@ -1,16 +1,11 @@
 import { ContextFileProvider } from "../../src/application/ports/vault";
-import {
-  ResearchService,
-  selectResearchExecutionStrategy,
-} from "../../src/application/use-cases/research/ResearchService";
-import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
-import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
-import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
+import { ResearchService, selectResearchExecutionStrategy } from "@application/use-cases/research";
+import { MarkdownExtractor } from "@adapters/extractors";
+import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
-import { NoteToolService } from "../../src/adapters/research-tools/note/NoteTools";
 import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
-import { stableId } from "../../src/adapters/extractors/common";
-import { QueryExpansionService } from "../../src/adapters/retrieval/QueryExpansionService";
+import { stableId } from "@adapters/extractors";
+import { QueryExpansionService } from "@adapters/retrieval";
 import {
   buildResearchPrompt,
   buildResearchSystemPrompt,

@@ -1,7 +1,7 @@
 import { App, Component, MarkdownRenderer, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "../../../../core/diagnostics";
-import { RetrievedChunk } from "../../../../core/model/source";
+import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "../shared/clipboard";
 import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
 import { stripRenderedCitationIds } from "./citations/citationText";

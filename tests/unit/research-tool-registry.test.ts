@@ -1,4 +1,4 @@
-import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
+import { MarkdownExtractor } from "@adapters/extractors";
 import { ContextFileProvider } from "../../src/application/ports/vault";
 import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
 import { NoteToolService } from "../../src/adapters/research-tools/note/NoteTools";

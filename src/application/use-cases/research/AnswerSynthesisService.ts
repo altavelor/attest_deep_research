@@ -1,8 +1,8 @@
 import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "../../../core/agent/protocol";
 import { ResearchAnswer } from "../../../core/answer";
 import { ContextDiagnostics, IndexDescriptionPromptContext, ToolCallDiagnostic } from "../../../core/diagnostics";
-import { Citation } from "../../../core/model/citation";
-import { RetrievedChunk } from "../../../core/model/source";
+import { Citation } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 import { IxplorerError } from "../../../core/errors";
 import {
   buildResearchPrompt,

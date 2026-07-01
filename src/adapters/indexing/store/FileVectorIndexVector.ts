@@ -1,4 +1,4 @@
-import { SourceReference } from "../../../core/model/source";
+import { SourceReference } from "@core/model";
 import {
   FileVectorChunkRow,
   FileVectorManifest,

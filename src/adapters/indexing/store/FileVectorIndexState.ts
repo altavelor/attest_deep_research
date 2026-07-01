@@ -1,5 +1,5 @@
 import { IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStoreMetadata } from "../../../application/ports/indexing";
-import { EmbeddedChunk } from "../../../core/model/source";
+import { EmbeddedChunk } from "@core/model";
 import { shardIdForSourcePath } from "../inventory/sourcePathShard";
 import { createFileVectorManifest } from "./FileVectorIndexFormat";
 import type { FileVectorChunkRow, FileVectorManifest, SourceSnapshot } from "./FileVectorIndexFormat";

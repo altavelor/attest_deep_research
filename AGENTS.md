@@ -24,7 +24,11 @@ apps  →  adapters  →  application  →  core
 | **adapters** | `src/adapters/` | Реализации портов: провайдеры моделей, индексация, settings, web, glue к Obsidian. | `core`, `application`, `adapters` |
 | **apps** | `src/apps/` | Точки входа (Obsidian-плагин), composition root, UI. | любой слой |
 
-**Проверяемые инварианты (должны давать пустой результат):**
+**Проверяемые инварианты** (машинно, через `dependency-cruiser` — [.dependency-cruiser.cjs](.dependency-cruiser.cjs)):
+```bash
+npm run depcruise    # правила слоёв §1 + детект рантайм-циклов (§2). Должно быть 0 errors.
+```
+Эквивалентная ручная проверка слоёв (должна давать пустой результат) — grep ловит и алиасы `@adapters/…`:
 ```bash
 grep -rE 'from "[^"]*(adapters|apps|application)/' src/core      # core наружу — запрещено
 grep -rE 'from "[^"]*(adapters|apps)/'           src/application # application → adapters/apps — запрещено
@@ -42,7 +46,9 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 
 - **Одна ответственность на модуль.** Файл описывает одну связную вещь.
 - **Ориентир по размеру: ~300–400 строк.** Файл, растущий к 600+, — сигнал к разбиению, а не к дописыванию. (Исторический потолок проекта — следствие god-файлов; не воспроизводить.)
-- **Ацикличность.** Циклы импортов запрещены. Если две группы тянут друг друга, вынеси общую низкоуровневую часть в leaf-модуль (`constants.ts`, `parsers.ts`, `*Diagnostics.ts`) и направь импорты снизу вверх.
+- **Ацикличность.** Рантайм-циклы импортов запрещены (проверяет `npm run depcruise`). Если две группы тянут друг друга, вынеси общую низкоуровневую часть в leaf-модуль (`constants.ts`, `parsers.ts`, `*Diagnostics.ts`) и направь импорты снизу вверх. Циклы, замкнутые только через `import type`, рантайм-безопасны (стираются компилятором) и репортятся как `info` — не блокируют, но остаются кандидатами на разрыв через leaf-модуль типа.
+- **Публичный API модуля — через баррель `index.ts`.** Модуль на границе (bounded-context) выставляет наружу курируемый `index.ts` с намеренно публичными символами; всё остальное — внутренняя реализация, снаружи невидимая. Внешние потребители импортируют `@<layer>/<module>` (напр. `@adapters/research-tools`), а не глубокие пути во внутренности. Баррель — не «export * со всего»: продакшн-поверхность обычно узкая. Инвариант: файлы **внутри** модуля не импортируют свой баррель (только соседей через `./…`) — иначе цикл. Эталон: [src/adapters/research-tools/index.ts](src/adapters/research-tools/index.ts) (потребитель — [composition/factories.ts](src/apps/obsidian/composition/factories.ts)). White-box юнит-тесты конкретных внутренних классов — легитимное исключение: им можно подключать внутренности напрямую.
+- **Импорты между слоями/модулями — через path-алиасы**, не через `../../../`. Настроены `@core/*`, `@application/*`, `@adapters/*`, `@apps/*`, `@shared/*` (в [tsconfig.json](tsconfig.json), [esbuild.config.mjs](esbuild.config.mjs), [vitest.config.ts](vitest.config.ts) — держать синхронными). Алиасы кросс-модульные; импорт соседа внутри своего модуля остаётся относительным (`./sibling`).
 - **Чистые свободные функции** не должны жить хвостом большого класса — выноси их в соседний helper-модуль.
 
 ---
@@ -80,6 +86,7 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 Перед завершением задачи прогнать и убедиться, что зелено:
 ```bash
 npx tsc --noEmit      # = npm run lint
+npm run depcruise     # инварианты слоёв §1 + рантайм-ацикличность §2 (0 errors)
 npm test
 npm run build         # tsc + esbuild production
 ```

@@ -1,12 +1,12 @@
 import { SearchProvider } from "../../../application/ports/web";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { EvidenceRegistry } from "@application/sources";
 import {
   BoundedSearchInput,
   parseBoundedSearchInput,
 } from "../../../application/research/boundedSearchInput";
 import { toolFailure } from "../../../core/agent/tool";
 import { WEB_SEARCH_TOOL } from "../../../core/agent/toolNames";
-import { defineTool, int, str } from "../../../application/sources/tools/toolFactory";
+import { defineTool, int, str } from "@application/sources/tools";
 
 export interface SearchWebOutput {
   query: string;

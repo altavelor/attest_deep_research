@@ -1,6 +1,6 @@
 import { formatCitationLink } from "./citationLinks";
 import { ResearchAnswer } from "../../../core/answer";
-import { Citation } from "../../../core/model/citation";
+import { Citation } from "@core/model";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   return [

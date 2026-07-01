@@ -1,7 +1,7 @@
 import { Notice } from "obsidian";
 
 import { IndexingState } from "../../../../adapters/indexing/IndexingService";
-import { RetrievedChunk } from "../../../../core/model/source";
+import { RetrievedChunk } from "@core/model";
 import { toUserMessage } from "../../../../core/errors";
 import { IndexProfileSelectOption } from "../chat/ChatComposer";
 import { IxplorerPanel } from "../chat/ChatHeader";

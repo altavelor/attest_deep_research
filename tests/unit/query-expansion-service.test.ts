@@ -1,7 +1,7 @@
 import {
   parseQueryVariants,
   QueryExpansionService,
-} from "../../src/adapters/retrieval/QueryExpansionService";
+} from "@adapters/retrieval";
 import { FakeChatModel } from "../helpers/researchFakes";
 
 describe("QueryExpansionService", () => {

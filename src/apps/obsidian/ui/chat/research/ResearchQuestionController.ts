@@ -7,8 +7,7 @@ import {
   compactionSummaryFromMessages,
   shouldCompactForContext,
 } from "../../../../../application/use-cases/chat/ChatCompaction";
-import { ResearchService, ResearchStreamEvent } from "../../../../../application/use-cases/research/ResearchService";
-import { AgentRunDiagnosticCollector } from "../../../../../application/use-cases/research/AgentRunDiagnostics";
+import { AgentRunDiagnosticCollector, ResearchService, ResearchStreamEvent } from "@application/use-cases/research";
 import { estimateResearchRequestTokens } from "../../../../../core/research/prompts";
 import { parseDeepResearchDirective } from "../../../../../core/research/deepResearch/deepResearchDirective";
 import type { ResearchSearchMode } from "../../../../../application/use-cases/research/ResearchService";

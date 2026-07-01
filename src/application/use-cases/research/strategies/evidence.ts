@@ -1,5 +1,5 @@
 import { RetrievalResult } from "../../../../application/contracts/retrieval";
-import { RetrievedChunk } from "../../../../core/model/source";
+import { RetrievedChunk } from "@core/model";
 
 export function graphEvidenceFromRetrieval(
   chunks: RetrievedChunk[],

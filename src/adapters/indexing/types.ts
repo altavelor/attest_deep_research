@@ -1,7 +1,7 @@
 import { VaultFileProvider, VaultFileSummary } from "../../application/ports/vault";
 import type { Extractor, IndexStore, IndexStoreWriteSession } from "../../application/ports/indexing";
 import type { EmbeddingProviderClient } from "../../core/agent/protocol";
-import type { ExtractedChunk } from "../../core/model/source";
+import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
 import type { IndexingProgressState } from "./controller/IndexingProgressState";
 

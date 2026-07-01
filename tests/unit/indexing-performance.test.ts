@@ -2,7 +2,7 @@ import { IndexingService } from "../../src/adapters/indexing/IndexingService";
 import { VaultFileProvider, VaultFileSummary } from "../../src/application/ports/vault";
 import { Extractor, IndexStore } from "../../src/application/ports/indexing";
 import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
-import { EmbeddedChunk, ExtractedChunk } from "../../src/core/model/source";
+import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 
 describe("IndexingService large-vault behavior", () => {
   it("indexes 1,000 markdown notes and multiple PDFs in bounded embedding and upsert batches", async () => {

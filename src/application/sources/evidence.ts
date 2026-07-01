@@ -2,8 +2,8 @@
 // abstraction; the concrete, Node-coupled collector (hashing + UUID handles)
 // lives in adapters and implements it. DTOs reference only core types.
 
-import { Citation } from "../../core/model/citation";
-import { RetrievedChunk, SourceReference, WebSourceReference } from "../../core/model/source";
+import { Citation } from "@core/model";
+import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
 
 export interface EvidenceCallProvenance {
   callId: string;

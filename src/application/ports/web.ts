@@ -1,6 +1,6 @@
 // Application ports: web search / fetch contracts (stage 1, task 1.3).
 
-import { WebSourceReference } from "../../core/model/source";
+import { WebSourceReference } from "@core/model";
 import { ToolError } from "../../core/agent/tool";
 
 export interface SearchProviderResult {

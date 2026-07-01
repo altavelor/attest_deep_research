@@ -12,12 +12,12 @@ import {
   IndexSourceInventoryOptions,
   KeywordSearchIndexStore,
 } from "../../application/ports/retrieval";
-import { RetrievalOptions } from "../../core/retrieval/query";
+import { RetrievalOptions } from "@core/retrieval";
 import { EmbeddingProviderClient } from "../../core/agent/protocol";
-import { LanguageInventoryItem } from "../../core/model/citation";
-import { RetrievedChunk, SourceReference } from "../../core/model/source";
-import { formatCitation } from "../../core/retrieval/citations";
-import { filterRetrievedChunks } from "../../core/retrieval/filters";
+import { LanguageInventoryItem } from "@core/model";
+import { RetrievedChunk, SourceReference } from "@core/model";
+import { formatCitation } from "@core/retrieval";
+import { filterRetrievedChunks } from "@core/retrieval";
 import { RetrievalResult } from "../../application/contracts/retrieval";
 import {
   IndexedUrlInventoryOptions,

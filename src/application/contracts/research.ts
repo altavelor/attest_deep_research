@@ -1,9 +1,9 @@
 import { RetrievalResult } from "./retrieval";
-import { RetrievalOptions, RetrievalQueryVariant } from "../../core/retrieval/query";
+import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchAnswer } from "../../core/answer";
 import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
-import { LanguageInventoryItem } from "../../core/model/citation";
-import { SourceReference } from "../../core/model/source";
+import { LanguageInventoryItem } from "@core/model";
+import { SourceReference } from "@core/model";
 import { ResearchChatHistoryMessage } from "../../core/research/prompts";
 import {
   FindInIndexOptions,

@@ -1,5 +1,5 @@
 import { Extractor, ExtractorInput } from "../../application/ports/indexing";
-import { ExtractedChunk } from "../../core/model/source";
+import { ExtractedChunk } from "@core/model";
 import {
   createDocumentChunks,
   DEFAULT_CHUNK_OVERLAP,

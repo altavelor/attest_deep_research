@@ -1,5 +1,5 @@
 import { ChatModelProvider } from "../../../core/agent/protocol";
-import { sourceLabel } from "../../../core/retrieval/citations";
+import { sourceLabel } from "@core/retrieval";
 import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "../../../core/research/prompts";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../../../core/conversation/model";
 

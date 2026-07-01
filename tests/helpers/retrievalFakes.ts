@@ -1,8 +1,8 @@
 import { IndexStore } from "../../src/application/ports/indexing";
 import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
-import { RetrievedChunk } from "../../src/core/model/source";
-import { RetrievalOptions } from "../../src/core/retrieval/query";
-import { filterRetrievedChunks } from "../../src/core/retrieval/filters";
+import { RetrievedChunk } from "@core/model";
+import { RetrievalOptions } from "@core/retrieval";
+import { filterRetrievedChunks } from "@core/retrieval";
 
 export class FakeEmbeddingProvider implements EmbeddingProviderClient {
   constructor(private readonly embeddings: number[][]) { }

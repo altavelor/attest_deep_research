@@ -5,10 +5,10 @@ import {
   ResearchToolset,
   ResearchToolsetOptions,
 } from "../../application/research/toolPorts";
-import { AttachmentSource } from "../../application/sources/AttachmentSource";
+import { AttachmentSource } from "@application/sources";
 import { NOTE_PERMISSIONS, createNoteTools } from "./note/createNoteTools";
 import { RagSource } from "./index/RagSource";
-import { SourceManager } from "../../application/sources/DataSource";
+import { SourceManager } from "@application/sources";
 import { WebSource } from "./web/WebSource";
 import { DeepResearchSource } from "./deep-research/DeepResearchSource";
 

@@ -1,7 +1,7 @@
 import { Menu, setIcon } from "obsidian";
 
 import { SavedChatSettings } from "../../../../core/chat/savedChat";
-import type { ResearchSearchMode } from "../../../../application/use-cases/research/ResearchService";
+import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ContextMode } from "../../../../core/diagnostics";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 import {

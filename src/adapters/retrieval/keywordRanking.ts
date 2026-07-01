@@ -3,8 +3,8 @@
 // a universal domain primitive, so it lives with the retrieval component rather
 // than in core. Swapping the engine (BM25, vector, hybrid) replaces this file.
 
-import { RetrievedChunk } from "../../core/model/source";
-import { tokenizeForSearch } from "../../core/retrieval/tokenization";
+import { RetrievedChunk } from "@core/model";
+import { tokenizeForSearch } from "@core/retrieval";
 
 export function rankKeywordMatches(
   query: string,

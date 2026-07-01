@@ -1,5 +1,5 @@
-import { QueryExpansionService } from "../../src/adapters/retrieval/QueryExpansionService";
-import { runToolLoop } from "../../src/adapters/research-tools/ToolLoopRunner";
+import { QueryExpansionService } from "@adapters/retrieval";
+import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "../../src/application/use-cases/research/AnswerSynthesisService";
 import { VaultResearchPipeline } from "../../src/application/use-cases/research/VaultResearchPipeline";
 import { WebResearchPipeline } from "../../src/application/use-cases/research/WebResearchPipeline";

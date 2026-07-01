@@ -1,4 +1,4 @@
-import { LanguageInventoryItem } from "../../../core/model/citation";
+import { LanguageInventoryItem } from "@core/model";
 import { detectTextLanguages, languageInventoryFromSources } from "../pipeline/languageDetection";
 import type { FileVectorIndexState } from "./FileVectorIndexState";
 import { sourcePathFromReference } from "./FileVectorIndexVector";

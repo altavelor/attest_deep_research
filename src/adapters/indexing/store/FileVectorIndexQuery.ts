@@ -1,5 +1,5 @@
-import { RetrievedChunk, SourceReference } from "../../../core/model/source";
-import { chunkMatchesRetrievalOptions } from "../../../core/retrieval/filters";
+import { RetrievedChunk, SourceReference } from "@core/model";
+import { chunkMatchesRetrievalOptions } from "@core/retrieval";
 import { readJsonlIndexFile } from "../inventory/fileIndexFiles";
 import { FileVectorChunkRow, isKeywordPostingRow, KeywordPostingRow } from "./FileVectorIndexFormat";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";

@@ -2,8 +2,19 @@ import builtins from "builtin-modules";
 import esbuild from "esbuild";
 import { copyFile, mkdir } from "fs/promises";
 import { homedir } from "os";
-import { join } from "path";
+import { join, resolve } from "path";
 import process from "process";
+
+// Path aliases mirror tsconfig.json "paths" and vitest.config.ts so the same
+// import specifiers resolve identically under tsc, the bundle, and tests.
+// esbuild remaps subpaths automatically (e.g. "@core/research/x" -> src/core/research/x).
+const srcAliases = {
+  "@core": resolve("src/core"),
+  "@application": resolve("src/application"),
+  "@adapters": resolve("src/adapters"),
+  "@apps": resolve("src/apps"),
+  "@shared": resolve("src/shared"),
+};
 
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
@@ -28,6 +39,7 @@ async function copyPluginAssets() {
 await mkdir(pluginOutputDir, { recursive: true });
 
 const context = await esbuild.context({
+  alias: srcAliases,
   banner: {
     js: banner,
   },

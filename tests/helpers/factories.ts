@@ -1,6 +1,6 @@
-import { RetrievalResult } from "../../src/adapters/retrieval/RetrievalService";
-import { Citation } from "../../src/core/model/citation";
-import { RetrievedChunk, SourceReference, WebSourceReference } from "../../src/core/model/source";
+import { RetrievalResult } from "@adapters/retrieval";
+import { Citation } from "@core/model";
+import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
 
 export function retrieved(
   id: string,

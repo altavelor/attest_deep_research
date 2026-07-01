@@ -4,7 +4,7 @@ import {
   formatResearchAnswerAppendBlock,
   formatResearchAnswerNote,
   researchAnswerNotePath,
-} from "../../../../../application/use-cases/research/answerFormatter";
+} from "@application/use-cases/research";
 import { ResearchAnswer } from "../../../../../core/answer";
 
 export class AnswerNoteWriter {

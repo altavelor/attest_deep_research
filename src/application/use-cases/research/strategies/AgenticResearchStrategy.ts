@@ -1,7 +1,7 @@
-import { formatCitation } from "../../../../core/retrieval/citations";
+import { formatCitation } from "@core/retrieval";
 import { ResearchAnswer } from "../../../../core/answer";
 import { ContextDiagnostics } from "../../../../core/diagnostics";
-import { RetrievedChunk, SourceReference } from "../../../../core/model/source";
+import { RetrievedChunk, SourceReference } from "@core/model";
 import { estimateTextTokens, extractFollowUpQuestions } from "../../../../core/research/prompts";
 import { buildAgenticResearchMessages } from "../../../../core/research/agenticPrompts";
 import { ResearchStreamEvent } from "../../../contracts/research";

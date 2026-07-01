@@ -1,17 +1,17 @@
 import { randomUUID } from "crypto";
 
 import { stableId } from "../extractors/common";
-import { formatCitation } from "../../core/retrieval/citations";
-import { Citation } from "../../core/model/citation";
-import { RetrievedChunk, SourceReference, WebSourceReference } from "../../core/model/source";
+import { formatCitation } from "@core/retrieval";
+import { Citation } from "@core/model";
+import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
 import {
   EvidenceCallProvenance,
   EvidenceRegistry,
   RegisteredWebResult,
   ResearchEvidenceSnapshot,
   WebHandleEntry,
-} from "../../application/sources/evidence";
-import { validatePublicWebUrl } from "../../application/sources/WebUrlPolicy";
+} from "@application/sources";
+import { validatePublicWebUrl } from "@application/sources";
 
 interface MutableEvidenceEntry {
   chunk: RetrievedChunk;

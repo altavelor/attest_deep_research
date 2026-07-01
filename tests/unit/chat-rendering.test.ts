@@ -1,8 +1,8 @@
 import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "../../src/core/conversation/reducers";
 import { citationTarget, formatIndexControlSummary, formatIndexingStatus, formatProgressPercent, messageDisplayContent } from "../../src/apps/obsidian/ui/chat/conversationFormatting";
 import { ContextDiagnostics } from "../../src/core/diagnostics";
-import { Citation } from "../../src/core/model/citation";
-import { SourceReference } from "../../src/core/model/source";
+import { Citation } from "@core/model";
+import { SourceReference } from "@core/model";
 
 describe("chat rendering helpers", () => {
   it("formats indexing status for the chat pane toolbar", () => {

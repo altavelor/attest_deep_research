@@ -1,6 +1,6 @@
 import { setIcon } from "obsidian";
 
-import { RetrievedChunk } from "../../../../../core/model/source";
+import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "../../shared/clipboard";
 import { formatIndexSearchCitation } from "../../index/IndexSearchPanel";
 

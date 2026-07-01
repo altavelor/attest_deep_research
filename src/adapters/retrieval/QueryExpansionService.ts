@@ -1,6 +1,6 @@
-import { RetrievalQueryVariant } from "../../core/retrieval/query";
+import { RetrievalQueryVariant } from "@core/retrieval";
 import { ChatModelProvider, ChatRequest } from "../../core/agent/protocol";
-import { LanguageInventoryItem } from "../../core/model/citation";
+import { LanguageInventoryItem } from "@core/model";
 import { detectTextLanguages } from "../indexing/pipeline/languageDetection";
 import {
   collectChatText,

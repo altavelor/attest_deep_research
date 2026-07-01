@@ -1,7 +1,7 @@
 import { isRecord } from "../../../shared/guards";
 import { isNonNegativeInteger, isPositiveInteger } from "../../../shared/numbers";
-import { LanguageInventoryItem } from "../../../core/model/citation";
-import { SourceReference } from "../../../core/model/source";
+import { LanguageInventoryItem } from "@core/model";
+import { SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import type { IndexDescription } from "../inventory/IndexDescription";
 

@@ -3,7 +3,7 @@ import { inflateRawSync } from "zlib";
 
 import { IxplorerError } from "../../core/errors";
 export { normalizeVaultPath as normalizePath } from "../../shared/pathFilters";
-import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "../../core/model/source";
+import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "@core/model";
 
 export interface DocumentExtractorOptions {
   maxChunkLength?: number;

@@ -28,7 +28,7 @@ import {
   num,
   str,
   text,
-} from "../../../application/sources/tools/toolFactory";
+} from "@application/sources/tools";
 
 /** Permission names a run may grant; mapped from availability by the composition. */
 export const NOTE_PERMISSIONS = {
