@@ -26,3 +26,5 @@ export {
 } from "./answerFormatter";
 
 export { citationTarget, formatCitationLink } from "./citationLinks";
+
+export { linkifyUrlCitations } from "./urlCitations";

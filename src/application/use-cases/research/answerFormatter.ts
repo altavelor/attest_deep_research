@@ -1,4 +1,5 @@
 import { formatCitationLink } from "./citationLinks";
+import { linkifyUrlCitations } from "./urlCitations";
 import { ResearchAnswer } from "@core/answer";
 import { Citation } from "@core/model";
 
@@ -14,7 +15,7 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
     "",
     "## Answer",
     "",
-    answer.answer,
+    linkifyUrlCitations(answer.answer),
     "",
     "## Citations",
     "",
