@@ -1,5 +1,6 @@
 import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
 import { SearchProvider } from "@application/ports/web";
+import { VaultWriter } from "@application/ports/vault";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
@@ -53,6 +54,10 @@ export interface ResearchServiceOptions {
   now?: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   noteTools?: NoteToolService;
+  /** Writes downloaded documents into the vault; enables the download tools when present. */
+  vaultWriter?: VaultWriter;
+  /** Default vault folder for downloaded documents. */
+  downloadFolder?: string;
   /** Builds the research toolset (concrete factory injected by the composition root). */
   toolsetFactory: ResearchToolsetFactory;
   /** Runs the note tool loop (concrete impl injected by the composition root). */
@@ -183,6 +188,8 @@ export class ResearchService implements ConversationEngine {
       urlStatusChecker: options.urlStatusChecker,
       searchProvider: options.searchProvider,
       noteTools: options.noteTools,
+      vaultWriter: options.vaultWriter,
+      downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
       deepResearchRunner,
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,

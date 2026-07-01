@@ -7,7 +7,12 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "@adapters/indexing/store/FileVectorIndexStore";
-import { DEFAULT_INDEX_FOLDER, DEFAULT_INDEX_PROFILE_ID, DEFAULT_PROFILE_TIMESTAMP } from "./constants";
+import {
+  DEFAULT_DOWNLOAD_FOLDER,
+  DEFAULT_INDEX_FOLDER,
+  DEFAULT_INDEX_PROFILE_ID,
+  DEFAULT_PROFILE_TIMESTAMP,
+} from "./constants";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";
 
@@ -58,6 +63,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   graphContextDepth: 1,
   useWebWhenFreshnessNeeded: true,
   forceEagerResearch: false,
+  downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
   debugMode: false,
   modelCapabilityCache: {},
 };

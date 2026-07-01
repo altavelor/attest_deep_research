@@ -89,6 +89,9 @@ export function createResearchService(
   const contextExtractors = createContextExtractorsForProfile(ctx, indexProfile);
   const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
   const toolsEnabled = resolveEffectiveTools(chatProfile);
+  // A single vault writer backs both note mutations and document downloads; both
+  // are gated by the profile's mutation consent.
+  const vaultWriter = chatProfile.noteMutationAccess ? new ObsidianVaultWriter(ctx.app) : undefined;
   let effectiveProtocol = resolveEffectiveChatApiProtocol(chatProfile);
   if (
     effectiveProtocol === "responses" &&
@@ -181,10 +184,12 @@ export function createResearchService(
         files: contextFiles,
         extractors: contextExtractors,
         getActiveFilePath: () => ctx.app.workspace.getActiveFile()?.path,
-        writer: chatProfile.noteMutationAccess ? new ObsidianVaultWriter(ctx.app) : undefined,
+        writer: vaultWriter,
         noteMutationAccess: chatProfile.noteMutationAccess,
       })
       : undefined,
+    vaultWriter,
+    downloadFolder: settings.downloadFolder,
   });
 }
 

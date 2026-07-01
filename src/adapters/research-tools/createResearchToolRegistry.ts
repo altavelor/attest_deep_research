@@ -11,6 +11,8 @@ import { RagSource } from "./index/RagSource";
 import { SourceManager } from "@application/sources";
 import { WebSource } from "./web/WebSource";
 import { DeepResearchSource } from "./deep-research/DeepResearchSource";
+import { DownloadSource } from "./download/DownloadSource";
+import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
@@ -62,6 +64,23 @@ export function createResearchToolRegistry(
     sources.register(new WebSource({ provider: options.searchProvider, evidence }));
   }
 
+  // Document download is a web capability that also writes to the vault: offered
+  // only when web is active for this turn AND a vault writer is available.
+  if (
+    options.searchProvider?.fetchDocument &&
+    options.vaultWriter &&
+    availability.webProviderAvailable &&
+    (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
+  ) {
+    sources.register(
+      new DownloadSource({
+        provider: options.searchProvider,
+        writer: options.vaultWriter,
+        defaultFolder: options.downloadFolder ?? "",
+      }),
+    );
+  }
+
   // Deep research is a web capability — only offered when web is active for this
   // turn (same gating as WebSource), never in index-only / none modes.
   if (
@@ -89,6 +108,10 @@ function grantedPermissions(availability: ResearchToolAvailability): ReadonlySet
   const granted = new Set<string>();
   if (availability.noteAccess) granted.add(NOTE_PERMISSIONS.read);
   if (availability.activeFileAccess) granted.add(NOTE_PERMISSIONS.active);
-  if (availability.noteMutationAccess) granted.add(NOTE_PERMISSIONS.mutate);
+  if (availability.noteMutationAccess) {
+    granted.add(NOTE_PERMISSIONS.mutate);
+    // Downloading writes into the vault; gate it behind the same mutation consent.
+    granted.add(DOWNLOAD_PERMISSIONS.write);
+  }
   return granted;
 }

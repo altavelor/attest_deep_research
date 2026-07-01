@@ -136,6 +136,8 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
       deepResearchRunner: this.deps.deepResearchRunner,
+      vaultWriter: this.deps.vaultWriter,
+      downloadFolder: this.deps.downloadFolder,
     });
     // When the user wrote @deep_search, compel at least one deep_search call.
     const effectivePolicy =

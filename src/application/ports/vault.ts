@@ -30,6 +30,8 @@ export interface VaultFileProvider {
 export interface VaultWriter {
   exists(path: string): Promise<boolean>;
   createFile(path: string, content: string): Promise<void>;
+  /** Write raw bytes (downloaded documents, e.g. PDFs). Overwrites when the file exists. */
+  createBinaryFile(path: string, data: Uint8Array): Promise<void>;
   modifyFile(path: string, content: string): Promise<void>;
   appendFile(path: string, content: string): Promise<void>;
   readFile(path: string): Promise<string>;

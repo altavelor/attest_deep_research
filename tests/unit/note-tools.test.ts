@@ -177,13 +177,18 @@ describe("VaultWriter type contract", () => {
 
 class MemoryVaultWriter implements VaultWriter {
   readonly files = new Map<string, string>();
+  readonly binaryFiles = new Map<string, Uint8Array>();
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path);
+    return this.files.has(path) || this.binaryFiles.has(path);
   }
 
   async createFile(path: string, content: string): Promise<void> {
     this.files.set(path, content);
+  }
+
+  async createBinaryFile(path: string, data: Uint8Array): Promise<void> {
+    this.binaryFiles.set(path, data);
   }
 
   async modifyFile(path: string, content: string): Promise<void> {

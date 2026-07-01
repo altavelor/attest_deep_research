@@ -5,6 +5,7 @@
 // root. This keeps application/use-cases free of any adapters import.
 
 import type { SearchProvider } from "@application/ports/web";
+import type { VaultWriter } from "@application/ports/vault";
 import type { DeepResearchRunner } from "./deepResearchPort";
 import type { ChatModelProvider } from "@core/agent";
 import type { ChatToolCall, ChatToolDefinition } from "@core/agent";
@@ -65,6 +66,10 @@ export interface ResearchToolsetOptions {
   searchProvider?: SearchProvider;
   /** Enables the `deep_search` tool when present (and a web provider exists). */
   deepResearchRunner?: DeepResearchRunner;
+  /** Enables document download tools (writes downloaded files into the vault). */
+  vaultWriter?: VaultWriter;
+  /** Default vault folder for downloaded documents when the agent gives no explicit path. */
+  downloadFolder?: string;
 }
 
 /** Assembled research toolset (concrete factory lives in adapters). */
