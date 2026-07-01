@@ -943,7 +943,7 @@
   position: relative;
   display: grid;
   gap: 0.5rem;
-  padding: 0.75rem 5.25rem 0.75rem 0.75rem;
+  padding: 0.75rem;
 }
 
 .ixplorer-chat__message--assistant {
@@ -969,40 +969,68 @@
   font-size: var(--font-ui-small);
 }
 
-.ixplorer-chat__message-copy,
-.ixplorer-chat__message-edit,
-.ixplorer-chat__message-diagnostic {
-  position: absolute;
-  top: 0.75rem;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
+.ixplorer-chat__message-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin-left: auto;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 
-.ixplorer-chat__message-copy {
-  right: 0.75rem;
+.ixplorer-chat__answer-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: -1.3rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
 }
 
-.ixplorer-chat__message-edit {
-  right: 3rem;
+.ixplorer-chat__answer-content {
+  position: relative;
 }
 
+.ixplorer-chat__answer-status-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-green, #2ea043);
+  box-shadow: 0 0 0 3px var(--background-secondary);
+}
+
+.ixplorer-chat__answer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+.ixplorer-chat__message-copy,
+.ixplorer-chat__message-edit,
+.ixplorer-chat__message-save-answer,
+.ixplorer-chat__message-append-answer,
 .ixplorer-chat__message-diagnostic {
-  right: 0.75rem;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
 }
 
-.ixplorer-chat__message--assistant:has(.ixplorer-chat__message-diagnostic) .ixplorer-chat__message-copy {
-  right: 3rem;
+.ixplorer-chat__message:focus-within .ixplorer-chat__message-actions,
+.ixplorer-chat__message:hover .ixplorer-chat__message-actions {
+  opacity: 1;
 }
 
-.ixplorer-chat__message:focus-within .ixplorer-chat__message-copy,
-.ixplorer-chat__message:hover .ixplorer-chat__message-copy,
-.ixplorer-chat__message:focus-within .ixplorer-chat__message-edit,
-.ixplorer-chat__message:hover .ixplorer-chat__message-edit,
-.ixplorer-chat__message:focus-within .ixplorer-chat__message-diagnostic,
-.ixplorer-chat__message:hover .ixplorer-chat__message-diagnostic {
+.ixplorer-chat__answer-content:focus-within .ixplorer-chat__answer-actions,
+.ixplorer-chat__answer-content:hover .ixplorer-chat__answer-actions {
   opacity: 1;
 }
 
@@ -1455,23 +1483,6 @@
 
 .ixplorer-chat__diff-line--remove .ixplorer-chat__diff-sign {
   color: var(--text-error);
-}
-
-/* Final answer reads as the tail of the workflow. */
-.ixplorer-chat__message-content--workflow .ixplorer-chat__answer-content {
-  position: relative;
-}
-
-.ixplorer-chat__message-content--workflow .ixplorer-chat__answer-content::before {
-  content: "";
-  position: absolute;
-  left: -1.3rem;
-  top: 0.4em;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--interactive-accent);
-  box-shadow: 0 0 0 3px var(--background-primary);
 }
 
 /* Fallback notice */

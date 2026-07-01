@@ -1,12 +1,17 @@
 import { App, Component, MarkdownRenderer, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "../../../../core/diagnostics";
+import { ResearchAnswer } from "../../../../core/answer";
 import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "../shared/clipboard";
-import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
+import {
+  buildCitationRefs,
+  ChatCitationRef,
+  renderCitationBlocks,
+} from "./citations/CitationPopover";
 import { stripRenderedCitationIds } from "./citations/citationText";
 import { ChainItem, ChatDisplayMessage } from "@core/conversation";
-import { shouldShowDiagnosticAction } from "@core/conversation";
+import { shouldShowAnswerNoteActions, shouldShowDiagnosticAction } from "@core/conversation";
 import { messageDisplayContent } from "./conversationFormatting";
 import { messageMarkdownContent } from "@core/conversation";
 import { describeToolCall, ToolCell } from "./toolCallView";
@@ -27,6 +32,8 @@ export interface ChatTranscriptOptions {
   onOpenChunk(chunk: RetrievedChunk): void;
   onHighlightCitation(key: string, highlighted: boolean): void;
   onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
+  onSaveAnswerToNewNote(answer: ResearchAnswer): void;
+  onAppendAnswerToActiveNote(answer: ResearchAnswer): void;
 }
 
 export function renderChatTranscript(
@@ -60,49 +67,7 @@ export function renderChatTranscript(
       cls: "ixplorer-chat__message-time",
       text: formatMessageTime(message.createdAt),
     });
-    if (message.role === "user") {
-      const editButton = header.createEl("button", {
-        cls: "ixplorer-chat__message-edit",
-        attr: {
-          type: "button",
-          "aria-label": "Edit question",
-          title: "Edit question",
-        },
-      });
-      setIcon(editButton, "pencil");
-      editButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        options.onEditQuestion(index);
-      });
-    }
-    const copyButton = header.createEl("button", {
-      cls: "ixplorer-chat__message-copy",
-      attr: {
-        type: "button",
-        "aria-label": "Copy message",
-        title: "Copy message",
-      },
-    });
-    setIcon(copyButton, "copy");
-    copyButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      void copyToClipboard(messageDisplayContent(message));
-    });
-    if (shouldShowDiagnosticAction(message, options.isDebugMode)) {
-      const diagnosticButton = header.createEl("button", {
-        cls: "ixplorer-chat__message-diagnostic",
-        attr: {
-          type: "button",
-          "aria-label": "Open diagnostic report",
-          title: "Open diagnostic report",
-        },
-      });
-      setIcon(diagnosticButton, "bug");
-      diagnosticButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        options.onOpenDiagnosticReport(message.contextDiagnostics!);
-      });
-    }
+    renderHeaderActions(header, message, index, options);
     const contentEl = messageEl.createDiv({
       cls: `ixplorer-chat__message-content ixplorer-chat__message-content--${message.role}`,
     });
@@ -117,6 +82,7 @@ export function renderChatTranscript(
       }
       const citationRefs = buildCitationRefs(message.evidence ?? []);
       const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
+      renderAssistantAnswerHeader(answerEl, message, options);
       void MarkdownRenderer.render(
         options.app,
         messageMarkdownContent(message),
@@ -139,6 +105,109 @@ export function renderChatTranscript(
   });
 
   applyScrollAnchor(transcriptEl, scroll);
+}
+
+function renderHeaderActions(
+  header: HTMLElement,
+  message: ChatDisplayMessage,
+  index: number,
+  options: ChatTranscriptOptions,
+): void {
+  let actions: HTMLElement | null = null;
+  const ensureActions = (): HTMLElement => {
+    actions ??= header.createDiv({ cls: "ixplorer-chat__message-actions" });
+    return actions;
+  };
+
+  if (message.role === "user") {
+    createMessageIconButton(
+      ensureActions(),
+      "pencil",
+      "Edit question",
+      "ixplorer-chat__message-edit",
+      () => options.onEditQuestion(index),
+    );
+    createMessageIconButton(
+      ensureActions(),
+      "copy",
+      "Copy message",
+      "ixplorer-chat__message-copy",
+      () => {
+        void copyToClipboard(messageDisplayContent(message));
+      },
+    );
+  }
+
+  if (shouldShowDiagnosticAction(message, options.isDebugMode)) {
+    createMessageIconButton(
+      ensureActions(),
+      "bug",
+      "Open diagnostic report",
+      "ixplorer-chat__message-diagnostic",
+      () => options.onOpenDiagnosticReport(message.contextDiagnostics!),
+    );
+  }
+}
+
+function renderAssistantAnswerHeader(
+  answerEl: HTMLElement,
+  message: ChatDisplayMessage,
+  options: ChatTranscriptOptions,
+): void {
+  const hasFinalAnswerText = messageMarkdownContent(message).trim().length > 0;
+  if (!hasFinalAnswerText && !shouldShowAnswerNoteActions(message)) {
+    return;
+  }
+
+  const header = answerEl.createDiv({ cls: "ixplorer-chat__answer-header" });
+  header.createSpan({
+    cls: "ixplorer-chat__answer-status-dot",
+    attr: { "aria-hidden": "true" },
+  });
+  const actions = header.createDiv({ cls: "ixplorer-chat__answer-actions" });
+  createMessageIconButton(actions, "copy", "Copy message", "ixplorer-chat__message-copy", () => {
+    void copyToClipboard(messageDisplayContent(message));
+  });
+
+  if (shouldShowAnswerNoteActions(message)) {
+    createMessageIconButton(
+      actions,
+      "file-plus-2",
+      "Save answer to new note",
+      "ixplorer-chat__message-save-answer",
+      () => options.onSaveAnswerToNewNote(message.answer!),
+    );
+    createMessageIconButton(
+      actions,
+      "file-input",
+      "Append answer to active note",
+      "ixplorer-chat__message-append-answer",
+      () => options.onAppendAnswerToActiveNote(message.answer!),
+    );
+  }
+}
+
+function createMessageIconButton(
+  containerEl: HTMLElement,
+  icon: string,
+  label: string,
+  className: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = containerEl.createEl("button", {
+    cls: className,
+    attr: {
+      type: "button",
+      "aria-label": label,
+      title: label,
+    },
+  });
+  setIcon(button, icon);
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onClick();
+  });
+  return button;
 }
 
 export function patchActiveAssistantMessage(
@@ -172,6 +241,7 @@ export function patchActiveAssistantMessage(
   }
   answerEl.empty();
   const citationRefs = buildCitationRefs(message.evidence ?? []);
+  renderAssistantAnswerHeader(answerEl, message, options);
   void MarkdownRenderer.render(
     options.app,
     messageMarkdownContent(message),
@@ -388,7 +458,9 @@ function renderToolNode(
     renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, uiState);
   }
   if (item.children && item.children.length > 0) {
-    const nested = body.createDiv({ cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested" });
+    const nested = body.createDiv({
+      cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested",
+    });
     for (const child of item.children) {
       if (child.kind === "tool-call") {
         renderToolNode(nested, child, options, uiState);

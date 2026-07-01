@@ -1,6 +1,12 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
-import { SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferChatTitle } from "../../../../core/chat/savedChat";
+import {
+  SaveChatInput,
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+  inferChatTitle,
+} from "../../../../core/chat/savedChat";
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import { IndexingState } from "@adapters/indexing";
 import { estimateResearchRequestTokens } from "@core/research";
@@ -28,7 +34,10 @@ import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
 import { DiagnosticReportModalController } from "../DiagnosticReportModal";
-import { ContextDocumentPickerModal, isContextDocumentPath } from "./context/ContextDocumentPickerModal";
+import {
+  ContextDocumentPickerModal,
+  isContextDocumentPath,
+} from "./context/ContextDocumentPickerModal";
 import { IndexControlActions } from "../index/IndexControl";
 import { IndexSearchController, IndexSearchOptions } from "../index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
@@ -292,7 +301,6 @@ export class IxplorerChatView extends ItemView {
   private headerOptions(): Parameters<typeof renderPanelTabs>[1] {
     return {
       activePanel: this.activePanel,
-      canSaveAnswer: this.lastAnswer !== null,
       onPanelChange: (panel) => {
         this.activePanel = panel;
         this.render();
@@ -303,8 +311,6 @@ export class IxplorerChatView extends ItemView {
       onNewChat: () => {
         void this.startNewChat();
       },
-      onSaveAnswerToNewNote: () => void this.saveAnswerToNewNote(),
-      onAppendAnswerToActiveNote: () => void this.appendAnswerToActiveNote(),
     };
   }
 
@@ -396,6 +402,8 @@ export class IxplorerChatView extends ItemView {
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
+      onSaveAnswerToNewNote: (answer) => void this.saveAnswerToNewNote(answer),
+      onAppendAnswerToActiveNote: (answer) => void this.appendAnswerToActiveNote(answer),
     };
   }
 
@@ -556,7 +564,8 @@ export class IxplorerChatView extends ItemView {
   }
 
   private async updateChatModel(model: string): Promise<void> {
-    const normalizedModel = model.trim() || createDefaultChatSettings(this.services).chatModelProfileId;
+    const normalizedModel =
+      model.trim() || createDefaultChatSettings(this.services).chatModelProfileId;
     this.currentChatSettings = {
       ...this.currentChatSettings,
       chatModelProfileId: normalizedModel,
@@ -767,19 +776,11 @@ export class IxplorerChatView extends ItemView {
     });
   }
 
-  private async saveAnswerToNewNote(): Promise<void> {
-    if (!this.lastAnswer) {
-      return;
-    }
-
-    await this.answerNoteWriter.saveAnswerToNewNote(this.lastAnswer);
+  private async saveAnswerToNewNote(answer: ResearchAnswer): Promise<void> {
+    await this.answerNoteWriter.saveAnswerToNewNote(answer);
   }
 
-  private async appendAnswerToActiveNote(): Promise<void> {
-    if (!this.lastAnswer) {
-      return;
-    }
-
-    await this.answerNoteWriter.appendAnswerToActiveNote(this.lastAnswer);
+  private async appendAnswerToActiveNote(answer: ResearchAnswer): Promise<void> {
+    await this.answerNoteWriter.appendAnswerToActiveNote(answer);
   }
 }

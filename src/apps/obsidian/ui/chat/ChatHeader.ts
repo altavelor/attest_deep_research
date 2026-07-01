@@ -4,12 +4,9 @@ export type IxplorerPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
   activePanel: IxplorerPanel;
-  canSaveAnswer: boolean;
   onPanelChange(panel: IxplorerPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
   onNewChat(): void;
-  onSaveAnswerToNewNote(): void;
-  onAppendAnswerToActiveNote(): void;
 }
 
 export function renderPanelTabs(containerEl: HTMLElement, options: ChatHeaderOptions): void {
@@ -34,18 +31,6 @@ export function renderChatWindowActions(
     label: "New chat",
     disabled: false,
     onClick: options.onNewChat,
-  });
-  createHeaderIconButton(actions, {
-    icon: "file-plus-2",
-    label: "Save answer to new note",
-    disabled: !options.canSaveAnswer,
-    onClick: options.onSaveAnswerToNewNote,
-  });
-  createHeaderIconButton(actions, {
-    icon: "file-input",
-    label: "Append answer to active note",
-    disabled: !options.canSaveAnswer,
-    onClick: options.onAppendAnswerToActiveNote,
   });
 }
 

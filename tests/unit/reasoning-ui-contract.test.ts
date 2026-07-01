@@ -14,6 +14,19 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain("ixplorer-chat__message-content--workflow");
   });
 
+  it("places assistant answer actions on the final answer element, after workflow rendering", () => {
+    expect(transcript.indexOf('cls: "ixplorer-chat__answer-content"')).toBeLessThan(
+      transcript.indexOf("renderAssistantAnswerHeader(answerEl, message, options)"),
+    );
+    expect(transcript).toContain("function renderAssistantAnswerHeader");
+  });
+
+  it("marks the final answer with a green dot", () => {
+    expect(transcript).toContain("ixplorer-chat__answer-status-dot");
+    expect(styles).toContain(".ixplorer-chat__answer-status-dot");
+    expect(styles).toContain("var(--color-green");
+  });
+
   it("collapses long thinking blocks but keeps short ones inline", () => {
     expect(transcript).toContain("isLongThinking");
     expect(transcript).toContain('"data-thinking-id"');
