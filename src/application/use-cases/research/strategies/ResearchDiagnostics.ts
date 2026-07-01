@@ -6,7 +6,7 @@ import {
   WebContextDiagnostics,
 } from "../../../../core/diagnostics";
 import { RetrievedChunk } from "@core/model";
-import { estimateTextTokens } from "../../../../core/research/prompts";
+import { estimateTextTokens } from "@core/research";
 
 export function withRetrievalDiagnostics(
   diagnostics: ContextDiagnostics,

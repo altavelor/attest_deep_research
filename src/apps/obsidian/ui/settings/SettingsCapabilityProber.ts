@@ -1,30 +1,30 @@
 import { Notice } from "obsidian";
 
 import type IxplorerPlugin from "../../main";
-import { ChatModelClient } from "../../../../adapters/model-provider/chat/ChatModelClient";
+import { ChatModelClient } from "@adapters/model-provider";
 import {
   isResponsesCapabilityCurrent,
   probeResponsesCapabilities,
-} from "../../../../adapters/settings/responsesCapabilityProbe";
-import { startChatProfileProbes as startChatProfileProbeTasks } from "../../../../adapters/settings/chatProfileProbes";
+} from "@adapters/settings";
+import { startChatProfileProbes as startChatProfileProbeTasks } from "@adapters/settings";
 import {
   fetchAvailableModels,
   fetchModelContextLength,
   verifyEmbeddingCapability,
   DiscoveredModel,
-} from "../../../../adapters/settings/connectionTests";
+} from "@adapters/settings";
 import {
   probeToolControlCapabilities,
   ToolCapabilityProbeResult,
-} from "../../../../adapters/settings/toolCapabilityProbe";
-import { createToolCapabilitySettings } from "../../../../adapters/settings/toolCapabilities";
+} from "@adapters/settings";
+import { createToolCapabilitySettings } from "@adapters/settings";
 import {
   capabilityCacheKey,
   ModelCapabilitySnapshot,
   unknownSnapshot,
-} from "../../../../adapters/settings/modelCapabilityCache";
-import { probeReasoningVisibility } from "../../../../adapters/settings/reasoningVisibilityProbe";
-import { ChatModelProfile, ServerProfile } from "../../../../adapters/settings/types";
+} from "@adapters/settings";
+import { probeReasoningVisibility } from "@adapters/settings";
+import { ChatModelProfile, ServerProfile } from "@adapters/settings";
 
 /** What the prober needs from the settings tab that hosts it. */
 export interface CapabilityProberHost {

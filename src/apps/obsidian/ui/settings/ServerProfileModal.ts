@@ -1,10 +1,10 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 
-import { ApiFormat } from "../../../../core/agent/protocol";
-import { MAX_PROFILE_NAME_LENGTH } from "../../../../adapters/settings/constants";
-import { normalizeUrl } from "../../../../adapters/settings/parsers";
-import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "../../../../adapters/settings/profileQueries";
-import { ServerProfile } from "../../../../adapters/settings/types";
+import { ApiFormat } from "@core/agent";
+import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
+import { normalizeUrl } from "@adapters/settings";
+import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
+import { ServerProfile } from "@adapters/settings";
 import { renderModalActions } from "./shared";
 
 export interface ServerProfileModalOptions {

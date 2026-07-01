@@ -2,9 +2,9 @@ import {
   DeepResearchReportSource,
   formatDeepResearchReport,
   remapReportEvidenceIds,
-} from "../../../core/research/deepResearch/deepResearchReport";
-import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
-import { DEEP_SEARCH_TOOL } from "../../../core/agent/toolNames";
+} from "@core/research";
+import { ToolParseResult, toolFailure } from "@core/agent";
+import { DEEP_SEARCH_TOOL } from "@core/agent";
 import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
 import { EvidenceRegistry } from "@application/sources";
 import { defineTool, str } from "@application/sources/tools";

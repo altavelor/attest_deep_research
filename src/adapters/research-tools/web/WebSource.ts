@@ -1,7 +1,7 @@
 // Web data source (stage 1, task 5.2). Wraps a web search provider and
 // contributes web search/fetch tools to the agent loop.
 
-import { Tool } from "../../../core/agent/tool";
+import { Tool } from "@core/agent";
 import { SearchProvider } from "../../../application/ports/web";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";

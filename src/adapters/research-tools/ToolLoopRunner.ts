@@ -6,7 +6,7 @@
 // The existing ToolLoopRunnerOptions API (with chatModel) is preserved for callers.
 
 import { ChatCompletionsRoundAdapter } from "../model-provider/chat/rounds/ChatCompletionsRoundAdapter";
-import { ToolLabeler, runAgentLoop } from "../../core/agent/AgentLoop";
+import { ToolLabeler, runAgentLoop } from "@core/agent";
 import {
   ToolLoopResult,
   ToolLoopRunnerOptions,

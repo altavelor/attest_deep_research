@@ -1,5 +1,5 @@
-import { probeReasoningVisibility } from "../../src/adapters/settings/reasoningVisibilityProbe";
-import { ChatModelProvider } from "../../src/core/agent/protocol";
+import { probeReasoningVisibility } from "@adapters/settings";
+import { ChatModelProvider } from "@core/agent";
 
 describe("reasoning visibility probe", () => {
   it("uses one bounded request without tools and reports observed formats", async () => {

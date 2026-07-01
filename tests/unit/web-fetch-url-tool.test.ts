@@ -1,5 +1,5 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { executeTool } from "../../src/core/agent/tool";
+import { executeTool } from "@core/agent";
 import { WebFetchUrlTool } from "../../src/adapters/research-tools/web/WebFetchUrlTool";
 import { SearchProvider } from "../../src/application/ports/web";
 

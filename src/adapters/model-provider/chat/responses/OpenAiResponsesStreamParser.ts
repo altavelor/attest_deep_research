@@ -1,5 +1,5 @@
 import { IxplorerError } from "../../../../core/errors";
-import { ModelOutputItem, ModelRoundResult } from "../../../../core/agent/protocol";
+import { ModelOutputItem, ModelRoundResult } from "@core/agent";
 
 export interface ParsedResponsesRound {
   result: ModelRoundResult;

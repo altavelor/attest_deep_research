@@ -3,10 +3,10 @@ import { ContextFileProvider } from "../../../application/ports/vault";
 import { VaultWriter } from "../../../application/ports/vault";
 import { normalizeVaultPath } from "../../../shared/pathFilters";
 import { Extractor } from "../../../application/ports/indexing";
-import { ChatToolCall, ChatToolDefinition } from "../../../core/agent/tool";
+import { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import { Citation } from "@core/model";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";
-import { estimateTextTokens } from "../../../core/research/prompts";
+import { estimateTextTokens } from "@core/research";
 import { applyNoteCitations, maxFootnoteNumber } from "./noteCitations";
 import {
   NOTE_MUTATION_TOOL_DEFINITIONS,

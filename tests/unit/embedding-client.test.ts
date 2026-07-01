@@ -1,4 +1,4 @@
-import { EmbeddingClient } from "../../src/adapters/model-provider/embeddings/EmbeddingClient";
+import { EmbeddingClient } from "@adapters/model-provider";
 import { IxplorerError } from "../../src/core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {

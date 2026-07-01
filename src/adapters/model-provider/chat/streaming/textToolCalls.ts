@@ -1,4 +1,4 @@
-import { ChatToolCall, ChatToolDefinition } from "../../../../core/agent/tool";
+import { ChatToolCall, ChatToolDefinition } from "@core/agent";
 
 /**
  * Some local models (notably via Ollama chat templates that lack tool-call parsing)

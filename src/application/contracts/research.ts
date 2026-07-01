@@ -4,7 +4,7 @@ import { ResearchAnswer } from "../../core/answer";
 import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
 import { LanguageInventoryItem } from "@core/model";
 import { SourceReference } from "@core/model";
-import { ResearchChatHistoryMessage } from "../../core/research/prompts";
+import { ResearchChatHistoryMessage } from "@core/research";
 import {
   FindInIndexOptions,
   FindInIndexMatch,
@@ -89,8 +89,8 @@ export interface QueryExpansion {
   buildVariants(request: QueryVariantsRequest): Promise<RetrievalQueryVariant[]>;
 }
 
-export type { ResearchSearchMode } from "../../core/research/searchMode";
-import type { ResearchSearchMode } from "../../core/research/searchMode";
+export type { ResearchSearchMode } from "@core/research";
+import type { ResearchSearchMode } from "@core/research";
 
 export interface ResearchRequest {
   question: string;

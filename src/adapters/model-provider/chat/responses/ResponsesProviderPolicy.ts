@@ -3,7 +3,7 @@
 // unit-tested without constructing a plugin. Returns the verified reasoning
 // settings to build the client with, or throws IxplorerError describing why not.
 
-import { ApiFormat } from "../../../../core/agent/protocol";
+import { ApiFormat } from "@core/agent";
 import { IxplorerError } from "../../../../core/errors";
 import { ReasoningCapabilitySettings } from "../../../settings/types";
 

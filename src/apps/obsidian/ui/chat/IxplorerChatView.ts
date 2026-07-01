@@ -3,7 +3,7 @@ import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferChatTitle } from "../../../../core/chat/savedChat";
 import { chatHistoryForPrompt } from "../../../../application/use-cases/chat/ChatCompaction";
 import { IndexingState } from "../../../../adapters/indexing/IndexingService";
-import { estimateResearchRequestTokens } from "../../../../core/research/prompts";
+import { estimateResearchRequestTokens } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import { ResearchAnswer } from "../../../../core/answer";

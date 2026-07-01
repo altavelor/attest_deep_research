@@ -1,4 +1,4 @@
-import { ChatModelProvider } from "../../core/agent/protocol";
+import { ChatModelProvider } from "@core/agent";
 
 export interface ReasoningVisibilityProbeOptions {
   provider: ChatModelProvider;

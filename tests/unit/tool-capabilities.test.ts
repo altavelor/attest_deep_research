@@ -4,7 +4,7 @@ import {
   describeToolCapability,
   resolveToolCapabilities,
   withProbeResults,
-} from "../../src/adapters/settings/toolCapabilities";
+} from "@adapters/settings";
 
 describe("tool capability resolution", () => {
   it("uses conservative format defaults", () => {

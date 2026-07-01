@@ -1,4 +1,4 @@
-import { ToolCallingCapabilities } from "../../core/agent/tool";
+import { ToolCallingCapabilities } from "@core/agent";
 import { ToolCapabilityProbeAudit } from "../../core/diagnostics";
 
 export type ToolCapabilitySource = "format-default" | "probe";

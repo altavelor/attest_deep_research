@@ -8,7 +8,7 @@ import {
   DeepResearchFinding,
   DeepResearchReport,
   isDeepResearchReliability,
-} from "../../../../core/research/deepResearch/deepResearchReport";
+} from "@core/research";
 
 const MAX_REPORT_INPUT_CHARS = 40_000;
 

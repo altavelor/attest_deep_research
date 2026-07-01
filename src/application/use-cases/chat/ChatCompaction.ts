@@ -1,6 +1,6 @@
-import { ChatModelProvider } from "../../../core/agent/protocol";
+import { ChatModelProvider } from "@core/agent";
 import { sourceLabel } from "@core/retrieval";
-import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "../../../core/research/prompts";
+import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "@core/research";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "../../../core/conversation/model";
 
 export const COMPACTION_RECENT_MESSAGE_COUNT = 4;

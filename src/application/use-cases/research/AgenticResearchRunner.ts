@@ -1,7 +1,7 @@
-import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "../../../core/agent/protocol";
-import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "../../../core/agent/tool";
+import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
+import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
 import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "../../../core/diagnostics";
-import { ResearchExecutionPolicy } from "../../../core/research/ResearchExecutionPolicy";
+import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "../../tools/ToolManager";
 import {
   toolCallChainLabel,

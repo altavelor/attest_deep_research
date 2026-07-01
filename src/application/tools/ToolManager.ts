@@ -7,7 +7,7 @@ import {
   ToolPermissions,
   executeTool,
   toolFailure,
-} from "../../core/agent/tool";
+} from "@core/agent";
 
 /**
  * Registry the agent loop queries for tools. Holds the handler map, exposes

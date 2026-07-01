@@ -4,7 +4,7 @@
 // Obsidian's TFile/Vault. GraphContextProvider is owned by core (the pure graph
 // logic depends on it) and re-exported here so all vault ports share one surface.
 
-export type { GraphContextProvider } from "../../core/research/GraphContext";
+export type { GraphContextProvider } from "@core/research";
 
 /** Read access to vault documents (VaultContentPort). */
 export interface ContextFileProvider {

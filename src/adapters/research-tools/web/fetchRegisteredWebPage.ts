@@ -7,7 +7,7 @@
 import { SearchProvider } from "../../../application/ports/web";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
-import { ToolExecution, toolFailure } from "../../../core/agent/tool";
+import { ToolExecution, toolFailure } from "@core/agent";
 
 export interface FetchWebPageOutput {
   resultId: string;

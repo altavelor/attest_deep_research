@@ -1,4 +1,4 @@
-import { ChatApiProtocol } from "../../core/agent/protocol";
+import { ChatApiProtocol } from "@core/agent";
 import { IndexProfile } from "../indexing/store/FileVectorIndexStore";
 import { MAX_PROFILE_NAME_LENGTH } from "./constants";
 import { cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "./defaults";

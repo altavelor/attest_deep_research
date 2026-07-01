@@ -1,8 +1,8 @@
 import { ProviderHttpClient } from "../../common/http";
 import { parseServerSentEvents } from "../../common/streams";
 import { isRecord } from "../../../../shared/guards";
-import { ChatMessage, ModelRoundProvider, ModelRoundRequest, ModelRoundResult, ModelStreamEvent, ModelToolOutput, ProviderContinuationState } from "../../../../core/agent/protocol";
-import { ChatToolChoice, ChatToolDefinition } from "../../../../core/agent/tool";
+import { ChatMessage, ModelRoundProvider, ModelRoundRequest, ModelRoundResult, ModelStreamEvent, ModelToolOutput, ProviderContinuationState } from "@core/agent";
+import { ChatToolChoice, ChatToolDefinition } from "@core/agent";
 import type { PluginRequestLogger } from "../../../settings/debugLogger";
 import { IxplorerError } from "../../../../core/errors";
 import { parseResponsesTerminalEvent, protocolError } from "./OpenAiResponsesStreamParser";

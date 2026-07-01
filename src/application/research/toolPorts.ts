@@ -6,8 +6,8 @@
 
 import type { SearchProvider } from "../ports/web";
 import type { DeepResearchRunner } from "./deepResearchPort";
-import type { ChatModelProvider } from "../../core/agent/protocol";
-import type { ChatToolCall, ChatToolDefinition } from "../../core/agent/tool";
+import type { ChatModelProvider } from "@core/agent";
+import type { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import type { Citation } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "../sources/evidence";
 import type { ResearchRetriever } from "../contracts/research";
@@ -16,7 +16,7 @@ import type {
   AgentLoopOptions,
   AgentLoopEvent,
   AgentLoopResult,
-} from "../../core/agent/AgentLoop";
+} from "@core/agent";
 import type { ToolManager } from "../tools/ToolManager";
 import type { ResearchSearchMode } from "../contracts/research";
 

@@ -3,7 +3,7 @@
 // binds the concrete note service) and gated per-tool via permissions in the
 // ToolManager, so this source is now just a thin descriptor + tool holder.
 
-import { Tool } from "../../core/agent/tool";
+import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "./DataSource";
 
 export interface AttachmentSourceOptions {

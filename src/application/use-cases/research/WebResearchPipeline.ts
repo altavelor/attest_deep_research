@@ -5,7 +5,7 @@ import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { tokenSetForSearch } from "@core/retrieval";
 import { normalizeInlineWhitespace } from "../../../shared/whitespace";
-import { estimateTextTokens } from "../../../core/research/prompts";
+import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "../../contracts/research";
 
 export interface ResearchEvidenceResult {

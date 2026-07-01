@@ -1,4 +1,4 @@
-import { executeTool } from "../../src/core/agent/tool";
+import { executeTool } from "@core/agent";
 import { WebPageMetadataTool } from "../../src/adapters/research-tools/web/WebPageMetadataTool";
 import { SearchProvider } from "../../src/application/ports/web";
 

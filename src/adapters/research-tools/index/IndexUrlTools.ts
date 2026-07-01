@@ -10,8 +10,8 @@ import {
   ToolExecution as ResearchToolExecution,
   ToolParseResult as ResearchToolParseResult,
   toolFailure,
-} from "../../../core/agent/tool";
-import { CHECK_URLS_TOOL, LIST_INDEX_URLS_TOOL } from "../../../core/agent/toolNames";
+} from "@core/agent";
+import { CHECK_URLS_TOOL, LIST_INDEX_URLS_TOOL } from "@core/agent";
 
 interface ListIndexUrlsInput {
   cursor?: string;

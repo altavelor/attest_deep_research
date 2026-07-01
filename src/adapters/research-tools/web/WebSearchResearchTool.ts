@@ -4,8 +4,8 @@ import {
   BoundedSearchInput,
   parseBoundedSearchInput,
 } from "../../../application/research/boundedSearchInput";
-import { toolFailure } from "../../../core/agent/tool";
-import { WEB_SEARCH_TOOL } from "../../../core/agent/toolNames";
+import { toolFailure } from "@core/agent";
+import { WEB_SEARCH_TOOL } from "@core/agent";
 import { defineTool, int, str } from "@application/sources/tools";
 
 export interface SearchWebOutput {

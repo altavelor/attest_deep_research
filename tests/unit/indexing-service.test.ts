@@ -1,5 +1,5 @@
 import { Extractor, IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, SourceSnapshotIndexStore } from "../../src/application/ports/indexing";
-import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { IxplorerError } from "../../src/core/errors";
 import {

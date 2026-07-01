@@ -1,8 +1,8 @@
 import { SearchProvider } from "../../../application/ports/web";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
-import { toolFailure } from "../../../core/agent/tool";
-import { WEB_FETCH_URL_TOOL } from "../../../core/agent/toolNames";
+import { toolFailure } from "@core/agent";
+import { WEB_FETCH_URL_TOOL } from "@core/agent";
 import { defineTool, str } from "@application/sources/tools";
 import { FetchWebPageOutput, fetchRegisteredWebPage } from "./fetchRegisteredWebPage";
 

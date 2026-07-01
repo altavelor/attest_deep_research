@@ -1,4 +1,4 @@
-import { ChatModelProvider, ModelOutputItem, ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "../../../../core/agent/protocol";
+import { ChatModelProvider, ModelOutputItem, ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "@core/agent";
 import { IxplorerError } from "../../../../core/errors";
 
 export class ChatCompletionsRoundAdapter implements ModelRoundProvider {

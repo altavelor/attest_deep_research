@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "fs";
 import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
-import { ChatCompletionsRoundAdapter } from "../../src/adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { join } from "path";
 
 import { ResearchService } from "@application/use-cases/research";
@@ -9,7 +9,7 @@ import {
   DUCK_DUCK_GO_DESCRIPTION,
   EMBEDDING_PROVIDER_DESCRIPTION,
   INDEX_FOLDER_DESCRIPTION,
-} from "../../src/adapters/settings/privacyCopy";
+} from "@adapters/settings";
 import { collectAsync } from "../helpers/async";
 import { citation, markdownSource, retrieved } from "../helpers/factories";
 import { FakeChatModel, FakeRetriever, RecordingSearchProvider } from "../helpers/researchFakes";

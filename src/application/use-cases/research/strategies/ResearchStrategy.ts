@@ -1,5 +1,5 @@
-import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "../../../../core/agent/protocol";
-import { ToolCallingCapabilities } from "../../../../core/agent/tool";
+import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
+import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "../../../../core/answer";
 import {
   ContextDiagnostics,
@@ -8,8 +8,8 @@ import {
   ResearchExecutionStrategy,
   ToolCapabilityProbeAudit,
 } from "../../../../core/diagnostics";
-import { EvidencePlanner } from "../../../../core/research/evidence-planner/EvidencePlanner";
-import { ResearchExecutionPolicy } from "../../../../core/research/ResearchExecutionPolicy";
+import { EvidencePlanner } from "@core/research";
+import { ResearchExecutionPolicy } from "@core/research";
 import { SearchProvider } from "../../../ports/web";
 import {
   ResearchRequest,

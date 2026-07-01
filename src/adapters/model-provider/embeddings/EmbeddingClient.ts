@@ -1,6 +1,6 @@
 import { IxplorerError } from "../../../core/errors";
 import { isRecord } from "../../../shared/guards";
-import { ApiFormat, EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "../../../core/agent/protocol";
+import { ApiFormat, EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "@core/agent";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { withLoggedErrors } from "../common/withLoggedErrors";

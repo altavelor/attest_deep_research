@@ -1,5 +1,5 @@
 import { IndexStore } from "../../src/application/ports/indexing";
-import { EmbeddingProviderClient } from "../../src/core/agent/protocol";
+import { EmbeddingProviderClient } from "@core/agent";
 import { RetrievedChunk } from "@core/model";
 import { RetrievalOptions } from "@core/retrieval";
 import { filterRetrievedChunks } from "@core/retrieval";

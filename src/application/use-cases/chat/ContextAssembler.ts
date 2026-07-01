@@ -13,8 +13,8 @@ import {
   GraphContextProvider,
   GraphContextLimits,
   GraphRoot,
-} from "../../../core/research/GraphContext";
-import { estimateTextTokens, ResearchChatHistoryMessage } from "../../../core/research/prompts";
+} from "@core/research";
+import { estimateTextTokens, ResearchChatHistoryMessage } from "@core/research";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;

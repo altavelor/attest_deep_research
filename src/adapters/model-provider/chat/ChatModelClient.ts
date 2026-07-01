@@ -10,8 +10,8 @@ import {
 
 import { IxplorerError } from "../../../core/errors";
 import { isRecord } from "../../../shared/guards";
-import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "../../../core/agent/protocol";
-import { ChatToolCall } from "../../../core/agent/tool";
+import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
+import { ChatToolCall } from "@core/agent";
 import type { PluginRequestLogger } from "../../settings/debugLogger";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import { InlineReasoningParser } from "./streaming/InlineReasoningParser";

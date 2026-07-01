@@ -1,6 +1,6 @@
 import { IndexResearchTool } from "../../src/adapters/research-tools/index/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
-import { executeTool } from "../../src/core/agent/tool";
+import { executeTool } from "@core/agent";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 import { markdownSource, retrieved } from "../helpers/factories";
 

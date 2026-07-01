@@ -1,4 +1,4 @@
-import { contextLengthInputAfterDiscovery } from "../../src/adapters/settings/modelContext";
+import { contextLengthInputAfterDiscovery } from "@adapters/settings";
 
 describe("contextLengthInputAfterDiscovery", () => {
   it("uses discovered model metadata when available", () => {
