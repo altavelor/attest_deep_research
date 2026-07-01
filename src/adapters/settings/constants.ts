@@ -1,5 +1,6 @@
 export const DEFAULT_INDEX_PROFILE_ID = "default";
 export const DEFAULT_INDEX_FOLDER = ".ixplorer/index";
+export const DEFAULT_DOWNLOAD_FOLDER = "Ixplorer/Downloads";
 export const DEFAULT_ANTHROPIC_MAX_TOKENS = 4096;
 export const MAX_INDEX_PROFILE_COUNT = 30;
 export const MAX_PROFILE_NAME_LENGTH = 30;

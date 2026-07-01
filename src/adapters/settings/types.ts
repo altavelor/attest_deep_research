@@ -106,6 +106,8 @@ export interface IxplorerSettings {
   graphContextDepth: number;
   useWebWhenFreshnessNeeded: boolean;
   forceEagerResearch: boolean;
+  /** Default vault folder for documents downloaded on demand (PDFs etc.). */
+  downloadFolder: string;
   debugMode: boolean;
   modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;
 }

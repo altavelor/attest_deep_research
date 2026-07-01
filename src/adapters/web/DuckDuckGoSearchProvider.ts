@@ -6,6 +6,7 @@ import {
   WebPageFetchFailure,
   WebPageFetchResult,
   WebPageMetadataResult,
+  WebDocumentFetchResult,
   WebSearchOptions,
 } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
@@ -191,10 +192,30 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     };
   }
 
-  /** Shared fetch core for fetchPage/fetchMetadata: follows redirects, reads bounded HTML. */
+  async fetchDocument(
+    url: string,
+    options: WebPageFetchOptions = {},
+  ): Promise<WebDocumentFetchResult> {
+    const raw = await this.fetchRawPage(url, options, isDocumentContentType);
+    if (!raw.ok) {
+      return raw.result;
+    }
+    return {
+      ok: true,
+      url: raw.url,
+      finalUrl: raw.finalUrl,
+      data: raw.bytes,
+      contentType: raw.contentType,
+      bytes: raw.byteLength,
+      redirects: raw.redirects,
+    };
+  }
+
+  /** Shared fetch core for fetchPage/fetchMetadata/fetchDocument: follows redirects, reads bounded body. */
   private async fetchRawPage(
     url: string,
     options: WebPageFetchOptions,
+    acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
   ): Promise<RawPageResult> {
     const initial = validatePublicWebUrl(url);
     if (!initial.ok) {
@@ -265,7 +286,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       }
 
       const contentType = normalizedContentType(response.headers.get("content-type"));
-      if (!isSupportedPageContentType(contentType)) {
+      if (!acceptContentType(contentType)) {
         return {
           ok: false,
           result: pageFailure("web-fetch-content-type", "Page content type is not supported.", false, {
@@ -292,6 +313,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         url: initial.url,
         finalUrl: currentUrl,
         rawText: new TextDecoder().decode(body.bytes),
+        bytes: body.bytes,
         contentType,
         byteLength: body.bytes.byteLength,
         redirects,
@@ -424,6 +446,7 @@ type RawPageResult =
       url: string;
       finalUrl: string;
       rawText: string;
+      bytes: Uint8Array;
       contentType: string;
       byteLength: number;
       redirects: string[];
@@ -477,6 +500,22 @@ function isSupportedPageContentType(contentType: string): boolean {
     contentType === "text/plain"
   );
 }
+
+/** Content types accepted for on-demand document download (primarily PDFs). */
+function isDocumentContentType(contentType: string): boolean {
+  return DOCUMENT_CONTENT_TYPES.has(contentType);
+}
+
+const DOCUMENT_CONTENT_TYPES = new Set<string>([
+  "application/pdf",
+  "application/x-pdf",
+  "application/epub+zip",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/rtf",
+  "text/plain",
+  "application/octet-stream",
+]);
 
 async function readBoundedBody(
   response: Response,

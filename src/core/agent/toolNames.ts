@@ -31,6 +31,10 @@ export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
 // --- Deep research ---
 export const DEEP_SEARCH_TOOL = "deep_search";
 
+// --- Document download ---
+export const PROBE_DOCUMENT_URL_TOOL = "probe_document_url";
+export const DOWNLOAD_DOCUMENT_TOOL = "download_document";
+
 // --- Note editing (read-only) ---
 export const READ_NOTE_TOOL = "read_note";
 export const SEARCH_NOTES_TOOL = "search_notes";

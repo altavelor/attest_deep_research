@@ -11,6 +11,7 @@ import {
 import { EvidencePlanner } from "@core/research";
 import { ResearchExecutionPolicy } from "@core/research";
 import { SearchProvider } from "@application/ports/web";
+import { VaultWriter } from "@application/ports/vault";
 import {
   ResearchRequest,
   ResearchRetriever,
@@ -53,6 +54,8 @@ export interface ResearchStrategyDeps {
   urlStatusChecker?: UrlStatusChecker;
   searchProvider?: SearchProvider;
   noteTools?: NoteToolService;
+  vaultWriter?: VaultWriter;
+  downloadFolder?: string;
   toolsetFactory: ResearchToolsetFactory;
   /** Launches deep-research sub-agents for the `deep_search` tool, when available. */
   deepResearchRunner?: DeepResearchRunner;

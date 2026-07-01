@@ -61,9 +61,24 @@ export interface WebPageMetadataSuccess {
 
 export type WebPageMetadataResult = WebPageMetadataSuccess | WebPageFetchFailure;
 
+/** Raw bytes of a downloadable document (PDF etc.), fetched for storage — not text extraction. */
+export interface WebDocumentFetchSuccess {
+  ok: true;
+  url: string;
+  finalUrl: string;
+  data: Uint8Array;
+  contentType: string;
+  bytes: number;
+  redirects: string[];
+}
+
+export type WebDocumentFetchResult = WebDocumentFetchSuccess | WebPageFetchFailure;
+
 export interface SearchProvider {
   search(query: string, options?: WebSearchOptions): Promise<SearchProviderResult[]>;
   fetchPage?(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult>;
   /** Fetch only head metadata (title/OG/author/published) without page text. */
   fetchMetadata?(url: string, options?: WebPageFetchOptions): Promise<WebPageMetadataResult>;
+  /** Fetch raw document bytes (PDF and similar) for on-demand storage in the vault. */
+  fetchDocument?(url: string, options?: WebPageFetchOptions): Promise<WebDocumentFetchResult>;
 }

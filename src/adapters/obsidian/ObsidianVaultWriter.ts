@@ -17,6 +17,17 @@ export class ObsidianVaultWriter implements VaultWriter {
     }
   }
 
+  async createBinaryFile(path: string, data: Uint8Array): Promise<void> {
+    // Copy into a fresh, exactly-sized ArrayBuffer (data may be a view/SharedArrayBuffer).
+    const buffer = new Uint8Array(data).buffer as ArrayBuffer;
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof TFile) {
+      await this.app.vault.modifyBinary(existing, buffer);
+    } else {
+      await this.app.vault.createBinary(path, buffer);
+    }
+  }
+
   async modifyFile(path: string, content: string): Promise<void> {
     const file = this.requireFile(path);
     await this.app.vault.modify(file, content);

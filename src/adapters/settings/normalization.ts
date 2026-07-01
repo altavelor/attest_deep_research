@@ -1,6 +1,6 @@
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
-import { DEFAULT_INDEX_PROFILE_ID } from "./constants";
-import { normalizeIndexProfileNumbers } from "./parsers";
+import { DEFAULT_DOWNLOAD_FOLDER, DEFAULT_INDEX_PROFILE_ID } from "./constants";
+import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";
 
 export function normalizeSettingsState(settings: IxplorerSettings): void {
@@ -9,6 +9,11 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
   normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
   normalizeActiveIndexProfile(settings);
+  // Backfilled for settings saved before the download tools existed.
+  settings.downloadFolder =
+    typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
+      ? normalizeVaultFolder(settings.downloadFolder)
+      : DEFAULT_DOWNLOAD_FOLDER;
 }
 
 export function isProfileSuspended(profile: { isSuspended?: boolean }): boolean {
