@@ -3,11 +3,11 @@
 // and display content (which strips rendered citation IDs). They depend on UI/
 // indexing concerns and therefore stay in the UI layer, not core/conversation.
 
-import { IndexingState } from "../../../../adapters/indexing/IndexingService";
-import { formatIndexSize } from "../../../../adapters/indexing/inventory/indexSize";
+import { IndexingState } from "@adapters/indexing";
+import { formatIndexSize } from "@adapters/indexing";
 import { Citation } from "@core/model";
-import { ChatDisplayMessage } from "../../../../core/conversation/model";
-import { messageMarkdownContent } from "../../../../core/conversation/reducers";
+import { ChatDisplayMessage } from "@core/conversation";
+import { messageMarkdownContent } from "@core/conversation";
 import { citationTarget as citationTargetString } from "@application/use-cases/research";
 import { stripRenderedCitationIds } from "./citations/citationText";
 

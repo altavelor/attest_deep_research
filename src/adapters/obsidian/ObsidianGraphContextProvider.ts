@@ -1,6 +1,6 @@
 import { MetadataCache, TFile, Vault } from "obsidian";
 
-import { normalizeVaultPath } from "../../shared/pathFilters";
+import { normalizeVaultPath } from "@shared";
 import {
   createGraphCandidate,
   GraphContextDiscovery,

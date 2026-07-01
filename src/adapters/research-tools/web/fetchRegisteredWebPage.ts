@@ -4,7 +4,7 @@
 // upgrades the evidence entry, and returns the normalized fetch output. The tools
 // differ only in how the resultId is obtained and how the content is post-shaped.
 
-import { SearchProvider } from "../../../application/ports/web";
+import { SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "@core/agent";

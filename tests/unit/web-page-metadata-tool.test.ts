@@ -1,6 +1,6 @@
 import { executeTool } from "@core/agent";
 import { WebPageMetadataTool } from "../../src/adapters/research-tools/web/WebPageMetadataTool";
-import { SearchProvider } from "../../src/application/ports/web";
+import { SearchProvider } from "@application/ports";
 
 describe("WebPageMetadataTool", () => {
   it("returns parsed metadata for a public URL", async () => {

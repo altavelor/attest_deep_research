@@ -6,6 +6,7 @@
       "@application/*": ["src/application/*"],
       "@adapters/*": ["src/adapters/*"],
       "@apps/*": ["src/apps/*"],
+      "@shared": ["src/shared"],
       "@shared/*": ["src/shared/*"]
     },
     "inlineSourceMap": true,

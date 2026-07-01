@@ -1,5 +1,5 @@
-import { VaultFileProvider, VaultFileSummary } from "../../application/ports/vault";
-import type { Extractor, IndexStore, IndexStoreWriteSession } from "../../application/ports/indexing";
+import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import type { Extractor, IndexStore, IndexStoreWriteSession } from "@application/ports";
 import type { EmbeddingProviderClient } from "@core/agent";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";

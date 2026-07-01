@@ -1,4 +1,4 @@
-import { SearchProvider, WebPageMetadata } from "../../../application/ports/web";
+import { SearchProvider, WebPageMetadata } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { toolFailure } from "@core/agent";
 import { WEB_PAGE_METADATA_TOOL } from "@core/agent";

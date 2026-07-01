@@ -1,4 +1,4 @@
-import { IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStoreMetadata } from "../../../application/ports/indexing";
+import { IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStoreMetadata } from "@application/ports";
 import { EmbeddedChunk } from "@core/model";
 import { shardIdForSourcePath } from "../inventory/sourcePathShard";
 import { createFileVectorManifest } from "./FileVectorIndexFormat";

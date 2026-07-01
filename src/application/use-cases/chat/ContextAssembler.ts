@@ -1,4 +1,4 @@
-import { ContextFileProvider } from "../../../application/ports/vault";
+import { ContextFileProvider } from "@application/ports";
 import { Extractor } from "../../ports/indexing";
 import { RetrievalOptions } from "@core/retrieval";
 import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "../../../core/diagnostics";

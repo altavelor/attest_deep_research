@@ -4,7 +4,7 @@
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "fs/promises";
 import { basename, join } from "path";
 
-import { ChatRepository } from "../../application/ports/chat";
+import { ChatRepository } from "@application/ports";
 import {
   CHAT_SCHEMA_VERSION,
   SaveChatInput,

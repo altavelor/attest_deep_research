@@ -23,7 +23,7 @@ import {
   UrlStatusChecker,
 } from "../../contracts/research";
 import { ConversationEngine } from "../../contracts/conversationView";
-import { ChatDisplayMessage, ConversationCompactionSummary } from "../../../core/conversation/model";
+import { ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
 import { resolveResearchExecutionPolicy } from "@core/research";
 import { AgenticResearchFailure } from "./AgenticResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";

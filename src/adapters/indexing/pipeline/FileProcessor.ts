@@ -1,6 +1,6 @@
 import type { ExtractedChunk } from "@core/model";
-import { VaultFileSummary } from "../../../application/ports/vault";
-import { isPathIncluded, vaultPathMatchesGlob } from "../../../shared/pathFilters";
+import { VaultFileSummary } from "@application/ports";
+import { isPathIncluded, vaultPathMatchesGlob } from "@shared";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 import { detectTextLanguages } from "./languageDetection";
 import type { FileProcessorOptions, IndexedFileResult, IndexingPerformanceLogEvent } from "../types";

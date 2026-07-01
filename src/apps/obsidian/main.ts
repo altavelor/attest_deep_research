@@ -3,9 +3,9 @@ import { join } from "path";
 
 import { FileChatRepository as FileChatStore } from "../../adapters/filesystem/FileChatRepository";
 import { PdfTextCache } from "@adapters/extractors";
-import { IndexSourceReportItem } from "../../adapters/indexing/IndexingService";
-import { IndexingProfileController } from "../../adapters/indexing/controller/IndexingProfileController";
-import { measureFolderSize } from "../../adapters/indexing/inventory/indexSize";
+import { IndexSourceReportItem } from "@adapters/indexing";
+import { IndexingProfileController } from "@adapters/indexing";
+import { measureFolderSize } from "@adapters/indexing";
 import { IxplorerSettingTab } from "./ui/SettingsTab";
 import { PluginDebugLogger } from "@adapters/settings";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
@@ -19,7 +19,7 @@ import {
 import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "../../core/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
-import { refreshIndexDescriptionAfterRun } from "../../adapters/indexing/inventory/IndexDescription";
+import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import { CompositionContext, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
 import { requireIndexProfile, resolveIndexProfileForUse } from "./composition/profileResolvers";
 

@@ -14,7 +14,7 @@ import {
   hasDuplicateProfileName,
   isValidProfileName,
 } from "@adapters/settings";
-import { parsePositiveInteger } from "../../../../shared/numbers";
+import { parsePositiveInteger } from "@shared";
 import { optionalNumber, renderModalActions } from "./shared";
 
 type ModelProfile = ChatModelProfile | EmbeddingModelProfile;

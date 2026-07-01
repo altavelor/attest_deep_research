@@ -1,5 +1,5 @@
 import { FindInIndexTool, ListIndexChunksTool } from "../../src/adapters/research-tools/index/IndexInventoryTools";
-import { ResearchRetriever } from "../../src/application/contracts/research";
+import { ResearchRetriever } from "@application/contracts";
 import { executeTool } from "@core/agent";
 
 describe("IndexInventoryTools", () => {

@@ -1,5 +1,5 @@
 import { executeTool, Tool, toolExecutionPayload } from "@core/agent";
-import { parseBoundedSearchInput } from "../../src/application/research/boundedSearchInput";
+import { parseBoundedSearchInput } from "@application/research";
 
 describe("research tool contracts", () => {
   it("normalizes a bounded search input and clamps integer limits", () => {

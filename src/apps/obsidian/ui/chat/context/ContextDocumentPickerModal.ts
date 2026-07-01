@@ -1,5 +1,5 @@
 import { Modal, TFile } from "obsidian";
-import { isSupportedContextDocumentPath } from "../../../../../shared/pathFilters";
+import { isSupportedContextDocumentPath } from "@shared";
 
 export function isContextDocumentPath(path: string): boolean {
   return isSupportedContextDocumentPath(path);

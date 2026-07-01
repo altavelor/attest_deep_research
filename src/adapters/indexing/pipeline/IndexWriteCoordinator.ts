@@ -1,4 +1,4 @@
-import type { IndexFailedSourceSnapshot, IndexStore, IndexStoreWriteSession, SourceSnapshotIndexStore } from "../../../application/ports/indexing";
+import type { IndexFailedSourceSnapshot, IndexStore, IndexStoreWriteSession, SourceSnapshotIndexStore } from "@application/ports";
 import type { ExtractedChunk } from "@core/model";
 import { updateSnapshot } from "./changeDetection";
 import type { FileSnapshot } from "./changeDetection";

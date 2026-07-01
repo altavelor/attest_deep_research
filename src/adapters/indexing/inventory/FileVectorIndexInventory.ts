@@ -12,7 +12,7 @@ import {
   IndexSourceInventoryOptions,
   IndexSourceOutline,
   IndexSourceSummary,
-} from "../../../application/ports/retrieval";
+} from "@application/ports";
 import { SourceReference } from "@core/model";
 import type { FileVectorIndexState, StoredChunk } from "../store/FileVectorIndexState";
 import {

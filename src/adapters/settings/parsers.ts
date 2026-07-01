@@ -6,8 +6,8 @@ import {
   IndexProfile,
 } from "../indexing/store/FileVectorIndexStore";
 import { ApiFormat } from "@core/agent";
-import { isRecord } from "../../shared/guards";
-import { isNonNegativeInteger, isPositiveInteger } from "../../shared/numbers";
+import { isRecord } from "@shared";
+import { isNonNegativeInteger, isPositiveInteger } from "@shared";
 import {
   INDEX_DESCRIPTION_MAX_CHARACTERS,
   type IndexDescription,

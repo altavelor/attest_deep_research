@@ -2,7 +2,7 @@
 // contributes web search/fetch tools to the agent loop.
 
 import { Tool } from "@core/agent";
-import { SearchProvider } from "../../../application/ports/web";
+import { SearchProvider } from "@application/ports";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { WebSearchResearchTool } from "./WebSearchResearchTool";

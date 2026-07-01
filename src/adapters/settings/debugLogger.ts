@@ -2,7 +2,7 @@ import { IxplorerError } from "../../core/errors";
 import type {
   DeepResearchLogEvent,
   DeepResearchLogger,
-} from "../../application/research/deepResearchPort";
+} from "@application/research";
 import type {
   IndexingFileLogEvent,
   IndexingLogger,

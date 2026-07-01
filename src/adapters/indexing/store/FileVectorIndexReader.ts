@@ -2,8 +2,8 @@ import {
   IndexChunkInventoryOptions,
   IndexChunkInventoryStore,
   LanguageInventoryIndexStore,
-} from "../../../application/ports/indexing";
-import { KeywordSearchIndexStore } from "../../../application/ports/retrieval";
+} from "@application/ports";
+import { KeywordSearchIndexStore } from "@application/ports";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { RetrievalOptions } from "@core/retrieval";

@@ -1,5 +1,5 @@
 import { RetrievalResult } from "@adapters/retrieval";
-import { SearchProvider, SearchProviderResult } from "../../src/application/ports/web";
+import { SearchProvider, SearchProviderResult } from "@application/ports";
 import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 

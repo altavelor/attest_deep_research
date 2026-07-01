@@ -1,6 +1,6 @@
 import { setIcon } from "obsidian";
 
-import { IndexingState } from "../../../../adapters/indexing/IndexingService";
+import { IndexingState } from "@adapters/indexing";
 import { formatIndexControlSummary, formatIndexingProgressLabel, formatIndexingStateLabel, formatProgressPercent, indexingProgressValue } from "../chat/conversationFormatting";
 
 export interface IndexControlActions {

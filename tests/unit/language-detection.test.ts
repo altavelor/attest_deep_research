@@ -1,7 +1,7 @@
 import {
   detectTextLanguages,
   languageInventoryFromSources,
-} from "../../src/adapters/indexing/pipeline/languageDetection";
+} from "@adapters/indexing";
 
 describe("language detection", () => {
   it("detects dominant Russian Cyrillic text", () => {

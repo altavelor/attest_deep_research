@@ -3,10 +3,10 @@ import { EvidenceRegistry } from "@application/sources";
 import {
   BoundedSearchInput,
   parseBoundedSearchInput,
-} from "../../../application/research/boundedSearchInput";
+} from "@application/research";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { INDEX_SEARCH_TOOL } from "@core/agent";
-import { ResearchRetriever } from "../../../application/contracts/research";
+import { ResearchRetriever } from "@application/contracts";
 import { bool, defineTool, int, str } from "@application/sources/tools";
 
 const MAX_SOURCE_PATH_CHARS = 500;

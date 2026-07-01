@@ -1,8 +1,8 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 
 import { SaveChatInput, SavedChat, SavedChatSettings, SavedChatSummary, inferChatTitle } from "../../../../core/chat/savedChat";
-import { chatHistoryForPrompt } from "../../../../application/use-cases/chat/ChatCompaction";
-import { IndexingState } from "../../../../adapters/indexing/IndexingService";
+import { chatHistoryForPrompt } from "@application/use-cases/chat";
+import { IndexingState } from "@adapters/indexing";
 import { estimateResearchRequestTokens } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
@@ -37,8 +37,8 @@ import {
   resolveChatSettings,
   stripContextDiagnostics,
 } from "./chatViewHelpers";
-import { ChatDisplayMessage } from "../../../../core/conversation/model";
-import { stripMessageDiagnostics } from "../../../../core/conversation/reducers";
+import { ChatDisplayMessage } from "@core/conversation";
+import { stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
 import {
   positionSavedChatsPopover,

@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { VaultWriter } from "../../application/ports/vault";
+import { VaultWriter } from "@application/ports";
 
 export class ObsidianVaultWriter implements VaultWriter {
   constructor(private readonly app: App) { }

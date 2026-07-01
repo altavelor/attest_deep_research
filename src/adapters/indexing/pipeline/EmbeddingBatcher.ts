@@ -1,4 +1,4 @@
-import type { IndexStore } from "../../../application/ports/indexing";
+import type { IndexStore } from "@application/ports";
 import type { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import type {
   EmbedAndStoreInput,

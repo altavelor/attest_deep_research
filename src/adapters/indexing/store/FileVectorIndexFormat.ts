@@ -1,5 +1,5 @@
-import { isRecord } from "../../../shared/guards";
-import { isNonNegativeInteger, isPositiveInteger } from "../../../shared/numbers";
+import { isRecord } from "@shared";
+import { isNonNegativeInteger, isPositiveInteger } from "@shared";
 import { LanguageInventoryItem } from "@core/model";
 import { SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";

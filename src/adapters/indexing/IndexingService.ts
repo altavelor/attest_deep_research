@@ -1,7 +1,7 @@
 import { isIxplorerError, IxplorerError } from "../../core/errors";
-import { VaultFileSummary } from "../../application/ports/vault";
-import { positiveIntegerOrDefault } from "../../shared/numbers";
-import type { IndexFailedSourceSnapshot } from "../../application/ports/indexing";
+import { VaultFileSummary } from "@application/ports";
+import { positiveIntegerOrDefault } from "@shared";
+import type { IndexFailedSourceSnapshot } from "@application/ports";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
 import { EmbeddingBatcher } from "./pipeline/EmbeddingBatcher";

@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { PdfExtractor, PdfPageTextParser } from "@adapters/extractors";
 import { PdfTextCache } from "@adapters/extractors";
-import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
+import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
-import { chatHistoryForPrompt, compactChatMessages } from "../../src/application/use-cases/chat/ChatCompaction";
+import { chatHistoryForPrompt, compactChatMessages } from "@application/use-cases/chat";
 import { GraphContextProvider } from "@core/research";
-import { Extractor } from "../../src/application/ports/indexing";
+import { Extractor } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
 
 describe("ContextAssembler", () => {

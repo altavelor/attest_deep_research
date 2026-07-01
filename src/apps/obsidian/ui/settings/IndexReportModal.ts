@@ -1,7 +1,7 @@
 import { App, Modal, Setting } from "obsidian";
 
-import { IndexSourceReportItem } from "../../../../adapters/indexing/IndexingService";
-import { IndexProfile } from "../../../../adapters/indexing/store/FileVectorIndexStore";
+import { IndexSourceReportItem } from "@adapters/indexing";
+import { IndexProfile } from "@adapters/indexing";
 import { formatReportTimestamp } from "./indexPath";
 
 export interface IndexReportModalOptions {

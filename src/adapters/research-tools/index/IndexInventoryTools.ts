@@ -4,8 +4,8 @@ import {
   IndexChunkReadOptions,
   IndexMetadataSearchOptions,
   IndexSourceInventoryOptions,
-} from "../../../application/ports/retrieval";
-import { ResearchRetriever } from "../../../application/contracts/research";
+} from "@application/ports";
+import { ResearchRetriever } from "@application/contracts";
 import { Tool } from "@core/agent";
 import {
   FIND_IN_INDEX_TOOL,

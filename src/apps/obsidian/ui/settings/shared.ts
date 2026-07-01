@@ -1,6 +1,6 @@
 import { Setting, setIcon } from "obsidian";
 
-import { IndexingState } from "../../../../adapters/indexing/IndexingService";
+import { IndexingState } from "@adapters/indexing";
 
 export interface ProfileStatus {
   kind: "is-default" | "is-suspended";

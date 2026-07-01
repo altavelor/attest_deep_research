@@ -9,7 +9,7 @@ import {
 } from "ollama";
 
 import { IxplorerError } from "../../../core/errors";
-import { isRecord } from "../../../shared/guards";
+import { isRecord } from "@shared";
 import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { ChatToolCall } from "@core/agent";
 import type { PluginRequestLogger } from "../../settings/debugLogger";

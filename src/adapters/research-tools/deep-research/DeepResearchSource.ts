@@ -5,7 +5,7 @@
 
 import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
-import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
+import { DeepResearchRunner } from "@application/research";
 import { EvidenceRegistry } from "@application/sources";
 import { DeepSearchTool } from "./DeepSearchTool";
 

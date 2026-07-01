@@ -1,7 +1,7 @@
 import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
 import { WebFetchUrlTool } from "../../src/adapters/research-tools/web/WebFetchUrlTool";
-import { SearchProvider } from "../../src/application/ports/web";
+import { SearchProvider } from "@application/ports";
 
 function pageResponse(content: string) {
   return {

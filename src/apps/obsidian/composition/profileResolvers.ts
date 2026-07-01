@@ -1,4 +1,4 @@
-import { IndexProfile } from "../../../adapters/indexing/store/FileVectorIndexStore";
+import { IndexProfile } from "@adapters/indexing";
 import { ChatModelProfile, EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
 import {
   getActiveIndexProfile,

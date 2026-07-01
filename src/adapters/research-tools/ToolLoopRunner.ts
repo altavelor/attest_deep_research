@@ -10,10 +10,10 @@ import { ToolLabeler, runAgentLoop } from "@core/agent";
 import {
   ToolLoopResult,
   ToolLoopRunnerOptions,
-} from "../../application/research/toolPorts";
-import { toolCallChainLabel, resolveLabelFromResult, resolveResultSummary } from "../../application/research/toolCallLabel";
+} from "@application/research";
+import { toolCallChainLabel, resolveLabelFromResult, resolveResultSummary } from "@application/research";
 
-export type { ToolLoopEvent, ToolLoopResult, ToolLoopRunnerOptions } from "../../application/research/toolPorts";
+export type { ToolLoopEvent, ToolLoopResult, ToolLoopRunnerOptions } from "@application/research";
 
 const RESEARCH_TOOL_LABELER: ToolLabeler = {
   chainLabel: toolCallChainLabel,

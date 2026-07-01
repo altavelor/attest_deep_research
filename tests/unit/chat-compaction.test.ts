@@ -6,9 +6,9 @@ import {
   compactChatMessages,
   fallbackCompactionSummary,
   shouldCompactForContext,
-} from "../../src/application/use-cases/chat/ChatCompaction";
+} from "@application/use-cases/chat";
 import { markdownSource, retrieved, webSource } from "../helpers/factories";
-import { ChatDisplayMessage } from "../../src/core/conversation/model";
+import { ChatDisplayMessage } from "@core/conversation";
 
 describe("ChatCompaction", () => {
   it("compacts old messages while preserving the two most recent turns for prompt history", () => {

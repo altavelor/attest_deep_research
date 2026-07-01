@@ -1,4 +1,4 @@
-import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "../../src/core/conversation/reducers";
+import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget, formatIndexControlSummary, formatIndexingStatus, formatProgressPercent, messageDisplayContent } from "../../src/apps/obsidian/ui/chat/conversationFormatting";
 import { ContextDiagnostics } from "../../src/core/diagnostics";
 import { Citation } from "@core/model";

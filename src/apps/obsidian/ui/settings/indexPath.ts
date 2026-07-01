@@ -1,4 +1,4 @@
-import { normalizeVaultPath, vaultPathMatchesGlob } from "../../../../shared/pathFilters";
+import { normalizeVaultPath, vaultPathMatchesGlob } from "@shared";
 
 export function normalizePickerPath(path: string): string {
   return normalizeVaultPath(path).replace(/\/+$/, "");

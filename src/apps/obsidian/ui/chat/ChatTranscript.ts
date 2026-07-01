@@ -5,10 +5,10 @@ import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "../shared/clipboard";
 import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
 import { stripRenderedCitationIds } from "./citations/citationText";
-import { ChainItem, ChatDisplayMessage } from "../../../../core/conversation/model";
-import { shouldShowDiagnosticAction } from "../../../../core/conversation/reducers";
+import { ChainItem, ChatDisplayMessage } from "@core/conversation";
+import { shouldShowDiagnosticAction } from "@core/conversation";
 import { messageDisplayContent } from "./conversationFormatting";
-import { messageMarkdownContent } from "../../../../core/conversation/reducers";
+import { messageMarkdownContent } from "@core/conversation";
 import { describeToolCall, ToolCell } from "./toolCallView";
 
 export interface ChatTranscriptOptions {

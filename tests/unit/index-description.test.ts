@@ -4,7 +4,7 @@ import {
   buildMinimalIndexDescription,
   resolveIndexDescriptionForPrompt,
   refreshIndexDescriptionAfterRun,
-} from "../../src/adapters/indexing/inventory/IndexDescription";
+} from "@adapters/indexing";
 import { createIndexProfile } from "@adapters/settings";
 
 const profile = createIndexProfile({

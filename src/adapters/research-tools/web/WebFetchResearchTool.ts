@@ -1,4 +1,4 @@
-import { SearchProvider } from "../../../application/ports/web";
+import { SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_TOOL } from "@core/agent";
