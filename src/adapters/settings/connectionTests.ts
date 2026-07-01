@@ -1,13 +1,13 @@
-import { EmbeddingClient } from "../model-provider/embeddings/EmbeddingClient";
-import { ProviderHttpClient } from "../model-provider/common/http";
+import { EmbeddingClient } from "@adapters/model-provider/embeddings/EmbeddingClient";
+import { ProviderHttpClient } from "@adapters/model-provider/common/http";
 import {
   contextLengthFromModelMetadata,
   isOllamaTagsResponse,
   isOpenAiModelsResponse,
   modelNamesFromOllamaTags,
   modelNamesFromOpenAiModels,
-} from "../model-provider/common/models";
-import { toUserMessage } from "../../core/errors";
+} from "@adapters/model-provider/common/models";
+import { toUserMessage } from "@core/errors";
 import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "./debugLogger";
 import { ModelCapability, ServerProfile } from "./types";

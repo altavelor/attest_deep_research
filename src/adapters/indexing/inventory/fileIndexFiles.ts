@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname } from "path";
 import { createInterface } from "readline";
 
-import { IxplorerError } from "../../../core/errors";
+import { IxplorerError } from "@core/errors";
 import { isMissingFileError } from "../store/FileVectorIndexErrors";
 
 export interface AtomicIndexFile {

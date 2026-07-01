@@ -1,14 +1,10 @@
 import { App, Component, MarkdownRenderer, setIcon } from "obsidian";
 
-import { ContextDiagnostics } from "../../../../core/diagnostics";
-import { ResearchAnswer } from "../../../../core/answer";
+import { ContextDiagnostics } from "@core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model";
-import { copyToClipboard } from "../shared/clipboard";
-import {
-  buildCitationRefs,
-  ChatCitationRef,
-  renderCitationBlocks,
-} from "./citations/CitationPopover";
+import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
+import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
 import { stripRenderedCitationIds } from "./citations/citationText";
 import { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import { shouldShowAnswerNoteActions, shouldShowDiagnosticAction } from "@core/conversation";

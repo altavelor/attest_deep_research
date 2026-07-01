@@ -1,8 +1,8 @@
 import { setIcon } from "obsidian";
 
 import { RetrievedChunk } from "@core/model";
-import { copyToClipboard } from "../../shared/clipboard";
-import { formatIndexSearchCitation } from "../../index/IndexSearchPanel";
+import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
+import { formatIndexSearchCitation } from "@apps/obsidian/ui/index/IndexSearchPanel";
 
 export interface ChatCitationRef {
   number: number;

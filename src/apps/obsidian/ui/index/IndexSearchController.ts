@@ -2,9 +2,9 @@ import { Notice } from "obsidian";
 
 import { IndexingState } from "@adapters/indexing";
 import { RetrievedChunk } from "@core/model";
-import { toUserMessage } from "../../../../core/errors";
-import { IndexProfileSelectOption } from "../chat/ChatComposer";
-import { IxplorerPanel } from "../chat/ChatHeader";
+import { toUserMessage } from "@core/errors";
+import { IndexProfileSelectOption } from "@apps/obsidian/ui/chat/ChatComposer";
+import { IxplorerPanel } from "@apps/obsidian/ui/chat/ChatHeader";
 import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import {
   IndexSearchPanelRefs,
@@ -15,7 +15,7 @@ import {
   normalizeExtensionFilter,
   readOptionalNumber,
   readPositiveInteger,
-} from "../chat/chatViewHelpers";
+} from "@apps/obsidian/ui/chat/chatViewHelpers";
 
 export interface IndexSearchOptions {
   profileId: string;

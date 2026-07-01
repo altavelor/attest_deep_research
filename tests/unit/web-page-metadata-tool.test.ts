@@ -1,5 +1,5 @@
 import { executeTool } from "@core/agent";
-import { WebPageMetadataTool } from "../../src/adapters/research-tools/web/WebPageMetadataTool";
+import { WebPageMetadataTool } from "@adapters/research-tools/web/WebPageMetadataTool";
 import { SearchProvider } from "@application/ports";
 
 describe("WebPageMetadataTool", () => {

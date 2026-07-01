@@ -1,7 +1,7 @@
 import { setIcon } from "obsidian";
 
 import { IndexingState } from "@adapters/indexing";
-import { formatIndexControlSummary, formatIndexingProgressLabel, formatIndexingStateLabel, formatProgressPercent, indexingProgressValue } from "../chat/conversationFormatting";
+import { formatIndexControlSummary, formatIndexingProgressLabel, formatIndexingStateLabel, formatProgressPercent, indexingProgressValue } from "@apps/obsidian/ui/chat/conversationFormatting";
 
 export interface IndexControlActions {
   start(indexProfileId?: string): void | Promise<unknown>;

@@ -1,18 +1,18 @@
 import { formatCitation } from "@core/retrieval";
-import { ResearchAnswer } from "../../../../core/answer";
-import { ContextDiagnostics } from "../../../../core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
+import { ContextDiagnostics } from "@core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
 import { buildAgenticResearchMessages } from "@core/research";
-import { ResearchStreamEvent } from "../../../contracts/research";
+import { ResearchStreamEvent } from "@application/contracts/research";
 import { ToolEvent } from "@core/agent";
 import { DEEP_SEARCH_TOOL } from "@core/agent";
 import {
   DEEP_RESEARCH_PHASE,
   DEEP_RESEARCH_TOOL_END,
   DEEP_RESEARCH_TOOL_START,
-} from "../../../research/deepResearchPort";
-import { createAsyncEventChannel } from "../../../AsyncEventChannel";
+} from "@application/research/deepResearchPort";
+import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { AgenticResearchRunner, AgenticResearchFailure } from "../AgenticResearchRunner";
 import {
   ResearchExecutionContext,

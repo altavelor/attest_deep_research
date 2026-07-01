@@ -1,6 +1,6 @@
-import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
-import { WebFetchSectionTool } from "../../src/adapters/research-tools/web/WebFetchSectionTool";
+import { WebFetchSectionTool } from "@adapters/research-tools/web/WebFetchSectionTool";
 import { SearchProvider } from "@application/ports";
 
 const PAGE =

@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { inflateRawSync } from "zlib";
 
-import { IxplorerError } from "../../core/errors";
+import { IxplorerError } from "@core/errors";
 export { normalizeVaultPath as normalizePath } from "@shared";
 import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "@core/model";
 

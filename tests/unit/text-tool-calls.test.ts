@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTextToolCalls } from "../../src/adapters/model-provider/chat/streaming/textToolCalls";
+import { parseTextToolCalls } from "@adapters/model-provider/chat/streaming/textToolCalls";
 import { ChatToolDefinition } from "@core/agent";
 
 const tools: ChatToolDefinition[] = [

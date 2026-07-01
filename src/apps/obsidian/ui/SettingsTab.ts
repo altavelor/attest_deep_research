@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 
-import type IxplorerPlugin from "../main";
+import type IxplorerPlugin from "@apps/obsidian/main";
 import { IndexProfile } from "@adapters/indexing";
 import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";

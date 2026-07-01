@@ -1,5 +1,5 @@
 import { formatResearchAnswerNote, researchAnswerNotePath } from "@application/use-cases/research";
-import { ResearchAnswer } from "../../src/core/answer";
+import { ResearchAnswer } from "@core/answer";
 import { SourceReference } from "@core/model";
 
 describe("answer formatter", () => {

@@ -3,8 +3,8 @@ import { parseServerSentEvents } from "../../common/streams";
 import { isRecord } from "@shared";
 import { ChatMessage, ModelRoundProvider, ModelRoundRequest, ModelRoundResult, ModelStreamEvent, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolChoice, ChatToolDefinition } from "@core/agent";
-import type { PluginRequestLogger } from "../../../settings/debugLogger";
-import { IxplorerError } from "../../../../core/errors";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
+import { IxplorerError } from "@core/errors";
 import { parseResponsesTerminalEvent, protocolError } from "./OpenAiResponsesStreamParser";
 
 export interface OpenAiResponsesClientOptions {

@@ -1,4 +1,4 @@
-import { IxplorerError } from "../../core/errors";
+import { IxplorerError } from "@core/errors";
 import type {
   DeepResearchLogEvent,
   DeepResearchLogger,
@@ -7,7 +7,7 @@ import type {
   IndexingFileLogEvent,
   IndexingLogger,
   IndexingPerformanceLogEvent,
-} from "../indexing/IndexingService";
+} from "@adapters/indexing/IndexingService";
 import type { IxplorerSettings } from "./types";
 
 export interface RequestLogContext {

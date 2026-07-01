@@ -1,17 +1,17 @@
-import { summarizeCompactionWithModel } from "../chat/ChatCompaction";
-import { SearchProvider } from "../../ports/web";
+import { summarizeCompactionWithModel } from "@application/use-cases/chat/ChatCompaction";
+import { SearchProvider } from "@application/ports/web";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
-import { ResearchAnswer } from "../../../core/answer";
-import { ContextIndexDiagnostics, IndexDescriptionPromptContext, ResearchExecutionStrategy, ToolCapabilityProbeAudit } from "../../../core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
+import { ContextIndexDiagnostics, IndexDescriptionPromptContext, ResearchExecutionStrategy, ToolCapabilityProbeAudit } from "@core/diagnostics";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "./AnswerSynthesisService";
-import { ContextAssembler, ContextAssembleRequest } from "../chat/ContextAssembler";
+import { ContextAssembler, ContextAssembleRequest } from "@application/use-cases/chat/ContextAssembler";
 import { EvidencePlanner, EvidencePlannerOptions } from "@core/research";
 import {
   NoteToolService,
   ResearchToolsetFactory,
   ToolLoopRunner,
-} from "../../research/toolPorts";
+} from "@application/research/toolPorts";
 import { VaultResearchPipeline } from "./VaultResearchPipeline";
 import { WebResearchPipeline } from "./WebResearchPipeline";
 import {
@@ -21,8 +21,8 @@ import {
   ResearchStreamEvent,
   QueryExpansion,
   UrlStatusChecker,
-} from "../../contracts/research";
-import { ConversationEngine } from "../../contracts/conversationView";
+} from "@application/contracts/research";
+import { ConversationEngine } from "@application/contracts/conversationView";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
 import { resolveResearchExecutionPolicy } from "@core/research";
 import { AgenticResearchFailure } from "./AgenticResearchRunner";
@@ -31,7 +31,7 @@ import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/Res
 import { AgenticResearchStrategy } from "./strategies/AgenticResearchStrategy";
 import { EagerResearchStrategy } from "./strategies/EagerResearchStrategy";
 import { DeepResearchAgent } from "./deep-research/DeepResearchAgent";
-import { DeepResearchLogger, DeepResearchRunner } from "../../research/deepResearchPort";
+import { DeepResearchLogger, DeepResearchRunner } from "@application/research/deepResearchPort";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 export { selectResearchExecutionStrategy } from "./strategies/searchMode";

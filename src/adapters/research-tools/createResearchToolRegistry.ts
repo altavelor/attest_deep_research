@@ -1,4 +1,4 @@
-import { ToolManager } from "../../application/tools/ToolManager";
+import { ToolManager } from "@application/tools/ToolManager";
 import { ResearchEvidenceRegistry } from "./ResearchEvidenceRegistry";
 import {
   ResearchToolAvailability,

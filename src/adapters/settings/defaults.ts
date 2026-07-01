@@ -1,4 +1,4 @@
-import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "../extractors/common";
+import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "@adapters/extractors/common";
 import {
   DEFAULT_EMBEDDING_BATCH_SIZE,
   DEFAULT_FILE_VECTOR_SHARD_COUNT,
@@ -6,7 +6,7 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "../indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing/store/FileVectorIndexStore";
 import { DEFAULT_INDEX_FOLDER, DEFAULT_INDEX_PROFILE_ID, DEFAULT_PROFILE_TIMESTAMP } from "./constants";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";

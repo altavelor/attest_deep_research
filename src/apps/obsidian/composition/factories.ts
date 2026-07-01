@@ -17,16 +17,16 @@ import { IndexingService, IndexingState } from "@adapters/indexing";
 import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
-import { ObsidianVaultFileProvider } from "../../../adapters/obsidian/ObsidianVaultFileProvider";
+import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
 import { QueryExpansionService } from "@adapters/retrieval";
 import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
-import { ObsidianContextFileProvider } from "../../../adapters/obsidian/ObsidianContextFileProvider";
-import { ObsidianGraphContextProvider } from "../../../adapters/obsidian/ObsidianGraphContextProvider";
+import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
+import { ObsidianGraphContextProvider } from "@adapters/obsidian/ObsidianGraphContextProvider";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
-import { ObsidianVaultWriter } from "../../../adapters/obsidian/ObsidianVaultWriter";
+import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
 import { PluginDebugLogger } from "@adapters/settings";
 import { resolveToolCapabilities } from "@adapters/settings";
@@ -51,7 +51,7 @@ import { DuckDuckGoSearchProvider } from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
-import { obsidianRequestFetch } from "../obsidianFetch";
+import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import {
   requireChatModelProfile,
   requireEmbeddingModelProfile,

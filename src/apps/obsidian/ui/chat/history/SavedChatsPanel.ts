@@ -1,6 +1,6 @@
 import { setIcon } from "obsidian";
 
-import { SavedChatSummary } from "../../../../../core/chat/savedChat";
+import { SavedChatSummary } from "@core/chat/savedChat";
 
 export interface SavedChatRowActions {
   onRenameChat?(id: string, title: string): void | Promise<void>;

@@ -4,8 +4,8 @@
 // settings to build the client with, or throws IxplorerError describing why not.
 
 import { ApiFormat } from "@core/agent";
-import { IxplorerError } from "../../../../core/errors";
-import { ReasoningCapabilitySettings } from "../../../settings/types";
+import { IxplorerError } from "@core/errors";
+import { ReasoningCapabilitySettings } from "@adapters/settings/types";
 
 export interface ResponsesPolicyInput {
   apiFormat: ApiFormat;

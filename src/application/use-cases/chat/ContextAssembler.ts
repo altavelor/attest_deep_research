@@ -1,7 +1,7 @@
 import { ContextFileProvider } from "@application/ports";
-import { Extractor } from "../../ports/indexing";
+import { Extractor } from "@application/ports/indexing";
 import { RetrievalOptions } from "@core/retrieval";
-import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "../../../core/diagnostics";
+import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "@core/diagnostics";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";
 
 /** Injected content-hash function (e.g. extractors/common.stableId). Keeps the

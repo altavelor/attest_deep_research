@@ -1,5 +1,5 @@
 import { ApiFormat } from "@core/agent";
-import { IndexProfile } from "../indexing/store/FileVectorIndexStore";
+import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { ToolCapabilitySettings } from "./toolCapabilities";
 import { ModelCapabilitySnapshot } from "./modelCapabilityCache";
 

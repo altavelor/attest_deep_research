@@ -1,13 +1,13 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
-import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "../../../core/diagnostics";
+import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
-import { ToolManager } from "../../tools/ToolManager";
+import { ToolManager } from "@application/tools/ToolManager";
 import {
   toolCallChainLabel,
   resolveLabelFromResult,
   resolveResultSummary,
-} from "../../research/toolCallLabel";
+} from "@application/research/toolCallLabel";
 
 export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"

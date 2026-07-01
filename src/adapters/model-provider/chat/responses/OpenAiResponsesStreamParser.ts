@@ -1,4 +1,4 @@
-import { IxplorerError } from "../../../../core/errors";
+import { IxplorerError } from "@core/errors";
 import { ModelOutputItem, ModelRoundResult } from "@core/agent";
 
 export interface ParsedResponsesRound {

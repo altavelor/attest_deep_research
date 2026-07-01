@@ -3,7 +3,7 @@
 // evidence as a fenced JSON block that the application parses into a
 // DeepResearchReport. Pure: builds messages, performs no I/O.
 
-import { ChatMessage } from "../../agent/protocol";
+import { ChatMessage } from "@core/agent/protocol";
 
 export interface BuildDeepResearchMessagesOptions {
   question: string;

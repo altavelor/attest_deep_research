@@ -1,4 +1,4 @@
-import type { PluginRequestLogger } from "../../settings/debugLogger";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 
 /**
  * Run an async operation, forwarding any thrown error to the optional request

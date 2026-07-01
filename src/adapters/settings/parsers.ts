@@ -1,17 +1,17 @@
-import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "../extractors/common";
+import { DEFAULT_CHUNK_LENGTH, DEFAULT_CHUNK_OVERLAP } from "@adapters/extractors/common";
 import {
   DEFAULT_EMBEDDING_BATCH_SIZE,
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "../indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing/store/FileVectorIndexStore";
 import { ApiFormat } from "@core/agent";
 import { isRecord } from "@shared";
 import { isNonNegativeInteger, isPositiveInteger } from "@shared";
 import {
   INDEX_DESCRIPTION_MAX_CHARACTERS,
   type IndexDescription,
-} from "../indexing/inventory/IndexDescription";
+} from "@adapters/indexing/inventory/IndexDescription";
 import { DEFAULT_INDEX_FOLDER, DEFAULT_INDEX_PROFILE_ID } from "./constants";
 
 export function normalizeListInput(value: string): string[] {

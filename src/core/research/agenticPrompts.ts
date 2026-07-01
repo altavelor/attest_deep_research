@@ -1,4 +1,4 @@
-import { ChatMessage } from "../agent/protocol";
+import { ChatMessage } from "@core/agent/protocol";
 import {
   CHECK_URLS_TOOL,
   DEEP_SEARCH_TOOL,
@@ -8,8 +8,8 @@ import {
   NOTE_MUTATION_TOOLS,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
-} from "../agent/toolNames";
-import { RetrievedChunk } from "../model/source";
+} from "@core/agent/toolNames";
+import { RetrievedChunk } from "@core/model/source";
 import { ResearchChatHistoryMessage } from "./prompts";
 
 /**

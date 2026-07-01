@@ -1,27 +1,27 @@
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
-import { ResearchAnswer } from "../../../../core/answer";
+import { ResearchAnswer } from "@core/answer";
 import {
   ContextDiagnostics,
   ContextIndexDiagnostics,
   IndexDescriptionPromptContext,
   ResearchExecutionStrategy,
   ToolCapabilityProbeAudit,
-} from "../../../../core/diagnostics";
+} from "@core/diagnostics";
 import { EvidencePlanner } from "@core/research";
 import { ResearchExecutionPolicy } from "@core/research";
-import { SearchProvider } from "../../../ports/web";
+import { SearchProvider } from "@application/ports/web";
 import {
   ResearchRequest,
   ResearchRetriever,
   ResearchSearchMode,
   ResearchStreamEvent,
   UrlStatusChecker,
-} from "../../../contracts/research";
-import { NoteToolService, ResearchToolsetFactory } from "../../../research/toolPorts";
-import { DeepResearchRunner } from "../../../research/deepResearchPort";
+} from "@application/contracts/research";
+import { NoteToolService, ResearchToolsetFactory } from "@application/research/toolPorts";
+import { DeepResearchRunner } from "@application/research/deepResearchPort";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "../AnswerSynthesisService";
-import { ContextAssembler, ContextAssembleRequest } from "../../chat/ContextAssembler";
+import { ContextAssembler, ContextAssembleRequest } from "@application/use-cases/chat/ContextAssembler";
 import { VaultResearchPipeline } from "../VaultResearchPipeline";
 import { WebResearchPipeline } from "../WebResearchPipeline";
 import { AgenticResearchFailure } from "../AgenticResearchRunner";

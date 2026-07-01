@@ -1,6 +1,6 @@
 import { rm } from "fs/promises";
 
-import { IxplorerError } from "../../../core/errors";
+import { IxplorerError } from "@core/errors";
 import {
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,

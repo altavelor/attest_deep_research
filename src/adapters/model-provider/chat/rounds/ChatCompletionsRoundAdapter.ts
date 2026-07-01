@@ -1,5 +1,5 @@
 import { ChatModelProvider, ModelOutputItem, ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "@core/agent";
-import { IxplorerError } from "../../../../core/errors";
+import { IxplorerError } from "@core/errors";
 
 export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
   constructor(private readonly chatModel: ChatModelProvider) { }

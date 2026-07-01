@@ -4,12 +4,12 @@ import {
   formatDeepResearchReport,
   remapReportEvidenceIds,
 } from "@core/research";
-import { parseDeepResearchReport } from "../../src/application/use-cases/research/deep-research/parseDeepResearchReport";
-import { DeepResearchAgent } from "../../src/application/use-cases/research/deep-research/DeepResearchAgent";
-import { DeepSearchTool } from "../../src/adapters/research-tools/deep-research/DeepSearchTool";
+import { parseDeepResearchReport } from "@application/use-cases/research/deep-research/parseDeepResearchReport";
+import { DeepResearchAgent } from "@application/use-cases/research/deep-research/DeepResearchAgent";
+import { DeepSearchTool } from "@adapters/research-tools/deep-research/DeepSearchTool";
 import { DeepResearchRunner } from "@application/research";
-import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
-import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
+import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../helpers/researchFakes";
 import { retrieved, webSource } from "../helpers/factories";

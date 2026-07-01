@@ -1,12 +1,12 @@
 import { formatCitation } from "@core/retrieval";
-import { SearchProvider, SearchProviderResult, WebSearchOptions } from "../../ports/web";
-import { WebContextDiagnostics } from "../../../core/diagnostics";
+import { SearchProvider, SearchProviderResult, WebSearchOptions } from "@application/ports/web";
+import { WebContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { tokenSetForSearch } from "@core/retrieval";
 import { normalizeInlineWhitespace } from "@shared";
 import { estimateTextTokens } from "@core/research";
-import { ResearchStreamEvent } from "../../contracts/research";
+import { ResearchStreamEvent } from "@application/contracts/research";
 
 export interface ResearchEvidenceResult {
   chunks: RetrievedChunk[];

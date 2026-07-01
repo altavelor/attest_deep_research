@@ -1,5 +1,5 @@
 import { FallbackModelRoundProvider } from "@adapters/model-provider";
-import { IxplorerError } from "../../src/core/errors";
+import { IxplorerError } from "@core/errors";
 import { ModelRoundProvider } from "@core/agent";
 
 function provider(runRound: ModelRoundProvider["runRound"]): ModelRoundProvider {

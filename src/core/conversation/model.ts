@@ -2,9 +2,9 @@
 // a chat transcript; previously lived in ui/rendering.ts. Consumed by research,
 // chat and ui — none of which should own it.
 
-import { RetrievedChunk } from "../model/source";
-import { ContextDiagnostics } from "../diagnostics";
-import { ResearchAnswer } from "../answer";
+import { RetrievedChunk } from "@core/model/source";
+import { ContextDiagnostics } from "@core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
 
 export interface ConversationCompactionSummary {
   userGoals: string[];

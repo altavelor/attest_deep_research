@@ -1,8 +1,8 @@
 import type { IndexProfile } from "../store/FileVectorIndexFormat";
 import type { LanguageInventoryItem } from "@core/model";
 import type { SourceKind } from "@core/model";
-import { stableId } from "../../extractors/common";
-import type { IndexDescriptionPromptContext } from "../../../core/diagnostics";
+import { stableId } from "@adapters/extractors/common";
+import type { IndexDescriptionPromptContext } from "@core/diagnostics";
 
 export const INDEX_DESCRIPTION_ALGORITHM_VERSION = 1;
 export const INDEX_DESCRIPTION_MAX_CHARACTERS = 2_000;

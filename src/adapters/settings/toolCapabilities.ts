@@ -1,5 +1,5 @@
 import { ToolCallingCapabilities } from "@core/agent";
-import { ToolCapabilityProbeAudit } from "../../core/diagnostics";
+import { ToolCapabilityProbeAudit } from "@core/diagnostics";
 
 export type ToolCapabilitySource = "format-default" | "probe";
 export type ToolCapabilityLayer = Partial<ToolCallingCapabilities>;

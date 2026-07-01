@@ -1,6 +1,6 @@
 import { Notice } from "obsidian";
 
-import type IxplorerPlugin from "../../main";
+import type IxplorerPlugin from "@apps/obsidian/main";
 import { ChatModelClient } from "@adapters/model-provider";
 import {
   isResponsesCapabilityCurrent,

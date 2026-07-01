@@ -1,4 +1,4 @@
-import { resolveAgenticMaxResultChars } from "../../src/application/use-cases/research/strategies/AgenticResearchStrategy";
+import { resolveAgenticMaxResultChars } from "@application/use-cases/research/strategies/AgenticResearchStrategy";
 
 describe("resolveAgenticMaxResultChars", () => {
   it("keeps the legacy fallback when context size is unknown", () => {

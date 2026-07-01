@@ -8,11 +8,11 @@ import {
   type Tool as OllamaTool,
 } from "ollama";
 
-import { IxplorerError } from "../../../core/errors";
+import { IxplorerError } from "@core/errors";
 import { isRecord } from "@shared";
 import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { ChatToolCall } from "@core/agent";
-import type { PluginRequestLogger } from "../../settings/debugLogger";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import { InlineReasoningParser } from "./streaming/InlineReasoningParser";
 import { createOpenAiClient, translateOpenAiError } from "./providers/openAiSdk";

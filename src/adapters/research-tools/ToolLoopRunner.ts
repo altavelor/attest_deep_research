@@ -5,7 +5,7 @@
 //   2. the research-specific tool labeler.
 // The existing ToolLoopRunnerOptions API (with chatModel) is preserved for callers.
 
-import { ChatCompletionsRoundAdapter } from "../model-provider/chat/rounds/ChatCompletionsRoundAdapter";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
 import { ToolLabeler, runAgentLoop } from "@core/agent";
 import {
   ToolLoopResult,

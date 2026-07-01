@@ -10,9 +10,9 @@ import {
   buildDeepResearchMessages,
   buildDeepResearchSynthesisMessages,
 } from "@core/research";
-import { ResearchEvidenceSnapshot } from "../../../sources/evidence";
-import { SearchProvider } from "../../../ports/web";
-import { ResearchToolsetFactory } from "../../../research/toolPorts";
+import { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import { SearchProvider } from "@application/ports/web";
+import { ResearchToolsetFactory } from "@application/research/toolPorts";
 import {
   DEEP_RESEARCH_PHASE,
   DEEP_RESEARCH_TOOL_END,
@@ -22,7 +22,7 @@ import {
   DeepResearchRunInput,
   DeepResearchRunResult,
   DeepResearchRunner,
-} from "../../../research/deepResearchPort";
+} from "@application/research/deepResearchPort";
 import { AgenticResearchRunner } from "../AgenticResearchRunner";
 import { looksLikeLeakedToolCall, parseDeepResearchReport } from "./parseDeepResearchReport";
 

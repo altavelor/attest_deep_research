@@ -3,8 +3,8 @@
 // from any client adapter (callers pass a built ModelRoundProvider) and from
 // research-specific tool labeling (injected via ToolLabeler).
 
-import { IxplorerError } from "../errors";
-import { ToolCallDiagnostic } from "../diagnostics";
+import { IxplorerError } from "@core/errors";
+import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ChatToolCall, ChatToolDefinition } from "./tool";
 import {
   ChatMessage,

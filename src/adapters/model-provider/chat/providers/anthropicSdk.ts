@@ -1,8 +1,8 @@
 import Anthropic, { APIError, APIUserAbortError } from "@anthropic-ai/sdk";
 
-import { IxplorerError, IxplorerErrorCode } from "../../../../core/errors";
+import { IxplorerError, IxplorerErrorCode } from "@core/errors";
 import { isRecord } from "@shared";
-import type { PluginRequestLogger } from "../../../settings/debugLogger";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 
 type UnavailableCode = Extract<

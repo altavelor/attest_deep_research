@@ -1,4 +1,4 @@
-import { ContextDiagnostics } from "../../../core/diagnostics";
+import { ContextDiagnostics } from "@core/diagnostics";
 import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
 import { DiagnosticReportV3 } from "./diagnostics/report/types";
 import { h } from "./diagnostics/html/primitives";

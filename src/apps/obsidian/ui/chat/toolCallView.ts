@@ -1,4 +1,4 @@
-import { computeLineDiff, DiffHunk, diffHasChanges } from "../shared/lineDiff";
+import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
 export type ToolCell =
   | { kind: "code"; text: string }

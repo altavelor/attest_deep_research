@@ -1,9 +1,9 @@
 import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
-import { ResearchAnswer } from "../../../core/answer";
-import { ContextDiagnostics, IndexDescriptionPromptContext, ToolCallDiagnostic } from "../../../core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
+import { ContextDiagnostics, IndexDescriptionPromptContext, ToolCallDiagnostic } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
-import { IxplorerError } from "../../../core/errors";
+import { IxplorerError } from "@core/errors";
 import {
   buildResearchPrompt,
   estimateResearchRequestTokens,
@@ -11,9 +11,9 @@ import {
   buildResearchSystemPrompt,
   ResearchChatHistoryMessage,
 } from "@core/research";
-import { ResearchStreamEvent } from "../../contracts/research";
-import { createAsyncEventChannel } from "../../AsyncEventChannel";
-import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "../../research/toolPorts";
+import { ResearchStreamEvent } from "@application/contracts/research";
+import { createAsyncEventChannel } from "@application/AsyncEventChannel";
+import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "@application/research/toolPorts";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -152,7 +152,7 @@ export class AnswerSynthesisService {
         ...result.usage,
       });
     } else if (this.modelRound) {
-      const deltas = createAsyncEventChannel<import("../../../core/agent/protocol").ModelRoundDelta>();
+      const deltas = createAsyncEventChannel<import("@core/agent/protocol").ModelRoundDelta>();
       let streamedText = false;
       let streamedSummaries = false;
       const resultPromise = this.modelRound
