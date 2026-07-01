@@ -5,10 +5,10 @@
 
 import { IndexingState } from "../../../../adapters/indexing/IndexingService";
 import { formatIndexSize } from "../../../../adapters/indexing/inventory/indexSize";
-import { Citation } from "../../../../core/model/citation";
+import { Citation } from "@core/model";
 import { ChatDisplayMessage } from "../../../../core/conversation/model";
 import { messageMarkdownContent } from "../../../../core/conversation/reducers";
-import { citationTarget as citationTargetString } from "../../../../application/use-cases/research/citationLinks";
+import { citationTarget as citationTargetString } from "@application/use-cases/research";
 import { stripRenderedCitationIds } from "./citations/citationText";
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };

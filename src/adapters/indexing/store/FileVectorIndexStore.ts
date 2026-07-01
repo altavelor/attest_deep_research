@@ -9,7 +9,7 @@ import {
   IndexStoreWriteSession,
   SourceSnapshotIndexStore,
 } from "../../../application/ports/indexing";
-import { EmbeddedChunk, RetrievedChunk, SourceReference } from "../../../core/model/source";
+import { EmbeddedChunk, RetrievedChunk, SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";

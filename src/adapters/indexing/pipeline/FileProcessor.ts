@@ -1,4 +1,4 @@
-import type { ExtractedChunk } from "../../../core/model/source";
+import type { ExtractedChunk } from "@core/model";
 import { VaultFileSummary } from "../../../application/ports/vault";
 import { isPathIncluded, vaultPathMatchesGlob } from "../../../shared/pathFilters";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";

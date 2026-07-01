@@ -1,4 +1,4 @@
-import { DuckDuckGoSearchProvider } from "../../src/adapters/web/DuckDuckGoSearchProvider";
+import { DuckDuckGoSearchProvider } from "@adapters/web";
 
 function htmlResponse(body: string, init?: ResponseInit): Response {
   return new Response(body, {

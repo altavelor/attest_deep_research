@@ -4,9 +4,9 @@
 // just a search provider).
 
 import { Tool } from "../../../core/agent/tool";
-import { DataSource, DataSourceDescriptor } from "../../../application/sources/DataSource";
+import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { EvidenceRegistry } from "@application/sources";
 import { DeepSearchTool } from "./DeepSearchTool";
 
 export interface DeepResearchSourceOptions {

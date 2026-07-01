@@ -1,9 +1,6 @@
-import {
-  formatResearchAnswerNote,
-  researchAnswerNotePath,
-} from "../../src/application/use-cases/research/answerFormatter";
+import { formatResearchAnswerNote, researchAnswerNotePath } from "@application/use-cases/research";
 import { ResearchAnswer } from "../../src/core/answer";
-import { SourceReference } from "../../src/core/model/source";
+import { SourceReference } from "@core/model";
 
 describe("answer formatter", () => {
   it("formats the final answer with timestamp, question, answer, citations, and follow-ups", () => {

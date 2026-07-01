@@ -2,7 +2,7 @@ import { FileSystemAdapter, Notice, Plugin } from "obsidian";
 import { join } from "path";
 
 import { FileChatRepository as FileChatStore } from "../../adapters/filesystem/FileChatRepository";
-import { PdfTextCache } from "../../adapters/extractors/PdfTextCache";
+import { PdfTextCache } from "@adapters/extractors";
 import { IndexSourceReportItem } from "../../adapters/indexing/IndexingService";
 import { IndexingProfileController } from "../../adapters/indexing/controller/IndexingProfileController";
 import { measureFolderSize } from "../../adapters/indexing/inventory/indexSize";

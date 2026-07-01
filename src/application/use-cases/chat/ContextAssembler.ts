@@ -1,8 +1,8 @@
 import { ContextFileProvider } from "../../../application/ports/vault";
 import { Extractor } from "../../ports/indexing";
-import { RetrievalOptions } from "../../../core/retrieval/query";
+import { RetrievalOptions } from "@core/retrieval";
 import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "../../../core/diagnostics";
-import { ExtractedChunk, RetrievedChunk } from "../../../core/model/source";
+import { ExtractedChunk, RetrievedChunk } from "@core/model";
 
 /** Injected content-hash function (e.g. extractors/common.stableId). Keeps the
  *  assembler free of any concrete (Node crypto) hashing dependency. */

@@ -1,9 +1,9 @@
-import { formatCitation } from "../../../core/retrieval/citations";
+import { formatCitation } from "@core/retrieval";
 import { SearchProvider, SearchProviderResult, WebSearchOptions } from "../../ports/web";
 import { WebContextDiagnostics } from "../../../core/diagnostics";
-import { Citation } from "../../../core/model/citation";
-import { RetrievedChunk } from "../../../core/model/source";
-import { tokenSetForSearch } from "../../../core/retrieval/tokenization";
+import { Citation } from "@core/model";
+import { RetrievedChunk } from "@core/model";
+import { tokenSetForSearch } from "@core/retrieval";
 import { normalizeInlineWhitespace } from "../../../shared/whitespace";
 import { estimateTextTokens } from "../../../core/research/prompts";
 import { ResearchStreamEvent } from "../../contracts/research";

@@ -2,11 +2,11 @@
 // index search tool to the agent loop.
 
 import { Tool } from "../../../core/agent/tool";
-import { DataSource, DataSourceDescriptor } from "../../../application/sources/DataSource";
+import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { IndexResearchTool } from "./IndexResearchTool";
 import { INDEX_INVENTORY_TOOLS } from "./IndexInventoryTools";
 import { CheckUrlsTool, ListIndexUrlsTool } from "./IndexUrlTools";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { EvidenceRegistry } from "@application/sources";
 import { ResearchRetriever, UrlStatusChecker } from "../../../application/contracts/research";
 
 export interface RagSourceOptions {

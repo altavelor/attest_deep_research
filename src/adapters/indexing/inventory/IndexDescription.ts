@@ -1,6 +1,6 @@
 import type { IndexProfile } from "../store/FileVectorIndexFormat";
-import type { LanguageInventoryItem } from "../../../core/model/citation";
-import type { SourceKind } from "../../../core/model/source";
+import type { LanguageInventoryItem } from "@core/model";
+import type { SourceKind } from "@core/model";
 import { stableId } from "../../extractors/common";
 import type { IndexDescriptionPromptContext } from "../../../core/diagnostics";
 

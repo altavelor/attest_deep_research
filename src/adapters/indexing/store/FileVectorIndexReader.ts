@@ -4,9 +4,9 @@ import {
   LanguageInventoryIndexStore,
 } from "../../../application/ports/indexing";
 import { KeywordSearchIndexStore } from "../../../application/ports/retrieval";
-import { LanguageInventoryItem } from "../../../core/model/citation";
-import { RetrievedChunk } from "../../../core/model/source";
-import { RetrievalOptions } from "../../../core/retrieval/query";
+import { LanguageInventoryItem } from "@core/model";
+import { RetrievedChunk } from "@core/model";
+import { RetrievalOptions } from "@core/retrieval";
 import { languageInventoryFromStoredChunks } from "./FileVectorIndexLanguage";
 import { searchFileVectorKeywords } from "./FileVectorIndexQuery";
 import type { FileVectorStateAccess } from "./FileVectorIndexState";

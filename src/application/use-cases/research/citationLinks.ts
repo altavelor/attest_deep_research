@@ -5,8 +5,8 @@
 // from this layer. The principled home is an Obsidian output adapter; that move
 // is blocked until the answer-note formatter itself is re-homed there.
 
-import { SourceReference } from "../../../core/model/source";
-import { formatCitation } from "../../../core/retrieval/citations";
+import { SourceReference } from "@core/model";
+import { formatCitation } from "@core/retrieval";
 
 /** Obsidian address for a source (the shared atom; see also ui/conversationFormatting). */
 export function citationTarget(source: SourceReference): string {

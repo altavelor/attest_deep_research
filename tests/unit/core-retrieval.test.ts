@@ -1,9 +1,9 @@
 // Stage 2: the RAG ranking/filtering/citation logic now lives in core and is
 // importable + testable without any adapter, node, or DOM dependency.
-import { rankKeywordMatches } from "../../src/adapters/retrieval/keywordRanking";
-import { filterRetrievedChunks } from "../../src/core/retrieval/filters";
-import { formatCitation } from "../../src/core/retrieval/citations";
-import type { RetrievedChunk } from "../../src/core/model/source";
+import { rankKeywordMatches } from "@adapters/retrieval";
+import { filterRetrievedChunks } from "@core/retrieval";
+import { formatCitation } from "@core/retrieval";
+import type { RetrievedChunk } from "@core/model";
 
 function chunk(id: string, text: string, score: number, path = `${id}.md`): RetrievedChunk {
   return {

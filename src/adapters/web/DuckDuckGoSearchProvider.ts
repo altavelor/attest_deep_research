@@ -10,7 +10,7 @@ import {
 } from "../../application/ports/web";
 import type { PluginRequestLogger } from "../settings/debugLogger";
 import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
-import { validatePublicWebUrl } from "../../application/sources/WebUrlPolicy";
+import { validatePublicWebUrl } from "@application/sources";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;

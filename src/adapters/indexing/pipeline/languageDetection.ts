@@ -1,6 +1,6 @@
 import { francAll } from "franc-min";
 
-import { LanguageCode, LanguageInventoryItem } from "../../../core/model/citation";
+import { LanguageCode, LanguageInventoryItem } from "@core/model";
 import { normalizeInlineWhitespace } from "../../../shared/whitespace";
 
 const UNKNOWN_LANGUAGE = "unknown";

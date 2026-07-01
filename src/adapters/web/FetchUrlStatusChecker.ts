@@ -3,7 +3,7 @@ import {
   UrlStatusCheckRequest,
   UrlStatusCheckResult,
 } from "../../application/contracts/research";
-import { validatePublicWebUrl } from "../../application/sources/WebUrlPolicy";
+import { validatePublicWebUrl } from "@application/sources";
 
 export interface FetchUrlStatusCheckerOptions {
   fetch?: typeof fetch;

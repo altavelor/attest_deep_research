@@ -1,5 +1,5 @@
-import { RetrievedChunk, SourceReference } from "../../core/model/source";
-import { RetrievalOptions } from "../../core/retrieval/query";
+import { RetrievedChunk, SourceReference } from "@core/model";
+import { RetrievalOptions } from "@core/retrieval";
 
 export interface IndexCursorPage<T> {
   items: T[];

@@ -1,5 +1,5 @@
 import type { IndexFailedSourceSnapshot, IndexStore, IndexStoreWriteSession, SourceSnapshotIndexStore } from "../../../application/ports/indexing";
-import type { ExtractedChunk } from "../../../core/model/source";
+import type { ExtractedChunk } from "@core/model";
 import { updateSnapshot } from "./changeDetection";
 import type { FileSnapshot } from "./changeDetection";
 import { EmbeddingBatcher } from "./EmbeddingBatcher";

@@ -1,4 +1,4 @@
-import { extractPageMetadata } from "../../src/adapters/web/DuckDuckGoParser";
+import { extractPageMetadata } from "@adapters/web";
 
 describe("extractPageMetadata", () => {
   it("prefers Open Graph values and parses author/published/canonical/lang", () => {

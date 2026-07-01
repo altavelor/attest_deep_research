@@ -4,8 +4,8 @@ import { VaultWriter } from "../../../application/ports/vault";
 import { normalizeVaultPath } from "../../../shared/pathFilters";
 import { Extractor } from "../../../application/ports/indexing";
 import { ChatToolCall, ChatToolDefinition } from "../../../core/agent/tool";
-import { Citation } from "../../../core/model/citation";
-import { ExtractedChunk, RetrievedChunk } from "../../../core/model/source";
+import { Citation } from "@core/model";
+import { ExtractedChunk, RetrievedChunk } from "@core/model";
 import { estimateTextTokens } from "../../../core/research/prompts";
 import { applyNoteCitations, maxFootnoteNumber } from "./noteCitations";
 import {

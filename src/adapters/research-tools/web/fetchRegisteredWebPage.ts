@@ -5,8 +5,8 @@
 // differ only in how the resultId is obtained and how the content is post-shaped.
 
 import { SearchProvider } from "../../../application/ports/web";
-import { validatePublicWebUrl } from "../../../application/sources/WebUrlPolicy";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { validatePublicWebUrl } from "@application/sources";
+import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "../../../core/agent/tool";
 
 export interface FetchWebPageOutput {

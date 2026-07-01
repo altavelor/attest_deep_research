@@ -10,7 +10,7 @@ import {
 import { FileVectorInventoryStore } from "../../src/adapters/indexing/inventory/FileVectorInventoryStore";
 import { FileVectorIndexReader } from "../../src/adapters/indexing/store/FileVectorIndexReader";
 import { shardIdForSourcePath } from "../../src/adapters/indexing/inventory/sourcePathShard";
-import { EmbeddedChunk, SourceReference } from "../../src/core/model/source";
+import { EmbeddedChunk, SourceReference } from "@core/model";
 
 describe("FileVectorIndexStore", () => {
   let folder: string;

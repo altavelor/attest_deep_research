@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { MarkdownExtractor } from "../../src/adapters/extractors/MarkdownExtractor";
-import { PdfExtractor, PdfPageTextParser } from "../../src/adapters/extractors/PdfExtractor";
-import { PdfTextCache } from "../../src/adapters/extractors/PdfTextCache";
+import { MarkdownExtractor } from "@adapters/extractors";
+import { PdfExtractor, PdfPageTextParser } from "@adapters/extractors";
+import { PdfTextCache } from "@adapters/extractors";
 import { ContextAssembler } from "../../src/application/use-cases/chat/ContextAssembler";
-import { stableId } from "../../src/adapters/extractors/common";
+import { stableId } from "@adapters/extractors";
 import { chatHistoryForPrompt, compactChatMessages } from "../../src/application/use-cases/chat/ChatCompaction";
 import { GraphContextProvider } from "../../src/core/research/GraphContext";
 import { Extractor } from "../../src/application/ports/indexing";
-import { RetrievedChunk } from "../../src/core/model/source";
+import { RetrievedChunk } from "@core/model";
 
 describe("ContextAssembler", () => {
   it("prioritizes explicit files before the active note", async () => {

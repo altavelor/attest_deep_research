@@ -16,7 +16,7 @@ import {
   SEARCH_INDEX_BY_METADATA_TOOL,
   SUMMARIZE_INDEX_SOURCE_TOOL,
 } from "../../../core/agent/toolNames";
-import { SourceKind } from "../../../core/model/source";
+import { SourceKind } from "@core/model";
 import {
   bool,
   defineInventoryTool,
@@ -26,7 +26,7 @@ import {
   okPage,
   str,
   strArray,
-} from "../../../application/sources/tools/toolFactory";
+} from "@application/sources/tools";
 
 const SOURCE_KINDS: SourceKind[] = ["markdown", "pdf", "document", "web"];
 const MAX_CURSOR_CHARS = 200;

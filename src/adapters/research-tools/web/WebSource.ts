@@ -3,8 +3,8 @@
 
 import { Tool } from "../../../core/agent/tool";
 import { SearchProvider } from "../../../application/ports/web";
-import { DataSource, DataSourceDescriptor } from "../../../application/sources/DataSource";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
+import { DataSource, DataSourceDescriptor } from "@application/sources";
+import { EvidenceRegistry } from "@application/sources";
 import { WebSearchResearchTool } from "./WebSearchResearchTool";
 import { WebFetchResearchTool } from "./WebFetchResearchTool";
 import { WebFetchUrlTool } from "./WebFetchUrlTool";

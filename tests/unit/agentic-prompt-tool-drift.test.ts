@@ -1,4 +1,4 @@
-import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
+import { createResearchToolRegistry } from "@adapters/research-tools";
 import { buildAgenticResearchMessages } from "../../src/core/research/agenticPrompts";
 import { PROMPT_TOOL_NAMES, WEB_FETCH_TOOL } from "../../src/core/agent/toolNames";
 import { ResearchRetriever } from "../../src/application/contracts/research";

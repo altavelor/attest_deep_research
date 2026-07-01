@@ -6,8 +6,8 @@ import {
 import { ToolParseResult, toolFailure } from "../../../core/agent/tool";
 import { DEEP_SEARCH_TOOL } from "../../../core/agent/toolNames";
 import { DeepResearchRunner } from "../../../application/research/deepResearchPort";
-import { EvidenceRegistry } from "../../../application/sources/evidence";
-import { defineTool, str } from "../../../application/sources/tools/toolFactory";
+import { EvidenceRegistry } from "@application/sources";
+import { defineTool, str } from "@application/sources/tools";
 
 export interface DeepSearchInput {
   question: string;

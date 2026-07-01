@@ -1,5 +1,5 @@
 import type { IndexStore } from "../../../application/ports/indexing";
-import type { EmbeddedChunk, ExtractedChunk } from "../../../core/model/source";
+import type { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import type {
   EmbedAndStoreInput,
   EmbeddingBatcherOptions,

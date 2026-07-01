@@ -1,7 +1,7 @@
-import { RetrievalResult } from "../../src/adapters/retrieval/RetrievalService";
+import { RetrievalResult } from "@adapters/retrieval";
 import { SearchProvider, SearchProviderResult } from "../../src/application/ports/web";
 import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "../../src/core/agent/protocol";
-import { LanguageInventoryItem } from "../../src/core/model/citation";
+import { LanguageInventoryItem } from "@core/model";
 
 export class FakeRetriever {
   readonly requests: Array<{

@@ -1,8 +1,8 @@
 // Application ports: indexing / extraction / index-store contracts (stage 1, task 1.3).
 // Depend only on core domain model.
 
-import { EmbeddedChunk, ExtractedChunk, RetrievedChunk } from "../../core/model/source";
-import { LanguageCode, LanguageInventoryItem } from "../../core/model/citation";
+import { EmbeddedChunk, ExtractedChunk, RetrievedChunk } from "@core/model";
+import { LanguageCode, LanguageInventoryItem } from "@core/model";
 
 export interface ExtractorInput {
   path: string;

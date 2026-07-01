@@ -1,4 +1,4 @@
-import { createResearchToolRegistry } from "../../src/adapters/research-tools/createResearchToolRegistry";
+import { createResearchToolRegistry } from "@adapters/research-tools";
 import { ResearchRetriever } from "../../src/application/contracts/research";
 import { SearchProvider } from "../../src/application/ports/web";
 
