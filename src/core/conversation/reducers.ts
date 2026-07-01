@@ -3,11 +3,8 @@
 
 import { RetrievedChunk } from "../model/source";
 import { ContextDiagnostics } from "../diagnostics";
-import {
-  AssistantResearchProgress,
-  ChainItem,
-  ChatDisplayMessage,
-} from "./model";
+import { ResearchAnswer } from "../answer";
+import { AssistantResearchProgress, ChainItem, ChatDisplayMessage } from "./model";
 
 export function nextAssistantMessage(
   messages: ChatDisplayMessage[],
@@ -198,9 +195,7 @@ export function nextChainToolCallStart(
       : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
   const progress = researchProgressFromMessage(assistant, new Date().toISOString());
   const item: ChainItem = { kind: "tool-call", id, name, label, status: "pending", args };
-  const chain = parentId
-    ? appendChild(progress.chain, parentId, item)
-    : [...progress.chain, item];
+  const chain = parentId ? appendChild(progress.chain, parentId, item) : [...progress.chain, item];
   const updated: ChatDisplayMessage = {
     ...assistant,
     researchProgress: { ...progress, chain },
@@ -329,6 +324,7 @@ function researchProgressFromMessage(
 export function attachAnswerDetailsToLastAssistantMessage(
   messages: ChatDisplayMessage[],
   answer: {
+    finalAnswer?: ResearchAnswer;
     evidence?: RetrievedChunk[];
     contextDiagnostics?: ContextDiagnostics;
     isFallback?: true;
@@ -344,8 +340,9 @@ export function attachAnswerDetailsToLastAssistantMessage(
       ...messages.slice(0, index),
       {
         ...messages[index],
+        answer: answer.finalAnswer,
         evidence: answer.evidence ?? [],
-        contextDiagnostics: answer.contextDiagnostics,
+        contextDiagnostics: answer.contextDiagnostics ?? answer.finalAnswer?.contextDiagnostics,
         ...(answer.isFallback
           ? { isFallback: true as const, fallbackReason: answer.fallbackReason }
           : {}),
@@ -385,6 +382,10 @@ export function shouldShowDiagnosticAction(
   isDebugMode: boolean,
 ): boolean {
   return isDebugMode && message.role === "assistant" && message.contextDiagnostics !== undefined;
+}
+
+export function shouldShowAnswerNoteActions(message: ChatDisplayMessage): boolean {
+  return message.role === "assistant" && message.answer !== undefined;
 }
 
 export function stripMessageDiagnostics(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {

@@ -4,6 +4,7 @@
 
 import { RetrievedChunk } from "../model/source";
 import { ContextDiagnostics } from "../diagnostics";
+import { ResearchAnswer } from "../answer";
 
 export interface ConversationCompactionSummary {
   userGoals: string[];
@@ -21,6 +22,7 @@ export interface ChatDisplayMessage {
   compacted?: boolean;
   compactSummary?: ConversationCompactionSummary;
   evidence?: RetrievedChunk[];
+  answer?: ResearchAnswer;
   contextDiagnostics?: ContextDiagnostics;
   reasoning?: Array<{ id: string; content: string }>;
   reasoningOpen?: boolean;

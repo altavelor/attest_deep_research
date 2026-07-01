@@ -7,14 +7,32 @@ import {
   compactionSummaryFromMessages,
   shouldCompactForContext,
 } from "@application/use-cases/chat";
-import { AgentRunDiagnosticCollector, ResearchService, ResearchStreamEvent } from "@application/use-cases/research";
+import {
+  AgentRunDiagnosticCollector,
+  ResearchService,
+  ResearchStreamEvent,
+} from "@application/use-cases/research";
 import { estimateResearchRequestTokens, parseDeepResearchDirective } from "@core/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ContextMode } from "../../../../../core/diagnostics";
 import { toUserMessage } from "../../../../../core/errors";
 import { ResearchAnswer } from "../../../../../core/answer";
 import { ChatDisplayMessage } from "@core/conversation";
-import { attachAnswerDetailsToLastAssistantMessage, completeAssistantCheckpoint, finalizeLastAssistantReasoning, interruptLastAssistantProgress, nextAssistantCheckpoint, nextAssistantMessage, nextAssistantReasoning, nextChainDeepResearchPhase, nextChainReasoningSegment, nextChainToolCallEnd, nextChainToolCallStart, resetLastAssistantContent, stampLastAssistantModel } from "@core/conversation";
+import {
+  attachAnswerDetailsToLastAssistantMessage,
+  completeAssistantCheckpoint,
+  finalizeLastAssistantReasoning,
+  interruptLastAssistantProgress,
+  nextAssistantCheckpoint,
+  nextAssistantMessage,
+  nextAssistantReasoning,
+  nextChainDeepResearchPhase,
+  nextChainReasoningSegment,
+  nextChainToolCallEnd,
+  nextChainToolCallStart,
+  resetLastAssistantContent,
+  stampLastAssistantModel,
+} from "@core/conversation";
 
 export interface ResearchQuestionControllerOptions {
   getQuestionInput(): string;
@@ -353,6 +371,7 @@ export class ResearchQuestionController {
     );
     this.options.setMessages(
       attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), {
+        finalAnswer: event.answer,
         ...event.answer,
         ...(event.answer.isFallback
           ? { isFallback: true as const, fallbackReason: event.answer.fallbackReason }

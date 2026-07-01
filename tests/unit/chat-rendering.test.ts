@@ -1,5 +1,19 @@
-import { attachAnswerDetailsToLastAssistantMessage, messageMarkdownContent, nextAssistantMessage, nextAssistantReasoning, shouldShowDiagnosticAction, stripMessageDiagnostics } from "@core/conversation";
-import { citationTarget, formatIndexControlSummary, formatIndexingStatus, formatProgressPercent, messageDisplayContent } from "../../src/apps/obsidian/ui/chat/conversationFormatting";
+import {
+  attachAnswerDetailsToLastAssistantMessage,
+  messageMarkdownContent,
+  nextAssistantMessage,
+  nextAssistantReasoning,
+  shouldShowAnswerNoteActions,
+  shouldShowDiagnosticAction,
+  stripMessageDiagnostics,
+} from "@core/conversation";
+import {
+  citationTarget,
+  formatIndexControlSummary,
+  formatIndexingStatus,
+  formatProgressPercent,
+  messageDisplayContent,
+} from "../../src/apps/obsidian/ui/chat/conversationFormatting";
 import { ContextDiagnostics } from "../../src/core/diagnostics";
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
@@ -128,6 +142,14 @@ describe("chat rendering helpers", () => {
 
   it("attaches completed diagnostics to the corresponding last assistant message", () => {
     const diagnostics = { contextMode: "include" } as ContextDiagnostics;
+    const answer = {
+      question: "What changed?",
+      answer: "Second",
+      citations: [],
+      followUpQuestions: [],
+      createdAt: "2026-05-16T10:02:00.000Z",
+      contextDiagnostics: diagnostics,
+    };
     const messages = [
       { role: "assistant" as const, content: "First", createdAt: "2026-05-16T10:00:00.000Z" },
       { role: "user" as const, content: "Next", createdAt: "2026-05-16T10:01:00.000Z" },
@@ -136,13 +158,46 @@ describe("chat rendering helpers", () => {
 
     expect(
       attachAnswerDetailsToLastAssistantMessage(messages, {
-        contextDiagnostics: diagnostics,
+        finalAnswer: answer,
       }),
     ).toEqual([
       messages[0],
       messages[1],
-      { ...messages[2], evidence: [], contextDiagnostics: diagnostics },
+      { ...messages[2], answer, evidence: [], contextDiagnostics: diagnostics },
     ]);
+  });
+
+  it("shows answer note actions only for assistant messages with a final answer", () => {
+    const answer = {
+      question: "What changed?",
+      answer: "Final answer",
+      citations: [],
+      followUpQuestions: [],
+      createdAt: "2026-05-16T10:02:00.000Z",
+    };
+
+    expect(
+      shouldShowAnswerNoteActions({
+        role: "assistant",
+        content: "Final answer",
+        createdAt: "2026-05-16T10:02:00.000Z",
+        answer,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowAnswerNoteActions({
+        role: "assistant",
+        content: "Streaming answer",
+        createdAt: "2026-05-16T10:02:00.000Z",
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowAnswerNoteActions({
+        role: "user",
+        content: "Question",
+        createdAt: "2026-05-16T10:01:00.000Z",
+      }),
+    ).toBe(false);
   });
 
   it("shows the diagnostic action only for debug assistant messages with a report", () => {
