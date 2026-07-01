@@ -12,7 +12,7 @@ import {
   ResearchService,
   ResearchStreamEvent,
 } from "@application/use-cases/research";
-import { estimateResearchRequestTokens, parseDeepResearchDirective } from "@core/research";
+import { estimateResearchRequestTokens, parseSubAgentDirective } from "@core/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ContextMode } from "@core/diagnostics";
 import { toUserMessage } from "@core/errors";
@@ -26,7 +26,7 @@ import {
   nextAssistantCheckpoint,
   nextAssistantMessage,
   nextAssistantReasoning,
-  nextChainDeepResearchPhase,
+  nextChainSubAgentPhase,
   nextChainReasoningSegment,
   nextChainToolCallEnd,
   nextChainToolCallStart,
@@ -193,12 +193,12 @@ export class ResearchQuestionController {
     try {
       const service = this.options.createResearchService();
       const contextPaths = this.options.getContextPaths();
-      const { forceDeepSearch, cleanedQuestion } = parseDeepResearchDirective(question);
+      const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(question);
       let completed = false;
 
       for await (const event of service.answer({
         question: cleanedQuestion || question,
-        forceDeepSearch: forceDeepSearch || undefined,
+        forceSubAgent: forceSubAgent || undefined,
         searchMode: this.options.getSearchMode(),
         contextMode: this.options.getContextMode(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,
@@ -302,9 +302,9 @@ export class ResearchQuestionController {
       return;
     }
 
-    if (event.type === "deep-research-phase") {
+    if (event.type === "sub-agent-phase") {
       this.options.setMessages(
-        nextChainDeepResearchPhase(this.options.getMessages(), event.parentId, event.phase),
+        nextChainSubAgentPhase(this.options.getMessages(), event.parentId, event.phase),
       );
       this.scheduleActiveRender();
       return;

@@ -1,7 +1,7 @@
 import { buildAgenticResearchMessages } from "@core/research";
 import {
   CREATE_NOTE_TOOL,
-  DEEP_SEARCH_TOOL,
+  SUB_AGENT_TOOL,
   DELETE_NOTE_TOOL,
   INDEX_SEARCH_TOOL,
   UPDATE_NOTE_TOOL,
@@ -65,15 +65,15 @@ describe("agentic research prompts", () => {
     expect(messages.at(-1)).toEqual({ role: "user", content: "Question" });
   });
 
-  it("injects the deep_search skill only when deep_search is available", () => {
+  it("injects the run_subagent skill only when run_subagent is available", () => {
     const without = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
-    expect(without).not.toContain("deep_search");
+    expect(without).not.toContain("run_subagent");
 
-    const withDeep = systemText({
-      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, DEEP_SEARCH_TOOL],
+    const withSubAgent = systemText({
+      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, SUB_AGENT_TOOL],
     });
-    expect(withDeep).toContain("Deep research (deep_search)");
-    expect(withDeep).toContain("When to prefer deep_search");
+    expect(withSubAgent).toContain("Delegating to a sub-agent (run_subagent)");
+    expect(withSubAgent).toContain("When to prefer run_subagent");
   });
 
   it("injects Core-Research skill when coreVariant is research", () => {

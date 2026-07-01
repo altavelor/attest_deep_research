@@ -6,12 +6,12 @@ import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
 import { buildAgenticResearchMessages } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { ToolEvent } from "@core/agent";
-import { DEEP_SEARCH_TOOL } from "@core/agent";
+import { SUB_AGENT_TOOL } from "@core/agent";
 import {
-  DEEP_RESEARCH_PHASE,
-  DEEP_RESEARCH_TOOL_END,
-  DEEP_RESEARCH_TOOL_START,
-} from "@application/research/deepResearchPort";
+  SUB_AGENT_PHASE,
+  SUB_AGENT_TOOL_END,
+  SUB_AGENT_TOOL_START,
+} from "@application/research/subAgentPort";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { AgenticResearchRunner, AgenticResearchFailure } from "../AgenticResearchRunner";
 import {
@@ -135,14 +135,14 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
-      deepResearchRunner: this.deps.deepResearchRunner,
+      subAgentRunner: this.deps.subAgentRunner,
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
     });
-    // When the user wrote @deep_search, compel at least one deep_search call.
+    // When the user wrote @run_subagent, compel at least one run_subagent call.
     const effectivePolicy =
-      request.forceDeepSearch === true && created.tools.has(DEEP_SEARCH_TOOL)
-        ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, DEEP_SEARCH_TOOL]) }
+      request.forceSubAgent === true && created.tools.has(SUB_AGENT_TOOL)
+        ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
         : policy;
     const messages = buildAgenticResearchMessages({
       question,
@@ -212,7 +212,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
             resultSummary,
             resultJson,
           }),
-        onToolEvent: (callId, event) => emitNestedDeepResearchEvent(onEvent, callId, event),
+        onToolEvent: (callId, event) => emitNestedSubAgentEvent(onEvent, callId, event),
       }).run();
     }
     const snapshot = created.evidence.snapshot();
@@ -295,22 +295,22 @@ export class AgenticResearchStrategy implements ResearchStrategy {
 }
 
 /**
- * Maps a deep_search sub-agent's progress (emitted via the tool's `emit`) into
- * nested research-stream events tagged with the parent deep_search call id, so the
- * UI can render the session's live work under its cell. Inner tool-call ids are
- * namespaced by the parent id to stay unique across parallel sessions.
+ * Maps a run_subagent session's progress (emitted via the tool's `emit`) into
+ * nested research-stream events tagged with the parent run_subagent call id, so
+ * the UI can render the session's live work under its cell. Inner tool-call ids
+ * are namespaced by the parent id to stay unique across parallel sessions.
  */
-function emitNestedDeepResearchEvent(
+function emitNestedSubAgentEvent(
   onEvent: (event: ResearchStreamEvent) => void,
   parentId: string,
   event: ToolEvent,
 ): void {
   const data = event.data ?? {};
-  if (event.type === DEEP_RESEARCH_PHASE) {
-    onEvent({ type: "deep-research-phase", parentId, phase: event.message ?? "" });
+  if (event.type === SUB_AGENT_PHASE) {
+    onEvent({ type: "sub-agent-phase", parentId, phase: event.message ?? "" });
     return;
   }
-  if (event.type === DEEP_RESEARCH_TOOL_START) {
+  if (event.type === SUB_AGENT_TOOL_START) {
     onEvent({
       type: "tool-call-start",
       parentId,
@@ -321,7 +321,7 @@ function emitNestedDeepResearchEvent(
     });
     return;
   }
-  if (event.type === DEEP_RESEARCH_TOOL_END) {
+  if (event.type === SUB_AGENT_TOOL_END) {
     onEvent({
       type: "tool-call-end",
       parentId,

@@ -24,10 +24,10 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
         : "Index URLs";
     case "check_urls":
       return Array.isArray(args.urls) ? `Checking ${args.urls.length} URLs` : "Checking URLs";
-    case "deep_search":
-      return typeof args.question === "string" && args.question
-        ? `Deep research: ${truncate(args.question)}`
-        : "Deep research";
+    case "run_subagent":
+      return typeof args.task === "string" && args.task
+        ? `Sub-agent: ${truncate(args.task)}`
+        : "Sub-agent";
     case "read_note":
       return basename(args.path) || name;
     case "get_active_note":
@@ -115,12 +115,10 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       return root.ok === true ? "done" : undefined;
     }
 
-    if (name === "deep_search") {
+    if (name === "run_subagent") {
       const value = root.value as Record<string, unknown> | undefined;
-      const findings = typeof value?.findingCount === "number" ? value.findingCount : undefined;
       const sources = typeof value?.sourceCount === "number" ? value.sourceCount : undefined;
-      if (findings === undefined && sources === undefined) return undefined;
-      return `${findings ?? 0} findings · ${sources ?? 0} sources`;
+      return sources === undefined ? undefined : `${sources} sources`;
     }
 
     return undefined;

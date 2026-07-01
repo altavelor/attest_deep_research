@@ -1,4 +1,4 @@
-import { DEEP_SEARCH_MENTION_INSERT } from "@core/research";
+import { SUB_AGENT_MENTION_INSERT } from "@core/research";
 
 export interface MentionCandidate {
   insertText: string;
@@ -6,9 +6,9 @@ export interface MentionCandidate {
   detail: "Document" | "Command";
 }
 
-const DEEP_SEARCH_CANDIDATE: MentionCandidate = {
-  insertText: DEEP_SEARCH_MENTION_INSERT,
-  label: "deep_search",
+const SUB_AGENT_CANDIDATE: MentionCandidate = {
+  insertText: SUB_AGENT_MENTION_INSERT,
+  label: "run_subagent",
   detail: "Command",
 };
 
@@ -18,8 +18,8 @@ export function getMentionCandidates(
 ): MentionCandidate[] {
   const normalizedQuery = query.toLowerCase();
 
-  const commandCandidates = DEEP_SEARCH_CANDIDATE.insertText.includes(normalizedQuery)
-    ? [DEEP_SEARCH_CANDIDATE]
+  const commandCandidates = SUB_AGENT_CANDIDATE.insertText.includes(normalizedQuery)
+    ? [SUB_AGENT_CANDIDATE]
     : [];
 
   const documentCandidates: MentionCandidate[] = contextFilePaths

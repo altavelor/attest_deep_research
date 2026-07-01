@@ -1,33 +1,34 @@
-// In-process deep-research sub-agent. A self-contained agent loop with its own
-// system prompt, web-only toolset, isolated evidence registry and budget. The
-// orchestrating (main) model launches one or more of these via the `deep_search`
-// tool; each returns structured evidence the main model synthesizes from.
+// In-process universal sub-agent. A self-contained agent loop with the same
+// read-only toolset as the orchestrating (main) model for the current turn
+// (index/web/notes — no mutation, no recursive run_subagent). The orchestrating
+// model launches one or more of these via the `run_subagent` tool; each returns
+// a free-text answer that already cites evidence in the shared citation format
+// (`[url:...]` for web, `[evidenceId]` for index/notes), so no remapping is
+// needed once the evidence is merged into the parent registry.
 
-import { ModelRoundProvider } from "@core/agent";
+import { ChatMessage, ModelRoundProvider } from "@core/agent";
 import { ResearchExecutionPolicy } from "@core/research";
-import {
-  DeepResearchSynthesisSource,
-  buildDeepResearchMessages,
-  buildDeepResearchSynthesisMessages,
-} from "@core/research";
+import { buildAgenticResearchMessages } from "@core/research";
+import { sourceLabel } from "@core/retrieval";
 import { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { SearchProvider } from "@application/ports/web";
-import { ResearchToolsetFactory } from "@application/research/toolPorts";
+import { ResearchToolsetFactory, ResearchToolsetOptions } from "@application/research/toolPorts";
 import {
-  DEEP_RESEARCH_PHASE,
-  DEEP_RESEARCH_TOOL_END,
-  DEEP_RESEARCH_TOOL_START,
-  DeepResearchLogEvent,
-  DeepResearchLogger,
-  DeepResearchRunInput,
-  DeepResearchRunResult,
-  DeepResearchRunner,
-} from "@application/research/deepResearchPort";
+  SUB_AGENT_PHASE,
+  SUB_AGENT_TOOL_END,
+  SUB_AGENT_TOOL_START,
+  SubAgentLogEvent,
+  SubAgentLogger,
+  SubAgentPort,
+  SubAgentRunInput,
+  SubAgentRunResult,
+} from "@application/research/subAgentPort";
 import { AgenticResearchRunner } from "../AgenticResearchRunner";
-import { looksLikeLeakedToolCall, parseDeepResearchReport } from "./parseDeepResearchReport";
+import { looksLikeLeakedToolCall } from "./leakedToolCallMarkup";
 
-export interface DeepResearchAgentDeps {
+export interface SubAgentRunnerDeps {
   toolsetFactory: ResearchToolsetFactory;
+  /** Fallback toolset (web-only) used only when the caller supplies no `toolContext`. */
   searchProvider: SearchProvider;
   /** Reuses the parent chat model + round provider by default. */
   modelRound: ModelRoundProvider;
@@ -39,7 +40,7 @@ export interface DeepResearchAgentDeps {
   maxRounds?: number;
   maxResultChars?: number;
   /** Optional diagnostic sink (gated by debug mode at the composition root). */
-  logger?: DeepResearchLogger;
+  logger?: SubAgentLogger;
 }
 
 const DEFAULT_MAX_ROUNDS = 12;
@@ -48,7 +49,7 @@ const SYNTHESIS_EXCERPT_CHARS = 1_500;
 
 // The sub-agent never forces a tool; the model drives its own loop. parallel
 // calls let it fan out sub-queries in one round.
-const DEEP_RESEARCH_POLICY: ResearchExecutionPolicy = Object.freeze({
+const SUB_AGENT_POLICY: ResearchExecutionPolicy = Object.freeze({
   strategy: "agentic",
   reason: "eligible",
   requiredTools: Object.freeze([] as string[]),
@@ -57,11 +58,17 @@ const DEEP_RESEARCH_POLICY: ResearchExecutionPolicy = Object.freeze({
   supportsSpecificChoice: false,
 });
 
-export class DeepResearchAgent implements DeepResearchRunner {
-  constructor(private readonly deps: DeepResearchAgentDeps) {}
+const SUB_AGENT_FRAMING =
+  "You are an autonomous sub-agent delegated a specific task by an orchestrating agent — " +
+  "there is no further user turn to come back to. Work the task end to end using the tools " +
+  "above, then produce one complete final answer (no tool calls) using the citation format " +
+  "already described. If something could not be established, say so explicitly.";
 
-  async run(input: DeepResearchRunInput): Promise<DeepResearchRunResult> {
-    const created = this.deps.toolsetFactory({
+export class SubAgentRunner implements SubAgentPort {
+  constructor(private readonly deps: SubAgentRunnerDeps) {}
+
+  async run(input: SubAgentRunInput): Promise<SubAgentRunResult> {
+    const toolsetOptions: ResearchToolsetOptions = input.toolContext ?? {
       availability: {
         searchMode: "webOnly",
         noteAccess: false,
@@ -71,18 +78,18 @@ export class DeepResearchAgent implements DeepResearchRunner {
         noteMutationAccess: false,
       },
       searchProvider: this.deps.searchProvider,
-    });
+    };
+    const created = this.deps.toolsetFactory(toolsetOptions);
 
     const emit = input.onEvent;
-    const log = (event: DeepResearchLogEvent): void => this.deps.logger?.logDeepResearch(event);
+    const log = (event: SubAgentLogEvent): void => this.deps.logger?.logSubAgent(event);
     const startedAt = Date.now();
     const maxRounds = this.deps.maxRounds ?? DEFAULT_MAX_ROUNDS;
     const maxResultChars = this.deps.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
 
     log({
       type: "session-start",
-      question: input.question,
-      scope: input.scope,
+      task: input.task,
       model: this.deps.model,
       maxRounds,
       maxResultChars,
@@ -91,14 +98,24 @@ export class DeepResearchAgent implements DeepResearchRunner {
         : undefined,
     });
 
-    emit?.({ type: DEEP_RESEARCH_PHASE, message: "Planning research…" });
+    emit?.({ type: SUB_AGENT_PHASE, message: "Planning…" });
+
+    const messages: ChatMessage[] = buildAgenticResearchMessages({
+      question: input.task,
+      requiredTools: [],
+      toolContext: {
+        coreVariant: "research",
+        availableTools: created.tools.definitions().map((definition) => definition.function.name),
+      },
+    });
+    messages.splice(1, 0, { role: "system", content: SUB_AGENT_FRAMING });
 
     const result = await new AgenticResearchRunner({
       modelRound: this.deps.modelRound,
       model: this.deps.model,
-      messages: buildDeepResearchMessages({ question: input.question, scope: input.scope }),
+      messages,
       tools: created.tools,
-      policy: DEEP_RESEARCH_POLICY,
+      policy: SUB_AGENT_POLICY,
       temperature: this.deps.temperature,
       maxTokens: this.deps.maxTokens,
       reasoning: this.deps.reasoning,
@@ -107,19 +124,19 @@ export class DeepResearchAgent implements DeepResearchRunner {
       maxResultChars,
       onToolCall: (id, name, label, round) => {
         log({ type: "tool-call", round, name, label });
-        emit?.({ type: DEEP_RESEARCH_PHASE, message: phaseForTool(name) });
-        emit?.({ type: DEEP_RESEARCH_TOOL_START, data: { id, name, label, round } });
+        emit?.({ type: SUB_AGENT_PHASE, message: phaseForTool(name) });
+        emit?.({ type: SUB_AGENT_TOOL_START, data: { id, name, label, round } });
       },
       onToolResult: (id, ok, resolvedLabel, resultSummary) => {
         log({ type: "tool-result", name: resolvedLabel ?? "", ok, summary: resultSummary });
         emit?.({
-          type: DEEP_RESEARCH_TOOL_END,
+          type: SUB_AGENT_TOOL_END,
           data: { id, ok, resolvedLabel, resultSummary },
         });
       },
     }).run();
 
-    const rawAnswer = result.ok ? result.answerText : "";
+    let answerText = result.ok ? result.answerText : "";
     log({
       type: "loop-complete",
       ok: result.ok,
@@ -129,56 +146,50 @@ export class DeepResearchAgent implements DeepResearchRunner {
       duplicateCalls: result.duplicateCalls,
       totalResultChars: result.totalResultChars,
       stopReasons: result.stopReasons,
-      answerChars: rawAnswer.length,
+      answerChars: answerText.length,
       usage: result.usage,
       durationMs: Date.now() - startedAt,
     });
 
-    emit?.({ type: DEEP_RESEARCH_PHASE, message: "Synthesizing evidence…" });
-
     const snapshot = created.evidence.snapshot();
-    let rawText = rawAnswer;
     // Synthesize from evidence when the runner returned no usable answer: either it ended
     // without text (loop-detected, budget, round limit) or the "answer" is leaked tool-call
     // markup the model emitted as text (its function-call dialect wasn't parsed). Either way
-    // the gathered evidence would otherwise be dumped as a bare source list with no findings.
-    const usedSynthesisFallback = !rawText.trim() || looksLikeLeakedToolCall(rawText);
+    // the gathered evidence would otherwise be dumped as nothing at all.
+    const usedSynthesisFallback = !answerText.trim() || looksLikeLeakedToolCall(answerText);
     if (usedSynthesisFallback) {
-      rawText = await this.synthesizeFromEvidence(input, snapshot, log);
+      emit?.({ type: SUB_AGENT_PHASE, message: "Synthesizing evidence…" });
+      answerText = await this.synthesizeFromEvidence(input, snapshot, log);
     }
 
-    const report = parseDeepResearchReport(input.question, rawText);
     log({
       type: "session-complete",
-      findingCount: report.findings.length,
-      sourceCount: snapshot.evidence.filter((chunk) => chunk.source.kind === "web").length,
+      sourceCount: snapshot.evidence.length,
       usedSynthesisFallback,
       durationMs: Date.now() - startedAt,
     });
 
-    return { report, snapshot };
+    return { answerText, snapshot };
   }
 
   private async synthesizeFromEvidence(
-    input: DeepResearchRunInput,
+    input: SubAgentRunInput,
     snapshot: ResearchEvidenceSnapshot,
-    log: (event: DeepResearchLogEvent) => void,
+    log: (event: SubAgentLogEvent) => void,
   ): Promise<string> {
-    const sources: DeepResearchSynthesisSource[] = [];
+    const excerpts: string[] = [];
     let excerptChars = 0;
     for (const chunk of snapshot.evidence) {
-      if (chunk.source.kind !== "web") continue;
+      const label =
+        chunk.source.kind === "web"
+          ? `${chunk.source.title || chunk.source.url} — ${chunk.source.url}`
+          : sourceLabel(chunk.source);
       const excerpt = chunk.text.slice(0, SYNTHESIS_EXCERPT_CHARS);
       excerptChars += excerpt.length;
-      sources.push({
-        evidenceId: chunk.id,
-        title: chunk.source.title,
-        url: chunk.source.url,
-        excerpt,
-      });
+      excerpts.push(`[${chunk.id}] ${label}\n${excerpt}`);
     }
-    log({ type: "synthesis-start", sourceCount: sources.length, excerptChars });
-    if (sources.length === 0) {
+    log({ type: "synthesis-start", sourceCount: excerpts.length, excerptChars });
+    if (excerpts.length === 0) {
       log({ type: "synthesis-complete", outputChars: 0 });
       return "";
     }
@@ -186,16 +197,25 @@ export class DeepResearchAgent implements DeepResearchRunner {
     try {
       const round = await this.deps.modelRound.runRound({
         model: this.deps.model,
-        messages: buildDeepResearchSynthesisMessages({
-          question: input.question,
-          scope: input.scope,
-          sources,
-        }),
+        messages: [
+          {
+            role: "system",
+            content:
+              "The sub-agent's tool loop ended (out of budget or rounds) before writing a final " +
+              "answer. Do NOT call any tool. Using only the evidence below, write the best possible " +
+              "final answer to the task, citing sources with the same [url:...] / [evidenceId] format " +
+              "already used in the tool results. Partial findings are far more useful than none.",
+          },
+          {
+            role: "user",
+            content: `Task: ${input.task}\n\nGathered evidence:\n${excerpts.join("\n\n")}`,
+          },
+        ],
         tools: [],
         toolChoice: { type: "none" },
         temperature: this.deps.temperature,
         // Same budget as the main loop — a tighter cap would be shared with reasoning
-        // tokens and truncate the JSON report, yielding an empty (findingless) result.
+        // tokens and truncate the answer, yielding an empty result.
         maxTokens: this.deps.maxTokens,
         reasoning: this.deps.reasoning,
         signal: input.signal,
@@ -224,7 +244,12 @@ function phaseForTool(name: string): string {
       return "Searching the web…";
     case "fetch_web_page":
       return "Reading sources…";
+    case "search_index":
+      return "Searching the index…";
+    case "read_note":
+    case "get_active_note":
+      return "Reading notes…";
     default:
-      return "Researching…";
+      return "Working…";
   }
 }

@@ -339,4 +339,46 @@ describe("AgenticResearchRunner", () => {
     expect(result).toMatchObject({ ok: true, answerText: "final" });
     expect(fetch.execute).toHaveBeenCalledTimes(2);
   });
+
+  it("runs at most 3 run_subagent calls concurrently within one round", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const subAgent = tool(
+      "run_subagent",
+      vi.fn().mockImplementation(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active -= 1;
+        return { ok: true, value: { answer: "done" } };
+      }),
+    );
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            { id: "1", name: "run_subagent", arguments: { task: "a" } },
+            { id: "2", name: "run_subagent", arguments: { task: "b" } },
+            { id: "3", name: "run_subagent", arguments: { task: "c" } },
+            { id: "4", name: "run_subagent", arguments: { task: "d" } },
+          ],
+        },
+      ],
+      [{ content: "final", isComplete: true }],
+    ]);
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([subAgent.handler]),
+      policy: policy([]),
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+    expect(subAgent.execute).toHaveBeenCalledTimes(4);
+    expect(maxActive).toBeLessThanOrEqual(3);
+    expect(maxActive).toBeGreaterThan(1);
+  });
 });
