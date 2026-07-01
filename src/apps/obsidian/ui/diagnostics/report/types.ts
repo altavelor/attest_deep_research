@@ -1,6 +1,6 @@
 import { ApiFormat } from "@core/agent";
 import { ChatToolChoice } from "@core/agent";
-import { ContextDiagnostics, ToolCallDiagnostic } from "../../../../../core/diagnostics";
+import { ContextDiagnostics, ToolCallDiagnostic } from "@core/diagnostics";
 
 export interface DiagnosticReportV3 {
   schemaVersion: 3;

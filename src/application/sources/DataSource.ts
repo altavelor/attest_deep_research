@@ -10,7 +10,7 @@
 // through the agent loop.
 
 import { Tool } from "@core/agent";
-import { ToolManager } from "../tools/ToolManager";
+import { ToolManager } from "@application/tools/ToolManager";
 
 export type SourceKind = "rag" | "web" | "attachments" | "deep-research";
 

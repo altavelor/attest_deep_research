@@ -1,7 +1,7 @@
-import { IxplorerSettings } from "../settings/types";
+import { IxplorerSettings } from "@adapters/settings/types";
 import { Extractor, ExtractorInput } from "@application/ports";
 import { ExtractedChunk } from "@core/model";
-import { chunkMarkdown } from "../indexing/pipeline/chunker";
+import { chunkMarkdown } from "@adapters/indexing/pipeline/chunker";
 import { isPathIncluded, normalizeVaultPath, vaultPathMatchesGlob } from "@shared";
 import { readInputText } from "./common";
 

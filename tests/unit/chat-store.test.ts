@@ -3,8 +3,8 @@ import { readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { FileChatRepository as FileChatStore } from "../../src/adapters/filesystem/FileChatRepository";
-import { inferChatTitle } from "../../src/core/chat/savedChat";
+import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
+import { inferChatTitle } from "@core/chat/savedChat";
 
 const CHAT_SETTINGS = {
   chatModelProfileId: "chat-model",

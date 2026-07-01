@@ -5,7 +5,7 @@ import {
   formatResearchAnswerNote,
   researchAnswerNotePath,
 } from "@application/use-cases/research";
-import { ResearchAnswer } from "../../../../../core/answer";
+import { ResearchAnswer } from "@core/answer";
 
 export class AnswerNoteWriter {
   constructor(private readonly app: App) { }

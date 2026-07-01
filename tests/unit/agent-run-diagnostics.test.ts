@@ -1,5 +1,5 @@
 import { AgentRunDiagnosticCollector } from "@application/use-cases/research";
-import { ContextDiagnostics } from "../../src/core/diagnostics";
+import { ContextDiagnostics } from "@core/diagnostics";
 
 function emptyDiagnostics(): ContextDiagnostics {
   return {

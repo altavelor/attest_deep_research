@@ -1,7 +1,7 @@
 import { RetrievalResult } from "./retrieval";
 import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
-import { ResearchAnswer } from "../../core/answer";
-import { ContextDiagnostics, ContextMode } from "../../core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
+import { ContextDiagnostics, ContextMode } from "@core/diagnostics";
 import { LanguageInventoryItem } from "@core/model";
 import { SourceReference } from "@core/model";
 import { ResearchChatHistoryMessage } from "@core/research";
@@ -18,7 +18,7 @@ import {
   IndexSourceInventoryOptions,
   IndexSourceOutline,
   IndexSourceSummary,
-} from "../ports/retrieval";
+} from "@application/ports/retrieval";
 
 export interface IndexedUrlReference {
   id: string;

@@ -7,7 +7,7 @@ import type {
   SavedChat,
   SavedChatSummary,
   SaveChatInput,
-} from "../../core/chat/savedChat";
+} from "@core/chat/savedChat";
 
 export type { SavedChat, SavedChatSummary, SaveChatInput };
 

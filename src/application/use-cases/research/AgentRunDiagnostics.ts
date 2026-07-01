@@ -1,5 +1,5 @@
-import { ContextDiagnostics } from "../../../core/diagnostics";
-import { ResearchStreamEvent } from "../../contracts/research";
+import { ContextDiagnostics } from "@core/diagnostics";
+import { ResearchStreamEvent } from "@application/contracts/research";
 
 export interface AgentRunDiagnosticCollectorOptions {
   runId: string;

@@ -1,6 +1,6 @@
-import { ChatMessage } from "../agent/protocol";
-import { RetrievedChunk } from "../model/source";
-import { sourceLabel } from "../retrieval/citations";
+import { ChatMessage } from "@core/agent/protocol";
+import { RetrievedChunk } from "@core/model/source";
+import { sourceLabel } from "@core/retrieval/citations";
 
 export const RESEARCH_SYSTEM_PROMPT =
   "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence. Cite only source IDs that appear in the evidence below or that were returned by a tool you actually called — never invent citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";

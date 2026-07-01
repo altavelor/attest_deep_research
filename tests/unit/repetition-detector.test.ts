@@ -1,4 +1,4 @@
-import { RepetitionDetector } from "../../src/adapters/model-provider/chat/streaming/repetitionDetector";
+import { RepetitionDetector } from "@adapters/model-provider/chat/streaming/repetitionDetector";
 
 function feed(detector: RepetitionDetector, text: string): void {
   // Feed in small fragments to mimic token-by-token streaming.

@@ -1,5 +1,5 @@
 import { ChatApiProtocol } from "@core/agent";
-import { IndexProfile } from "../indexing/store/FileVectorIndexStore";
+import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { MAX_PROFILE_NAME_LENGTH } from "./constants";
 import { cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "./defaults";
 import { isProfileActive, isProfileSuspended, normalizeSettingsState } from "./normalization";

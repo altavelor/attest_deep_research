@@ -1,4 +1,4 @@
-import { DiagnosticReportV3, Finding } from "../report/types";
+import { DiagnosticReportV3, Finding } from "@apps/obsidian/ui/diagnostics/report/types";
 import {
   attr,
   badge,

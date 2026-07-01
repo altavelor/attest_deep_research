@@ -1,6 +1,6 @@
 import { inflateSync } from "zlib";
 
-import { IxplorerError } from "../../core/errors";
+import { IxplorerError } from "@core/errors";
 import { positiveIntegerOrDefault } from "@shared";
 import { Extractor, ExtractorInput } from "@application/ports";
 import { ExtractedChunk, PdfSourceReference } from "@core/model";

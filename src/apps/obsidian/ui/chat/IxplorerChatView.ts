@@ -6,13 +6,13 @@ import {
   SavedChatSettings,
   SavedChatSummary,
   inferChatTitle,
-} from "../../../../core/chat/savedChat";
+} from "@core/chat/savedChat";
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import { IndexingState } from "@adapters/indexing";
 import { estimateResearchRequestTokens } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
-import { ResearchAnswer } from "../../../../core/answer";
+import { ResearchAnswer } from "@core/answer";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { AnswerNoteWriter } from "./research/AnswerNoteWriter";
@@ -33,13 +33,13 @@ import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
-import { DiagnosticReportModalController } from "../DiagnosticReportModal";
+import { DiagnosticReportModalController } from "@apps/obsidian/ui/DiagnosticReportModal";
 import {
   ContextDocumentPickerModal,
   isContextDocumentPath,
 } from "./context/ContextDocumentPickerModal";
-import { IndexControlActions } from "../index/IndexControl";
-import { IndexSearchController, IndexSearchOptions } from "../index/IndexSearchController";
+import { IndexControlActions } from "@apps/obsidian/ui/index/IndexControl";
+import { IndexSearchController, IndexSearchOptions } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
 import {
   createDefaultChatSettings,

@@ -1,4 +1,4 @@
-import { stableId } from "../../extractors/common";
+import { stableId } from "@adapters/extractors/common";
 import { ContextFileProvider } from "@application/ports";
 import { VaultWriter } from "@application/ports";
 import { normalizeVaultPath } from "@shared";

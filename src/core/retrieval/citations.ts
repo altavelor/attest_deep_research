@@ -3,8 +3,8 @@
 // `#page=` syntax) is presentation knowledge and lives outside core, in
 // application/use-cases/citationLinks.
 
-import { Citation } from "../model/citation";
-import { SourceReference } from "../model/source";
+import { Citation } from "@core/model/citation";
+import { SourceReference } from "@core/model/source";
 
 export function formatCitation(source: SourceReference): Citation {
   return {

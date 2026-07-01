@@ -1,5 +1,5 @@
 import { Tool } from "@core/agent";
-import { ToolManager } from "../../src/application/tools/ToolManager";
+import { ToolManager } from "@application/tools/ToolManager";
 
 function makeTool(name: string): Tool<{ value: string }, { echoed: string }> {
   return {

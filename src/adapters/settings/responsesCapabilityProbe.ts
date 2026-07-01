@@ -1,7 +1,7 @@
-import { OpenAiResponsesClient } from "../model-provider/chat/responses/OpenAiResponsesClient";
+import { OpenAiResponsesClient } from "@adapters/model-provider/chat/responses/OpenAiResponsesClient";
 import { ReasoningCapabilitySettings, ServerProfile } from "./types";
 import type { PluginRequestLogger } from "./debugLogger";
-import { isIxplorerError } from "../../core/errors";
+import { isIxplorerError } from "@core/errors";
 
 const PROBE_TOOL = "ixplorer_responses_probe";
 const PROBE_MAX_OUTPUT_TOKENS = 512;

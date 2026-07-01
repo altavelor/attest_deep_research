@@ -6,7 +6,7 @@ import {
   ToolPermissions,
   toolFailure,
 } from "@core/agent";
-import { ResearchRetriever } from "../../contracts/research";
+import { ResearchRetriever } from "@application/contracts/research";
 
 // --- Field schema mini-DSL -------------------------------------------------
 // Each field carries enough metadata to derive *both* the JSON schema sent to

@@ -1,5 +1,5 @@
 import { ExtractedChunk, MarkdownSourceReference } from "@core/model";
-import { DEFAULT_CHUNK_LENGTH, splitText, stableId, TextPart } from "../../extractors/common";
+import { DEFAULT_CHUNK_LENGTH, splitText, stableId, TextPart } from "@adapters/extractors/common";
 
 export interface MarkdownChunkOptions {
   path: string;

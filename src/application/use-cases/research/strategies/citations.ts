@@ -1,6 +1,6 @@
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
-import { validatePublicWebUrl } from "../../../sources/WebUrlPolicy";
+import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 export function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {
   const seen = new Set<string>();

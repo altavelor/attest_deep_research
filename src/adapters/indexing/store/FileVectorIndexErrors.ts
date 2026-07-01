@@ -1,4 +1,4 @@
-import { IxplorerError } from "../../../core/errors";
+import { IxplorerError } from "@core/errors";
 
 export function throwRebuildRequired(details: Record<string, unknown>): never {
   throw new IxplorerError({

@@ -3,7 +3,7 @@ import {
   ContextGraphDiagnostics,
   ContextSourceRole,
   GraphEdgeType,
-} from "../diagnostics";
+} from "@core/diagnostics";
 
 export interface GraphRoot {
   path: string;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   citationIdsFromText,
   resolveCitationTokens,
-} from "../../src/application/use-cases/research/strategies/citations";
+} from "@application/use-cases/research/strategies/citations";
 
 describe("citationIdsFromText", () => {
   it("extracts bracketed tokens verbatim", () => {

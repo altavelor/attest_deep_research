@@ -1,6 +1,6 @@
-import { ChatToolChoice, ToolCallingCapabilities } from "../agent/tool";
-import { ApiFormat } from "../agent/protocol";
-import { ResearchExecutionStrategy } from "../diagnostics";
+import { ChatToolChoice, ToolCallingCapabilities } from "@core/agent/tool";
+import { ApiFormat } from "@core/agent/protocol";
+import { ResearchExecutionStrategy } from "@core/diagnostics";
 import { ResearchSearchMode } from "./searchMode";
 
 export type ResearchPolicyReason =

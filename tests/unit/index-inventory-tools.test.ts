@@ -1,4 +1,4 @@
-import { FindInIndexTool, ListIndexChunksTool } from "../../src/adapters/research-tools/index/IndexInventoryTools";
+import { FindInIndexTool, ListIndexChunksTool } from "@adapters/research-tools/index/IndexInventoryTools";
 import { ResearchRetriever } from "@application/contracts";
 import { executeTool } from "@core/agent";
 

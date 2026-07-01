@@ -1,4 +1,4 @@
-import { ContextDiagnostics } from "../../../../../core/diagnostics";
+import { ContextDiagnostics } from "@core/diagnostics";
 import {
   AgenticLoopRound,
   AnswerSection,

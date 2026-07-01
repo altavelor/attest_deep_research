@@ -1,4 +1,4 @@
-import { isIxplorerError } from "../../../../core/errors";
+import { isIxplorerError } from "@core/errors";
 import { ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "@core/agent";
 
 export class FallbackModelRoundProvider implements ModelRoundProvider {

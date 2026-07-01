@@ -1,7 +1,7 @@
 import { FileSystemAdapter, Notice, Plugin } from "obsidian";
 import { join } from "path";
 
-import { FileChatRepository as FileChatStore } from "../../adapters/filesystem/FileChatRepository";
+import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { PdfTextCache } from "@adapters/extractors";
 import { IndexSourceReportItem } from "@adapters/indexing";
 import { IndexingProfileController } from "@adapters/indexing";
@@ -17,7 +17,7 @@ import {
   resolveServerProfile,
 } from "@adapters/settings";
 import { IxplorerSettings } from "@adapters/settings";
-import { toUserMessage } from "../../core/errors";
+import { toUserMessage } from "@core/errors";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import { CompositionContext, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";

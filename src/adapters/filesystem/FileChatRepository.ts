@@ -14,7 +14,7 @@ import {
   isSafeChatId,
   isSavedChat,
   normalizeTitle,
-} from "../../core/chat/savedChat";
+} from "@core/chat/savedChat";
 
 export interface FileChatRepositoryOptions {
   folder: string;

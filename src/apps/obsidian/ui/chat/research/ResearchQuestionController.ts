@@ -14,9 +14,9 @@ import {
 } from "@application/use-cases/research";
 import { estimateResearchRequestTokens, parseDeepResearchDirective } from "@core/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
-import type { ContextMode } from "../../../../../core/diagnostics";
-import { toUserMessage } from "../../../../../core/errors";
-import { ResearchAnswer } from "../../../../../core/answer";
+import type { ContextMode } from "@core/diagnostics";
+import { toUserMessage } from "@core/errors";
+import { ResearchAnswer } from "@core/answer";
 import { ChatDisplayMessage } from "@core/conversation";
 import {
   attachAnswerDetailsToLastAssistantMessage,

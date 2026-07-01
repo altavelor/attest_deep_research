@@ -13,8 +13,8 @@ import {
   formatIndexingStatus,
   formatProgressPercent,
   messageDisplayContent,
-} from "../../src/apps/obsidian/ui/chat/conversationFormatting";
-import { ContextDiagnostics } from "../../src/core/diagnostics";
+} from "@apps/obsidian/ui/chat/conversationFormatting";
+import { ContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
 

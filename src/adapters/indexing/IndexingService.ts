@@ -1,4 +1,4 @@
-import { isIxplorerError, IxplorerError } from "../../core/errors";
+import { isIxplorerError, IxplorerError } from "@core/errors";
 import { VaultFileSummary } from "@application/ports";
 import { positiveIntegerOrDefault } from "@shared";
 import type { IndexFailedSourceSnapshot } from "@application/ports";

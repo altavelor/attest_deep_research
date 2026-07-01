@@ -4,7 +4,7 @@ import {
   ContextMode,
   ResearchExecutionStrategy,
   WebContextDiagnostics,
-} from "../../../../core/diagnostics";
+} from "@core/diagnostics";
 import { RetrievedChunk } from "@core/model";
 import { estimateTextTokens } from "@core/research";
 

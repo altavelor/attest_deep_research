@@ -3,10 +3,10 @@
 // filesystem persistence lives in adapters/filesystem; the repository port lives
 // in application/ports.
 
-import { ChatDisplayMessage } from "../conversation/model";
-import { ResearchAnswer } from "../answer";
-import { ResearchSearchMode } from "../research/searchMode";
-import { ContextMode } from "../diagnostics";
+import { ChatDisplayMessage } from "@core/conversation/model";
+import { ResearchAnswer } from "@core/answer";
+import { ResearchSearchMode } from "@core/research/searchMode";
+import { ContextMode } from "@core/diagnostics";
 
 export const CHAT_SCHEMA_VERSION = 2;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;

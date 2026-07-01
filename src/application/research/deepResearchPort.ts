@@ -5,7 +5,7 @@
 
 import type { ToolEvent } from "@core/agent";
 import type { DeepResearchReport } from "@core/research";
-import type { ResearchEvidenceSnapshot } from "../sources/evidence";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 
 export interface DeepResearchRunInput {
   question: string;

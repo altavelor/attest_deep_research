@@ -1,4 +1,4 @@
-import { IxplorerError } from "../../core/errors";
+import { IxplorerError } from "@core/errors";
 import {
   SearchProvider,
   SearchProviderResult,
@@ -8,7 +8,7 @@ import {
   WebPageMetadataResult,
   WebSearchOptions,
 } from "@application/ports";
-import type { PluginRequestLogger } from "../settings/debugLogger";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
 import { validatePublicWebUrl } from "@application/sources";
 

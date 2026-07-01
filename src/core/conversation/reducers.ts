@@ -1,9 +1,9 @@
 // Core conversation reducers (stage 1, task 2.1). Pure functions that evolve the
 // transcript as streaming events arrive. No Obsidian/DOM dependency.
 
-import { RetrievedChunk } from "../model/source";
-import { ContextDiagnostics } from "../diagnostics";
-import { ResearchAnswer } from "../answer";
+import { RetrievedChunk } from "@core/model/source";
+import { ContextDiagnostics } from "@core/diagnostics";
+import { ResearchAnswer } from "@core/answer";
 import { AssistantResearchProgress, ChainItem, ChatDisplayMessage } from "./model";
 
 export function nextAssistantMessage(

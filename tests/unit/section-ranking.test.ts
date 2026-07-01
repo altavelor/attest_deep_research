@@ -1,4 +1,4 @@
-import { rankSectionsByQuery, splitIntoSections } from "../../src/core/web/sectionRanking";
+import { rankSectionsByQuery, splitIntoSections } from "@core/web/sectionRanking";
 
 describe("rankSectionsByQuery", () => {
   const text =

@@ -1,8 +1,8 @@
 import { QueryExpansionService } from "@adapters/retrieval";
 import { runToolLoop } from "@adapters/research-tools";
-import { AnswerSynthesisService } from "../../src/application/use-cases/research/AnswerSynthesisService";
-import { VaultResearchPipeline } from "../../src/application/use-cases/research/VaultResearchPipeline";
-import { WebResearchPipeline } from "../../src/application/use-cases/research/WebResearchPipeline";
+import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
+import { VaultResearchPipeline } from "@application/use-cases/research/VaultResearchPipeline";
+import { WebResearchPipeline } from "@application/use-cases/research/WebResearchPipeline";
 import { collectAsync } from "../helpers/async";
 import { citation, fixedNow, markdownSource, retrieved, webSource } from "../helpers/factories";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";

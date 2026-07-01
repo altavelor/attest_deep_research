@@ -2,8 +2,8 @@
 // outbound ports, so they live in core; the retrieval ports (application/ports)
 // and the filtering logic both depend on them.
 
-import { SourceKind } from "../model/source";
-import { LanguageCode } from "../model/citation";
+import { SourceKind } from "@core/model/source";
+import { LanguageCode } from "@core/model/citation";
 
 export interface RetrievalOptions {
   limit: number;

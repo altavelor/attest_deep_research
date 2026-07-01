@@ -4,21 +4,21 @@
 // loop runner) live in adapters/research-tools and are wired by the composition
 // root. This keeps application/use-cases free of any adapters import.
 
-import type { SearchProvider } from "../ports/web";
+import type { SearchProvider } from "@application/ports/web";
 import type { DeepResearchRunner } from "./deepResearchPort";
 import type { ChatModelProvider } from "@core/agent";
 import type { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import type { Citation } from "@core/model";
-import type { ResearchEvidenceSnapshot } from "../sources/evidence";
-import type { ResearchRetriever } from "../contracts/research";
-import type { UrlStatusChecker } from "../contracts/research";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type { ResearchRetriever } from "@application/contracts/research";
+import type { UrlStatusChecker } from "@application/contracts/research";
 import type {
   AgentLoopOptions,
   AgentLoopEvent,
   AgentLoopResult,
 } from "@core/agent";
-import type { ToolManager } from "../tools/ToolManager";
-import type { ResearchSearchMode } from "../contracts/research";
+import type { ToolManager } from "@application/tools/ToolManager";
+import type { ResearchSearchMode } from "@application/contracts/research";
 
 /** Which research tools are exposed for a run (gating policy). */
 export interface ResearchToolAvailability {

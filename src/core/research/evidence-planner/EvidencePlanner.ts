@@ -1,5 +1,5 @@
-import { EvidencePlannerDiagnostics } from "../../diagnostics";
-import { RetrievedChunk, uniqueChunks } from "../../model/source";
+import { EvidencePlannerDiagnostics } from "@core/diagnostics";
+import { RetrievedChunk, uniqueChunks } from "@core/model/source";
 import { ResearchSearchMode } from "../searchMode";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "../prompts";
 

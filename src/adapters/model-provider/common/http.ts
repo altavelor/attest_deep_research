@@ -1,6 +1,6 @@
-import { IxplorerError, IxplorerErrorCode } from "../../../core/errors";
+import { IxplorerError, IxplorerErrorCode } from "@core/errors";
 import { ApiFormat } from "@core/agent";
-import type { PluginRequestLogger } from "../../settings/debugLogger";
+import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 
 export interface ProviderHttpClientOptions {
   apiFormat: ApiFormat;

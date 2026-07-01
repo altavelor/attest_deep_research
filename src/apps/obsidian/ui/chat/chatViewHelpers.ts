@@ -1,5 +1,5 @@
-import { ResearchAnswer } from "../../../../core/answer";
-import { SavedChatSettings } from "../../../../core/chat/savedChat";
+import { ResearchAnswer } from "@core/answer";
+import { SavedChatSettings } from "@core/chat/savedChat";
 import { parsePositiveInteger } from "@shared";
 import { ChatModelSelectOption, IndexProfileSelectOption } from "./ChatComposer";
 

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-import { stableId } from "../extractors/common";
+import { stableId } from "@adapters/extractors/common";
 import { formatCitation } from "@core/retrieval";
 import { Citation } from "@core/model";
 import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";

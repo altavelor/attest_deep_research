@@ -1,7 +1,7 @@
 import { SourceManager } from "@application/sources";
-import { RagSource } from "../../src/adapters/research-tools/index/RagSource";
-import { ToolManager } from "../../src/application/tools/ToolManager";
-import { ResearchEvidenceRegistry } from "../../src/adapters/research-tools/ResearchEvidenceRegistry";
+import { RagSource } from "@adapters/research-tools/index/RagSource";
+import { ToolManager } from "@application/tools/ToolManager";
+import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import type { ResearchRetriever } from "@application/contracts";
 import type { RetrievalResult } from "@application/contracts";
 
