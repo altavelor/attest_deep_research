@@ -89,6 +89,34 @@ describe("applyNoteCitations", () => {
     expect(count).toBe(0);
   });
 
+  it("collapses a `[url:…]` handle into a footnote when the URL is a known citation", () => {
+    const citations = [webCitation(WEB_ID, "Elephants", "https://en.wikipedia.org/wiki/Elephant")];
+    const { content, count } = applyNoteCitations(
+      "Elephants live long [url:https://en.wikipedia.org/wiki/Elephant].",
+      citations,
+    );
+
+    expect(count).toBe(1);
+    expect(content).toContain("Elephants live long [^1].");
+    expect(content).toContain("[^1]: [Elephants](https://en.wikipedia.org/wiki/Elephant)");
+    expect(content).not.toContain("[url:");
+  });
+
+  it("turns an unresolved `[url:…]` handle into a plain clickable link", () => {
+    const { content, count } = applyNoteCitations(
+      "See [url:https://example.com/page].",
+      [],
+    );
+
+    expect(count).toBe(0);
+    expect(content).toBe("See [https://example.com/page](https://example.com/page).");
+  });
+
+  it("leaves a malformed `[url:…]` handle untouched", () => {
+    const { content } = applyNoteCitations("Broken [url:not a url].", []);
+    expect(content).toBe("Broken [url:not a url].");
+  });
+
   it("starts footnote numbering at the requested offset", () => {
     const citations = [webCitation(WEB_ID, "Source", "https://example.com")];
     const { content } = applyNoteCitations(`More [${WEB_ID}].`, citations, 3);

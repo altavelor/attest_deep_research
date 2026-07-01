@@ -1,5 +1,7 @@
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
+import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
+import { linkifyUrlCitations } from "@application/use-cases/research";
 
 export interface NoteCitationResult {
   /** Content with citation IDs replaced by footnote markers and a reference list appended. */
@@ -14,9 +16,13 @@ export interface NoteCitationResult {
  * that link to the underlying source — a web URL (opens in the browser) or a vault
  * wikilink (opens the local document inside Obsidian).
  *
- * Only bracketed tokens whose inner text exactly matches a known citation ID are
- * rewritten, so ordinary prose and markdown links are left untouched. When no known
- * citation IDs appear, the content is returned unchanged.
+ * The model also cites web sources by their raw URL handle `[url:https://…]`. When
+ * that URL matches a known web citation it collapses into the same footnote; when it
+ * doesn't (or no citations are supplied at all) it is still turned into a plain
+ * clickable markdown link so it never renders as inert `[url:…]` text.
+ *
+ * Only bracketed tokens whose inner text matches a known citation ID / URL are turned
+ * into footnotes, so ordinary prose and markdown links are left untouched.
  *
  * @param startNumber First footnote number to assign. Use a value past any footnotes
  * already present in the target file to avoid collisions when appending/prepending.
@@ -26,13 +32,24 @@ export function applyNoteCitations(
   citations: readonly Citation[],
   startNumber = 1,
 ): NoteCitationResult {
-  if (!content || citations.length === 0) {
+  if (!content) {
     return { content, count: 0 };
   }
 
   const byId = new Map(citations.map((citation) => [citation.id, citation]));
+  const byUrl = webCitationsByUrl(citations);
   const numberById = new Map<string, number>();
   const order: string[] = [];
+
+  const assignFootnote = (id: string): string => {
+    let assigned = numberById.get(id);
+    if (assigned === undefined) {
+      assigned = startNumber + order.length;
+      order.push(id);
+      numberById.set(id, assigned);
+    }
+    return `[^${assigned}]`;
+  };
 
   const rewritten = content.replace(
     /\[([^\]\n]+)\]/g,
@@ -41,23 +58,25 @@ export function applyNoteCitations(
       if (source[offset + match.length] === "(") {
         return match;
       }
-      const id = inner.trim();
-      const citation = byId.get(id);
-      if (!citation) {
-        return match;
+      const token = inner.trim();
+      // URL handle `[url:https://…]` — collapse into a footnote when the URL is a
+      // known citation; otherwise leave it for the linkify pass below.
+      if (token.startsWith("url:")) {
+        const validated = validatePublicWebUrl(token.slice("url:".length).trim());
+        if (!validated.ok) return match;
+        const citation = byUrl.get(validated.url);
+        return citation ? assignFootnote(citation.id) : match;
       }
-      let assigned = numberById.get(id);
-      if (assigned === undefined) {
-        assigned = startNumber + order.length;
-        order.push(id);
-        numberById.set(id, assigned);
-      }
-      return `[^${assigned}]`;
+      const citation = byId.get(token);
+      return citation ? assignFootnote(citation.id) : match;
     },
   );
 
+  // Any `[url:…]` not resolved to a footnote becomes a plain clickable link.
+  const linked = linkifyUrlCitations(rewritten);
+
   if (order.length === 0) {
-    return { content, count: 0 };
+    return { content: linked, count: 0 };
   }
 
   const definitions = order
@@ -67,8 +86,19 @@ export function applyNoteCitations(
     })
     .join("\n");
 
-  const body = rewritten.replace(/\s+$/, "");
+  const body = linked.replace(/\s+$/, "");
   return { content: `${body}\n\n${definitions}\n`, count: order.length };
+}
+
+/** Index web citations by their canonical URL, so `[url:…]` handles resolve to them. */
+function webCitationsByUrl(citations: readonly Citation[]): Map<string, Citation> {
+  const byUrl = new Map<string, Citation>();
+  for (const citation of citations) {
+    if (citation.source.kind !== "web") continue;
+    const validated = validatePublicWebUrl(citation.source.url);
+    if (validated.ok) byUrl.set(validated.url, citation);
+  }
+  return byUrl;
 }
 
 /** Highest footnote number already defined in the given text, or 0 when there are none. */

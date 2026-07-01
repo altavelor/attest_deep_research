@@ -27,6 +27,17 @@ Use local models with citations [local-1].
 `);
   });
 
+  it("turns inline `[url:…]` handles in the answer into clickable links", () => {
+    const withUrl: ResearchAnswer = {
+      ...answer(),
+      answer: "See the source [url:https://example.com/local].",
+    };
+
+    expect(formatResearchAnswerNote(withUrl)).toContain(
+      "See the source [https://example.com/local](https://example.com/local).",
+    );
+  });
+
   it("creates a vault-safe note path from the question and timestamp", () => {
     expect(researchAnswerNotePath(answer())).toBe(
       "Ixplorer/2026-05-16-how-should-i-use-local-models.md",
