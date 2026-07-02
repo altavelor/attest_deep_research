@@ -27,3 +27,4 @@ export * from "./responsesCapabilityProbe";
 export * from "./toolCapabilities";
 export * from "./toolCapabilityProbe";
 export * from "./types";
+export * from "./webSourceQueries";

@@ -18,6 +18,7 @@ import {
 } from "@adapters/settings";
 import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
+import { WebSourceHealthTracker } from "@application/web";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import { CompositionContext, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
@@ -61,12 +62,15 @@ export default class IxplorerPlugin extends Plugin {
     },
   });
 
+  readonly webSourceHealth = new WebSourceHealthTracker();
+
   /** Collaborators the composition factories need from this plugin host. */
   private get composition(): CompositionContext {
     return {
       app: this.app,
       logger: this.logger,
       pdfTextCache: this.pdfTextCache,
+      webSourceHealth: this.webSourceHealth,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       getVaultLocalPath: (path) => this.getVaultLocalPath(path),
@@ -99,7 +103,7 @@ export default class IxplorerPlugin extends Plugin {
             rebuild: (indexProfileId) =>
               this.indexing.rebuild(indexProfileId ?? this.settings.activeIndexProfileId),
           },
-          isWebSearchEnabled: () => this.settings.duckDuckGoEnabled,
+          isWebSearchEnabled: () => this.settings.webSources.some((profile) => profile.enabled),
           getChatModel: () =>
             resolveChatModelProfile(this.settings, this.settings.activeChatModelProfileId)?.name ??
             "",

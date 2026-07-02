@@ -9,6 +9,17 @@ export interface ResearchSystemPromptOptions {
   indexDescription?: string;
   /** Names of vault note tools available in this turn. When present, a usage section is appended. */
   noteToolNames?: readonly string[];
+  /** Injectable clock for deterministic tests; defaults to the real current date. */
+  now?: Date;
+}
+
+/**
+ * Models misjudge "current/latest" from their training cutoff; every prompt is
+ * anchored to today so time-sensitive search queries pick the right years.
+ */
+export function currentDateLine(now: Date = new Date()): string {
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+  return `Current date: ${weekday}, ${now.toISOString().slice(0, 10)}. Rely on this date — not your training data — when interpreting "latest", "current", or "today", when choosing years for search queries, and when judging source freshness.`;
 }
 
 const NOTE_TOOL_DESCRIPTIONS: Record<string, string> = {
@@ -46,7 +57,7 @@ function buildVaultToolsSection(toolNames: readonly string[]): string {
 }
 
 export function buildResearchSystemPrompt(options: ResearchSystemPromptOptions = {}): string {
-  const sections = [RESEARCH_SYSTEM_PROMPT];
+  const sections = [RESEARCH_SYSTEM_PROMPT, currentDateLine(options.now)];
 
   if (options.noteToolNames && options.noteToolNames.length > 0) {
     const vaultTools = buildVaultToolsSection(options.noteToolNames);

@@ -97,8 +97,6 @@ export interface IxplorerSettings {
   indexProfiles: IndexProfile[];
   includeFolders: string[];
   excludeGlobs: string[];
-  duckDuckGoEnabled: boolean;
-  duckDuckGoResultLimit: number;
   /** Hub of external search sources; entries exist only for sources the user configured. */
   webSources: WebSourceProfile[];
   showChatIndexControl: boolean;

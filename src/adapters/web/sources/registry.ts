@@ -70,7 +70,12 @@ export function createWebSearchSources(
     if (!profile?.enabled || !areCredentialsComplete(definition.descriptor, profile.credentials)) {
       return [];
     }
-    return [new HttpWebSearchSource(definition, { ...runtime, credentials: profile.credentials })];
+    return [
+      new HttpWebSearchSource(definition, {
+        ...runtime,
+        credentials: profile.credentials,
+      }),
+    ];
   });
 }
 

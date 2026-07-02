@@ -6,7 +6,6 @@ import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";
 import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
-import { DUCK_DUCK_GO_DESCRIPTION } from "@adapters/settings";
 import {
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
@@ -16,6 +15,7 @@ import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexReportModal } from "./settings/IndexReportModal";
 import { IndexProfileModal } from "./settings/IndexProfileModal";
 import { ServerProfileModal } from "./settings/ServerProfileModal";
+import { WebSourcesSection } from "./settings/WebSourcesSection";
 import { ModelProfileModal } from "./settings/ModelProfileModal";
 import {
   ProfileStatus,
@@ -704,36 +704,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
     renderSubcategoryHeading(containerEl, "Web");
 
     new Setting(containerEl)
-      .setName("DuckDuckGo")
-      .setDesc(DUCK_DUCK_GO_DESCRIPTION)
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.duckDuckGoEnabled).onChange(async (value) => {
-          this.plugin.settings.duckDuckGoEnabled = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Links returned per web search")
-      .setDesc(
-        "How many result links each DuckDuckGo query returns. Higher values give deep research more sources but cost more requests.",
-      )
-      .addText((text) => {
-        text.inputEl.type = "number";
-        text.inputEl.min = "1";
-        text.inputEl.max = "50";
-        text.setValue(String(this.plugin.settings.duckDuckGoResultLimit));
-        text.onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (!Number.isInteger(parsed)) {
-            return;
-          }
-          this.plugin.settings.duckDuckGoResultLimit = Math.max(1, Math.min(50, parsed));
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
       .setName("Use web for freshness questions")
       .setDesc(
         "Give web evidence more budget when a question asks for current, latest, price, or release information.",
@@ -744,5 +714,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }),
       );
+
+    new WebSourcesSection({
+      app: this.app,
+      getSettings: () => this.plugin.settings,
+      saveSettings: () => this.plugin.saveSettings(),
+      requestRedisplay: () => this.display(),
+      getSourceIssue: (sourceId) => this.plugin.webSourceHealth.getIssue(sourceId),
+      resetSourceIssue: (sourceId) => this.plugin.webSourceHealth.reset(sourceId),
+    }).render(containerEl);
   }
 }

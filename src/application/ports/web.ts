@@ -2,7 +2,12 @@
 
 import { WebSourceReference } from "@core/model";
 import { ToolError } from "@core/agent";
-import type { WebSourceDescriptor } from "@core/web";
+import type {
+  WebQueryIntent,
+  WebQueryLanguage,
+  WebQueryRecency,
+  WebSourceDescriptor,
+} from "@core/web";
 
 export interface SearchProviderResult {
   source: WebSourceReference;
@@ -15,6 +20,12 @@ export interface WebSearchOptions {
   limit?: number;
   maxFetches?: number;
   timeoutMs?: number;
+  /** Caller-supplied query category; overrides the planner's own classification. */
+  intent?: WebQueryIntent;
+  /** Freshness window; sources map it to their native date filters. */
+  recency?: WebQueryRecency;
+  /** Query language; the planner fills it in so sources can localize requests. */
+  language?: WebQueryLanguage;
 }
 
 export interface WebPageFetchOptions {
@@ -92,4 +103,10 @@ export interface WebSearchSource extends SearchProvider {
 /** Port for the query planner (later stage): enabled, ready-to-call hub sources. */
 export interface WebSourceRegistry {
   enabledSources(): WebSearchSource[];
+}
+
+/** A single link in the page-fetch fallback chain (Jina reader, Zyte, Wayback…). */
+export interface PageFetchProvider {
+  id: string;
+  fetchPage(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult>;
 }

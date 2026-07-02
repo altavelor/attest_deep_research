@@ -6,9 +6,9 @@ import { join } from "path";
 import { ResearchService } from "@application/use-cases/research";
 import {
   CHAT_PROVIDER_DESCRIPTION,
-  DUCK_DUCK_GO_DESCRIPTION,
   EMBEDDING_PROVIDER_DESCRIPTION,
   INDEX_FOLDER_DESCRIPTION,
+  WEB_SOURCES_DESCRIPTION,
 } from "@adapters/settings";
 import { collectAsync } from "../helpers/async";
 import { citation, markdownSource, retrieved } from "../helpers/factories";
@@ -73,15 +73,15 @@ describe("privacy boundaries", () => {
     expect(searchProvider.queries).toEqual([]);
   });
 
-  it("keeps settings copy explicit about local model calls and external DuckDuckGo calls", () => {
+  it("keeps settings copy explicit about local model calls and external web calls", () => {
     expect(CHAT_PROVIDER_DESCRIPTION).toContain("Local");
     expect(CHAT_PROVIDER_DESCRIPTION).toContain("configured endpoint");
     expect(EMBEDDING_PROVIDER_DESCRIPTION).toContain("Local");
     expect(EMBEDDING_PROVIDER_DESCRIPTION).toContain("Vault chunks");
     expect(INDEX_FOLDER_DESCRIPTION).toContain("Vault-local");
-    expect(DUCK_DUCK_GO_DESCRIPTION).toContain("External");
-    expect(DUCK_DUCK_GO_DESCRIPTION).toContain("only the typed question");
-    expect(DUCK_DUCK_GO_DESCRIPTION).toContain("never retrieved vault content");
+    expect(WEB_SOURCES_DESCRIPTION).toContain("External");
+    expect(WEB_SOURCES_DESCRIPTION).toContain("only the typed question");
+    expect(WEB_SOURCES_DESCRIPTION).toContain("never retrieved vault content");
   });
 });
 

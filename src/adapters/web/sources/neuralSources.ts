@@ -19,14 +19,19 @@ function boundedText(value: unknown): string | undefined {
 
 export const tavilyDefinition: WebSourceDefinition = {
   descriptor: descriptor("tavily"),
-  buildRequest: ({ query, limit, credentials }) => ({
+  buildRequest: ({ query, limit, credentials, recency }) => ({
     url: "https://api.tavily.com/search",
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${credentials.apiKey ?? ""}`,
     },
-    body: JSON.stringify({ query, max_results: limit, include_answer: false }),
+    body: JSON.stringify({
+      query,
+      max_results: limit,
+      include_answer: false,
+      ...(recency ? { time_range: recency } : {}),
+    }),
   }),
   parseResponse: (body) =>
     asArray(asRecord(JSON.parse(body)).results).map((entry) => {

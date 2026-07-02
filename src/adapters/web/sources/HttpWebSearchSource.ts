@@ -3,7 +3,12 @@
 // definitions; error wrapping and rate-limit signalling stay here.
 
 import { IxplorerError } from "@core/errors";
-import { areCredentialsComplete } from "@core/web";
+import {
+  areCredentialsComplete,
+  extractSiteFilters,
+  recencyFloor,
+  stripTemporalNoise,
+} from "@core/web";
 import {
   SearchProviderResult,
   WebSearchOptions,
@@ -69,10 +74,32 @@ export class HttpWebSearchSource implements WebSearchSource {
       throw this.failure("not-configured", "is not configured.");
     }
 
+    // Keyword APIs match SERP operators and date words literally (usually to
+    // zero results); sanitize the query and hand the intent over as structured
+    // fields for buildRequest to map onto native API parameters.
+    let effectiveQuery = trimmedQuery;
+    let domains: string[] = [];
+    if (this.definition.supportsSiteOperator !== true) {
+      const extracted = extractSiteFilters(effectiveQuery);
+      effectiveQuery = extracted.query.length > 0 ? extracted.query : trimmedQuery;
+      domains = extracted.domains;
+    }
+    if (options.recency) {
+      effectiveQuery = stripTemporalNoise(effectiveQuery);
+    }
+
     const input: WebSourceQueryInput = {
-      query: trimmedQuery,
+      query: effectiveQuery,
       limit: clampLimit(options.limit, this.defaultResultLimit),
       credentials: this.credentials,
+      ...(options.recency
+        ? {
+          recency: options.recency,
+          freshFrom: recencyFloor(options.recency, this.now()).toISOString(),
+        }
+        : {}),
+      ...(options.language ? { language: options.language } : {}),
+      ...(domains.length > 0 ? { domains } : {}),
     };
 
     const body = await this.execute(this.definition.buildRequest(input), options.timeoutMs);
