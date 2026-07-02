@@ -14,7 +14,12 @@ import {
   GraphContextLimits,
   GraphRoot,
 } from "@core/research";
-import { estimateTextTokens, ResearchChatHistoryMessage } from "@core/research";
+import {
+  AttachedFileCoverage,
+  AttachedFileManifestEntry,
+  estimateTextTokens,
+  ResearchChatHistoryMessage,
+} from "@core/research";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
@@ -40,6 +45,12 @@ export interface ContextAssembleRequest {
   smallMarkdownCharLimit?: number;
   skipRetrieval?: boolean;
   explicitSourcesOnly?: boolean;
+  /**
+   * Agentic runs with note tools: large attachments are not inlined as excerpts —
+   * they stay tool-addressable references the model reads in full via read_note.
+   * Small files (single markdown under the small-file limit) still inline whole.
+   */
+  largeAttachmentsAsReferences?: boolean;
   graph?: {
     enabled: boolean;
     includeBacklinks: boolean;
@@ -50,6 +61,8 @@ export interface ContextAssembleRequest {
 }
 
 export interface AssembledContext {
+  /** User-attached files with how their content was delivered — prompt manifest data. */
+  attachments: AttachedFileManifestEntry[];
   explicitEvidence: RetrievedChunk[];
   retrievalEvidence: RetrievedChunk[];
   evidence: RetrievedChunk[];
@@ -111,7 +124,13 @@ export class ContextAssembler {
     }
     const budget = createBudget(request);
     const explicitEvidence: RetrievedChunk[] = [];
+    const attachments: AttachedFileManifestEntry[] = [];
     let explicitTokens = 0;
+    const recordAttachment = (candidate: ContextCandidate, coverage: AttachedFileCoverage) => {
+      if (candidate.role === "attached") {
+        attachments.push({ path: candidate.path, coverage });
+      }
+    };
 
     for (const candidate of explicitCandidates) {
       const sourceDiagnostic = await this.buildExplicitSource(
@@ -122,6 +141,10 @@ export class ContextAssembler {
       addDiagnosticSource(diagnostics, sourceDiagnostic.diagnostic);
 
       if (sourceDiagnostic.chunks.length === 0) {
+        recordAttachment(
+          candidate,
+          sourceDiagnostic.coverage === "reference" ? "reference" : "omitted",
+        );
         continue;
       }
 
@@ -135,6 +158,7 @@ export class ContextAssembler {
           reason: "evidence-limit-exceeded",
           droppedTokens: estimateChunksTokens(sourceDiagnostic.chunks),
         });
+        recordAttachment(candidate, "omitted");
         continue;
       }
 
@@ -145,11 +169,19 @@ export class ContextAssembler {
           reason: "context-budget-exceeded",
           droppedTokens: candidateTokens,
         });
+        recordAttachment(candidate, "omitted");
         continue;
       }
 
       explicitEvidence.push(...chunksToAdd);
       explicitTokens += candidateTokens;
+      recordAttachment(
+        candidate,
+        chunksToAdd.length === sourceDiagnostic.chunks.length &&
+          sourceDiagnostic.coverage === "full"
+          ? "full"
+          : "excerpts",
+      );
     }
 
     const retrievalSourcePaths = this.retrievalSourcePaths(
@@ -214,6 +246,7 @@ export class ContextAssembler {
     };
 
     return {
+      attachments,
       explicitEvidence,
       retrievalEvidence,
       evidence: [...explicitEvidence, ...retrievalEvidence],
@@ -330,12 +363,17 @@ export class ContextAssembler {
     candidate: ContextCandidate,
     request: ContextAssembleRequest,
     remainingTokens: number,
-  ): Promise<{ chunks: RetrievedChunk[]; diagnostic: ContextDiagnosticSource }> {
+  ): Promise<{
+    chunks: RetrievedChunk[];
+    diagnostic: ContextDiagnosticSource;
+    coverage: AttachedFileCoverage;
+  }> {
     const extractor = this.extractors.find((item) => item.supports(candidate.path));
 
     if (!extractor) {
       return {
         chunks: [],
+        coverage: "omitted",
         diagnostic: {
           path: candidate.path,
           role: candidate.role,
@@ -351,6 +389,7 @@ export class ContextAssembler {
     } catch {
       return {
         chunks: [],
+        coverage: "omitted",
         diagnostic: {
           path: candidate.path,
           role: candidate.role,
@@ -369,31 +408,42 @@ export class ContextAssembler {
         modifiedTime,
         size,
       });
-      const selectedChunks = selectExplicitChunks(
-        chunks,
-        request,
-        remainingTokens,
-        this.generateId,
-      );
+      const selected = selectExplicitChunks(chunks, request, remainingTokens, this.generateId);
+
+      if (selected.coverage === "reference") {
+        return {
+          chunks: [],
+          coverage: "reference",
+          diagnostic: {
+            path: candidate.path,
+            role: candidate.role,
+            status: "dropped",
+            reason: "referenced-for-tools",
+            droppedTokens: estimateChunksTokens(chunks),
+          },
+        };
+      }
 
       return {
-        chunks: selectedChunks,
+        chunks: selected.chunks,
+        coverage: selected.coverage,
         diagnostic: {
           path: candidate.path,
           role: candidate.role,
-          status: selectedChunks.length > 0 ? "included" : "dropped",
-          chunkCount: selectedChunks.length,
-          includedTokens: estimateChunksTokens(selectedChunks),
+          status: selected.chunks.length > 0 ? "included" : "dropped",
+          chunkCount: selected.chunks.length,
+          includedTokens: estimateChunksTokens(selected.chunks),
           droppedTokens: Math.max(
             0,
-            estimateChunksTokens(chunks) - estimateChunksTokens(selectedChunks),
+            estimateChunksTokens(chunks) - estimateChunksTokens(selected.chunks),
           ),
-          reason: selectedChunks.length > 0 ? undefined : "context-budget-exceeded",
+          reason: selected.chunks.length > 0 ? undefined : "context-budget-exceeded",
         },
       };
     } catch {
       return {
         chunks: [],
+        coverage: "omitted",
         diagnostic: {
           path: candidate.path,
           role: candidate.role,
@@ -432,21 +482,32 @@ function selectExplicitChunks(
   request: ContextAssembleRequest,
   remainingTokens: number,
   generateId: GenerateId,
-): RetrievedChunk[] {
+): { chunks: RetrievedChunk[]; coverage: AttachedFileCoverage } {
   if (chunks.length === 0 || remainingTokens <= 0) {
-    return [];
+    return { chunks: [], coverage: "omitted" };
   }
 
   if (isSingleSmallMarkdownFile(chunks, request.smallMarkdownCharLimit)) {
     const combined = combineMarkdownChunks(chunks, generateId);
 
     if (estimateTextTokens(combined.text) <= remainingTokens) {
-      return [combined];
+      return { chunks: [combined], coverage: "full" };
     }
   }
 
+  // In reference mode a file that cannot inline whole stays a tool-addressable
+  // reference — the model reads it in full via read_note instead of guessing
+  // from relevance-ranked excerpts.
+  if (request.largeAttachmentsAsReferences) {
+    return { chunks: [], coverage: "reference" };
+  }
+
   const ranked = rankChunksForQuestion(chunks, request.question);
-  return packChunksByBudget(ranked, remainingTokens);
+  const packed = packChunksByBudget(ranked, remainingTokens);
+  return {
+    chunks: packed,
+    coverage: packed.length === chunks.length ? "full" : "excerpts",
+  };
 }
 
 function isSingleSmallMarkdownFile(

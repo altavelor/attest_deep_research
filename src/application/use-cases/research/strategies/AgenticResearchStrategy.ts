@@ -86,6 +86,9 @@ export class AgenticResearchStrategy implements ResearchStrategy {
         reservedOutputTokens: this.deps.reservedOutputTokens,
         evidenceLimit: this.deps.evidenceLimit,
         skipRetrieval: true,
+        // With note tools the model reads large attachments itself (read_note);
+        // without them excerpts remain the only way to deliver the content.
+        largeAttachmentsAsReferences: this.deps.noteTools !== undefined,
         graph: {
           enabled: false,
           includeBacklinks: false,
@@ -149,6 +152,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       chatHistory: request.chatHistory,
       requiredTools: effectivePolicy.requiredTools,
       explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
+      attachedFiles: assembled?.attachments,
       toolContext: {
         coreVariant: searchMode === "none" ? "vault" : "research",
         // Source of truth: exactly the tools the runtime registered for this run.
@@ -261,6 +265,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       capabilityProvenance: this.deps.toolCapabilityProvenance,
       ...(unknownCitationIds.length > 0 ? { unknownCitationIds } : {}),
       phases: result.phases,
+      promptDeltas: result.promptRounds,
       reasoningSegments: result.reasoningSegments,
       stopReasons: result.stopReasons,
       budgets: agenticBudgets(result.totalResultChars, result.maxResultChars),
@@ -361,6 +366,7 @@ function emptyAgenticFailure(
     totalCalls: 0,
     duplicateCalls: 0,
     phases: [],
+    promptRounds: [],
     stopReasons: [],
     maxResultChars,
     totalResultChars: 0,

@@ -1,7 +1,7 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
-import { ReasoningSegmentAttribution, ToolCallDiagnostic } from "@core/diagnostics";
+import { ReasoningSegmentAttribution, RoundPromptDeltaDiagnostic, ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "@application/tools/ToolManager";
 import {
@@ -10,6 +10,7 @@ import {
   resolveResultSummary,
 } from "@application/research/toolCallLabel";
 import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
+import { buildRoundPromptDelta } from "./agenticPromptLog";
 
 export type AgenticFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -68,6 +69,7 @@ export interface AgenticResearchSuccess {
   totalCalls: number;
   duplicateCalls: number;
   phases: string[];
+  promptRounds: RoundPromptDeltaDiagnostic[];
   stopReasons: string[];
   maxResultChars: number;
   totalResultChars: number;
@@ -87,6 +89,7 @@ export interface AgenticResearchFailure {
   totalCalls: number;
   duplicateCalls: number;
   phases: string[];
+  promptRounds: RoundPromptDeltaDiagnostic[];
   stopReasons: string[];
   maxResultChars: number;
   totalResultChars: number;
@@ -155,6 +158,10 @@ export class AgenticResearchRunner {
     const seenEvidenceIds = new Set<string>();
     let rounds = 0;
     const phases: string[] = [];
+    const promptRounds: RoundPromptDeltaDiagnostic[] = [];
+    // Messages already captured in an earlier round's prompt delta; each round logs
+    // only the tail appended since (incremental prompt log).
+    let promptLoggedCount = 0;
     const stopReasons: string[] = [];
     let continuation: ProviderContinuationState | undefined;
     let toolOutputs: ModelToolOutput[] | undefined;
@@ -173,6 +180,7 @@ export class AgenticResearchRunner {
       totalCalls,
       duplicateCalls,
       phases,
+      promptRounds,
       stopReasons,
       maxResultChars,
       totalResultChars,
@@ -197,6 +205,10 @@ export class AgenticResearchRunner {
                 ? { type: "specific", name: repairTool! }
                 : { type: "required" }
               : { type: "auto" };
+        promptRounds.push(
+          buildRoundPromptDelta(round, toolChoice, messages.slice(promptLoggedCount), toolOutputs),
+        );
+        promptLoggedCount = messages.length;
         const response = await collectRound(
           this.options,
           this.modelRound,
@@ -242,6 +254,7 @@ export class AgenticResearchRunner {
               totalCalls,
               duplicateCalls,
               phases,
+              promptRounds,
               stopReasons,
               maxResultChars,
               totalResultChars,
@@ -274,6 +287,13 @@ export class AgenticResearchRunner {
           });
         } else {
           toolOutputs = [];
+        }
+
+        if (!forceSynthesis) {
+          for (const call of response.toolCalls) {
+            const label = toolCallChainLabel(call.name, call.arguments);
+            this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
+          }
         }
 
         // Pre-launch this round's run_subagent calls up to a bounded concurrency (default
@@ -320,8 +340,6 @@ export class AgenticResearchRunner {
           // Mutation tools are never cached: identical args may have different vault state.
           const bypassCache = mutationTool(call.name);
           const cacheHit = !!execution && !retryMandatory && !bypassCache;
-          const label = toolCallChainLabel(call.name, call.arguments);
-          this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
           if (execution && !retryMandatory && !bypassCache) {
             duplicateCalls += 1;
             roundDuplicates += 1;

@@ -3,7 +3,9 @@ import {
   CREATE_NOTE_TOOL,
   SUB_AGENT_TOOL,
   DELETE_NOTE_TOOL,
+  DOWNLOAD_DOCUMENT_TOOL,
   INDEX_SEARCH_TOOL,
+  PROBE_DOCUMENT_URL_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
@@ -158,6 +160,28 @@ describe("agentic research prompts", () => {
   it("does not inject Web skill when web tools are absent", () => {
     const system = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
     expect(system).not.toContain("Using Web Search");
+  });
+
+  it("injects the Download skill only when the download tool is present", () => {
+    const withDownload = systemText({
+      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, PROBE_DOCUMENT_URL_TOOL, DOWNLOAD_DOCUMENT_TOOL],
+      question: "Download this PDF",
+    });
+    expect(withDownload).toContain("Downloading documents");
+    expect(withDownload).toContain("probe_document_url");
+    expect(withDownload).toContain("download_document");
+
+    const without = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
+    expect(without).not.toContain("Downloading documents");
+  });
+
+  it("always includes the action-honesty rule so writes are never fabricated", () => {
+    const research = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
+    expect(research).toContain("Doing vs. describing");
+    expect(research).toContain("{ok:true}");
+
+    const vault = systemText({ coreVariant: "vault", availableTools: [] });
+    expect(vault).toContain("Doing vs. describing");
   });
 
   it("includes mutation rules when a mutation tool is present", () => {

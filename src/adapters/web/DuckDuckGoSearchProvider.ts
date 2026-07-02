@@ -206,6 +206,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       finalUrl: raw.finalUrl,
       data: raw.bytes,
       contentType: raw.contentType,
+      ...(raw.contentDisposition ? { contentDisposition: raw.contentDisposition } : {}),
       bytes: raw.byteLength,
       redirects: raw.redirects,
     };
@@ -315,6 +316,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         rawText: new TextDecoder().decode(body.bytes),
         bytes: body.bytes,
         contentType,
+        contentDisposition: response.headers.get("content-disposition") ?? undefined,
         byteLength: body.bytes.byteLength,
         redirects,
       };
@@ -448,6 +450,7 @@ type RawPageResult =
       rawText: string;
       bytes: Uint8Array;
       contentType: string;
+      contentDisposition?: string;
       byteLength: number;
       redirects: string[];
     }

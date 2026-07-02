@@ -98,19 +98,54 @@ describe("readable diagnostic HTML (v3)", () => {
   it("includes nav bar with section anchors", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("top-nav");
-    expect(html).toContain('href="#model"');
-    expect(html).toContain('href="#preflight"');
-    expect(html).toContain('href="#reasoning"');
+    expect(html).toContain('href="#run-trace"');
+    expect(html).toContain('href="#input"');
+    expect(html).toContain('href="#internals"');
   });
 
-  it("does not include a findings section when no issues are present", () => {
-    // The fixture has a missing terminal event warning but stream.terminalEventObserved=true, so no stream warning.
-    // The only potential finding is the stale stream warning, but terminalEventObserved is true.
+  it("keeps reference sections collapsed by default", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
-    // If there are no findings, the findings card should be absent
-    // (it may still appear if other conditions trigger findings — just verify structure)
-    expect(html).toContain('id="model"');
-    expect(html).toContain('id="preflight"');
+    expect(html).toContain('id="input"');
+    expect(html).toContain('id="internals"');
+    expect(html).toMatch(/<details class="card card-collapsed" id="input">/);
+  });
+
+  it("omits the stats timeline card", () => {
+    const html = formatDiagnosticReportHtml(diagnosticFixture());
+    expect(html).not.toContain('id="timeline"');
+    expect(html).not.toContain('href="#timeline"');
+  });
+
+  it("renders the per-round incremental prompt delta", () => {
+    const diagnostics = diagnosticFixture();
+    diagnostics.agentic = {
+      policyReason: "eligible",
+      requiredTools: [],
+      satisfiedTools: [],
+      repairedTools: [],
+      rounds: 2,
+      totalCalls: 1,
+      duplicateCalls: 0,
+      duplicatedCost: false,
+      phases: ["bootstrap", "research"],
+      promptDeltas: [
+        {
+          round: 1,
+          toolChoice: '{"type":"auto"}',
+          messages: [{ role: "user", chars: 22, content: "system prompt <contents>" }],
+        },
+        {
+          round: 2,
+          toolChoice: '{"type":"auto"}',
+          messages: [{ role: "tool", chars: 100, toolCallId: "call-1" }],
+        },
+      ],
+    };
+    const html = formatDiagnosticReportHtml(diagnostics);
+    // Prompt content is rendered escaped, tool results by reference only.
+    expect(html).toContain("system prompt &lt;contents&gt;");
+    expect(html).toContain("call-1");
+    expect(html).toContain("Prompt Δ");
   });
 
   it("is a self-contained single HTML file with inlined CSS", () => {

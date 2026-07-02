@@ -1,6 +1,10 @@
 import { ChatMessage } from "@core/agent/protocol";
 import { RetrievedChunk } from "@core/model/source";
 import { sourceLabel } from "@core/retrieval/citations";
+import {
+  AttachedFileManifestEntry,
+  buildAttachmentManifestSection,
+} from "./attachments";
 
 export const RESEARCH_SYSTEM_PROMPT =
   "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence. Cite only source IDs that appear in the evidence below or that were returned by a tool you actually called — never invent citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
@@ -98,6 +102,10 @@ export interface BuildResearchPromptOptions {
   webEvidence?: RetrievedChunk[];
   retrievalDiagnostics?: string;
   maxEvidenceItems: number;
+  /** User-attached vault files; rendered as a manifest so the model sees them as files. */
+  attachedFiles?: AttachedFileManifestEntry[];
+  /** Whether vault note tools are registered for this turn (drives manifest guidance). */
+  noteToolsAvailable?: boolean;
 }
 
 export interface EstimateResearchRequestTokensOptions extends BuildResearchPromptOptions {
@@ -131,6 +139,10 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     explicitEvidence || graphEvidence || retrievedEvidence || webEvidence,
   );
 
+  const attachmentManifest = buildAttachmentManifestSection(options.attachedFiles ?? [], {
+    noteToolsAvailable: options.noteToolsAvailable,
+  });
+
   return [
     hasEvidence
       ? "Answer the question directly in a detailed, structured way using the context below."
@@ -151,7 +163,10 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     ...(history ? ["Previous chat:", history, ""] : []),
     `Question: ${options.question}`,
     "",
-    explicitEvidence ? `Explicit context:\n${explicitEvidence}` : "Explicit context: None.",
+    ...(attachmentManifest ? [attachmentManifest, ""] : []),
+    explicitEvidence
+      ? `Explicit context${attachmentManifest ? " (content of the attached files listed above)" : ""}:\n${explicitEvidence}`
+      : "Explicit context: None.",
     "",
     graphEvidence ? `Graph context:\n${graphEvidence}` : "Graph context: None.",
     "",

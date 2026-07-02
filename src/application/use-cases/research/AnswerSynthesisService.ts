@@ -5,6 +5,7 @@ import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { IxplorerError } from "@core/errors";
 import {
+  AttachedFileManifestEntry,
   buildResearchPrompt,
   estimateResearchRequestTokens,
   extractFollowUpQuestions,
@@ -38,6 +39,7 @@ export interface AnswerSynthesisInput {
   chatHistory?: ResearchChatHistoryMessage[];
   evidence: RetrievedChunk[];
   explicitEvidence?: RetrievedChunk[];
+  attachedFiles?: AttachedFileManifestEntry[];
   graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
   webEvidence?: RetrievedChunk[];
@@ -95,6 +97,8 @@ export class AnswerSynthesisService {
       chatHistory: input.chatHistory,
       evidence: input.evidence,
       explicitEvidence: input.explicitEvidence,
+      attachedFiles: input.attachedFiles,
+      noteToolsAvailable: toolLoopEnabled,
       graphEvidence: input.graphEvidence,
       retrievedEvidence: input.retrievedEvidence,
       webEvidence: input.webEvidence,

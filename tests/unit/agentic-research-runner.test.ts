@@ -144,11 +144,57 @@ describe("AgenticResearchRunner", () => {
       answerText: "final answer",
       satisfiedTools: ["search_index"],
     });
-    expect(JSON.stringify(result)).not.toContain("discard me");
+    // Intermediate text is not the answer (it does remain visible in the
+    // promptRounds log, which mirrors the real transcript by design).
+    expect(result.ok && result.answerText).toBe("final answer");
     expect(provider.requests.map((request) => request.toolChoice)).toEqual([
       { type: "specific", name: "search_index" },
       { type: "auto" },
     ]);
+  });
+
+  it("records an incremental prompt delta per round", async () => {
+    const search = tool("search_index");
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "call-1", name: "search_index", arguments: {} }],
+        },
+      ],
+      [{ content: "final answer", isComplete: true }],
+    ]);
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [
+        { role: "system", content: "sys prompt" },
+        { role: "user", content: "q" },
+      ],
+      tools: new ToolManager([search.handler]),
+      policy: policy(["search_index"]),
+    }).run();
+
+    expect(result.ok).toBe(true);
+    expect(result.promptRounds).toHaveLength(2);
+    // Round 1 carries the full initial prompt.
+    expect(result.promptRounds[0]).toMatchObject({
+      round: 1,
+      toolChoice: JSON.stringify({ type: "specific", name: "search_index" }),
+      messages: [
+        { role: "system", content: "sys prompt" },
+        { role: "user", content: "q" },
+      ],
+    });
+    // Round 2 carries only what the loop appended: assistant tool call + tool result.
+    const round2 = result.promptRounds[1];
+    expect(round2.round).toBe(2);
+    expect(round2.messages.map((m) => m.role)).toEqual(["assistant", "tool"]);
+    expect(round2.messages[0].toolCallNames).toEqual(["search_index"]);
+    expect(round2.messages[1].toolCallId).toBe("call-1");
+    expect(round2.messages[1].content).toBeUndefined();
+    expect(round2.messages[1].chars).toBeGreaterThan(0);
   });
 
   it("uses exactly one specific repair and fails for multiple missing tools", async () => {
@@ -380,5 +426,59 @@ describe("AgenticResearchRunner", () => {
     expect(subAgent.execute).toHaveBeenCalledTimes(4);
     expect(maxActive).toBeLessThanOrEqual(3);
     expect(maxActive).toBeGreaterThan(1);
+  });
+
+  it("emits all parallel sub-agent starts before awaiting the first result", async () => {
+    const events: string[] = [];
+    let releaseFirst!: () => void;
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const subAgent = tool(
+      "run_subagent",
+      vi.fn().mockImplementation(async (input: { task?: string }) => {
+        events.push(`execute:${input.task}`);
+        if (input.task === "a") {
+          await firstCanFinish;
+        }
+        return { ok: true, value: { answer: input.task } };
+      }),
+    );
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            { id: "1", name: "run_subagent", arguments: { task: "a" } },
+            { id: "2", name: "run_subagent", arguments: { task: "b" } },
+          ],
+        },
+      ],
+      [{ content: "final", isComplete: true }],
+    ]);
+
+    const resultPromise = new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([subAgent.handler]),
+      policy: policy([]),
+      onToolCall: (id) => {
+        events.push(`start:${id}`);
+      },
+      onToolResult: (id) => {
+        events.push(`result:${id}`);
+      },
+    }).run();
+    await vi.waitFor(() => {
+      expect(events.length).toBeGreaterThanOrEqual(4);
+    });
+
+    expect(events).toEqual(["start:1", "start:2", "execute:a", "execute:b"]);
+
+    releaseFirst();
+    const result = await resultPromise;
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
   });
 });

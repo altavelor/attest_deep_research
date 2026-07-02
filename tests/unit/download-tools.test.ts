@@ -80,6 +80,25 @@ describe("DownloadDocumentTool", () => {
     expect(writer.folders.has("Ixplorer/Downloads")).toBe(true);
   });
 
+  it("prefers the Content-Disposition filename over an opaque URL segment", async () => {
+    const fetchDocument = vi.fn().mockResolvedValue(
+      pdfDocument({
+        url: "https://example.com/download?id=42",
+        finalUrl: "https://example.com/download?id=42",
+        contentDisposition: 'attachment; filename="Annual Report.pdf"',
+      }),
+    );
+    const writer = new MemoryWriter();
+    const tool = makeDownloadTool({ fetchDocument }, writer);
+
+    const execution = await executeTool(tool, call({ url: "https://example.com/download?id=42" }));
+
+    expect(execution).toMatchObject({
+      ok: true,
+      value: { path: "Ixplorer/Downloads/Annual Report.pdf" },
+    });
+  });
+
   it("treats a trailing-slash path as a folder and derives the filename", async () => {
     const fetchDocument = vi.fn().mockResolvedValue(pdfDocument());
     const writer = new MemoryWriter();
@@ -183,10 +202,14 @@ describe("ProbeDocumentUrlTool", () => {
     expect(execution).toMatchObject({
       ok: true,
       value: {
-        downloadable: true,
-        contentType: "application/pdf",
-        sizeBytes: 2048,
-        suggestedFilename: "paper.pdf",
+        results: [
+          {
+            downloadable: true,
+            contentType: "application/pdf",
+            sizeBytes: 2048,
+            suggestedFilename: "paper.pdf",
+          },
+        ],
       },
     });
   });
@@ -201,7 +224,55 @@ describe("ProbeDocumentUrlTool", () => {
       arguments: { url: "http://127.0.0.1/paper.pdf" },
     });
 
-    expect(execution).toMatchObject({ ok: true, value: { downloadable: false } });
+    expect(execution).toMatchObject({
+      ok: true,
+      value: { results: [{ downloadable: false }] },
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("probes a batch of URLs in input order and de-duplicates", async () => {
+    const fetchImpl = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      url,
+      headers: { get: (name: string) => (name.toLowerCase() === "content-type" ? "application/pdf" : null) },
+      body: null,
+    }));
+    const tool = new ProbeDocumentUrlTool({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const execution = await executeTool(tool, {
+      id: "c",
+      name: "probe_document_url",
+      arguments: {
+        url: "https://example.com/a.pdf",
+        urls: ["https://example.com/b.pdf", "https://example.com/a.pdf"],
+      },
+    });
+
+    expect(execution).toMatchObject({
+      ok: true,
+      value: {
+        results: [
+          { url: "https://example.com/a.pdf", suggestedFilename: "a.pdf" },
+          { url: "https://example.com/b.pdf", suggestedFilename: "b.pdf" },
+        ],
+      },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails when neither url nor urls is provided", async () => {
+    const fetchImpl = vi.fn();
+    const tool = new ProbeDocumentUrlTool({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const execution = await executeTool(tool, {
+      id: "c",
+      name: "probe_document_url",
+      arguments: {},
+    });
+
+    expect(execution).toMatchObject({ ok: false, error: { code: "invalid-input" } });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
@@ -213,6 +284,12 @@ describe("documentDownload helpers", () => {
     ).toBe("report.pdf");
     expect(deriveFilename("https://x.com/docs/guide.pdf", null, "application/pdf")).toBe("guide.pdf");
     expect(deriveFilename("https://x.com/download", null, "application/pdf")).toBe("download.pdf");
+  });
+
+  it("appends an extension when the URL's trailing token is not a real one (e.g. arXiv ids)", () => {
+    expect(deriveFilename("https://arxiv.org/pdf/2301.12345", null, "application/pdf")).toBe(
+      "2301.12345.pdf",
+    );
   });
 
   it("resolves destinations from explicit path, folder, or default", () => {

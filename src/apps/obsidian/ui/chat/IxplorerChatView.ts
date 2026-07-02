@@ -38,6 +38,7 @@ import {
   ContextDocumentPickerModal,
   isContextDocumentPath,
 } from "./context/ContextDocumentPickerModal";
+import { expandAttachedContextPaths } from "./context/attachmentPaths";
 import { IndexControlActions } from "@apps/obsidian/ui/index/IndexControl";
 import { IndexSearchController, IndexSearchOptions } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
@@ -165,7 +166,13 @@ export class IxplorerChatView extends ItemView {
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
-      getContextPaths: () => this.attachedContextPaths,
+      // Folder attachments ("path/") expand into their current files only here,
+      // at request time — the composer keeps showing one folder chip.
+      getContextPaths: () =>
+        expandAttachedContextPaths(
+          this.attachedContextPaths,
+          this.app.vault.getFiles().map((file) => file.path),
+        ),
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
         this.editingMessageIndex = index;

@@ -80,6 +80,8 @@ export interface WebDocumentFetchSuccess {
   finalUrl: string;
   data: Uint8Array;
   contentType: string;
+  /** Raw Content-Disposition header, when present — used to recover a human-readable filename. */
+  contentDisposition?: string;
   bytes: number;
   redirects: string[];
 }

@@ -140,6 +140,7 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
   let rounds: AgenticLoopRound[] = [];
   if (agentic && agentic.phases && agentic.phases.length > 0) {
     const segments = agentic.reasoningSegments ?? [];
+    const promptDeltas = agentic.promptDeltas ?? [];
     rounds = agentic.phases.map((phase, index) => {
       const roundNumber = index + 1;
       const roundCalls = tools.filter((t) => t.round === roundNumber);
@@ -149,6 +150,7 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
       return {
         round: roundNumber,
         phase,
+        promptDelta: promptDeltas.find((delta) => delta.round === roundNumber) ?? null,
         toolCalls: roundCalls,
         reasoningSegments: roundSegments,
         hadTextOutput: roundCalls.length === 0, // heuristic: no tool calls means text round

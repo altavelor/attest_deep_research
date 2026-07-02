@@ -523,9 +523,13 @@ export function renderAttachedContext(
   containerEl.empty();
 
   for (const path of paths) {
+    const isFolder = path.endsWith("/");
     const chip = containerEl.createSpan({ cls: "ixplorer-chat__attachment" });
     chip.setAttr("title", path);
-    setIcon(chip.createSpan({ cls: "ixplorer-chat__attachment-icon" }), "file-text");
+    setIcon(
+      chip.createSpan({ cls: "ixplorer-chat__attachment-icon" }),
+      isFolder ? "folder" : "file-text",
+    );
     chip.createSpan({ cls: "ixplorer-chat__attachment-name", text: attachmentDisplayName(path) });
     const removeButton = chip.createEl("button", {
       attr: {
