@@ -1,13 +1,22 @@
 // Core domain: static catalog of external web search sources.
 // Platform-neutral metadata only — endpoints and parsing live in adapters/web.
 
+import type { WebQueryLanguage } from "./queryContext";
+
 export type WebSourceCategory =
   | "serp"
   | "neural"
   | "academic"
   | "encyclopedia"
   | "community"
-  | "news";
+  | "news"
+  | "fetch";
+
+/** What the source can do; absent means search-only. */
+export interface WebSourceCapabilities {
+  search: boolean;
+  fetchPage: boolean;
+}
 
 /** Declarative credential field; drives settings UI generation and enable-gating. */
 export interface WebSourceCredentialField {
@@ -30,6 +39,10 @@ export interface WebSourceDescriptor {
   homepage: string;
   /** Short free-tier note shown in settings. */
   freeTierNote: string;
+  /** Absent ⇒ search-only. */
+  capabilities?: WebSourceCapabilities;
+  /** Query languages this source can answer; absent ⇒ any language. */
+  languages?: readonly WebQueryLanguage[];
 }
 
 /** Per-source user configuration persisted in settings. */
@@ -46,13 +59,23 @@ const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCre
   ...overrides,
 });
 
+/** Built-in scraper provider; lives in the catalog like any other source but is constructed specially. */
+export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
+  id: "duckduckgo",
+  label: "DuckDuckGo",
+  category: "serp",
+  strengths: ["general"],
+  credentials: [],
+  homepage: "https://duckduckgo.com/",
+  freeTierNote: "Free, no key",
+};
+
 /**
- * External sources with a free tier, in planner-preference order within category.
- * The built-in DuckDuckGo provider is intentionally not listed: it predates the
- * hub and keeps its own settings until the planner stage migrates it.
+ * Sources selectable in settings, in planner-preference order within category.
  */
 export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
   // --- General SERP ---
+  DUCKDUCKGO_DESCRIPTOR,
   {
     id: "brave",
     label: "Brave Search",
@@ -126,6 +149,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey()],
     homepage: "https://jina.ai/",
     freeTierNote: "Free token allowance on signup",
+    capabilities: { search: true, fetchPage: true },
   },
   {
     id: "firecrawl",
@@ -145,6 +169,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [],
     homepage: "https://info.arxiv.org/help/api/",
     freeTierNote: "Free, no key",
+    languages: ["en"],
   },
   {
     id: "semantic-scholar",
@@ -154,6 +179,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey({ optional: true, label: "API key (optional, raises limits)" })],
     homepage: "https://www.semanticscholar.org/product/api",
     freeTierNote: "Free, key optional",
+    languages: ["en"],
   },
   {
     id: "openalex",
@@ -163,6 +189,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [],
     homepage: "https://docs.openalex.org/",
     freeTierNote: "Free, no key",
+    languages: ["en"],
   },
   {
     id: "europe-pmc",
@@ -172,6 +199,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [],
     homepage: "https://europepmc.org/RestfulWebService",
     freeTierNote: "Free, no key",
+    languages: ["en"],
   },
   // --- Encyclopedia ---
   {
@@ -192,6 +220,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey({ optional: true, label: "Token (optional, raises limits)" })],
     homepage: "https://docs.github.com/rest/search",
     freeTierNote: "Free; 10 req/min without token",
+    languages: ["en"],
   },
   {
     id: "stackexchange",
@@ -201,6 +230,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey({ optional: true, label: "App key (optional, raises quota)" })],
     homepage: "https://api.stackexchange.com/",
     freeTierNote: "Free; 300 req/day without key",
+    languages: ["en"],
   },
   {
     id: "hackernews",
@@ -210,6 +240,18 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [],
     homepage: "https://hn.algolia.com/api",
     freeTierNote: "Free, no key",
+    languages: ["en"],
+  },
+  // --- Page fetching ---
+  {
+    id: "zyte",
+    label: "Zyte API",
+    category: "fetch",
+    strengths: [],
+    credentials: [apiKey()],
+    homepage: "https://www.zyte.com/zyte-api/",
+    freeTierNote: "Pay-as-you-go ($5 trial credit); used as a page-fetch fallback",
+    capabilities: { search: false, fetchPage: true },
   },
   // --- News ---
   {

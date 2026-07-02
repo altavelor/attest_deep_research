@@ -7,9 +7,35 @@
 export { rankSectionsByQuery, splitIntoSections } from "./sectionRanking";
 export type { RankedSection, SectionRankingOptions } from "./sectionRanking";
 
-export { WEB_SOURCE_CATALOG, findWebSourceDescriptor, areCredentialsComplete } from "./webSources";
+export {
+  WEB_SOURCE_CATALOG,
+  DUCKDUCKGO_DESCRIPTOR,
+  findWebSourceDescriptor,
+  areCredentialsComplete,
+} from "./webSources";
+
+export {
+  classifyWebQuery,
+  selectSourcesForIntent,
+  mergeRankedResults,
+  isWebQueryIntent,
+  WEB_QUERY_INTENTS,
+} from "./queryPlanning";
+export type { WebQueryIntent } from "./queryPlanning";
+
+export {
+  WEB_QUERY_RECENCIES,
+  isWebQueryRecency,
+  inferQueryRecency,
+  recencyFloor,
+  detectQueryLanguage,
+  extractSiteFilters,
+  stripTemporalNoise,
+} from "./queryContext";
+export type { WebQueryRecency, WebQueryLanguage, SiteFilterExtraction } from "./queryContext";
 export type {
   WebSourceCategory,
+  WebSourceCapabilities,
   WebSourceCredentialField,
   WebSourceDescriptor,
   WebSourceProfile,

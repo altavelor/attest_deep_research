@@ -71,8 +71,6 @@ function isCurrentSettings(value: unknown): value is IxplorerSettings {
     Array.isArray(settings.indexProfiles) &&
     Array.isArray(settings.includeFolders) &&
     Array.isArray(settings.excludeGlobs) &&
-    typeof settings.duckDuckGoEnabled === "boolean" &&
-    typeof settings.duckDuckGoResultLimit === "number" &&
     typeof settings.showChatIndexControl === "boolean" &&
     typeof settings.includeActiveFileContext === "boolean" &&
     typeof settings.useLinkedNotes === "boolean" &&

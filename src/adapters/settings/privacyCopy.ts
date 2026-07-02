@@ -6,5 +6,5 @@ export const EMBEDDING_PROVIDER_DESCRIPTION =
 
 export const INDEX_FOLDER_DESCRIPTION = "Vault-local folder for Ixplorer's local vector index.";
 
-export const DUCK_DUCK_GO_DESCRIPTION =
-  "External, user-initiated DuckDuckGo first-result search. Ixplorer sends only the typed question, never retrieved vault content.";
+export const WEB_SOURCES_DESCRIPTION =
+  "External, user-initiated web search across the enabled sources. Ixplorer sends only the typed question, never retrieved vault content.";

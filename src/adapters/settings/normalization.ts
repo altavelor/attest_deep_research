@@ -15,7 +15,32 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
       : DEFAULT_DOWNLOAD_FOLDER;
+  migrateLegacyWebSettings(settings);
   normalizeWebSources(settings);
+}
+
+/**
+ * Settings saved before the web-source hub carried `duckDuckGoEnabled` /
+ * `duckDuckGoResultLimit`. The flag becomes a hub profile for the catalog's
+ * duckduckgo entry; per-source result limits no longer exist (the planner
+ * derives per-source fetch sizes from the tool's requested limit).
+ */
+function migrateLegacyWebSettings(settings: IxplorerSettings): void {
+  const legacy = settings as unknown as Record<string, unknown>;
+  if (!Array.isArray(settings.webSources)) {
+    settings.webSources = [];
+  }
+
+  if (
+    legacy.duckDuckGoEnabled === true &&
+    !settings.webSources.some((profile) => profile.sourceId === "duckduckgo")
+  ) {
+    settings.webSources.push({ sourceId: "duckduckgo", enabled: true, credentials: {} });
+  }
+  delete legacy.duckDuckGoEnabled;
+  delete legacy.duckDuckGoResultLimit;
+  // Interim field from an unreleased hub iteration.
+  delete legacy.webSearchResultLimit;
 }
 
 /**
@@ -39,6 +64,8 @@ function normalizeWebSources(settings: IxplorerSettings): void {
           ),
         )
         : {};
+    // Interim per-source field from an unreleased hub iteration.
+    delete (entry as unknown as Record<string, unknown>).resultLimit;
     return [
       {
         sourceId: descriptor.id,

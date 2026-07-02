@@ -125,8 +125,8 @@ export const europePmcDefinition: WebSourceDefinition = {
 
 export const wikipediaDefinition: WebSourceDefinition = {
   descriptor: descriptor("wikipedia"),
-  buildRequest: ({ query, limit }) => {
-    const url = new URL("https://en.wikipedia.org/w/api.php");
+  buildRequest: ({ query, limit, language }) => {
+    const url = new URL(`https://${language === "ru" ? "ru" : "en"}.wikipedia.org/w/api.php`);
     url.searchParams.set("action", "query");
     url.searchParams.set("list", "search");
     url.searchParams.set("srsearch", query);
@@ -135,16 +135,18 @@ export const wikipediaDefinition: WebSourceDefinition = {
     url.searchParams.set("origin", "*");
     return { url: url.toString(), headers: { accept: "application/json" } };
   },
-  parseResponse: (body) =>
-    asArray(asRecord(asRecord(JSON.parse(body)).query).search).map((entry) => {
+  parseResponse: (body, input) => {
+    const host = input.language === "ru" ? "ru.wikipedia.org" : "en.wikipedia.org";
+    return asArray(asRecord(asRecord(JSON.parse(body)).query).search).map((entry) => {
       const item = asRecord(entry);
       const title = asString(item.title);
       return {
         title,
-        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`,
+        url: `https://${host}/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`,
         snippet: stripSearchHighlights(asString(item.snippet)),
       };
-    }),
+    });
+  },
 };
 
 /** MediaWiki wraps matches in <span class="searchmatch">…</span>. */

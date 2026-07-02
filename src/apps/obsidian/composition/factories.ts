@@ -47,9 +47,15 @@ import {
   resolveEffectiveReasoning,
   resolveEffectiveTools,
 } from "@adapters/settings";
-import { createWebSourceRegistry, DuckDuckGoSearchProvider } from "@adapters/web";
+import {
+  createFetchFallbackProviders,
+  createWebSearchSources,
+  DuckDuckGoSearchProvider,
+} from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
-import type { WebSourceRegistry } from "@application/ports";
+import type { SearchProvider, WebSearchSource } from "@application/ports";
+import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
+import { DUCKDUCKGO_DESCRIPTOR } from "@core/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
@@ -70,6 +76,8 @@ export interface CompositionContext {
   app: App;
   logger: PluginDebugLogger;
   pdfTextCache: PdfTextCache;
+  /** Plugin-lifetime health state of web sources; planners are per-run, this is not. */
+  webSourceHealth: WebSourceHealthTracker;
   getSettings(): IxplorerSettings;
   saveSettings(): Promise<void>;
   getVaultLocalPath(path: string): string;
@@ -347,30 +355,53 @@ export function createQueryExpansionService(
   });
 }
 
-export function createSearchProvider(
-  ctx: CompositionContext,
-): DuckDuckGoSearchProvider | undefined {
-  if (!ctx.getSettings().duckDuckGoEnabled) {
+/**
+ * Web search entry point for research tools. The query planner routes across
+ * the enabled hub sources (DuckDuckGo is one of them, from the catalog row).
+ * Page fetches run through the fallback chain: native → Jina → Zyte → Wayback.
+ */
+export function createSearchProvider(ctx: CompositionContext): SearchProvider | undefined {
+  const settings = ctx.getSettings();
+  const runtime = {
+    fetch: obsidianRequestFetch,
+    logger: ctx.logger,
+  };
+
+  // Always constructed: its fetch core serves page fetches even when the
+  // DuckDuckGo search row is disabled.
+  const duckDuckGoProfile = settings.webSources.find(
+    (profile) => profile.sourceId === DUCKDUCKGO_DESCRIPTOR.id,
+  );
+  const duckDuckGo = new DuckDuckGoSearchProvider(runtime);
+  const duckDuckGoEnabled = duckDuckGoProfile?.enabled === true;
+  const hubSources = createWebSearchSources(settings.webSources, runtime);
+  const pool: WebSearchSource[] = [
+    ...(duckDuckGoEnabled
+      ? [Object.assign(duckDuckGo, { descriptor: DUCKDUCKGO_DESCRIPTOR })]
+      : []),
+    ...hubSources,
+  ];
+  if (pool.length === 0) {
     return undefined;
   }
 
-  return new DuckDuckGoSearchProvider({
-    fetch: obsidianRequestFetch,
-    logger: ctx.logger,
-    defaultResultLimit: ctx.getSettings().duckDuckGoResultLimit,
+  const fetchDelegate = new FetchFallbackChain({
+    primary: duckDuckGo,
+    fallbacks: createFetchFallbackProviders(settings.webSources, duckDuckGo, {
+      fetch: obsidianRequestFetch,
+      logger: ctx.logger,
+    }),
+    onFallback: (providerId, failure) =>
+      ctx.logger?.logError(failure.ok ? undefined : failure.error, {
+        url: `fetch-fallback:${providerId}`,
+      }),
   });
-}
 
-/**
- * Hub sources built from enabled+configured web-source profiles. Consumed by
- * the query planner (next hub stage); until then the registry is wired but the
- * research tools keep using the DuckDuckGo provider directly.
- */
-export function createWebSourceRegistryFromSettings(ctx: CompositionContext): WebSourceRegistry {
-  return createWebSourceRegistry(ctx.getSettings().webSources, {
-    fetch: obsidianRequestFetch,
-    logger: ctx.logger,
-    defaultResultLimit: ctx.getSettings().duckDuckGoResultLimit,
+  return new WebQueryPlanner({
+    registry: { enabledSources: () => pool },
+    fetchDelegate,
+    health: ctx.webSourceHealth,
+    onSourceError: (sourceId, error) => ctx.logger?.logError(error, { url: `source:${sourceId}` }),
   });
 }
 

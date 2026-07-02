@@ -37,7 +37,10 @@ export const WebFetchUrlTool = defineTool<
         { callId: context.callId, query: safeUrl.url },
       );
     } catch {
-      return toolFailure("web-result-capacity", "Too many web results registered for this answer.");
+      return toolFailure(
+        "web-result-capacity",
+        "Too many web results registered for this answer. Results returned by earlier searches remain usable and citable — synthesize the answer from the evidence you already have instead of fetching more pages.",
+      );
     }
 
     return fetchRegisteredWebPage(deps, registered.resultId, context.callId);

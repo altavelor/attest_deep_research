@@ -2,13 +2,26 @@
 // A definition is declarative: how to build the request and how to parse the
 // response body into neutral results. All I/O lives in HttpWebSearchSource.
 
-import { findWebSourceDescriptor, type WebSourceDescriptor } from "@core/web";
+import {
+  findWebSourceDescriptor,
+  type WebQueryLanguage,
+  type WebQueryRecency,
+  type WebSourceDescriptor,
+} from "@core/web";
 
 export interface WebSourceQueryInput {
   query: string;
   limit: number;
   /** Values entered by the user for descriptor.credentials fields. */
   credentials: Record<string, string>;
+  /** Freshness window requested by the planner. */
+  recency?: WebQueryRecency;
+  /** ISO instant matching `recency` — earliest acceptable publication time. */
+  freshFrom?: string;
+  /** Query language detected by the planner. */
+  language?: WebQueryLanguage;
+  /** Domains extracted from `site:` operators the source's API cannot parse. */
+  domains?: string[];
 }
 
 export interface WebSourceRequest {
@@ -29,6 +42,12 @@ export interface ParsedWebResult {
 
 export interface WebSourceDefinition {
   descriptor: WebSourceDescriptor;
+  /**
+   * True when the underlying engine understands `site:` operators in the query
+   * text (SERP-style APIs). Keyword APIs get the operators stripped by the
+   * engine and receive the domains via `input.domains` instead.
+   */
+  supportsSiteOperator?: boolean;
   buildRequest(input: WebSourceQueryInput): WebSourceRequest;
   /** Pure: parses the raw response body. Throws on malformed payloads. */
   parseResponse(body: string, input: WebSourceQueryInput): ParsedWebResult[];

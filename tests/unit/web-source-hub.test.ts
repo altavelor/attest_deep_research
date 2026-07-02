@@ -5,7 +5,13 @@ import {
   HttpWebSearchSource,
   WEB_SOURCE_DEFINITIONS,
 } from "@adapters/web";
-import { DEFAULT_SETTINGS, readSettings } from "@adapters/settings";
+import {
+  DEFAULT_SETTINGS,
+  getWebSourceProfile,
+  isWebSourceConfigured,
+  readSettings,
+  upsertWebSourceProfile,
+} from "@adapters/settings";
 
 const CREDENTIALS: Record<string, string> = {
   apiKey: "test-key",
@@ -230,11 +236,16 @@ function sourceFor(id: string, fetchMock: typeof fetch): HttpWebSearchSource {
 }
 
 describe("web source definitions", () => {
-  it("covers every catalog entry with a definition and vice versa", () => {
-    const catalogIds = WEB_SOURCE_CATALOG.map((descriptor) => descriptor.id).sort();
+  it("covers every search-capable catalog entry with a definition and vice versa", () => {
+    // duckduckgo is a bespoke provider; zyte is fetch-only — neither has an HTTP definition.
+    const searchCatalogIds = WEB_SOURCE_CATALOG.filter(
+      (descriptor) => descriptor.id !== "duckduckgo" && descriptor.capabilities?.search !== false,
+    )
+      .map((descriptor) => descriptor.id)
+      .sort();
     const definitionIds = WEB_SOURCE_DEFINITIONS.map((entry) => entry.descriptor.id).sort();
-    expect(definitionIds).toEqual(catalogIds);
-    expect(Object.keys(FIXTURES).sort()).toEqual(catalogIds);
+    expect(definitionIds).toEqual(searchCatalogIds);
+    expect(Object.keys(FIXTURES).sort()).toEqual(searchCatalogIds);
   });
 
   for (const [id, fixture] of Object.entries(FIXTURES)) {
@@ -354,6 +365,16 @@ describe("createWebSearchSources", () => {
     ...overrides,
   });
 
+  it("passes the planner-requested limit through to the source request", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(JSON.stringify({ web: { results: [] } })));
+    const [source] = createWebSearchSources([profile({})], { fetch: fetchMock as typeof fetch });
+
+    await source.search("query", { limit: 12 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("count=12");
+  });
+
   it("builds sources only for enabled, fully configured profiles", () => {
     const sources = createWebSearchSources([
       profile({}),
@@ -367,6 +388,44 @@ describe("createWebSearchSources", () => {
   });
 });
 
+describe("web source settings queries", () => {
+  it("returns a disabled blank profile for untouched sources and upserts in place", () => {
+    const settings = { webSources: [] as WebSourceProfile[] };
+
+    expect(getWebSourceProfile(settings, "brave")).toEqual({
+      sourceId: "brave",
+      enabled: false,
+      credentials: {},
+    });
+
+    upsertWebSourceProfile(settings, {
+      sourceId: "brave",
+      enabled: false,
+      credentials: { apiKey: "k" },
+    });
+    upsertWebSourceProfile(settings, {
+      sourceId: "brave",
+      enabled: true,
+      credentials: { apiKey: "k2" },
+    });
+
+    expect(settings.webSources).toEqual([
+      { sourceId: "brave", enabled: true, credentials: { apiKey: "k2" } },
+    ]);
+  });
+
+  it("reports configured state from required credential completeness", () => {
+    const settings = {
+      webSources: [{ sourceId: "brave", enabled: false, credentials: { apiKey: "k" } }],
+    };
+    expect(isWebSourceConfigured(settings, "brave")).toBe(true);
+    expect(isWebSourceConfigured(settings, "tavily")).toBe(false);
+    // Key-free sources are configured out of the box; unknown ids are not.
+    expect(isWebSourceConfigured(settings, "wikipedia")).toBe(true);
+    expect(isWebSourceConfigured(settings, "nope")).toBe(false);
+  });
+});
+
 describe("settings normalization for web sources", () => {
   it("backfills webSources for settings saved before the hub existed", () => {
     const legacy = { ...DEFAULT_SETTINGS, webSources: undefined } as unknown as Record<
@@ -375,6 +434,22 @@ describe("settings normalization for web sources", () => {
     >;
     const settings = readSettings(legacy);
     expect(settings.webSources).toEqual([]);
+  });
+
+  it("migrates legacy duckDuckGoEnabled/duckDuckGoResultLimit into a hub profile", () => {
+    const legacy = {
+      ...DEFAULT_SETTINGS,
+      duckDuckGoEnabled: true,
+      duckDuckGoResultLimit: 7,
+    } as unknown as Record<string, unknown>;
+    delete legacy.webSources;
+
+    const settings = readSettings(legacy);
+    expect(settings.webSources).toEqual([
+      { sourceId: "duckduckgo", enabled: true, credentials: {} },
+    ]);
+    expect("duckDuckGoEnabled" in settings).toBe(false);
+    expect("duckDuckGoResultLimit" in settings).toBe(false);
   });
 
   it("drops unknown sources and force-disables incomplete ones", () => {

@@ -21,3 +21,8 @@ export {
 export type { WebSourceRuntimeOptions } from "./sources/registry";
 export { HttpWebSearchSource } from "./sources/HttpWebSearchSource";
 export type { HttpWebSearchSourceOptions } from "./sources/HttpWebSearchSource";
+
+export { createFetchFallbackProviders } from "./fetch/fallbacks";
+export { JinaReaderFetchProvider } from "./fetch/JinaReaderFetchProvider";
+export { ZyteFetchProvider } from "./fetch/ZyteFetchProvider";
+export { WaybackFetchProvider } from "./fetch/WaybackFetchProvider";

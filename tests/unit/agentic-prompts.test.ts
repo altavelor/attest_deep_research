@@ -1,4 +1,4 @@
-import { buildAgenticResearchMessages } from "@core/research";
+import { buildAgenticResearchMessages, buildResearchSystemPrompt } from "@core/research";
 import {
   CREATE_NOTE_TOOL,
   SUB_AGENT_TOOL,
@@ -29,6 +29,27 @@ function systemText(overrides: {
   });
   return messages.find((m) => m.role === "system")?.content ?? "";
 }
+
+describe("current date anchoring", () => {
+  const now = new Date("2026-07-02T12:00:00Z");
+
+  it("anchors the agentic system prompt to the current date", () => {
+    const messages = buildAgenticResearchMessages({
+      question: "Q",
+      requiredTools: [],
+      toolContext: { coreVariant: "research", availableTools: [] },
+      now,
+    });
+    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    expect(system).toContain("Current date: Thursday, 2026-07-02");
+  });
+
+  it("anchors the eager research system prompt to the current date", () => {
+    expect(buildResearchSystemPrompt({ now })).toContain("Current date: Thursday, 2026-07-02");
+    // Without an injected clock the line is still present (real today).
+    expect(buildResearchSystemPrompt()).toContain("Current date:");
+  });
+});
 
 describe("agentic research prompts", () => {
   it("contains trusted policy, bounded explicit context, history, and index description", () => {

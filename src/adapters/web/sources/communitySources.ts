@@ -62,13 +62,24 @@ export const stackExchangeDefinition: WebSourceDefinition = {
 
 export const hackerNewsDefinition: WebSourceDefinition = {
   descriptor: descriptor("hackernews"),
-  buildRequest: ({ query, limit }) => ({
-    url:
-      "https://hn.algolia.com/api/v1/search?query=" +
-      encodeURIComponent(query) +
-      `&tags=story&hitsPerPage=${limit}`,
-    headers: { accept: "application/json" },
-  }),
+  buildRequest: ({ query, limit, freshFrom }) => {
+    // With a freshness window, `search_by_date` + a created_at floor keeps out
+    // popular-but-ancient threads that dominate the default relevance ranking.
+    const endpoint = freshFrom ? "search_by_date" : "search";
+    const numericFilters = freshFrom
+      ? `&numericFilters=${encodeURIComponent(
+        `created_at_i>${Math.floor(Date.parse(freshFrom) / 1_000)}`,
+      )}`
+      : "";
+    return {
+      url:
+        `https://hn.algolia.com/api/v1/${endpoint}?query=` +
+        encodeURIComponent(query) +
+        `&tags=story&hitsPerPage=${limit}` +
+        numericFilters,
+      headers: { accept: "application/json" },
+    };
+  },
   parseResponse: (body) =>
     asArray(asRecord(JSON.parse(body)).hits).map((entry) => {
       const item = asRecord(entry);
@@ -76,26 +87,43 @@ export const hackerNewsDefinition: WebSourceDefinition = {
       const discussion = `https://news.ycombinator.com/item?id=${objectId}`;
       const points = typeof item.points === "number" ? item.points : 0;
       const comments = typeof item.num_comments === "number" ? item.num_comments : 0;
+      const created = asString(item.created_at).slice(0, 10);
       return {
         title: asString(item.title),
         url: asString(item.url) || discussion,
-        snippet: `${points} points · ${comments} comments · ${discussion}`,
+        snippet: [created, `${points} points · ${comments} comments`, discussion]
+          .filter(Boolean)
+          .join(" · "),
       };
     }),
 };
 
 export const newsApiDefinition: WebSourceDefinition = {
   descriptor: descriptor("newsapi"),
-  buildRequest: ({ query, limit, credentials }) => ({
-    url:
-      "https://newsapi.org/v2/everything?q=" +
-      encodeURIComponent(query) +
-      `&pageSize=${limit}&sortBy=relevancy`,
-    headers: {
-      accept: "application/json",
-      "x-api-key": credentials.apiKey ?? "",
-    },
-  }),
+  buildRequest: ({ query, limit, credentials, freshFrom, language, domains }) => {
+    const url = new URL("https://newsapi.org/v2/everything");
+    url.searchParams.set("q", query);
+    url.searchParams.set("pageSize", String(limit));
+    // Freshness beats relevance for time-bounded queries: `from` bounds the
+    // window and publishedAt ordering surfaces the newest articles first.
+    url.searchParams.set("sortBy", freshFrom ? "publishedAt" : "relevancy");
+    if (freshFrom) {
+      url.searchParams.set("from", freshFrom);
+    }
+    if (language) {
+      url.searchParams.set("language", language);
+    }
+    if (domains && domains.length > 0) {
+      url.searchParams.set("domains", domains.join(","));
+    }
+    return {
+      url: url.toString(),
+      headers: {
+        accept: "application/json",
+        "x-api-key": credentials.apiKey ?? "",
+      },
+    };
+  },
   parseResponse: (body) =>
     asArray(asRecord(JSON.parse(body)).articles).map((entry) => {
       const item = asRecord(entry);
