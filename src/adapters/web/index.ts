@@ -12,3 +12,12 @@ export type { FetchUrlStatusCheckerOptions } from "./FetchUrlStatusChecker";
 
 export { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
 export type { DuckDuckGoResult, PageMetadata } from "./DuckDuckGoParser";
+
+export {
+  createWebSearchSources,
+  createWebSourceRegistry,
+  WEB_SOURCE_DEFINITIONS,
+} from "./sources/registry";
+export type { WebSourceRuntimeOptions } from "./sources/registry";
+export { HttpWebSearchSource } from "./sources/HttpWebSearchSource";
+export type { HttpWebSearchSourceOptions } from "./sources/HttpWebSearchSource";

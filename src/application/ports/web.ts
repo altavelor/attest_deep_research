@@ -2,6 +2,7 @@
 
 import { WebSourceReference } from "@core/model";
 import { ToolError } from "@core/agent";
+import type { WebSourceDescriptor } from "@core/web";
 
 export interface SearchProviderResult {
   source: WebSourceReference;
@@ -81,4 +82,14 @@ export interface SearchProvider {
   fetchMetadata?(url: string, options?: WebPageFetchOptions): Promise<WebPageMetadataResult>;
   /** Fetch raw document bytes (PDF and similar) for on-demand storage in the vault. */
   fetchDocument?(url: string, options?: WebPageFetchOptions): Promise<WebDocumentFetchResult>;
+}
+
+/** A hub source: a search provider carrying its catalog descriptor for planner routing. */
+export interface WebSearchSource extends SearchProvider {
+  descriptor: WebSourceDescriptor;
+}
+
+/** Port for the query planner (later stage): enabled, ready-to-call hub sources. */
+export interface WebSourceRegistry {
+  enabledSources(): WebSearchSource[];
 }

@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   duckDuckGoEnabled: false,
   duckDuckGoResultLimit: 5,
+  webSources: [],
   showChatIndexControl: true,
   includeActiveFileContext: true,
   useLinkedNotes: true,
