@@ -1,4 +1,5 @@
 import { ApiFormat } from "@core/agent";
+import type { WebSourceProfile } from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { ToolCapabilitySettings } from "./toolCapabilities";
 import { ModelCapabilitySnapshot } from "./modelCapabilityCache";
@@ -98,6 +99,8 @@ export interface IxplorerSettings {
   excludeGlobs: string[];
   duckDuckGoEnabled: boolean;
   duckDuckGoResultLimit: number;
+  /** Hub of external search sources; entries exist only for sources the user configured. */
+  webSources: WebSourceProfile[];
   showChatIndexControl: boolean;
   includeActiveFileContext: boolean;
   useLinkedNotes: boolean;

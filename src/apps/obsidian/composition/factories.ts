@@ -47,8 +47,9 @@ import {
   resolveEffectiveReasoning,
   resolveEffectiveTools,
 } from "@adapters/settings";
-import { DuckDuckGoSearchProvider } from "@adapters/web";
+import { createWebSourceRegistry, DuckDuckGoSearchProvider } from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
+import type { WebSourceRegistry } from "@application/ports";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
@@ -354,6 +355,19 @@ export function createSearchProvider(
   }
 
   return new DuckDuckGoSearchProvider({
+    fetch: obsidianRequestFetch,
+    logger: ctx.logger,
+    defaultResultLimit: ctx.getSettings().duckDuckGoResultLimit,
+  });
+}
+
+/**
+ * Hub sources built from enabled+configured web-source profiles. Consumed by
+ * the query planner (next hub stage); until then the registry is wired but the
+ * research tools keep using the DuckDuckGo provider directly.
+ */
+export function createWebSourceRegistryFromSettings(ctx: CompositionContext): WebSourceRegistry {
+  return createWebSourceRegistry(ctx.getSettings().webSources, {
     fetch: obsidianRequestFetch,
     logger: ctx.logger,
     defaultResultLimit: ctx.getSettings().duckDuckGoResultLimit,

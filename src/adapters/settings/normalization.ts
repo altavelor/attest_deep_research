@@ -1,3 +1,4 @@
+import { areCredentialsComplete, findWebSourceDescriptor } from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { DEFAULT_DOWNLOAD_FOLDER, DEFAULT_INDEX_PROFILE_ID } from "./constants";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
@@ -14,6 +15,38 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
       : DEFAULT_DOWNLOAD_FOLDER;
+  normalizeWebSources(settings);
+}
+
+/**
+ * Backfills for settings saved before the web-source hub existed; drops entries
+ * for sources removed from the catalog and force-disables ones whose required
+ * credentials are missing (the UI gates the toggle, this guards stale data).
+ */
+function normalizeWebSources(settings: IxplorerSettings): void {
+  const entries = Array.isArray(settings.webSources) ? settings.webSources : [];
+  settings.webSources = entries.flatMap((entry) => {
+    const descriptor =
+      typeof entry?.sourceId === "string" ? findWebSourceDescriptor(entry.sourceId) : undefined;
+    if (!descriptor) {
+      return [];
+    }
+    const credentials =
+      typeof entry.credentials === "object" && entry.credentials !== null
+        ? Object.fromEntries(
+          Object.entries(entry.credentials).filter(
+            (pair): pair is [string, string] => typeof pair[1] === "string",
+          ),
+        )
+        : {};
+    return [
+      {
+        sourceId: descriptor.id,
+        enabled: entry.enabled === true && areCredentialsComplete(descriptor, credentials),
+        credentials,
+      },
+    ];
+  });
 }
 
 export function isProfileSuspended(profile: { isSuspended?: boolean }): boolean {
