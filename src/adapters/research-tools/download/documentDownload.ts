@@ -163,7 +163,16 @@ function sanitizeSegment(value: string): string {
     .slice(0, 200);
 }
 
+/**
+ * Whether the name already carries a *plausible* file extension. A trailing token
+ * that is all digits (e.g. arXiv ids like `2301.12345`) or unusually long is not a
+ * real extension, so we let the content-type supply one instead of trusting the URL.
+ */
 function hasExtension(name: string): boolean {
   const dot = name.lastIndexOf(".");
-  return dot > 0 && dot < name.length - 1;
+  if (dot <= 0 || dot >= name.length - 1) {
+    return false;
+  }
+  const ext = name.slice(dot + 1);
+  return /^[A-Za-z0-9]{1,8}$/.test(ext) && /[A-Za-z]/.test(ext);
 }

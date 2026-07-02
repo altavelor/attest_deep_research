@@ -142,6 +142,7 @@ export class EagerResearchStrategy implements ResearchStrategy {
       chatHistory: request.chatHistory,
       evidence: planned.finalEvidence,
       explicitEvidence: planned.explicitEvidence,
+      attachedFiles: assembled?.attachments,
       graphEvidence: planned.graphEvidence,
       retrievedEvidence: planned.retrievedEvidence,
       webEvidence: planned.webEvidence,

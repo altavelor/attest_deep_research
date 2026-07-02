@@ -24,6 +24,35 @@ export interface DocumentProbeResult {
 
 const DEFAULT_PROBE_TIMEOUT_MS = 15_000;
 
+/** Cap on how many URLs a single batch probe fans out to concurrently. */
+const PROBE_CONCURRENCY = 4;
+
+/**
+ * Probe a batch of URLs, preserving input order. Runs with bounded concurrency so
+ * a long list does not open dozens of sockets at once. Each entry fails/succeeds
+ * independently — one bad URL never sinks the batch.
+ */
+export async function probeDocumentUrls(
+  fetchImpl: typeof fetch,
+  rawUrls: string[],
+  timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS,
+): Promise<DocumentProbeResult[]> {
+  const results = new Array<DocumentProbeResult>(rawUrls.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let index = next; index < rawUrls.length; index = next) {
+      next += 1;
+      results[index] = await probeDocumentUrl(fetchImpl, rawUrls[index]!, timeoutMs);
+    }
+  };
+  const workers = Array.from(
+    { length: Math.min(PROBE_CONCURRENCY, rawUrls.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function probeDocumentUrl(
   fetchImpl: typeof fetch,
   rawUrl: string,

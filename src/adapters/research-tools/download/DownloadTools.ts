@@ -8,7 +8,7 @@ import { DOWNLOAD_DOCUMENT_TOOL, PROBE_DOCUMENT_URL_TOOL } from "@core/agent";
 import { SearchProvider } from "@application/ports";
 import { VaultWriter } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
-import { bool, defineTool, str } from "@application/sources/tools";
+import { bool, defineTool, str, strArray } from "@application/sources/tools";
 import {
   DOWNLOAD_PERMISSIONS,
   DownloadConfirmation,
@@ -19,7 +19,7 @@ import {
   resolveDownloadPath,
   validateDownloadPath,
 } from "./documentDownload";
-import { DocumentProbeResult, probeDocumentUrl } from "./probeDocumentUrl";
+import { DocumentProbeResult, probeDocumentUrls } from "./probeDocumentUrl";
 
 export interface ProbeDocumentDeps {
   fetchImpl: typeof fetch;
@@ -33,7 +33,12 @@ export interface DownloadDocumentDeps {
 }
 
 interface ProbeInput {
-  url: string;
+  url?: string;
+  urls?: string[];
+}
+
+interface ProbeOutput {
+  results: DocumentProbeResult[];
 }
 
 interface DownloadInput {
@@ -52,19 +57,41 @@ interface DownloadOutput {
 
 const MAX_URL_CHARS = 2_048;
 const MAX_PATH_CHARS = 500;
+const MAX_PROBE_URLS = 20;
 
-export const ProbeDocumentUrlTool = defineTool<ProbeDocumentDeps, ProbeInput, DocumentProbeResult>({
+export const ProbeDocumentUrlTool = defineTool<ProbeDocumentDeps, ProbeInput, ProbeOutput>({
   name: PROBE_DOCUMENT_URL_TOOL,
   description:
-    "Check whether a public http(s) URL points at a downloadable document (e.g. a PDF) before downloading it. Reports content-type, size and a suggested filename without transferring the file body.",
+    "Check whether one or more public http(s) URLs point at a downloadable document (e.g. a PDF) before downloading. Reports content-type, size and a suggested filename for each URL without transferring the file body. Pass `url` for a single link or `urls` for a batch; results are returned as an array in input order.",
   schema: {
-    url: str(MAX_URL_CHARS, { required: true, description: "Absolute http(s) URL to probe." }),
+    url: str(MAX_URL_CHARS, { description: "Absolute http(s) URL to probe (single link)." }),
+    urls: strArray(MAX_PROBE_URLS, MAX_URL_CHARS, {
+      description: `Multiple absolute http(s) URLs to probe in one call (up to ${MAX_PROBE_URLS}).`,
+    }),
   },
   execute: async (deps, input) => {
-    const result = await probeDocumentUrl(deps.fetchImpl, input.url);
-    return { ok: true, value: result };
+    const urls = collectProbeUrls(input);
+    if (urls.length === 0) {
+      return toolFailure("invalid-input", "Provide `url` or a non-empty `urls` array.");
+    }
+    const results = await probeDocumentUrls(deps.fetchImpl, urls);
+    return { ok: true, value: { results } };
   },
 });
+
+/** Merge `url` + `urls` into a de-duplicated, order-preserving list, capped at MAX_PROBE_URLS. */
+function collectProbeUrls(input: ProbeInput): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const candidate of [input.url, ...(input.urls ?? [])]) {
+    const trimmed = candidate?.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      urls.push(trimmed);
+    }
+  }
+  return urls.slice(0, MAX_PROBE_URLS);
+}
 
 export const DownloadDocumentTool = defineTool<
   DownloadDocumentDeps,
@@ -105,7 +132,11 @@ export const DownloadDocumentTool = defineTool<
       );
     }
 
-    const filename = deriveFilename(fetched.finalUrl, null, fetched.contentType);
+    const filename = deriveFilename(
+      fetched.finalUrl,
+      fetched.contentDisposition ?? null,
+      fetched.contentType,
+    );
     const path = resolveDownloadPath(input.path, deps.defaultFolder, filename);
     const validation = validateDownloadPath(path);
     if (!validation.ok) {

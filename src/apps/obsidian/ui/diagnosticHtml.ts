@@ -3,41 +3,38 @@ import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
 import { DiagnosticReportV3 } from "./diagnostics/report/types";
 import { h } from "./diagnostics/html/primitives";
 import {
-  renderAnswer,
   renderFindings,
   renderHeader,
-  renderModel,
+  renderInput,
+  renderInternals,
   renderNav,
-  renderPreflight,
-  renderReasoning,
-  renderRequest,
-  renderTimeline,
-  renderWarnings,
 } from "./diagnostics/html/sections";
+import { renderRunTrace } from "./diagnostics/html/trace";
 import { CSS } from "./diagnostics/html/styles";
 
 export function formatDiagnosticReportHtml(diagnostics: ContextDiagnostics): string {
-  const report = buildDiagnosticReportV3(diagnostics);
-  return renderHtml(report);
+  return renderDiagnosticHtmlDocument(buildDiagnosticReportV3(diagnostics));
 }
 
-function renderHtml(report: DiagnosticReportV3): string {
-  const title = `Diagnostic report · ${h(report.stats.runId || "unknown")}`;
-  const body = [
+/**
+ * The report body shared verbatim by the standalone HTML export and the modal's
+ * readable view (which injects it into a shadow root) — one report, two hosts.
+ */
+export function diagnosticReportBodyHtml(report: DiagnosticReportV3): string {
+  return [
     renderNav(report),
     `<main class="layout">`,
     renderHeader(report),
     renderFindings(report.findings),
-    renderModel(report),
-    renderPreflight(report),
-    renderRequest(report),
-    renderReasoning(report),
-    renderAnswer(report),
-    renderTimeline(report),
-    renderWarnings(report),
+    renderRunTrace(report),
+    renderInput(report),
+    renderInternals(report),
     `</main>`,
   ].join("\n");
+}
 
+export function renderDiagnosticHtmlDocument(report: DiagnosticReportV3): string {
+  const title = `Diagnostic report · ${h(report.stats.runId || "unknown")}`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -46,6 +43,6 @@ function renderHtml(report: DiagnosticReportV3): string {
 <title>${title}</title>
 <style>${CSS}</style>
 </head>
-<body>${body}</body>
+<body>${diagnosticReportBodyHtml(report)}</body>
 </html>`;
 }

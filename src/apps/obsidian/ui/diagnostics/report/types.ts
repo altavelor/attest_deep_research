@@ -1,6 +1,6 @@
 import { ApiFormat } from "@core/agent";
 import { ChatToolChoice } from "@core/agent";
-import { ContextDiagnostics, ToolCallDiagnostic } from "@core/diagnostics";
+import { ContextDiagnostics, RoundPromptDeltaDiagnostic, ToolCallDiagnostic } from "@core/diagnostics";
 
 export interface DiagnosticReportV3 {
   schemaVersion: 3;
@@ -119,6 +119,8 @@ export interface RequestSection {
 export interface AgenticLoopRound {
   round: number;
   phase: string;
+  /** Prompt messages added for this round's request (incremental; round 1 = full prompt). */
+  promptDelta: RoundPromptDeltaDiagnostic | null;
   toolCalls: ToolCallDiagnostic[];
   reasoningSegments: Array<{ segmentId: string; chars: number }>;
   hadTextOutput: boolean;

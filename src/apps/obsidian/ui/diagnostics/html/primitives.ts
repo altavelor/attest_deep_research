@@ -31,6 +31,11 @@ export function card(id: string, eyebrow: string, body: string): string {
   return `<section class="card" id="${attr(id)}"><header class="card-eyebrow">${h(eyebrow)}</header><div class="card-body">${body}</div></section>`;
 }
 
+/** Card collapsed by default: reference material, not the story. */
+export function collapsedCard(id: string, eyebrow: string, body: string): string {
+  return `<details class="card card-collapsed" id="${attr(id)}"><summary class="card-eyebrow">${h(eyebrow)}</summary><div class="card-body">${body}</div></details>`;
+}
+
 export function sub(title: string): string {
   return `<h4 class="sub-heading">${h(title)}</h4>`;
 }

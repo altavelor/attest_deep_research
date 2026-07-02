@@ -2,9 +2,8 @@ import { App, Modal, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "@core/diagnostics";
 import { copyToClipboard } from "./shared/clipboard";
-import { formatDiagnosticReport } from "./diagnosticFormatting";
-import { buildDiagnosticReportViewModel } from "./diagnosticFormatting";
-import { formatDiagnosticReportHtml } from "./diagnosticHtml";
+import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
+import { renderDiagnosticHtmlDocument } from "./diagnosticHtml";
 import { downloadDiagnosticHtml } from "./diagnosticDownload";
 import { renderReadableDiagnosticReport } from "./diagnosticReadable";
 
@@ -34,9 +33,10 @@ class DiagnosticReportModal extends Modal {
   }
 
   onOpen(): void {
-    const report = formatDiagnosticReport(this.diagnostics);
-    const viewModel = buildDiagnosticReportViewModel(this.diagnostics);
-    const readableHtml = formatDiagnosticReportHtml(this.diagnostics);
+    // Readable view, raw view, and the downloadable HTML all come from the
+    // same v3 report — one report, three hosts.
+    const report = buildDiagnosticReportV3(this.diagnostics);
+    const rawJson = JSON.stringify(report, null, 2);
     this.modalEl.addClass("ixplorer-chat__diagnostic-modal");
     this.setTitle("Diagnostic report");
     this.contentEl.empty();
@@ -65,7 +65,7 @@ class DiagnosticReportModal extends Modal {
     });
     setIcon(copyButton, "copy");
     copyButton.addEventListener("click", () => {
-      void copyToClipboard(report);
+      void copyToClipboard(rawJson);
     });
     const downloadButton = toolbar.createEl("button", {
       attr: {
@@ -76,7 +76,7 @@ class DiagnosticReportModal extends Modal {
     });
     setIcon(downloadButton, "download");
     downloadButton.addEventListener("click", () => {
-      downloadDiagnosticHtml(readableHtml, viewModel.identity.runId);
+      downloadDiagnosticHtml(renderDiagnosticHtmlDocument(report), report.stats.runId || undefined);
     });
 
     const closeButton = this.modalEl.querySelector(".modal-close-button");
@@ -87,10 +87,10 @@ class DiagnosticReportModal extends Modal {
     const readablePanel = this.contentEl.createDiv({
       cls: "ixplorer-chat__diagnostic-readable",
     });
-    renderReadableDiagnosticReport(readablePanel, viewModel);
+    renderReadableDiagnosticReport(readablePanel, report);
     const rawPanel = this.contentEl.createEl("pre", {
       cls: "ixplorer-chat__diagnostic-modal-report",
-      text: report,
+      text: rawJson,
     });
     rawPanel.hidden = true;
     let readableScrollTop = 0;

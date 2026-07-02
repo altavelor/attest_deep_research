@@ -262,6 +262,38 @@ export interface ReasoningSegmentAttribution {
   chars: number;
 }
 
+/**
+ * One message appended to the model prompt since the previous round's request.
+ * Tool results carry only `toolCallId` + `chars` — their content is already
+ * captured (and redacted where needed) in the round's ToolCallDiagnostic.
+ */
+export interface PromptDeltaMessageDiagnostic {
+  role: string;
+  chars: number;
+  /** Full text for system/user/assistant messages, capped; absent for tool results. */
+  content?: string;
+  /** Characters cut from `content` by the per-message cap. */
+  truncatedChars?: number;
+  toolCallId?: string;
+  /** Names of tool calls the assistant emitted in this message. */
+  toolCallNames?: string[];
+}
+
+/**
+ * Incremental prompt log for one agentic round: only what was added to the
+ * request since the previous round (round 1 carries the full initial prompt),
+ * so the report explains model behaviour without duplicating the whole context
+ * every round.
+ */
+export interface RoundPromptDeltaDiagnostic {
+  round: number;
+  /** Serialized toolChoice sent with this round's request. */
+  toolChoice: string;
+  /** True when the round rode provider-side continuation state (tool outputs, not messages). */
+  viaContinuation?: boolean;
+  messages: PromptDeltaMessageDiagnostic[];
+}
+
 export interface AgenticAttemptDiagnostics {
   policyReason: string;
   requiredTools: string[];
@@ -276,6 +308,7 @@ export interface AgenticAttemptDiagnostics {
   capabilityProvenance?: Record<string, string>;
   unknownCitationIds?: string[];
   phases?: string[];
+  promptDeltas?: RoundPromptDeltaDiagnostic[];
   reasoningSegments?: ReasoningSegmentAttribution[];
   stopReasons?: string[];
   budgets?: {
