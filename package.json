@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
+    "styles": "node scripts/build-styles.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "test": "vitest run",
     "lint": "tsc --noEmit",

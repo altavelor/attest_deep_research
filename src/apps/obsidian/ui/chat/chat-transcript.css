@@ -1,0 +1,94 @@
+.ixplorer-chat__message {
+  position: relative;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.ixplorer-chat__message--assistant {
+  margin: 0.375rem 0;
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.ixplorer-chat__message-header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ixplorer-chat__message-label {
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.ixplorer-chat__message-time {
+  color: var(--text-faint);
+  font-size: var(--font-ui-small);
+}
+
+.ixplorer-chat__message-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ixplorer-chat__answer-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: -1.3rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.ixplorer-chat__answer-content {
+  position: relative;
+}
+
+.ixplorer-chat__answer-status-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-green, #2ea043);
+  box-shadow: 0 0 0 3px var(--background-secondary);
+}
+
+.ixplorer-chat__answer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+.ixplorer-chat__message-copy,
+.ixplorer-chat__message-edit,
+.ixplorer-chat__message-save-answer,
+.ixplorer-chat__message-append-answer,
+.ixplorer-chat__message-diagnostic {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.ixplorer-chat__message:focus-within .ixplorer-chat__message-actions,
+.ixplorer-chat__message:hover .ixplorer-chat__message-actions {
+  opacity: 1;
+}
+
+.ixplorer-chat__answer-content:focus-within .ixplorer-chat__answer-actions,
+.ixplorer-chat__answer-content:hover .ixplorer-chat__answer-actions {
+  opacity: 1;
+}

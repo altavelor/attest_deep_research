@@ -4,6 +4,7 @@ import { copyFile, mkdir } from "fs/promises";
 import { homedir } from "os";
 import { join, resolve } from "path";
 import process from "process";
+import { buildStyles } from "./scripts/build-styles.mjs";
 
 // Path aliases mirror tsconfig.json "paths" and vitest.config.ts so the same
 // import specifiers resolve identically under tsc, the bundle, and tests.
@@ -32,7 +33,7 @@ async function copyPluginAssets() {
   await mkdir(pluginOutputDir, { recursive: true });
   await Promise.all([
     copyFile("manifest.json", join(pluginOutputDir, "manifest.json")),
-    copyFile("styles.css", join(pluginOutputDir, "styles.css")),
+    buildStyles(join(pluginOutputDir, "styles.css")),
   ]);
 }
 

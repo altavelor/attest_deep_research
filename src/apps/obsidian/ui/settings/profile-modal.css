@@ -1,0 +1,67 @@
+.ixplorer-profile-modal .setting-item {
+  align-items: flex-start;
+}
+
+.ixplorer-profile-modal .setting-item-control {
+  position: relative;
+  min-width: 0;
+}
+
+.ixplorer-profile-modal input,
+.ixplorer-profile-modal select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ixplorer-profile-modal__model-input {
+  width: min(28rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ixplorer-profile-modal__model-menu {
+  position: absolute;
+  z-index: var(--layer-popover, 1000);
+  top: calc(100% + 0.25rem);
+  left: 0;
+  width: min(28rem, 100%);
+  max-height: 14rem;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.ixplorer-profile-modal__model-menu.is-hidden {
+  display: none;
+}
+
+.ixplorer-profile-modal__model-option {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ixplorer-profile-modal__model-option:hover,
+.ixplorer-profile-modal__model-option:focus {
+  background: var(--background-modifier-hover);
+}
+
+.ixplorer-profile-modal__model-empty {
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.ixplorer-profile-modal__actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--background-modifier-border);
+}
