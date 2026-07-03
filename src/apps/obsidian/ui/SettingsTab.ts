@@ -16,8 +16,8 @@ import { IndexRunModal } from "./settings/IndexRunModal";
 import { IndexReportModal } from "./settings/IndexReportModal";
 import { IndexProfileModal } from "./settings/IndexProfileModal";
 import {
-  resolveEnrichmentColumnStatus,
-  resolveIndexColumnStatus,
+  resolveIndexProfileColumnStatus,
+  resolveIndexStatusBadge,
 } from "./settings/indexProfileStatus";
 import type { EnrichmentPendingAction, IndexPendingAction } from "./settings/indexProfileStatus";
 import { ServerProfileModal } from "./settings/ServerProfileModal";
@@ -557,18 +557,21 @@ export class IxplorerSettingTab extends PluginSettingTab {
       nameEl.createDiv({ cls: "ixplorer-settings-index-list__title", text: profile.name });
       const pathCount =
         profile.mode === "wholeVault" ? profile.excludeGlobs.length : profile.includeFolders.length;
-      const columnStatus =
-        resolveIndexColumnStatus({ state, pendingAction: pendingIndexAction }) ??
-        resolveEnrichmentColumnStatus({ state: enrichment, pendingAction: pendingEnrichmentAction });
+      const columnStatus = resolveIndexProfileColumnStatus({
+        indexing: state,
+        enrichment,
+        pendingIndexAction,
+        pendingEnrichmentAction,
+      });
       const metaClass = columnStatus
         ? [
-          "ixplorer-settings-index-list__meta",
-          "ixplorer-settings-index-list__status",
-          columnStatus.kind,
-          columnStatus.animated ? "is-animated" : "",
-        ]
-          .filter(Boolean)
-          .join(" ")
+            "ixplorer-settings-index-list__meta",
+            "ixplorer-settings-index-list__status",
+            columnStatus.kind,
+            columnStatus.animated ? "is-animated" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
         : "ixplorer-settings-index-list__meta";
       nameEl.createDiv({
         cls: metaClass,
@@ -587,37 +590,17 @@ export class IxplorerSettingTab extends PluginSettingTab {
       }
       row.createDiv({
         cls: "ixplorer-settings-index-list__size",
-        text: `${formatIndexSize(state.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${state.indexedFiles + state.skippedFiles || profile.indexedFileCount || 0
-          } files`,
+        text: `${formatIndexSize(state.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${
+          state.indexedFiles + state.skippedFiles || profile.indexedFileCount || 0
+        } files`,
       });
-      const metadataStale =
-        Boolean(profile.lastEnrichedAt) &&
-        Boolean(profile.lastIndexedAt) &&
-        profile.lastIndexedAt! > profile.lastEnrichedAt!;
-      const status = profile.isSuspended
-        ? statusForProfile(profile)
-        : state.status === "error"
-          ? {
-            kind: "is-suspended",
-            label: "Error",
-            title: state.errorMessage ?? "Indexing failed",
-          }
-          : state.isStale || state.status === "stale"
-            ? {
-              kind: "is-suspended",
-              label: "Stale index",
-              title: "The index profile changed — run Update to refresh the index.",
-            }
-            : metadataStale
-              ? {
-                kind: "is-suspended",
-                label: "Stale metadata",
-                title:
-                  "The index changed after the last metadata extraction — run Update with the metadata section enabled.",
-              }
-              : isDefault
-                ? { kind: "is-default", label: "Default", title: "Default index" }
-                : null;
+      const status = resolveIndexStatusBadge({
+        isDefault,
+        profile,
+        indexing: state,
+        enrichment,
+        pendingEnrichmentAction,
+      });
       if (status) {
         row.createSpan({
           cls: `ixplorer-settings-profile-list__status ${status.kind}`,
