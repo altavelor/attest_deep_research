@@ -47,3 +47,31 @@
       сохранены); скоринг BM25F-lite: `tf_eff = frequency + (W−1)×headingFrequency`,
       `HEADING_WEIGHT = 3`; v1-файлы читаются без изменений (headingFrequency → 0).
       Буст работает после пересборки индекса
+
+## Фаза 3 — Enrichment: метаданные + библиография (R3) — DONE
+- [x] **3.1** Порты `application/ports/documentMetadata.ts`: `SourceDocumentMetadata`
+      (title/authors/year/abstract/references + provenance), `DocumentMetadataStore`,
+      `DocumentMetadataExtractor`, `SharedReference`; `IndexSourceInventoryItem`
+      получил опциональный `contentHash` (инкрементальность)
+- [x] **3.2** Use-case `EnrichIndexSources` (`application/use-cases/enrichment/`):
+      обход источников курсором, скип по `contentHash`, сэмплы head/references
+      (секция по outline-заголовку `references|bibliography|литератур…`, иначе хвост),
+      прогресс + AbortSignal
+- [x] **3.3** Библиография `bibliography.ts` (чистая): нормализация ссылок
+      (DOI-регэксп; title-key — первые 12 слов без пунктуации + год),
+      `sharedReferences(minSources)` c ключом doi > title:year
+- [x] **3.4** Адаптеры `adapters/indexing/metadata/`: `FileDocumentMetadataStore`
+      (`<index>/metadata/<sha256(path)>.json`), `LlmDocumentMetadataExtractor`
+      (не-стриминговый chat-вызов, строгий JSON-промпт v1, толерантный парсер)
+- [x] **3.5** Тулы `get_source_metadata`, `list_shared_references`
+      (defineInventoryTool, capability-gated) + методы в `RetrievalService`
+      и `ResearchRetriever`; `read_index_chunk`/`read_index_section`
+      добавлены в `PROMPT_TOOL_NAMES` (drift-guard)
+- [x] **3.6** Composition: `createDocumentMetadataStoreForProfile`,
+      `createEnrichmentService` (активный chat-профиль); команда Obsidian
+      «Enrich index metadata (bibliography)» с Notice-прогрессом.
+      *Решение:* обогащение запускается только явно (команда), не как
+      side-effect индексации — траты LLM-токенов видимы пользователю.
+      Sidecar-файлы читаются тулами сразу после прогона
+- Отложено в Ф4+: саммари, `<index-description>` v2, UI-статус enrichment
+  в настройках, фильтры year/author в search_index

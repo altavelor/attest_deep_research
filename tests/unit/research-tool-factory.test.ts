@@ -36,6 +36,8 @@ describe("createResearchToolRegistry", () => {
       "summarize_index_source",
       "get_index_source_outline",
       "search_index_by_metadata",
+      "get_source_metadata",
+      "list_shared_references",
       "list_index_urls",
       "check_urls",
       "search_web",
@@ -86,6 +88,8 @@ describe("createResearchToolRegistry", () => {
       "summarize_index_source",
       "get_index_source_outline",
       "search_index_by_metadata",
+      "get_source_metadata",
+      "list_shared_references",
       "list_index_urls",
       "check_urls",
     ]);

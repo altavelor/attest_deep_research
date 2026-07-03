@@ -21,7 +21,7 @@ import { toUserMessage } from "@core/errors";
 import { WebSourceHealthTracker } from "@application/web";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
-import { CompositionContext, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
+import { CompositionContext, createEnrichmentService, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
 import { requireIndexProfile, resolveIndexProfileForUse } from "./composition/profileResolvers";
 
 export default class IxplorerPlugin extends Plugin {
@@ -29,6 +29,7 @@ export default class IxplorerPlugin extends Plugin {
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
+  private enrichmentRunning = false;
   readonly indexing = new IndexingProfileController({
     getProfile: (profileId) =>
       this.settings.indexProfiles.find((profile) => profile.id === profileId),
@@ -153,6 +154,14 @@ export default class IxplorerPlugin extends Plugin {
         void this.activateChatView();
       },
     });
+    this.addCommand({
+      id: "enrich-index-metadata",
+      name: "Enrich index metadata (bibliography)",
+      icon: "book-open",
+      callback: () => {
+        void this.runIndexEnrichment();
+      },
+    });
     this.addSettingTab(new IxplorerSettingTab(this.app, this));
   }
 
@@ -172,6 +181,41 @@ export default class IxplorerPlugin extends Plugin {
 
   markIndexStale(profileId = this.settings.activeIndexProfileId): void {
     this.indexing.markStale(profileId);
+  }
+
+  /**
+   * Explicit, user-triggered enrichment run (SPEC-corpus-knowledge R3): spends
+   * chat-model tokens per document, so it is a command, not an indexing side
+   * effect. Incremental by contentHash — re-runs are cheap.
+   */
+  private async runIndexEnrichment(): Promise<void> {
+    if (this.enrichmentRunning) {
+      new Notice("Ixplorer: enrichment is already running.");
+      return;
+    }
+    this.enrichmentRunning = true;
+    const progressNotice = new Notice("Ixplorer: enriching index metadata…", 0);
+    try {
+      const profile = resolveIndexProfileForUse(this.settings);
+      const enrichment = createEnrichmentService(this.composition, profile.id);
+      const result = await enrichment.run({
+        onProgress: (progress) => {
+          progressNotice.setMessage(
+            `Ixplorer: enriching ${progress.processed}/${progress.total} — ${progress.sourcePath}`,
+          );
+        },
+      });
+      new Notice(
+        `Ixplorer: enrichment done — ${result.extracted} extracted, ${result.skipped} up to date` +
+          (result.failed > 0 ? `, ${result.failed} failed` : "") +
+          ".",
+      );
+    } catch (error) {
+      new Notice(toUserMessage(error));
+    } finally {
+      this.enrichmentRunning = false;
+      progressNotice.hide();
+    }
   }
 
   async loadIndexReport(profileId: string): Promise<IndexSourceReportItem[]> {

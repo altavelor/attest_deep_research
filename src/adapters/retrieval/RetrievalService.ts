@@ -4,6 +4,8 @@ import {
   LanguageInventoryIndexStore,
 } from "@application/ports";
 import {
+  DocumentMetadataStore,
+  SharedReference,
   FindInIndexOptions,
   IndexChunkListOptions,
   IndexChunkReadOptions,
@@ -13,6 +15,7 @@ import {
   IndexSourceInventoryOptions,
   KeywordSearchIndexStore,
 } from "@application/ports";
+import { sharedReferences } from "@application/use-cases/enrichment";
 import { RetrievalOptions } from "@core/retrieval";
 import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
@@ -42,6 +45,8 @@ export interface RetrievalServiceOptions {
   chunkInventory?: IndexChunkInventoryStore;
   languageInventory?: LanguageInventoryIndexStore;
   inventory?: IndexInventoryStore;
+  /** Enrichment sidecars (R3); absent capability degrades to "unsupported". */
+  documentMetadata?: DocumentMetadataStore;
 }
 
 export class RetrievalService {
@@ -52,6 +57,7 @@ export class RetrievalService {
   private readonly chunkInventory?: IndexChunkInventoryStore;
   private readonly languageInventory?: LanguageInventoryIndexStore;
   private readonly inventory?: IndexInventoryStore;
+  private readonly documentMetadata?: DocumentMetadataStore;
 
   constructor(options: RetrievalServiceOptions) {
     this.embeddings = options.embeddings;
@@ -61,6 +67,7 @@ export class RetrievalService {
     this.chunkInventory = options.chunkInventory;
     this.languageInventory = options.languageInventory;
     this.inventory = options.inventory;
+    this.documentMetadata = options.documentMetadata;
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
@@ -150,6 +157,17 @@ export class RetrievalService {
 
   async readIndexSection(options: IndexSectionReadOptions) {
     return this.inventory?.readIndexSection(options) ?? null;
+  }
+
+  async getSourceMetadata(sourcePath: string) {
+    return this.documentMetadata?.read(sourcePath) ?? null;
+  }
+
+  async listSharedReferences(options: { minSources: number }): Promise<SharedReference[]> {
+    if (!this.documentMetadata) {
+      return [];
+    }
+    return sharedReferences(await this.documentMetadata.list(), options.minSources);
   }
 
   async findInIndex(options: FindInIndexOptions) {

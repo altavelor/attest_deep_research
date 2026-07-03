@@ -11,6 +11,8 @@ import { Tool } from "@core/agent";
 import {
   FIND_IN_INDEX_TOOL,
   GET_INDEX_SOURCE_OUTLINE_TOOL,
+  GET_SOURCE_METADATA_TOOL,
+  LIST_SHARED_REFERENCES_TOOL,
   LIST_INDEX_CHUNKS_TOOL,
   LIST_INDEX_SOURCES_TOOL,
   READ_INDEX_CHUNK_TOOL,
@@ -204,6 +206,42 @@ export const SearchIndexByMetadataTool = defineInventoryTool<IndexMetadataSearch
   wrap: (result, input) => pageOrCount(result, input),
 });
 
+export const GetSourceMetadataTool = defineInventoryTool<{ sourcePath: string }>({
+  name: GET_SOURCE_METADATA_TOOL,
+  description:
+    "Return extracted bibliographic metadata for one indexed source: title, authors, year, abstract, and its list of references. Available only after index enrichment has run.",
+  schema: {
+    sourcePath: str(MAX_PATH_CHARS, { required: true }),
+  },
+  capability: "getSourceMetadata",
+  errorCode: "source-metadata-failed",
+  errorMessage: "Source metadata lookup failed.",
+  run: (retriever, input) => retriever.getSourceMetadata!(input.sourcePath),
+  wrap: (metadata) => ({ metadata, diagnostics: diagnostics(metadata ? 1 : 0, 1) }),
+});
+
+const DEFAULT_MIN_SHARED_SOURCES = 2;
+const MAX_MIN_SHARED_SOURCES = 50;
+
+export const ListSharedReferencesTool = defineInventoryTool<{ minSources: number }>({
+  name: LIST_SHARED_REFERENCES_TOOL,
+  description:
+    "List works cited by several indexed documents (shared bibliography). Use to find common sources across articles. Available only after index enrichment has run.",
+  schema: {
+    minSources: int(2, MAX_MIN_SHARED_SOURCES, DEFAULT_MIN_SHARED_SOURCES, {
+      description: "Minimum number of citing documents.",
+    }),
+  },
+  capability: "listSharedReferences",
+  errorCode: "shared-references-failed",
+  errorMessage: "Shared references lookup failed.",
+  run: (retriever, input) => retriever.listSharedReferences!(input),
+  wrap: (result, input) => {
+    const items = result as unknown[];
+    return { items, diagnostics: diagnostics(items.length, input.minSources) };
+  },
+});
+
 /** Page result, or — when the caller asked for `countOnly` — just the total match count. */
 function pageOrCount(
   result: unknown,
@@ -229,4 +267,6 @@ export const INDEX_INVENTORY_TOOLS: ReadonlyArray<
   SummarizeIndexSourceTool,
   GetIndexSourceOutlineTool,
   SearchIndexByMetadataTool,
+  GetSourceMetadataTool,
+  ListSharedReferencesTool,
 ];
