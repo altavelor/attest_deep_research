@@ -52,6 +52,25 @@ describe("LightweightKeywordIndex", () => {
     expect(matches[0].chunkId).toBe("chunk-riquet");
   });
 
+  it("boosts chunks whose section heading matches the query term", () => {
+    const rows = buildKeywordPostingRows(
+      [
+        chunkWithHeading("chunk-heading", "Once upon a time there was a Queen", [
+          "Riquet with the Tuft",
+        ]),
+        chunk("chunk-body", "Riquet spoke about the Queen and the palace once more"),
+      ],
+      3,
+    );
+
+    // Постинг заголовочного вхождения несёт headingFrequency.
+    const riquetRow = rows.find((row) => row.term === "riquet");
+    expect(riquetRow?.postings.find((p) => p.chunkId === "chunk-heading")?.headingFrequency).toBe(1);
+
+    const matches = rankKeywordPostings("riquet", rows, 3, 2);
+    expect(matches[0].chunkId).toBe("chunk-heading");
+  });
+
   it("returns no matches for empty or too-short queries", () => {
     const rows = buildKeywordPostingRows([chunk("chunk-a", "local model")], 3);
 
@@ -61,6 +80,10 @@ describe("LightweightKeywordIndex", () => {
 });
 
 function chunk(id: string, text: string): FileVectorChunkRow {
+  return chunkWithHeading(id, text, []);
+}
+
+function chunkWithHeading(id: string, text: string, headingPath: string[]): FileVectorChunkRow {
   return {
     id,
     source: {
@@ -68,7 +91,7 @@ function chunk(id: string, text: string): FileVectorChunkRow {
       kind: "markdown",
       title: `${id}.md`,
       path: `${id}.md`,
-      headingPath: [],
+      headingPath,
     },
     sourcePath: `${id}.md`,
     text,

@@ -12,6 +12,7 @@ export const INDEX_SEARCH_TOOL = "search_index";
 export const LIST_INDEX_SOURCES_TOOL = "list_index_sources";
 export const LIST_INDEX_CHUNKS_TOOL = "list_index_chunks";
 export const READ_INDEX_CHUNK_TOOL = "read_index_chunk";
+export const READ_INDEX_SECTION_TOOL = "read_index_section";
 export const FIND_IN_INDEX_TOOL = "find_in_index";
 export const SUMMARIZE_INDEX_SOURCE_TOOL = "summarize_index_source";
 export const GET_INDEX_SOURCE_OUTLINE_TOOL = "get_index_source_outline";

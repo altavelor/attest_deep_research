@@ -4,6 +4,7 @@ import {
   IndexChunkReadOptions,
   IndexInventoryStore,
   IndexMetadataSearchOptions,
+  IndexSectionReadOptions,
   IndexSourceInventoryOptions,
 } from "@application/ports";
 import {
@@ -12,6 +13,7 @@ import {
   listFileVectorIndexChunks,
   listFileVectorIndexSources,
   readFileVectorIndexChunk,
+  readFileVectorIndexSection,
   searchFileVectorIndexByMetadata,
   summarizeFileVectorIndexSource,
 } from "./FileVectorIndexInventory";
@@ -42,6 +44,10 @@ export class FileVectorInventoryStore implements IndexInventoryStore {
     return this.state.withState({ chunks: [] }, (state) =>
       readFileVectorIndexChunk(state, options),
     );
+  }
+
+  readIndexSection(options: IndexSectionReadOptions) {
+    return this.state.withState(null, (state) => readFileVectorIndexSection(state, options));
   }
 
   findInIndex(options: FindInIndexOptions) {

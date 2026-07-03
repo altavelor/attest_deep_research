@@ -12,6 +12,8 @@ import {
   IndexChunkListOptions,
   IndexChunkReadOptions,
   IndexChunkReadResult,
+  IndexSectionReadOptions,
+  IndexSectionReadResult,
   IndexCursorPage,
   IndexMetadataSearchOptions,
   IndexSourceInventoryItem,
@@ -71,6 +73,7 @@ export interface ResearchRetriever {
   ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
   listIndexChunks?(options: IndexChunkListOptions): Promise<IndexCursorPage<IndexChunkListItem>>;
   readIndexChunk?(options: IndexChunkReadOptions): Promise<IndexChunkReadResult>;
+  readIndexSection?(options: IndexSectionReadOptions): Promise<IndexSectionReadResult | null>;
   findInIndex?(options: FindInIndexOptions): Promise<IndexCursorPage<FindInIndexMatch>>;
   summarizeIndexSource?(sourcePath: string, maxSections: number): Promise<IndexSourceSummary | null>;
   getIndexSourceOutline?(sourcePath: string): Promise<IndexSourceOutline | null>;
