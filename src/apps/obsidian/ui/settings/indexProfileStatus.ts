@@ -7,8 +7,89 @@ export interface IndexColumnStatus {
   animated?: boolean;
 }
 
+export interface IndexStatusBadge {
+  kind: "is-default" | "is-suspended";
+  label: string;
+  title: string;
+}
+
 export type IndexPendingAction = "pausing";
 export type EnrichmentPendingAction = "stopping";
+
+export function resolveIndexProfileColumnStatus(options: {
+  indexing: IndexingState;
+  enrichment: EnrichmentProfileState;
+  pendingIndexAction?: IndexPendingAction;
+  pendingEnrichmentAction?: EnrichmentPendingAction;
+}): IndexColumnStatus | null {
+  return (
+    resolveEnrichmentColumnStatus({
+      state: options.enrichment,
+      pendingAction: options.pendingEnrichmentAction,
+    }) ??
+    resolveIndexColumnStatus({
+      state: options.indexing,
+      pendingAction: options.pendingIndexAction,
+    })
+  );
+}
+
+export function resolveIndexStatusBadge(options: {
+  isDefault: boolean;
+  profile: {
+    isSuspended?: boolean;
+    suspendedReason?: string;
+    lastIndexedAt?: string;
+    lastEnrichedAt?: string;
+  };
+  indexing: Pick<IndexingState, "status" | "isStale" | "errorMessage">;
+  enrichment: Pick<EnrichmentProfileState, "status">;
+  pendingEnrichmentAction?: EnrichmentPendingAction;
+}): IndexStatusBadge | null {
+  const { profile, indexing, enrichment, pendingEnrichmentAction } = options;
+  if (profile.isSuspended) {
+    return {
+      kind: "is-suspended",
+      label: "Suspended",
+      title: profile.suspendedReason ?? "Suspended",
+    };
+  }
+
+  if (indexing.status === "error") {
+    return {
+      kind: "is-suspended",
+      label: "Error",
+      title: indexing.errorMessage ?? "Indexing failed",
+    };
+  }
+
+  if (indexing.isStale || indexing.status === "stale") {
+    return {
+      kind: "is-suspended",
+      label: "Stale index",
+      title: "The index profile changed — run Update to refresh the index.",
+    };
+  }
+
+  const metadataStale =
+    Boolean(profile.lastEnrichedAt) &&
+    Boolean(profile.lastIndexedAt) &&
+    profile.lastIndexedAt! > profile.lastEnrichedAt!;
+  const metadataUpdating =
+    enrichment.status === "running" || pendingEnrichmentAction === "stopping";
+  if (metadataStale && !metadataUpdating) {
+    return {
+      kind: "is-suspended",
+      label: "Stale metadata",
+      title:
+        "The index changed after the last metadata extraction — run Update with the metadata section enabled.",
+    };
+  }
+
+  return options.isDefault
+    ? { kind: "is-default", label: "Default", title: "Default index" }
+    : null;
+}
 
 export function resolveIndexColumnStatus(options: {
   state: IndexingState;

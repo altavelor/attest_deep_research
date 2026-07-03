@@ -1,6 +1,8 @@
 import {
   resolveEnrichmentColumnStatus,
   resolveIndexColumnStatus,
+  resolveIndexProfileColumnStatus,
+  resolveIndexStatusBadge,
 } from "@apps/obsidian/ui/settings/indexProfileStatus";
 import type { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
 
@@ -59,6 +61,63 @@ describe("index profile status in the Index column", () => {
       label: "Finished",
       tooltip:
         "Finished\nFiles: 4/4 scanned · 2 indexed · 1 skipped · 1 deferred · 0 failed\nChunks embedded: 42",
+    });
+  });
+
+  it("prioritizes active enrichment over a completed indexing badge", () => {
+    expect(
+      resolveIndexProfileColumnStatus({
+        indexing: indexingState({
+          status: "idle",
+          phase: "complete",
+          scannedFiles: 4,
+          totalFiles: 4,
+          indexedFiles: 2,
+          skippedFiles: 2,
+          embeddedChunks: 12,
+          lastIndexedAt: "2026-07-03T10:20:30.000Z",
+        }),
+        enrichment: enrichmentState({
+          status: "running",
+          processed: 1,
+          total: 4,
+          currentSourcePath: "Books/Fairy tail.md",
+          phase: "metadata",
+        }),
+      }),
+    ).toEqual({
+      kind: "is-enriching",
+      label: "Enriching",
+      tooltip: "Enriching metadata · 1/4 · Fairy tail.md\nextracting metadata",
+      animated: true,
+    });
+  });
+
+  it("does not show stale metadata while metadata enrichment is running", () => {
+    const profile = {
+      lastIndexedAt: "2026-07-03T10:20:30.000Z",
+      lastEnrichedAt: "2026-07-03T09:00:00.000Z",
+    };
+
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: false,
+        profile,
+        indexing: indexingState(),
+        enrichment: enrichmentState({ status: "running", phase: "sections" }),
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: false,
+        profile,
+        indexing: indexingState(),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({
+      kind: "is-suspended",
+      label: "Stale metadata",
     });
   });
 
