@@ -13,7 +13,11 @@ import {
   SourceDocumentMetadata,
 } from "@application/ports";
 import { ResearchRetriever } from "@application/contracts";
-import { FileDocumentMetadataStore, parseExtractedMetadata } from "@adapters/indexing";
+import {
+  EnrichmentProfileController,
+  FileDocumentMetadataStore,
+  parseExtractedMetadata,
+} from "@adapters/indexing";
 
 describe("bibliography normalization", () => {
   it("extracts DOI, year, and a title key from a raw reference", () => {
@@ -121,6 +125,40 @@ describe("EnrichIndexSources", () => {
     } finally {
       rmSync(folder, { recursive: true, force: true });
     }
+  });
+});
+
+describe("EnrichmentProfileController", () => {
+  it("runs onComplete before notifying subscribers about the done state", async () => {
+    const events: string[] = [];
+    const controller = new EnrichmentProfileController({
+      createService: () =>
+        new EnrichIndexSources({
+          retriever: fakeRetriever(["a.pdf"]),
+          metadataStore: {
+            read: async () => null,
+            write: async () => {},
+            list: async () => [],
+          },
+          extractor: {
+            model: "t",
+            promptVersion: 1,
+            extract: async () => ({ references: [] }),
+          },
+        }),
+      onComplete: async () => {
+        events.push("complete");
+      },
+    });
+    controller.subscribeAll(() => {
+      if (controller.getState("p").status === "done") {
+        events.push(`done-notified`);
+      }
+    });
+
+    await controller.start("p", "chat-model");
+
+    expect(events).toEqual(["complete", "done-notified"]);
   });
 });
 

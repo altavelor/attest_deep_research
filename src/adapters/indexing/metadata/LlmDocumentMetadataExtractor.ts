@@ -10,7 +10,7 @@ import {
   ExtractedDocumentMetadata,
 } from "@application/ports";
 
-export const EXTRACTION_PROMPT_VERSION = 1;
+export const EXTRACTION_PROMPT_VERSION = 2;
 const MAX_REFERENCES = 200;
 
 export interface LlmDocumentMetadataExtractorOptions {
@@ -57,7 +57,9 @@ Rules:
 - abstract: at most 3 sentences; null if the document has none.
 - references: bibliography entries cited BY this document, one string per entry, verbatim.
   Only include entries that look like citations of other works. Empty array if none.
-- Never invent data. Use null / [] when the excerpts do not contain it.`;
+- Ground every value in the excerpts. Even if you recognize the work, do NOT fill in
+  facts (year, authors, publisher) from your own knowledge — if the excerpts do not
+  state it, use null / [].`;
 
 export function parseExtractedMetadata(text: string): ExtractedDocumentMetadata {
   const parsed = extractJsonObject(text);

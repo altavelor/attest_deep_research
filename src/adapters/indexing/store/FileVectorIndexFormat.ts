@@ -25,6 +25,8 @@ export interface IndexProfile {
   isSuspended?: boolean;
   suspendedReason?: string;
   lastIndexedAt?: string;
+  /** Completion time of the last metadata enrichment run (SPEC-corpus R3). */
+  lastEnrichedAt?: string;
   indexedFileCount?: number;
   indexSizeBytes?: number;
   sourceKinds?: Array<SourceReference["kind"]>;

@@ -290,10 +290,11 @@ export function createDocumentMetadataStoreForProfile(
 export function createEnrichmentService(
   ctx: CompositionContext,
   indexProfileId: string,
+  chatModelProfileId?: string,
 ): EnrichIndexSources {
   const settings = ctx.getSettings();
   const indexProfile = requireIndexProfile(settings, indexProfileId);
-  const chatProfile = requireChatModelProfile(settings);
+  const chatProfile = requireChatModelProfile(settings, chatModelProfileId);
   const server = requireServerProfile(settings, chatProfile.serverProfileId);
 
   return new EnrichIndexSources({

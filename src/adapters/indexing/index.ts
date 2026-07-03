@@ -15,6 +15,7 @@
 
 export * from "./IndexingService";
 
+export * from "./controller/EnrichmentProfileController";
 export * from "./controller/IndexingController";
 export * from "./controller/IndexingProfileController";
 
