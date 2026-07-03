@@ -10,22 +10,15 @@ Local-first agentic research assistant for Obsidian desktop. Ixplorer indexes se
    npm install
    ```
 
-2. Build the plugin:
+2. Build the plugin into a development Obsidian vault:
 
    ```bash
-   npm run build
+   IXPLORER_OUTPUT_DIR="<vault>/.obsidian/plugins/ixplorer" npm run build
    ```
 
-3. Create a development plugin folder in a desktop Obsidian vault:
+3. Enable `Ixplorer` from Obsidian Settings → Community plugins.
 
-   ```bash
-   mkdir -p "<vault>/.obsidian/plugins/ixplorer"
-   cp main.js manifest.json styles.css "<vault>/.obsidian/plugins/ixplorer/"
-   ```
-
-4. Enable `Ixplorer` from Obsidian Settings → Community plugins.
-
-5. Open Settings → Ixplorer and configure server profiles and model profiles.
+4. Open Settings → Ixplorer and configure server profiles and model profiles.
 
 ## Commands
 
@@ -33,9 +26,12 @@ Local-first agentic research assistant for Obsidian desktop. Ixplorer indexes se
 | ---------------- | ------------------------------------------- |
 | `npm run dev`    | Build in watch mode.                        |
 | `npm run build`  | Type-check and create production `main.js`. |
+| `npm run styles` | Build `release/ixplorer-dev/styles.css` from colocated CSS files. |
 | `npm test`       | Run the Vitest suite.                       |
 | `npm run lint`   | Run TypeScript with `--noEmit`.             |
 | `npm run format` | Check Prettier formatting.                  |
+
+Styles are colocated next to their UI owners under `src/apps/obsidian/ui/`. `src/apps/obsidian/styles.json` defines the artifact order. The Obsidian-facing `styles.css` is generated only in the plugin output directory during `npm run dev` / `npm run build`.
 
 ## Settings
 

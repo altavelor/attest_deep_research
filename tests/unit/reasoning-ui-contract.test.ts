@@ -1,9 +1,10 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { readStyles } from "../helpers/readStyles";
 
 describe("reasoning transcript UI", () => {
   const transcript = readFileSync(resolve("src/apps/obsidian/ui/chat/ChatTranscript.ts"), "utf8");
-  const styles = readFileSync(resolve("styles.css"), "utf8");
+  const styles = readStyles();
 
   it("renders reasoning, tools, and the answer as one unified workflow", () => {
     expect(transcript).toContain("renderWorkflowNodes");

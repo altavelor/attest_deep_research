@@ -1,0 +1,96 @@
+.ixplorer-context-picker {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ixplorer-context-picker__search {
+  width: 100%;
+}
+
+.ixplorer-context-picker__list {
+  display: grid;
+  max-height: 20rem;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.ixplorer-context-picker__row {
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--picker-depth, 0) * 1.1rem);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ixplorer-context-picker__row:last-child {
+  border-bottom: 0;
+}
+
+.ixplorer-context-picker__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ixplorer-context-picker__toggle-spacer {
+  width: 1.5rem;
+  flex-shrink: 0;
+}
+
+.ixplorer-context-picker__item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.5rem 0.375rem 0;
+  font-size: var(--font-ui-small);
+}
+
+.ixplorer-context-picker__item--folder {
+  font-weight: 500;
+}
+
+.ixplorer-context-picker__icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.ixplorer-context-picker__icon svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.ixplorer-context-picker__count {
+  margin-left: auto;
+  padding-right: 0.5rem;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.ixplorer-context-picker__item input[type="checkbox"]:disabled {
+  opacity: 0.5;
+}
+
+.ixplorer-context-picker__item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ixplorer-context-picker__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

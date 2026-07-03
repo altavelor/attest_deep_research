@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
+import { readStyles } from "../helpers/readStyles";
 
-const styles = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+const styles = readStyles();
 
 describe("diagnostic report modal styles", () => {
   it("keeps the app-level modal resizable in both dimensions", () => {
