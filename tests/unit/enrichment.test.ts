@@ -16,6 +16,7 @@ import { ResearchRetriever } from "@application/contracts";
 import {
   EnrichmentProfileController,
   FileDocumentMetadataStore,
+  FileDocumentSummaryStore,
   parseExtractedMetadata,
 } from "@adapters/indexing";
 
@@ -127,6 +128,86 @@ describe("EnrichIndexSources", () => {
     }
   });
 });
+
+describe("EnrichIndexSources summaries (Ф4)", () => {
+  it("summarizes outline sections and reduces them into a document summary", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summaries-"));
+    try {
+      const metadataStore = new FileDocumentMetadataStore(folder);
+      const summaryStore = new FileDocumentSummaryStore(folder);
+      const sectionCalls: string[] = [];
+
+      const enrichment = new EnrichIndexSources({
+        retriever: {
+          ...fakeRetriever(["book.pdf"]),
+          getIndexSourceOutline: async () => ({
+            sourcePath: "book.pdf",
+            title: "book.pdf",
+            kind: "pdf" as const,
+            chunkCount: 20,
+            charCount: 10_000,
+            sections: [
+              sectionOutline(["Riquet with the Tuft"], 0, 9),
+              sectionOutline(["The Sleeping Beauty"], 10, 19),
+            ],
+          }),
+        },
+        metadataStore,
+        summaryStore,
+        extractor: {
+          model: "t",
+          promptVersion: 1,
+          extract: async () => ({ title: "Fairy Tales", references: [] }),
+        },
+        summarizer: {
+          model: "sum-model",
+          promptVersion: 1,
+          summarizeSection: async (input) => {
+            sectionCalls.push(input.headingPath.join(">"));
+            return `Summary of ${input.headingPath.at(-1)}`;
+          },
+          summarizeDocument: async (input) => ({
+            summary: `Doc summary from ${input.sectionSummaries.length} sections`,
+            oneLiner: "A fairy tale collection.",
+          }),
+        },
+        now: () => new Date("2026-07-03T00:00:00Z"),
+      });
+
+      const result = await enrichment.run();
+
+      expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
+      expect(sectionCalls).toEqual(["Riquet with the Tuft", "The Sleeping Beauty"]);
+      const summaries = await summaryStore.read("book.pdf");
+      expect(summaries?.document).toEqual({
+        summary: "Doc summary from 2 sections",
+        oneLiner: "A fairy tale collection.",
+      });
+      expect(summaries?.sections.map((s) => s.summary)).toEqual([
+        "Summary of Riquet with the Tuft",
+        "Summary of The Sleeping Beauty",
+      ]);
+
+      // Повторный прогон: оба sidecar-а свежие → скип без вызовов LLM.
+      const second = await enrichment.run();
+      expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+});
+
+function sectionOutline(headingPath: string[], chunkStart: number, chunkEnd: number) {
+  return {
+    headingPath,
+    title: headingPath.at(-1) ?? "",
+    level: headingPath.length,
+    chunkStart,
+    chunkEnd,
+    chunkCount: chunkEnd - chunkStart + 1,
+    charCount: 5_000,
+  };
+}
 
 describe("EnrichmentProfileController", () => {
   it("runs onComplete before notifying subscribers about the done state", async () => {

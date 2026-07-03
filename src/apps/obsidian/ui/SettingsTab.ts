@@ -768,7 +768,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
     try {
       const report = await this.plugin.loadIndexReport(profile.id);
       const metadata = await this.plugin.loadIndexMetadata(profile.id);
-      new IndexReportModal(this.app, { profile, report, metadata }).open();
+      const summaries = await this.plugin.loadIndexSummaries(profile.id);
+      new IndexReportModal(this.app, { profile, report, metadata, summaries }).open();
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not load index report.");
     }

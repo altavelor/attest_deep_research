@@ -7,6 +7,7 @@
 
 export * from "./chat";
 export * from "./documentMetadata";
+export * from "./documentSummaries";
 export * from "./indexing";
 export * from "./retrieval";
 export * from "./vault";

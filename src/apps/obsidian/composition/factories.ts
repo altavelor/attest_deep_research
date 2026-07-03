@@ -17,7 +17,12 @@ import { IndexingService, IndexingState } from "@adapters/indexing";
 import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
-import { FileDocumentMetadataStore, LlmDocumentMetadataExtractor } from "@adapters/indexing";
+import {
+  FileDocumentMetadataStore,
+  FileDocumentSummaryStore,
+  LlmDocumentMetadataExtractor,
+  LlmDocumentSummarizer,
+} from "@adapters/indexing";
 import { EnrichIndexSources } from "@application/use-cases/enrichment";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
@@ -271,6 +276,7 @@ export function createRetrieverForProfile(
     languageInventory: reader,
     inventory: new FileVectorInventoryStore(indexStore),
     documentMetadata: createDocumentMetadataStoreForProfile(ctx, indexProfile),
+    documentSummaries: createDocumentSummaryStoreForProfile(ctx, indexProfile),
   });
 }
 
@@ -279,6 +285,13 @@ export function createDocumentMetadataStoreForProfile(
   indexProfile: IndexProfile,
 ): FileDocumentMetadataStore {
   return new FileDocumentMetadataStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
+}
+
+export function createDocumentSummaryStoreForProfile(
+  ctx: CompositionContext,
+  indexProfile: IndexProfile,
+): FileDocumentSummaryStore {
+  return new FileDocumentSummaryStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
 }
 
 /**
@@ -297,11 +310,17 @@ export function createEnrichmentService(
   const chatProfile = requireChatModelProfile(settings, chatModelProfileId);
   const server = requireServerProfile(settings, chatProfile.serverProfileId);
 
+  const provider = createChatModelClient(ctx, server, chatProfile);
   return new EnrichIndexSources({
     retriever: createRetrieverForProfile(ctx, indexProfile),
     metadataStore: createDocumentMetadataStoreForProfile(ctx, indexProfile),
     extractor: new LlmDocumentMetadataExtractor({
-      provider: createChatModelClient(ctx, server, chatProfile),
+      provider,
+      model: chatProfile.modelName,
+    }),
+    summaryStore: createDocumentSummaryStoreForProfile(ctx, indexProfile),
+    summarizer: new LlmDocumentSummarizer({
+      provider,
       model: chatProfile.modelName,
     }),
   });

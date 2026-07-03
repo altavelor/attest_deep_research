@@ -28,7 +28,9 @@ export * from "./inventory/sourcePathShard";
 export * from "./keyword/LightweightKeywordIndex";
 
 export * from "./metadata/FileDocumentMetadataStore";
+export * from "./metadata/FileDocumentSummaryStore";
 export * from "./metadata/LlmDocumentMetadataExtractor";
+export * from "./metadata/LlmDocumentSummarizer";
 
 export * from "./pipeline/changeDetection";
 export * from "./pipeline/chunker";

@@ -117,9 +117,9 @@ export class IndexRunModal extends Modal {
     const section = containerEl.createDiv({ cls: "ixplorer-index-run__section" });
     this.metadataSectionEl = section;
     new Setting(section)
-      .setName("Extract metadata (chat model)")
+      .setName("Extract metadata & summaries (chat model)")
       .setDesc(
-        "Extract title, authors, year, abstract, and references for every document. Unchanged documents are skipped.",
+        "Extract title, authors, year, abstract, and references, and generate section and document summaries for every document. Unchanged documents are skipped.",
       )
       .addToggle((toggle) => {
         toggle.setValue(this.metadataEnabled).onChange((value) => {

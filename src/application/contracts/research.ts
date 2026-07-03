@@ -22,6 +22,7 @@ import {
   IndexSourceSummary,
 } from "@application/ports/retrieval";
 import { SharedReference, SourceDocumentMetadata } from "@application/ports/documentMetadata";
+import { SourceDocumentSummaries } from "@application/ports/documentSummaries";
 
 export interface IndexedUrlReference {
   id: string;
@@ -76,6 +77,7 @@ export interface ResearchRetriever {
   readIndexChunk?(options: IndexChunkReadOptions): Promise<IndexChunkReadResult>;
   readIndexSection?(options: IndexSectionReadOptions): Promise<IndexSectionReadResult | null>;
   getSourceMetadata?(sourcePath: string): Promise<SourceDocumentMetadata | null>;
+  getSourceSummary?(sourcePath: string): Promise<SourceDocumentSummaries | null>;
   listSharedReferences?(options: { minSources: number }): Promise<SharedReference[]>;
   findInIndex?(options: FindInIndexOptions): Promise<IndexCursorPage<FindInIndexMatch>>;
   summarizeIndexSource?(sourcePath: string, maxSections: number): Promise<IndexSourceSummary | null>;

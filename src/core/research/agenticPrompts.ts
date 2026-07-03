@@ -359,6 +359,10 @@ indexed material. Use check_urls to verify HTTP(S) URL reachability in batches.
 - If a top result looks like a heading, a title, or a fragment of a longer passage, call
   \`read_index_section\` with its \`chunkId\` to read the whole section in one call — do not
   reassemble it chunk-by-chunk with read_index_chunk. Continue with \`cursor\` if truncated.
+- For broad or comparative questions ("what does the corpus say about…", "compare the
+  documents on…"), start from the document list in <index-description> and
+  \`get_source_summary\` to pick relevant documents and sections, then go deep with
+  search_index or read_index_section scoped by \`sourcePath\`.
 - \`limit\` controls how many results to return (max 5). Start with 3–5; increase only if needed.
 - For URL audits, page through \`list_index_urls\` with \`cursor\` until no \`nextCursor\`
   remains. Its \`limit\` is capped at 100. Preserve each URL's \`purpose\`, \`context\`,

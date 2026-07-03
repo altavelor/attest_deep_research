@@ -99,6 +99,27 @@
       прогон, shared references) + per-file `<details>` (авторы, аннотация,
       список литературы), max-height + вертикальный скролл
 
+## Фаза 4 — Иерархические саммари (R4) — DONE
+- [x] **4.1** Порты `documentSummaries.ts`: `SourceDocumentSummaries`
+      (sections + document.summary/oneLiner + provenance), `DocumentSummaryStore`,
+      `DocumentSummarizer`
+- [x] **4.2** Адаптеры: `FileDocumentSummaryStore` (`summaries/*.json`;
+      общий `JsonSidecarStore` c metadata-store), `LlmDocumentSummarizer`
+      (секция — plain text 2–4 предложения; документ — JSON summary+oneLiner
+      с текстовым fallback; `SUMMARY_PROMPT_VERSION`)
+- [x] **4.3** `EnrichIndexSources`: саммари — вторая задача того же прохода
+      (та же chat-модель и тумблер в модалке); секции из outline (кап 30,
+      текст секции ≤ 6k), map-reduce в документное саммари; документы без
+      секций — из head-сэмпла; независимая инкрементальность по contentHash
+      каждого sidecar-а
+- [x] **4.4** `<index-description>` v2 (`algorithmVersion` 2, бюджет 4k):
+      блок `Documents:` с one-liner'ами (до 50) вместо «representative sources»;
+      описание пересобирается и после enrichment (onComplete)
+- [x] **4.5** Тул `get_source_summary` + промпт-стратегия обзорных вопросов
+      (саммари → выбор документов → глубокий поиск со `sourcePath`)
+- [x] **4.6** Index report: per-file `<details>` «Summary · N sections»
+      с документным и секционными саммари
+
 ## Фаза 3-UI — Единая кнопка запуска + отчёт с метаданными — DONE
 - [x] Команда-палитра убрана; `EnrichmentProfileController` (state per profile,
       subscribeAll, cancel через AbortSignal) + строка статуса обогащения в таблице

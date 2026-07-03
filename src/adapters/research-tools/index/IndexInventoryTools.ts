@@ -12,6 +12,7 @@ import {
   FIND_IN_INDEX_TOOL,
   GET_INDEX_SOURCE_OUTLINE_TOOL,
   GET_SOURCE_METADATA_TOOL,
+  GET_SOURCE_SUMMARY_TOOL,
   LIST_SHARED_REFERENCES_TOOL,
   LIST_INDEX_CHUNKS_TOOL,
   LIST_INDEX_SOURCES_TOOL,
@@ -220,6 +221,20 @@ export const GetSourceMetadataTool = defineInventoryTool<{ sourcePath: string }>
   wrap: (metadata) => ({ metadata, diagnostics: diagnostics(metadata ? 1 : 0, 1) }),
 });
 
+export const GetSourceSummaryTool = defineInventoryTool<{ sourcePath: string }>({
+  name: GET_SOURCE_SUMMARY_TOOL,
+  description:
+    "Return generated summaries for one indexed source: a document summary plus per-section summaries with chunk ranges. Use before deep search to pick relevant documents and sections. Available only after index enrichment has run.",
+  schema: {
+    sourcePath: str(MAX_PATH_CHARS, { required: true }),
+  },
+  capability: "getSourceSummary",
+  errorCode: "source-summary-failed",
+  errorMessage: "Source summary lookup failed.",
+  run: (retriever, input) => retriever.getSourceSummary!(input.sourcePath),
+  wrap: (summaries) => ({ summaries, diagnostics: diagnostics(summaries ? 1 : 0, 1) }),
+});
+
 const DEFAULT_MIN_SHARED_SOURCES = 2;
 const MAX_MIN_SHARED_SOURCES = 50;
 
@@ -268,5 +283,6 @@ export const INDEX_INVENTORY_TOOLS: ReadonlyArray<
   GetIndexSourceOutlineTool,
   SearchIndexByMetadataTool,
   GetSourceMetadataTool,
+  GetSourceSummaryTool,
   ListSharedReferencesTool,
 ];

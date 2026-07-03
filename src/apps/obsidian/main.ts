@@ -22,8 +22,9 @@ import { toUserMessage } from "@core/errors";
 import { WebSourceHealthTracker } from "@application/web";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
-import { CompositionContext, createDocumentMetadataStoreForProfile, createEnrichmentService, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
-import type { SourceDocumentMetadata } from "@application/ports";
+import { CompositionContext, createDocumentMetadataStoreForProfile, createDocumentSummaryStoreForProfile, createEnrichmentService, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
+import type { SourceDocumentMetadata, SourceDocumentSummaries } from "@application/ports";
+import type { IndexDescriptionSource, IndexProfile } from "@adapters/indexing";
 import type { IndexRunPlan } from "./ui/settings/IndexRunModal";
 import { requireIndexProfile, resolveIndexProfileForUse } from "./composition/profileResolvers";
 
@@ -47,6 +48,13 @@ export default class IxplorerPlugin extends Plugin {
       }
       profile.lastEnrichedAt = new Date().toISOString();
       profile.updatedAt = profile.lastEnrichedAt;
+      // Саммари попадают в <index-description> — пересобираем его с one-liner'ами.
+      profile.indexDescription = await refreshIndexDescriptionAfterRun(
+        profile,
+        { indexChanged: true, lastIndexedAt: profile.lastIndexedAt },
+        () => this.loadDescriptionSource(profile),
+        profile.lastEnrichedAt,
+      );
       await this.saveSettings();
     },
     onError: (error) => new Notice(toUserMessage(error)),
@@ -73,7 +81,7 @@ export default class IxplorerPlugin extends Plugin {
       profile.indexDescription = await refreshIndexDescriptionAfterRun(
         profile,
         state,
-        () => createVectorIndexStoreForProfile(this.composition, profile).loadIndexDescriptionSource(),
+        () => this.loadDescriptionSource(profile),
         generatedAt,
       );
       profile.lastIndexedAt = state.lastIndexedAt;
@@ -211,6 +219,33 @@ export default class IxplorerPlugin extends Plugin {
       this.composition,
       requireIndexProfile(this.settings, profileId),
     ).list();
+  }
+
+  async loadIndexSummaries(profileId: string): Promise<SourceDocumentSummaries[]> {
+    return createDocumentSummaryStoreForProfile(
+      this.composition,
+      requireIndexProfile(this.settings, profileId),
+    ).list();
+  }
+
+  /** Deterministic description source + enrichment one-liners (R4). */
+  private async loadDescriptionSource(profile: IndexProfile): Promise<IndexDescriptionSource> {
+    const source = await createVectorIndexStoreForProfile(
+      this.composition,
+      profile,
+    ).loadIndexDescriptionSource();
+    const summaries = await createDocumentSummaryStoreForProfile(this.composition, profile).list();
+    return {
+      ...source,
+      ...(summaries.length > 0
+        ? {
+          documentOneLiners: summaries.map((item) => ({
+            path: item.sourcePath,
+            oneLiner: item.document.oneLiner,
+          })),
+        }
+        : {}),
+    };
   }
 
   /**
