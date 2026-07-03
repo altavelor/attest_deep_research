@@ -15,6 +15,11 @@ import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexRunModal } from "./settings/IndexRunModal";
 import { IndexReportModal } from "./settings/IndexReportModal";
 import { IndexProfileModal } from "./settings/IndexProfileModal";
+import {
+  resolveEnrichmentColumnStatus,
+  resolveIndexColumnStatus,
+} from "./settings/indexProfileStatus";
+import type { EnrichmentPendingAction, IndexPendingAction } from "./settings/indexProfileStatus";
 import { ServerProfileModal } from "./settings/ServerProfileModal";
 import { WebSourcesSection } from "./settings/WebSourcesSection";
 import { ModelProfileModal } from "./settings/ModelProfileModal";
@@ -22,7 +27,6 @@ import {
   ProfileStatus,
   createIconButton,
   formatEnrichmentStatus,
-  formatIndexRowProgress,
   renderCategoryHeading,
   renderSubcategoryHeading,
   statusForProfile,
@@ -32,6 +36,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
   private unsubscribeIndexing: (() => void) | null = null;
   private unsubscribeEnrichment: (() => void) | null = null;
   private readonly fetchedModelsByServerId = new Map<string, DiscoveredModel[]>();
+  private readonly pendingIndexActions = new Map<string, IndexPendingAction>();
+  private readonly pendingEnrichmentActions = new Map<string, EnrichmentPendingAction>();
   private metadataRefreshStarted = false;
   private readonly prober: SettingsCapabilityProber;
 
@@ -538,24 +544,42 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     for (const profile of this.plugin.settings.indexProfiles) {
       const state = this.plugin.indexing.getState(profile.id);
+      const enrichment = this.plugin.enrichment.getState(profile.id);
+      this.syncPendingIndexActions(profile.id, state.status, state.activeOperation);
+      this.syncPendingEnrichmentActions(profile.id, enrichment.status);
+      const pendingIndexAction = this.pendingIndexActions.get(profile.id);
+      const pendingEnrichmentAction = this.pendingEnrichmentActions.get(profile.id);
       const isDefault = this.plugin.settings.activeIndexProfileId === profile.id;
       const row = containerEl.createDiv({
         cls: "ixplorer-settings-profile-list__item ixplorer-settings-index-list__item",
       });
       const nameEl = row.createDiv({ cls: "ixplorer-settings-profile-list__name" });
-      nameEl.createDiv({ text: profile.name });
+      nameEl.createDiv({ cls: "ixplorer-settings-index-list__title", text: profile.name });
       const pathCount =
         profile.mode === "wholeVault" ? profile.excludeGlobs.length : profile.includeFolders.length;
-      const progressText =
-        state.status === "indexing" || state.status === "paused"
-          ? formatIndexRowProgress(state)
-          : "";
+      const columnStatus =
+        resolveIndexColumnStatus({ state, pendingAction: pendingIndexAction }) ??
+        resolveEnrichmentColumnStatus({ state: enrichment, pendingAction: pendingEnrichmentAction });
+      const metaClass = columnStatus
+        ? [
+          "ixplorer-settings-index-list__meta",
+          "ixplorer-settings-index-list__status",
+          columnStatus.kind,
+          columnStatus.animated ? "is-animated" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+        : "ixplorer-settings-index-list__meta";
       nameEl.createDiv({
-        cls: "ixplorer-settings-index-list__meta",
-        text: `${profile.mode === "wholeVault" ? "Whole vault" : "Selected"} · ${pathCount} paths${progressText}`,
+        cls: metaClass,
+        text:
+          columnStatus?.label ??
+          `${profile.mode === "wholeVault" ? "Whole vault" : "Selected"} · ${pathCount} paths`,
+        attr: columnStatus
+          ? { "aria-label": columnStatus.tooltip, "data-tooltip": columnStatus.tooltip }
+          : undefined,
       });
-      const enrichment = this.plugin.enrichment.getState(profile.id);
-      if (enrichment.status !== "idle") {
+      if (enrichment.status !== "idle" && !columnStatus) {
         nameEl.createDiv({
           cls: "ixplorer-settings-index-list__meta",
           text: formatEnrichmentStatus(enrichment),
@@ -610,6 +634,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
       const isPaused = state.status === "paused";
       const isEnriching = this.plugin.enrichment.isRunning(profile.id);
       const canRun = profile.isSuspended !== true && !isBusyElsewhere;
+      const isActionPending = Boolean(pendingIndexAction || pendingEnrichmentAction);
 
       // Единая кнопка запуска: start → update → pause/continue. Настройки
       // прогона (модели, секции) выбираются в IndexRunModal.
@@ -617,23 +642,24 @@ export class IxplorerSettingTab extends PluginSettingTab {
         createIconButton(actions, {
           icon: isPaused ? "play" : "pause",
           label: isPaused ? "Continue indexing" : "Pause indexing",
-          disabled: isBusyElsewhere,
+          disabled: isBusyElsewhere || isActionPending,
           onClick: () =>
             isPaused
               ? void this.plugin.indexing.resume(profile.id)
-              : this.plugin.indexing.pause(profile.id),
+              : this.pauseIndexing(profile.id),
         });
       } else if (isEnriching) {
         createIconButton(actions, {
           icon: "circle-x",
           label: "Stop metadata extraction",
-          onClick: () => this.plugin.enrichment.cancel(profile.id),
+          disabled: isActionPending,
+          onClick: () => this.stopMetadataExtraction(profile.id),
         });
       } else {
         createIconButton(actions, {
           icon: profile.lastIndexedAt ? "history" : "play",
           label: profile.lastIndexedAt ? "Update index" : "Start indexing",
-          disabled: !canRun,
+          disabled: !canRun || isActionPending,
           onClick: () => void this.openIndexRunModal(profile),
         });
       }
@@ -642,7 +668,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
         icon: "star",
         className: "ixplorer-settings__default-action",
         label: isDefault ? "Default index" : "Set as default index",
-        disabled: isDefault || profile.isSuspended === true || !profile.lastIndexedAt,
+        disabled:
+          isActionPending || isDefault || profile.isSuspended === true || !profile.lastIndexedAt,
         onClick: async () => {
           this.plugin.settings.activeIndexProfileId = profile.id;
           await this.plugin.saveSettings();
@@ -652,19 +679,52 @@ export class IxplorerSettingTab extends PluginSettingTab {
       createIconButton(actions, {
         icon: "file-text",
         label: "Show index report",
+        disabled: isActionPending,
         onClick: () => void this.openIndexReportModal(profile),
       });
       createIconButton(actions, {
         icon: "pencil",
         label: "Edit index profile",
+        disabled: isActionPending,
         onClick: () => this.openEditIndexProfileModal(profile),
       });
       createIconButton(actions, {
         icon: "trash",
         label: "Delete index profile",
+        disabled: isActionPending,
         onClick: () => void this.deleteIndexProfile(profile.id),
       });
     }
+  }
+
+  private syncPendingIndexActions(
+    profileId: string,
+    status: string,
+    activeOperation: string | undefined,
+  ): void {
+    if (
+      this.pendingIndexActions.get(profileId) === "pausing" &&
+      !(status === "indexing" || activeOperation)
+    ) {
+      this.pendingIndexActions.delete(profileId);
+    }
+  }
+
+  private syncPendingEnrichmentActions(profileId: string, status: string): void {
+    if (this.pendingEnrichmentActions.get(profileId) === "stopping" && status !== "running") {
+      this.pendingEnrichmentActions.delete(profileId);
+    }
+  }
+
+  private pauseIndexing(profileId: string): void {
+    this.pendingIndexActions.set(profileId, "pausing");
+    this.plugin.indexing.pause(profileId);
+  }
+
+  private stopMetadataExtraction(profileId: string): void {
+    this.pendingEnrichmentActions.set(profileId, "stopping");
+    this.plugin.enrichment.cancel(profileId);
+    this.display();
   }
 
   private openAddIndexProfileModal(): void {

@@ -54,8 +54,11 @@ export function formatIndexRowProgress(state: IndexingState): string {
 
 export function formatEnrichmentStatus(state: EnrichmentProfileState): string {
   switch (state.status) {
-    case "running":
-      return `Enriching metadata · ${state.processed}/${state.total}`;
+    case "running": {
+      const scope = state.total > 0 ? ` ${state.processed}/${state.total}` : "";
+      const file = state.currentSourcePath ? ` · ${baseName(state.currentSourcePath)}` : "";
+      return `Enriching${scope}${file}${enrichmentPhaseLabel(state)}`;
+    }
     case "done":
       return (
         `Metadata: ${state.extracted} extracted, ${state.skipped} up to date` +
@@ -67,6 +70,25 @@ export function formatEnrichmentStatus(state: EnrichmentProfileState): string {
     default:
       return "";
   }
+}
+
+function enrichmentPhaseLabel(state: EnrichmentProfileState): string {
+  switch (state.phase) {
+    case "metadata":
+      return " · extracting metadata";
+    case "sections":
+      return state.sectionCount
+        ? ` · summarizing section ${state.sectionIndex ?? 0}/${state.sectionCount}`
+        : " · summarizing sections";
+    case "document":
+      return " · writing document summary";
+    default:
+      return state.total === 0 ? " · listing sources" : "";
+  }
+}
+
+function baseName(path: string): string {
+  return path.split("/").pop() ?? path;
 }
 
 export function renderModalActions(

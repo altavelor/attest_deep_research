@@ -175,7 +175,9 @@ export class IndexRunModal extends Modal {
       return;
     }
     this.footerEl.empty();
-    const actions = new Setting(this.footerEl).setClass("ixplorer-profile-modal__actions");
+    const actions = new Setting(this.footerEl)
+      .setClass("ixplorer-profile-modal__actions")
+      .setClass("ixplorer-index-run__actions");
 
     if (!this.indexExists()) {
       actions.addButton((button) => {

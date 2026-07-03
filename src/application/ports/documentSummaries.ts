@@ -6,6 +6,8 @@ export interface SectionSummary {
   headingPath: string[];
   chunkStart: number;
   chunkEnd: number;
+  /** Stable hash of the section text used to reuse summaries across source-level hash changes. */
+  sectionHash?: string;
   summary: string;
 }
 

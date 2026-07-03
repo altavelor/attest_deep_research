@@ -11,6 +11,11 @@ export interface EnrichmentProfileState {
   extracted: number;
   skipped: number;
   failed: number;
+  /** In-flight detail (status === "running"): what exactly is being processed. */
+  currentSourcePath?: string;
+  phase?: "metadata" | "sections" | "document";
+  sectionIndex?: number;
+  sectionCount?: number;
   errorMessage?: string;
 }
 
@@ -85,6 +90,12 @@ export class EnrichmentProfileController {
             extracted: state.extracted + (progress.status === "extracted" ? 1 : 0),
             skipped: state.skipped + (progress.status === "skipped" ? 1 : 0),
             failed: state.failed + (progress.status === "failed" ? 1 : 0),
+            // Промежуточная фаза видна пока источник в работе; терминальный
+            // статус источника её сбрасывает до следующего "working".
+            currentSourcePath: progress.status === "working" ? progress.sourcePath : undefined,
+            phase: progress.status === "working" ? progress.phase : undefined,
+            sectionIndex: progress.status === "working" ? progress.sectionIndex : undefined,
+            sectionCount: progress.status === "working" ? progress.sectionCount : undefined,
           });
         },
       });

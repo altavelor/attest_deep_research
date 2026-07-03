@@ -10,12 +10,25 @@ import {
   DocumentSummarizer,
   DocumentSummaryStore,
   IndexChunkListItem,
-  SectionSummary,
+  IndexSourceOutline,
   SourceDocumentMetadata,
   SourceDocumentSummaries,
 } from "@application/ports";
 import { ResearchRetriever } from "@application/contracts";
 import { toDocumentReference } from "./bibliography";
+import {
+  buildSectionSummaryGroups,
+  PreparedSection,
+  SECTION_TEXT_CHARS,
+  sectionTextHash,
+  shouldUseSmallDocumentFastPath,
+  summarizableSections,
+} from "./SectionSummaryPlanner";
+import {
+  DEFAULT_RETRY_BACKOFF_MS,
+  DEFAULT_SECTION_SUMMARY_CONCURRENCY,
+  summarizeSectionGroups,
+} from "./SectionSummaryScheduler";
 
 export interface EnrichIndexSourcesOptions {
   retriever: ResearchRetriever;
@@ -27,13 +40,22 @@ export interface EnrichIndexSourcesOptions {
   now?: () => Date;
   /** Characters of document head/tail handed to the extractor. */
   sampleChars?: number;
+  /** Max concurrent section-level LLM requests. */
+  sectionSummaryConcurrency?: number;
+  /** Initial delay between retry attempts for transient LLM failures. */
+  retryBackoffMs?: number;
 }
 
 export interface EnrichmentProgress {
   processed: number;
   total: number;
   sourcePath: string;
-  status: "extracted" | "skipped" | "failed";
+  /** "working" — промежуточный прогресс внутри источника (фазы ниже). */
+  status: "working" | "extracted" | "skipped" | "failed";
+  /** Set when status === "working". */
+  phase?: "metadata" | "sections" | "document";
+  sectionIndex?: number;
+  sectionCount?: number;
   error?: string;
 }
 
@@ -48,10 +70,6 @@ const HEAD_CHUNK_LIMIT = 8;
 const TAIL_CHUNK_LIMIT = 10;
 const REFERENCES_HEADING = /references|bibliography|literature|литератур|источник/i;
 const SOURCE_PAGE_LIMIT = 500;
-// Бюджеты саммаризации: секций на документ и символов текста секции на вызов.
-const MAX_SECTIONS_PER_SOURCE = 30;
-const SECTION_TEXT_CHARS = 6_000;
-const MIN_SECTION_CHUNKS = 1;
 
 export class EnrichIndexSources {
   private readonly retriever: ResearchRetriever;
@@ -61,6 +79,8 @@ export class EnrichIndexSources {
   private readonly summarizer?: DocumentSummarizer;
   private readonly now: () => Date;
   private readonly sampleChars: number;
+  private readonly sectionSummaryConcurrency: number;
+  private readonly retryBackoffMs: number;
 
   constructor(options: EnrichIndexSourcesOptions) {
     this.retriever = options.retriever;
@@ -70,14 +90,21 @@ export class EnrichIndexSources {
     this.summarizer = options.summarizer;
     this.now = options.now ?? (() => new Date());
     this.sampleChars = options.sampleChars ?? DEFAULT_SAMPLE_CHARS;
+    this.sectionSummaryConcurrency = Math.max(
+      1,
+      Math.floor(options.sectionSummaryConcurrency ?? DEFAULT_SECTION_SUMMARY_CONCURRENCY),
+    );
+    this.retryBackoffMs = Math.max(0, options.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS);
   }
 
-  async run(options: {
-    signal?: AbortSignal;
-    /** Re-extract even when the stored contentHash matches (user-forced refresh). */
-    force?: boolean;
-    onProgress?: (progress: EnrichmentProgress) => void;
-  } = {}): Promise<EnrichmentRunResult> {
+  async run(
+    options: {
+      signal?: AbortSignal;
+      /** Re-extract even when the stored contentHash matches (user-forced refresh). */
+      force?: boolean;
+      onProgress?: (progress: EnrichmentProgress) => void;
+    } = {},
+  ): Promise<EnrichmentRunResult> {
     const sources = await this.listAllSources();
     const result: EnrichmentRunResult = { extracted: 0, skipped: 0, failed: 0 };
     let processed = 0;
@@ -89,16 +116,16 @@ export class EnrichIndexSources {
       processed += 1;
 
       const contentHash = source.contentHash ?? "";
+      const [storedMetadata, storedSummaries] = await Promise.all([
+        this.metadataStore.read(source.sourcePath),
+        this.summaryStore ? this.summaryStore.read(source.sourcePath) : Promise.resolve(null),
+      ]);
       const metadataFresh =
-        !options.force &&
-        Boolean(contentHash) &&
-        (await this.metadataStore.read(source.sourcePath))?.contentHash === contentHash;
+        !options.force && Boolean(contentHash) && storedMetadata?.contentHash === contentHash;
       const summariesFresh =
         !this.summarizer ||
         !this.summaryStore ||
-        (!options.force &&
-          Boolean(contentHash) &&
-          (await this.summaryStore.read(source.sourcePath))?.contentHash === contentHash);
+        (!options.force && Boolean(contentHash) && storedSummaries?.contentHash === contentHash);
 
       if (metadataFresh && summariesFresh) {
         result.skipped += 1;
@@ -111,16 +138,34 @@ export class EnrichIndexSources {
         continue;
       }
 
+      const working = (
+        progress: Pick<EnrichmentProgress, "phase" | "sectionIndex" | "sectionCount">,
+      ) =>
+        options.onProgress?.({
+          processed,
+          total: sources.length,
+          sourcePath: source.sourcePath,
+          status: "working",
+          ...progress,
+        });
+
       try {
-        let title: string | undefined;
+        let title = storedMetadata?.title;
         if (!metadataFresh) {
+          working({ phase: "metadata" });
           const metadata = await this.extractSource(source.sourcePath, contentHash);
           await this.metadataStore.write(metadata);
           title = metadata.title;
         }
         if (!summariesFresh && this.summarizer && this.summaryStore) {
           await this.summaryStore.write(
-            await this.summarizeSource(source.sourcePath, contentHash, title),
+            await this.summarizeSource(
+              source.sourcePath,
+              contentHash,
+              title,
+              options.force ? null : storedSummaries,
+              working,
+            ),
           );
         }
         result.extracted += 1;
@@ -192,33 +237,31 @@ export class EnrichIndexSources {
     sourcePath: string,
     contentHash: string,
     title: string | undefined,
+    previousSummaries: SourceDocumentSummaries | null,
+    working?: (
+      progress: Pick<EnrichmentProgress, "phase" | "sectionIndex" | "sectionCount">,
+    ) => void,
   ): Promise<SourceDocumentSummaries> {
     const summarizer = this.summarizer!;
     const outline = await this.retriever.getIndexSourceOutline?.(sourcePath);
-    const outlineSections = (outline?.sections ?? [])
-      .filter(
-        (section) => section.headingPath.length > 0 && section.chunkCount >= MIN_SECTION_CHUNKS,
-      )
-      .slice(0, MAX_SECTIONS_PER_SOURCE);
-
-    const sections: SectionSummary[] = [];
-    for (const section of outlineSections) {
-      const text = await this.sectionText(sourcePath, section.headingPath);
-      if (!text) {
-        continue;
-      }
-      sections.push({
-        headingPath: section.headingPath,
-        chunkStart: section.chunkStart,
-        chunkEnd: section.chunkEnd,
-        summary: await summarizer.summarizeSection({
+    const previousByHash = new Map(
+      (previousSummaries?.sections ?? [])
+        .filter((section) => section.sectionHash)
+        .map((section) => [section.sectionHash!, section]),
+    );
+    const sections = shouldUseSmallDocumentFastPath(outline)
+      ? []
+      : await summarizeSectionGroups({
+          summarizer,
           sourcePath,
-          headingPath: section.headingPath,
-          text,
-        }),
-      });
-    }
+          groups: await this.prepareSectionGroups(sourcePath, outline, working),
+          previousByHash,
+          concurrency: this.sectionSummaryConcurrency,
+          retryBackoffMs: this.retryBackoffMs,
+          onProgress: (progress) => working?.({ phase: "sections", ...progress }),
+        });
 
+    working?.({ phase: "document" });
     const sectionSummaries =
       sections.length > 0
         ? sections.map((section) => `${section.headingPath.join(" > ")}: ${section.summary}`)
@@ -241,6 +284,39 @@ export class EnrichIndexSources {
         generatedAt: this.now().toISOString(),
       },
     };
+  }
+
+  private async prepareSectionGroups(
+    sourcePath: string,
+    outline: IndexSourceOutline | null | undefined,
+    working?: (
+      progress: Pick<EnrichmentProgress, "phase" | "sectionIndex" | "sectionCount">,
+    ) => void,
+  ) {
+    const outlineSections = summarizableSections(outline);
+
+    const prepared: PreparedSection[] = [];
+    for (const [index, section] of outlineSections.entries()) {
+      working?.({
+        phase: "sections",
+        sectionIndex: index + 1,
+        sectionCount: outlineSections.length,
+      });
+      const text = await this.sectionText(sourcePath, section.headingPath);
+      if (!text) {
+        continue;
+      }
+      prepared.push({
+        headingPath: section.headingPath,
+        chunkStart: section.chunkStart,
+        chunkEnd: section.chunkEnd,
+        charCount: section.charCount,
+        text,
+        sectionHash: sectionTextHash(section.headingPath, text),
+      });
+    }
+
+    return buildSectionSummaryGroups(prepared);
   }
 
   private async sectionText(sourcePath: string, headingPath: string[]): Promise<string> {
