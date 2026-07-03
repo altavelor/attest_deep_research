@@ -141,3 +141,22 @@
 - [x] Index report: сворачиваемая секция «Index metadata» (модель извлечения,
       последний прогон, общие ссылки из shared bibliography) + per-file
       `<details>` с авторами/аннотацией/списком литературы, max-height + scroll
+
+## Фаза 5 — Fan-out по документам (R5) — DONE
+- [x] **5.1** Use-case `MapSources` (`@application/use-cases/map-sources`):
+      выбор источников (явный список или дешёвый relevance-pass через
+      `retriever.search`), fan-out по одному sub-agent'у на документ,
+      ограничение параллелизма (Limiter, дефолт 4), деградация одного
+      sub-agent'а в error-строку без падения прогона
+- [x] **5.2** Скоуп каждого sub-agent'а: `searchMode: indexOnly`,
+      `indexSourcePaths: [sourcePath]`, без notes/web/рекурсии; per-source
+      budget через новое поле `SubAgentRunInput.budget` (maxRounds/maxResultChars)
+- [x] **5.3** Structured output строки `{sourcePath, stance, keyFindings[],
+      evidenceIds[]}`: толерантный парсинг ответа (`STANCE:` + буллеты),
+      `citedEvidenceIds` (цитируемые id → иначе весь snapshot)
+- [x] **5.4** Тул `map_sources` (`MapSourcesSource`, гейт: subAgentRunner +
+      retriever + index-mode); мердж evidence в родительский реестр; label +
+      result-summary в `toolCallLabel`
+- [x] **5.5** Промпт-скилл `MAP_SOURCES_SKILL`: когда предпочесть fan-out,
+      reduce-шаблон **evidence matrix** (документ × позиция, цитата в каждой
+      строке, пометка error-строк) — вход для R7

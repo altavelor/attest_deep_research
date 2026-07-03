@@ -11,6 +11,7 @@ import { RagSource } from "./index/RagSource";
 import { SourceManager } from "@application/sources";
 import { WebSource } from "./web/WebSource";
 import { SubAgentSource } from "./sub-agent/SubAgentSource";
+import { MapSourcesSource } from "./map-sources/MapSourcesSource";
 import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
 
@@ -93,6 +94,29 @@ export function createResearchToolRegistry(
     sources.register(
       new SubAgentSource({
         runner: options.subAgentRunner,
+        evidence,
+        toolContext: {
+          ...options,
+          subAgentRunner: undefined,
+          availability: { ...availability, noteMutationAccess: false },
+        },
+      }),
+    );
+  }
+
+  // Map-reduce fan-out over documents (SPEC-corpus R5): needs both the sub-agent
+  // runner and an active index retriever (it fans out one scoped sub-agent per
+  // indexed document). MapSources re-scopes the context to a single source per run.
+  if (
+    options.subAgentRunner &&
+    options.retriever &&
+    availability.retrieverAvailable &&
+    (availability.searchMode === "indexOnly" || availability.searchMode === "indexAndWeb")
+  ) {
+    sources.register(
+      new MapSourcesSource({
+        runner: options.subAgentRunner,
+        retriever: options.retriever,
         evidence,
         toolContext: {
           ...options,

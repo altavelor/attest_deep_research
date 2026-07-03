@@ -34,6 +34,8 @@ export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
 
 // --- Universal sub-agent ---
 export const SUB_AGENT_TOOL = "run_subagent";
+/** Fan-out: one scoped sub-agent per document, reduced to an evidence matrix (SPEC-corpus R5). */
+export const MAP_SOURCES_TOOL = "map_sources";
 
 // --- Document download ---
 export const PROBE_DOCUMENT_URL_TOOL = "probe_document_url";
@@ -71,6 +73,7 @@ export const PROMPT_TOOL_NAMES = [
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
   SUB_AGENT_TOOL,
+  MAP_SOURCES_TOOL,
   LIST_INDEX_URLS_TOOL,
   CHECK_URLS_TOOL,
   PROBE_DOCUMENT_URL_TOOL,

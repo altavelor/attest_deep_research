@@ -15,6 +15,8 @@ export interface SubAgentRunInput {
   task: string;
   /** Tool availability + collaborators for the current turn (index/web/notes, no mutation, no recursion). */
   toolContext?: ResearchToolsetOptions;
+  /** Per-run budget override, tighter than the runner's default (used by fan-out map_sources). */
+  budget?: { maxRounds?: number; maxResultChars?: number };
   signal?: AbortSignal;
   /** Progress sink so a session's internal work can be surfaced live (nested). */
   onEvent?: (event: ToolEvent) => void;

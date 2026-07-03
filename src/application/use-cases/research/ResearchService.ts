@@ -151,22 +151,22 @@ export class ResearchService implements ConversationEngine {
       runToolLoop: options.runToolLoop,
     });
 
-    // The universal sub-agent reuses the parent chat model; its fallback (web-only)
-    // toolset needs a search provider, but callers normally pass a per-turn
-    // `toolContext` so the `run_subagent` tool it backs mirrors whatever the parent
-    // has this turn (index/web/notes).
-    const subAgentRunner: SubAgentPort | undefined = options.searchProvider
-      ? new SubAgentRunner({
-          toolsetFactory: options.toolsetFactory,
-          searchProvider: options.searchProvider,
-          modelRound: options.modelRound ?? options.modelRoundFactory(options.chatModel),
-          model: options.chatModelName,
-          temperature: chatOptions.temperature,
-          maxTokens: chatOptions.maxTokens,
-          reasoning: options.reasoning,
-          ...(options.subAgentLogger ? { logger: options.subAgentLogger } : {}),
-        })
-      : undefined;
+    // The universal sub-agent reuses the parent chat model. It is created whenever
+    // there is a chat model (always): callers pass a per-turn `toolContext` so the
+    // `run_subagent` / `map_sources` tools it backs mirror whatever the parent has
+    // this turn (index/web/notes). The search provider is only a web-only *fallback*
+    // for the rare call with no `toolContext`, so an index-only profile (no web)
+    // still gets a working sub-agent — the corpus fan-out (map_sources) needs it.
+    const subAgentRunner: SubAgentPort = new SubAgentRunner({
+      toolsetFactory: options.toolsetFactory,
+      ...(options.searchProvider ? { searchProvider: options.searchProvider } : {}),
+      modelRound: options.modelRound ?? options.modelRoundFactory(options.chatModel),
+      model: options.chatModelName,
+      temperature: chatOptions.temperature,
+      maxTokens: chatOptions.maxTokens,
+      reasoning: options.reasoning,
+      ...(options.subAgentLogger ? { logger: options.subAgentLogger } : {}),
+    });
 
     const deps: ResearchStrategyDeps = {
       chatModel: options.chatModel,

@@ -5,6 +5,7 @@ import {
   DOWNLOAD_DOCUMENT_TOOL,
   INDEX_SEARCH_TOOL,
   LIST_INDEX_URLS_TOOL,
+  MAP_SOURCES_TOOL,
   NOTE_EDIT_TOOLS,
   NOTE_MUTATION_TOOLS,
   PROBE_DOCUMENT_URL_TOOL,
@@ -49,6 +50,7 @@ type ToolSet = ReadonlySet<string>;
 const hasWeb = (tools: ToolSet): boolean => tools.has(WEB_SEARCH_TOOL);
 const hasIndex = (tools: ToolSet): boolean => tools.has(INDEX_SEARCH_TOOL);
 const hasSubAgent = (tools: ToolSet): boolean => tools.has(SUB_AGENT_TOOL);
+const hasMapSources = (tools: ToolSet): boolean => tools.has(MAP_SOURCES_TOOL);
 const hasNoteMutation = (tools: ToolSet): boolean =>
   NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 const hasDownload = (tools: ToolSet): boolean => tools.has(DOWNLOAD_DOCUMENT_TOOL);
@@ -303,6 +305,35 @@ budget, not yours, so your context stays compact.
   }`.trimStart();
 };
 
+// Fan-out skill — advertised only when map_sources is registered (needs an index).
+// The reduce contract is an evidence matrix: a document × stance table with a
+// citation on every row, which is also the input format for contradiction work.
+const MAP_SOURCES_SKILL = `
+## Comparing across documents (map_sources)
+
+For questions about where a *set* of documents stands on one issue — agreement,
+disagreement, coverage, "what does each paper say about X" — use map_sources
+instead of many manual searches. It fans out one sub-agent per document (each
+locked to that document) and returns a row per document: \`stance\`,
+\`keyFindings\`, and \`evidenceIds\`.
+
+### When to prefer it
+- The question is naturally *document × position*: comparison, consensus,
+  contradiction hunting, or a coverage survey across the corpus.
+- You would otherwise run the same query against many documents by hand.
+Omit \`sourcePaths\` to auto-select the most relevant documents; pass them
+explicitly when you already know which documents to compare (cap with
+\`maxSources\`).
+
+### Reducing the result — evidence matrix
+Render the rows as an **evidence matrix** the user can scan: one row per
+document (title/path), its stance, and the concrete finding — each finding
+carrying its \`[evidenceId]\` citation. Do not drop the citations; a row without
+one is unverifiable. Group agreeing documents, call out the ones that oppose or
+do not address the question, and note any row flagged with an \`error\` (that
+document could not be analyzed) rather than treating it as silence.
+`.trimStart();
+
 // Hard limit on which evidence sources this profile exposes. Without it the model
 // assumes tools that were never granted (e.g. fetch_web_page in an index-only profile),
 // fails with unknown-tool, and silently falls back to whatever source it does have.
@@ -430,6 +461,11 @@ export function buildAgenticResearchMessages(
   // Sub-agent skill — only when the run_subagent tool is registered
   if (hasSubAgent(tools)) {
     systemSections.push(SUB_AGENT_SKILL(tools));
+  }
+
+  // Fan-out skill — only when map_sources is registered (index-backed corpora)
+  if (hasMapSources(tools)) {
+    systemSections.push(MAP_SOURCES_SKILL);
   }
 
   // Attachment manifest — the user's attached files as files, not just chunks,

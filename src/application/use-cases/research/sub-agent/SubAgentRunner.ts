@@ -28,8 +28,9 @@ import { looksLikeLeakedToolCall } from "./leakedToolCallMarkup";
 
 export interface SubAgentRunnerDeps {
   toolsetFactory: ResearchToolsetFactory;
-  /** Fallback toolset (web-only) used only when the caller supplies no `toolContext`. */
-  searchProvider: SearchProvider;
+  /** Fallback toolset (web-only) used only when the caller supplies no `toolContext`.
+   * Absent in index-only profiles — callers always pass an explicit `toolContext`. */
+  searchProvider?: SearchProvider;
   /** Reuses the parent chat model + round provider by default. */
   modelRound: ModelRoundProvider;
   model: string;
@@ -74,7 +75,7 @@ export class SubAgentRunner implements SubAgentPort {
         noteAccess: false,
         activeFileAccess: false,
         retrieverAvailable: false,
-        webProviderAvailable: true,
+        webProviderAvailable: this.deps.searchProvider !== undefined,
         noteMutationAccess: false,
       },
       searchProvider: this.deps.searchProvider,
@@ -84,8 +85,9 @@ export class SubAgentRunner implements SubAgentPort {
     const emit = input.onEvent;
     const log = (event: SubAgentLogEvent): void => this.deps.logger?.logSubAgent(event);
     const startedAt = Date.now();
-    const maxRounds = this.deps.maxRounds ?? DEFAULT_MAX_ROUNDS;
-    const maxResultChars = this.deps.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+    const maxRounds = input.budget?.maxRounds ?? this.deps.maxRounds ?? DEFAULT_MAX_ROUNDS;
+    const maxResultChars =
+      input.budget?.maxResultChars ?? this.deps.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
 
     log({
       type: "session-start",
