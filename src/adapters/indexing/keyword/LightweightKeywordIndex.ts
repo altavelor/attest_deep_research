@@ -5,6 +5,62 @@ export interface KeywordSearchMatch {
   score: number;
 }
 
+export interface KeywordPosting {
+  chunkId: string;
+  frequency: number;
+}
+
+/**
+ * Query-ready view over posting rows: term lookup plus the corpus statistics
+ * BM25 needs (chunk lengths, average length). Built once per committed index
+ * state and cached by the caller — ranking must not rescan all rows per query.
+ */
+export interface KeywordPostingLookup {
+  get(term: string): KeywordPosting[] | undefined;
+  chunkCount: number;
+  averageLength: number;
+  lengthOf(chunkId: string): number | undefined;
+}
+
+export function buildKeywordPostingLookup(rowsByShard: KeywordPostingRow[][]): KeywordPostingLookup {
+  const postingsByTerm = new Map<string, Map<string, number>>();
+  const chunkLengths = new Map<string, number>();
+
+  for (const rows of rowsByShard) {
+    for (const row of rows) {
+      const postings = getOrCreate(postingsByTerm, row.term, () => new Map<string, number>());
+
+      for (const posting of row.postings) {
+        postings.set(posting.chunkId, (postings.get(posting.chunkId) ?? 0) + posting.frequency);
+        chunkLengths.set(
+          posting.chunkId,
+          (chunkLengths.get(posting.chunkId) ?? 0) + posting.frequency,
+        );
+      }
+    }
+  }
+
+  const materialized = new Map<string, KeywordPosting[]>();
+  for (const [term, postings] of postingsByTerm) {
+    materialized.set(
+      term,
+      Array.from(postings.entries()).map(([chunkId, frequency]) => ({ chunkId, frequency })),
+    );
+  }
+
+  let totalLength = 0;
+  for (const length of chunkLengths.values()) {
+    totalLength += length;
+  }
+
+  return {
+    get: (term) => materialized.get(term),
+    chunkCount: chunkLengths.size,
+    averageLength: chunkLengths.size > 0 ? totalLength / chunkLengths.size : 0,
+    lengthOf: (chunkId) => chunkLengths.get(chunkId),
+  };
+}
+
 export function tokenizeForKeywordIndex(text: string, minTokenLength: number): string[] {
   return text
     .toLowerCase()
@@ -52,13 +108,26 @@ export function countIndexedKeywordChunks(rows: KeywordPostingRow[]): number {
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 
+/** Convenience over {@link rankKeywordLookup} for callers holding raw rows (tests). */
 export function rankKeywordPostings(
   query: string,
   rows: KeywordPostingRow[],
   minTokenLength: number,
   limit: number,
 ): KeywordSearchMatch[] {
-  if (limit <= 0) {
+  return rankKeywordLookup(query, buildKeywordPostingLookup([rows]), minTokenLength, limit);
+}
+
+// BM25 поверх lookup-а. IDF гасит стоп-слова ("the", "with"), нормализация по
+// длине не даёт длинным чанкам выигрывать за счёт объёма — сырой TF-скоринг
+// страдал и тем, и другим.
+export function rankKeywordLookup(
+  query: string,
+  lookup: KeywordPostingLookup,
+  minTokenLength: number,
+  limit: number,
+): KeywordSearchMatch[] {
+  if (limit <= 0 || lookup.chunkCount === 0) {
     return [];
   }
 
@@ -68,50 +137,25 @@ export function rankKeywordPostings(
     return [];
   }
 
-  // BM25 поверх posting-строк. Статистика корпуса (длины чанков, средняя длина,
-  // число чанков) выводится из самих строк, поэтому формат индекса не меняется.
-  // IDF гасит стоп-слова ("the", "with"), нормализация по длине не даёт длинным
-  // чанкам выигрывать за счёт объёма — сырой TF-скоринг страдал и тем, и другим.
-  const chunkLengths = new Map<string, number>();
-
-  for (const row of rows) {
-    for (const posting of row.postings) {
-      chunkLengths.set(
-        posting.chunkId,
-        (chunkLengths.get(posting.chunkId) ?? 0) + posting.frequency,
-      );
-    }
-  }
-
-  const chunkCount = chunkLengths.size;
-
-  if (chunkCount === 0) {
-    return [];
-  }
-
-  let totalLength = 0;
-  for (const length of chunkLengths.values()) {
-    totalLength += length;
-  }
-  const averageLength = totalLength / chunkCount;
-
   const scores = new Map<string, number>();
 
-  for (const row of rows) {
-    if (!queryTerms.has(row.term)) {
+  for (const term of queryTerms) {
+    const postings = lookup.get(term);
+
+    if (!postings || postings.length === 0) {
       continue;
     }
 
-    const documentFrequency = row.postings.length;
     const idf = Math.log(
-      1 + (chunkCount - documentFrequency + 0.5) / (documentFrequency + 0.5),
+      1 + (lookup.chunkCount - postings.length + 0.5) / (postings.length + 0.5),
     );
 
-    for (const posting of row.postings) {
-      const length = chunkLengths.get(posting.chunkId) ?? averageLength;
+    for (const posting of postings) {
+      const length = lookup.lengthOf(posting.chunkId) ?? lookup.averageLength;
       const saturation =
         (posting.frequency * (BM25_K1 + 1)) /
-        (posting.frequency + BM25_K1 * (1 - BM25_B + (BM25_B * length) / averageLength));
+        (posting.frequency +
+          BM25_K1 * (1 - BM25_B + (BM25_B * length) / lookup.averageLength));
 
       scores.set(posting.chunkId, (scores.get(posting.chunkId) ?? 0) + idf * saturation);
     }
@@ -121,28 +165,6 @@ export function rankKeywordPostings(
     .map(([chunkId, score]) => ({ chunkId, score }))
     .sort((left, right) => right.score - left.score || left.chunkId.localeCompare(right.chunkId))
     .slice(0, limit);
-}
-
-export function mergeKeywordPostingRows(rowsByShard: KeywordPostingRow[][]): KeywordPostingRow[] {
-  const merged = new Map<string, Map<string, number>>();
-
-  for (const rows of rowsByShard) {
-    for (const row of rows) {
-      const postings = getOrCreate(merged, row.term, () => new Map<string, number>());
-
-      for (const posting of row.postings) {
-        postings.set(posting.chunkId, (postings.get(posting.chunkId) ?? 0) + posting.frequency);
-      }
-    }
-  }
-
-  return Array.from(merged.entries()).map(([term, postings]) => ({
-    term,
-    postings: Array.from(postings.entries()).map(([chunkId, frequency]) => ({
-      chunkId,
-      frequency,
-    })),
-  }));
 }
 
 function getOrCreate<K, V>(map: Map<K, V>, key: K, create: () => V): V {

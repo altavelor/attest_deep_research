@@ -5,7 +5,57 @@ import { FileVectorChunkRow, isKeywordPostingRow, KeywordPostingRow } from "./Fi
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import type { FileVectorIndexState } from "./FileVectorIndexState";
 import { dotProduct, normalizeVector } from "./FileVectorIndexVector";
-import { mergeKeywordPostingRows, rankKeywordPostings } from "../keyword/LightweightKeywordIndex";
+import {
+  buildKeywordPostingLookup,
+  KeywordPostingLookup,
+  rankKeywordLookup,
+} from "../keyword/LightweightKeywordIndex";
+
+interface KeywordQueryCacheEntry {
+  writeId: string;
+  loaded: Promise<{
+    lookup: KeywordPostingLookup;
+    chunkById: Map<string, FileVectorChunkRow>;
+  }>;
+}
+
+// Merged-постинги и статистика BM25 строятся один раз на закоммиченное
+// состояние (каждый commit меняет manifest.writeId) — иначе каждый запрос
+// перечитывает keyword-файлы всех шардов с диска, что на десятках тысяч
+// чанков занимает секунды. Promise в кэше дедуплицирует конкурентные сборки.
+const keywordQueryCache = new WeakMap<FileVectorIndexState, KeywordQueryCacheEntry>();
+
+function keywordQueryDataFor(
+  state: FileVectorIndexState,
+  pathFor: (relativePath: string) => string,
+): KeywordQueryCacheEntry["loaded"] {
+  const cached = keywordQueryCache.get(state);
+
+  if (cached && cached.writeId === state.manifest.writeId) {
+    return cached.loaded;
+  }
+
+  const loaded = (async () => {
+    const chunkById = new Map<string, FileVectorChunkRow>();
+    const rowsByShard: KeywordPostingRow[][] = [];
+
+    for (const shard of state.manifest.shards) {
+      const shardChunks = state.chunksByShard.get(shard.id) ?? [];
+      for (const chunk of shardChunks) {
+        chunkById.set(chunk.row.id, chunk.row);
+      }
+
+      rowsByShard.push(
+        await readJsonlIndexFile(pathFor(`keywords/${shard.id}.terms.jsonl`), isKeywordPostingRow),
+      );
+    }
+
+    return { lookup: buildKeywordPostingLookup(rowsByShard), chunkById };
+  })();
+
+  keywordQueryCache.set(state, { writeId: state.manifest.writeId, loaded });
+  return loaded;
+}
 
 export async function searchFileVectorKeywords(
   state: FileVectorIndexState,
@@ -19,23 +69,11 @@ export async function searchFileVectorKeywords(
   },
   pathFor: (relativePath: string) => string,
 ): Promise<RetrievedChunk[]> {
-  const chunkById = new Map<string, FileVectorChunkRow>();
-  const rowsByShard: KeywordPostingRow[][] = [];
+  const { lookup, chunkById } = await keywordQueryDataFor(state, pathFor);
 
-  for (const shard of state.manifest.shards) {
-    const shardChunks = state.chunksByShard.get(shard.id) ?? [];
-    for (const chunk of shardChunks) {
-      chunkById.set(chunk.row.id, chunk.row);
-    }
-
-    rowsByShard.push(
-      await readJsonlIndexFile(pathFor(`keywords/${shard.id}.terms.jsonl`), isKeywordPostingRow),
-    );
-  }
-
-  const matches = rankKeywordPostings(
+  const matches = rankKeywordLookup(
     query,
-    mergeKeywordPostingRows(rowsByShard),
+    lookup,
     state.manifest.keywordIndex.minTokenLength,
     options.limit * 4,
   );

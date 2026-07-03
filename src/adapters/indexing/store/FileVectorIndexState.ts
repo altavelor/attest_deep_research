@@ -8,7 +8,8 @@ import { normalizeVector, sourcePathFromReference } from "./FileVectorIndexVecto
 
 export interface StoredChunk {
   row: FileVectorChunkRow;
-  embedding: number[];
+  /** Normalized vector; Float32Array keeps 50k+ chunks compact and dot-product fast. */
+  embedding: Float32Array;
 }
 
 export interface FileVectorIndexState {

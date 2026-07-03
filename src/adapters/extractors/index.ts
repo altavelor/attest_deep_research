@@ -13,8 +13,23 @@ export { TextExtractor } from "./TextExtractor";
 export { MarkdownExtractor } from "./MarkdownExtractor";
 export type { MarkdownExtractorOptions } from "./MarkdownExtractor";
 
-export { PdfExtractor, PdfJsTextParser, SimplePdfTextParser } from "./PdfExtractor";
-export type { PdfExtractorOptions, PdfPageText, PdfPageTextParser } from "./PdfExtractor";
+export { PdfExtractor, PdfJsTextParser } from "./PdfExtractor";
+export type {
+  PdfExtractorOptions,
+  PdfPageText,
+  PdfPageTextParser,
+  PdfParsedDocument,
+} from "./PdfExtractor";
+
+export { SimplePdfTextParser } from "./pdfSimpleParser";
+
+export {
+  headingPathAt,
+  headingsFromTypography,
+  positionHeadings,
+  resolvePdfHeadings,
+} from "./pdfHeadings";
+export type { PdfHeading, PdfTextLine, PositionedPdfHeading } from "./pdfHeadings";
 
 export { PdfTextCache } from "./PdfTextCache";
 export type { PdfTextCacheEntry, PdfTextCacheKey } from "./PdfTextCache";
