@@ -218,7 +218,9 @@ describe("FileVectorIndexStore", () => {
 
     await expect(
       new FileVectorIndexReader(store, store).searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
-    ).resolves.toEqual([expect.objectContaining({ id: "chunk-a", score: 3 })]);
+    ).resolves.toEqual([
+      expect.objectContaining({ id: "chunk-a", score: expect.any(Number) }),
+    ]);
 
     await store.deleteBySourcePath("Research/a.md");
     await store.upsert([

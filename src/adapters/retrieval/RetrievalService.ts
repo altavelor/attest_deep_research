@@ -73,11 +73,12 @@ export class RetrievalService {
     const queryVariants = normalizedQueryVariants(query, options.queryVariants);
     const semanticChunksByVariant: RetrievedChunk[] = [];
     const keywordChunksByVariant: RetrievedChunk[] = [];
+    let semanticError: string | undefined;
 
     for (const variant of queryVariants) {
-      semanticChunksByVariant.push(
-        ...filterRetrievedChunks(await this.searchSemantic(variant, candidateLimit), scoped),
-      );
+      const semantic = await this.searchSemantic(variant, candidateLimit);
+      semanticError = semanticError ?? semantic.error;
+      semanticChunksByVariant.push(...filterRetrievedChunks(semantic.chunks, scoped));
       keywordChunksByVariant.push(
         ...filterRetrievedChunks(
           await this.searchKeywords(variant, { ...scoped, limit: candidateLimit }),
@@ -99,6 +100,7 @@ export class RetrievalService {
         id: chunk.id,
       })),
       usedFallback: semanticChunks.length === 0 && keywordChunks.length > 0,
+      ...(semanticError ? { semanticError } : {}),
     };
   }
 
@@ -161,7 +163,16 @@ export class RetrievalService {
     return this.inventory?.searchIndexByMetadata(options) ?? { items: [] };
   }
 
-  private async searchSemantic(query: string, limit: number): Promise<RetrievedChunk[]> {
+  /**
+   * Semantic search never throws: retrieval degrades to keyword-only ranking.
+   * The failure reason is returned (not swallowed) so callers can surface the
+   * degradation — a silent catch here previously hid rebuild-required and
+   * embedding-provider errors behind seemingly normal keyword results.
+   */
+  private async searchSemantic(
+    query: string,
+    limit: number,
+  ): Promise<{ chunks: RetrievedChunk[]; error?: string }> {
     try {
       const response = await this.embeddings.embed({
         model: this.embeddingModel,
@@ -170,7 +181,7 @@ export class RetrievalService {
       const embedding = response.embeddings[0];
 
       if (!embedding) {
-        return [];
+        return { chunks: [], error: "embedding provider returned no embedding" };
       }
 
       await this.indexStore.initialize({
@@ -178,9 +189,9 @@ export class RetrievalService {
         embeddingDimensions: embedding.length,
       });
 
-      return this.indexStore.query(embedding, limit);
-    } catch {
-      return [];
+      return { chunks: await this.indexStore.query(embedding, limit) };
+    } catch (error) {
+      return { chunks: [], error: describeSemanticError(error) };
     }
   }
 
@@ -319,6 +330,13 @@ function escapeRegExp(value: string): string {
 
 // Upper bound on sources resolved for a language scope; ample for real vaults.
 const LANGUAGE_SCOPE_LIMIT = 1000;
+
+function describeSemanticError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || error.name;
+  }
+  return String(error);
+}
 
 /** Keep only the first (highest-ranked) chunk per source. Input must be score-sorted. */
 function oneChunkPerSource(chunks: RetrievedChunk[]): RetrievedChunk[] {

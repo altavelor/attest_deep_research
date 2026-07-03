@@ -11,5 +11,11 @@ export interface RetrievalResult {
   chunks: RetrievedChunk[];
   citations: Citation[];
   usedFallback: boolean;
+  /**
+   * Set when the semantic (embedding) path failed and retrieval silently
+   * degraded to keyword-only ranking. Surfaced to tool diagnostics so the
+   * degradation is visible instead of masquerading as a normal result.
+   */
+  semanticError?: string;
   queryVariants?: RetrievalQueryVariant[];
 }

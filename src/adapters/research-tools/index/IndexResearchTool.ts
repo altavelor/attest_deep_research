@@ -74,6 +74,10 @@ export interface SearchIndexOutput {
     resultCount: number;
     snippetsTruncated: number;
     untrustedEvidence: true;
+    /** Semantic search contributed nothing; ranking degraded to keyword-only. */
+    usedKeywordFallback?: true;
+    /** Failure reason when the semantic (embedding) path errored. */
+    semanticError?: string;
   };
 }
 
@@ -110,6 +114,8 @@ export const IndexResearchTool = defineTool<
   execute: async (deps, input, context) => {
     const snippetChars = deps.snippetChars ?? DEFAULT_SNIPPET_CHARS;
     let chunks: RetrievedChunk[];
+    let usedFallback = false;
+    let semanticError: string | undefined;
     try {
       const retrieval = await deps.retriever.search(input.query, {
         limit: input.limit,
@@ -119,6 +125,8 @@ export const IndexResearchTool = defineTool<
         ...(input.diversify ? { diversify: true } : {}),
       });
       chunks = retrieval.chunks;
+      usedFallback = retrieval.usedFallback;
+      semanticError = retrieval.semanticError;
     } catch {
       return toolFailure("index-search-failed", "Index search failed.", true);
     }
@@ -155,8 +163,20 @@ export const IndexResearchTool = defineTool<
           resultCount: results.length,
           snippetsTruncated,
           untrustedEvidence: true,
+          ...(usedFallback ? { usedKeywordFallback: true as const } : {}),
+          ...(semanticError ? { semanticError } : {}),
         },
       },
+      // Degradation also travels the diagnostic channel so it lands in
+      // ToolCallDiagnostic.metadata (report) without parsing the result JSON.
+      ...(usedFallback || semanticError
+        ? {
+            diagnostic: {
+              ...(usedFallback ? { usedKeywordFallback: true } : {}),
+              ...(semanticError ? { semanticError } : {}),
+            },
+          }
+        : {}),
     };
   },
 });

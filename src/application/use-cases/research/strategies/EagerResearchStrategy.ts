@@ -16,6 +16,7 @@ import {
   buildRagDiagnosticSnapshot,
   createEmptyContextDiagnostics,
   isRagDebugIntent,
+  semanticDegradationWarning,
   withPlannerDiagnostics,
   withRetrievalDiagnostics,
   withWebDiagnostics,
@@ -134,6 +135,10 @@ export class EagerResearchStrategy implements ResearchStrategy {
           `Index description used ${indexDescription.diagnostics.freshness} deterministic fallback metadata.`,
         );
       }
+    }
+    const degradation = semanticDegradationWarning([retrieval]);
+    if (degradation) {
+      diagnostics.warnings.push(degradation);
     }
     this.applyAgenticDiagnostics(diagnostics, policy, failedAgenticAttempt);
 

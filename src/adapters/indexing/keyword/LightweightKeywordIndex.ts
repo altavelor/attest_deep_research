@@ -48,6 +48,10 @@ export function countIndexedKeywordChunks(rows: KeywordPostingRow[]): number {
   return chunkIds.size;
 }
 
+// Классика BM25: k1 — насыщение частоты терма, b — доля нормализации по длине.
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
 export function rankKeywordPostings(
   query: string,
   rows: KeywordPostingRow[],
@@ -64,6 +68,33 @@ export function rankKeywordPostings(
     return [];
   }
 
+  // BM25 поверх posting-строк. Статистика корпуса (длины чанков, средняя длина,
+  // число чанков) выводится из самих строк, поэтому формат индекса не меняется.
+  // IDF гасит стоп-слова ("the", "with"), нормализация по длине не даёт длинным
+  // чанкам выигрывать за счёт объёма — сырой TF-скоринг страдал и тем, и другим.
+  const chunkLengths = new Map<string, number>();
+
+  for (const row of rows) {
+    for (const posting of row.postings) {
+      chunkLengths.set(
+        posting.chunkId,
+        (chunkLengths.get(posting.chunkId) ?? 0) + posting.frequency,
+      );
+    }
+  }
+
+  const chunkCount = chunkLengths.size;
+
+  if (chunkCount === 0) {
+    return [];
+  }
+
+  let totalLength = 0;
+  for (const length of chunkLengths.values()) {
+    totalLength += length;
+  }
+  const averageLength = totalLength / chunkCount;
+
   const scores = new Map<string, number>();
 
   for (const row of rows) {
@@ -71,8 +102,18 @@ export function rankKeywordPostings(
       continue;
     }
 
+    const documentFrequency = row.postings.length;
+    const idf = Math.log(
+      1 + (chunkCount - documentFrequency + 0.5) / (documentFrequency + 0.5),
+    );
+
     for (const posting of row.postings) {
-      scores.set(posting.chunkId, (scores.get(posting.chunkId) ?? 0) + posting.frequency);
+      const length = chunkLengths.get(posting.chunkId) ?? averageLength;
+      const saturation =
+        (posting.frequency * (BM25_K1 + 1)) /
+        (posting.frequency + BM25_K1 * (1 - BM25_B + (BM25_B * length) / averageLength));
+
+      scores.set(posting.chunkId, (scores.get(posting.chunkId) ?? 0) + idf * saturation);
     }
   }
 

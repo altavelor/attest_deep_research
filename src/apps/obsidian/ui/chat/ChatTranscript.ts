@@ -447,6 +447,13 @@ function renderToolNode(
   if (item.phase && item.status === "pending") {
     head.createSpan({ cls: "ixplorer-chat__tool-phase", text: item.phase });
   }
+  if (view.badge) {
+    head.createSpan({
+      cls: "ixplorer-chat__tool-badge",
+      text: view.badge.text,
+      ...(view.badge.tooltip ? { attr: { "aria-label": view.badge.tooltip, title: view.badge.tooltip } } : {}),
+    });
+  }
   if (view.inCell) {
     renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, uiState);
   }
