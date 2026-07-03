@@ -2,15 +2,16 @@ import { App, Modal, Setting } from "obsidian";
 
 import { IndexSourceReportItem } from "@adapters/indexing";
 import { IndexProfile } from "@adapters/indexing";
-import type { SourceDocumentMetadata } from "@application/ports";
+import type { SourceDocumentMetadata, SourceDocumentSummaries } from "@application/ports";
 import { sharedReferences } from "@application/use-cases/enrichment";
 import { formatReportTimestamp } from "./indexPath";
 
 export interface IndexReportModalOptions {
   profile: IndexProfile;
   report: IndexSourceReportItem[];
-  /** Enrichment sidecars, when the profile has been enriched (SPEC-corpus R3). */
+  /** Enrichment sidecars, when the profile has been enriched (SPEC-corpus R3/R4). */
   metadata?: SourceDocumentMetadata[];
+  summaries?: SourceDocumentSummaries[];
 }
 
 const SHARED_REFERENCES_SHOWN = 10;
@@ -34,6 +35,9 @@ export class IndexReportModal extends Modal {
     const totalChunks = indexed.reduce((total, item) => total + item.chunkCount, 0);
     const metadata = this.options.metadata ?? [];
     const metadataBySourcePath = new Map(metadata.map((item) => [item.sourcePath, item]));
+    const summariesBySourcePath = new Map(
+      (this.options.summaries ?? []).map((item) => [item.sourcePath, item]),
+    );
     const summary = contentEl.createDiv({ cls: "ixplorer-index-report__summary" });
     summary.createDiv({ text: `${indexed.length} indexed files` });
     summary.createDiv({ text: `${failed.length} failed files` });
@@ -72,6 +76,10 @@ export class IndexReportModal extends Modal {
         const sourceMetadata = metadataBySourcePath.get(item.sourcePath);
         if (sourceMetadata) {
           this.renderSourceMetadata(row, sourceMetadata);
+        }
+        const sourceSummaries = summariesBySourcePath.get(item.sourcePath);
+        if (sourceSummaries) {
+          this.renderSourceSummaries(row, sourceSummaries);
         }
       }
     }
@@ -147,6 +155,21 @@ export class IndexReportModal extends Modal {
       for (const reference of metadata.references) {
         body.createDiv({ cls: "ixplorer-index-report__reference", text: reference.raw });
       }
+    }
+  }
+
+  private renderSourceSummaries(row: HTMLElement, summaries: SourceDocumentSummaries): void {
+    const details = row.createEl("details", { cls: "ixplorer-index-report__section" });
+    details.createEl("summary", {
+      text: `Summary · ${summaries.sections.length} sections`,
+    });
+    const body = details.createDiv({ cls: "ixplorer-index-report__section-body" });
+    body.createDiv({ cls: "ixplorer-index-report__abstract", text: summaries.document.summary });
+    for (const section of summaries.sections) {
+      body.createDiv({
+        cls: "ixplorer-index-report__reference",
+        text: `${section.headingPath.join(" > ")}: ${section.summary}`,
+      });
     }
   }
 }

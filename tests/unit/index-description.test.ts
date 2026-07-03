@@ -106,7 +106,7 @@ describe("index descriptions", () => {
     expect(resolved.diagnostics).toMatchObject({
       freshness: "stale",
       usedFallback: true,
-      algorithmVersion: 1,
+      algorithmVersion: 2,
     });
     expect(resolved.diagnostics.textHash).toMatch(/^[a-f0-9]+$/);
   });

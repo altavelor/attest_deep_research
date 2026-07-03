@@ -1,13 +1,18 @@
-// Use-case (SPEC-corpus-knowledge R3): extract per-source document metadata
-// (title/authors/year/abstract/references) for every indexed source whose
-// content changed since the last enrichment. LLM and storage enter through
-// ports; this class only orchestrates.
+// Use-case (SPEC-corpus-knowledge R3+R4): per indexed source whose content
+// changed since the last run — extract document metadata (title/authors/year/
+// abstract/references) and, when a summarizer is wired, generate hierarchical
+// summaries (per section + per document). LLM and storage enter through ports;
+// this class only orchestrates.
 
 import {
   DocumentMetadataExtractor,
   DocumentMetadataStore,
+  DocumentSummarizer,
+  DocumentSummaryStore,
   IndexChunkListItem,
+  SectionSummary,
   SourceDocumentMetadata,
+  SourceDocumentSummaries,
 } from "@application/ports";
 import { ResearchRetriever } from "@application/contracts";
 import { toDocumentReference } from "./bibliography";
@@ -16,6 +21,9 @@ export interface EnrichIndexSourcesOptions {
   retriever: ResearchRetriever;
   metadataStore: DocumentMetadataStore;
   extractor: DocumentMetadataExtractor;
+  /** Optional summary task (R4): absent ⇒ metadata only. */
+  summaryStore?: DocumentSummaryStore;
+  summarizer?: DocumentSummarizer;
   now?: () => Date;
   /** Characters of document head/tail handed to the extractor. */
   sampleChars?: number;
@@ -40,11 +48,17 @@ const HEAD_CHUNK_LIMIT = 8;
 const TAIL_CHUNK_LIMIT = 10;
 const REFERENCES_HEADING = /references|bibliography|literature|литератур|источник/i;
 const SOURCE_PAGE_LIMIT = 500;
+// Бюджеты саммаризации: секций на документ и символов текста секции на вызов.
+const MAX_SECTIONS_PER_SOURCE = 30;
+const SECTION_TEXT_CHARS = 6_000;
+const MIN_SECTION_CHUNKS = 1;
 
 export class EnrichIndexSources {
   private readonly retriever: ResearchRetriever;
   private readonly metadataStore: DocumentMetadataStore;
   private readonly extractor: DocumentMetadataExtractor;
+  private readonly summaryStore?: DocumentSummaryStore;
+  private readonly summarizer?: DocumentSummarizer;
   private readonly now: () => Date;
   private readonly sampleChars: number;
 
@@ -52,6 +66,8 @@ export class EnrichIndexSources {
     this.retriever = options.retriever;
     this.metadataStore = options.metadataStore;
     this.extractor = options.extractor;
+    this.summaryStore = options.summaryStore;
+    this.summarizer = options.summarizer;
     this.now = options.now ?? (() => new Date());
     this.sampleChars = options.sampleChars ?? DEFAULT_SAMPLE_CHARS;
   }
@@ -72,8 +88,19 @@ export class EnrichIndexSources {
       }
       processed += 1;
 
-      const existing = options.force ? null : await this.metadataStore.read(source.sourcePath);
-      if (existing && source.contentHash && existing.contentHash === source.contentHash) {
+      const contentHash = source.contentHash ?? "";
+      const metadataFresh =
+        !options.force &&
+        Boolean(contentHash) &&
+        (await this.metadataStore.read(source.sourcePath))?.contentHash === contentHash;
+      const summariesFresh =
+        !this.summarizer ||
+        !this.summaryStore ||
+        (!options.force &&
+          Boolean(contentHash) &&
+          (await this.summaryStore.read(source.sourcePath))?.contentHash === contentHash);
+
+      if (metadataFresh && summariesFresh) {
         result.skipped += 1;
         options.onProgress?.({
           processed,
@@ -85,8 +112,17 @@ export class EnrichIndexSources {
       }
 
       try {
-        const metadata = await this.extractSource(source.sourcePath, source.contentHash ?? "");
-        await this.metadataStore.write(metadata);
+        let title: string | undefined;
+        if (!metadataFresh) {
+          const metadata = await this.extractSource(source.sourcePath, contentHash);
+          await this.metadataStore.write(metadata);
+          title = metadata.title;
+        }
+        if (!summariesFresh && this.summarizer && this.summaryStore) {
+          await this.summaryStore.write(
+            await this.summarizeSource(source.sourcePath, contentHash, title),
+          );
+        }
         result.extracted += 1;
         options.onProgress?.({
           processed,
@@ -145,6 +181,79 @@ export class EnrichIndexSources {
         extractedAt: this.now().toISOString(),
       },
     };
+  }
+
+  /**
+   * Hierarchical summaries (R4): summarize each outline section (bounded), then
+   * reduce section summaries into a document summary + one-liner. Documents
+   * without sections are summarized from the head sample directly.
+   */
+  private async summarizeSource(
+    sourcePath: string,
+    contentHash: string,
+    title: string | undefined,
+  ): Promise<SourceDocumentSummaries> {
+    const summarizer = this.summarizer!;
+    const outline = await this.retriever.getIndexSourceOutline?.(sourcePath);
+    const outlineSections = (outline?.sections ?? [])
+      .filter(
+        (section) => section.headingPath.length > 0 && section.chunkCount >= MIN_SECTION_CHUNKS,
+      )
+      .slice(0, MAX_SECTIONS_PER_SOURCE);
+
+    const sections: SectionSummary[] = [];
+    for (const section of outlineSections) {
+      const text = await this.sectionText(sourcePath, section.headingPath);
+      if (!text) {
+        continue;
+      }
+      sections.push({
+        headingPath: section.headingPath,
+        chunkStart: section.chunkStart,
+        chunkEnd: section.chunkEnd,
+        summary: await summarizer.summarizeSection({
+          sourcePath,
+          headingPath: section.headingPath,
+          text,
+        }),
+      });
+    }
+
+    const sectionSummaries =
+      sections.length > 0
+        ? sections.map((section) => `${section.headingPath.join(" > ")}: ${section.summary}`)
+        : [(await this.collectSamples(sourcePath)).headSample].filter(Boolean);
+    const document = await summarizer.summarizeDocument({
+      sourcePath,
+      title,
+      sectionSummaries,
+    });
+
+    return {
+      schemaVersion: 1,
+      sourcePath,
+      contentHash,
+      sections,
+      document,
+      generation: {
+        model: summarizer.model,
+        promptVersion: summarizer.promptVersion,
+        generatedAt: this.now().toISOString(),
+      },
+    };
+  }
+
+  private async sectionText(sourcePath: string, headingPath: string[]): Promise<string> {
+    if (!this.retriever.listIndexChunks) {
+      return "";
+    }
+    const chunks = await this.retriever.listIndexChunks({
+      sourcePath,
+      limit: TAIL_CHUNK_LIMIT,
+      headingPath,
+    });
+    const sample = await this.sampleFromChunks(chunks.items);
+    return sample.slice(0, SECTION_TEXT_CHARS);
   }
 
   /**

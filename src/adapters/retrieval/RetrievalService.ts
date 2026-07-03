@@ -5,6 +5,7 @@ import {
 } from "@application/ports";
 import {
   DocumentMetadataStore,
+  DocumentSummaryStore,
   SharedReference,
   FindInIndexOptions,
   IndexChunkListOptions,
@@ -45,8 +46,9 @@ export interface RetrievalServiceOptions {
   chunkInventory?: IndexChunkInventoryStore;
   languageInventory?: LanguageInventoryIndexStore;
   inventory?: IndexInventoryStore;
-  /** Enrichment sidecars (R3); absent capability degrades to "unsupported". */
+  /** Enrichment sidecars (R3/R4); absent capability degrades to "unsupported". */
   documentMetadata?: DocumentMetadataStore;
+  documentSummaries?: DocumentSummaryStore;
 }
 
 export class RetrievalService {
@@ -58,6 +60,7 @@ export class RetrievalService {
   private readonly languageInventory?: LanguageInventoryIndexStore;
   private readonly inventory?: IndexInventoryStore;
   private readonly documentMetadata?: DocumentMetadataStore;
+  private readonly documentSummaries?: DocumentSummaryStore;
 
   constructor(options: RetrievalServiceOptions) {
     this.embeddings = options.embeddings;
@@ -68,6 +71,7 @@ export class RetrievalService {
     this.languageInventory = options.languageInventory;
     this.inventory = options.inventory;
     this.documentMetadata = options.documentMetadata;
+    this.documentSummaries = options.documentSummaries;
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
@@ -161,6 +165,10 @@ export class RetrievalService {
 
   async getSourceMetadata(sourcePath: string) {
     return this.documentMetadata?.read(sourcePath) ?? null;
+  }
+
+  async getSourceSummary(sourcePath: string) {
+    return this.documentSummaries?.read(sourcePath) ?? null;
   }
 
   async listSharedReferences(options: { minSources: number }): Promise<SharedReference[]> {

@@ -4,11 +4,12 @@ import type { SourceKind } from "@core/model";
 import { stableId } from "@adapters/extractors/common";
 import type { IndexDescriptionPromptContext } from "@core/diagnostics";
 
-export const INDEX_DESCRIPTION_ALGORITHM_VERSION = 1;
-export const INDEX_DESCRIPTION_MAX_CHARACTERS = 2_000;
+export const INDEX_DESCRIPTION_ALGORITHM_VERSION = 2;
+export const INDEX_DESCRIPTION_MAX_CHARACTERS = 4_000;
 export const INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS = 12;
 export const INDEX_DESCRIPTION_MAX_SAMPLE_CHARACTERS = 180;
 export const INDEX_DESCRIPTION_MAX_TOPICS = 12;
+export const INDEX_DESCRIPTION_MAX_ONE_LINERS = 50;
 
 export interface IndexDescriptionDiagnostics {
   representativeChunkCount: number;
@@ -44,6 +45,8 @@ export interface IndexDescriptionSource {
   sourceKinds: readonly SourceKind[];
   languageInventory: LanguageInventoryItem[];
   representativeChunks: IndexDescriptionRepresentativeChunk[];
+  /** One-liner summaries per document from enrichment (R4); optional. */
+  documentOneLiners?: Array<{ path: string; oneLiner: string }>;
 }
 
 export function buildIndexDescription(
@@ -60,14 +63,21 @@ export function buildIndexDescription(
     )
     .slice(0, INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS);
   const topics = representativeTopics(samples);
+  const oneLiners = (source.documentOneLiners ?? []).slice(0, INDEX_DESCRIPTION_MAX_ONE_LINERS);
   const sections = [
     profileSummary(profile),
     `The committed index contains ${source.sourceCount} sources and ${source.chunkCount} chunks.`,
     `Source types: ${sortedUnique(source.sourceKinds).join(", ") || "unknown"}.`,
     `Languages: ${formatLanguages(source.languageInventory)}.`,
-    samples.length > 0
-      ? `Representative sources:\n${samples.map(formatSample).join("\n")}`
-      : "Representative sources: none available.",
+    // Однострочные саммари заменяют «representative sources», когда есть:
+    // они несравнимо информативнее списка имён файлов.
+    oneLiners.length > 0
+      ? `Documents:\n${oneLiners
+        .map((item) => `- ${normalizeMetadata(item.path)}: ${normalizeMetadata(item.oneLiner)}`)
+        .join("\n")}`
+      : samples.length > 0
+        ? `Representative sources:\n${samples.map(formatSample).join("\n")}`
+        : "Representative sources: none available.",
     topics.length > 0 ? `Representative topics: ${topics.join(", ")}.` : "",
   ].filter(Boolean);
   const unbounded = sections.join("\n");
