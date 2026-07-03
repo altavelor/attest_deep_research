@@ -1,11 +1,14 @@
 import { stableId } from "./common";
 import type { PdfPageText } from "./PdfExtractor";
+import type { PdfHeading } from "./pdfHeadings";
 
 export interface PdfTextCacheEntry {
   mtime: number;
   size: number;
   textHash: string;
   content: PdfPageText[];
+  /** Headings resolved at parse time; cached so re-extraction skips the heuristics. */
+  headings?: PdfHeading[];
 }
 
 export interface PdfTextCacheKey {
@@ -26,12 +29,18 @@ export class PdfTextCache {
     return cloneEntry(entry);
   }
 
-  set(path: string, key: PdfTextCacheKey, content: PdfPageText[]): PdfTextCacheEntry {
+  set(
+    path: string,
+    key: PdfTextCacheKey,
+    content: PdfPageText[],
+    headings?: PdfHeading[],
+  ): PdfTextCacheEntry {
     const entry: PdfTextCacheEntry = {
       mtime: key.mtime,
       size: key.size,
       textHash: stableId(JSON.stringify(content)),
       content: content.map((page) => ({ ...page })),
+      ...(headings && headings.length > 0 ? { headings: headings.map((h) => ({ ...h })) } : {}),
     };
 
     this.entries.set(path, entry);
@@ -52,5 +61,6 @@ function cloneEntry(entry: PdfTextCacheEntry): PdfTextCacheEntry {
   return {
     ...entry,
     content: entry.content.map((page) => ({ ...page })),
+    ...(entry.headings ? { headings: entry.headings.map((heading) => ({ ...heading })) } : {}),
   };
 }

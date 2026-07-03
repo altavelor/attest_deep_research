@@ -49,25 +49,38 @@ export function decodeStoredChunks(
 
     return {
       row,
-      embedding: Array.from(vectorData.slice(start, end)),
+      // subarray — zero-copy view поверх общего буфера шарда.
+      embedding: vectorData.subarray(start, end),
     };
   });
 }
 
-export function normalizeVector(vector: number[]): number[] {
-  const magnitude = Math.sqrt(vector.reduce((total, value) => total + value * value, 0));
+export function normalizeVector(vector: ArrayLike<number>): Float32Array {
+  const normalized = new Float32Array(vector.length);
+  let sumOfSquares = 0;
 
-  if (magnitude === 0) {
-    return vector.map(() => 0);
+  for (let index = 0; index < vector.length; index += 1) {
+    sumOfSquares += vector[index] * vector[index];
   }
 
-  return vector.map((value) => value / magnitude);
+  const magnitude = Math.sqrt(sumOfSquares);
+
+  if (magnitude === 0) {
+    return normalized;
+  }
+
+  for (let index = 0; index < vector.length; index += 1) {
+    normalized[index] = vector[index] / magnitude;
+  }
+
+  return normalized;
 }
 
-export function dotProduct(left: number[], right: number[]): number {
+export function dotProduct(left: ArrayLike<number>, right: ArrayLike<number>): number {
   let score = 0;
+  const length = Math.min(left.length, right.length);
 
-  for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+  for (let index = 0; index < length; index += 1) {
     score += left[index] * right[index];
   }
 

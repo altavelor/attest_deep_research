@@ -26,6 +26,8 @@ export interface PdfSourceReference extends SourceReferenceBase {
   pageNumber: number;
   startOffset?: number;
   endOffset?: number;
+  /** Section path from the PDF outline or typography heuristics; absent in older indexes. */
+  headingPath?: string[];
 }
 
 export interface DocumentSourceReference extends SourceReferenceBase {

@@ -273,11 +273,20 @@ function headingMetadataMatches(
     return true;
   }
   const query = heading.toLocaleLowerCase();
-  return storedChunksForSource(state, source.sourcePath).some(
-    (chunk) =>
-      chunk.row.source.kind === "markdown" &&
-      chunk.row.source.headingPath.some((item) => item.toLocaleLowerCase().includes(query)),
+  return storedChunksForSource(state, source.sourcePath).some((chunk) =>
+    chunkHeadingPath(chunk.row.source).some((item) => item.toLocaleLowerCase().includes(query)),
   );
+}
+
+/** Section path of a chunk regardless of source kind (markdown and pdf carry one). */
+function chunkHeadingPath(source: SourceReference): string[] {
+  if (source.kind === "markdown") {
+    return source.headingPath;
+  }
+  if (source.kind === "pdf") {
+    return source.headingPath ?? [];
+  }
+  return [];
 }
 
 function sourceText(source: IndexSourceInventoryItem): string {
@@ -288,10 +297,11 @@ function headingMatches(source: SourceReference, headingPath: string[] | undefin
   if (!headingPath || headingPath.length === 0) {
     return true;
   }
-  if (source.kind !== "markdown") {
+  const sourceHeadingPath = chunkHeadingPath(source);
+  if (sourceHeadingPath.length === 0) {
     return false;
   }
-  return headingPath.every((heading, index) => source.headingPath[index] === heading);
+  return headingPath.every((heading, index) => sourceHeadingPath[index] === heading);
 }
 
 function toChunkListItem(chunk: StoredChunk): IndexChunkListItem {
@@ -301,7 +311,9 @@ function toChunkListItem(chunk: StoredChunk): IndexChunkListItem {
     sourcePath,
     chunkIndex: chunk.row.chunkIndex ?? 0,
     title: chunk.row.source.title,
-    ...(chunk.row.source.kind === "markdown" ? { headingPath: chunk.row.source.headingPath } : {}),
+    ...(chunkHeadingPath(chunk.row.source).length > 0
+      ? { headingPath: chunkHeadingPath(chunk.row.source) }
+      : {}),
     textPreview: chunk.row.text.slice(0, 500),
     charCount: chunk.row.text.length,
     source: chunk.row.source,
@@ -311,7 +323,7 @@ function toChunkListItem(chunk: StoredChunk): IndexChunkListItem {
 function outlineSections(chunks: StoredChunk[]): IndexSectionOutline[] {
   const sections = new Map<string, IndexSectionOutline>();
   chunks.forEach((chunk) => {
-    const headingPath = chunk.row.source.kind === "markdown" ? chunk.row.source.headingPath : [];
+    const headingPath = chunkHeadingPath(chunk.row.source);
     const key = headingPath.join("\u0000");
     const existing = sections.get(key);
     const chunkIndex = chunk.row.chunkIndex ?? 0;
