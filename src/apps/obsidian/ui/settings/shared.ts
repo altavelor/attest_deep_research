@@ -1,6 +1,6 @@
 import { Setting, setIcon } from "obsidian";
 
-import { IndexingState } from "@adapters/indexing";
+import { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
 
 export interface ProfileStatus {
   kind: "is-default" | "is-suspended";
@@ -52,14 +52,36 @@ export function formatIndexRowProgress(state: IndexingState): string {
   return ` · ${Math.round(state.progress * 100)}% · ${state.scannedFiles}/${state.totalFiles} files`;
 }
 
+export function formatEnrichmentStatus(state: EnrichmentProfileState): string {
+  switch (state.status) {
+    case "running":
+      return `Enriching metadata · ${state.processed}/${state.total}`;
+    case "done":
+      return (
+        `Metadata: ${state.extracted} extracted, ${state.skipped} up to date` +
+        (state.failed > 0 ? `, ${state.failed} failed` : "") +
+        ` (${state.total} sources)`
+      );
+    case "error":
+      return `Metadata enrichment failed: ${state.errorMessage ?? "unknown error"}`;
+    default:
+      return "";
+  }
+}
+
 export function renderModalActions(
   containerEl: HTMLElement,
-  actions: { onCancel(): void; onSave(): void },
+  actions: { onCancel(): void; onSave(): void; saveLabel?: string },
 ): void {
   new Setting(containerEl)
     .setClass("ixplorer-profile-modal__actions")
     .addButton((button) => button.setButtonText("Cancel").onClick(actions.onCancel))
-    .addButton((button) => button.setCta().setButtonText("Save").onClick(actions.onSave));
+    .addButton((button) =>
+      button
+        .setCta()
+        .setButtonText(actions.saveLabel ?? "Save")
+        .onClick(actions.onSave),
+    );
 }
 
 export function createIconButton(

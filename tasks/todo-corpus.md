@@ -75,3 +75,48 @@
       Sidecar-файлы читаются тулами сразу после прогона
 - Отложено в Ф4+: саммари, `<index-description>` v2, UI-статус enrichment
   в настройках, фильтры year/author в search_index
+
+## Фаза 3-UI — Единая кнопка запуска + отчёт с метаданными — DONE
+- [x] `EnrichmentProfileController`: состояние per profile, `subscribeAll`,
+      cancel через AbortSignal, force-режим; строка статуса обогащения в таблице
+      («X extracted, Y up to date, Z failed (N sources)»)
+- [x] Единая кнопка Actions: start (индекса нет) / update (есть) /
+      pause–continue (индексация) / stop (извлечение метаданных); отдельные
+      кнопки rebuild/enrich и команда-палитра удалены
+- [x] `IndexRunModal`: секции «Index content (embedding)» и «Extract metadata
+      (chat model)» с тумблерами; без индекса metadata-секция требует embedding;
+      footer Start (новый) или Rebuild+Update; Rebuild недоступен без embedding;
+      смена embedding-модели → warning + повышение Update до Rebuild;
+      «Re-extract unchanged documents» — принудительное пере-извлечение;
+      Esc/✕ — нативное поведение Obsidian Modal
+- [x] Оркестрация `runIndexPlan`: секции последовательно, без подтверждений;
+      rebuild сносит папку индекса целиком (метаданные включительно);
+      `IndexProfile.lastEnrichedAt` после успешного прогона + бэкфилл из
+      sidecar-provenance для индексов, обогащённых до появления поля
+- [x] Статусы: Suspended > Error > Stale index > Stale metadata
+      (`lastIndexedAt > lastEnrichedAt`) > Default; только подсказка, без автозапуска
+- [x] Index report: сворачиваемая секция «Index metadata» (модель, последний
+      прогон, shared references) + per-file `<details>` (авторы, аннотация,
+      список литературы), max-height + вертикальный скролл
+
+## Фаза 3-UI — Единая кнопка запуска + отчёт с метаданными — DONE
+- [x] Команда-палитра убрана; `EnrichmentProfileController` (state per profile,
+      subscribeAll, cancel через AbortSignal) + строка статуса обогащения в таблице
+- [x] Единая кнопка Actions: start (индекса нет) / update (есть) /
+      pause–continue (индексация идёт) / stop (идёт извлечение метаданных);
+      отдельные кнопки rebuild и enrich удалены
+- [x] `IndexRunModal`: секции «Index content (embedding)» и «Extract metadata
+      (chat model)» с тумблерами; без индекса metadata-секция недоступна при
+      выключенной embedding; footer Start (новый индекс) или Rebuild+Update;
+      Rebuild требует включённой embedding-секции; смена embedding-модели
+      показывает warning и повышает Update до Rebuild; Esc/✕ — нативные
+- [x] Оркестрация `runIndexPlan`: секции выполняются последовательно без
+      дополнительных подтверждений; rebuild сносит папку индекса целиком
+      (метаданные включительно — store.clear = rm -rf); `lastEnrichedAt`
+      в `IndexProfile` после успешного прогона
+- [x] Статусы строки: Suspended > Error > **Stale index** (профиль изменён) >
+      **Stale metadata** (`lastIndexedAt > lastEnrichedAt`) > Default;
+      автозапуск обновления не выполняется — только подсказка
+- [x] Index report: сворачиваемая секция «Index metadata» (модель извлечения,
+      последний прогон, общие ссылки из shared bibliography) + per-file
+      `<details>` с авторами/аннотацией/списком литературы, max-height + scroll

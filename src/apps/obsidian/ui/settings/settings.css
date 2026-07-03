@@ -272,10 +272,10 @@
   white-space: nowrap;
 }
 
+/* Без собственного скролла: прокручиваются только metadata-блоки внутри строк
+   (see __section-body); длинный список файлов скроллится вместе с модалкой. */
 .ixplorer-index-report__list {
   display: grid;
-  max-height: 24rem;
-  overflow-y: auto;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
 }
@@ -323,6 +323,66 @@
 
 .ixplorer-index-report__empty {
   padding: 0.75rem;
+}
+
+.ixplorer-index-report__section {
+  grid-column: 1 / -1;
+  font-size: var(--font-ui-smaller);
+}
+
+.ixplorer-index-report__section>summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.ixplorer-index-report__section-body {
+  max-height: 14rem;
+  overflow-y: auto;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-inline-start: 2px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ixplorer-index-report__facts-heading {
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.ixplorer-index-report__reference {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ixplorer-index-report__abstract {
+  color: var(--text-normal);
+}
+
+.ixplorer-index-run__section {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 0.25rem 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.ixplorer-index-run__section .setting-item {
+  border-top: none;
+  padding: 0.5rem 0;
+}
+
+.ixplorer-index-run__section.is-disabled {
+  opacity: 0.55;
+}
+
+.ixplorer-index-run__warning {
+  color: var(--text-warning, var(--color-orange));
+  font-size: var(--font-ui-smaller);
+  min-height: 1.2em;
+  margin-bottom: 0.5rem;
 }
 
 .ixplorer-settings-profile-list {

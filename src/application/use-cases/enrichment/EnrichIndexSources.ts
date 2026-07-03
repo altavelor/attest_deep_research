@@ -58,6 +58,8 @@ export class EnrichIndexSources {
 
   async run(options: {
     signal?: AbortSignal;
+    /** Re-extract even when the stored contentHash matches (user-forced refresh). */
+    force?: boolean;
     onProgress?: (progress: EnrichmentProgress) => void;
   } = {}): Promise<EnrichmentRunResult> {
     const sources = await this.listAllSources();
@@ -70,7 +72,7 @@ export class EnrichIndexSources {
       }
       processed += 1;
 
-      const existing = await this.metadataStore.read(source.sourcePath);
+      const existing = options.force ? null : await this.metadataStore.read(source.sourcePath);
       if (existing && source.contentHash && existing.contentHash === source.contentHash) {
         result.skipped += 1;
         options.onProgress?.({
@@ -161,7 +163,7 @@ export class EnrichIndexSources {
       sourcePath,
       limit: HEAD_CHUNK_LIMIT,
     });
-    const headSample = joinChunkTexts(head.items, this.sampleChars);
+    const headSample = await this.sampleFromChunks(head.items);
 
     const referencesHeading = await this.findReferencesHeading(sourcePath);
     if (referencesHeading) {
@@ -171,11 +173,38 @@ export class EnrichIndexSources {
         headingPath: referencesHeading,
       });
       if (chunks.items.length > 0) {
-        return { headSample, referencesSample: joinChunkTexts(chunks.items, this.sampleChars) };
+        return { headSample, referencesSample: await this.sampleFromChunks(chunks.items) };
       }
     }
 
     return { headSample, referencesSample: await this.tailSample(sourcePath) };
+  }
+
+  /**
+   * Full chunk text for a sample. `listIndexChunks` returns 500-char previews —
+   * feeding those to the extractor made it fall back on the model's own
+   * knowledge of famous works and lose bibliographies. When the retriever can
+   * read chunks, re-read the contiguous run in full within the sample budget.
+   */
+  private async sampleFromChunks(items: IndexChunkListItem[]): Promise<string> {
+    if (items.length === 0) {
+      return "";
+    }
+    if (this.retriever.readIndexChunk) {
+      const read = await this.retriever.readIndexChunk({
+        chunkId: items[0].chunkId,
+        before: 0,
+        after: items.length - 1,
+        maxChars: this.sampleChars,
+      });
+      if (read.chunks.length > 0) {
+        return read.chunks
+          .map((chunk) => chunk.text)
+          .join("\n")
+          .slice(0, this.sampleChars);
+      }
+    }
+    return joinChunkTexts(items, this.sampleChars);
   }
 
   private async findReferencesHeading(sourcePath: string): Promise<string[] | undefined> {
@@ -200,10 +229,10 @@ export class EnrichIndexSources {
         limit: TAIL_CHUNK_LIMIT,
         cursor: String(chunkCount - TAIL_CHUNK_LIMIT),
       });
-      return joinChunkTexts(page.items, this.sampleChars);
+      return this.sampleFromChunks(page.items);
     }
     const page = await this.retriever.listIndexChunks({ sourcePath, limit: TAIL_CHUNK_LIMIT });
-    return joinChunkTexts(page.items, this.sampleChars);
+    return this.sampleFromChunks(page.items);
   }
 }
 
