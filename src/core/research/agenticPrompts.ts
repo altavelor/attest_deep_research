@@ -356,6 +356,9 @@ indexed material. Use check_urls to verify HTTP(S) URL reachability in batches.
 - Run independent sub-queries in parallel if the question has multiple distinct facets.
 - Use the returned \`evidenceId\` to cite results in your answer.
 - If results are insufficient, rephrase the query — do not call search_index with the same query twice.
+- If a top result looks like a heading, a title, or a fragment of a longer passage, call
+  \`read_index_section\` with its \`chunkId\` to read the whole section in one call — do not
+  reassemble it chunk-by-chunk with read_index_chunk. Continue with \`cursor\` if truncated.
 - \`limit\` controls how many results to return (max 5). Start with 3–5; increase only if needed.
 - For URL audits, page through \`list_index_urls\` with \`cursor\` until no \`nextCursor\`
   remains. Its \`limit\` is capped at 100. Preserve each URL's \`purpose\`, \`context\`,

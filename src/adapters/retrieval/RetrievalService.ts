@@ -9,6 +9,7 @@ import {
   IndexChunkReadOptions,
   IndexInventoryStore,
   IndexMetadataSearchOptions,
+  IndexSectionReadOptions,
   IndexSourceInventoryOptions,
   KeywordSearchIndexStore,
 } from "@application/ports";
@@ -145,6 +146,10 @@ export class RetrievalService {
 
   async readIndexChunk(options: IndexChunkReadOptions) {
     return this.inventory?.readIndexChunk(options) ?? { chunks: [] };
+  }
+
+  async readIndexSection(options: IndexSectionReadOptions) {
+    return this.inventory?.readIndexSection(options) ?? null;
   }
 
   async findInIndex(options: FindInIndexOptions) {

@@ -32,3 +32,18 @@
 - [x] **1.4** `chunkHeadingPath()` в inventory: `outlineSections`, `headingMatches`,
       `summarizeSectionsMatch` работают для pdf-чанков; приёмка на реальной книге Перро —
       вручную после пересборки индекса
+
+## Фаза 2 — Секции (R2) — DONE
+- [x] **2.1** `read_index_section`: порт `IndexSectionReadOptions/Result` +
+      `readFileVectorIndexSection` (границы: ран одинакового headingPath; без заголовков —
+      ран между «титульными» чанками ≤ 100 симв., начиная с ближайшего титула; кап
+      `maxChars` + курсор, усечённый чанк перечитывается целиком) + метод в
+      `FileVectorInventoryStore`/`RetrievalService`/`ResearchRetriever` + тул через
+      `defineInventoryTool` (регистрируется автоматически через `INDEX_INVENTORY_TOOLS`)
+- [x] **2.1b** Промпт-подсказка в `agenticPrompts`: топ-результат похож на заголовок →
+      `read_index_section`, а не сборка соседей `read_index_chunk`
+- [x] **2.2** Keyword-формат v2: у постинга опциональный `headingFrequency`
+      (термы `headingPath` считаются и в `frequency` — инвариант ≥ 1 и v1-совместимость
+      сохранены); скоринг BM25F-lite: `tf_eff = frequency + (W−1)×headingFrequency`,
+      `HEADING_WEIGHT = 3`; v1-файлы читаются без изменений (headingFrequency → 0).
+      Буст работает после пересборки индекса

@@ -63,6 +63,23 @@ export interface IndexChunkReadResult {
   }>;
 }
 
+export interface IndexSectionReadOptions {
+  chunkId: string;
+  maxChars: number;
+  cursor?: string;
+}
+
+export interface IndexSectionReadResult {
+  /** Section identity: heading path of the section (empty for heuristic runs). */
+  headingPath: string[];
+  sourcePath: string;
+  /** chunkIndex range of the whole section, before pagination. */
+  chunkStart: number;
+  chunkEnd: number;
+  chunks: IndexChunkReadResult["chunks"];
+  nextCursor?: string;
+}
+
 export interface FindInIndexOptions {
   pattern: string;
   mode: "literal" | "regex";
@@ -133,6 +150,7 @@ export interface IndexInventoryStore {
   ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
   listIndexChunks(options: IndexChunkListOptions): Promise<IndexCursorPage<IndexChunkListItem>>;
   readIndexChunk(options: IndexChunkReadOptions): Promise<IndexChunkReadResult>;
+  readIndexSection(options: IndexSectionReadOptions): Promise<IndexSectionReadResult | null>;
   findInIndex(options: FindInIndexOptions): Promise<IndexCursorPage<FindInIndexMatch>>;
   summarizeIndexSource(sourcePath: string, maxSections: number): Promise<IndexSourceSummary | null>;
   getIndexSourceOutline(sourcePath: string): Promise<IndexSourceOutline | null>;

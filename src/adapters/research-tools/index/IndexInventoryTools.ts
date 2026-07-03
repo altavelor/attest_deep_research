@@ -3,6 +3,7 @@ import {
   IndexChunkListOptions,
   IndexChunkReadOptions,
   IndexMetadataSearchOptions,
+  IndexSectionReadOptions,
   IndexSourceInventoryOptions,
 } from "@application/ports";
 import { ResearchRetriever } from "@application/contracts";
@@ -13,6 +14,7 @@ import {
   LIST_INDEX_CHUNKS_TOOL,
   LIST_INDEX_SOURCES_TOOL,
   READ_INDEX_CHUNK_TOOL,
+  READ_INDEX_SECTION_TOOL,
   SEARCH_INDEX_BY_METADATA_TOOL,
   SUMMARIZE_INDEX_SOURCE_TOOL,
 } from "@core/agent";
@@ -95,6 +97,33 @@ export const ReadIndexChunkTool = defineInventoryTool<IndexChunkReadOptions>({
   wrap: (result, input) => {
     const value = result as { chunks: unknown[] };
     return { ...value, diagnostics: diagnostics(value.chunks.length, input.maxChars) };
+  },
+});
+
+const DEFAULT_SECTION_CHARS = 20_000;
+const MAX_SECTION_CHARS = 60_000;
+
+export const ReadIndexSectionTool = defineInventoryTool<IndexSectionReadOptions>({
+  name: READ_INDEX_SECTION_TOOL,
+  description:
+    "Read the entire section a chunk belongs to (same heading), in document order. Use when a search hit looks like a heading or a fragment of a larger passage — one call instead of guessing neighbor chunks.",
+  schema: {
+    chunkId: str(240, { required: true }),
+    maxChars: int(1, MAX_SECTION_CHARS, DEFAULT_SECTION_CHARS),
+    cursor: str(MAX_CURSOR_CHARS, {
+      description: "Continuation cursor from a previous read of the same section.",
+    }),
+  },
+  capability: "readIndexSection",
+  errorCode: "index-section-read-failed",
+  errorMessage: "Index section read failed.",
+  run: (retriever, input) => retriever.readIndexSection!(input),
+  wrap: (result, input) => {
+    const section = result as { chunks: unknown[] } | null;
+    return {
+      section,
+      diagnostics: diagnostics(section?.chunks.length ?? 0, input.maxChars),
+    };
   },
 });
 
@@ -195,6 +224,7 @@ export const INDEX_INVENTORY_TOOLS: ReadonlyArray<
   ListIndexSourcesTool,
   ListIndexChunksTool,
   ReadIndexChunkTool,
+  ReadIndexSectionTool,
   FindInIndexTool,
   SummarizeIndexSourceTool,
   GetIndexSourceOutlineTool,

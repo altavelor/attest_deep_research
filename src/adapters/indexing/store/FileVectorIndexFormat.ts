@@ -110,6 +110,8 @@ export interface KeywordPostingRow {
   postings: Array<{
     chunkId: string;
     frequency: number;
+    /** Term frequency inside the chunk's headingPath; absent in v1 files (reads as 0). */
+    headingFrequency?: number;
   }>;
 }
 
@@ -251,7 +253,8 @@ export function isKeywordPostingRow(value: unknown): value is KeywordPostingRow 
       (posting) =>
         isRecord(posting) &&
         typeof posting.chunkId === "string" &&
-        isPositiveInteger(posting.frequency),
+        isPositiveInteger(posting.frequency) &&
+        (posting.headingFrequency === undefined || isPositiveInteger(posting.headingFrequency)),
     )
   );
 }
