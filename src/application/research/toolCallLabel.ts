@@ -28,6 +28,10 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
       return typeof args.task === "string" && args.task
         ? `Sub-agent: ${truncate(args.task)}`
         : "Sub-agent";
+    case "map_sources":
+      return typeof args.question === "string" && args.question
+        ? `Fan-out: ${truncate(args.question)}`
+        : "Fan-out over sources";
     case "read_note":
       return basename(args.path) || name;
     case "get_active_note":
@@ -119,6 +123,18 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       const value = root.value as Record<string, unknown> | undefined;
       const sources = typeof value?.sourceCount === "number" ? value.sourceCount : undefined;
       return sources === undefined ? undefined : `${sources} sources`;
+    }
+
+    if (name === "map_sources") {
+      const value = root.value as Record<string, unknown> | undefined;
+      const rows = value?.rows;
+      if (Array.isArray(rows)) {
+        const failed = rows.filter(
+          (row) => (row as Record<string, unknown>).ok === false,
+        ).length;
+        return failed > 0 ? `${rows.length} docs (${failed} failed)` : `${rows.length} docs`;
+      }
+      return undefined;
     }
 
     return undefined;

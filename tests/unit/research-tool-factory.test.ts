@@ -96,4 +96,44 @@ describe("createResearchToolRegistry", () => {
       "check_urls",
     ]);
   });
+
+  it("exposes map_sources (and run_subagent) only when a sub-agent runner and index are present", () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+    };
+    const subAgentRunner = { run: vi.fn() };
+
+    const indexed = createResearchToolRegistry({
+      retriever,
+      subAgentRunner,
+      availability: {
+        searchMode: "indexOnly",
+        noteAccess: false,
+        activeFileAccess: false,
+        noteMutationAccess: false,
+        retrieverAvailable: true,
+        webProviderAvailable: false,
+      },
+    });
+    const indexedNames = indexed.tools.definitions().map((definition) => definition.function.name);
+    expect(indexedNames).toContain("run_subagent");
+    expect(indexedNames).toContain("map_sources");
+
+    // Web-only: run_subagent is available, but map_sources needs an index.
+    const webOnly = createResearchToolRegistry({
+      searchProvider: { search: vi.fn().mockResolvedValue([]) },
+      subAgentRunner,
+      availability: {
+        searchMode: "webOnly",
+        noteAccess: false,
+        activeFileAccess: false,
+        noteMutationAccess: false,
+        retrieverAvailable: false,
+        webProviderAvailable: true,
+      },
+    });
+    const webNames = webOnly.tools.definitions().map((definition) => definition.function.name);
+    expect(webNames).toContain("run_subagent");
+    expect(webNames).not.toContain("map_sources");
+  });
 });
