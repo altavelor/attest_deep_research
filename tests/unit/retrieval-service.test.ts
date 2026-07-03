@@ -89,6 +89,7 @@ describe("RetrievalService", () => {
       chunks: [expect.objectContaining({ id: "fallback-match" })],
       citations: [expect.objectContaining({ id: "fallback-match" })],
       usedFallback: true,
+      semanticError: "embedding unavailable",
     });
   });
 

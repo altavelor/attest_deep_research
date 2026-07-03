@@ -26,7 +26,11 @@ import {
   resolveCitationTokens,
   webUrlEvidenceIndex,
 } from "./citations";
-import { agenticBudgets, createEmptyContextDiagnostics } from "./ResearchDiagnostics";
+import {
+  agenticBudgets,
+  createEmptyContextDiagnostics,
+  semanticDegradationWarning,
+} from "./ResearchDiagnostics";
 
 interface AgenticRunResult {
   result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
@@ -251,6 +255,17 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       diagnostics.probeAudit = this.deps.toolCapabilityProbeAudit;
     diagnostics.toolCapabilities = this.deps.toolCapabilities;
     diagnostics.tools = result.diagnostics;
+    const degradation = semanticDegradationWarning(
+      result.diagnostics.map((tool) => ({
+        semanticError:
+          typeof tool.metadata?.semanticError === "string"
+            ? tool.metadata.semanticError
+            : undefined,
+      })),
+    );
+    if (degradation && !diagnostics.warnings.includes(degradation)) {
+      diagnostics.warnings.push(degradation);
+    }
     diagnostics.agentic = {
       policyReason: policy.reason,
       requiredTools: [...effectivePolicy.requiredTools],

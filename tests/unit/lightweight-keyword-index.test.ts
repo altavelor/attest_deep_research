@@ -25,10 +25,31 @@ describe("LightweightKeywordIndex", () => {
       3,
     );
 
-    expect(rankKeywordPostings("local retrieval", rows, 3, 3)).toEqual([
-      { chunkId: "chunk-a", score: 3 },
-      { chunkId: "chunk-b", score: 1 },
-    ]);
+    const matches = rankKeywordPostings("local retrieval", rows, 3, 3);
+
+    expect(matches.map((match) => match.chunkId)).toEqual(["chunk-a", "chunk-b"]);
+    expect(matches[0].score).toBeGreaterThan(matches[1].score);
+    for (const match of matches) {
+      expect(match.score).toBeGreaterThan(0);
+    }
+  });
+
+  it("ranks a rare-term match above a long chunk saturated with common terms", () => {
+    // Регресс из бага search_index: чанк, набитый частым термом, выигрывал у
+    // чанка с редким термом запроса за счёт сырого TF без IDF и нормализации.
+    const commonFiller = Array.from({ length: 50 }, () => "the mail service").join(" ");
+    const rows = buildKeywordPostingRows(
+      [
+        chunk("chunk-noise", commonFiller),
+        chunk("chunk-riquet", "Riquet with the Tuft was, once upon a time, the son of the Queen"),
+        chunk("chunk-other", "the queen read the mail about the service"),
+      ],
+      3,
+    );
+
+    const matches = rankKeywordPostings("riquet the tuft fairy tale", rows, 3, 3);
+
+    expect(matches[0].chunkId).toBe("chunk-riquet");
   });
 
   it("returns no matches for empty or too-short queries", () => {

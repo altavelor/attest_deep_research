@@ -12,6 +12,8 @@ export interface ToolCallView {
   inCell?: ToolCell;
   /** Bottom "Out" cell — the result. Omitted for tools that need no output. */
   outCell?: ToolCell;
+  /** Short warning chip next to the tool head (e.g. degraded search mode). */
+  badge?: { text: string; tooltip?: string };
 }
 
 export interface ToolCallViewInput {
@@ -66,7 +68,31 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
         intent,
         inCell: argsCell(args),
         outCell: resultJson ? { kind: "code", text: prettyJson(resultJson) } : undefined,
+        ...(name === "search_index" ? { badge: keywordFallbackBadge(resultJson) } : {}),
       };
+  }
+}
+
+/**
+ * Surfaces degraded index search (semantic path failed, keyword-only ranking)
+ * as a warning chip, so silent quality loss is visible outside the raw report.
+ */
+function keywordFallbackBadge(resultJson?: string): { text: string; tooltip?: string } | undefined {
+  if (!resultJson) return undefined;
+  try {
+    const parsed = JSON.parse(resultJson) as {
+      diagnostics?: { usedKeywordFallback?: boolean; semanticError?: string };
+    };
+    const diagnostics = parsed.diagnostics;
+    if (!diagnostics?.usedKeywordFallback && !diagnostics?.semanticError) return undefined;
+    return {
+      text: "keyword-only",
+      tooltip: diagnostics.semanticError
+        ? `Semantic (embedding) search failed: ${diagnostics.semanticError}`
+        : "Semantic search returned nothing; results ranked by keywords only.",
+    };
+  } catch {
+    return undefined;
   }
 }
 

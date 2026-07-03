@@ -1402,6 +1402,17 @@
   font-size: var(--font-ui-smaller);
 }
 
+.ixplorer-chat__tool-badge {
+  color: var(--text-warning, var(--color-orange));
+  border: 1px solid currentColor;
+  border-radius: var(--radius-s);
+  padding: 0 0.35em;
+  font-size: var(--font-ui-smaller);
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: help;
+}
+
 .ixplorer-chat__workflow--nested {
   margin-top: 0.4rem;
   margin-inline-start: 0.75rem;
