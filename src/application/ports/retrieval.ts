@@ -24,6 +24,8 @@ export interface IndexSourceInventoryItem {
   indexedAt: string;
   chunkCount: number;
   languages?: string[];
+  /** Hash of the source content at indexing time; drives incremental enrichment. */
+  contentHash?: string;
 }
 
 export interface IndexChunkListOptions {

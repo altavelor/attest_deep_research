@@ -17,6 +17,8 @@ export const FIND_IN_INDEX_TOOL = "find_in_index";
 export const SUMMARIZE_INDEX_SOURCE_TOOL = "summarize_index_source";
 export const GET_INDEX_SOURCE_OUTLINE_TOOL = "get_index_source_outline";
 export const SEARCH_INDEX_BY_METADATA_TOOL = "search_index_by_metadata";
+export const GET_SOURCE_METADATA_TOOL = "get_source_metadata";
+export const LIST_SHARED_REFERENCES_TOOL = "list_shared_references";
 
 // --- Index URL audit ---
 export const LIST_INDEX_URLS_TOOL = "list_index_urls";
@@ -62,6 +64,8 @@ export const NOTE_MUTATION_TOOLS = [CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL, DELETE_N
 /** Every tool name the agentic prompt may reference. Drives the drift guard test. */
 export const PROMPT_TOOL_NAMES = [
   INDEX_SEARCH_TOOL,
+  READ_INDEX_CHUNK_TOOL,
+  READ_INDEX_SECTION_TOOL,
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
   SUB_AGENT_TOOL,

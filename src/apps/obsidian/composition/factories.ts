@@ -17,6 +17,8 @@ import { IndexingService, IndexingState } from "@adapters/indexing";
 import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
+import { FileDocumentMetadataStore, LlmDocumentMetadataExtractor } from "@adapters/indexing";
+import { EnrichIndexSources } from "@application/use-cases/enrichment";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
 import { QueryExpansionService } from "@adapters/retrieval";
@@ -268,6 +270,39 @@ export function createRetrieverForProfile(
     chunkInventory: reader,
     languageInventory: reader,
     inventory: new FileVectorInventoryStore(indexStore),
+    documentMetadata: createDocumentMetadataStoreForProfile(ctx, indexProfile),
+  });
+}
+
+export function createDocumentMetadataStoreForProfile(
+  ctx: CompositionContext,
+  indexProfile: IndexProfile,
+): FileDocumentMetadataStore {
+  return new FileDocumentMetadataStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
+}
+
+/**
+ * Index enrichment (SPEC-corpus-knowledge R3): extracts bibliographic metadata
+ * for every indexed source with the active chat model. Triggered explicitly
+ * (command) — never as a silent side effect of indexing, because it spends
+ * LLM tokens proportional to corpus size.
+ */
+export function createEnrichmentService(
+  ctx: CompositionContext,
+  indexProfileId: string,
+): EnrichIndexSources {
+  const settings = ctx.getSettings();
+  const indexProfile = requireIndexProfile(settings, indexProfileId);
+  const chatProfile = requireChatModelProfile(settings);
+  const server = requireServerProfile(settings, chatProfile.serverProfileId);
+
+  return new EnrichIndexSources({
+    retriever: createRetrieverForProfile(ctx, indexProfile),
+    metadataStore: createDocumentMetadataStoreForProfile(ctx, indexProfile),
+    extractor: new LlmDocumentMetadataExtractor({
+      provider: createChatModelClient(ctx, server, chatProfile),
+      model: chatProfile.modelName,
+    }),
   });
 }
 
