@@ -125,6 +125,65 @@ describe("ChatCompaction", () => {
       }),
     ).toBe(true);
   });
+
+  it("includes assistant reasoning trace and tool results in prompt history", () => {
+    const messages: ChatDisplayMessage[] = [
+      user("Find relevant notes."),
+      {
+        ...assistant("The note says to use Ixplorer."),
+        researchProgress: {
+          phase: "complete",
+          disclosure: "auto",
+          view: "expanded",
+          reasoning: {
+            phase: "complete",
+            segments: [{ id: "summary-1", kind: "summary", content: "Need local evidence." }],
+          },
+          checkpoints: [
+            { id: "checkpoint-1", round: 1, content: "Searching the index", status: "complete" },
+          ],
+          chain: [
+            { kind: "reasoning", segmentId: "reason-1", content: "Search before answering." },
+            {
+              kind: "tool-call",
+              id: "tool-1",
+              name: "search_index",
+              label: "Search index",
+              status: "complete",
+              resultSummary: "1 result",
+              args: { query: "Ixplorer" },
+              resultJson: '{"results":[{"path":"Notes/Ixplorer.md","text":"Use Ixplorer."}]}',
+              children: [
+                {
+                  kind: "tool-call",
+                  id: "tool-2",
+                  name: "read_note",
+                  label: "Read note",
+                  status: "complete",
+                  args: { path: "Notes/Ixplorer.md" },
+                  resultJson: '{"content":"Use Ixplorer."}',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    const [, assistantHistory] = chatHistoryForPrompt(messages);
+
+    expect(assistantHistory.content).toContain("The note says to use Ixplorer.");
+    expect(assistantHistory.content).toContain("Research trace:");
+    expect(assistantHistory.content).toContain("Reasoning summary: Need local evidence.");
+    expect(assistantHistory.content).toContain("Reasoning: Search before answering.");
+    expect(assistantHistory.content).toContain("Checkpoint round 1: Searching the index");
+    expect(assistantHistory.content).toContain(
+      'Tool search_index [complete] Search index; args: {"query":"Ixplorer"}; summary: 1 result; result: {"results":[{"path":"Notes/Ixplorer.md","text":"Use Ixplorer."}]}',
+    );
+    expect(assistantHistory.content).toContain(
+      'Child tool read_note [complete] Read note; args: {"path":"Notes/Ixplorer.md"}; result: {"content":"Use Ixplorer."}',
+    );
+  });
 });
 
 function user(content: string): ChatDisplayMessage {

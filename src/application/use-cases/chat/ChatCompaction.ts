@@ -1,7 +1,7 @@
 import { ChatModelProvider } from "@core/agent";
 import { sourceLabel } from "@core/retrieval";
 import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "@core/research";
-import { ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
+import { ChainItem, ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
 
 export const COMPACTION_RECENT_MESSAGE_COUNT = 4;
 
@@ -125,7 +125,7 @@ export function chatHistoryForPrompt(messages: ChatDisplayMessage[]): ResearchCh
       content:
         message.kind === "compact-summary" && message.compactSummary
           ? formatCompactionSummaryForPrompt(message.compactSummary)
-          : message.content,
+          : formatMessageContentForPrompt(message),
     }));
 }
 
@@ -308,6 +308,71 @@ function existingCompactionSummary(
   messages: ChatDisplayMessage[],
 ): ConversationCompactionSummary | undefined {
   return messages.find((message) => message.kind === "compact-summary")?.compactSummary;
+}
+
+function formatMessageContentForPrompt(message: ChatDisplayMessage): string {
+  if (message.role !== "assistant" || !message.researchProgress) {
+    return message.content;
+  }
+
+  const trace = researchTraceForPrompt(message.researchProgress);
+
+  if (trace.length === 0) {
+    return message.content;
+  }
+
+  return [message.content, "", "Research trace:", ...trace].join("\n");
+}
+
+function researchTraceForPrompt(
+  progress: NonNullable<ChatDisplayMessage["researchProgress"]>,
+): string[] {
+  const lines: string[] = [];
+
+  for (const segment of progress.reasoning.segments) {
+    lines.push(
+      `${segment.kind === "summary" ? "Reasoning summary" : "Reasoning"}: ${segment.content}`,
+    );
+  }
+
+  for (const checkpoint of progress.checkpoints) {
+    lines.push(`Checkpoint round ${checkpoint.round}: ${checkpoint.content}`);
+  }
+
+  for (const item of progress.chain) {
+    lines.push(...chainItemTraceLines(item));
+  }
+
+  return uniqueStrings(lines);
+}
+
+function chainItemTraceLines(item: ChainItem, depth = 0): string[] {
+  if (item.kind === "reasoning") {
+    return [`${depth > 0 ? "Child reasoning" : "Reasoning"}: ${item.content}`];
+  }
+
+  if (item.kind === "checkpoint") {
+    return [`Checkpoint round ${item.round}: ${item.content}`];
+  }
+
+  const prefix = depth > 0 ? "Child tool" : "Tool";
+  const details = [
+    `${prefix} ${item.name} [${item.status}] ${item.label}`,
+    item.args ? `args: ${stableJson(item.args)}` : undefined,
+    item.resultSummary ? `summary: ${item.resultSummary}` : undefined,
+    item.resultJson ? `result: ${item.resultJson}` : undefined,
+  ].filter((part): part is string => part !== undefined);
+  const lines = [`${details.join("; ")}`];
+
+  for (const child of item.children ?? []) {
+    lines.push(...chainItemTraceLines(child, depth + 1));
+  }
+
+  return lines;
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value);
 }
 
 function mergeSummaries(
