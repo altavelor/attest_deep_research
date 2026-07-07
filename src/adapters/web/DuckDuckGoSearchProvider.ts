@@ -11,6 +11,7 @@ import {
 } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
+import { HostRequestThrottle } from "./HostRequestThrottle";
 import { validatePublicWebUrl } from "@application/sources";
 
 export interface DuckDuckGoSearchProviderOptions {
@@ -26,6 +27,10 @@ export interface DuckDuckGoSearchProviderOptions {
   maxSearchRetries?: number;
   /** Base backoff between rate-limit retries (multiplied by attempt number). */
   rateLimitBackoffMs?: number;
+  /** Minimum spacing between page fetches to the *same* host (fetch_web_page batch). */
+  pageFetchIntervalMs?: number;
+  /** Maximum simultaneous page fetches across all hosts. */
+  pageFetchConcurrency?: number;
   now?: () => Date;
   logger?: PluginRequestLogger;
 }
@@ -45,6 +50,11 @@ const DEFAULT_MAX_REDIRECTS = 5;
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 700;
 const DEFAULT_MAX_SEARCH_RETRIES = 2;
 const RATE_LIMIT_BACKOFF_MS = 1_500;
+// Page fetches hit arbitrary target hosts, not DuckDuckGo, so they get their own
+// per-host throttle instead of the search gate: same-host requests are spaced,
+// distinct hosts run concurrently up to a global cap (fast batch fetch_web_page).
+const DEFAULT_PAGE_FETCH_INTERVAL_MS = 250;
+const DEFAULT_PAGE_FETCH_CONCURRENCY = 6;
 
 export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly fetchImpl: typeof fetch;
@@ -57,9 +67,11 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly rateLimitBackoffMs: number;
   private readonly now: () => Date;
   private readonly logger?: PluginRequestLogger;
-  // Serializes + spaces all outbound requests across concurrent callers.
+  // Serializes + spaces all outbound *search* requests across concurrent callers.
   private requestChain: Promise<void> = Promise.resolve();
   private lastRequestAt = 0;
+  // Page fetches use a separate per-host throttle (concurrent across hosts).
+  private readonly pageThrottle: HostRequestThrottle;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
@@ -75,6 +87,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     this.minRequestIntervalMs = Math.max(0, options.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS);
     this.maxSearchRetries = Math.max(0, options.maxSearchRetries ?? DEFAULT_MAX_SEARCH_RETRIES);
     this.rateLimitBackoffMs = Math.max(0, options.rateLimitBackoffMs ?? RATE_LIMIT_BACKOFF_MS);
+    this.pageThrottle = new HostRequestThrottle({
+      perHostIntervalMs: options.pageFetchIntervalMs ?? DEFAULT_PAGE_FETCH_INTERVAL_MS,
+      maxConcurrent: options.pageFetchConcurrency ?? DEFAULT_PAGE_FETCH_CONCURRENCY,
+    });
     this.now = options.now ?? (() => new Date());
     this.logger = options.logger;
   }
@@ -213,7 +229,20 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 
   /** Shared fetch core for fetchPage/fetchMetadata/fetchDocument: follows redirects, reads bounded body. */
-  private async fetchRawPage(
+  // Throttled per host so a batch fetch spaces same-host hits but fans out across
+  // distinct hosts. Keyed on the request host (redirect hops inside a single
+  // logical fetch are not re-throttled — they run within this one slot).
+  private fetchRawPage(
+    url: string,
+    options: WebPageFetchOptions,
+    acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
+  ): Promise<RawPageResult> {
+    return this.pageThrottle.run(hostOf(url), () =>
+      this.fetchRawPageNow(url, options, acceptContentType),
+    );
+  }
+
+  private async fetchRawPageNow(
     url: string,
     options: WebPageFetchOptions,
     acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
@@ -409,8 +438,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     });
   }
 
+  // No search gate here: throttling is applied once per logical page fetch in
+  // fetchRawPage (so redirect hops don't each pay the per-host interval).
   private requestPage(url: string, timeoutMs: number): Promise<Response> {
-    return this.gate(() => this.requestPageNow(url, timeoutMs));
+    return this.requestPageNow(url, timeoutMs);
   }
 
   private async requestPageNow(url: string, timeoutMs: number): Promise<Response> {
@@ -482,6 +513,15 @@ function nonNegativeInteger(value: number | undefined, fallback: number): number
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Throttle key: the request host, or the raw URL when it cannot be parsed (validation rejects it later). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 function isRateLimited(status: number): boolean {
