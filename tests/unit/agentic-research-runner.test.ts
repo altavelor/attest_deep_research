@@ -481,4 +481,100 @@ describe("AgenticResearchRunner", () => {
     const result = await resultPromise;
     expect(result).toMatchObject({ ok: true, answerText: "final" });
   });
+
+  it("runs independent read tools in one round concurrently, keeping result order", async () => {
+    let active = 0;
+    let peak = 0;
+    let started = 0;
+    let releaseAll!: () => void;
+    const allStarted = new Promise<void>((resolve) => (releaseAll = resolve));
+    // Each read execute blocks until every sibling has started: only true
+    // concurrency lets all three run, so `peak` reaches 3.
+    const search = tool(
+      "search_index",
+      vi.fn().mockImplementation(async (input: { q?: string }) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        started += 1;
+        if (started === 3) releaseAll();
+        await allStarted;
+        active -= 1;
+        return { ok: true, value: { results: [{ evidenceId: `e-${input.q}` }] } };
+      }),
+    );
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            { id: "1", name: "search_index", arguments: { q: "a" } },
+            { id: "2", name: "search_index", arguments: { q: "b" } },
+            { id: "3", name: "search_index", arguments: { q: "c" } },
+          ],
+        },
+      ],
+      [{ content: "final", isComplete: true }],
+    ]);
+
+    const results: string[] = [];
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler]),
+      policy: policy([]),
+      onToolResult: (id) => results.push(id),
+    }).run();
+
+    expect(peak).toBe(3); // all three read calls overlapped
+    expect(results).toEqual(["1", "2", "3"]); // results still surface in call order
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+  });
+
+  it("runs mutation tools inline in call order, never overlapping", async () => {
+    let active = 0;
+    let peak = 0;
+    // Fallback release so a (correct) sequential run does not deadlock on the barrier.
+    let started = 0;
+    let releaseAll!: () => void;
+    const bothStarted = new Promise<void>((resolve) => (releaseAll = resolve));
+    setTimeout(() => releaseAll(), 20);
+    const update = tool(
+      "update_note",
+      vi.fn().mockImplementation(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        started += 1;
+        if (started === 2) releaseAll();
+        await bothStarted;
+        active -= 1;
+        return { ok: true, value: { ok: true } };
+      }),
+    );
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            { id: "1", name: "update_note", arguments: { path: "a.md" } },
+            { id: "2", name: "update_note", arguments: { path: "b.md" } },
+          ],
+        },
+      ],
+      [{ content: "final", isComplete: true }],
+    ]);
+
+    const result = await new AgenticResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([update.handler]),
+      policy: policy([]),
+    }).run();
+
+    expect(peak).toBe(1); // mutations were not pre-launched — they ran one at a time
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+  });
 });
