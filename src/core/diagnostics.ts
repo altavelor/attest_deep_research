@@ -307,6 +307,8 @@ export interface AgenticAttemptDiagnostics {
   duplicatedCost: boolean;
   capabilityProvenance?: Record<string, string>;
   unknownCitationIds?: string[];
+  /** Cited evidence ids whose surrounding claim does not lexically overlap the chunk (R8). */
+  unverifiedCitations?: string[];
   phases?: string[];
   promptDeltas?: RoundPromptDeltaDiagnostic[];
   reasoningSegments?: ReasoningSegmentAttribution[];

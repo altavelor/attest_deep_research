@@ -190,5 +190,10 @@ function summarizeSource(chunk: RetrievedChunk): Record<string, unknown> {
     ...(source.kind === "markdown" ? { headingPath: source.headingPath } : {}),
     ...(source.kind === "pdf" ? { pageNumber: source.pageNumber } : {}),
     ...(source.kind === "document" ? { format: source.format } : {}),
+    // Near-duplicate copies this result stands in for (R8) — so the model knows
+    // several sources carry the same passage rather than treating it as unique.
+    ...(chunk.duplicates && chunk.duplicates.length > 0
+      ? { duplicates: [...chunk.duplicates] }
+      : {}),
   };
 }

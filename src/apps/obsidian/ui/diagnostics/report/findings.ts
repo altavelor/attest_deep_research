@@ -169,6 +169,19 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
+  // warning: unverified-citations (R8) — cited chunk exists but its wording does not
+  // overlap the claim, so the citation may be misattributed.
+  if (answer.unverifiedCitations.length > 0) {
+    findings.push({
+      severity: "warning",
+      code: "unverified-citations",
+      title: "Answer cites sources whose text does not support the claim",
+      detail: `${answer.unverifiedCitations.length} citation(s) point to a real evidence chunk whose wording does not lexically overlap the surrounding claim. The citation may be misattributed — verify against the source before relying on it.`,
+      affectedSection: "answer",
+      evidence: { ids: answer.unverifiedCitations },
+    });
+  }
+
   // info: index-stale
   if (preflight.index?.isStale) {
     findings.push({

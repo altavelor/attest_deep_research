@@ -202,3 +202,22 @@
       enrichment claims-task (инкрементальность, references пропущены)
 - [ ] **7.9** Ручная приёмка: синтетическая пара с противоречием + набор ~20 пар
       на ложноположительные
+
+## Фаза 8 — Качество на масштабе (R8, независимые задачи)
+- [x] **8.2 Цитатная верификация** (детерминированно, без LLM): пост-шаг ответа
+      `verifyCitations` (`strategies/citationVerification.ts`) — для каждого
+      `[evidenceId]`/`[url:…]` окно-претензия перед цитатой сверяется с текстом
+      чанка через word-shingle overlap (k=3, порог 0.18); несоответствия →
+      `unverifiedCitations` в agentic-диагностику + warning + finding в отчёте
+      (report/html). Тесты: overlap/mismatch/multi-occurrence/url-токены/короткие
+- [x] **8.1 Дедуп чанков** (детерминированно, retrieval-time — без миграции
+      индекс-формата): `dedupeNearDuplicateChunks` (`core/retrieval/dedupe.ts`) —
+      по ранжированному candidate-набору word-shingle Jaccard (k=8, порог 0.5;
+      short-text fallback на токен-сет), лучший скор выживает, подавлённые копии →
+      `duplicates: [sourcePath]` на выжившем; применяется в `RetrievalService.search`
+      до среза top-k; проброс в `search_index`-output. Тесты: near-copy/distinct/
+      best-score-wins/same-source. NB: это подавление в выдаче; indexing-time
+      minhash-кластеры для claim-индекса (R7) — при необходимости отдельно
+- [ ] **8.3 LLM-реранк** top-k за флагом профиля (BM25+вектор top-20..50 →
+      дешёвая модель, относительная сортировка → top-5; `rerank`-блок в
+      диагностику). Нужен порт+адаптер+флаг в settings/UI+изменение search-flow

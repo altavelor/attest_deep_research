@@ -199,6 +199,7 @@ export function buildAnswerSection(d: ContextDiagnostics): AnswerSection {
     projection: d.projection ?? null,
     delivery: d.delivery ?? null,
     unknownCitationIds: d.agentic?.unknownCitationIds ?? [],
+    unverifiedCitations: d.agentic?.unverifiedCitations ?? [],
   };
 }
 

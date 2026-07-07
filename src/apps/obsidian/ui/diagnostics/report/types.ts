@@ -161,6 +161,7 @@ export interface AnswerSection {
   projection: ContextDiagnostics["projection"] | null;
   delivery: ContextDiagnostics["delivery"] | null;
   unknownCitationIds: string[];
+  unverifiedCitations: string[];
 }
 
 export interface StatsSection {
