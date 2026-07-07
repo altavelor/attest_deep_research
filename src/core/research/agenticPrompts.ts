@@ -1,15 +1,21 @@
 import { ChatMessage } from "@core/agent/protocol";
 import {
   CHECK_URLS_TOOL,
+  CREATE_NOTE_TOOL,
   SUB_AGENT_TOOL,
   DOWNLOAD_DOCUMENT_TOOL,
+  FIND_CLAIMS_TOOL,
+  GET_SOURCE_SUMMARY_TOOL,
   INDEX_SEARCH_TOOL,
+  LIST_INDEX_SOURCES_TOOL,
   LIST_INDEX_URLS_TOOL,
   MAP_SOURCES_TOOL,
   NOTE_EDIT_TOOLS,
   NOTE_MUTATION_TOOLS,
   PROBE_DOCUMENT_URL_TOOL,
   READ_NOTE_TOOL,
+  SEARCH_NOTES_TOOL,
+  UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
@@ -51,6 +57,11 @@ const hasWeb = (tools: ToolSet): boolean => tools.has(WEB_SEARCH_TOOL);
 const hasIndex = (tools: ToolSet): boolean => tools.has(INDEX_SEARCH_TOOL);
 const hasSubAgent = (tools: ToolSet): boolean => tools.has(SUB_AGENT_TOOL);
 const hasMapSources = (tools: ToolSet): boolean => tools.has(MAP_SOURCES_TOOL);
+const hasClaims = (tools: ToolSet): boolean => tools.has(FIND_CLAIMS_TOOL);
+// Compiling corpus knowledge into notes needs both a readable index (evidence +
+// planning) and note-writing tools; advertised only when both are present.
+const hasCompileKnowledge = (tools: ToolSet): boolean =>
+  hasIndex(tools) && hasNoteMutation(tools);
 const hasNoteMutation = (tools: ToolSet): boolean =>
   NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 const hasDownload = (tools: ToolSet): boolean => tools.has(DOWNLOAD_DOCUMENT_TOOL);
@@ -334,6 +345,96 @@ do not address the question, and note any row flagged with an \`error\` (that
 document could not be analyzed) rather than treating it as silence.
 `.trimStart();
 
+// Knowledge-compilation workflow (SPEC-corpus R6): turn a corpus into a connected
+// set of vault notes rather than one flat dump. Pure prompt engineering over tools
+// already registered — it only names the ones actually present in this profile so
+// the drift guard and source-availability rule stay honest.
+// "a", "a and b", "a, b and c" — for listing the tools a step may use.
+function humanJoin(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+const COMPILE_KNOWLEDGE_SKILL = (tools: ToolSet): string => {
+  const surveyTools = [GET_SOURCE_SUMMARY_TOOL, LIST_INDEX_SOURCES_TOOL, INDEX_SEARCH_TOOL].filter(
+    (name) => tools.has(name),
+  );
+  const researchTools = [MAP_SOURCES_TOOL, INDEX_SEARCH_TOOL].filter((name) => tools.has(name));
+  const dedupTools = [SEARCH_NOTES_TOOL, READ_NOTE_TOOL].filter((name) => tools.has(name));
+
+  const survey =
+    surveyTools.length > 0
+      ? `Survey the corpus first with ${humanJoin(surveyTools)} to map the topic into distinct\n  entities/subtopics — one note each.`
+      : "Survey the corpus first to map the topic into distinct entities/subtopics — one note each.";
+  const research =
+    researchTools.length > 0
+      ? `Gather evidence for each planned note with ${humanJoin(researchTools)} before writing it${
+          tools.has(MAP_SOURCES_TOOL)
+            ? " — prefer map_sources when the note spans several documents"
+            : ""
+        }.`
+      : "Gather evidence for each planned note before writing it.";
+  const dedup =
+    dedupTools.length > 0
+      ? `Before ${CREATE_NOTE_TOOL}, check for an existing note on that entity with ${humanJoin(dedupTools)}.`
+      : `Before ${CREATE_NOTE_TOOL}, check whether a note on that entity already exists.`;
+
+  return `
+## Compiling corpus knowledge into notes
+
+When the user asks you to compile / build / synthesize the corpus's knowledge on a
+topic into notes (e.g. "compile what the library says about X into folder Notes/X/"),
+build a connected set of notes, not one flat note:
+
+### 1. Plan the note set
+- ${survey}
+  Aim for a small connected set (concepts, methods, claims), not a single dump.
+
+### 2. Research each note
+- ${research}
+  Every factual claim must trace to an \`[evidenceId]\` from a tool result.
+
+### 3. Deduplicate before creating
+- ${dedup} If one exists, ${UPDATE_NOTE_TOOL} to APPEND a new section — never
+  overwrite (see note mutation rules). A re-run on the same topic must extend the
+  existing notes, not duplicate them.
+
+### 4. Write linked notes with citations
+- Cite every claim inline with its \`[evidenceId]\`, and add a human-readable
+  footnote per source (file name + page/section) so a reader can find the origin.
+- Link related notes to each other with \`[[wikilinks]]\` so the set forms a graph.
+- Report exactly the notes the tools confirmed you wrote — never claim a note that
+  no ${CREATE_NOTE_TOOL}/${UPDATE_NOTE_TOOL} actually produced (see "Doing vs. describing").
+`.trimStart();
+};
+
+// Contradiction workflow (SPEC-corpus R7). Two layers: cheap claim retrieval
+// (find_claims) then careful verbatim verification before any contradiction is
+// asserted — paraphrases of the same fact are NOT contradictions. Advertised only
+// when the claim index tool is present.
+const CONTRADICTION_SKILL = `
+## Finding contradictions across the corpus (find_claims)
+
+For "where do the documents disagree / contradict each other on X", do not eyeball
+search results — use the claim index:
+
+### 1. Gather claims
+- Call find_claims with the subject or topic. It returns claims grouped by subject
+  across documents, multi-document groups first; each claim has a \`chunkId\`.
+
+### 2. Verify before judging
+- A contradiction requires two claims about the SAME subject that cannot both be
+  true. Before asserting one, call read_index_chunk on both claims' \`chunkId\` to
+  confirm the wording — the one-sentence claim is a pointer, not the evidence.
+- Different wording of the same fact, different scope, or different time/conditions
+  is NOT a contradiction. Say "no genuine contradiction" when that is the case.
+
+### 3. Report
+- For each real conflict: "Document A asserts … [evidenceId]; Document B asserts the
+  opposite … [evidenceId]", citing the verified chunk on both sides. An evidence
+  matrix (document × claim) is a good format when several documents are involved.
+`.trimStart();
+
 // Hard limit on which evidence sources this profile exposes. Without it the model
 // assumes tools that were never granted (e.g. fetch_web_page in an index-only profile),
 // fails with unknown-tool, and silently falls back to whatever source it does have.
@@ -466,6 +567,16 @@ export function buildAgenticResearchMessages(
   // Fan-out skill — only when map_sources is registered (index-backed corpora)
   if (hasMapSources(tools)) {
     systemSections.push(MAP_SOURCES_SKILL);
+  }
+
+  // Knowledge-compilation workflow — only when the index can be read AND notes written
+  if (hasCompileKnowledge(tools)) {
+    systemSections.push(COMPILE_KNOWLEDGE_SKILL(tools));
+  }
+
+  // Contradiction workflow — only when the claim index tool is registered
+  if (hasClaims(tools)) {
+    systemSections.push(CONTRADICTION_SKILL);
   }
 
   // Attachment manifest — the user's attached files as files, not just chunks,

@@ -160,3 +160,45 @@
 - [x] **5.5** Промпт-скилл `MAP_SOURCES_SKILL`: когда предпочесть fan-out,
       reduce-шаблон **evidence matrix** (документ × позиция, цитата в каждой
       строке, пометка error-строк) — вход для R7
+- [x] **5.6** Фикс гейта: sub-agent runner создаётся без web-провайдера, иначе
+      `run_subagent`/`map_sources` не регистрировались в чистом Index-режиме
+
+## Фаза 6 — Компиляция знаний в vault-заметки (R6) — DONE
+- [x] **6.1** Промпт-скилл `COMPILE_KNOWLEDGE_SKILL` (без новых портов/тулов):
+      workflow «скомпилируй знания корпуса по теме X в папку Y» —
+      план заметок (survey через `get_source_summary`/`list_index_sources`/
+      `search_index`) → исследование каждой (`map_sources`/`search_index`) →
+      дедуп (`search_notes` → append через `update_note`, не перезапись) →
+      запись с `[[wikilinks]]` + цитатами `[evidenceId]` + сноской (файл, стр.)
+- [x] **6.2** Гейт `hasCompileKnowledge` (index читаем + notes пишутся);
+      скилл именует только зарегистрированные тулы (drift guard остаётся зелёным);
+      тесты присутствия/отсутствия секции
+- [ ] **6.3** Ручная приёмка на тестовом корпусе + чек-лист action-honesty
+
+## Фаза 7 — Claim-индекс + поиск противоречий (R7) — DONE
+- [x] **7.1** Порт `documentClaims.ts`: `DocumentClaim`
+      (`{claimId, chunkId, sourcePath, subject, statement, topicKeys[]}`),
+      `SourceDocumentClaims` (+ contentHash/generation), `DocumentClaimStore`,
+      `ClaimExtractor`, `FindClaimsOptions`, `ClaimGroup`
+- [x] **7.2** Адаптеры: `FileDocumentClaimStore` (`claims/<id>.jsonl`,
+      header-строка + строка-на-claim), `LlmClaimExtractor` (строгий JSON-массив,
+      толерантный парсер, нормализация subject/topicKeys, `CLAIM_PROMPT_VERSION`)
+- [x] **7.3** Извлечение claims — третья задача enrichment-прохода
+      (`ClaimExtraction.extractSourceClaims`): по контентным секциям
+      (`summarizableSections`, references исключены), concurrency-bounded,
+      деградация секции без падения документа; инкрементальность по contentHash
+- [x] **7.4** Ретривер `findClaims` (capability) + `RetrievalService` поверх
+      чистого `groupClaims` (`@application/use-cases/claims`): группировка по
+      subject, multi-document группы первыми, фильтр по subject/topic, кап
+- [x] **7.5** Тул `find_claims({subject?, topic?, limit})` (inventory-тул,
+      `chunkId` для дословной проверки); в `PROMPT_TOOL_NAMES`
+- [x] **7.6** Промпт-скилл `CONTRADICTION_SKILL` (гейт `hasClaims`):
+      find_claims → verbatim-проверка через `read_index_chunk` перед вердиктом →
+      отчёт «A утверждает…, B утверждает…» с обеими цитатами; перефразировки —
+      не противоречие
+- [x] **7.7** Composition: claim store в ретривер и в enrichment-сервис
+- [x] **7.8** Тесты: `groupClaims` (группировка/фильтр/кап/contradiction
+      precondition на ~пары), `parseExtractedClaims`, JSONL round-trip,
+      enrichment claims-task (инкрементальность, references пропущены)
+- [ ] **7.9** Ручная приёмка: синтетическая пара с противоречием + набор ~20 пар
+      на ложноположительные

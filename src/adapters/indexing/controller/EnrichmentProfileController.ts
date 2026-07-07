@@ -13,7 +13,7 @@ export interface EnrichmentProfileState {
   failed: number;
   /** In-flight detail (status === "running"): what exactly is being processed. */
   currentSourcePath?: string;
-  phase?: "metadata" | "sections" | "document";
+  phase?: "metadata" | "sections" | "document" | "claims";
   sectionIndex?: number;
   sectionCount?: number;
   errorMessage?: string;

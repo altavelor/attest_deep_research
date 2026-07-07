@@ -5,6 +5,8 @@
 // this class only orchestrates.
 
 import {
+  ClaimExtractor,
+  DocumentClaimStore,
   DocumentMetadataExtractor,
   DocumentMetadataStore,
   DocumentSummarizer,
@@ -16,6 +18,7 @@ import {
 } from "@application/ports";
 import { ResearchRetriever } from "@application/contracts";
 import { toDocumentReference } from "./bibliography";
+import { DEFAULT_CLAIM_CONCURRENCY, extractSourceClaims } from "./ClaimExtraction";
 import {
   buildSectionSummaryGroups,
   PreparedSection,
@@ -37,6 +40,11 @@ export interface EnrichIndexSourcesOptions {
   /** Optional summary task (R4): absent ⇒ metadata only. */
   summaryStore?: DocumentSummaryStore;
   summarizer?: DocumentSummarizer;
+  /** Optional claim-index task (R7): absent ⇒ no claim extraction. */
+  claimStore?: DocumentClaimStore;
+  claimExtractor?: ClaimExtractor;
+  /** Max concurrent claim-extraction LLM requests per document. */
+  claimConcurrency?: number;
   now?: () => Date;
   /** Characters of document head/tail handed to the extractor. */
   sampleChars?: number;
@@ -53,7 +61,7 @@ export interface EnrichmentProgress {
   /** "working" — промежуточный прогресс внутри источника (фазы ниже). */
   status: "working" | "extracted" | "skipped" | "failed";
   /** Set when status === "working". */
-  phase?: "metadata" | "sections" | "document";
+  phase?: "metadata" | "sections" | "document" | "claims";
   sectionIndex?: number;
   sectionCount?: number;
   error?: string;
@@ -77,6 +85,9 @@ export class EnrichIndexSources {
   private readonly extractor: DocumentMetadataExtractor;
   private readonly summaryStore?: DocumentSummaryStore;
   private readonly summarizer?: DocumentSummarizer;
+  private readonly claimStore?: DocumentClaimStore;
+  private readonly claimExtractor?: ClaimExtractor;
+  private readonly claimConcurrency: number;
   private readonly now: () => Date;
   private readonly sampleChars: number;
   private readonly sectionSummaryConcurrency: number;
@@ -88,6 +99,12 @@ export class EnrichIndexSources {
     this.extractor = options.extractor;
     this.summaryStore = options.summaryStore;
     this.summarizer = options.summarizer;
+    this.claimStore = options.claimStore;
+    this.claimExtractor = options.claimExtractor;
+    this.claimConcurrency = Math.max(
+      1,
+      Math.floor(options.claimConcurrency ?? DEFAULT_CLAIM_CONCURRENCY),
+    );
     this.now = options.now ?? (() => new Date());
     this.sampleChars = options.sampleChars ?? DEFAULT_SAMPLE_CHARS;
     this.sectionSummaryConcurrency = Math.max(
@@ -116,9 +133,10 @@ export class EnrichIndexSources {
       processed += 1;
 
       const contentHash = source.contentHash ?? "";
-      const [storedMetadata, storedSummaries] = await Promise.all([
+      const [storedMetadata, storedSummaries, storedClaims] = await Promise.all([
         this.metadataStore.read(source.sourcePath),
         this.summaryStore ? this.summaryStore.read(source.sourcePath) : Promise.resolve(null),
+        this.claimStore ? this.claimStore.read(source.sourcePath) : Promise.resolve(null),
       ]);
       const metadataFresh =
         !options.force && Boolean(contentHash) && storedMetadata?.contentHash === contentHash;
@@ -126,8 +144,12 @@ export class EnrichIndexSources {
         !this.summarizer ||
         !this.summaryStore ||
         (!options.force && Boolean(contentHash) && storedSummaries?.contentHash === contentHash);
+      const claimsFresh =
+        !this.claimExtractor ||
+        !this.claimStore ||
+        (!options.force && Boolean(contentHash) && storedClaims?.contentHash === contentHash);
 
-      if (metadataFresh && summariesFresh) {
+      if (metadataFresh && summariesFresh && claimsFresh) {
         result.skipped += 1;
         options.onProgress?.({
           processed,
@@ -166,6 +188,20 @@ export class EnrichIndexSources {
               options.force ? null : storedSummaries,
               working,
             ),
+          );
+        }
+        if (!claimsFresh && this.claimExtractor && this.claimStore) {
+          await this.claimStore.write(
+            await extractSourceClaims({
+              retriever: this.retriever,
+              extractor: this.claimExtractor,
+              sourcePath: source.sourcePath,
+              contentHash,
+              now: this.now,
+              concurrency: this.claimConcurrency,
+              signal: options.signal,
+              onProgress: (progress) => working({ phase: "claims", ...progress }),
+            }),
           );
         }
         result.extracted += 1;

@@ -18,8 +18,10 @@ import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
 import {
+  FileDocumentClaimStore,
   FileDocumentMetadataStore,
   FileDocumentSummaryStore,
+  LlmClaimExtractor,
   LlmDocumentMetadataExtractor,
   LlmDocumentSummarizer,
 } from "@adapters/indexing";
@@ -277,6 +279,7 @@ export function createRetrieverForProfile(
     inventory: new FileVectorInventoryStore(indexStore),
     documentMetadata: createDocumentMetadataStoreForProfile(ctx, indexProfile),
     documentSummaries: createDocumentSummaryStoreForProfile(ctx, indexProfile),
+    documentClaims: createDocumentClaimStoreForProfile(ctx, indexProfile),
   });
 }
 
@@ -292,6 +295,13 @@ export function createDocumentSummaryStoreForProfile(
   indexProfile: IndexProfile,
 ): FileDocumentSummaryStore {
   return new FileDocumentSummaryStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
+}
+
+export function createDocumentClaimStoreForProfile(
+  ctx: CompositionContext,
+  indexProfile: IndexProfile,
+): FileDocumentClaimStore {
+  return new FileDocumentClaimStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
 }
 
 /**
@@ -320,6 +330,11 @@ export function createEnrichmentService(
     }),
     summaryStore: createDocumentSummaryStoreForProfile(ctx, indexProfile),
     summarizer: new LlmDocumentSummarizer({
+      provider,
+      model: chatProfile.modelName,
+    }),
+    claimStore: createDocumentClaimStoreForProfile(ctx, indexProfile),
+    claimExtractor: new LlmClaimExtractor({
       provider,
       model: chatProfile.modelName,
     }),

@@ -4,8 +4,11 @@ import {
   LanguageInventoryIndexStore,
 } from "@application/ports";
 import {
+  ClaimGroup,
+  DocumentClaimStore,
   DocumentMetadataStore,
   DocumentSummaryStore,
+  FindClaimsOptions,
   SharedReference,
   FindInIndexOptions,
   IndexChunkListOptions,
@@ -17,6 +20,7 @@ import {
   KeywordSearchIndexStore,
 } from "@application/ports";
 import { sharedReferences } from "@application/use-cases/enrichment";
+import { groupClaims } from "@application/use-cases/claims";
 import { RetrievalOptions } from "@core/retrieval";
 import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
@@ -46,9 +50,10 @@ export interface RetrievalServiceOptions {
   chunkInventory?: IndexChunkInventoryStore;
   languageInventory?: LanguageInventoryIndexStore;
   inventory?: IndexInventoryStore;
-  /** Enrichment sidecars (R3/R4); absent capability degrades to "unsupported". */
+  /** Enrichment sidecars (R3/R4/R7); absent capability degrades to "unsupported". */
   documentMetadata?: DocumentMetadataStore;
   documentSummaries?: DocumentSummaryStore;
+  documentClaims?: DocumentClaimStore;
 }
 
 export class RetrievalService {
@@ -61,6 +66,7 @@ export class RetrievalService {
   private readonly inventory?: IndexInventoryStore;
   private readonly documentMetadata?: DocumentMetadataStore;
   private readonly documentSummaries?: DocumentSummaryStore;
+  private readonly documentClaims?: DocumentClaimStore;
 
   constructor(options: RetrievalServiceOptions) {
     this.embeddings = options.embeddings;
@@ -72,6 +78,7 @@ export class RetrievalService {
     this.inventory = options.inventory;
     this.documentMetadata = options.documentMetadata;
     this.documentSummaries = options.documentSummaries;
+    this.documentClaims = options.documentClaims;
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
@@ -169,6 +176,13 @@ export class RetrievalService {
 
   async getSourceSummary(sourcePath: string) {
     return this.documentSummaries?.read(sourcePath) ?? null;
+  }
+
+  async findClaims(options: FindClaimsOptions): Promise<ClaimGroup[]> {
+    if (!this.documentClaims) {
+      return [];
+    }
+    return groupClaims(await this.documentClaims.list(), options);
   }
 
   async listSharedReferences(options: { minSources: number }): Promise<SharedReference[]> {

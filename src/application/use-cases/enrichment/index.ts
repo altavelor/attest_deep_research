@@ -8,3 +8,4 @@ export type {
 } from "./EnrichIndexSources";
 
 export { normalizeReference, sharedReferences, toDocumentReference } from "./bibliography";
+export { DEFAULT_CLAIM_CONCURRENCY, extractSourceClaims } from "./ClaimExtraction";

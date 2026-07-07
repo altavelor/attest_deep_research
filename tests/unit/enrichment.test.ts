@@ -12,6 +12,7 @@ import { DocumentMetadataExtractor, SourceDocumentMetadata } from "@application/
 import { ResearchRetriever } from "@application/contracts";
 import {
   EnrichmentProfileController,
+  FileDocumentClaimStore,
   FileDocumentMetadataStore,
   FileDocumentSummaryStore,
   parseExtractedMetadata,
@@ -456,6 +457,63 @@ describe("EnrichmentProfileController", () => {
     await controller.start("p", "chat-model");
 
     expect(events).toEqual(["complete", "done-notified"]);
+  });
+});
+
+describe("EnrichIndexSources claims (Ф7)", () => {
+  it("extracts claims per content section and skips references; re-run is incremental", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "ixplorer-claims-"));
+    try {
+      const metadataStore = new FileDocumentMetadataStore(folder);
+      const claimStore = new FileDocumentClaimStore(folder);
+      const extractCalls: string[] = [];
+
+      const enrichment = new EnrichIndexSources({
+        retriever: outlineRetriever("book.pdf", [
+          sectionOutline(["Findings"], 0, 4, 3_000),
+          sectionOutline(["References"], 5, 9, 3_000),
+        ]),
+        metadataStore,
+        extractor: {
+          model: "t",
+          promptVersion: 1,
+          extract: async () => ({ title: "Book", references: [] }),
+        },
+        claimStore,
+        claimExtractor: {
+          model: "claim-model",
+          promptVersion: 1,
+          extract: async (input) => {
+            extractCalls.push(input.headingPath.join(">"));
+            return [
+              { subject: "effect", statement: `Claim from ${input.headingPath.at(-1)}.`, topicKeys: ["t"] },
+            ];
+          },
+        },
+        now: () => new Date("2026-07-03T00:00:00Z"),
+      });
+
+      const result = await enrichment.run();
+
+      expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
+      // "References" is a low-value heading → not handed to the claim extractor.
+      expect(extractCalls).toEqual(["Findings"]);
+      const stored = await claimStore.read("book.pdf");
+      expect(stored?.claims).toHaveLength(1);
+      expect(stored?.claims[0]).toMatchObject({
+        chunkId: "book.pdf-Findings",
+        sourcePath: "book.pdf",
+        subject: "effect",
+      });
+      expect(stored?.generation.model).toBe("claim-model");
+
+      // Both sidecars fresh on the second run → skip, no extractor calls.
+      const second = await enrichment.run();
+      expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
+      expect(extractCalls).toEqual(["Findings"]);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 });
 

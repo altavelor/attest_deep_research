@@ -39,6 +39,7 @@ describe("createResearchToolRegistry", () => {
       "get_source_metadata",
       "get_source_summary",
       "list_shared_references",
+      "find_claims",
       "list_index_urls",
       "check_urls",
       "search_web",
@@ -92,6 +93,7 @@ describe("createResearchToolRegistry", () => {
       "get_source_metadata",
       "get_source_summary",
       "list_shared_references",
+      "find_claims",
       "list_index_urls",
       "check_urls",
     ]);

@@ -82,6 +82,10 @@ function enrichmentPhaseLabel(state: EnrichmentProfileState): string {
         : " · summarizing sections";
     case "document":
       return " · writing document summary";
+    case "claims":
+      return state.sectionCount
+        ? ` · extracting claims ${state.sectionIndex ?? 0}/${state.sectionCount}`
+        : " · extracting claims";
     default:
       return state.total === 0 ? " · listing sources" : "";
   }

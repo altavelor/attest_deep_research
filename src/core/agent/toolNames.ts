@@ -20,6 +20,7 @@ export const SEARCH_INDEX_BY_METADATA_TOOL = "search_index_by_metadata";
 export const GET_SOURCE_METADATA_TOOL = "get_source_metadata";
 export const GET_SOURCE_SUMMARY_TOOL = "get_source_summary";
 export const LIST_SHARED_REFERENCES_TOOL = "list_shared_references";
+export const FIND_CLAIMS_TOOL = "find_claims";
 
 // --- Index URL audit ---
 export const LIST_INDEX_URLS_TOOL = "list_index_urls";
@@ -74,6 +75,7 @@ export const PROMPT_TOOL_NAMES = [
   WEB_FETCH_TOOL,
   SUB_AGENT_TOOL,
   MAP_SOURCES_TOOL,
+  FIND_CLAIMS_TOOL,
   LIST_INDEX_URLS_TOOL,
   CHECK_URLS_TOOL,
   PROBE_DOCUMENT_URL_TOOL,
