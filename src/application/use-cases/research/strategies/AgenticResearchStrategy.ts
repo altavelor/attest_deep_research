@@ -26,6 +26,7 @@ import {
   resolveCitationTokens,
   webUrlEvidenceIndex,
 } from "./citations";
+import { verifyCitations } from "./citationVerification";
 import {
   agenticBudgets,
   createEmptyContextDiagnostics,
@@ -239,6 +240,9 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       ...[...citedIds].filter((id) => !knownIds.has(id)),
       ...unresolvedUrls,
     ];
+    const unverifiedCitations = result.ok
+      ? verifyCitations(result.answerText, evidence, { urlToEvidenceId })
+      : [];
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
       assembled?.diagnostics ??
@@ -266,6 +270,14 @@ export class AgenticResearchStrategy implements ResearchStrategy {
     if (degradation && !diagnostics.warnings.includes(degradation)) {
       diagnostics.warnings.push(degradation);
     }
+    if (unverifiedCitations.length > 0) {
+      const warning =
+        `${unverifiedCitations.length} citation(s) could not be verified against the cited ` +
+        "source text — the claim may be misattributed. Re-read the source before relying on it.";
+      if (!diagnostics.warnings.includes(warning)) {
+        diagnostics.warnings.push(warning);
+      }
+    }
     diagnostics.agentic = {
       policyReason: policy.reason,
       requiredTools: [...effectivePolicy.requiredTools],
@@ -279,6 +291,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       duplicatedCost: !result.ok,
       capabilityProvenance: this.deps.toolCapabilityProvenance,
       ...(unknownCitationIds.length > 0 ? { unknownCitationIds } : {}),
+      ...(unverifiedCitations.length > 0 ? { unverifiedCitations } : {}),
       phases: result.phases,
       promptDeltas: result.promptRounds,
       reasoningSegments: result.reasoningSegments,

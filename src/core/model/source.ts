@@ -66,6 +66,9 @@ export interface EmbeddedChunk extends ExtractedChunk {
 
 export interface RetrievedChunk extends ExtractedChunk {
   score: number;
+  /** Retrieval-time near-duplicate annotation (SPEC-corpus R8): sourcePaths of
+   * suppressed near-duplicate copies this chunk stands in for. */
+  duplicates?: readonly string[];
 }
 
 /** Deduplicate chunks by `id`, preserving first-seen order. */

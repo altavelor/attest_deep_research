@@ -1,0 +1,106 @@
+// Deterministic citation verification (SPEC-corpus R8). For each `[evidenceId]` /
+// `[url:…]` token the answer places after a claim, check that the claim's wording
+// lexically overlaps the cited chunk's text (word-shingle overlap ≥ threshold). A
+// citation whose surrounding claim shares almost nothing with the chunk is likely
+// misattributed — reported so the UI can warn. No LLM: pure string comparison.
+
+import { RetrievedChunk } from "@core/model";
+import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
+
+const SHINGLE_SIZE = 3;
+const OVERLAP_THRESHOLD = 0.18;
+// Below this many shingles the claim window is too short to judge (e.g. "As shown
+// [id]."), so it is left unverified-but-not-flagged to avoid false positives.
+const MIN_CLAIM_SHINGLES = 3;
+// How far back from a citation the "claim" reasonably extends.
+const CLAIM_WINDOW_CHARS = 240;
+
+export interface CitationVerificationOptions {
+  /** Cited web URLs (canonical) mapped to their evidence id, as the strategy resolves them. */
+  urlToEvidenceId: ReadonlyMap<string, string>;
+}
+
+/**
+ * Returns the distinct evidence ids whose surrounding claim does not lexically
+ * overlap the cited chunk. Only chunks present in `evidence` are checked; unknown
+ * ids are handled separately (unknownCitationIds).
+ */
+export function verifyCitations(
+  answerText: string,
+  evidence: readonly RetrievedChunk[],
+  options: CitationVerificationOptions,
+): string[] {
+  const chunkShingles = new Map<string, Set<string>>();
+  for (const chunk of evidence) {
+    chunkShingles.set(chunk.id, shingles(chunk.text));
+  }
+
+  const unverified = new Set<string>();
+  const verified = new Set<string>();
+
+  for (const match of answerText.matchAll(/\[([^\]\n]{1,200})\]/g)) {
+    const token = match[1].trim();
+    const evidenceId = resolveToken(token, options.urlToEvidenceId);
+    if (!evidenceId) {
+      continue;
+    }
+    const target = chunkShingles.get(evidenceId);
+    if (!target || verified.has(evidenceId)) {
+      continue;
+    }
+
+    const claimStart = Math.max(0, (match.index ?? 0) - CLAIM_WINDOW_CHARS);
+    const claim = answerText.slice(claimStart, match.index ?? 0);
+    const claimShingles = shingles(claim);
+    if (claimShingles.size < MIN_CLAIM_SHINGLES) {
+      continue;
+    }
+
+    if (overlapRatio(claimShingles, target) >= OVERLAP_THRESHOLD) {
+      // One well-supported occurrence clears the id even if another reads thin.
+      verified.add(evidenceId);
+      unverified.delete(evidenceId);
+    } else {
+      unverified.add(evidenceId);
+    }
+  }
+
+  return [...unverified];
+}
+
+function resolveToken(token: string, urlToEvidenceId: ReadonlyMap<string, string>): string | null {
+  if (token.startsWith("url:")) {
+    const validated = validatePublicWebUrl(token.slice("url:".length).trim());
+    return validated.ok ? (urlToEvidenceId.get(validated.url) ?? null) : null;
+  }
+  return token;
+}
+
+function overlapRatio(claim: Set<string>, chunk: Set<string>): number {
+  let shared = 0;
+  for (const shingle of claim) {
+    if (chunk.has(shingle)) {
+      shared += 1;
+    }
+  }
+  return claim.size === 0 ? 0 : shared / claim.size;
+}
+
+function shingles(text: string): Set<string> {
+  const tokens = text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length >= 2);
+  const result = new Set<string>();
+  if (tokens.length < SHINGLE_SIZE) {
+    // Short text: fall back to single tokens so tiny chunks/claims still compare.
+    for (const token of tokens) {
+      result.add(token);
+    }
+    return result;
+  }
+  for (let index = 0; index + SHINGLE_SIZE <= tokens.length; index += 1) {
+    result.add(tokens.slice(index, index + SHINGLE_SIZE).join(" "));
+  }
+  return result;
+}

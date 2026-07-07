@@ -26,7 +26,7 @@ import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { formatCitation } from "@core/retrieval";
-import { filterRetrievedChunks } from "@core/retrieval";
+import { dedupeNearDuplicateChunks, filterRetrievedChunks } from "@core/retrieval";
 import { RetrievalResult } from "@application/contracts";
 import {
   IndexedUrlInventoryOptions,
@@ -110,7 +110,10 @@ export class RetrievalService {
     const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
     const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
-    const chunks = ranked.slice(0, options.limit);
+    // Suppress near-duplicate copies (R8) before filling result slots, so distinct
+    // content wins the top-k and copies of one article don't read as many voices.
+    const deduped = dedupeNearDuplicateChunks(ranked);
+    const chunks = deduped.slice(0, options.limit);
 
     return {
       chunks,

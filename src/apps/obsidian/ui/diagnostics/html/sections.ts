@@ -269,6 +269,14 @@ export function renderInternals(report: DiagnosticReportV3): string {
     html += callout("danger", `<strong>Unknown citation IDs:</strong> ${chips}`);
   }
 
+  if (answer.unverifiedCitations.length > 0) {
+    const chips = answer.unverifiedCitations.map((id) => `<code>${h(id)}</code>`).join(" ");
+    html += callout(
+      "warning",
+      `<strong>Unverified citations (claim ≁ source text):</strong> ${chips}`,
+    );
+  }
+
   if (!html) return "";
   return collapsedCard("internals", "Internals", html);
 }
