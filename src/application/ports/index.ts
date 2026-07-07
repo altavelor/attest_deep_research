@@ -6,6 +6,7 @@
 // через `./…`, иначе цикл (ловит `npm run depcruise`).
 
 export * from "./chat";
+export * from "./documentClaims";
 export * from "./documentMetadata";
 export * from "./documentSummaries";
 export * from "./indexing";

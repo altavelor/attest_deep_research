@@ -9,6 +9,7 @@ import {
 import { ResearchRetriever } from "@application/contracts";
 import { Tool } from "@core/agent";
 import {
+  FIND_CLAIMS_TOOL,
   FIND_IN_INDEX_TOOL,
   GET_INDEX_SOURCE_OUTLINE_TOOL,
   GET_SOURCE_METADATA_TOOL,
@@ -257,6 +258,46 @@ export const ListSharedReferencesTool = defineInventoryTool<{ minSources: number
   },
 });
 
+const DEFAULT_CLAIMS_LIMIT = 30;
+const MAX_CLAIMS_LIMIT = 100;
+
+export const FindClaimsTool = defineInventoryTool<{
+  subject?: string;
+  topic?: string;
+  limit: number;
+}>({
+  name: FIND_CLAIMS_TOOL,
+  description:
+    "Find extracted claims about a subject or topic, grouped by subject across documents — " +
+    "the starting point for detecting agreement/contradiction. Each claim carries its chunkId " +
+    "so you can read_index_chunk to verify the wording verbatim before judging. Multi-document " +
+    "subjects are returned first. Available only after index enrichment (with claims) has run.",
+  schema: {
+    subject: str(MAX_PATH_CHARS, {
+      description: "Entity/topic to gather claims about (e.g. an author, method, or quantity).",
+    }),
+    topic: str(MAX_PATH_CHARS, {
+      description: "Coarse topic tag to filter by (matches claim topicKeys).",
+    }),
+    limit: int(1, MAX_CLAIMS_LIMIT, DEFAULT_CLAIMS_LIMIT, {
+      description: "Max claims to return across all groups.",
+    }),
+  },
+  capability: "findClaims",
+  errorCode: "find-claims-failed",
+  errorMessage: "Claim lookup failed.",
+  run: (retriever, input) =>
+    retriever.findClaims!({
+      ...(input.subject ? { subject: input.subject } : {}),
+      ...(input.topic ? { topic: input.topic } : {}),
+      limit: input.limit,
+    }),
+  wrap: (result, input) => {
+    const groups = result as unknown[];
+    return { groups, diagnostics: diagnostics(groups.length, input.limit) };
+  },
+});
+
 /** Page result, or — when the caller asked for `countOnly` — just the total match count. */
 function pageOrCount(
   result: unknown,
@@ -285,4 +326,5 @@ export const INDEX_INVENTORY_TOOLS: ReadonlyArray<
   GetSourceMetadataTool,
   GetSourceSummaryTool,
   ListSharedReferencesTool,
+  FindClaimsTool,
 ];

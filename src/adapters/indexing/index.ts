@@ -27,8 +27,10 @@ export * from "./inventory/sourcePathShard";
 
 export * from "./keyword/LightweightKeywordIndex";
 
+export * from "./metadata/FileDocumentClaimStore";
 export * from "./metadata/FileDocumentMetadataStore";
 export * from "./metadata/FileDocumentSummaryStore";
+export * from "./metadata/LlmClaimExtractor";
 export * from "./metadata/LlmDocumentMetadataExtractor";
 export * from "./metadata/LlmDocumentSummarizer";
 

@@ -99,6 +99,33 @@ describe("agentic research prompts", () => {
     expect(withSubAgent).toContain("When to prefer run_subagent");
   });
 
+  it("injects the compile-knowledge skill only when the index is readable and notes are writable", () => {
+    // Index without note mutation: no compile workflow.
+    const indexOnly = systemText({ availableTools: [INDEX_SEARCH_TOOL, "read_note"] });
+    expect(indexOnly).not.toContain("Compiling corpus knowledge into notes");
+
+    // Notes writable but no index: nothing to compile from.
+    const notesOnly = systemText({
+      availableTools: ["read_note", "search_notes", CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL],
+    });
+    expect(notesOnly).not.toContain("Compiling corpus knowledge into notes");
+
+    // Both present: workflow appears and prefers map_sources when available.
+    const both = systemText({
+      availableTools: [
+        INDEX_SEARCH_TOOL,
+        "map_sources",
+        "read_note",
+        "search_notes",
+        CREATE_NOTE_TOOL,
+        UPDATE_NOTE_TOOL,
+      ],
+    });
+    expect(both).toContain("Compiling corpus knowledge into notes");
+    expect(both).toContain("[[wikilinks]]");
+    expect(both).toContain("prefer map_sources");
+  });
+
   it("injects Core-Research skill when coreVariant is research", () => {
     const system = systemText({
       coreVariant: "research",
