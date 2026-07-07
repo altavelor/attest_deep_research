@@ -210,9 +210,11 @@ const WEB_SKILL = (tools: ToolSet): string => {
   ];
   if (canFetch) {
     strategy.push(
-      "- If a snippet is insufficient, call fetch_web_page with the result's `resultId` to get\n" +
-        "  the full page content. Pass the `resultId` returned by search_web — not its `url` and\n" +
-        "  not any `[url:…]` citation.",
+      "- If a snippet is insufficient, call fetch_web_page to get the full page content. Pass the\n" +
+        "  `resultId`(s) returned by search_web in the `resultIds` array — not their `url` and not\n" +
+        "  any `[url:…]` citation.",
+      "- Batch fetches: when you want several pages, pass all their resultIds in one fetch_web_page\n" +
+        "  call (they load in parallel) instead of fetching one page at a time.",
       "- Do not call search_web or fetch_web_page with the same arguments twice.",
     );
   } else {
@@ -223,7 +225,7 @@ const WEB_SKILL = (tools: ToolSet): string => {
     "### Reading results",
     "Each result has:",
     "- `url` — source URL; cite it as `[url:<url>]`",
-    ...(canFetch ? ["- `resultId` — opaque handle; pass to fetch_web_page to read the full page"] : []),
+    ...(canFetch ? ["- `resultId` — opaque handle; pass in fetch_web_page's `resultIds` to read the full page"] : []),
     "- `title` — page title",
     "- `snippet` — short preview (may be truncated)",
     "- `rank` — position in search results (lower = higher priority)",

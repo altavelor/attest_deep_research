@@ -16,8 +16,10 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
     case "search_notes":
     case "search_web":
       return typeof args.query === "string" && args.query ? truncate(args.query) : name;
-    case "fetch_web_page":
-      return "Fetching page";
+    case "fetch_web_page": {
+      const count = Array.isArray(args.resultIds) ? args.resultIds.length : 0;
+      return count > 1 ? `Fetching ${count} pages` : "Fetching page";
+    }
     case "list_index_urls":
       return typeof args.sourcePath === "string" && args.sourcePath
         ? `URLs: ${truncate(args.sourcePath)}`
@@ -55,9 +57,17 @@ export function resolveLabelFromResult(name: string, resultJson: string): string
     const parsed = JSON.parse(resultJson) as unknown;
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const value = (parsed as Record<string, unknown>).value as Record<string, unknown> | undefined;
-    const url = (value?.finalUrl ?? value?.url) as string | undefined;
-    if (!url) return undefined;
-    return new URL(url).hostname;
+    const pages = value?.pages;
+    if (!Array.isArray(pages)) return undefined;
+    const hosts = new Set<string>();
+    for (const page of pages) {
+      const entry = page as Record<string, unknown>;
+      if (entry.ok !== true) continue;
+      const url = (entry.finalUrl ?? entry.url) as string | undefined;
+      if (url) hosts.add(new URL(url).hostname);
+    }
+    if (hosts.size === 0) return undefined;
+    return hosts.size === 1 ? [...hosts][0] : `${hosts.size} hosts`;
   } catch {
     return undefined;
   }
@@ -94,11 +104,20 @@ export function resolveResultSummary(name: string, resultJson: string): string |
 
     if (name === "fetch_web_page") {
       const value = root.value as Record<string, unknown> | undefined;
-      const content = value?.content;
-      if (typeof content === "string") {
-        return `~${(content.length / 1024).toFixed(1)} kb`;
+      const pages = value?.pages;
+      if (!Array.isArray(pages)) return undefined;
+      let totalChars = 0;
+      let failed = 0;
+      for (const page of pages) {
+        const entry = page as Record<string, unknown>;
+        if (entry.ok === true && typeof entry.content === "string") {
+          totalChars += entry.content.length;
+        } else {
+          failed += 1;
+        }
       }
-      return undefined;
+      const size = `~${(totalChars / 1024).toFixed(1)} kb`;
+      return failed > 0 ? `${size} (${failed} failed)` : size;
     }
 
     if (name === "read_note" || name === "get_active_note") {

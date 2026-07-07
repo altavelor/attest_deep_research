@@ -24,8 +24,9 @@ describe("toolCallChainLabel", () => {
     expect(toolCallChainLabel("search_index", {})).toBe("search_index");
   });
 
-  it("returns Fetching page for fetch_web_page", () => {
-    expect(toolCallChainLabel("fetch_web_page", { resultId: "abc123" })).toBe("Fetching page");
+  it("returns Fetching page(s) for fetch_web_page by resultIds count", () => {
+    expect(toolCallChainLabel("fetch_web_page", { resultIds: ["abc123"] })).toBe("Fetching page");
+    expect(toolCallChainLabel("fetch_web_page", { resultIds: ["a", "b", "c"] })).toBe("Fetching 3 pages");
   });
 
   it("returns basename without .md for read_note and mutation tools", () => {
@@ -55,14 +56,22 @@ describe("toolCallChainLabel", () => {
 });
 
 describe("resolveLabelFromResult", () => {
-  it("extracts hostname from fetch_web_page result", () => {
-    const result = JSON.stringify({ ok: true, value: { url: "https://example.com/path", finalUrl: "https://example.com/path", content: "", contentType: "text/html", truncated: false, resultId: "r1", evidenceId: "e1", untrustedEvidence: true } });
+  it("extracts hostname from a single-page fetch_web_page result", () => {
+    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: true, url: "https://example.com/path", finalUrl: "https://example.com/path", content: "" }] } });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBe("example.com");
   });
 
   it("prefers finalUrl over url", () => {
-    const result = JSON.stringify({ ok: true, value: { url: "https://original.com/", finalUrl: "https://redirected.com/page", content: "", contentType: "text/html", truncated: false, resultId: "r1", evidenceId: "e1", untrustedEvidence: true } });
+    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: true, url: "https://original.com/", finalUrl: "https://redirected.com/page", content: "" }] } });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBe("redirected.com");
+  });
+
+  it("summarizes distinct hosts for a batch fetch_web_page result", () => {
+    const result = JSON.stringify({ ok: true, value: { pages: [
+      { ok: true, finalUrl: "https://a.example/x", content: "" },
+      { ok: true, finalUrl: "https://b.example/y", content: "" },
+    ] } });
+    expect(resolveLabelFromResult("fetch_web_page", result)).toBe("2 hosts");
   });
 
   it("returns undefined for non-fetch_web_page tools", () => {
@@ -75,8 +84,8 @@ describe("resolveLabelFromResult", () => {
     expect(resolveLabelFromResult("fetch_web_page", "not-json")).toBeUndefined();
   });
 
-  it("returns undefined when url is missing", () => {
-    const result = JSON.stringify({ ok: true, value: {} });
+  it("returns undefined when no page succeeded", () => {
+    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: false, resultId: "r1", error: {} }] } });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBeUndefined();
   });
 });
@@ -94,10 +103,20 @@ describe("resolveResultSummary", () => {
     expect(resolveResultSummary("search_index", result)).toBe("no results");
   });
 
-  it("returns kb size for fetch_web_page", () => {
-    const content = "x".repeat(2048);
-    const result = JSON.stringify({ ok: true, value: { content, url: "https://ex.com", finalUrl: "https://ex.com", contentType: "text/html", truncated: false, resultId: "r1", evidenceId: "e1", untrustedEvidence: true } });
+  it("returns total kb size across fetch_web_page pages", () => {
+    const result = JSON.stringify({ ok: true, value: { pages: [
+      { ok: true, content: "x".repeat(1024), finalUrl: "https://a.example" },
+      { ok: true, content: "x".repeat(1024), finalUrl: "https://b.example" },
+    ] } });
     expect(resolveResultSummary("fetch_web_page", result)).toBe("~2.0 kb");
+  });
+
+  it("appends failed count for partially failed fetch_web_page batches", () => {
+    const result = JSON.stringify({ ok: true, value: { pages: [
+      { ok: true, content: "x".repeat(2048), finalUrl: "https://a.example" },
+      { ok: false, resultId: "r2", error: {} },
+    ] } });
+    expect(resolveResultSummary("fetch_web_page", result)).toBe("~2.0 kb (1 failed)");
   });
 
   it("returns kb size for read_note from chunk text", () => {
