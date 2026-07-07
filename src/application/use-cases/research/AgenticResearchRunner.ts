@@ -1,6 +1,6 @@
 import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
 import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
-import { SUB_AGENT_TOOL } from "@core/agent";
+import { DOWNLOAD_DOCUMENT_TOOL, SUB_AGENT_TOOL } from "@core/agent";
 import { ReasoningSegmentAttribution, RoundPromptDeltaDiagnostic, ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "@application/tools/ToolManager";
@@ -35,6 +35,8 @@ export interface AgenticResearchRunnerOptions {
   maxResultChars?: number;
   /** Cap on run_subagent calls executed concurrently within one round. */
   maxParallelSubAgents?: number;
+  /** Cap on other (read-only) tool calls executed concurrently within one round. */
+  maxParallelToolCalls?: number;
   reasoning?: ModelRoundRequest["reasoning"];
   onDelta?(delta: ModelRoundDelta, round: number): void;
   onAnswerReset?(): void;
@@ -110,6 +112,9 @@ const PREVIEW_CHARS = 600;
 // How many run_subagent calls within one round may execute concurrently. The rest
 // queue and run as a slot frees up (see ConcurrencyLimiter).
 const DEFAULT_MAX_PARALLEL_SUB_AGENTS = 3;
+// How many other (read-only) tool calls within one round may execute concurrently.
+// Sub-agents get their own (smaller) budget above since each spins a nested loop.
+const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 5;
 
 // Stub returned in place of a tool result once the loop enters synthesis mode (result
 // budget spent or the model is spinning), plus the nudge that asks it to answer from what
@@ -296,20 +301,22 @@ export class AgenticResearchRunner {
           }
         }
 
-        // Pre-launch this round's run_subagent calls up to a bounded concurrency (default
-        // 3) instead of the sequential loop below awaiting each one in turn. Calls already
-        // in the cache are left alone — the loop below resolves those the normal way — and
-        // identical duplicate calls within the same batch share one launch so they don't
-        // pay for redundant work.
-        const subAgentPool = forceSynthesis
+        // Pre-launch this round's parallel-safe tool calls (read-only tools + run_subagent)
+        // up to a bounded concurrency instead of the sequential loop below awaiting each one
+        // in turn. The loop still processes results in call order, so transcript/diagnostics
+        // ordering and budget accounting are unchanged — only wall-clock improves. Mutations
+        // and downloads are excluded (side effects / ordering), and calls already in the
+        // cache are left alone; identical duplicates within a round share one launch.
+        const toolPool = forceSynthesis
           ? undefined
-          : launchSubAgentPool(
+          : launchParallelToolPool(
               response.toolCalls,
               cache,
               this.options.tools,
               this.options.signal,
               (id, event) => this.options.onToolEvent?.(id, event),
               this.options.maxParallelSubAgents ?? DEFAULT_MAX_PARALLEL_SUB_AGENTS,
+              this.options.maxParallelToolCalls ?? DEFAULT_MAX_PARALLEL_TOOL_CALLS,
             );
 
         let roundDuplicates = 0;
@@ -344,7 +351,7 @@ export class AgenticResearchRunner {
             duplicateCalls += 1;
             roundDuplicates += 1;
           } else {
-            const pooled = subAgentPool?.get(call.id);
+            const pooled = toolPool?.get(call.id);
             const raw = pooled
               ? await pooled
               : await this.options.tools.execute(call, {
@@ -631,27 +638,33 @@ function searchTool(name: string): boolean {
 }
 
 /**
- * Launches this round's run_subagent calls up to `limit` concurrently instead of
- * leaving them to the sequential per-call loop. Calls already resolved in `cache`
+ * Launches this round's parallel-safe tool calls concurrently instead of leaving
+ * them to the sequential per-call loop. run_subagent calls run under their own
+ * (smaller) limiter since each spins a nested loop; other read-only tools share a
+ * separate limiter. Mutations and downloads are never pooled — they run inline in
+ * call order so their side effects stay ordered. Calls already resolved in `cache`
  * are skipped (the loop resolves those itself); identical duplicate calls within
  * the same round share one launch. Returns a map from call id to its in-flight
  * execution promise; the per-call loop awaits the matching entry when present.
  */
-function launchSubAgentPool(
+function launchParallelToolPool(
   calls: ChatToolCall[],
   cache: Map<string, CachedExecution>,
   tools: ToolManager,
   signal: AbortSignal | undefined,
   onToolEvent: (id: string, event: ToolEvent) => void,
-  limit: number,
+  subAgentLimit: number,
+  toolLimit: number,
 ): Map<string, Promise<ResearchToolExecution<unknown>>> {
-  const limiter = new ConcurrencyLimiter(limit);
+  const subAgentLimiter = new ConcurrencyLimiter(subAgentLimit);
+  const toolLimiter = new ConcurrencyLimiter(toolLimit);
   const pool = new Map<string, Promise<ResearchToolExecution<unknown>>>();
   const launchedByKey = new Map<string, Promise<ResearchToolExecution<unknown>>>();
   for (const call of calls) {
-    if (call.name !== SUB_AGENT_TOOL) continue;
+    if (!parallelSafeTool(call.name)) continue;
     const key = normalizedCallKey(call);
     if (cache.has(key)) continue;
+    const limiter = call.name === SUB_AGENT_TOOL ? subAgentLimiter : toolLimiter;
     const promise =
       launchedByKey.get(key) ??
       limiter.run(() => tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }));
@@ -663,4 +676,11 @@ function launchSubAgentPool(
 
 function mutationTool(name: string): boolean {
   return name === "create_note" || name === "update_note" || name === "delete_note";
+}
+
+// Safe to pre-launch concurrently ahead of the sequential loop: read-only tools and
+// sub-agents. Mutations and downloads have side effects / ordering dependence, so they
+// stay inline and run in call order.
+function parallelSafeTool(name: string): boolean {
+  return !mutationTool(name) && name !== DOWNLOAD_DOCUMENT_TOOL;
 }
