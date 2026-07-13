@@ -59,10 +59,39 @@ export function isIxplorerError(error: unknown): error is IxplorerError {
 export function toUserMessage(error: unknown): string {
   if (isIxplorerError(error)) {
     if (error.code === "UNSUPPORTED_CAPABILITY") return error.message;
+    if (error.code === "MODEL_PROVIDER_UNAVAILABLE" || error.code === "MODEL_NOT_FOUND") {
+      return modelRequestUserMessage(error);
+    }
     return USER_MESSAGES[error.code];
   }
 
   return USER_MESSAGES.UNKNOWN;
+}
+
+function modelRequestUserMessage(error: IxplorerError): string {
+  const providerMessage = detailMessage(error.details?.providerMessage);
+  if (providerMessage) {
+    const status = error.details?.status;
+    return typeof status === "number" && Number.isFinite(status)
+      ? `Provider returned HTTP ${status}: ${providerMessage}`
+      : providerMessage;
+  }
+
+  const causeMessage = errorMessage(error.cause);
+  if (causeMessage) return causeMessage;
+
+  return error.message !== USER_MESSAGES[error.code]
+    ? error.message
+    : USER_MESSAGES[error.code];
+}
+
+function detailMessage(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  return detailMessage(error);
 }
 
 export function errorCodeFromUnknown(error: unknown): IxplorerErrorCode {

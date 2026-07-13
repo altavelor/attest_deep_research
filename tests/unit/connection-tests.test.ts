@@ -115,7 +115,7 @@ describe("model discovery", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      message: "The local model provider is unavailable.",
+      message: "fetch failed",
       models: [],
     });
   });
