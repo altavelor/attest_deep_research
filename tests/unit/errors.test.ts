@@ -21,6 +21,31 @@ describe("Ixplorer errors", () => {
     );
   });
 
+  it("shows the provider error when a model request fails", () => {
+    const error = new IxplorerError({
+      code: "MODEL_PROVIDER_UNAVAILABLE",
+      message: "Provider returned HTTP 401.",
+      details: {
+        status: 401,
+        providerCode: "invalid_api_key",
+        providerMessage: "The API key is invalid or expired.",
+      },
+    });
+
+    expect(toUserMessage(error)).toBe(
+      "Provider returned HTTP 401: The API key is invalid or expired.",
+    );
+  });
+
+  it("shows the underlying cause when a model request has no provider response", () => {
+    const error = new IxplorerError({
+      code: "MODEL_PROVIDER_UNAVAILABLE",
+      cause: new TypeError("fetch failed"),
+    });
+
+    expect(toUserMessage(error)).toBe("fetch failed");
+  });
+
   it("does not expose internal error messages to users", () => {
     const error = new IxplorerError({
       code: "EXTRACTION_FAILED",
