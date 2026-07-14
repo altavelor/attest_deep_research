@@ -16,6 +16,7 @@ import {
   messageDisplayContent,
 } from "@apps/obsidian/ui/chat/conversationFormatting";
 import { chatModelProfileLabel as selectedChatModelProfileLabel } from "@apps/obsidian/ui/chat/chatViewHelpers";
+import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvidence";
 import { shouldScrollSavedChatsList } from "@apps/obsidian/ui/chat/history/savedChatListState";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
@@ -115,6 +116,27 @@ describe("chat rendering helpers", () => {
       kind: "web",
       target: "https://example.com/local",
     });
+  });
+
+  it("limits the source list to evidence the finalized answer actually cites", () => {
+    const cited = { id: "a", source: markdownSource("A.md"), text: "", contentHash: "a", score: 1 };
+    const uncited = { id: "b", source: markdownSource("B.md"), text: "", contentHash: "b", score: 1 };
+    const streaming = {
+      role: "assistant" as const,
+      content: "",
+      createdAt: "t",
+      evidence: [cited, uncited],
+    };
+
+    // While streaming (no finalized answer) all consulted evidence is shown.
+    expect(citationEvidence(streaming as never).map((chunk) => chunk.id)).toEqual(["a", "b"]);
+
+    const finalized = {
+      ...streaming,
+      answer: { citations: [{ id: "a", label: "A", source: markdownSource("A.md") }] },
+    };
+    // Once finalized, only the cited source survives — no phantom links.
+    expect(citationEvidence(finalized as never).map((chunk) => chunk.id)).toEqual(["a"]);
   });
 
   it("appends streamed answer deltas without creating a second assistant message", () => {
