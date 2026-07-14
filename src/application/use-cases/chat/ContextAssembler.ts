@@ -550,11 +550,15 @@ function combineMarkdownChunks(chunks: ExtractedChunk[], generateId: GenerateId)
 }
 
 function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): RetrievedChunk[] {
-  const terms = question
+  // Match on a left word boundary (`\bterm`) rather than a raw substring: this
+  // keeps suffix morphology ("model" → "models") while rejecting incidental
+  // infixes ("art" no longer matches "part").
+  const termPatterns = question
     .toLowerCase()
     .split(/[^\p{L}\p{N}_-]+/u)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 3);
+    .filter((term) => term.length >= 3)
+    .map((term) => new RegExp(`\\b${escapeRegExp(term)}`, "u"));
 
   return chunks
     .map((chunk, index) => {
@@ -564,7 +568,7 @@ function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): Retr
           : `${"path" in chunk.source ? chunk.source.path : chunk.source.title} ${chunk.text}`;
       const haystack = sourceText.toLowerCase();
       const score =
-        terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0) +
+        termPatterns.reduce((total, pattern) => total + (pattern.test(haystack) ? 1 : 0), 0) +
         1 / (index + 1_000);
 
       return { ...chunk, score };

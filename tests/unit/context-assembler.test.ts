@@ -96,6 +96,25 @@ describe("ContextAssembler", () => {
     expect(result.explicitEvidence[0].text.length).toBeLessThan(10_000);
   });
 
+  it("ranks whole-word term matches above incidental infix matches", async () => {
+    const filler = "Filler text. ".repeat(900);
+    const assembler = createAssembler({
+      "Large.md": `# Descartes\n\nDescartes philosophy discussion.\n\n${filler}\n\n# Cart\n\nShopping cart checkout flow.\n\n${filler}`,
+    });
+
+    const result = await assembler.assemble({
+      question: "How does the cart checkout work?",
+      contextMode: "include",
+      contextPaths: ["Large.md"],
+      evidenceLimit: 1,
+      smallMarkdownCharLimit: 10_000,
+    });
+
+    // "Descartes" contains "cart" as an infix; a substring match would falsely
+    // boost it. The word-boundary ranker prefers the real "cart checkout" section.
+    expect(result.explicitEvidence[0].text).toContain("Shopping cart checkout");
+  });
+
   it("resolves exact @path mentions as explicit context", async () => {
     const assembler = createAssembler({
       "Folder/Mentioned.md": "# Mentioned\n\nMention context answer.",
