@@ -96,6 +96,19 @@ describe("buildResearchPrompt", () => {
     expect(prompt).not.toContain("Extra evidence");
   });
 
+  it("caps a single oversized evidence item so it cannot dominate the section", () => {
+    const huge = "word ".repeat(6_000); // ~30k chars, above the per-item cap
+    const prompt = buildResearchPrompt({
+      question: "Summarize the notes",
+      evidence: [retrieved("big-1", markdownSource("Research/big.md"), huge)],
+      maxEvidenceItems: 2,
+    });
+
+    expect(prompt).toContain("…[truncated]");
+    const item = prompt.slice(prompt.indexOf("[S1] Research/big.md"));
+    expect(item.length).toBeLessThan(huge.length);
+  });
+
   it("requires a direct answer instead of treating web evidence as a user message", () => {
     const prompt = buildResearchPrompt({
       question: "How does the CIA anonymous contact channel work?",
