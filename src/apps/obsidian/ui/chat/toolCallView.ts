@@ -34,7 +34,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     return {
       intent,
       inCell: argsCell(args),
-      outCell: resultJson ? { kind: "code", text: prettyJson(resultJson) } : undefined,
+      outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
     };
   }
 
@@ -67,7 +67,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
       return {
         intent,
         inCell: argsCell(args),
-        outCell: resultJson ? { kind: "code", text: prettyJson(resultJson) } : undefined,
+        outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
         ...(name === "search_index" ? { badge: keywordFallbackBadge(resultJson) } : {}),
       };
   }
@@ -98,37 +98,75 @@ function keywordFallbackBadge(resultJson?: string): { text: string; tooltip?: st
 
 function argsCell(args: Record<string, unknown>): ToolCell | undefined {
   if (!args || Object.keys(args).length === 0) return undefined;
-  return { kind: "code", text: JSON.stringify(args, null, 2) };
+  // Single-line, compact — the full multi-line payload is one click away in the
+  // detail tab. Keeping this on one line lets the transcript stay dense.
+  return { kind: "code", text: JSON.stringify(args) };
 }
 
 function describeIntent(name: string, args: Record<string, unknown>, label: string): string {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   const path = typeof args.path === "string" ? args.path.trim() : "";
+  const url = typeof args.url === "string" ? args.url.trim() : "";
   switch (name) {
     case "search_index":
-    case "search_notes":
-      return query ? `Searching the vault for “${query}”` : "Searching the vault";
-    case "search_web":
-      return query ? `Searching the web for “${query}”` : "Searching the web";
-    case "fetch_web_page":
-      return label && label !== name ? `Fetching ${label}` : "Fetching web page";
+    case "search_notes": {
+      const scope = describeSearchScope(args);
+      return query
+        ? `Searching the vault for “${query}”${scope}`
+        : `Searching the vault${scope}`;
+    }
+    case "search_web": {
+      const count = typeof args.count === "number" ? ` (top ${args.count})` : "";
+      return query ? `Searching the web for “${query}”${count}` : "Searching the web";
+    }
+    case "fetch_web_page": {
+      const target = url || (label && label !== name ? label : "");
+      return target ? `Fetching the page at ${hostOf(target)}` : "Fetching web page";
+    }
     case "read_note":
-      return path ? `Reading ${basename(path)}` : "Reading note";
+      return path ? `Reading the note “${basename(path)}”` : "Reading a note";
     case "get_active_note":
-      return "Reading the active note";
+      return "Reading the currently active note";
     case "list_notes": {
       const prefix = typeof args.prefix === "string" ? args.prefix.trim() : "";
-      return prefix ? `Listing notes under ${prefix}` : "Listing notes";
+      return prefix ? `Listing notes under “${prefix}”` : "Listing all notes in the vault";
     }
-    case "create_note":
-      return path ? `Creating ${basename(path)}` : "Creating note";
+    case "create_note": {
+      const size = typeof args.content === "string" ? ` (${args.content.length} chars)` : "";
+      return path ? `Creating the note “${basename(path)}”${size}` : "Creating a note";
+    }
     case "update_note":
-      return path ? `Editing ${basename(path)}` : "Editing note";
+      return path ? `Editing the note “${basename(path)}”` : "Editing a note";
     case "delete_note":
-      return path ? `Deleting ${basename(path)}` : "Deleting note";
+      return path ? `Deleting the note “${basename(path)}”` : "Deleting a note";
+    case "run_subagent": {
+      const task = typeof args.task === "string" ? args.task.trim() : "";
+      return task ? `Delegating to a sub-agent: “${truncate(task, 80)}”` : "Running a sub-agent";
+    }
     default:
       return label && label !== name ? label : name;
   }
+}
+
+function describeSearchScope(args: Record<string, unknown>): string {
+  const limit = typeof args.limit === "number" ? args.limit : undefined;
+  const prefix = typeof args.prefix === "string" ? args.prefix.trim() : "";
+  const parts: string[] = [];
+  if (prefix) parts.push(`under “${prefix}”`);
+  if (limit !== undefined) parts.push(`top ${limit}`);
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
+function hostOf(target: string): string {
+  try {
+    return new URL(target).hostname || target;
+  } catch {
+    return target;
+  }
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function noteEditDiff(resultJson?: string): DiffHunk[] | undefined {
@@ -145,11 +183,16 @@ function noteEditDiff(resultJson?: string): DiffHunk[] | undefined {
   }
 }
 
-function prettyJson(value: string): string {
+/**
+ * Single-line, whitespace-free rendering for the inline Out preview. Keeps the
+ * clamped 3-line window information-dense; the pretty, indented payload lives in
+ * the detail tab that opens on click.
+ */
+function compactJson(value: string): string {
   try {
-    return JSON.stringify(JSON.parse(value), null, 2);
+    return JSON.stringify(JSON.parse(value));
   } catch {
-    return value;
+    return value.replace(/\s+/g, " ").trim();
   }
 }
 

@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 
 import { SavedChatSummary } from "@core/chat/savedChat";
+import { shouldScrollSavedChatsList } from "./savedChatListState";
 
 export interface SavedChatRowActions {
   onRenameChat?(id: string, title: string): void | Promise<void>;
@@ -83,8 +84,10 @@ export function renderSavedChatsPopoverContent(
   header.createSpan({ text: "Recent chats" });
   header.createSpan({ text: String(options.savedChats.length) });
 
-  const list = containerEl.createDiv({ cls: "ixplorer-chat__history-list" });
   const filtered = filterSavedChatSummaries(options.savedChats, options.searchQuery);
+  const list = containerEl.createDiv({
+    cls: `ixplorer-chat__history-list${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
+  });
 
   if (filtered.length === 0) {
     list.createDiv({

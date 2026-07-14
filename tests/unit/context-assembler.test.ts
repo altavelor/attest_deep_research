@@ -52,7 +52,7 @@ describe("ContextAssembler", () => {
     });
   });
 
-  it("uses selected files as retrieval filters in filter mode", async () => {
+  it("uses selected files as explicit context and retrieval filters in filter mode", async () => {
     const assembler = createAssembler({
       "Project.md": "# Project\n\nExplicit context answer.",
     });
@@ -64,12 +64,14 @@ describe("ContextAssembler", () => {
       evidenceLimit: 4,
     });
 
-    expect(result.explicitEvidence).toHaveLength(0);
+    expect(result.explicitEvidence).toHaveLength(1);
+    expect(result.explicitEvidence[0].text).toContain("Explicit context answer.");
+    expect(result.attachments).toEqual([{ path: "Project.md", coverage: "full" }]);
     expect(result.retrievalSourcePaths).toEqual(["Project.md"]);
     expect(result.diagnostics.explicitSources[0]).toMatchObject({
       path: "Project.md",
       role: "attached",
-      status: "filtered",
+      status: "included",
     });
   });
 

@@ -3,6 +3,7 @@ import {
   messageMarkdownContent,
   nextAssistantMessage,
   nextAssistantReasoning,
+  nextUserMessage,
   shouldShowAnswerNoteActions,
   shouldShowDiagnosticAction,
   stripMessageDiagnostics,
@@ -14,11 +15,26 @@ import {
   formatProgressPercent,
   messageDisplayContent,
 } from "@apps/obsidian/ui/chat/conversationFormatting";
+import { chatModelProfileLabel as selectedChatModelProfileLabel } from "@apps/obsidian/ui/chat/chatViewHelpers";
+import { shouldScrollSavedChatsList } from "@apps/obsidian/ui/chat/history/savedChatListState";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
 
 describe("chat rendering helpers", () => {
+  it("keeps included context paths on the sent user message", () => {
+    const messages = nextUserMessage([], "Summarize this", ["Docs/one.md", "Docs/two.pdf"]);
+
+    expect(messages).toEqual([
+      {
+        role: "user",
+        content: "Summarize this",
+        contextPaths: ["Docs/one.md", "Docs/two.pdf"],
+        createdAt: expect.any(String),
+      },
+    ]);
+  });
+
   it("formats indexing status for the chat pane toolbar", () => {
     expect(
       formatIndexingStatus({
@@ -253,6 +269,23 @@ describe("chat rendering helpers", () => {
         createdAt: "2026-05-16T00:00:00.000Z",
       }),
     ).toBe("The answer cites local notes [1faca705800f51b4679ba10c0ec7923f].");
+  });
+
+  it("resolves the displayed assistant label from the selected chat model profile id", () => {
+    expect(
+      selectedChatModelProfileLabel(
+        [
+          { id: "default", name: "Default model" },
+          { id: "selected", name: "Selected model" },
+        ],
+        "selected",
+      ),
+    ).toBe("Selected model");
+  });
+
+  it("enables saved-chat list scrolling only after fifteen visible rows", () => {
+    expect(shouldScrollSavedChatsList(15)).toBe(false);
+    expect(shouldScrollSavedChatsList(16)).toBe(true);
   });
 });
 

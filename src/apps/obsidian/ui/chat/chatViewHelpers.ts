@@ -79,6 +79,13 @@ export function resolveAvailableIndexProfileId(
   return profiles.find((profile) => !profile.isSuspended && profile.isIndexed)?.id ?? "";
 }
 
+export function chatModelProfileLabel(
+  profiles: ChatModelSelectOption[],
+  profileId: string | undefined,
+): string {
+  return profiles.find((profile) => profile.id === profileId)?.name ?? "";
+}
+
 export function normalizeExtensionFilter(value: string): string | undefined {
   const normalized = value.trim().replace(/^\./, "").toLowerCase();
 

@@ -1,7 +1,12 @@
 import { ContextFileProvider } from "@application/ports";
 import { Extractor } from "@application/ports/indexing";
 import { RetrievalOptions } from "@core/retrieval";
-import { ContextDiagnosticSource, ContextDiagnostics, ContextMode, ContextSourceRole } from "@core/diagnostics";
+import {
+  ContextDiagnosticSource,
+  ContextDiagnostics,
+  ContextMode,
+  ContextSourceRole,
+} from "@core/diagnostics";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";
 
 /** Injected content-hash function (e.g. extractors/common.stableId). Keeps the
@@ -106,22 +111,14 @@ export class ContextAssembler {
     const diagnostics = createEmptyDiagnostics(request.contextMode);
     const graph = request.explicitSourcesOnly
       ? {
-        sourcePaths: [],
-        diagnostics: createDisabledGraphDiagnostics({
-          ...DEFAULT_GRAPH_CONTEXT_LIMITS,
-          ...(request.graph?.limits ?? {}),
-        }),
-      }
+          sourcePaths: [],
+          diagnostics: createDisabledGraphDiagnostics({
+            ...DEFAULT_GRAPH_CONTEXT_LIMITS,
+            ...(request.graph?.limits ?? {}),
+          }),
+        }
       : await this.discoverGraphContext(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
-    for (const path of request.contextMode === "filter" ? request.contextPaths : []) {
-      addDiagnosticSource(diagnostics, {
-        path,
-        role: "attached",
-        status: "filtered",
-        reason: "retrieval-filter",
-      });
-    }
     const budget = createBudget(request);
     const explicitEvidence: RetrievedChunk[] = [];
     const attachments: AttachedFileManifestEntry[] = [];
@@ -194,11 +191,11 @@ export class ContextAssembler {
     const retrievalResult = request.skipRetrieval
       ? []
       : await this.retrieve(request.question, {
-        limit: request.evidenceLimit,
-        includeWebResults: false,
-        ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
-        ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
-      });
+          limit: request.evidenceLimit,
+          includeWebResults: false,
+          ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
+          ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
+        });
     const retrievalChunks = Array.isArray(retrievalResult)
       ? retrievalResult
       : retrievalResult.chunks;
@@ -275,10 +272,12 @@ export class ContextAssembler {
       add(path, "mention");
     }
 
-    if (request.contextMode === "include") {
-      for (const path of request.contextPaths) {
-        add(path, "attached");
-      }
+    // Attached files are always explicit prompt context. Filter mode narrows
+    // retrieval to these paths, but must not remove the files themselves from
+    // the request; otherwise the model receives only an empty/partial search
+    // result and cannot answer from the file the user attached.
+    for (const path of request.contextPaths) {
+      add(path, "attached");
     }
 
     if (request.includeActiveFile) {
@@ -531,14 +530,14 @@ function combineMarkdownChunks(chunks: ExtractedChunk[], generateId: GenerateId)
   const source =
     first.source.kind === "markdown"
       ? {
-        ...first.source,
-        id: generateId(`${first.source.path}:explicit-full:${contentHash}`),
-        title: first.source.path,
-        headingPath: [],
-        startOffset: undefined,
-        endOffset: undefined,
-        blockId: undefined,
-      }
+          ...first.source,
+          id: generateId(`${first.source.path}:explicit-full:${contentHash}`),
+          title: first.source.path,
+          headingPath: [],
+          startOffset: undefined,
+          endOffset: undefined,
+          blockId: undefined,
+        }
       : first.source;
 
   return {

@@ -191,6 +191,13 @@
   border-radius: var(--radius-s);
   overflow: hidden;
   background: var(--background-secondary);
+  cursor: pointer;
+}
+
+.ixplorer-chat__tool-cell:hover,
+.ixplorer-chat__tool-cell:focus-visible {
+  border-color: var(--interactive-accent);
+  outline: none;
 }
 
 .ixplorer-chat__tool-cell-header {
@@ -210,52 +217,63 @@
   letter-spacing: 0.04em;
 }
 
-.ixplorer-chat__tool-cell-expand {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  box-shadow: none;
+/* "Open full output" affordance — only hinted on hover/focus to stay quiet. */
+.ixplorer-chat__tool-cell-open-hint {
+  font-weight: var(--font-normal);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-accent);
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
 }
 
-.ixplorer-chat__tool-cell-expand:hover {
-  color: var(--text-normal);
-}
-
-.ixplorer-chat__tool-cell-expand svg {
-  width: 0.9em;
-  height: 0.9em;
-}
-
-.ixplorer-chat__tool-cell-expand.is-hidden {
-  display: none;
+.ixplorer-chat__tool-cell:hover .ixplorer-chat__tool-cell-open-hint,
+.ixplorer-chat__tool-cell:focus-visible .ixplorer-chat__tool-cell-open-hint {
+  opacity: 1;
 }
 
 .ixplorer-chat__tool-cell-body {
-  max-height: 160px;
-  overflow: auto;
   padding: 0.4rem 0.5rem;
+  overflow: hidden;
+  font-size: var(--font-ui-smaller);
+  line-height: 1.45;
+  /* Preview text stays selectable/copyable; a bare click still opens the tab. */
+  user-select: text;
+  cursor: text;
 }
 
-.ixplorer-chat__tool-cell.is-expanded .ixplorer-chat__tool-cell-body {
-  max-height: none;
+/* Arguments render on a single line; the full payload is one click away. */
+.ixplorer-chat__tool-cell--in .ixplorer-chat__tool-cell-body {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Result preview is clamped to ~3 lines with no scrollbar. */
+.ixplorer-chat__tool-cell--out .ixplorer-chat__tool-cell-body {
+  max-height: calc(1.45em * 3);
 }
 
 .ixplorer-chat__tool-cell-code {
   margin: 0;
-  white-space: pre-wrap;
+  white-space: inherit;
+  overflow: hidden;
+  text-overflow: inherit;
   word-break: break-word;
   font-family: var(--font-monospace);
-  font-size: var(--font-ui-smaller);
+  font-size: inherit;
+  line-height: inherit;
   background: transparent;
+}
+
+/* Out-cell code wraps so long results fill the 3-line preview before clipping. */
+.ixplorer-chat__tool-cell--out .ixplorer-chat__tool-cell-code {
+  white-space: pre-wrap;
 }
 
 .ixplorer-chat__tool-cell-code code {
   background: transparent;
   padding: 0;
+  white-space: inherit;
 }
 
 /* Edit diff (update_note) */
