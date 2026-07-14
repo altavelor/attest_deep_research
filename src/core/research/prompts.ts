@@ -217,7 +217,22 @@ export function extractFollowUpQuestions(answer: string): string[] {
 }
 
 function formatEvidenceItem({ label, chunk }: LabeledChunk): string {
-  return [`[${label}] ${sourceLabel(chunk.source)}`, truncateEvidenceText(chunk.text)].join("\n");
+  const header = `[${label}] ${sourceLabel(chunk.source)}${webSourceHint(chunk)}`;
+  return [header, truncateEvidenceText(chunk.text)].join("\n");
+}
+
+/**
+ * For web sources, tell the model whether this is the full fetched page or only a
+ * search-result snippet, plus the URL and retrieval date — so it weights fetched
+ * pages over snippets, judges freshness, and does not over-claim from a preview.
+ */
+function webSourceHint(chunk: RetrievedChunk): string {
+  if (chunk.source.kind !== "web") {
+    return "";
+  }
+  const reliability = chunk.source.wasContentFetched ? "fetched page" : "search snippet";
+  const date = chunk.source.retrievedAt.slice(0, 10);
+  return ` — ${chunk.source.url} (${reliability}, retrieved ${date})`;
 }
 
 function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {

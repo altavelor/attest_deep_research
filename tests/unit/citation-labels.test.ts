@@ -30,6 +30,23 @@ describe("labelResearchEvidence", () => {
     expect(labeled.byLabel.get("S4")).toBe("w1");
   });
 
+  it("labels a source shared across sections once, on its highest-priority occurrence", () => {
+    const shared = chunk("shared");
+    const labeled = labelResearchEvidence({
+      evidence: [],
+      explicitEvidence: [shared],
+      retrievedEvidence: [shared, chunk("r1")],
+      webEvidence: [shared],
+      maxEvidenceItems: 5,
+    });
+
+    expect(labeled.explicit.map((item) => item.label)).toEqual(["S1"]);
+    // The retrieved section skips the already-labeled shared source.
+    expect(labeled.retrieved.map((item) => item.chunk.id)).toEqual(["r1"]);
+    expect(labeled.web).toEqual([]);
+    expect(labeled.byLabel.get("S1")).toBe("shared");
+  });
+
   it("falls back to `evidence` for the retrieved section and respects the item cap", () => {
     const labeled = labelResearchEvidence({
       evidence: [chunk("r1"), chunk("r2"), chunk("r3")],
