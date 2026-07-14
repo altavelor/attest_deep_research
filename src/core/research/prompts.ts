@@ -242,6 +242,16 @@ function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {
     .trim();
 }
 
+// Safety valve so one pathologically large chunk cannot dominate a section (and
+// crowd out other sources). Kept well above the small-file inline limit (~10k
+// chars) so whole-file "full" coverage is never silently clipped.
+const MAX_EVIDENCE_ITEM_CHARS = 16_000;
+const EVIDENCE_TRUNCATION_MARKER = " …[truncated]";
+
 function truncateEvidenceText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= MAX_EVIDENCE_ITEM_CHARS) {
+    return collapsed;
+  }
+  return collapsed.slice(0, MAX_EVIDENCE_ITEM_CHARS).trimEnd() + EVIDENCE_TRUNCATION_MARKER;
 }
