@@ -14,7 +14,7 @@ How should I use local models?
 
 ## Answer
 
-Use local models with citations [local-1].
+Use local models with citations [1].
 
 ## Citations
 

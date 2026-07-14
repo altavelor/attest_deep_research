@@ -5,9 +5,10 @@ import {
   AttachedFileManifestEntry,
   buildAttachmentManifestSection,
 } from "./attachments";
+import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
 
 export const RESEARCH_SYSTEM_PROMPT =
-  "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Preserve citation IDs for claims based on evidence. Cite only source IDs that appear in the evidence below or that were returned by a tool you actually called — never invent citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
+  "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Cite claims based on evidence with the short bracketed label shown next to each source, e.g. [S1]. Cite only labels that appear in the evidence below, or source handles returned by a tool you actually called — never invent labels, citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
 
 export interface ResearchSystemPromptOptions {
   indexDescription?: string;
@@ -118,22 +119,11 @@ const CHAT_MESSAGE_OVERHEAD_TOKENS = 4;
 const CHAT_REQUEST_OVERHEAD_TOKENS = 8;
 
 export function buildResearchPrompt(options: BuildResearchPromptOptions): string {
-  const explicitEvidence = (options.explicitEvidence ?? [])
-    .slice(0, options.maxEvidenceItems)
-    .map((chunk) => formatEvidenceItem(chunk))
-    .join("\n\n");
-  const graphEvidence = (options.graphEvidence ?? [])
-    .slice(0, options.maxEvidenceItems)
-    .map((chunk) => formatEvidenceItem(chunk))
-    .join("\n\n");
-  const retrievedEvidence = (options.retrievedEvidence ?? options.evidence)
-    .slice(0, options.maxEvidenceItems)
-    .map((chunk) => formatEvidenceItem(chunk))
-    .join("\n\n");
-  const webEvidence = (options.webEvidence ?? [])
-    .slice(0, options.maxEvidenceItems)
-    .map((chunk) => formatEvidenceItem(chunk))
-    .join("\n\n");
+  const labeled = labelResearchEvidence(options);
+  const explicitEvidence = labeled.explicit.map(formatEvidenceItem).join("\n\n");
+  const graphEvidence = labeled.graph.map(formatEvidenceItem).join("\n\n");
+  const retrievedEvidence = labeled.retrieved.map(formatEvidenceItem).join("\n\n");
+  const webEvidence = labeled.web.map(formatEvidenceItem).join("\n\n");
   const history = formatChatHistory(options.chatHistory ?? []);
   const hasEvidence = Boolean(
     explicitEvidence || graphEvidence || retrievedEvidence || webEvidence,
@@ -151,7 +141,7 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     "Do not ask the user what to do with the evidence or merely summarize what they supplied.",
     "Treat explicit context as authoritative when it conflicts with retrieved evidence.",
     "Synthesize all relevant facts from the evidence before concluding.",
-    "Cite claims with bracketed citation IDs exactly as shown, for example [chunk-id].",
+    "Cite claims with the bracketed source label shown next to each item, for example [S1].",
     "Do not add a separate citations, sources, or bibliography section.",
     ...(hasEvidence
       ? ["If the evidence is insufficient for evidence-dependent claims, say what is missing."]
@@ -226,8 +216,8 @@ export function extractFollowUpQuestions(answer: string): string[] {
     .slice(0, 3);
 }
 
-function formatEvidenceItem(chunk: RetrievedChunk): string {
-  return [`[${chunk.id}] ${sourceLabel(chunk.source)}`, truncateEvidenceText(chunk.text)].join("\n");
+function formatEvidenceItem({ label, chunk }: LabeledChunk): string {
+  return [`[${label}] ${sourceLabel(chunk.source)}`, truncateEvidenceText(chunk.text)].join("\n");
 }
 
 function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {

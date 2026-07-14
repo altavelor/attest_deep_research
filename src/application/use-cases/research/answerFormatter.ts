@@ -4,6 +4,7 @@ import { ResearchAnswer } from "@core/answer";
 import { Citation } from "@core/model";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
+  const citations = dedupeCitationsBySource(answer.citations);
   return [
     "# Ixplorer Research",
     "",
@@ -15,17 +16,44 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
     "",
     "## Answer",
     "",
-    linkifyUrlCitations(answer.answer),
+    renderAnswerBody(answer, citations),
     "",
     "## Citations",
     "",
-    citationsMarkdown(answer),
+    citationsMarkdown(citations),
     "",
     "## Follow-up Questions",
     "",
     followUpsMarkdown(answer),
     "",
   ].join("\n");
+}
+
+/**
+ * Rewrite the answer body's inline citation tokens into a reader-friendly form.
+ * The model cites evidence by its raw chunk id (`[chunk-id]`), which reads as
+ * inert noise in a saved note. Each such token is replaced with `[n]`, the same
+ * number the source carries in the `## Citations` list below. `[url:…]` handles
+ * are turned into plain links as before.
+ */
+function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]): string {
+  const numberByKey = new Map(
+    dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
+  );
+  const numberById = new Map<string, number>();
+  for (const citation of answer.citations) {
+    const number = numberByKey.get(citationSourceKey(citation));
+    if (number !== undefined) {
+      numberById.set(citation.id, number);
+    }
+  }
+
+  const numbered = answer.answer.replace(/\[([^\]\n]{1,200})\]/g, (whole, inner: string) => {
+    const number = numberById.get(inner.trim());
+    return number === undefined ? whole : `[${number}]`;
+  });
+
+  return linkifyUrlCitations(numbered);
 }
 
 export function researchAnswerNotePath(answer: ResearchAnswer): string {
@@ -39,9 +67,7 @@ export function formatResearchAnswerAppendBlock(answer: ResearchAnswer): string 
   return `\n\n${formatResearchAnswerNote(answer)}`;
 }
 
-function citationsMarkdown(answer: ResearchAnswer): string {
-  const citations = dedupeCitationsBySource(answer.citations);
-
+function citationsMarkdown(citations: Citation[]): string {
   if (citations.length === 0) {
     return "No citations.";
   }
