@@ -30,6 +30,7 @@ import {
   nextChainReasoningSegment,
   nextChainToolCallEnd,
   nextChainToolCallStart,
+  nextUserMessage,
   resetLastAssistantContent,
   stampLastAssistantModel,
 } from "@core/conversation";
@@ -55,6 +56,7 @@ export interface ResearchQuestionControllerOptions {
   shouldIncludeActiveFileContext(): boolean;
   shouldIncludeContextDiagnostics(): boolean;
   getContextPaths(): string[];
+  clearContextPaths(): void;
   getSearchUnavailableMessage(): string | null;
   setEditingMessageIndex(index: number | null): void;
   setProgressStatus(message: string | null): void;
@@ -139,13 +141,23 @@ export class ResearchQuestionController {
       return;
     }
 
+    const pendingContextPaths = this.options.getContextPaths();
+    const contextPaths =
+      pendingContextPaths.length > 0 ? pendingContextPaths : (messages[index]?.contextPaths ?? []);
     this.options.setMessages(
       messages.map((message, messageIndex) =>
-        messageIndex === index ? { ...message, content: question } : message,
+        messageIndex === index
+          ? {
+              ...message,
+              content: question,
+              ...(contextPaths.length > 0 ? { contextPaths } : {}),
+            }
+          : message,
       ),
     );
+    this.options.clearContextPaths();
     await this.options.saveCurrentChat();
-    await this.runQuestion(question, { appendQuestion: false, chatHistory });
+    await this.runQuestion(question, { appendQuestion: false, chatHistory, contextPaths });
   }
 
   stopRunningQuestion(): void {
@@ -162,6 +174,7 @@ export class ResearchQuestionController {
     options: {
       appendQuestion: boolean;
       chatHistory: ChatDisplayMessage[];
+      contextPaths?: string[];
     },
   ): Promise<void> {
     const runId = createRunId();
@@ -174,15 +187,14 @@ export class ResearchQuestionController {
     this.setRunning(true);
     this.shouldStopRunning = false;
     this.activeAbortController = new AbortController();
+    const contextPaths = options.contextPaths ?? this.options.getContextPaths();
     await this.options.updateChatModel(
       this.options.getModelInputValue() || this.options.getCurrentModel(),
     );
     this.options.setFormRunning(true);
     if (options.appendQuestion) {
-      this.options.setMessages([
-        ...this.options.getMessages(),
-        { role: "user", content: question, createdAt: new Date().toISOString() },
-      ]);
+      this.options.setMessages(nextUserMessage(this.options.getMessages(), question, contextPaths));
+      this.options.clearContextPaths();
       await this.options.saveCurrentChat();
     }
     this.options.setLastAnswer(null);
@@ -192,7 +204,6 @@ export class ResearchQuestionController {
 
     try {
       const service = this.options.createResearchService();
-      const contextPaths = this.options.getContextPaths();
       const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(question);
       let completed = false;
 

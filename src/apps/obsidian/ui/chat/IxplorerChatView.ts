@@ -16,6 +16,9 @@ import { ResearchAnswer } from "@core/answer";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { AnswerNoteWriter } from "./research/AnswerNoteWriter";
+import { ToolOutputViewer } from "./toolOutputViewer";
+import { describeToolCall } from "./toolCallView";
+import type { ChainItem } from "@core/conversation";
 import {
   ChatComposerRefs,
   ComposerControls,
@@ -40,9 +43,13 @@ import {
 } from "./context/ContextDocumentPickerModal";
 import { expandAttachedContextPaths } from "./context/attachmentPaths";
 import { IndexControlActions } from "@apps/obsidian/ui/index/IndexControl";
-import { IndexSearchController, IndexSearchOptions } from "@apps/obsidian/ui/index/IndexSearchController";
+import {
+  IndexSearchController,
+  IndexSearchOptions,
+} from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
 import {
+  chatModelProfileLabel,
   createDefaultChatSettings,
   resolveChatSettings,
   stripContextDiagnostics,
@@ -92,6 +99,7 @@ export class IxplorerChatView extends ItemView {
   private readonly citationPopover: CitationPopoverController;
   private readonly diagnosticModal: DiagnosticReportModalController;
   private readonly answerNoteWriter: AnswerNoteWriter;
+  private readonly toolOutputViewer: ToolOutputViewer;
   private readonly researchController: ResearchQuestionController;
   private readonly indexSearch: IndexSearchController;
   private messages: ChatDisplayMessage[] = [];
@@ -133,6 +141,7 @@ export class IxplorerChatView extends ItemView {
     });
     this.diagnosticModal = new DiagnosticReportModalController(this.app);
     this.answerNoteWriter = new AnswerNoteWriter(this.app);
+    this.toolOutputViewer = new ToolOutputViewer(this.app);
     this.researchController = new ResearchQuestionController({
       getQuestionInput: () => this.textareaEl?.value ?? "",
       clearQuestionInput: () => {
@@ -151,7 +160,7 @@ export class IxplorerChatView extends ItemView {
       },
       getModelInputValue: () => this.composerControls?.getModel() ?? "",
       getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
-      getCurrentModelLabel: () => this.services.getChatModel(),
+      getCurrentModelLabel: () => this.getCurrentChatModelLabel(),
       getContextLimitTokens: () => this.getContextLimitTokens(),
       getReservedOutputTokens: () => this.getReservedOutputTokens(),
       updateChatModel: (model) => this.updateChatModel(model),
@@ -173,6 +182,10 @@ export class IxplorerChatView extends ItemView {
           this.attachedContextPaths,
           this.app.vault.getFiles().map((file) => file.path),
         ),
+      clearContextPaths: () => {
+        this.attachedContextPaths = [];
+        this.renderAttachedContext();
+      },
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
         this.editingMessageIndex = index;
@@ -393,7 +406,7 @@ export class IxplorerChatView extends ItemView {
       markdownContext: this,
       messages: this.messages,
       editingMessageIndex: this.editingMessageIndex,
-      assistantLabel: this.services.getChatModel() || "Assistant",
+      assistantLabel: this.getCurrentChatModelLabel() || "Assistant",
       isDebugMode: this.services.isDebugMode(),
       renderEmptyState: (containerEl) => this.renderEmptyChatState(containerEl),
       onEditQuestion: (index) => {
@@ -406,6 +419,7 @@ export class IxplorerChatView extends ItemView {
       onScheduleCitationPopoverClose: (key) => this.citationPopover.scheduleClose(key),
       onScrollCitationBlockIntoView: (key) => this.citationPopover.scrollBlockIntoView(key),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
+      onOpenToolOutput: (item) => void this.openToolOutput(item),
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
@@ -765,6 +779,13 @@ export class IxplorerChatView extends ItemView {
       .find((profile) => profile.id === this.currentChatSettings.chatModelProfileId);
   }
 
+  private getCurrentChatModelLabel(): string {
+    return chatModelProfileLabel(
+      this.services.getChatModelProfiles(),
+      this.currentChatSettings.chatModelProfileId,
+    );
+  }
+
   private async openCitation(citation: Citation): Promise<void> {
     const target = citationTarget(citation);
 
@@ -780,6 +801,25 @@ export class IxplorerChatView extends ItemView {
     await this.openCitation({
       ...formatCitationForChunk(chunk),
       id: chunk.id,
+    });
+  }
+
+  private async openToolOutput(
+    item: Extract<ChainItem, { kind: "tool-call" }>,
+  ): Promise<void> {
+    const view = describeToolCall({
+      name: item.name,
+      label: item.label,
+      status: item.status,
+      args: item.args,
+      resultJson: item.resultJson,
+    });
+    await this.toolOutputViewer.open({
+      name: item.name,
+      intent: view.intent,
+      status: item.status,
+      args: item.args,
+      resultJson: item.resultJson,
     });
   }
 

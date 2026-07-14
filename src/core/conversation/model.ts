@@ -18,6 +18,8 @@ export interface ChatDisplayMessage {
   kind?: "message" | "compact-summary";
   content: string;
   createdAt: string;
+  /** Context documents included with this user request. */
+  contextPaths?: string[];
   modelName?: string;
   compacted?: boolean;
   compactSummary?: ConversationCompactionSummary;

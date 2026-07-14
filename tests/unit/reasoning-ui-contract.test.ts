@@ -49,4 +49,10 @@ describe("reasoning transcript UI", () => {
     expect(styles).toContain(".ixplorer-chat__diff-line--add");
     expect(styles).toContain(".ixplorer-chat__diff-line--remove");
   });
+
+  it("renders included context documents inside user messages", () => {
+    expect(transcript).toContain("renderUserMessageContent");
+    expect(transcript).toContain("message.contextPaths");
+    expect(styles).toContain(".ixplorer-chat__message-context");
+  });
 });

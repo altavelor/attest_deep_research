@@ -6,6 +6,22 @@ import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { AssistantResearchProgress, ChainItem, ChatDisplayMessage } from "./model";
 
+export function nextUserMessage(
+  messages: ChatDisplayMessage[],
+  content: string,
+  contextPaths: readonly string[] = [],
+): ChatDisplayMessage[] {
+  return [
+    ...messages,
+    {
+      role: "user",
+      content,
+      createdAt: new Date().toISOString(),
+      ...(contextPaths.length > 0 ? { contextPaths: [...contextPaths] } : {}),
+    },
+  ];
+}
+
 export function nextAssistantMessage(
   messages: ChatDisplayMessage[],
   delta: string,

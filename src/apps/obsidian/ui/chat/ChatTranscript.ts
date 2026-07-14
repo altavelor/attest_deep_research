@@ -26,6 +26,7 @@ export interface ChatTranscriptOptions {
   onScheduleCitationPopoverClose(key: string): void;
   onScrollCitationBlockIntoView(key: string): void;
   onOpenChunk(chunk: RetrievedChunk): void;
+  onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
   onHighlightCitation(key: string, highlighted: boolean): void;
   onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
   onSaveAnswerToNewNote(answer: ResearchAnswer): void;
@@ -89,7 +90,7 @@ export function renderChatTranscript(
         renderInlineCitationAnchors(answerEl, citationRefs, options);
       });
     } else {
-      contentEl.setText(messageDisplayContent(message));
+      renderUserMessageContent(contentEl, message);
     }
 
     if (message.role === "assistant" && message.evidence && message.evidence.length > 0) {
@@ -101,6 +102,42 @@ export function renderChatTranscript(
   });
 
   applyScrollAnchor(transcriptEl, scroll);
+}
+
+function renderUserMessageContent(containerEl: HTMLElement, message: ChatDisplayMessage): void {
+  const contextPaths = message.contextPaths ?? [];
+  if (contextPaths.length > 0) {
+    const contextEl = containerEl.createDiv({
+      cls: "ixplorer-chat__message-context",
+      attr: { role: "list", "aria-label": "Context documents" },
+    });
+    for (const path of contextPaths) {
+      const itemEl = contextEl.createDiv({
+        cls: "ixplorer-chat__message-context-item",
+        attr: { role: "listitem", title: path },
+      });
+      setIcon(
+        itemEl.createSpan({
+          cls: "ixplorer-chat__message-context-icon",
+          attr: { "aria-hidden": "true" },
+        }),
+        path.endsWith("/") ? "folder" : "file-text",
+      );
+      itemEl.createSpan({
+        cls: "ixplorer-chat__message-context-name",
+        text: attachmentDisplayName(path),
+      });
+    }
+  }
+
+  containerEl.createDiv({
+    cls: "ixplorer-chat__message-text",
+    text: messageDisplayContent(message),
+  });
+}
+
+function attachmentDisplayName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 function renderHeaderActions(
@@ -276,7 +313,6 @@ function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): voi
 
 interface WorkflowUiState {
   openThinking: Set<string>;
-  expandedCells: Set<string>;
 }
 
 function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
@@ -284,11 +320,7 @@ function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
   hostEl.querySelectorAll<HTMLDetailsElement>("details[data-thinking-id]").forEach((el) => {
     if (el.open && el.dataset.thinkingId) openThinking.add(el.dataset.thinkingId);
   });
-  const expandedCells = new Set<string>();
-  hostEl.querySelectorAll<HTMLElement>("[data-tool-cell-id].is-expanded").forEach((el) => {
-    if (el.dataset.toolCellId) expandedCells.add(el.dataset.toolCellId);
-  });
-  return { openThinking, expandedCells };
+  return { openThinking };
 }
 
 /**
@@ -329,9 +361,17 @@ function renderWorkflowNodes(
           options,
           uiState,
         });
-      } else if (item.kind === "tool-call") {
+      } else if (item.kind === "tool-call" && options.isDebugMode) {
+        // Tool-call cards (args + result) are a debug-only surface; regular
+        // users only see reasoning and the final answer.
         renderToolNode(listEl, item, options, uiState);
       }
+    }
+    // A tool-only chain renders nothing outside debug mode — drop the empty
+    // rail so it doesn't leave a stray divider above the answer.
+    if (listEl.childElementCount === 0) {
+      listEl.remove();
+      return false;
     }
     return true;
   }
@@ -455,24 +495,33 @@ function renderToolNode(
     });
   }
   if (view.inCell) {
-    renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, uiState);
+    renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, {
+      variant: "in",
+      onOpen: () => options.onOpenToolOutput(item),
+    });
   }
   if (view.outCell) {
-    renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, uiState);
+    renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, {
+      variant: "out",
+      onOpen: () => options.onOpenToolOutput(item),
+    });
   }
   if (item.children && item.children.length > 0) {
     const nested = body.createDiv({
       cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested",
     });
     for (const child of item.children) {
-      if (child.kind === "tool-call") {
+      if (child.kind === "tool-call" && options.isDebugMode) {
         renderToolNode(nested, child, options, uiState);
       }
     }
   }
 }
 
-const TOOL_CELL_COLLAPSED_PX = 160;
+interface ToolCellOptions {
+  variant: "in" | "out";
+  onOpen: () => void;
+}
 
 function renderToolCell(
   parentEl: HTMLElement,
@@ -480,37 +529,44 @@ function renderToolCell(
   label: string,
   cell: ToolCell,
   options: ChatTranscriptOptions,
-  uiState?: WorkflowUiState,
+  cellOptions: ToolCellOptions,
 ): void {
   const wrap = parentEl.createDiv({
-    cls: "ixplorer-chat__tool-cell",
-    attr: { "data-tool-cell-id": cellId },
+    cls: `ixplorer-chat__tool-cell ixplorer-chat__tool-cell--${cellOptions.variant}`,
+    attr: { "data-tool-cell-id": cellId, role: "button", tabindex: "0" },
   });
-  if (uiState?.expandedCells.has(cellId)) wrap.addClass("is-expanded");
   const header = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-header" });
   header.createSpan({ cls: "ixplorer-chat__tool-cell-label", text: label });
-  const expandBtn = header.createEl("button", {
-    cls: "ixplorer-chat__tool-cell-expand",
-    attr: { type: "button", "aria-label": "Expand", title: "Expand" },
+  header.createSpan({
+    cls: "ixplorer-chat__tool-cell-open-hint",
+    text: "Open full output",
   });
-  setIcon(expandBtn, "chevrons-up-down");
   const bodyEl = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-body" });
   renderToolCellBody(bodyEl, cell, options);
 
-  expandBtn.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const expanded = !wrap.hasClass("is-expanded");
-    wrap.toggleClass("is-expanded", expanded);
-    expandBtn.setAttr("aria-label", expanded ? "Collapse" : "Expand");
-    expandBtn.setAttr("title", expanded ? "Collapse" : "Expand");
+  // The inline cell is a clamped preview; clicking (or Enter/Space) opens the
+  // untruncated payload in a tab. But the text must stay selectable, so a click
+  // that ends a text selection copies rather than navigates — only a bare click
+  // opens the detail tab.
+  wrap.addEventListener("click", () => {
+    if (hasTextSelectionWithin(wrap)) return;
+    cellOptions.onOpen();
   });
-
-  // Hide the toggle when the content already fits within the collapsed height.
-  if (cell.kind !== "diff" || cell.hunks.length > 0) {
-    if (bodyEl.scrollHeight <= TOOL_CELL_COLLAPSED_PX && !wrap.hasClass("is-expanded")) {
-      expandBtn.addClass("is-hidden");
+  wrap.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      cellOptions.onOpen();
     }
-  }
+  });
+}
+
+/** True when the user has an active, non-empty text selection inside `el`. */
+function hasTextSelectionWithin(el: HTMLElement): boolean {
+  const selection = el.ownerDocument.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+  const text = selection.toString().trim();
+  if (!text) return false;
+  return el.contains(selection.anchorNode) || el.contains(selection.focusNode);
 }
 
 function renderToolCellBody(
