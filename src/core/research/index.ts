@@ -9,6 +9,7 @@
 // — только соседей через `./…`, иначе цикл (ловит `npm run depcruise`).
 
 export * from "./prompts";
+export * from "./citationLabels";
 export * from "./attachments";
 export * from "./agenticPrompts";
 export * from "./ResearchExecutionPolicy";

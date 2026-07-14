@@ -7,14 +7,18 @@ import { IxplorerError } from "@core/errors";
 import {
   AttachedFileManifestEntry,
   buildResearchPrompt,
+  BuildResearchPromptOptions,
   estimateResearchRequestTokens,
   extractFollowUpQuestions,
   buildResearchSystemPrompt,
+  labelResearchEvidence,
+  rewriteCitationLabels,
   ResearchChatHistoryMessage,
 } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "@application/research/toolPorts";
+import { citationIdsFromText } from "./strategies/citations";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -92,7 +96,7 @@ export class AnswerSynthesisService {
         ? { noteToolNames: this.noteTools!.definitions().map((def) => def.function.name) }
         : {}),
     };
-    const prompt = buildResearchPrompt({
+    const promptOptions: BuildResearchPromptOptions = {
       question: input.question,
       chatHistory: input.chatHistory,
       evidence: input.evidence,
@@ -104,7 +108,8 @@ export class AnswerSynthesisService {
       webEvidence: input.webEvidence,
       maxEvidenceItems: input.evidenceLimit,
       retrievalDiagnostics: input.retrievalDiagnostics,
-    });
+    };
+    const prompt = buildResearchPrompt(promptOptions);
     let answerText = "";
     let toolDiagnostics: ToolCallDiagnostic[] = [];
 
@@ -236,11 +241,33 @@ export class AnswerSynthesisService {
       }
     }
 
-    const contextDiagnostics = appendToolDiagnostics(input.contextDiagnostics, toolDiagnostics);
+    // Expand the model's short `[S1]` citation labels back to the real evidence
+    // ids the whole downstream (UI anchors, saved-note formatter) keys off, and
+    // keep only the citations the answer actually used (B).
+    const { byLabel } = labelResearchEvidence(promptOptions);
+    const rewrite = rewriteCitationLabels(answerText, byLabel);
+    answerText = rewrite.text;
+    // Cited ids come from the rewritten text so both expanded labels and any raw
+    // `[chunk-id]` a model still emits count as a citation.
+    const citedIds = citationIdsFromText(answerText);
+    const citations = input.citations.filter((citation) => citedIds.has(citation.id));
+
+    let contextDiagnostics = appendToolDiagnostics(input.contextDiagnostics, toolDiagnostics);
+    if (contextDiagnostics && rewrite.unknownLabels.length > 0) {
+      const warning =
+        `${rewrite.unknownLabels.length} citation label(s) the answer cited ` +
+        "match no evidence and were removed — the model may have invented them.";
+      contextDiagnostics = {
+        ...contextDiagnostics,
+        warnings: contextDiagnostics.warnings.includes(warning)
+          ? contextDiagnostics.warnings
+          : [...contextDiagnostics.warnings, warning],
+      };
+    }
     const finalAnswer: ResearchAnswer = {
       question: input.question,
       answer: answerText,
-      citations: input.citations,
+      citations,
       evidence: input.evidence,
       ...(contextDiagnostics ? { contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),

@@ -88,10 +88,12 @@ describe("buildResearchPrompt", () => {
     });
 
     expect(prompt).toContain("Question: How should I use local models?");
-    expect(prompt).toContain("[local-1] Research/local.md");
+    expect(prompt).toContain("[S1] Research/local.md");
     expect(prompt).toContain("Local evidence");
-    expect(prompt).toContain("[pdf-1] Papers/model.pdf p. 3");
-    expect(prompt).not.toContain("[extra]");
+    expect(prompt).toContain("[S2] Papers/model.pdf p. 3");
+    // Only the first two items are within the limit, so no third label is rendered.
+    expect(prompt).not.toContain("[S3]");
+    expect(prompt).not.toContain("Extra evidence");
   });
 
   it("requires a direct answer instead of treating web evidence as a user message", () => {
@@ -944,11 +946,9 @@ describe("ResearchService", () => {
           question: "How should I use local models?",
           answer:
             "Use local models with citations [local-1].\n\nFollow-up questions:\n1. What should I index next?",
-          citations: [
-            expect.objectContaining({ id: "local-1" }),
-            expect.objectContaining({ id: "web:https://example.com/local-models" }),
-            expect.objectContaining({ id: "web:https://example.com/second" }),
-          ],
+          // Only the source the answer actually cites is kept (B); the web
+          // sources were gathered but never bracket-cited, so they are dropped.
+          citations: [expect.objectContaining({ id: "local-1" })],
           evidence: [
             expect.objectContaining({ id: "local-1", text: "Local model notes" }),
             expect.objectContaining({
@@ -981,10 +981,8 @@ describe("ResearchService", () => {
       model: "qwen",
       temperature: 0.2,
     });
-    expect(chatModel.requests[0].messages[1].content).toContain("[local-1] Research/local.md");
-    expect(chatModel.requests[0].messages[1].content).toContain(
-      "[web:https://example.com/local-models] Example",
-    );
+    expect(chatModel.requests[0].messages[1].content).toContain("[S1] Research/local.md");
+    expect(chatModel.requests[0].messages[1].content).toContain("[S2] Example");
     expect(persisted).toEqual([
       expect.objectContaining({ question: "How should I use local models?" }),
     ]);
@@ -1159,7 +1157,9 @@ describe("ResearchService", () => {
     expect(events.at(-1)).toEqual({
       type: "complete",
       answer: expect.objectContaining({
-        citations: [expect.objectContaining({ id: "web:https://example.com/current-docs" })],
+        // The answer cites nothing, so no citations are attached (B); the web
+        // source stays in evidence for context/popovers.
+        citations: [],
         evidence: [
           expect.objectContaining({
             id: "web:https://example.com/current-docs",
@@ -1168,9 +1168,7 @@ describe("ResearchService", () => {
         ],
       }),
     });
-    expect(chatModel.requests[0].messages[1].content).toContain(
-      "[web:https://example.com/current-docs] Example",
-    );
+    expect(chatModel.requests[0].messages[1].content).toContain("[S1] Example");
     expect(chatModel.requests[0].messages[1].content).not.toContain("Local model notes");
   });
 

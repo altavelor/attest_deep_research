@@ -340,6 +340,10 @@ export function attachAnswerDetailsToLastAssistantMessage(
       ...messages.slice(0, index),
       {
         ...messages[index],
+        // The final answer is authoritative: the model cited short `[S1]` labels
+        // that synthesis rewrote into the real `[chunk-id]` tokens inline-anchor
+        // rendering needs, so replace the streamed body with the rewritten text.
+        ...(answer.finalAnswer ? { content: answer.finalAnswer.answer } : {}),
         answer: answer.finalAnswer,
         evidence: answer.evidence ?? [],
         contextDiagnostics: answer.contextDiagnostics ?? answer.finalAnswer?.contextDiagnostics,
