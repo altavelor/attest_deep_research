@@ -43,15 +43,29 @@ export interface EvidenceSectionsInput {
  */
 export function labelResearchEvidence(input: EvidenceSectionsInput): LabeledResearchEvidence {
   const byLabel = new Map<string, string>();
+  const seen = new Set<string>();
   let counter = 0;
 
-  const assign = (chunks: RetrievedChunk[]): LabeledChunk[] =>
-    chunks.slice(0, input.maxEvidenceItems).map((chunk) => {
+  // A source that appears in several sections (e.g. an attached note also surfaced
+  // by retrieval) is labeled once — on its first, highest-priority occurrence
+  // (explicit → graph → retrieved → web) — so it costs one citation, not several.
+  const assign = (chunks: RetrievedChunk[]): LabeledChunk[] => {
+    const labeled: LabeledChunk[] = [];
+    for (const chunk of chunks) {
+      if (labeled.length >= input.maxEvidenceItems) {
+        break;
+      }
+      if (seen.has(chunk.id)) {
+        continue;
+      }
+      seen.add(chunk.id);
       counter += 1;
       const label = `${CITATION_LABEL_PREFIX}${counter}`;
       byLabel.set(label.toUpperCase(), chunk.id);
-      return { label, chunk };
-    });
+      labeled.push({ label, chunk });
+    }
+    return labeled;
+  };
 
   return {
     explicit: assign(input.explicitEvidence ?? []),
