@@ -5,6 +5,7 @@ import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
+import { citationEvidence } from "./citations/citationEvidence";
 import { stripRenderedCitationIds } from "./citations/citationText";
 import { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import { shouldShowAnswerNoteActions, shouldShowDiagnosticAction } from "@core/conversation";
@@ -77,7 +78,7 @@ export function renderChatTranscript(
       if (message.isFallback) {
         renderFallbackBanner(contentEl, message.fallbackReason);
       }
-      const citationRefs = buildCitationRefs(message.evidence ?? []);
+      const citationRefs = buildCitationRefs(citationEvidence(message));
       const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
       renderAssistantAnswerHeader(answerEl, message, options);
       void MarkdownRenderer.render(
@@ -93,8 +94,9 @@ export function renderChatTranscript(
       renderUserMessageContent(contentEl, message);
     }
 
-    if (message.role === "assistant" && message.evidence && message.evidence.length > 0) {
-      renderCitationBlocks(messageEl, buildCitationRefs(message.evidence), {
+    const sourceEvidence = message.role === "assistant" ? citationEvidence(message) : [];
+    if (sourceEvidence.length > 0) {
+      renderCitationBlocks(messageEl, buildCitationRefs(sourceEvidence), {
         onOpenChunk: options.onOpenChunk,
         onHighlight: options.onHighlightCitation,
       });
@@ -273,7 +275,7 @@ export function patchActiveAssistantMessage(
     if (contentElForFallback) renderFallbackBanner(contentElForFallback, message.fallbackReason);
   }
   answerEl.empty();
-  const citationRefs = buildCitationRefs(message.evidence ?? []);
+  const citationRefs = buildCitationRefs(citationEvidence(message));
   renderAssistantAnswerHeader(answerEl, message, options);
   void MarkdownRenderer.render(
     options.app,
