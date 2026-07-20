@@ -9,17 +9,9 @@ import {
   recencyFloor,
   stripTemporalNoise,
 } from "@core/web";
-import {
-  SearchProviderResult,
-  WebSearchOptions,
-  WebSearchSource,
-} from "@application/ports";
+import { SearchProviderResult, WebSearchOptions, WebSearchSource } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
-import {
-  sanitizeParsedResults,
-  WebSourceDefinition,
-  WebSourceQueryInput,
-} from "./types";
+import { sanitizeParsedResults, WebSourceDefinition, WebSourceQueryInput } from "./types";
 
 export interface HttpWebSearchSourceOptions {
   credentials?: Record<string, string>;
@@ -94,9 +86,9 @@ export class HttpWebSearchSource implements WebSearchSource {
       credentials: this.credentials,
       ...(options.recency
         ? {
-          recency: options.recency,
-          freshFrom: recencyFloor(options.recency, this.now()).toISOString(),
-        }
+            recency: options.recency,
+            freshFrom: recencyFloor(options.recency, this.now()).toISOString(),
+          }
         : {}),
       ...(options.language ? { language: options.language } : {}),
       ...(domains.length > 0 ? { domains } : {}),

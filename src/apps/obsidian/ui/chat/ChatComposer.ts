@@ -4,10 +4,7 @@ import { SavedChatSettings } from "@core/chat/savedChat";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ContextMode } from "@core/diagnostics";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
-import {
-  getMentionCandidates,
-  MentionCandidate,
-} from "./mentionAutocomplete";
+import { getMentionCandidates, MentionCandidate } from "./mentionAutocomplete";
 
 export interface ChatModelSelectOption {
   id: string;
@@ -553,9 +550,6 @@ export function getResearchSearchMode(value: string | undefined): ResearchSearch
 
 function isResearchSearchMode(value: string | undefined): value is ResearchSearchMode {
   return (
-    value === "none" ||
-    value === "indexOnly" ||
-    value === "indexAndWeb" ||
-    value === "webOnly"
+    value === "none" || value === "indexOnly" || value === "indexAndWeb" || value === "webOnly"
   );
 }

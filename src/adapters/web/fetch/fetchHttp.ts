@@ -33,7 +33,7 @@ export async function requestText(
   const timeoutMs =
     typeof timeoutOverrideMs === "number" && timeoutOverrideMs > 0
       ? timeoutOverrideMs
-      : runtime.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+      : (runtime.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const context = { url: spec.url, method: spec.method ?? "GET", headers: spec.headers ?? {} };
 

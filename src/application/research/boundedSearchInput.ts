@@ -1,10 +1,5 @@
 import { ToolParseResult, toolFailure } from "@core/agent";
-import {
-  isWebQueryIntent,
-  isWebQueryRecency,
-  WebQueryIntent,
-  WebQueryRecency,
-} from "@core/web";
+import { isWebQueryIntent, isWebQueryRecency, WebQueryIntent, WebQueryRecency } from "@core/web";
 
 export interface BoundedSearchInput {
   query: string;

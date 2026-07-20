@@ -25,7 +25,12 @@ describe("WebFetchSectionTool", () => {
       { url: "https://example.com/a", title: "A", snippet: "s", rank: 1 },
       { callId: "search", query: "q" },
     );
-    return { tool: new WebFetchSectionTool({ provider, evidence }), evidence, registered, fetchPage };
+    return {
+      tool: new WebFetchSectionTool({ provider, evidence }),
+      evidence,
+      registered,
+      fetchPage,
+    };
   }
 
   it("returns only passages relevant to the focused query", async () => {

@@ -14,9 +14,9 @@ describe("FetchUrlStatusChecker", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 404 }));
     const checker = new FetchUrlStatusChecker({ fetch: fetchMock });
 
-    await expect(checker.checkUrls([{ url: "https://example.com/missing" }], options())).resolves.toEqual([
-      expect.objectContaining({ state: "unreachable", ok: false, status: 404 }),
-    ]);
+    await expect(
+      checker.checkUrls([{ url: "https://example.com/missing" }], options()),
+    ).resolves.toEqual([expect.objectContaining({ state: "unreachable", ok: false, status: 404 })]);
   });
 
   it("classifies blocked and rate-limited responses as unknown", async () => {

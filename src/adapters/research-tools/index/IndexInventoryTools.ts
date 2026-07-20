@@ -199,7 +199,9 @@ export const SearchIndexByMetadataTool = defineInventoryTool<IndexMetadataSearch
     language: str(40),
     cursor: str(MAX_CURSOR_CHARS),
     limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
-    countOnly: bool({ description: "Return only the total count of matched sources, not the sources." }),
+    countOnly: bool({
+      description: "Return only the total count of matched sources, not the sources.",
+    }),
   },
   capability: "searchIndexByMetadata",
   errorCode: "index-metadata-search-failed",
@@ -299,10 +301,7 @@ export const FindClaimsTool = defineInventoryTool<{
 });
 
 /** Page result, or — when the caller asked for `countOnly` — just the total match count. */
-function pageOrCount(
-  result: unknown,
-  input: { limit: number; countOnly?: boolean },
-): unknown {
+function pageOrCount(result: unknown, input: { limit: number; countOnly?: boolean }): unknown {
   const page = result as { items: unknown[]; totalCount?: number };
   if (input.countOnly) {
     const count = page.totalCount ?? page.items.length;
@@ -312,9 +311,7 @@ function pageOrCount(
 }
 
 /** Registry of retriever-backed index inventory tools; the single source of truth. */
-export const INDEX_INVENTORY_TOOLS: ReadonlyArray<
-  new (retriever: ResearchRetriever) => Tool
-> = [
+export const INDEX_INVENTORY_TOOLS: ReadonlyArray<new (retriever: ResearchRetriever) => Tool> = [
   ListIndexSourcesTool,
   ListIndexChunksTool,
   ReadIndexChunkTool,

@@ -110,7 +110,10 @@ export function stripTemporalNoise(query: string): string {
     )
     // "2nd July 2026", "2 июля 2026"
     .replace(
-      new RegExp(`\\b\\d{1,2}(st|nd|rd|th)?\\s+(${EN_MONTHS}|${RU_MONTHS})(\\s+20\\d\\d)?\\b`, "gi"),
+      new RegExp(
+        `\\b\\d{1,2}(st|nd|rd|th)?\\s+(${EN_MONTHS}|${RU_MONTHS})(\\s+20\\d\\d)?\\b`,
+        "gi",
+      ),
       " ",
     )
     .replace(/\b20\d\d-\d\d-\d\d\b/g, " ")

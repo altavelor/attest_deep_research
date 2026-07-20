@@ -4,9 +4,17 @@ import { VaultWriter } from "@application/ports/vault";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
-import { ContextIndexDiagnostics, IndexDescriptionPromptContext, ResearchExecutionStrategy, ToolCapabilityProbeAudit } from "@core/diagnostics";
+import {
+  ContextIndexDiagnostics,
+  IndexDescriptionPromptContext,
+  ResearchExecutionStrategy,
+  ToolCapabilityProbeAudit,
+} from "@core/diagnostics";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "./AnswerSynthesisService";
-import { ContextAssembler, ContextAssembleRequest } from "@application/use-cases/chat/ContextAssembler";
+import {
+  ContextAssembler,
+  ContextAssembleRequest,
+} from "@application/use-cases/chat/ContextAssembler";
 import { EvidencePlanner, EvidencePlannerOptions } from "@core/research";
 import {
   NoteToolService,
@@ -224,7 +232,13 @@ export class ResearchService implements ConversationEngine {
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
         : undefined;
-    const ctx: ResearchExecutionContext = { request, question, searchMode, policy, indexDescription };
+    const ctx: ResearchExecutionContext = {
+      request,
+      question,
+      searchMode,
+      policy,
+      indexDescription,
+    };
 
     let executionStrategy: ResearchExecutionStrategy = policy.strategy;
     let failedAgenticAttempt: AgenticResearchFailure | undefined;

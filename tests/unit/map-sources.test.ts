@@ -129,7 +129,10 @@ describe("MapSources fan-out", () => {
         if (input.task.includes("b.pdf")) {
           throw new Error("boom");
         }
-        return { answerText: "ok [c1]\nSTANCE: SUPPORTS", snapshot: snapshot([chunk("c1", "a.pdf")]) };
+        return {
+          answerText: "ok [c1]\nSTANCE: SUPPORTS",
+          snapshot: snapshot([chunk("c1", "a.pdf")]),
+        };
       },
     };
     const retriever = { search: vi.fn() } as unknown as ResearchRetriever;

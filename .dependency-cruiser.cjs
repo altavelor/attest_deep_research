@@ -24,14 +24,16 @@ module.exports = {
     },
     {
       name: "core-stays-inner",
-      comment: "core → application/adapters/apps запрещено: внутренний слой не знает о внешних (AGENTS.md §1).",
+      comment:
+        "core → application/adapters/apps запрещено: внутренний слой не знает о внешних (AGENTS.md §1).",
       severity: "error",
       from: { path: "^src/core/" },
       to: { path: "^src/(application|adapters|apps)/" },
     },
     {
       name: "application-no-outer",
-      comment: "application → adapters/apps запрещено: зависимости только внутрь, к core (AGENTS.md §1).",
+      comment:
+        "application → adapters/apps запрещено: зависимости только внутрь, к core (AGENTS.md §1).",
       severity: "error",
       from: { path: "^src/application/" },
       to: { path: "^src/(adapters|apps)/" },

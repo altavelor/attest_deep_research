@@ -23,7 +23,9 @@ export interface KeywordPostingLookup {
   lengthOf(chunkId: string): number | undefined;
 }
 
-export function buildKeywordPostingLookup(rowsByShard: KeywordPostingRow[][]): KeywordPostingLookup {
+export function buildKeywordPostingLookup(
+  rowsByShard: KeywordPostingRow[][],
+): KeywordPostingLookup {
   const postingsByTerm = new Map<
     string,
     Map<string, { frequency: number; headingFrequency: number }>
@@ -109,10 +111,7 @@ export function buildKeywordPostingRows(
     for (const token of tokenizeForKeywordIndex(chunk.text, minTokenLength)) {
       count(token, chunk.id, false);
     }
-    for (const token of tokenizeForKeywordIndex(
-      chunkHeadingText(chunk),
-      minTokenLength,
-    )) {
+    for (const token of tokenizeForKeywordIndex(chunkHeadingText(chunk), minTokenLength)) {
       count(token, chunk.id, true);
     }
   }
@@ -200,9 +199,7 @@ export function rankKeywordLookup(
       continue;
     }
 
-    const idf = Math.log(
-      1 + (lookup.chunkCount - postings.length + 0.5) / (postings.length + 0.5),
-    );
+    const idf = Math.log(1 + (lookup.chunkCount - postings.length + 0.5) / (postings.length + 0.5));
 
     for (const posting of postings) {
       const length = lookup.lengthOf(posting.chunkId) ?? lookup.averageLength;
@@ -210,8 +207,7 @@ export function rankKeywordLookup(
         posting.frequency + (HEADING_WEIGHT - 1) * (posting.headingFrequency ?? 0);
       const saturation =
         (effectiveFrequency * (BM25_K1 + 1)) /
-        (effectiveFrequency +
-          BM25_K1 * (1 - BM25_B + (BM25_B * length) / lookup.averageLength));
+        (effectiveFrequency + BM25_K1 * (1 - BM25_B + (BM25_B * length) / lookup.averageLength));
 
       scores.set(posting.chunkId, (scores.get(posting.chunkId) ?? 0) + idf * saturation);
     }

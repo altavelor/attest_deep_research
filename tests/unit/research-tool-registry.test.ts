@@ -4,10 +4,7 @@ import { IndexResearchTool } from "@adapters/research-tools/index/IndexResearchT
 import { NoteToolService } from "@adapters/research-tools/note/NoteTools";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ToolManager } from "@application/tools/ToolManager";
-import {
-  NOTE_PERMISSIONS,
-  createNoteTools,
-} from "@adapters/research-tools/note/createNoteTools";
+import { NOTE_PERMISSIONS, createNoteTools } from "@adapters/research-tools/note/createNoteTools";
 import { ResearchRetriever } from "@application/contracts";
 
 class MemoryFiles implements ContextFileProvider {
@@ -40,10 +37,7 @@ describe("ToolManager", () => {
 
   it("hides unpermitted tools from definitions but exposes permitted ones", () => {
     const service = { definitions: () => [], execute: vi.fn() } as unknown as NoteToolService;
-    const registry = new ToolManager(
-      createNoteTools(service),
-      new Set([NOTE_PERMISSIONS.read]),
-    );
+    const registry = new ToolManager(createNoteTools(service), new Set([NOTE_PERMISSIONS.read]));
 
     expect(registry.definitions().map((definition) => definition.function.name)).toEqual([
       "read_note",

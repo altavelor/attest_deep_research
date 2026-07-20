@@ -20,7 +20,7 @@
   padding-inline-start: 0.125rem;
 }
 
-.ixplorer-chat__message-content--assistant li> :is(p, ul, ol) {
+.ixplorer-chat__message-content--assistant li > :is(p, ul, ol) {
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
 }
@@ -30,13 +30,13 @@
   line-height: 1.45;
 }
 
-.ixplorer-chat__message-content--assistant> :first-child,
-.ixplorer-chat__message-content--assistant .markdown-rendered> :first-child {
+.ixplorer-chat__message-content--assistant > :first-child,
+.ixplorer-chat__message-content--assistant .markdown-rendered > :first-child {
   margin-top: 0;
 }
 
-.ixplorer-chat__message-content--assistant> :last-child,
-.ixplorer-chat__message-content--assistant .markdown-rendered> :last-child {
+.ixplorer-chat__message-content--assistant > :last-child,
+.ixplorer-chat__message-content--assistant .markdown-rendered > :last-child {
   margin-bottom: 0;
 }
 

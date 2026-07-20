@@ -21,10 +21,7 @@ import {
 } from "@core/agent/toolNames";
 import { RetrievedChunk } from "@core/model/source";
 import { sourceLabel } from "@core/retrieval/citations";
-import {
-  AttachedFileManifestEntry,
-  buildAttachmentManifestSection,
-} from "./attachments";
+import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { currentDateLine, ResearchChatHistoryMessage } from "./prompts";
 
 /**
@@ -60,8 +57,7 @@ const hasMapSources = (tools: ToolSet): boolean => tools.has(MAP_SOURCES_TOOL);
 const hasClaims = (tools: ToolSet): boolean => tools.has(FIND_CLAIMS_TOOL);
 // Compiling corpus knowledge into notes needs both a readable index (evidence +
 // planning) and note-writing tools; advertised only when both are present.
-const hasCompileKnowledge = (tools: ToolSet): boolean =>
-  hasIndex(tools) && hasNoteMutation(tools);
+const hasCompileKnowledge = (tools: ToolSet): boolean => hasIndex(tools) && hasNoteMutation(tools);
 const hasNoteMutation = (tools: ToolSet): boolean =>
   NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 const hasDownload = (tools: ToolSet): boolean => tools.has(DOWNLOAD_DOCUMENT_TOOL);
@@ -93,7 +89,8 @@ const MUTATION_RULES = `
 - On {ok:false, reason:"not-found"}: call create_note first, then update_note if needed.
 - Never write to .ixplorer/ paths.`.trimStart();
 
-const CORE_VAULT_SKILL = (includeMutation: boolean) => `
+const CORE_VAULT_SKILL = (includeMutation: boolean) =>
+  `
 ## Vault Assistant Principles
 
 You are Ixplorer, a local-first Obsidian assistant.
@@ -148,9 +145,11 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
   const sections: string[] = [
     "## Answer Principles",
     "You are Ixplorer, a research assistant. Your goal is to answer the user's question\nusing authoritative sources retrieved by evidence tools.",
-    [`### Evidence tools (${evidenceHeader})`, "- Use these to find information relevant to the question.", ...citationLines].join(
-      "\n",
-    ),
+    [
+      `### Evidence tools (${evidenceHeader})`,
+      "- Use these to find information relevant to the question.",
+      ...citationLines,
+    ].join("\n"),
   ];
 
   // Index URL audit tools register alongside search_index — advertise them only then.
@@ -225,7 +224,9 @@ const WEB_SKILL = (tools: ToolSet): string => {
     "### Reading results",
     "Each result has:",
     "- `url` — source URL; cite it as `[url:<url>]`",
-    ...(canFetch ? ["- `resultId` — opaque handle; pass in fetch_web_page's `resultIds` to read the full page"] : []),
+    ...(canFetch
+      ? ["- `resultId` — opaque handle; pass in fetch_web_page's `resultIds` to read the full page"]
+      : []),
     "- `title` — page title",
     "- `snippet` — short preview (may be truncated)",
     "- `rank` — position in search results (lower = higher priority)",
@@ -252,7 +253,7 @@ const DOWNLOAD_SKILL = (tools: ToolSet): string => {
   const steps: string[] = [
     "Use these when the user asks you to download/save a file (PDF and similar) into the vault.",
     "- These tools perform a real side effect. The file exists only after download_document",
-    "  returns {ok:true} — never claim a file was saved otherwise (see \"Doing vs. describing\").",
+    '  returns {ok:true} — never claim a file was saved otherwise (see "Doing vs. describing").',
   ];
   if (canProbe) {
     steps.push(
@@ -282,9 +283,12 @@ const DOWNLOAD_SKILL = (tools: ToolSet): string => {
 // the parent's, but the skill text must not name a manual tool the parent itself
 // doesn't have (e.g. search_index in a web-only profile).
 const SUB_AGENT_SKILL = (tools: ToolSet): string => {
-  const manualAlternatives = [INDEX_SEARCH_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL, READ_NOTE_TOOL].filter(
-    (name) => tools.has(name),
-  );
+  const manualAlternatives = [
+    INDEX_SEARCH_TOOL,
+    WEB_SEARCH_TOOL,
+    WEB_FETCH_TOOL,
+    READ_NOTE_TOOL,
+  ].filter((name) => tools.has(name));
 
   return `
 ## Delegating to a sub-agent (run_subagent)
@@ -518,8 +522,7 @@ export function buildAgenticResearchMessages(
 ): ChatMessage[] {
   const { toolContext } = options;
   const tools: ToolSet = new Set(toolContext.availableTools);
-  const required =
-    options.requiredTools.length > 0 ? options.requiredTools.join(", ") : "none";
+  const required = options.requiredTools.length > 0 ? options.requiredTools.join(", ") : "none";
 
   const systemSections: string[] = [
     [

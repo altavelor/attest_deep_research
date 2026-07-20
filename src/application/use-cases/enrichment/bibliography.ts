@@ -68,7 +68,10 @@ export function sharedReferences(
       ...(entry.doi ? { doi: entry.doi } : {}),
       citedBy: Array.from(entry.citedBy).sort(),
     }))
-    .sort((left, right) => right.citedBy.length - left.citedBy.length || left.key.localeCompare(right.key));
+    .sort(
+      (left, right) =>
+        right.citedBy.length - left.citedBy.length || left.key.localeCompare(right.key),
+    );
 }
 
 function referenceMatchKey(reference: DocumentReference): string | undefined {

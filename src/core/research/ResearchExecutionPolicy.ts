@@ -67,7 +67,11 @@ export function resolveResearchExecutionPolicy(
   // all. Specific/required/parallel choice no longer gate eligibility because we
   // never force a tool.
   if (!input.capabilities.calls) {
-    return freeze({ ...base, strategy: "deterministic-fallback", reason: "tool-calls-unavailable" });
+    return freeze({
+      ...base,
+      strategy: "deterministic-fallback",
+      reason: "tool-calls-unavailable",
+    });
   }
   return freeze({ ...base, strategy: "agentic", reason: "eligible" });
 }

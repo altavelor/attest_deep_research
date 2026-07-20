@@ -8,11 +8,7 @@ import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
 import type { SubAgentPort, ResearchToolsetOptions } from "@application/research";
 import { buildSourceTask, citedEvidenceIds, parseSourceAnswer } from "./mapSourcesParse";
-import {
-  MapSourceRow,
-  MapSourcesProgress,
-  MapSourcesResult,
-} from "./types";
+import { MapSourceRow, MapSourcesProgress, MapSourcesResult } from "./types";
 
 export interface MapSourcesDeps {
   runner: SubAgentPort;
@@ -168,7 +164,9 @@ export class MapSources {
     } catch {
       chunks = [];
     }
-    const paths = dedupe(chunks.map(chunkSourcePath).filter((path): path is string => Boolean(path)));
+    const paths = dedupe(
+      chunks.map(chunkSourcePath).filter((path): path is string => Boolean(path)),
+    );
     return { sourcePaths: paths.slice(0, maxSources), kind: "relevance" };
   }
 }

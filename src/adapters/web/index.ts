@@ -10,7 +10,11 @@ export type { DuckDuckGoSearchProviderOptions } from "./DuckDuckGoSearchProvider
 export { FetchUrlStatusChecker } from "./FetchUrlStatusChecker";
 export type { FetchUrlStatusCheckerOptions } from "./FetchUrlStatusChecker";
 
-export { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
+export {
+  extractPageMetadata,
+  extractReadableText,
+  parseDuckDuckGoResults,
+} from "./DuckDuckGoParser";
 export type { DuckDuckGoResult, PageMetadata } from "./DuckDuckGoParser";
 
 export {

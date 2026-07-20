@@ -115,11 +115,14 @@ export class EvidencePlanner {
         ? takeFreshnessGroups(input, slots, tokenBudget, seen, webSlots, localSlots)
         : takeLocalFirstGroups(input, slots, tokenBudget, seen, webSlots, localSlots);
 
-    const usedNonExplicit =
-      groups.graph.length + groups.retrieval.length + groups.web.length;
+    const usedNonExplicit = groups.graph.length + groups.retrieval.length + groups.web.length;
     const unusedSlots = Math.max(0, remainingAfterExplicit - usedNonExplicit);
 
-    if (unusedSlots > 0 && groups.web.length < input.webEvidence.length && policy !== "index-only") {
+    if (
+      unusedSlots > 0 &&
+      groups.web.length < input.webEvidence.length &&
+      policy !== "index-only"
+    ) {
       groups.web.push(
         ...takeGroup(
           input.webEvidence.filter((chunk) => !seen.has(chunk.id)),
@@ -241,9 +244,7 @@ function buildOutput(input: {
     ]),
     retrievalChunkIds: uniqueIds([
       ...input.dropped.retrievalChunkIds,
-      ...input.groups.retrieval
-        .filter((chunk) => !finalIds.has(chunk.id))
-        .map((chunk) => chunk.id),
+      ...input.groups.retrieval.filter((chunk) => !finalIds.has(chunk.id)).map((chunk) => chunk.id),
     ]),
     webChunkIds: uniqueIds([
       ...input.dropped.webChunkIds,
@@ -278,9 +279,7 @@ function buildOutput(input: {
   };
 }
 
-function groupDroppedKey(
-  name: EvidenceGroupName,
-): keyof EvidencePlannerDiagnostics["dropped"] {
+function groupDroppedKey(name: EvidenceGroupName): keyof EvidencePlannerDiagnostics["dropped"] {
   switch (name) {
     case "explicit":
       return "explicitChunkIds";
@@ -420,10 +419,7 @@ function evaluateLocalEvidence(
   if (input.retrievalEvidence.length < 3) {
     reasons.push("few-retrieval-chunks");
   }
-  if (
-    averageRetrievalScore !== undefined &&
-    averageRetrievalScore < AVERAGE_SCORE_WEAK_THRESHOLD
-  ) {
+  if (averageRetrievalScore !== undefined && averageRetrievalScore < AVERAGE_SCORE_WEAK_THRESHOLD) {
     reasons.push("low-retrieval-score");
   }
 

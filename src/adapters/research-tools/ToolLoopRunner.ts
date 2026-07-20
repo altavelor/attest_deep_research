@@ -7,11 +7,12 @@
 
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider/chat/rounds/ChatCompletionsRoundAdapter";
 import { ToolLabeler, runAgentLoop } from "@core/agent";
+import { ToolLoopResult, ToolLoopRunnerOptions } from "@application/research";
 import {
-  ToolLoopResult,
-  ToolLoopRunnerOptions,
+  toolCallChainLabel,
+  resolveLabelFromResult,
+  resolveResultSummary,
 } from "@application/research";
-import { toolCallChainLabel, resolveLabelFromResult, resolveResultSummary } from "@application/research";
 
 export type { ToolLoopEvent, ToolLoopResult, ToolLoopRunnerOptions } from "@application/research";
 

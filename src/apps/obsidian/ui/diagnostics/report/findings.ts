@@ -26,14 +26,18 @@ export function computeFindings(sections: ReportSections): FindingsSection {
       severity: "error",
       code: "tool-calls-blocked",
       title: "Tool calls unavailable for this model",
-      detail: "The model does not support tool calling. Agentic research requires tool calls. Run the capability probe in Settings to check support, or set tool capabilities manually.",
+      detail:
+        "The model does not support tool calling. Agentic research requires tool calls. Run the capability probe in Settings to check support, or set tool capabilities manually.",
       affectedSection: "model",
       evidence: { calls: false, provenance: model.toolCapabilities.provenance },
     });
   }
 
   // error: agentic-policy-fallback
-  if (request.agenticPolicy.policyReason !== "eligible" && request.agenticPolicy.policyReason !== "forced-eager") {
+  if (
+    request.agenticPolicy.policyReason !== "eligible" &&
+    request.agenticPolicy.policyReason !== "forced-eager"
+  ) {
     findings.push({
       severity: "error",
       code: "agentic-policy-fallback",
@@ -46,11 +50,12 @@ export function computeFindings(sections: ReportSections): FindingsSection {
 
   // error: mandatory-tool-unsatisfied
   if (reasoning.agenticLoop) {
-    const unsatisfied = reasoning.agenticLoop.satisfiedTools !== undefined
-      ? request.agenticPolicy.requiredTools.filter(
-        (t) => !reasoning.agenticLoop!.satisfiedTools.includes(t),
-      )
-      : [];
+    const unsatisfied =
+      reasoning.agenticLoop.satisfiedTools !== undefined
+        ? request.agenticPolicy.requiredTools.filter(
+            (t) => !reasoning.agenticLoop!.satisfiedTools.includes(t),
+          )
+        : [];
     if (unsatisfied.length > 0) {
       findings.push({
         severity: "error",
@@ -58,7 +63,11 @@ export function computeFindings(sections: ReportSections): FindingsSection {
         title: "Required tools were not satisfied",
         detail: `The agentic loop finished without satisfying required tools: ${unsatisfied.join(", ")}. Check tool availability and model behavior.`,
         affectedSection: "reasoning",
-        evidence: { unsatisfied, satisfiedTools: reasoning.agenticLoop.satisfiedTools, fallbackReason: reasoning.agenticLoop.fallbackReason },
+        evidence: {
+          unsatisfied,
+          satisfiedTools: reasoning.agenticLoop.satisfiedTools,
+          fallbackReason: reasoning.agenticLoop.fallbackReason,
+        },
       });
     }
   }
@@ -71,9 +80,13 @@ export function computeFindings(sections: ReportSections): FindingsSection {
         severity: "warning",
         code: "all-chunks-dropped",
         title: "All retrieved chunks were dropped by the evidence planner",
-        detail: "Every chunk returned by the index was dropped. Check score thresholds, evidence planner policy, and budget settings.",
+        detail:
+          "Every chunk returned by the index was dropped. Check score thresholds, evidence planner policy, and budget settings.",
         affectedSection: "request",
-        evidence: { droppedCount: ranked.length, policyReason: request.evidencePlanner?.budget.policy },
+        evidence: {
+          droppedCount: ranked.length,
+          policyReason: request.evidencePlanner?.budget.policy,
+        },
       });
     }
   }
@@ -88,7 +101,12 @@ export function computeFindings(sections: ReportSections): FindingsSection {
         title: "Average retrieval score is below threshold",
         detail: `Mean score ${avg.toFixed(3)} is below the threshold ${threshold.toFixed(3)}. The retrieved chunks may not be relevant. Consider expanding the index or rephrasing the query.`,
         affectedSection: "request",
-        evidence: { avg, threshold, min: request.retrieval.scoreStats.min, max: request.retrieval.scoreStats.max },
+        evidence: {
+          avg,
+          threshold,
+          min: request.retrieval.scoreStats.min,
+          max: request.retrieval.scoreStats.max,
+        },
       });
     }
   }
@@ -96,14 +114,15 @@ export function computeFindings(sections: ReportSections): FindingsSection {
   // warning: index-files-zero-but-chunks-found
   if (
     preflight.index &&
-    (preflight.index.indexedFiles === 0) &&
+    preflight.index.indexedFiles === 0 &&
     (request.retrieval?.rankedChunks.length ?? 0) > 0
   ) {
     findings.push({
       severity: "warning",
       code: "index-files-zero-but-chunks-found",
       title: "Index reports 0 files but retrieval returned chunks",
-      detail: "The index status shows indexedFiles=0, yet retrieval found chunks. This may indicate a stale index status counter. Re-index the vault to resolve.",
+      detail:
+        "The index status shows indexedFiles=0, yet retrieval found chunks. This may indicate a stale index status counter. Re-index the vault to resolve.",
       affectedSection: "preflight",
       evidence: { indexedFiles: 0, chunksFound: request.retrieval?.rankedChunks.length },
     });
@@ -119,7 +138,8 @@ export function computeFindings(sections: ReportSections): FindingsSection {
       severity: "warning",
       code: "agentic-loop-zero-tool-calls",
       title: "Agentic loop ran but made no tool calls",
-      detail: "The model completed all rounds without calling any tools. The answer may be based on context alone, without retrieval.",
+      detail:
+        "The model completed all rounds without calling any tools. The answer may be based on context alone, without retrieval.",
       affectedSection: "reasoning",
       evidence: { rounds: reasoning.agenticLoop.totalRounds, totalCalls: 0 },
     });
@@ -144,14 +164,14 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-
   // warning: stream-terminal-missing
   if (reasoning.stream && !reasoning.stream.terminalEventObserved) {
     findings.push({
       severity: "warning",
       code: "stream-terminal-missing",
       title: "Stream ended without a terminal event",
-      detail: "The model's streaming response did not produce a recognized terminal event (done/stop). The response may be truncated.",
+      detail:
+        "The model's streaming response did not produce a recognized terminal event (done/stop). The response may be truncated.",
       affectedSection: "reasoning",
       evidence: { terminalEventObserved: false, frameCount: reasoning.stream.frameCount },
     });
@@ -188,7 +208,8 @@ export function computeFindings(sections: ReportSections): FindingsSection {
       severity: "info",
       code: "index-stale",
       title: "Index is stale",
-      detail: "The vault index has not been refreshed since files were modified. Retrieval results may not reflect recent changes. Re-index to update.",
+      detail:
+        "The vault index has not been refreshed since files were modified. Retrieval results may not reflect recent changes. Re-index to update.",
       affectedSection: "preflight",
       evidence: { isStale: true },
     });

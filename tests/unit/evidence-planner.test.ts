@@ -95,7 +95,6 @@ describe("EvidencePlanner", () => {
     expect(output.diagnostics.budget.policy).toBe("local-first");
   });
 
-
   it("lets web fill budget when local evidence is weak", () => {
     const planner = new EvidencePlanner();
     const output = planner.plan({

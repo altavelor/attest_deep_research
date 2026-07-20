@@ -43,9 +43,7 @@ export function dedupeNearDuplicateChunks(chunks: readonly RetrievedChunk[]): Re
   }
 
   return kept.map((entry) =>
-    entry.duplicates.length > 0
-      ? { ...entry.chunk, duplicates: entry.duplicates }
-      : entry.chunk,
+    entry.duplicates.length > 0 ? { ...entry.chunk, duplicates: entry.duplicates } : entry.chunk,
   );
 }
 

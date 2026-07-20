@@ -45,9 +45,8 @@ export async function probeDocumentUrls(
       results[index] = await probeDocumentUrl(fetchImpl, rawUrls[index]!, timeoutMs);
     }
   };
-  const workers = Array.from(
-    { length: Math.min(PROBE_CONCURRENCY, rawUrls.length) },
-    () => worker(),
+  const workers = Array.from({ length: Math.min(PROBE_CONCURRENCY, rawUrls.length) }, () =>
+    worker(),
   );
   await Promise.all(workers);
   return results;

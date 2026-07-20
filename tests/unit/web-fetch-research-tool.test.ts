@@ -80,8 +80,16 @@ describe("WebFetchResearchTool", () => {
       ok: true,
       value: {
         pages: [
-          { ok: true, evidenceId: first.evidenceId, content: "content of https://a.example/article" },
-          { ok: true, evidenceId: second.evidenceId, content: "content of https://b.example/article" },
+          {
+            ok: true,
+            evidenceId: first.evidenceId,
+            content: "content of https://a.example/article",
+          },
+          {
+            ok: true,
+            evidenceId: second.evidenceId,
+            content: "content of https://b.example/article",
+          },
         ],
         diagnostics: { requested: 2, fetched: 2, failed: 0, untrustedEvidence: true },
       },
@@ -115,7 +123,10 @@ describe("WebFetchResearchTool", () => {
     });
 
     expect(fetchPage).toHaveBeenCalledTimes(1);
-    expect(execution).toMatchObject({ ok: true, value: { diagnostics: { requested: 1, fetched: 1 } } });
+    expect(execution).toMatchObject({
+      ok: true,
+      value: { diagnostics: { requested: 1, fetched: 1 } },
+    });
   });
 
   it("reports structured provider policy failures per page while keeping the batch ok", async () => {
@@ -142,7 +153,13 @@ describe("WebFetchResearchTool", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: {
-        pages: [{ ok: false, resultId: "timeout-handle", error: { code: "web-fetch-timeout", retryable: true } }],
+        pages: [
+          {
+            ok: false,
+            resultId: "timeout-handle",
+            error: { code: "web-fetch-timeout", retryable: true },
+          },
+        ],
         diagnostics: { requested: 1, fetched: 0, failed: 1 },
       },
     });

@@ -256,9 +256,7 @@ describe("RetrievalService", () => {
       ],
       nextCursor: "1",
     });
-    expect(second.items.map((item) => item.normalizedUrl)).toEqual([
-      "https://second.example/path",
-    ]);
+    expect(second.items.map((item) => item.normalizedUrl)).toEqual(["https://second.example/path"]);
     expect(second.nextCursor).toBeUndefined();
   });
 
@@ -329,7 +327,9 @@ describe("RetrievalService", () => {
       findInIndex: vi.fn().mockResolvedValue({ items: [{ chunkId: "chunk-a" }] }),
       summarizeIndexSource: vi.fn().mockResolvedValue({ sourcePath: "Books/book.md" }),
       getIndexSourceOutline: vi.fn().mockResolvedValue({ sourcePath: "Books/book.md" }),
-      searchIndexByMetadata: vi.fn().mockResolvedValue({ items: [{ sourcePath: "Books/book.md" }] }),
+      searchIndexByMetadata: vi
+        .fn()
+        .mockResolvedValue({ items: [{ sourcePath: "Books/book.md" }] }),
     });
     const service = makeRetrievalService({
       embeddings: new FailingEmbeddingProvider(),
@@ -355,7 +355,9 @@ describe("RetrievalService", () => {
     await expect(service.getIndexSourceOutline("Books/book.md")).resolves.toMatchObject({
       sourcePath: "Books/book.md",
     });
-    await expect(service.searchIndexByMetadata({ heading: "Intro", limit: 5 })).resolves.toMatchObject({
+    await expect(
+      service.searchIndexByMetadata({ heading: "Intro", limit: 5 }),
+    ).resolves.toMatchObject({
       items: [{ sourcePath: "Books/book.md" }],
     });
 

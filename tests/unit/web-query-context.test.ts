@@ -13,10 +13,7 @@ import { parseWebSearchInput } from "@application/research";
 import { SearchProviderResult, WebSearchSource } from "@application/ports";
 import { WebQueryPlanner } from "@application/web";
 import { HttpWebSearchSource } from "@adapters/web";
-import {
-  hackerNewsDefinition,
-  newsApiDefinition,
-} from "@adapters/web/sources/communitySources";
+import { hackerNewsDefinition, newsApiDefinition } from "@adapters/web/sources/communitySources";
 import { braveDefinition } from "@adapters/web/sources/serpSources";
 import { wikipediaDefinition } from "@adapters/web/sources/academicSources";
 

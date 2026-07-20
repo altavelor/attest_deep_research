@@ -7,9 +7,13 @@ import {
 
 describe("toolCallChainLabel", () => {
   it("returns query for search tools", () => {
-    expect(toolCallChainLabel("search_index", { query: "zettelkasten inbox" })).toBe("zettelkasten inbox");
+    expect(toolCallChainLabel("search_index", { query: "zettelkasten inbox" })).toBe(
+      "zettelkasten inbox",
+    );
     expect(toolCallChainLabel("search_notes", { query: "fleeting notes" })).toBe("fleeting notes");
-    expect(toolCallChainLabel("search_web", { query: "obsidian plugins" })).toBe("obsidian plugins");
+    expect(toolCallChainLabel("search_web", { query: "obsidian plugins" })).toBe(
+      "obsidian plugins",
+    );
   });
 
   it("truncates long queries to 60 chars with ellipsis", () => {
@@ -26,11 +30,15 @@ describe("toolCallChainLabel", () => {
 
   it("returns Fetching page(s) for fetch_web_page by resultIds count", () => {
     expect(toolCallChainLabel("fetch_web_page", { resultIds: ["abc123"] })).toBe("Fetching page");
-    expect(toolCallChainLabel("fetch_web_page", { resultIds: ["a", "b", "c"] })).toBe("Fetching 3 pages");
+    expect(toolCallChainLabel("fetch_web_page", { resultIds: ["a", "b", "c"] })).toBe(
+      "Fetching 3 pages",
+    );
   });
 
   it("returns basename without .md for read_note and mutation tools", () => {
-    expect(toolCallChainLabel("read_note", { path: "Notes/Inbox process.md" })).toBe("Inbox process");
+    expect(toolCallChainLabel("read_note", { path: "Notes/Inbox process.md" })).toBe(
+      "Inbox process",
+    );
     expect(toolCallChainLabel("create_note", { path: "journal/2026-01-01.md" })).toBe("2026-01-01");
     expect(toolCallChainLabel("update_note", { path: "toplevel.md" })).toBe("toplevel");
     expect(toolCallChainLabel("delete_note", { path: "trash/old.md" })).toBe("old");
@@ -57,20 +65,49 @@ describe("toolCallChainLabel", () => {
 
 describe("resolveLabelFromResult", () => {
   it("extracts hostname from a single-page fetch_web_page result", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: true, url: "https://example.com/path", finalUrl: "https://example.com/path", content: "" }] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: {
+        pages: [
+          {
+            ok: true,
+            url: "https://example.com/path",
+            finalUrl: "https://example.com/path",
+            content: "",
+          },
+        ],
+      },
+    });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBe("example.com");
   });
 
   it("prefers finalUrl over url", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: true, url: "https://original.com/", finalUrl: "https://redirected.com/page", content: "" }] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: {
+        pages: [
+          {
+            ok: true,
+            url: "https://original.com/",
+            finalUrl: "https://redirected.com/page",
+            content: "",
+          },
+        ],
+      },
+    });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBe("redirected.com");
   });
 
   it("summarizes distinct hosts for a batch fetch_web_page result", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [
-      { ok: true, finalUrl: "https://a.example/x", content: "" },
-      { ok: true, finalUrl: "https://b.example/y", content: "" },
-    ] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: {
+        pages: [
+          { ok: true, finalUrl: "https://a.example/x", content: "" },
+          { ok: true, finalUrl: "https://b.example/y", content: "" },
+        ],
+      },
+    });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBe("2 hosts");
   });
 
@@ -85,7 +122,10 @@ describe("resolveLabelFromResult", () => {
   });
 
   it("returns undefined when no page succeeded", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [{ ok: false, resultId: "r1", error: {} }] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: { pages: [{ ok: false, resultId: "r1", error: {} }] },
+    });
     expect(resolveLabelFromResult("fetch_web_page", result)).toBeUndefined();
   });
 });
@@ -104,24 +144,37 @@ describe("resolveResultSummary", () => {
   });
 
   it("returns total kb size across fetch_web_page pages", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [
-      { ok: true, content: "x".repeat(1024), finalUrl: "https://a.example" },
-      { ok: true, content: "x".repeat(1024), finalUrl: "https://b.example" },
-    ] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: {
+        pages: [
+          { ok: true, content: "x".repeat(1024), finalUrl: "https://a.example" },
+          { ok: true, content: "x".repeat(1024), finalUrl: "https://b.example" },
+        ],
+      },
+    });
     expect(resolveResultSummary("fetch_web_page", result)).toBe("~2.0 kb");
   });
 
   it("appends failed count for partially failed fetch_web_page batches", () => {
-    const result = JSON.stringify({ ok: true, value: { pages: [
-      { ok: true, content: "x".repeat(2048), finalUrl: "https://a.example" },
-      { ok: false, resultId: "r2", error: {} },
-    ] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: {
+        pages: [
+          { ok: true, content: "x".repeat(2048), finalUrl: "https://a.example" },
+          { ok: false, resultId: "r2", error: {} },
+        ],
+      },
+    });
     expect(resolveResultSummary("fetch_web_page", result)).toBe("~2.0 kb (1 failed)");
   });
 
   it("returns kb size for read_note from chunk text", () => {
     const text = "x".repeat(1024);
-    const result = JSON.stringify({ ok: true, value: { chunks: [{ text, id: "c1", evidenceSource: {} }] } });
+    const result = JSON.stringify({
+      ok: true,
+      value: { chunks: [{ text, id: "c1", evidenceSource: {} }] },
+    });
     expect(resolveResultSummary("read_note", result)).toBe("~1.0 kb");
   });
 

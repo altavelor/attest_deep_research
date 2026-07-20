@@ -120,7 +120,13 @@ describe("chat rendering helpers", () => {
 
   it("limits the source list to evidence the finalized answer actually cites", () => {
     const cited = { id: "a", source: markdownSource("A.md"), text: "", contentHash: "a", score: 1 };
-    const uncited = { id: "b", source: markdownSource("B.md"), text: "", contentHash: "b", score: 1 };
+    const uncited = {
+      id: "b",
+      source: markdownSource("B.md"),
+      text: "",
+      contentHash: "b",
+      score: 1,
+    };
     const streaming = {
       role: "assistant" as const,
       content: "",

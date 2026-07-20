@@ -127,8 +127,8 @@ function readSnapshot(value: unknown): ModelCapabilitySnapshot | undefined {
     candidate === "supported" || candidate === "unsupported" ? candidate : "unknown";
   const formats = Array.isArray(value.reasoning.responseFormats)
     ? value.reasoning.responseFormats.flatMap((item) =>
-      typeof item === "string" && normalizeFormat(item) ? [normalizeFormat(item)!] : [],
-    )
+        typeof item === "string" && normalizeFormat(item) ? [normalizeFormat(item)!] : [],
+      )
     : [];
   return {
     protocols: {

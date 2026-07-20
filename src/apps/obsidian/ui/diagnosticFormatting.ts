@@ -79,4 +79,3 @@ export function webDiagnosticLines(diagnostics: ContextDiagnostics): string[] {
 export function formatDiagnosticReport(diagnostics: ContextDiagnostics): string {
   return JSON.stringify(buildDiagnosticReportV3(diagnostics), null, 2);
 }
-

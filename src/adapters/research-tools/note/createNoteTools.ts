@@ -3,13 +3,7 @@
 // the NoteToolService — which does all the work. Lives in adapters because it
 // binds the concrete service; the declarations themselves only touch the port.
 
-import {
-  Tool,
-  ToolContext,
-  ToolExecution,
-  ToolPermissions,
-  toolFailure,
-} from "@core/agent";
+import { Tool, ToolContext, ToolExecution, ToolPermissions, toolFailure } from "@core/agent";
 import {
   CREATE_NOTE_TOOL,
   DELETE_NOTE_TOOL,
@@ -20,15 +14,7 @@ import {
   UPDATE_NOTE_TOOL,
 } from "@core/agent";
 import { NoteToolService } from "@application/research";
-import {
-  bool,
-  defineTool,
-  enumOf,
-  FieldSchema,
-  num,
-  str,
-  text,
-} from "@application/sources/tools";
+import { bool, defineTool, enumOf, FieldSchema, num, str, text } from "@application/sources/tools";
 
 /** Permission names a run may grant; mapped from availability by the composition. */
 export const NOTE_PERMISSIONS = {
@@ -131,7 +117,10 @@ const CreateNoteTool = defineNoteTool({
   description:
     "Create a new markdown note at the given vault-relative path. Returns {ok:false, reason:'already-exists'} if the file exists — set overwrite:true to replace it, or use update_note to modify it.",
   schema: {
-    path: str(MAX_PATH_CHARS, { required: true, description: "Vault-relative path ending in .md." }),
+    path: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault-relative path ending in .md.",
+    }),
     content: text({ required: true, description: "Markdown content for the new note." }),
     overwrite: bool({ description: "If true, overwrite an existing file. Default false." }),
   },
@@ -143,7 +132,10 @@ const UpdateNoteTool = defineNoteTool({
   description:
     "Update an existing markdown note. CAUTION: mode=replace (default) destroys all existing content. Prefer mode=append to add content or mode=prepend to insert at the top. mode=prepend is non-atomic: avoid when concurrent edits are likely. Returns {ok:false, reason:'not-found'} if the file does not exist — use create_note first.",
   schema: {
-    path: str(MAX_PATH_CHARS, { required: true, description: "Vault-relative path ending in .md." }),
+    path: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault-relative path ending in .md.",
+    }),
     content: text({ required: true, description: "Content to write." }),
     mode: enumOf(["replace", "append", "prepend"], {
       description:

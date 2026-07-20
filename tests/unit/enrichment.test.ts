@@ -486,7 +486,11 @@ describe("EnrichIndexSources claims (Ф7)", () => {
           extract: async (input) => {
             extractCalls.push(input.headingPath.join(">"));
             return [
-              { subject: "effect", statement: `Claim from ${input.headingPath.at(-1)}.`, topicKeys: ["t"] },
+              {
+                subject: "effect",
+                statement: `Claim from ${input.headingPath.at(-1)}.`,
+                topicKeys: ["t"],
+              },
             ];
           },
         },

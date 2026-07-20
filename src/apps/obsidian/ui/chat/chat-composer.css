@@ -255,13 +255,17 @@
   /* Pushes the indicator + model selector + submit cluster to the right edge. */
   margin-inline-start: auto;
   border-radius: 999px;
-  background: conic-gradient(var(--text-muted) var(--ixplorer-context-used, 0%),
-      var(--background-modifier-border) var(--ixplorer-context-used, 0%));
+  background: conic-gradient(
+    var(--text-muted) var(--ixplorer-context-used, 0%),
+    var(--background-modifier-border) var(--ixplorer-context-used, 0%)
+  );
 }
 
 .ixplorer-chat__context-indicator.is-warning {
-  background: conic-gradient(var(--text-warning) var(--ixplorer-context-used, 0%),
-      var(--background-modifier-border) var(--ixplorer-context-used, 0%));
+  background: conic-gradient(
+    var(--text-warning) var(--ixplorer-context-used, 0%),
+    var(--background-modifier-border) var(--ixplorer-context-used, 0%)
+  );
 }
 
 .ixplorer-chat__context-indicator::after {
@@ -349,7 +353,7 @@
   color: var(--text-normal);
 }
 
-.ixplorer-chat__composer-panel>.ixplorer-chat__icon-button {
+.ixplorer-chat__composer-panel > .ixplorer-chat__icon-button {
   color: var(--text-muted);
 }
 

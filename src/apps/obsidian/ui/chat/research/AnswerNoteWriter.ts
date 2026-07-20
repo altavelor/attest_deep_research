@@ -8,7 +8,7 @@ import {
 import { ResearchAnswer } from "@core/answer";
 
 export class AnswerNoteWriter {
-  constructor(private readonly app: App) { }
+  constructor(private readonly app: App) {}
 
   async saveAnswerToNewNote(answer: ResearchAnswer): Promise<void> {
     const path = await this.nextAvailableNotePath(researchAnswerNotePath(answer));

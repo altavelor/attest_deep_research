@@ -1,6 +1,10 @@
 import { ApiFormat } from "@core/agent";
 import { ChatToolChoice } from "@core/agent";
-import { ContextDiagnostics, RoundPromptDeltaDiagnostic, ToolCallDiagnostic } from "@core/diagnostics";
+import {
+  ContextDiagnostics,
+  RoundPromptDeltaDiagnostic,
+  ToolCallDiagnostic,
+} from "@core/diagnostics";
 
 export interface DiagnosticReportV3 {
   schemaVersion: 3;
@@ -43,7 +47,12 @@ export interface ModelSection {
       modelName: string;
       apiFormat: ApiFormat;
       results: { required: string[]; specific: string[]; auto: string[] };
-      rawCapabilities: { calls: boolean; choiceRequired: boolean; choiceSpecific: boolean; parallelCalls: boolean };
+      rawCapabilities: {
+        calls: boolean;
+        choiceRequired: boolean;
+        choiceSpecific: boolean;
+        parallelCalls: boolean;
+      };
     } | null;
   };
   reasoning: {
@@ -172,6 +181,8 @@ export interface StatsSection {
   durationMs: number;
   lastPhase: string;
   terminalReason?: string;
-  timeline: ContextDiagnostics["run"] extends undefined ? never : NonNullable<ContextDiagnostics["run"]>["timeline"];
+  timeline: ContextDiagnostics["run"] extends undefined
+    ? never
+    : NonNullable<ContextDiagnostics["run"]>["timeline"];
   omittedTimelineEvents?: number;
 }

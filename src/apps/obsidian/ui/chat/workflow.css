@@ -75,7 +75,6 @@
 }
 
 @keyframes ixplorer-workflow-pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -91,11 +90,11 @@
 }
 
 /* Reasoning and tool text share the font of the main answer. */
-.ixplorer-chat__workflow-text> :first-child {
+.ixplorer-chat__workflow-text > :first-child {
   margin-top: 0;
 }
 
-.ixplorer-chat__workflow-text> :last-child {
+.ixplorer-chat__workflow-text > :last-child {
   margin-bottom: 0;
 }
 

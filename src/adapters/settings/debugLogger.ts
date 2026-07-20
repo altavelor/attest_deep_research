@@ -1,8 +1,5 @@
 import { IxplorerError } from "@core/errors";
-import type {
-  SubAgentLogEvent,
-  SubAgentLogger,
-} from "@application/research";
+import type { SubAgentLogEvent, SubAgentLogger } from "@application/research";
 import type {
   IndexingFileLogEvent,
   IndexingLogger,
@@ -45,9 +42,7 @@ export interface PluginDebugLoggerOptions {
   console?: Pick<Console, "debug" | "error">;
 }
 
-export class PluginDebugLogger
-  implements PluginRequestLogger, IndexingLogger, SubAgentLogger
-{
+export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, SubAgentLogger {
   private readonly getSettings: () => IxplorerSettings;
   private readonly console: Pick<Console, "debug" | "error">;
   private readonly loggedErrors = new WeakSet<object>();
@@ -191,9 +186,9 @@ function redactLogValue(value: unknown): unknown {
     const normalizedKey = key.toLowerCase();
     redacted[key] =
       normalizedKey === "apikey" ||
-        normalizedKey === "api_key" ||
-        normalizedKey === "authorization" ||
-        normalizedKey.includes("api-key")
+      normalizedKey === "api_key" ||
+      normalizedKey === "authorization" ||
+      normalizedKey.includes("api-key")
         ? "[redacted]"
         : redactLogValue(item);
   }

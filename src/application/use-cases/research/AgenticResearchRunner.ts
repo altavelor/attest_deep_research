@@ -1,7 +1,24 @@
-import { ChatMessage, ChatRequest, ModelRoundDelta, ModelRoundProvider, ModelRoundRequest, ModelToolOutput, ProviderContinuationState } from "@core/agent";
-import { ChatToolCall, ToolEvent, ToolExecution as ResearchToolExecution, toolExecutionPayload } from "@core/agent";
+import {
+  ChatMessage,
+  ChatRequest,
+  ModelRoundDelta,
+  ModelRoundProvider,
+  ModelRoundRequest,
+  ModelToolOutput,
+  ProviderContinuationState,
+} from "@core/agent";
+import {
+  ChatToolCall,
+  ToolEvent,
+  ToolExecution as ResearchToolExecution,
+  toolExecutionPayload,
+} from "@core/agent";
 import { DOWNLOAD_DOCUMENT_TOOL, SUB_AGENT_TOOL } from "@core/agent";
-import { ReasoningSegmentAttribution, RoundPromptDeltaDiagnostic, ToolCallDiagnostic } from "@core/diagnostics";
+import {
+  ReasoningSegmentAttribution,
+  RoundPromptDeltaDiagnostic,
+  ToolCallDiagnostic,
+} from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "@application/tools/ToolManager";
 import {
@@ -419,7 +436,7 @@ export class AgenticResearchRunner {
             resultBytes: execution.result.length,
             round,
             ...(cache.get(key) === execution &&
-              diagnostics.some((item) => normalizedDiagnosticKey(item) === key)
+            diagnostics.some((item) => normalizedDiagnosticKey(item) === key)
               ? { reason: "duplicate-result-reused" }
               : {}),
             ...(execution.diagnostic ? { metadata: execution.diagnostic } : {}),
@@ -560,7 +577,10 @@ async function collectRound(
     for (let index = 0; index < summaries.length; index += 1) {
       const segmentId = `reasoning-${round}-${index}`;
       recordSegment(segmentId, summaries[index].text);
-      options.onDelta?.({ type: "reasoningSummary", segmentId, text: summaries[index].text }, round);
+      options.onDelta?.(
+        { type: "reasoningSummary", segmentId, text: summaries[index].text },
+        round,
+      );
     }
   }
   return {
@@ -667,7 +687,9 @@ function launchParallelToolPool(
     const limiter = call.name === SUB_AGENT_TOOL ? subAgentLimiter : toolLimiter;
     const promise =
       launchedByKey.get(key) ??
-      limiter.run(() => tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }));
+      limiter.run(() =>
+        tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }),
+      );
     launchedByKey.set(key, promise);
     pool.set(call.id, promise);
   }

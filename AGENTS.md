@@ -17,18 +17,21 @@ apps  →  adapters  →  application  →  core
 (самый внешний)                      (самый внутренний)
 ```
 
-| Слой | Каталог | Назначение | Кому можно импортировать |
-|---|---|---|---|
-| **core** | `src/core/` | Платформенно-независимая доменная логика и типы. Чистые функции, без I/O. | только `core` |
-| **application** | `src/application/` | Use-cases, оркестрация. Зависит от core и от **портов** (`application/contracts`, `application/ports`). | `core`, `application` |
-| **adapters** | `src/adapters/` | Реализации портов: провайдеры моделей, индексация, settings, web, glue к Obsidian. | `core`, `application`, `adapters` |
-| **apps** | `src/apps/` | Точки входа (Obsidian-плагин), composition root, UI. | любой слой |
+| Слой            | Каталог            | Назначение                                                                                              | Кому можно импортировать          |
+| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **core**        | `src/core/`        | Платформенно-независимая доменная логика и типы. Чистые функции, без I/O.                               | только `core`                     |
+| **application** | `src/application/` | Use-cases, оркестрация. Зависит от core и от **портов** (`application/contracts`, `application/ports`). | `core`, `application`             |
+| **adapters**    | `src/adapters/`    | Реализации портов: провайдеры моделей, индексация, settings, web, glue к Obsidian.                      | `core`, `application`, `adapters` |
+| **apps**        | `src/apps/`        | Точки входа (Obsidian-плагин), composition root, UI.                                                    | любой слой                        |
 
 **Проверяемые инварианты** (машинно, через `dependency-cruiser` — [.dependency-cruiser.cjs](.dependency-cruiser.cjs)):
+
 ```bash
 npm run depcruise    # правила слоёв §1 + детект рантайм-циклов (§2). Должно быть 0 errors.
 ```
+
 Эквивалентная ручная проверка слоёв (должна давать пустой результат) — grep ловит и алиасы `@adapters/…`:
+
 ```bash
 grep -rE 'from "[^"]*(adapters|apps|application)/' src/core      # core наружу — запрещено
 grep -rE 'from "[^"]*(adapters|apps)/'           src/application # application → adapters/apps — запрещено
@@ -36,6 +39,7 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 ```
 
 **Следствия при расширении:**
+
 - Новая бизнес-логика → `core` (чистая) или `application` (оркестрация). Не в adapters/apps.
 - Внешняя зависимость (HTTP, файлы, Obsidian API, БД) — только в `adapters`/`apps`. В core/application она входит **через порт-интерфейс**, реализация инжектится.
 - Если `application`-коду нужен новый внешний сервис — объяви **порт** в `application/ports` (или контракт в `application/contracts`) и реализуй в `adapters`. Не импортируй адаптер напрямую.
@@ -47,7 +51,7 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 - **Одна ответственность на модуль.** Файл описывает одну связную вещь.
 - **Ориентир по размеру: ~300–400 строк.** Файл, растущий к 600+, — сигнал к разбиению, а не к дописыванию. (Исторический потолок проекта — следствие god-файлов; не воспроизводить.)
 - **Ацикличность.** Рантайм-циклы импортов запрещены (проверяет `npm run depcruise`). Если две группы тянут друг друга, вынеси общую низкоуровневую часть в leaf-модуль (`constants.ts`, `parsers.ts`, `*Diagnostics.ts`) и направь импорты снизу вверх. Циклы, замкнутые только через `import type`, рантайм-безопасны (стираются компилятором) и репортятся как `info` — не блокируют, но остаются кандидатами на разрыв через leaf-модуль типа.
-- **Публичный API модуля — через баррель `index.ts`.** Модуль на границе (bounded-context) выставляет наружу курируемый `index.ts` с намеренно публичными символами; всё остальное — внутренняя реализация, снаружи невидимая. Внешние потребители импортируют `@<layer>/<module>` (напр. `@adapters/research-tools`), а не глубокие пути во внутренности. Баррель — не «export * со всего»: продакшн-поверхность обычно узкая. Инвариант: файлы **внутри** модуля не импортируют свой баррель (только соседей через `./…`) — иначе цикл. Эталон: [src/adapters/research-tools/index.ts](src/adapters/research-tools/index.ts) (потребитель — [composition/factories.ts](src/apps/obsidian/composition/factories.ts)). White-box юнит-тесты конкретных внутренних классов — легитимное исключение: им можно подключать внутренности напрямую.
+- **Публичный API модуля — через баррель `index.ts`.** Модуль на границе (bounded-context) выставляет наружу курируемый `index.ts` с намеренно публичными символами; всё остальное — внутренняя реализация, снаружи невидимая. Внешние потребители импортируют `@<layer>/<module>` (напр. `@adapters/research-tools`), а не глубокие пути во внутренности. Баррель — не «export \* со всего»: продакшн-поверхность обычно узкая. Инвариант: файлы **внутри** модуля не импортируют свой баррель (только соседей через `./…`) — иначе цикл. Эталон: [src/adapters/research-tools/index.ts](src/adapters/research-tools/index.ts) (потребитель — [composition/factories.ts](src/apps/obsidian/composition/factories.ts)). White-box юнит-тесты конкретных внутренних классов — легитимное исключение: им можно подключать внутренности напрямую.
 - **Импорты между слоями/модулями — через path-алиасы**, не через `../../../`. Настроены `@core/*`, `@application/*`, `@adapters/*`, `@apps/*`, `@shared/*` (в [tsconfig.json](tsconfig.json), [esbuild.config.mjs](esbuild.config.mjs), [vitest.config.ts](vitest.config.ts) — держать синхронными). Алиасы кросс-модульные; импорт соседа внутри своего модуля остаётся относительным (`./sibling`).
 - **Чистые свободные функции** не должны жить хвостом большого класса — выноси их в соседний helper-модуль.
 
@@ -56,19 +60,23 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 ## 3. Паттерны по слоям
 
 ### application — изолированные стратегии
+
 Различные пути исполнения одного use-case — **отдельные сущности за общим интерфейсом**, а не ветки `if/else` в одном методе. Координатор только выбирает стратегию и оркеструет переходы между ними.
 Эталон: `ResearchService` (тонкий диспетчер) + `EagerResearchStrategy` / `AgenticResearchStrategy` за `ResearchStrategy` ([src/application/use-cases/research/](src/application/use-cases/research/)). Общие коллабораторы передаются стратегиям через `ResearchStrategyDeps`, а не через ссылку на сервис.
 
 ### apps — composition root
+
 Сборка DI-графа (фабрики `create*`) живёт в [src/apps/obsidian/composition/](src/apps/obsidian/composition/) за интерфейсом `CompositionContext`, **не** в теле `Plugin`. `main.ts` хранит только lifecycle и тонкую проводку. Фабрики не обращаются обратно к экземпляру плагина — только к переданному контексту.
 
 ### apps/ui — UI не содержит оркестрацию
+
 - Не-рендеринговая логика (probing, обнаружение capability, поиск, сетевые вызовы) **выносится из UI-классов** в отдельные контроллеры/сервисы. UI делегирует им через узкий контекст/коллбэки. Эталон: `SettingsCapabilityProber` ([src/apps/obsidian/ui/settings/](src/apps/obsidian/ui/settings/)).
 - **Контроллер владеет своим локальным состоянием.** Самодостаточную фичу (локальный стейт + свои DOM-рефы) выноси в контроллер, получающий контекст-интерфейс. Эталон: `IndexSearchController`, `ResearchQuestionController`. **Общий** мутабельный стейт остаётся в хосте-вью.
 - Связь контроллера обратно во вью — через явный коллбэк (`requestRedisplay()`, `onOpenChunk()`), а не через ссылку на вью.
 - Крупные render/builder-файлы дробятся по секциям (`*/sections.ts`, `*/primitives.ts`, `*/styles.ts`, `*/types.ts`), entry-файл остаётся тонким оркестратором + реэкспорт типов. Эталон: `diagnosticReportV3.ts` / `diagnosticHtml.ts`.
 
 ### Фабрики и порты инжектятся
+
 Конкретные реализации (toolset, modelRound, retriever, writer) передаются через опции/конструктор из composition root. Use-case принимает фабрику/порт, а не создаёт адаптер сам.
 
 ---
@@ -84,12 +92,14 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 ## 5. Definition of Done для изменения
 
 Перед завершением задачи прогнать и убедиться, что зелено:
+
 ```bash
-npx tsc --noEmit      # = npm run lint
+npm run typecheck     # = tsc --noEmit
 npm run depcruise     # инварианты слоёв §1 + рантайм-ацикличность §2 (0 errors)
 npm test
 npm run build         # tsc + esbuild production
 ```
+
 И проверить: инварианты §1 не нарушены; новый файл не перерос ~400 строк без разбиения;
 внешние зависимости заходят через порт, а не прямым импортом адаптера.
 

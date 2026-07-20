@@ -149,12 +149,7 @@ describe("prompt rendering", () => {
 });
 
 describe("expandAttachedContextPaths", () => {
-  const vault = [
-    "research/a.md",
-    "research/sub/b.md",
-    "research/img.png",
-    "other/c.md",
-  ];
+  const vault = ["research/a.md", "research/sub/b.md", "research/img.png", "other/c.md"];
 
   it("expands folder attachments recursively to supported files only", () => {
     expect(expandAttachedContextPaths(["research/"], vault)).toEqual([

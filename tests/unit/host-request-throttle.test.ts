@@ -87,7 +87,11 @@ describe("HostRequestThrottle", () => {
   it("propagates task rejection without poisoning the host queue", async () => {
     const throttle = new HostRequestThrottle({ perHostIntervalMs: 0, maxConcurrent: 6 });
 
-    await expect(throttle.run("a.example", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+    await expect(
+      throttle.run("a.example", async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
     await expect(throttle.run("a.example", async () => "ok")).resolves.toBe("ok");
   });
 });

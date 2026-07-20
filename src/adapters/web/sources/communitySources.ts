@@ -68,8 +68,8 @@ export const hackerNewsDefinition: WebSourceDefinition = {
     const endpoint = freshFrom ? "search_by_date" : "search";
     const numericFilters = freshFrom
       ? `&numericFilters=${encodeURIComponent(
-        `created_at_i>${Math.floor(Date.parse(freshFrom) / 1_000)}`,
-      )}`
+          `created_at_i>${Math.floor(Date.parse(freshFrom) / 1_000)}`,
+        )}`
       : "";
     return {
       url:

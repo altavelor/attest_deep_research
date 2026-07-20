@@ -109,12 +109,7 @@ function syntheticRows(chunkCount: number): KeywordPostingRow[] {
   return Array.from(postingsByTerm.entries()).map(([term, postings]) => ({ term, postings }));
 }
 
-function chunk(
-  id: string,
-  path: string,
-  text: string,
-  embedding: number[],
-): EmbeddedChunk {
+function chunk(id: string, path: string, text: string, embedding: number[]): EmbeddedChunk {
   const source: SourceReference = {
     id: `source-${id}`,
     kind: "markdown",

@@ -99,8 +99,7 @@ async function checkUrl(
 function requestHeaders(): Record<string, string> {
   return {
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "user-agent":
-      "Mozilla/5.0 (compatible; IxplorerLinkChecker/1.0; +https://obsidian.md)",
+    "user-agent": "Mozilla/5.0 (compatible; IxplorerLinkChecker/1.0; +https://obsidian.md)",
   };
 }
 

@@ -1,7 +1,4 @@
-import {
-  detectTextLanguages,
-  languageInventoryFromSources,
-} from "@adapters/indexing";
+import { detectTextLanguages, languageInventoryFromSources } from "@adapters/indexing";
 
 describe("language detection", () => {
   it("detects dominant Russian Cyrillic text", () => {

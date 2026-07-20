@@ -284,9 +284,9 @@ function extractJsonObject(content: string): string | null {
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value
-      .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter(Boolean)
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
     : [];
 }
 

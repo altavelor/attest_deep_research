@@ -17,11 +17,7 @@ import {
 } from "@application/ports";
 import { SourceReference } from "@core/model";
 import type { FileVectorIndexState, StoredChunk } from "../store/FileVectorIndexState";
-import {
-  createIndexMatcher,
-  frequentTerms,
-  matchesInChunk,
-} from "./FileVectorIndexInventoryText";
+import { createIndexMatcher, frequentTerms, matchesInChunk } from "./FileVectorIndexInventoryText";
 import { sourcePathFromReference } from "../store/FileVectorIndexVector";
 
 export function listFileVectorIndexSources(
@@ -300,23 +296,18 @@ export function searchFileVectorIndexByMetadata(
 }
 
 function sortedStoredChunks(state: FileVectorIndexState): StoredChunk[] {
-  return [...state.chunksByShard.values()]
-    .flat()
-    .sort((left, right) => {
-      const leftPath = left.row.sourcePath ?? sourcePathFromReference(left.row.source);
-      const rightPath = right.row.sourcePath ?? sourcePathFromReference(right.row.source);
-      return (
-        leftPath.localeCompare(rightPath) ||
-        (left.row.chunkIndex ?? 0) - (right.row.chunkIndex ?? 0) ||
-        left.row.id.localeCompare(right.row.id)
-      );
-    });
+  return [...state.chunksByShard.values()].flat().sort((left, right) => {
+    const leftPath = left.row.sourcePath ?? sourcePathFromReference(left.row.source);
+    const rightPath = right.row.sourcePath ?? sourcePathFromReference(right.row.source);
+    return (
+      leftPath.localeCompare(rightPath) ||
+      (left.row.chunkIndex ?? 0) - (right.row.chunkIndex ?? 0) ||
+      left.row.id.localeCompare(right.row.id)
+    );
+  });
 }
 
-function storedChunksForSource(
-  state: FileVectorIndexState,
-  sourcePath: string,
-): StoredChunk[] {
+function storedChunksForSource(state: FileVectorIndexState, sourcePath: string): StoredChunk[] {
   return sortedStoredChunks(state).filter((chunk) => {
     const chunkSourcePath = chunk.row.sourcePath ?? sourcePathFromReference(chunk.row.source);
     return chunkSourcePath === sourcePath;

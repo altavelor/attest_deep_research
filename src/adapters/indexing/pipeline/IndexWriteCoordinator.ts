@@ -1,4 +1,9 @@
-import type { IndexFailedSourceSnapshot, IndexStore, IndexStoreWriteSession, SourceSnapshotIndexStore } from "@application/ports";
+import type {
+  IndexFailedSourceSnapshot,
+  IndexStore,
+  IndexStoreWriteSession,
+  SourceSnapshotIndexStore,
+} from "@application/ports";
 import type { ExtractedChunk } from "@core/model";
 import { updateSnapshot } from "./changeDetection";
 import type { FileSnapshot } from "./changeDetection";
@@ -78,10 +83,10 @@ export class IndexWriteCoordinator {
     const embeddedChunks =
       input.chunks.length > 0
         ? await this.embeddingBatcher.embedAndStoreChunks({
-          chunks: input.chunks,
-          sourcePathsToReplace,
-          getWriter: () => this.getWriter(),
-        })
+            chunks: input.chunks,
+            sourcePathsToReplace,
+            getWriter: () => this.getWriter(),
+          })
         : [];
 
     if (input.chunks.length === 0) {

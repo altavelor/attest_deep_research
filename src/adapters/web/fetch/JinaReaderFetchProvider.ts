@@ -2,7 +2,12 @@
 // in the page-fetch chain — handles JS-rendered pages the native fetcher can't.
 
 import { PageFetchProvider, WebPageFetchOptions, WebPageFetchResult } from "@application/ports";
-import { FetchHttpRuntime, DEFAULT_MAX_CONTENT_CHARS, fetchFailure, requestText } from "./fetchHttp";
+import {
+  FetchHttpRuntime,
+  DEFAULT_MAX_CONTENT_CHARS,
+  fetchFailure,
+  requestText,
+} from "./fetchHttp";
 
 export class JinaReaderFetchProvider implements PageFetchProvider {
   readonly id = "jina";
@@ -37,7 +42,11 @@ export class JinaReaderFetchProvider implements PageFetchProvider {
       content = typeof payload.data?.content === "string" ? payload.data.content.trim() : "";
       finalUrl = typeof payload.data?.url === "string" ? payload.data.url : url;
     } catch {
-      return fetchFailure("web-fetch-bad-response", "Jina Reader returned an unexpected response.", false);
+      return fetchFailure(
+        "web-fetch-bad-response",
+        "Jina Reader returned an unexpected response.",
+        false,
+      );
     }
     if (!content) {
       return fetchFailure("web-fetch-empty-content", "Page contained no readable text.", false);

@@ -295,13 +295,15 @@ describe("ChatModelClient", () => {
   });
 
   it("recovers OpenAI-compatible tool calls when the stream finishes with finish_reason stop", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      streamResponse([
-        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_note","arguments":"{}"}}]}}]}\n\n',
-        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
-        "data: [DONE]\n\n",
-      ]),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_note","arguments":"{}"}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
     const client = new ChatModelClient({
       provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
@@ -333,13 +335,15 @@ describe("ChatModelClient", () => {
   });
 
   it("recovers OpenAI-compatible tool calls leaked as plain text", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      streamResponse([
-        'data: {"choices":[{"delta":{"content":"<tool_call>{\\"name\\": \\"read_note\\", \\"arguments\\": {}}</tool_call>"}}]}\n\n',
-        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
-        "data: [DONE]\n\n",
-      ]),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"<tool_call>{\\"name\\": \\"read_note\\", \\"arguments\\": {}}</tool_call>"}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
     const client = new ChatModelClient({
       provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
@@ -402,7 +406,9 @@ describe("ChatModelClient", () => {
   it("posts Anthropic chat to the SDK /v1/messages endpoint", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]));
+      .mockResolvedValue(
+        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
+      );
     const client = new ChatModelClient({
       provider: "anthropic",
       baseUrl: "https://api.anthropic.com/v1",
@@ -426,11 +432,19 @@ describe("ChatModelClient", () => {
         { event: "message_start", data: { type: "message_start", message: { content: [] } } },
         {
           event: "content_block_start",
-          data: { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+          data: {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "thinking", thinking: "" },
+          },
         },
         {
           event: "content_block_delta",
-          data: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "Plan" } },
+          data: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "thinking_delta", thinking: "Plan" },
+          },
         },
         { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
         {
@@ -443,12 +457,20 @@ describe("ChatModelClient", () => {
         },
         {
           event: "content_block_delta",
-          data: { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{\"q\":1}" } },
+          data: {
+            type: "content_block_delta",
+            index: 1,
+            delta: { type: "input_json_delta", partial_json: '{"q":1}' },
+          },
         },
         { event: "content_block_stop", data: { type: "content_block_stop", index: 1 } },
         {
           event: "message_delta",
-          data: { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 1 } },
+          data: {
+            type: "message_delta",
+            delta: { stop_reason: "tool_use" },
+            usage: { output_tokens: 1 },
+          },
         },
         { event: "message_stop", data: { type: "message_stop" } },
       ]),
@@ -474,8 +496,16 @@ describe("ChatModelClient", () => {
     expect(body).not.toHaveProperty("temperature");
 
     const events = chunks.flatMap((chunk) => chunk.events ?? []);
-    expect(events).toContainEqual({ type: "reasoning-start", segmentId: "reasoning-0", visibility: "text" });
-    expect(events).toContainEqual({ type: "reasoning-delta", segmentId: "reasoning-0", text: "Plan" });
+    expect(events).toContainEqual({
+      type: "reasoning-start",
+      segmentId: "reasoning-0",
+      visibility: "text",
+    });
+    expect(events).toContainEqual({
+      type: "reasoning-delta",
+      segmentId: "reasoning-0",
+      text: "Plan",
+    });
     expect(events).toContainEqual({ type: "reasoning-end", segmentId: "reasoning-0" });
     expect(chunks.at(-1)).toMatchObject({
       isComplete: true,
@@ -487,7 +517,9 @@ describe("ChatModelClient", () => {
   it("maps Anthropic required and specific choices", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]));
+      .mockResolvedValue(
+        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
+      );
     const client = new ChatModelClient({
       provider: "anthropic",
       baseUrl: "https://api.anthropic.com/v1",
@@ -509,7 +541,9 @@ describe("ChatModelClient", () => {
   it("groups parallel Anthropic tool results into one immediate user message", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]));
+      .mockResolvedValue(
+        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
+      );
     const client = new ChatModelClient({
       provider: "anthropic",
       baseUrl: "https://api.anthropic.com/v1",
@@ -558,7 +592,7 @@ describe("ChatModelClient", () => {
     await expect(
       ollama
         .streamChat({ model: "m", messages: [], tools: [tool], toolChoice: { type: "required" } })
-      [Symbol.asyncIterator]()
+        [Symbol.asyncIterator]()
         .next(),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
     await expect(
@@ -569,7 +603,7 @@ describe("ChatModelClient", () => {
           tools: [tool],
           toolChoice: { type: "specific", name: "missing" },
         })
-      [Symbol.asyncIterator]()
+        [Symbol.asyncIterator]()
         .next(),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -606,15 +640,17 @@ describe("ChatModelClient", () => {
   });
 
   it("requests Ollama thinking when reasoning is enabled", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      streamResponse(
-        [
-          '{"message":{"role":"assistant","thinking":"Plan","content":""},"done":false}\n',
-          '{"message":{"role":"assistant","content":"Answer"},"done":true}\n',
-        ],
-        "application/x-ndjson",
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse(
+          [
+            '{"message":{"role":"assistant","thinking":"Plan","content":""},"done":false}\n',
+            '{"message":{"role":"assistant","content":"Answer"},"done":true}\n',
+          ],
+          "application/x-ndjson",
+        ),
+      );
     const client = new ChatModelClient({
       provider: "ollama",
       baseUrl: "http://localhost:11434/api",
@@ -630,20 +666,26 @@ describe("ChatModelClient", () => {
     }
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.think).toBe(true);
-    expect(events).toContainEqual({ type: "reasoning-delta", segmentId: "reasoning-0", text: "Plan" });
+    expect(events).toContainEqual({
+      type: "reasoning-delta",
+      segmentId: "reasoning-0",
+      text: "Plan",
+    });
     expect(events).toContainEqual({ type: "text-delta", text: "Answer" });
   });
 
   it("recovers a tool call leaked as text in the Ollama content stream", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      streamResponse(
-        [
-          '{"message":{"role":"assistant","content":"<|tool_call>call:ixplorer.list_notes(path=\\"\\")<tool_call|>"},"done":false}\n',
-          '{"message":{"role":"assistant","content":""},"done":true}\n',
-        ],
-        "application/x-ndjson",
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse(
+          [
+            '{"message":{"role":"assistant","content":"<|tool_call>call:ixplorer.list_notes(path=\\"\\")<tool_call|>"},"done":false}\n',
+            '{"message":{"role":"assistant","content":""},"done":true}\n',
+          ],
+          "application/x-ndjson",
+        ),
+      );
     const client = new ChatModelClient({
       provider: "ollama",
       baseUrl: "http://localhost:11434/api",
@@ -668,21 +710,21 @@ describe("ChatModelClient", () => {
       if (chunk.toolCalls) toolCalls.push(...chunk.toolCalls);
     }
 
-    expect(toolCalls).toEqual([
-      { id: "text_call_0", name: "list_notes", arguments: { path: "" } },
-    ]);
+    expect(toolCalls).toEqual([{ id: "text_call_0", name: "list_notes", arguments: { path: "" } }]);
   });
 
   it("does not synthesize tool calls from native Ollama tool_calls", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      streamResponse(
-        [
-          '{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"list_notes","arguments":{"prefix":"Daily"}}}]},"done":false}\n',
-          '{"message":{"role":"assistant","content":""},"done":true}\n',
-        ],
-        "application/x-ndjson",
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse(
+          [
+            '{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"list_notes","arguments":{"prefix":"Daily"}}}]},"done":false}\n',
+            '{"message":{"role":"assistant","content":""},"done":true}\n',
+          ],
+          "application/x-ndjson",
+        ),
+      );
     const client = new ChatModelClient({
       provider: "ollama",
       baseUrl: "http://localhost:11434/api",

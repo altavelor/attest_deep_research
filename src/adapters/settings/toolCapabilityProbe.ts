@@ -19,8 +19,10 @@ export interface ToolCapabilityProbeOptions {
   signal?: AbortSignal;
 }
 
-export interface ToolCapabilityProbeResult
-  extends Pick<ToolCallingCapabilities, "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls"> {
+export interface ToolCapabilityProbeResult extends Pick<
+  ToolCallingCapabilities,
+  "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls"
+> {
   /** Per-mode raw tool-name arrays and timestamp for the audit trail. */
   probeAuditData: {
     ranAt: string;
@@ -40,7 +42,10 @@ export async function probeToolControlCapabilities(
     choiceRequired: false,
     choiceSpecific: false,
     parallelCalls: false,
-    probeAuditData: { ranAt: new Date().toISOString(), results: { required: [], specific: [], auto: [] } },
+    probeAuditData: {
+      ranAt: new Date().toISOString(),
+      results: { required: [], specific: [], auto: [] },
+    },
   };
   if (options.apiFormat === "ollama") return failed;
 

@@ -8,10 +8,7 @@ import { Citation } from "@core/model";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";
 import { estimateTextTokens } from "@core/research";
 import { applyNoteCitations, maxFootnoteNumber } from "./noteCitations";
-import {
-  NOTE_MUTATION_TOOL_DEFINITIONS,
-  NOTE_TOOL_DEFINITIONS,
-} from "./noteToolDefinitions";
+import { NOTE_MUTATION_TOOL_DEFINITIONS, NOTE_TOOL_DEFINITIONS } from "./noteToolDefinitions";
 
 export type NoteActionType = "create" | "update" | "delete";
 
@@ -83,7 +80,6 @@ const MUTATION_TOOL_NAMES = new Set<NoteMutationToolName>([
   "update_note",
   "delete_note",
 ]);
-
 
 export class NoteToolService {
   private readonly files: ContextFileProvider;
@@ -335,7 +331,7 @@ export class NoteToolService {
         droppedTokens: Math.max(
           0,
           estimateTextTokens(chunks.map((chunk) => chunk.text).join("\n\n")) -
-          estimateTextTokens(packed.content),
+            estimateTextTokens(packed.content),
         ),
         truncated: packed.truncated,
         maxChars,

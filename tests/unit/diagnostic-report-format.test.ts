@@ -35,11 +35,15 @@ function round(overrides: Partial<AgenticLoopRound>): AgenticLoopRound {
 
 describe("diagnostic report format helpers", () => {
   it("detects an empty keyword search result", () => {
-    const empty = call({ resultPreview: '{"ok":true,"results":[],"diagnostics":{"hint":"retry with 2-4 keywords"}}' });
+    const empty = call({
+      resultPreview: '{"ok":true,"results":[],"diagnostics":{"hint":"retry with 2-4 keywords"}}',
+    });
     expect(isEmptySearchResult(empty)).toBe(true);
     expect(isEmptySearchResult(call({ resultPreview: '{"results":[{"url":"x"}]}' }))).toBe(false);
     // Content-bearing tools are never "empty searches".
-    expect(isEmptySearchResult(call({ name: "fetch_web_page", resultPreview: '"results":[]' }))).toBe(false);
+    expect(
+      isEmptySearchResult(call({ name: "fetch_web_page", resultPreview: '"results":[]' })),
+    ).toBe(false);
     expect(extractResultHint(empty)).toBe("retry with 2-4 keywords");
   });
 
@@ -57,9 +61,13 @@ describe("diagnostic report format helpers", () => {
 
   it("auto-expands only noteworthy rounds", () => {
     expect(isNoteworthyRound(round({ toolCalls: [call({ status: "failed" })] }))).toBe(true);
-    expect(isNoteworthyRound(round({ toolCalls: [call({ resultPreview: '"results":[]' })] }))).toBe(true);
+    expect(isNoteworthyRound(round({ toolCalls: [call({ resultPreview: '"results":[]' })] }))).toBe(
+      true,
+    );
     expect(isNoteworthyRound(round({ hadTextOutput: true }))).toBe(true);
-    expect(isNoteworthyRound(round({ toolCalls: [call({ resultPreview: '"results":[1]' })] }))).toBe(false);
+    expect(
+      isNoteworthyRound(round({ toolCalls: [call({ resultPreview: '"results":[1]' })] })),
+    ).toBe(false);
   });
 
   it("formats large counts compactly", () => {

@@ -31,7 +31,10 @@ export function rankSectionsByQuery(
   query: string,
   options: SectionRankingOptions = {},
 ): RankedSection[] {
-  const sentencesPerSection = Math.max(1, options.sentencesPerSection ?? DEFAULT_SENTENCES_PER_SECTION);
+  const sentencesPerSection = Math.max(
+    1,
+    options.sentencesPerSection ?? DEFAULT_SENTENCES_PER_SECTION,
+  );
   const limit = Math.max(1, options.limit ?? DEFAULT_LIMIT);
 
   const sections = splitIntoSections(text, sentencesPerSection);

@@ -28,22 +28,22 @@ export function buildModelSection(d: ContextDiagnostics): ModelSection {
       provenance,
       probe: d.probeAudit
         ? {
-          ranAt: d.probeAudit.ranAt,
-          modelName: d.probeAudit.modelName,
-          apiFormat: d.probeAudit.apiFormat,
-          results: d.probeAudit.results,
-          rawCapabilities: d.probeAudit.rawCapabilities,
-        }
+            ranAt: d.probeAudit.ranAt,
+            modelName: d.probeAudit.modelName,
+            apiFormat: d.probeAudit.apiFormat,
+            results: d.probeAudit.results,
+            rawCapabilities: d.probeAudit.rawCapabilities,
+          }
         : null,
     },
     reasoning: d.reasoning
       ? {
-        protocol: d.reasoning.protocol,
-        capabilitySource: d.reasoning.capabilitySource ?? null,
-        configuredEffort: d.reasoning.configuredEffort ?? null,
-        summaryRequested: d.reasoning.summaryRequested,
-        summaryAvailable: d.reasoning.summaryAvailable,
-      }
+          protocol: d.reasoning.protocol,
+          capabilitySource: d.reasoning.capabilitySource ?? null,
+          configuredEffort: d.reasoning.configuredEffort ?? null,
+          summaryRequested: d.reasoning.summaryRequested,
+          summaryAvailable: d.reasoning.summaryAvailable,
+        }
       : null,
   };
 }
@@ -62,25 +62,38 @@ export function buildPreflightSection(d: ContextDiagnostics): PreflightSection {
   return {
     index: d.index
       ? {
-        status: d.index.status,
-        available: d.index.available,
-        isStale: d.index.isStale ?? false,
-        indexedFiles: d.index.indexedFiles ?? 0,
-        ...(d.index.errorMessage ? { errorMessage: d.index.errorMessage } : {}),
-      }
+          status: d.index.status,
+          available: d.index.available,
+          isStale: d.index.isStale ?? false,
+          indexedFiles: d.index.indexedFiles ?? 0,
+          ...(d.index.errorMessage ? { errorMessage: d.index.errorMessage } : {}),
+        }
       : null,
-    indexDescription: d.indexDescription
-      ? { ...d.indexDescription }
-      : null,
+    indexDescription: d.indexDescription ? { ...d.indexDescription } : null,
     context: {
       mode: d.contextMode ?? "include",
       sources: allSources,
-      graph: d.graph ?? { enabled: false, source: "none", depth: 0, rootPaths: [], included: [], dropped: [], unresolved: [], limits: { maxForwardLinksPerRoot: 0, maxEmbedsPerRoot: 0, maxBacklinksPerRoot: 0, maxGraphCandidatesTotal: 0 } },
+      graph: d.graph ?? {
+        enabled: false,
+        source: "none",
+        depth: 0,
+        rootPaths: [],
+        included: [],
+        dropped: [],
+        unresolved: [],
+        limits: {
+          maxForwardLinksPerRoot: 0,
+          maxEmbedsPerRoot: 0,
+          maxBacklinksPerRoot: 0,
+          maxGraphCandidatesTotal: 0,
+        },
+      },
       budget: {
         limitTokens: limit,
         reservedOutputTokens: budget.reservedOutputTokens ?? null,
         usedTokens: used,
-        utilizationPct: limit !== null && limit > 0 ? Math.round((used / limit) * 100 * 10) / 10 : null,
+        utilizationPct:
+          limit !== null && limit > 0 ? Math.round((used / limit) * 100 * 10) / 10 : null,
         groups: budget.groups,
       },
     },
@@ -90,11 +103,18 @@ export function buildPreflightSection(d: ContextDiagnostics): PreflightSection {
 
 export function buildRequestSection(d: ContextDiagnostics): RequestSection {
   const agentic = d.agentic;
-  const retrieval = d.retrieval ?? { queryVariants: [], includedChunkIds: [], droppedChunkIds: [], filteredSourcePaths: [] };
+  const retrieval = d.retrieval ?? {
+    queryVariants: [],
+    includedChunkIds: [],
+    droppedChunkIds: [],
+    filteredSourcePaths: [],
+  };
   const rankedChunks = retrieval.rankedChunks ?? [];
 
   // Compute score stats from ranked chunks
-  let scoreStats: RequestSection["retrieval"] extends null ? never : NonNullable<RequestSection["retrieval"]>["scoreStats"] = null;
+  let scoreStats: RequestSection["retrieval"] extends null
+    ? never
+    : NonNullable<RequestSection["retrieval"]>["scoreStats"] = null;
   if (rankedChunks.length > 0) {
     const scores = rankedChunks.map((c) => c.score);
     const min = Math.min(...scores);
@@ -171,23 +191,23 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
     stream: d.stream ?? null,
     agenticLoop: agentic
       ? {
-        totalRounds: agentic.rounds,
-        totalCalls: agentic.totalCalls,
-        duplicateCalls: agentic.duplicateCalls,
-        satisfiedTools: agentic.satisfiedTools,
-        repairedTools: agentic.repairedTools,
-        ...(agentic.fallbackReason ? { fallbackReason: agentic.fallbackReason } : {}),
-        stopReasons: agentic.stopReasons ?? [],
-        budgets: agentic.budgets ?? null,
-        rounds,
-      }
+          totalRounds: agentic.rounds,
+          totalCalls: agentic.totalCalls,
+          duplicateCalls: agentic.duplicateCalls,
+          satisfiedTools: agentic.satisfiedTools,
+          repairedTools: agentic.repairedTools,
+          ...(agentic.fallbackReason ? { fallbackReason: agentic.fallbackReason } : {}),
+          stopReasons: agentic.stopReasons ?? [],
+          budgets: agentic.budgets ?? null,
+          rounds,
+        }
       : null,
     tokens: d.reasoning
       ? {
-        inputTokens: d.reasoning.inputTokens,
-        outputTokens: d.reasoning.outputTokens,
-        reasoningTokens: d.reasoning.reasoningTokens,
-      }
+          inputTokens: d.reasoning.inputTokens,
+          outputTokens: d.reasoning.outputTokens,
+          reasoningTokens: d.reasoning.reasoningTokens,
+        }
       : { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
     reasoningItemCount: d.reasoning?.reasoningItemCount ?? 0,
     continuationRounds: d.reasoning?.continuationRounds ?? 0,

@@ -113,14 +113,14 @@ export interface IndexingLogger {
 
 export interface IndexingPerformanceLogEvent {
   phase:
-  | IndexingProgressPhase
-  | "readFile"
-  | "hash"
-  | "keywordBuild"
-  | "vectorEncode"
-  | "manifestBuild"
-  | "diskWrite"
-  | "persist";
+    | IndexingProgressPhase
+    | "readFile"
+    | "hash"
+    | "keywordBuild"
+    | "vectorEncode"
+    | "manifestBuild"
+    | "diskWrite"
+    | "persist";
   path?: string;
   durationMs: number;
   chunkCount?: number;

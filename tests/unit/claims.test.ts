@@ -3,7 +3,9 @@ import { parseExtractedClaims } from "@adapters/indexing";
 import { parseClaimsFile, serializeClaimsFile } from "@adapters/indexing";
 import type { DocumentClaim, SourceDocumentClaims } from "@application/ports";
 
-function claim(overrides: Partial<DocumentClaim> & Pick<DocumentClaim, "sourcePath" | "subject" | "statement">): DocumentClaim {
+function claim(
+  overrides: Partial<DocumentClaim> & Pick<DocumentClaim, "sourcePath" | "subject" | "statement">,
+): DocumentClaim {
   return {
     claimId: overrides.claimId ?? `${overrides.sourcePath}:${overrides.subject}`,
     chunkId: overrides.chunkId ?? `${overrides.sourcePath}#c`,
@@ -103,7 +105,11 @@ describe("parseExtractedClaims", () => {
       '[{"subject":"Mail Forwarding","statement":"Mail is forwarded.","topicKeys":["Privacy.Mail","x"]}]',
     );
     expect(claims).toEqual([
-      { subject: "mail forwarding", statement: "Mail is forwarded.", topicKeys: ["privacy.mail", "x"] },
+      {
+        subject: "mail forwarding",
+        statement: "Mail is forwarded.",
+        topicKeys: ["privacy.mail", "x"],
+      },
     ]);
   });
 
@@ -135,7 +141,9 @@ describe("claims JSONL sidecar", () => {
     expect(parseClaimsFile("")).toBeNull();
     const header =
       '{"schemaVersion":1,"sourcePath":"a.pdf","contentHash":"h","generation":{"model":"m","promptVersion":1,"generatedAt":"t"}}';
-    const parsed = parseClaimsFile(`${header}\nnot-json\n{"claimId":"1","chunkId":"c","sourcePath":"a.pdf","subject":"s","statement":"S.","topicKeys":[]}`);
+    const parsed = parseClaimsFile(
+      `${header}\nnot-json\n{"claimId":"1","chunkId":"c","sourcePath":"a.pdf","subject":"s","statement":"S.","topicKeys":[]}`,
+    );
     expect(parsed?.claims).toHaveLength(1);
   });
 });

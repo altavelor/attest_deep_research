@@ -10,7 +10,11 @@ import {
   WebSearchOptions,
 } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
-import { extractPageMetadata, extractReadableText, parseDuckDuckGoResults } from "./DuckDuckGoParser";
+import {
+  extractPageMetadata,
+  extractReadableText,
+  parseDuckDuckGoResults,
+} from "./DuckDuckGoParser";
 import { HostRequestThrottle } from "./HostRequestThrottle";
 import { validatePublicWebUrl } from "@application/sources";
 
@@ -84,7 +88,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       DEFAULT_RESULT_LIMIT,
       HARD_RESULT_LIMIT,
     );
-    this.minRequestIntervalMs = Math.max(0, options.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS);
+    this.minRequestIntervalMs = Math.max(
+      0,
+      options.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
+    );
     this.maxSearchRetries = Math.max(0, options.maxSearchRetries ?? DEFAULT_MAX_SEARCH_RETRIES);
     this.rateLimitBackoffMs = Math.max(0, options.rateLimitBackoffMs ?? RATE_LIMIT_BACKOFF_MS);
     this.pageThrottle = new HostRequestThrottle({
@@ -192,7 +199,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     };
   }
 
-  async fetchMetadata(url: string, options: WebPageFetchOptions = {}): Promise<WebPageMetadataResult> {
+  async fetchMetadata(
+    url: string,
+    options: WebPageFetchOptions = {},
+  ): Promise<WebPageMetadataResult> {
     const raw = await this.fetchRawPage(url, options);
     if (!raw.ok) {
       return raw.result;
@@ -269,7 +279,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         response = await this.requestPage(currentUrl, timeoutMs);
       } catch (error) {
         if (isAbortError(error)) {
-          return { ok: false, result: pageFailure("web-fetch-timeout", "Page fetch timed out.", true) };
+          return {
+            ok: false,
+            result: pageFailure("web-fetch-timeout", "Page fetch timed out.", true),
+          };
         }
         return { ok: false, result: pageFailure("web-fetch-network", "Page fetch failed.", true) };
       }
@@ -319,9 +332,14 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       if (!acceptContentType(contentType)) {
         return {
           ok: false,
-          result: pageFailure("web-fetch-content-type", "Page content type is not supported.", false, {
-            contentType,
-          }),
+          result: pageFailure(
+            "web-fetch-content-type",
+            "Page content type is not supported.",
+            false,
+            {
+              contentType,
+            },
+          ),
         };
       }
 

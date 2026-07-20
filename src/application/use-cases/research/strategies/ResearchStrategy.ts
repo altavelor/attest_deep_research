@@ -22,7 +22,10 @@ import {
 import { NoteToolService, ResearchToolsetFactory } from "@application/research/toolPorts";
 import { SubAgentPort } from "@application/research/subAgentPort";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "../AnswerSynthesisService";
-import { ContextAssembler, ContextAssembleRequest } from "@application/use-cases/chat/ContextAssembler";
+import {
+  ContextAssembler,
+  ContextAssembleRequest,
+} from "@application/use-cases/chat/ContextAssembler";
 import { VaultResearchPipeline } from "../VaultResearchPipeline";
 import { WebResearchPipeline } from "../WebResearchPipeline";
 import { AgenticResearchFailure } from "../AgenticResearchRunner";

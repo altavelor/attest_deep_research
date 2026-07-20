@@ -72,11 +72,8 @@ export type FileVectorIndexStorePerformanceEvent = FileVectorIndexPersistenceEve
 const DEFAULT_PROFILE_ID = "default";
 
 export class FileVectorIndexStore
-  implements
-  IndexStore,
-  SourceSnapshotIndexStore,
-  FileVectorPathResolver,
-  FileVectorStateAccess {
+  implements IndexStore, SourceSnapshotIndexStore, FileVectorPathResolver, FileVectorStateAccess
+{
   private readonly folder: string;
   private readonly profileId: string;
   private readonly shardCount: number;
@@ -208,16 +205,16 @@ export class FileVectorIndexStore
   async loadSourceReport(): Promise<IndexSourceReportItem[]> {
     return this.withState([], (state) =>
       state.sources
-      .map((source) => ({
-        sourcePath: source.sourcePath,
-        status: source.failed === true ? ("failed" as const) : ("indexed" as const),
-        modifiedTime: source.modifiedTime,
-        indexedAt: source.indexedAt,
-        chunkCount: source.chunkCount,
-        errorMessage: source.errorMessage,
-        languages: source.languages,
-      }))
-      .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath)),
+        .map((source) => ({
+          sourcePath: source.sourcePath,
+          status: source.failed === true ? ("failed" as const) : ("indexed" as const),
+          modifiedTime: source.modifiedTime,
+          indexedAt: source.indexedAt,
+          chunkCount: source.chunkCount,
+          errorMessage: source.errorMessage,
+          languages: source.languages,
+        }))
+        .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath)),
     );
   }
 
@@ -235,9 +232,9 @@ export class FileVectorIndexStore
       this.state
         ? [...this.state.chunksByShard.values()].flat().map((chunk) => chunk.row)
         : await this.persistence.readRepresentativeChunkRows(
-          manifest,
-          INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS,
-        )
+            manifest,
+            INDEX_DESCRIPTION_MAX_REPRESENTATIVE_CHUNKS,
+          )
     ).sort((left, right) => {
       const leftPath = left.sourcePath ?? sourcePathForDescription(left.source);
       const rightPath = right.sourcePath ?? sourcePathForDescription(right.source);

@@ -60,7 +60,11 @@ describe("DuckDuckGoSearchProvider", () => {
           </html>
         `),
       );
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: fetchMock, now: fixedNow });
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: fetchMock,
+      now: fixedNow,
+    });
 
     await expect(provider.search("local models", { limit: 3, maxFetches: 2 })).resolves.toEqual([
       {
@@ -127,13 +131,19 @@ describe("DuckDuckGoSearchProvider", () => {
   });
 
   it("uses the configured default result limit when no per-call limit is given", async () => {
-    const resultsHtml = Array.from({ length: 8 }, (_, index) => `
+    const resultsHtml = Array.from(
+      { length: 8 },
+      (_, index) => `
       <div class="result">
         <a class="result__a" href="https://example.com/r${index}">Result ${index}</a>
         <a class="result__snippet">Snippet ${index}</a>
-      </div>`).join("");
-    const fetchMock = vi.fn().mockResolvedValue(htmlResponse(`<html><body>${resultsHtml}</body></html>`));
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+      </div>`,
+    ).join("");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(htmlResponse(`<html><body>${resultsHtml}</body></html>`));
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: fetchMock,
       now: fixedNow,
       defaultResultLimit: 7,
@@ -145,13 +155,19 @@ describe("DuckDuckGoSearchProvider", () => {
   });
 
   it("lets a per-call limit override the configured default", async () => {
-    const resultsHtml = Array.from({ length: 8 }, (_, index) => `
+    const resultsHtml = Array.from(
+      { length: 8 },
+      (_, index) => `
       <div class="result">
         <a class="result__a" href="https://example.com/r${index}">Result ${index}</a>
         <a class="result__snippet">Snippet ${index}</a>
-      </div>`).join("");
-    const fetchMock = vi.fn().mockResolvedValue(htmlResponse(`<html><body>${resultsHtml}</body></html>`));
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+      </div>`,
+    ).join("");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(htmlResponse(`<html><body>${resultsHtml}</body></html>`));
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: fetchMock,
       now: fixedNow,
       defaultResultLimit: 7,
@@ -224,7 +240,11 @@ describe("DuckDuckGoSearchProvider", () => {
         `),
       )
       .mockResolvedValueOnce(htmlResponse("not found", { status: 404 }));
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: fetchMock, now: fixedNow });
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: fetchMock,
+      now: fixedNow,
+    });
 
     await expect(provider.search("local models", { limit: 1, maxFetches: 1 })).resolves.toEqual([
       expect.objectContaining({
@@ -246,7 +266,11 @@ describe("DuckDuckGoSearchProvider", () => {
         `),
       )
       .mockRejectedValueOnce(new TypeError("result page unavailable"));
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: fetchMock, now: fixedNow });
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: fetchMock,
+      now: fixedNow,
+    });
 
     await expect(provider.search("local models", { limit: 1, maxFetches: 1 })).resolves.toEqual([
       {
@@ -281,7 +305,11 @@ describe("DuckDuckGoSearchProvider", () => {
         <a class="result__snippet">Snippet text</a>
       `),
     );
-    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: fetchMock, now: fixedNow });
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: fetchMock,
+      now: fixedNow,
+    });
 
     const results = await provider.search("local models", { limit: 1, maxFetches: 0 });
 
@@ -325,13 +353,17 @@ describe("DuckDuckGoSearchProvider", () => {
   });
 
   it("distinguishes URL, HTTP, content-type, size, and timeout failures", async () => {
-    const privateProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: vi.fn() });
+    const privateProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: vi.fn(),
+    });
     await expect(privateProvider.fetchPage("http://127.0.0.1/private")).resolves.toMatchObject({
       ok: false,
       error: { code: "unsafe-web-url", retryable: false },
     });
 
-    const httpProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+    const httpProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: vi.fn().mockResolvedValue(new Response("error", { status: 503 })),
     });
     await expect(httpProvider.fetchPage("https://example.com")).resolves.toMatchObject({
@@ -339,7 +371,8 @@ describe("DuckDuckGoSearchProvider", () => {
       error: { code: "web-fetch-http", retryable: true, details: { status: 503 } },
     });
 
-    const binaryProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+    const binaryProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: vi
         .fn()
         .mockResolvedValue(
@@ -351,7 +384,8 @@ describe("DuckDuckGoSearchProvider", () => {
       error: { code: "web-fetch-content-type", retryable: false },
     });
 
-    const largeProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+    const largeProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: vi.fn().mockResolvedValue(htmlResponse("x".repeat(20))),
     });
     await expect(
@@ -361,7 +395,8 @@ describe("DuckDuckGoSearchProvider", () => {
       error: { code: "web-fetch-response-too-large", retryable: false },
     });
 
-    const timeoutProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+    const timeoutProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: vi.fn((_url, init) => {
         return new Promise((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () =>
@@ -382,7 +417,8 @@ describe("DuckDuckGoSearchProvider", () => {
         controller.error(new TypeError("connection reset"));
       },
     });
-    const streamProvider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0,
+    const streamProvider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
       fetch: vi
         .fn()
         .mockResolvedValue(

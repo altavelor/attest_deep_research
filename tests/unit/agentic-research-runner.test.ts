@@ -3,11 +3,18 @@ import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { ResearchExecutionPolicy } from "@core/research";
 import { Tool } from "@core/agent";
 import { ToolManager } from "@application/tools/ToolManager";
-import { ChatModelProvider, ChatRequest, ChatResponseChunk, ModelRoundProvider, ModelRoundRequest, ProviderContinuationState } from "@core/agent";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  ChatResponseChunk,
+  ModelRoundProvider,
+  ModelRoundRequest,
+  ProviderContinuationState,
+} from "@core/agent";
 
 class ScriptedProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
-  constructor(private readonly rounds: ChatResponseChunk[][]) { }
+  constructor(private readonly rounds: ChatResponseChunk[][]) {}
   async listModels() {
     return ["m"];
   }
@@ -60,15 +67,15 @@ describe("AgenticResearchRunner", () => {
         requests.push(request);
         return requests.length === 1
           ? {
-            items: [
-              {
-                type: "toolCall" as const,
-                call: { id: "call-1", name: "search_index", arguments: {} },
-              },
-            ],
-            continuation,
-            stopReason: "tool_calls" as const,
-          }
+              items: [
+                {
+                  type: "toolCall" as const,
+                  call: { id: "call-1", name: "search_index", arguments: {} },
+                },
+              ],
+              continuation,
+              stopReason: "tool_calls" as const,
+            }
           : { items: [{ type: "text" as const, text: "final" }], stopReason: "complete" as const };
       }),
     };
@@ -91,7 +98,8 @@ describe("AgenticResearchRunner", () => {
     const roundProvider: ModelRoundProvider = {
       listModels: async () => ["m"],
       runRound: vi.fn(async (request: ModelRoundRequest) => {
-        const isFirst = (roundProvider.runRound as ReturnType<typeof vi.fn>).mock.calls.length === 1;
+        const isFirst =
+          (roundProvider.runRound as ReturnType<typeof vi.fn>).mock.calls.length === 1;
         if (isFirst) {
           request.onDelta?.({ type: "reasoningSummary", segmentId: "s", text: "plan it" });
           return {
@@ -102,7 +110,10 @@ describe("AgenticResearchRunner", () => {
           };
         }
         request.onDelta?.({ type: "reasoningSummary", segmentId: "s", text: "done now" });
-        return { items: [{ type: "text" as const, text: "final" }], stopReason: "complete" as const };
+        return {
+          items: [{ type: "text" as const, text: "final" }],
+          stopReason: "complete" as const,
+        };
       }),
     };
     const result = await new AgenticResearchRunner({
@@ -224,7 +235,9 @@ describe("AgenticResearchRunner", () => {
     });
 
     const failed = await new AgenticResearchRunner({
-      modelRound: new ChatCompletionsRoundAdapter(new ScriptedProvider([[{ content: "no tools", isComplete: true }]])),
+      modelRound: new ChatCompletionsRoundAdapter(
+        new ScriptedProvider([[{ content: "no tools", isComplete: true }]]),
+      ),
       model: "m",
       messages: [],
       tools: new ToolManager([search.handler, tool("search_web").handler]),
@@ -287,9 +300,27 @@ describe("AgenticResearchRunner", () => {
       .mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", chunkId: "e1" }] } });
     const search = tool("search_index", execute);
     const provider = new ScriptedProvider([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "search_index", arguments: { query: "b" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "search_index", arguments: { query: "c" } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "2", name: "search_index", arguments: { query: "b" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "3", name: "search_index", arguments: { query: "c" } }],
+        },
+      ],
       [{ content: "synthesized", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
@@ -308,12 +339,32 @@ describe("AgenticResearchRunner", () => {
   it("loop-detected still fails when a mandatory tool is unsatisfied", async () => {
     // No evidence ever surfaces and the required tool never returns a usable result, so the
     // run cannot honor its contract — synthesis is not an option, it must fall back.
-    const execute = vi.fn().mockResolvedValue({ ok: false, error: { code: "x", message: "no", retryable: false } });
+    const execute = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: { code: "x", message: "no", retryable: false } });
     const search = tool("search_web", execute);
     const provider = new ScriptedProvider([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "search_web", arguments: { query: "b" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "search_web", arguments: { query: "c" } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "2", name: "search_web", arguments: { query: "b" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "3", name: "search_web", arguments: { query: "c" } }],
+        },
+      ],
     ]);
     const result = await new AgenticResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
@@ -332,10 +383,18 @@ describe("AgenticResearchRunner", () => {
     const huge = "x".repeat(200);
     const search = tool(
       "search_web",
-      vi.fn().mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", text: huge }] } }),
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", text: huge }] } }),
     );
     const provider = new ScriptedProvider([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a" } }],
+        },
+      ],
       [{ content: "synthesized answer", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({
@@ -353,7 +412,11 @@ describe("AgenticResearchRunner", () => {
     expect(synthesisRequest.toolChoice).toEqual({ type: "none" });
     const toolMessage = synthesisRequest.messages.find((m) => m.role === "tool");
     expect(toolMessage?.content).not.toContain(huge);
-    expect(synthesisRequest.messages.some((m) => m.role === "user" && /stop calling tools/i.test(String(m.content)))).toBe(true);
+    expect(
+      synthesisRequest.messages.some(
+        (m) => m.role === "user" && /stop calling tools/i.test(String(m.content)),
+      ),
+    ).toBe(true);
   });
 
   it("treats consecutive fetch_web_page reads as progress, not a loop", async () => {
@@ -370,9 +433,27 @@ describe("AgenticResearchRunner", () => {
       vi.fn().mockResolvedValue({ ok: true, value: { evidenceId: "e1", content: "page text" } }),
     );
     const provider = new ScriptedProvider([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "2", name: "fetch_web_page", arguments: { resultId: "x" } }] }],
-      [{ content: "", isComplete: true, toolCalls: [{ id: "3", name: "fetch_web_page", arguments: { resultId: "y" } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_index", arguments: { query: "a" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "2", name: "fetch_web_page", arguments: { resultId: "x" } }],
+        },
+      ],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "3", name: "fetch_web_page", arguments: { resultId: "y" } }],
+        },
+      ],
       [{ content: "final", isComplete: true }],
     ]);
     const result = await new AgenticResearchRunner({

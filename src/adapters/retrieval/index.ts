@@ -4,7 +4,11 @@
 // Инвариант: файлы ВНУТРИ модуля не импортируют этот баррель — только соседей
 // через `./…`, иначе цикл (ловит `npm run depcruise`).
 
-export { buildQueryExpansionPrompt, parseQueryVariants, QueryExpansionService } from "./QueryExpansionService";
+export {
+  buildQueryExpansionPrompt,
+  parseQueryVariants,
+  QueryExpansionService,
+} from "./QueryExpansionService";
 export type {
   BuildQueryVariantsOptions,
   QueryExpansionDiagnostic,

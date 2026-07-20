@@ -1,6 +1,11 @@
 import { IxplorerError } from "@core/errors";
 import { isRecord } from "@shared";
-import { ApiFormat, EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "@core/agent";
+import {
+  ApiFormat,
+  EmbeddingProviderClient,
+  EmbeddingRequest,
+  EmbeddingResponse,
+} from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { withLoggedErrors } from "../common/withLoggedErrors";
@@ -153,7 +158,6 @@ export class EmbeddingClient implements EmbeddingProviderClient {
       embeddings: body.embeddings,
     };
   }
-
 }
 
 function isOpenAiEmbeddingsResponse(value: unknown): value is OpenAiEmbeddingsResponse {

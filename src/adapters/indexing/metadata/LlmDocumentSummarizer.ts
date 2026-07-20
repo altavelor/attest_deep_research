@@ -3,11 +3,7 @@
 // for the corpus overview). Prompt changes must bump SUMMARY_PROMPT_VERSION.
 
 import { ChatMessage, ChatModelProvider } from "@core/agent";
-import {
-  DocumentSummarizer,
-  DocumentSummaryInput,
-  SectionSummaryInput,
-} from "@application/ports";
+import { DocumentSummarizer, DocumentSummaryInput, SectionSummaryInput } from "@application/ports";
 
 export const SUMMARY_PROMPT_VERSION = 1;
 const MAX_SECTION_SUMMARY_CHARS = 700;

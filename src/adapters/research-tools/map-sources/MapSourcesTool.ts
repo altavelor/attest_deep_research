@@ -122,11 +122,7 @@ export const MapSourcesTool = defineTool<
 
 // Re-register each source's index chunks into the parent registry. evidenceIds
 // are the retriever's own stable ids, so the row's citations resolve unchanged.
-function mergeRowEvidence(
-  evidence: EvidenceRegistry,
-  row: MapSourceRow,
-  callId: string,
-): void {
+function mergeRowEvidence(evidence: EvidenceRegistry, row: MapSourceRow, callId: string): void {
   for (const chunk of row.snapshot.evidence) {
     if (chunk.source.kind === "web") {
       continue;

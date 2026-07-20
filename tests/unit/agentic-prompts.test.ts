@@ -191,7 +191,12 @@ describe("agentic research prompts", () => {
 
   it("injects the Download skill only when the download tool is present", () => {
     const withDownload = systemText({
-      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, PROBE_DOCUMENT_URL_TOOL, DOWNLOAD_DOCUMENT_TOOL],
+      availableTools: [
+        WEB_SEARCH_TOOL,
+        WEB_FETCH_TOOL,
+        PROBE_DOCUMENT_URL_TOOL,
+        DOWNLOAD_DOCUMENT_TOOL,
+      ],
       question: "Download this PDF",
     });
     expect(withDownload).toContain("Downloading documents");

@@ -44,7 +44,8 @@ describe("createResearchToolRegistry", () => {
       "check_urls",
       "search_web",
     ]);
-    expect(first.evidence).not.toBe(second.evidence);  });
+    expect(first.evidence).not.toBe(second.evidence);
+  });
 
   it("does not expose or report index and web tools when dependencies are absent", () => {
     const created = createResearchToolRegistry({
@@ -58,7 +59,8 @@ describe("createResearchToolRegistry", () => {
       },
     });
 
-    expect(created.tools.definitions()).toEqual([]);  });
+    expect(created.tools.definitions()).toEqual([]);
+  });
 
   it("exposes URL inventory tools in index-only mode when index dependencies exist", () => {
     const retriever: ResearchRetriever = {

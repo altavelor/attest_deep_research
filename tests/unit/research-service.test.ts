@@ -24,7 +24,7 @@ import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
 import { ChatModelProvider } from "@core/agent";
 class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) { }
+  constructor(private readonly files: Record<string, string>) {}
 
   async listPaths(): Promise<string[]> {
     return Object.keys(this.files).sort();
@@ -186,9 +186,9 @@ describe("ResearchService", () => {
     async (forceEagerResearch, expected) => {
       const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
       const service = new ResearchService({
-      toolsetFactory: createResearchToolRegistry,
-      runToolLoop,
-      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+        toolsetFactory: createResearchToolRegistry,
+        runToolLoop,
+        modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
         retriever: new FakeRetriever(emptyRetrieval()),
         chatModel,
         chatModelName: "qwen",
@@ -1029,7 +1029,7 @@ describe("ResearchService", () => {
 
     const iterator = service
       .answer({ question: "What is local retrieval?" })
-    [Symbol.asyncIterator]();
+      [Symbol.asyncIterator]();
     const first = await iterator.next();
 
     expect(first.value).toEqual({ type: "status", message: "Reading vault context..." });
@@ -1189,7 +1189,6 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0].messages[1].content).toContain("[S1] Example");
     expect(chatModel.requests[0].messages[1].content).not.toContain("Local model notes");
   });
-
 });
 
 function visibleAnswerText(

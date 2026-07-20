@@ -94,15 +94,14 @@ export function formatIndexingProgressLabel(state: IndexingState): string {
     return `${formatPhase(state.phase)} · ${chunks}${batches}${formatCurrentFile(state)}`;
   }
 
-  return `${formatPhase(state.phase)} · ${state.scannedFiles} of ${state.totalFiles
-    } files${formatCurrentFile(state)}`;
+  return `${formatPhase(state.phase)} · ${state.scannedFiles} of ${
+    state.totalFiles
+  } files${formatCurrentFile(state)}`;
 }
 
 export function citationTarget(citation: Citation): CitationTarget {
   const target = citationTargetString(citation.source);
-  return citation.source.kind === "web"
-    ? { kind: "web", target }
-    : { kind: "obsidian", target };
+  return citation.source.kind === "web" ? { kind: "web", target } : { kind: "obsidian", target };
 }
 
 export function messageDisplayContent(message: ChatDisplayMessage): string {

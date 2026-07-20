@@ -1,11 +1,14 @@
-import { Extractor, IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStore, SourceSnapshotIndexStore } from "@application/ports";
+import {
+  Extractor,
+  IndexFailedSourceSnapshot,
+  IndexSourceSnapshot,
+  IndexStore,
+  SourceSnapshotIndexStore,
+} from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { IxplorerError } from "@core/errors";
-import {
-  IndexingService,
-  IndexingFileLogEvent,
-} from "@adapters/indexing";
+import { IndexingService, IndexingFileLogEvent } from "@adapters/indexing";
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 
@@ -475,7 +478,7 @@ class FakeVaultFileProvider implements VaultFileProvider {
 class FakeExtractor implements Extractor {
   extractedPaths: string[] = [];
 
-  constructor(private readonly extension: string) { }
+  constructor(private readonly extension: string) {}
 
   supports(path: string): boolean {
     return path.endsWith(this.extension);
@@ -495,7 +498,7 @@ class MultiChunkExtractor implements Extractor {
   constructor(
     private readonly extension: string,
     private readonly chunkCount: number,
-  ) { }
+  ) {}
 
   supports(path: string): boolean {
     return path.endsWith(this.extension);
@@ -513,7 +516,7 @@ class MultiChunkExtractor implements Extractor {
 }
 
 class FailingPathExtractor implements Extractor {
-  constructor(private readonly failedPath: string) { }
+  constructor(private readonly failedPath: string) {}
 
   supports(path: string): boolean {
     return path === this.failedPath;
@@ -525,7 +528,7 @@ class FailingPathExtractor implements Extractor {
 }
 
 class FailingIxplorerPathExtractor implements Extractor {
-  constructor(private readonly failedPath: string) { }
+  constructor(private readonly failedPath: string) {}
 
   supports(path: string): boolean {
     return path === this.failedPath;
@@ -541,7 +544,7 @@ class FailingIxplorerPathExtractor implements Extractor {
 }
 
 class EmptyPathExtractor implements Extractor {
-  constructor(private readonly emptyPath: string) { }
+  constructor(private readonly emptyPath: string) {}
 
   supports(path: string): boolean {
     return path === this.emptyPath;

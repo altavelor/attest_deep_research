@@ -38,7 +38,11 @@ export class WaybackFetchProvider implements PageFetchProvider {
         snapshotUrl = closest.url.replace(/^http:\/\//, "https://");
       }
     } catch {
-      return fetchFailure("web-fetch-bad-response", "Wayback returned an unexpected response.", false);
+      return fetchFailure(
+        "web-fetch-bad-response",
+        "Wayback returned an unexpected response.",
+        false,
+      );
     }
     if (!snapshotUrl) {
       return fetchFailure("web-fetch-no-snapshot", "No archived snapshot is available.", false);

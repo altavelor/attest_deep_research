@@ -30,7 +30,6 @@ export async function* parseServerSentEvents(
   }
 }
 
-
 function parseServerSentEventData(event: string): string {
   return event
     .split("\n")

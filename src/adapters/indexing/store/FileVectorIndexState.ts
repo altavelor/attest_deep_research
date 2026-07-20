@@ -1,8 +1,16 @@
-import { IndexFailedSourceSnapshot, IndexSourceSnapshot, IndexStoreMetadata } from "@application/ports";
+import {
+  IndexFailedSourceSnapshot,
+  IndexSourceSnapshot,
+  IndexStoreMetadata,
+} from "@application/ports";
 import { EmbeddedChunk } from "@core/model";
 import { shardIdForSourcePath } from "../inventory/sourcePathShard";
 import { createFileVectorManifest } from "./FileVectorIndexFormat";
-import type { FileVectorChunkRow, FileVectorManifest, SourceSnapshot } from "./FileVectorIndexFormat";
+import type {
+  FileVectorChunkRow,
+  FileVectorManifest,
+  SourceSnapshot,
+} from "./FileVectorIndexFormat";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import { normalizeVector, sourcePathFromReference } from "./FileVectorIndexVector";
 

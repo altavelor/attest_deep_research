@@ -3,10 +3,7 @@ import { readdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import {
-  FileVectorIndexStore,
-  isFileVectorManifest,
-} from "@adapters/indexing";
+import { FileVectorIndexStore, isFileVectorManifest } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
 import { shardIdForSourcePath } from "@adapters/indexing";
@@ -148,9 +145,9 @@ describe("FileVectorIndexStore", () => {
         languages: ["en"],
       },
     ]);
-    await expect(new FileVectorIndexReader(reopened, reopened).getLanguageInventory()).resolves.toEqual([
-      { language: "en", chunkCount: 1, sourceCount: 1 },
-    ]);
+    await expect(
+      new FileVectorIndexReader(reopened, reopened).getLanguageInventory(),
+    ).resolves.toEqual([{ language: "en", chunkCount: 1, sourceCount: 1 }]);
   });
 
   it("loads per-source report with chunk counts and failed reasons", async () => {
@@ -202,9 +199,9 @@ describe("FileVectorIndexStore", () => {
 
     const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
 
-    await expect(new FileVectorIndexReader(reopened, reopened).getLanguageInventory()).resolves.toEqual([
-      { language: "en", chunkCount: 1, sourceCount: 1 },
-    ]);
+    await expect(
+      new FileVectorIndexReader(reopened, reopened).getLanguageInventory(),
+    ).resolves.toEqual([{ language: "en", chunkCount: 1, sourceCount: 1 }]);
   });
 
   it("searches keyword postings without embeddings and updates them after source replacement", async () => {
@@ -217,10 +214,11 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
-    ).resolves.toEqual([
-      expect.objectContaining({ id: "chunk-a", score: expect.any(Number) }),
-    ]);
+      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", {
+        limit: 5,
+        includeWebResults: false,
+      }),
+    ).resolves.toEqual([expect.objectContaining({ id: "chunk-a", score: expect.any(Number) })]);
 
     await store.deleteBySourcePath("Research/a.md");
     await store.upsert([
@@ -228,7 +226,10 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("local retrieval", {
+        limit: 5,
+        includeWebResults: false,
+      }),
     ).resolves.toEqual([]);
   });
 
@@ -250,10 +251,16 @@ describe("FileVectorIndexStore", () => {
     await writer.commit();
 
     await expect(
-      new FileVectorIndexReader(store, store).searchKeywords("old privacy", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("old privacy", {
+        limit: 5,
+        includeWebResults: false,
+      }),
     ).resolves.toEqual([]);
     await expect(
-      new FileVectorIndexReader(store, store).searchKeywords("stable keyword", { limit: 5, includeWebResults: false }),
+      new FileVectorIndexReader(store, store).searchKeywords("stable keyword", {
+        limit: 5,
+        includeWebResults: false,
+      }),
     ).resolves.toEqual([expect.objectContaining({ id: "chunk-right" })]);
   });
 
@@ -312,7 +319,11 @@ describe("FileVectorIndexStore", () => {
     ]);
 
     await expect(
-      new FileVectorInventoryStore(store).listIndexSources({ limit: 10, pathPrefix: "Books/", query: "alpha" }),
+      new FileVectorInventoryStore(store).listIndexSources({
+        limit: 10,
+        pathPrefix: "Books/",
+        query: "alpha",
+      }),
     ).resolves.toMatchObject({
       items: [
         {
@@ -326,7 +337,10 @@ describe("FileVectorIndexStore", () => {
     });
 
     const first = await new FileVectorInventoryStore(store).listIndexSources({ limit: 1 });
-    const second = await new FileVectorInventoryStore(store).listIndexSources({ limit: 1, cursor: first.nextCursor });
+    const second = await new FileVectorInventoryStore(store).listIndexSources({
+      limit: 1,
+      cursor: first.nextCursor,
+    });
 
     expect(first.items.map((item) => item.sourcePath)).toEqual(["Books/Alpha.md"]);
     expect(second.items.map((item) => item.sourcePath)).toEqual(["Notes/Beta.md"]);
@@ -367,7 +381,12 @@ describe("FileVectorIndexStore", () => {
       chunk("after", "Books/Guide.md", "after text", [1, 0], "hash-3"),
     ]);
 
-    const result = await new FileVectorInventoryStore(store).readIndexChunk({ chunkId: "hit", before: 1, after: 1, maxChars: 27 });
+    const result = await new FileVectorInventoryStore(store).readIndexChunk({
+      chunkId: "hit",
+      before: 1,
+      after: 1,
+      maxChars: 27,
+    });
 
     expect(result.chunks.map((item) => item.chunkId)).toEqual(["before", "hit"]);
     expect(result.chunks.map((item) => item.text)).toEqual(["before text", "hit text is long"]);
@@ -379,7 +398,13 @@ describe("FileVectorIndexStore", () => {
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
-      chunk("a", "Books/Guide.md", "ISBN 978-1-4028-9462-6 and email Test@Example.com", [1, 0], "hash-a"),
+      chunk(
+        "a",
+        "Books/Guide.md",
+        "ISBN 978-1-4028-9462-6 and email Test@Example.com",
+        [1, 0],
+        "hash-a",
+      ),
       chunk("b", "Books/Other.md", "test@example.com outside scope", [1, 0], "hash-b"),
     ]);
 
@@ -403,7 +428,11 @@ describe("FileVectorIndexStore", () => {
       }),
     ).resolves.toMatchObject({ items: [] });
     await expect(
-      new FileVectorInventoryStore(store).findInIndex({ pattern: "ISBN\\s+[0-9-]+", mode: "regex", limit: 10 }),
+      new FileVectorInventoryStore(store).findInIndex({
+        pattern: "ISBN\\s+[0-9-]+",
+        mode: "regex",
+        limit: 10,
+      }),
     ).resolves.toMatchObject({
       items: [{ chunkId: "a", match: "ISBN 978-1-4028-9462-6" }],
     });
@@ -426,7 +455,9 @@ describe("FileVectorIndexStore", () => {
       },
     ]);
 
-    await expect(new FileVectorInventoryStore(store).getIndexSourceOutline("Books/Guide.md")).resolves.toMatchObject({
+    await expect(
+      new FileVectorInventoryStore(store).getIndexSourceOutline("Books/Guide.md"),
+    ).resolves.toMatchObject({
       sourcePath: "Books/Guide.md",
       chunkCount: 2,
       sections: [
@@ -434,7 +465,9 @@ describe("FileVectorIndexStore", () => {
         { headingPath: ["Chapter 1"], chunkStart: 1, chunkEnd: 1 },
       ],
     });
-    await expect(new FileVectorInventoryStore(store).summarizeIndexSource("Books/Guide.md", 1)).resolves.toMatchObject({
+    await expect(
+      new FileVectorInventoryStore(store).summarizeIndexSource("Books/Guide.md", 1),
+    ).resolves.toMatchObject({
       sections: [{ headingPath: ["Intro"] }],
       topics: expect.arrayContaining([{ term: "retrieval", count: 2 }]),
     });

@@ -129,9 +129,7 @@ describe("DownloadDocumentTool", () => {
   });
 
   it("rejects a non-document content type", async () => {
-    const fetchDocument = vi
-      .fn()
-      .mockResolvedValue(pdfDocument({ contentType: "text/html" }));
+    const fetchDocument = vi.fn().mockResolvedValue(pdfDocument({ contentType: "text/html" }));
     const tool = makeDownloadTool({ fetchDocument }, new MemoryWriter());
 
     const execution = await executeTool(tool, call({ url: "https://example.com/paper.pdf" }));
@@ -176,7 +174,10 @@ describe("DownloadDocumentTool", () => {
 });
 
 describe("ProbeDocumentUrlTool", () => {
-  function fakeFetch(headers: Record<string, string>, init: { status?: number; url?: string } = {}) {
+  function fakeFetch(
+    headers: Record<string, string>,
+    init: { status?: number; url?: string } = {},
+  ) {
     return vi.fn().mockResolvedValue({
       ok: (init.status ?? 200) < 400,
       status: init.status ?? 200,
@@ -236,7 +237,9 @@ describe("ProbeDocumentUrlTool", () => {
       ok: true,
       status: 200,
       url,
-      headers: { get: (name: string) => (name.toLowerCase() === "content-type" ? "application/pdf" : null) },
+      headers: {
+        get: (name: string) => (name.toLowerCase() === "content-type" ? "application/pdf" : null),
+      },
       body: null,
     }));
     const tool = new ProbeDocumentUrlTool({ fetchImpl: fetchImpl as unknown as typeof fetch });
@@ -282,7 +285,9 @@ describe("documentDownload helpers", () => {
     expect(
       deriveFilename("https://x.com/a", 'attachment; filename="report.pdf"', "application/pdf"),
     ).toBe("report.pdf");
-    expect(deriveFilename("https://x.com/docs/guide.pdf", null, "application/pdf")).toBe("guide.pdf");
+    expect(deriveFilename("https://x.com/docs/guide.pdf", null, "application/pdf")).toBe(
+      "guide.pdf",
+    );
     expect(deriveFilename("https://x.com/download", null, "application/pdf")).toBe("download.pdf");
   });
 

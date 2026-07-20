@@ -32,7 +32,7 @@
   align-items: center;
 }
 
-.ixplorer-chat__diagnostic-modal-toolbar>button {
+.ixplorer-chat__diagnostic-modal-toolbar > button {
   width: 2rem;
   height: 2rem;
   padding: 0;
@@ -71,7 +71,8 @@
   color: var(--text-normal);
   font-size: var(--font-ui-smaller);
   line-height: 1.45;
-  scrollbar-color: var(--scrollbar-thumb-bg, var(--background-modifier-border-hover)) var(--scrollbar-bg, var(--background-secondary));
+  scrollbar-color: var(--scrollbar-thumb-bg, var(--background-modifier-border-hover))
+    var(--scrollbar-bg, var(--background-secondary));
   scrollbar-gutter: stable;
   white-space: pre-wrap;
 }

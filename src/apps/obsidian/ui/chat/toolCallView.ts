@@ -111,9 +111,7 @@ function describeIntent(name: string, args: Record<string, unknown>, label: stri
     case "search_index":
     case "search_notes": {
       const scope = describeSearchScope(args);
-      return query
-        ? `Searching the vault for “${query}”${scope}`
-        : `Searching the vault${scope}`;
+      return query ? `Searching the vault for “${query}”${scope}` : `Searching the vault${scope}`;
     }
     case "search_web": {
       const count = typeof args.count === "number" ? ` (top ${args.count})` : "";

@@ -73,8 +73,8 @@ export function buildIndexDescription(
     // они несравнимо информативнее списка имён файлов.
     oneLiners.length > 0
       ? `Documents:\n${oneLiners
-        .map((item) => `- ${normalizeMetadata(item.path)}: ${normalizeMetadata(item.oneLiner)}`)
-        .join("\n")}`
+          .map((item) => `- ${normalizeMetadata(item.path)}: ${normalizeMetadata(item.oneLiner)}`)
+          .join("\n")}`
       : samples.length > 0
         ? `Representative sources:\n${samples.map(formatSample).join("\n")}`
         : "Representative sources: none available.",
@@ -142,11 +142,11 @@ export function resolveIndexDescriptionForPrompt(
     persisted && persisted.status !== "stale"
       ? persisted
       : buildMinimalIndexDescription(profile, {
-        generatedAt: persisted?.generatedAt ?? profile.lastIndexedAt ?? profile.updatedAt,
-        indexUpdatedAt: profile.lastIndexedAt ?? persisted?.indexUpdatedAt ?? profile.updatedAt,
-        sourceCount: profile.indexedFileCount ?? persisted?.sourceCount ?? 0,
-        chunkCount: persisted?.chunkCount ?? 0,
-      });
+          generatedAt: persisted?.generatedAt ?? profile.lastIndexedAt ?? profile.updatedAt,
+          indexUpdatedAt: profile.lastIndexedAt ?? persisted?.indexUpdatedAt ?? profile.updatedAt,
+          sourceCount: profile.indexedFileCount ?? persisted?.sourceCount ?? 0,
+          chunkCount: persisted?.chunkCount ?? 0,
+        });
 
   return {
     text: description.text,

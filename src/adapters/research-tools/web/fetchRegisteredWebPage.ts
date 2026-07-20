@@ -57,7 +57,10 @@ export async function fetchRegisteredWebPage(
 
   let result;
   try {
-    result = await deps.provider.fetchPage(safeUrl.url, { ...DEFAULT_FETCH_OPTIONS, maxContentChars });
+    result = await deps.provider.fetchPage(safeUrl.url, {
+      ...DEFAULT_FETCH_OPTIONS,
+      maxContentChars,
+    });
   } catch {
     return toolFailure("web-fetch-failed", "Page fetch failed.", true);
   }

@@ -1,27 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  parseMarkdownGraphLinks,
-  resolveMarkdownLinkTarget,
-} from "@core/research";
+import { parseMarkdownGraphLinks, resolveMarkdownLinkTarget } from "@core/research";
 
 describe("GraphContext markdown fallback", () => {
   it("parses wiki links, embeds, heading links, and markdown links", () => {
-    const parsed = parseMarkdownGraphLinks([
-      "---",
-      "aliases: [IgnoredLink]",
-      "---",
-      "# Root",
-      "[[Project|Project alias]]",
-      "[[Spec#Requirements]]",
-      "![[Brief.md]]",
-      "[meeting](Meetings/Kickoff.md)",
-      "`[[Ignored inline]]`",
-      "```",
-      "[[Ignored code]]",
-      "```",
-      "<!-- [[Ignored comment]] -->",
-    ].join("\n"));
+    const parsed = parseMarkdownGraphLinks(
+      [
+        "---",
+        "aliases: [IgnoredLink]",
+        "---",
+        "# Root",
+        "[[Project|Project alias]]",
+        "[[Spec#Requirements]]",
+        "![[Brief.md]]",
+        "[meeting](Meetings/Kickoff.md)",
+        "`[[Ignored inline]]`",
+        "```",
+        "[[Ignored code]]",
+        "```",
+        "<!-- [[Ignored comment]] -->",
+      ].join("\n"),
+    );
 
     expect(parsed.links).toEqual(["Project", "Spec#Requirements", "Meetings/Kickoff.md"]);
     expect(parsed.embeds).toEqual(["Brief.md"]);

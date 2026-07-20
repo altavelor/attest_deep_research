@@ -5,17 +5,28 @@ import { ChatToolDefinition } from "@core/agent";
 const tools: ChatToolDefinition[] = [
   {
     type: "function",
-    function: { name: "list_notes", description: "", parameters: { type: "object", properties: {} } },
+    function: {
+      name: "list_notes",
+      description: "",
+      parameters: { type: "object", properties: {} },
+    },
   },
   {
     type: "function",
-    function: { name: "read_note", description: "", parameters: { type: "object", properties: {} } },
+    function: {
+      name: "read_note",
+      description: "",
+      parameters: { type: "object", properties: {} },
+    },
   },
 ];
 
 describe("parseTextToolCalls", () => {
   it("recovers the namespaced wrapped function-call syntax leaked by gemma", () => {
-    const calls = parseTextToolCalls('<|tool_call>call:ixplorer.list_notes(path="")<tool_call|>', tools);
+    const calls = parseTextToolCalls(
+      '<|tool_call>call:ixplorer.list_notes(path="")<tool_call|>',
+      tools,
+    );
     expect(calls).toEqual([{ id: "text_call_0", name: "list_notes", arguments: { path: "" } }]);
   });
 
@@ -27,7 +38,8 @@ describe("parseTextToolCalls", () => {
   });
 
   it("parses the <tool_call> JSON form and strips the namespace", () => {
-    const text = '<tool_call>{"name": "functions.read_note", "arguments": {"path": "a.md"}}</tool_call>';
+    const text =
+      '<tool_call>{"name": "functions.read_note", "arguments": {"path": "a.md"}}</tool_call>';
     expect(parseTextToolCalls(text, tools)).toEqual([
       { id: "text_call_0", name: "read_note", arguments: { path: "a.md" } },
     ]);

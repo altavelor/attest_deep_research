@@ -44,19 +44,19 @@ export class EagerResearchStrategy implements ResearchStrategy {
       searchMode === "webOnly" || !this.deps.contextAssembler
         ? undefined
         : await this.deps.contextAssembler.assemble({
-          question,
-          contextMode: searchMode === "none" ? "include" : (request.contextMode ?? "include"),
-          contextPaths: request.contextPaths ?? [],
-          activeFilePath: request.activeFilePath,
-          includeActiveFile: request.includeActiveFile === true,
-          chatHistory: request.chatHistory,
-          contextLimitTokens: this.deps.contextLimitTokens,
-          reservedOutputTokens: totalReservedWithIndexTokens,
-          evidenceLimit: this.deps.evidenceLimit,
-          skipRetrieval: searchMode === "none",
-          explicitSourcesOnly: searchMode === "none",
-          graph: this.deps.graphContext,
-        });
+            question,
+            contextMode: searchMode === "none" ? "include" : (request.contextMode ?? "include"),
+            contextPaths: request.contextPaths ?? [],
+            activeFilePath: request.activeFilePath,
+            includeActiveFile: request.includeActiveFile === true,
+            chatHistory: request.chatHistory,
+            contextLimitTokens: this.deps.contextLimitTokens,
+            reservedOutputTokens: totalReservedWithIndexTokens,
+            evidenceLimit: this.deps.evidenceLimit,
+            skipRetrieval: searchMode === "none",
+            explicitSourcesOnly: searchMode === "none",
+            graph: this.deps.graphContext,
+          });
     if (assembled) {
       assembled.diagnostics.executionStrategy = executionStrategy;
       assembled.diagnostics.question = question;
@@ -74,17 +74,17 @@ export class EagerResearchStrategy implements ResearchStrategy {
       searchMode === "webOnly" || searchMode === "none"
         ? emptyRetrievalResult()
         : yield* this.deps.vaultPipeline.search(
-          question,
-          assembled?.retrievalSourcePaths ?? request.contextPaths,
-          assembled?.boostedSourcePaths,
-        );
+            question,
+            assembled?.retrievalSourcePaths ?? request.contextPaths,
+            assembled?.boostedSourcePaths,
+          );
     const webEvidence = yield* this.deps.webPipeline.search(
       question,
       searchMode !== "indexOnly" && searchMode !== "none",
     );
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
-      createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
+        createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
       retrieval,
     );
     contextDiagnostics.question = question;

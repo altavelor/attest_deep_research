@@ -59,10 +59,10 @@ function normalizeWebSources(settings: IxplorerSettings): void {
     const credentials =
       typeof entry.credentials === "object" && entry.credentials !== null
         ? Object.fromEntries(
-          Object.entries(entry.credentials).filter(
-            (pair): pair is [string, string] => typeof pair[1] === "string",
-          ),
-        )
+            Object.entries(entry.credentials).filter(
+              (pair): pair is [string, string] => typeof pair[1] === "string",
+            ),
+          )
         : {};
     // Interim per-source field from an unreleased hub iteration.
     delete (entry as unknown as Record<string, unknown>).resultLimit;
@@ -159,8 +159,8 @@ function normalizeIndexProfiles(settings: IxplorerSettings): void {
     normalizeIndexProfileNumbers(profile);
     const embedding = profile.embeddingModelProfileId
       ? settings.embeddingModelProfiles.find(
-        (candidate) => candidate.id === profile.embeddingModelProfileId,
-      )
+          (candidate) => candidate.id === profile.embeddingModelProfileId,
+        )
       : undefined;
 
     if (!embedding) {
