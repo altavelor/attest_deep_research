@@ -13,7 +13,7 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "target": "ES2020",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
