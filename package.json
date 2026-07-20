@@ -1,14 +1,15 @@
 {
   "name": "ixplorer",
   "version": "0.1.0",
-  "description": "Local-first LM Studio research assistant for Obsidian.",
+  "description": "Open-source Obsidian plugin for Agentic Vaults & Deep Research.",
+  "private": true,
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
     "styles": "node scripts/build-styles.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "test": "vitest run",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --skipLibCheck",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --check ."
   },
@@ -18,7 +19,7 @@
     "ollama",
     "research"
   ],
-  "author": "",
+  "author": "altavelor",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.12.12",

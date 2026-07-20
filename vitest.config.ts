@@ -11,6 +11,7 @@ export default defineConfig({
       "@adapters": resolve("src/adapters"),
       "@apps": resolve("src/apps"),
       "@shared": resolve("src/shared"),
+      "@manifest": resolve("manifest.json"),
     },
   },
   test: {

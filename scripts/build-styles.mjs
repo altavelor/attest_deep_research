@@ -3,7 +3,7 @@ import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
 const modulesFile = resolve("src/apps/obsidian/styles.json");
-const defaultOutputFile = resolve("release/ixplorer-dev/styles.css");
+const defaultOutputFile = resolve("dist/styles.css");
 
 export async function readStyles() {
   const styleFiles = JSON.parse(await readFile(modulesFile, "utf8"));

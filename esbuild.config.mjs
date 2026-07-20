@@ -1,7 +1,6 @@
 import builtins from "builtin-modules";
 import esbuild from "esbuild";
 import { copyFile, mkdir } from "fs/promises";
-import { homedir } from "os";
 import { join, resolve } from "path";
 import process from "process";
 import { buildStyles } from "./scripts/build-styles.mjs";
@@ -15,14 +14,12 @@ const srcAliases = {
   "@adapters": resolve("src/adapters"),
   "@apps": resolve("src/apps"),
   "@shared": resolve("src/shared"),
+  "@manifest": resolve("manifest.json"),
 };
 
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
-// Output directory is configurable so the build is reproducible outside one
-// specific Obsidian vault (stage 1, task 6.4). Defaults to the original vault
-// path to preserve existing behavior when the env var is unset.
-const defaultOutputDir = join(homedir(), "Documents", "Заметки", ".obsidian", "plugins", "ixplorer");
+const defaultOutputDir = resolve("dist");
 const pluginOutputDir = process.env.IXPLORER_OUTPUT_DIR ?? defaultOutputDir;
 const pluginOutputFile = join(pluginOutputDir, "main.js");
 

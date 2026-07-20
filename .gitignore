@@ -1,7 +1,7 @@
 node_modules/
 main.js
 *.map
+release/
 coverage/
 .DS_Store
-.claude/
-.vscode/
+dist/
