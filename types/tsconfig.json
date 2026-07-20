@@ -1,0 +1,10 @@
+{
+  "//": "Editors resolve a file through its nearest tsconfig. Without this, web-standard-globals.d.ts falls back to a default project that already declares URL/TextEncoder via the DOM lib, and every declaration here reports a false 'cannot redeclare' error. Mirrors the platform-neutral settings the declarations are written for.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["**/*.d.ts"]
+}

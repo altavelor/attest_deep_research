@@ -83,6 +83,7 @@ jobs:
       - name: Run checks
         run: |
           npm run typecheck
+          npm run typecheck:core
           npm run depcruise
           npm run format
           npm test

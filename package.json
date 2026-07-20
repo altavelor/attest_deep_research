@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "test": "vitest run",
     "typecheck": "tsc --noEmit --skipLibCheck",
+    "typecheck:core": "tsc -p tsconfig.core.json",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --check ."
   },

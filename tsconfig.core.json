@@ -8,7 +8,8 @@
   "include": [
     "src/core/**/*.ts",
     "src/application/ports/**/*.ts",
-    "src/application/contracts/**/*.ts"
+    "src/application/contracts/**/*.ts",
+    "types/web-standard-globals.d.ts"
   ],
   "//": "application/sources is the wiring layer: it composes concrete tools that still carry Node deps (extractors crypto/Buffer). It is guarded against obsidian/DOM by the import-boundary test but is not part of the platform-neutral isolation check. Tightening it requires decoupling the indexing extractors from Node."
 }

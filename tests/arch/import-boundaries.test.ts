@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 
 /**
@@ -46,22 +47,22 @@ type Target =
   | { kind: "node-builtin" }
   | { kind: "external" };
 
-const NODE_BUILTINS = new Set([
-  "fs",
-  "node:fs",
-  "fs/promises",
-  "node:fs/promises",
-  "path",
-  "node:path",
-  "os",
-  "node:os",
-  "child_process",
-  "node:child_process",
-]);
+/**
+ * Every Node builtin, taken from the running runtime rather than a hand-written
+ * list: an enumerated allowlist silently lets new specifiers (node:url,
+ * node:crypto, …) slip past the core/application guard as they get used.
+ */
+const NODE_BUILTINS = new Set(builtinModules);
+
+function isNodeBuiltin(spec: string): boolean {
+  const bare = spec.startsWith("node:") ? spec.slice("node:".length) : spec;
+  // Subpath builtins such as "fs/promises" resolve by their parent module.
+  return NODE_BUILTINS.has(bare) || NODE_BUILTINS.has(bare.split("/")[0]);
+}
 
 function classifyImport(fromFile: string, spec: string): Target {
   if (spec === "obsidian") return { kind: "obsidian" };
-  if (NODE_BUILTINS.has(spec)) return { kind: "node-builtin" };
+  if (isNodeBuiltin(spec)) return { kind: "node-builtin" };
   if (!spec.startsWith(".")) return { kind: "external" };
   const resolved = resolve(dirname(fromFile), spec);
   return { kind: "layer", layer: layerOfFile(resolved) };
