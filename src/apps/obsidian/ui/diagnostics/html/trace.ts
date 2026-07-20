@@ -35,7 +35,9 @@ function renderRound(round: AgenticLoopRound, stopReason: string | undefined): s
     thought > 0 ? `<span>💭 ${h(formatCount(thought))}</span>` : "",
     round.hadTextOutput ? `<span>✍ text</span>` : "",
     stopReason ? `<span class="muted">${h(stopReason)}</span>` : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const body = [
     renderPromptDelta(round),
@@ -43,7 +45,9 @@ function renderRound(round: AgenticLoopRound, stopReason: string | undefined): s
     round.hadTextOutput
       ? `<div class="trace-text-output">✍ text output${round.classification ? ` → ${h(round.classification)}` : ""}</div>`
       : "",
-  ].filter(Boolean).join("");
+  ]
+    .filter(Boolean)
+    .join("");
 
   return `<details class="trace-round"${isNoteworthyRound(round) ? " open" : ""}>
     <summary class="trace-round-summary">${summaryBits}</summary>
@@ -55,19 +59,26 @@ function renderPromptDelta(round: AgenticLoopRound): string {
   const delta = round.promptDelta;
   if (!delta || delta.messages.length === 0) return "";
   const totalChars = delta.messages.reduce((sum, message) => sum + message.chars, 0);
-  const label = `Prompt Δ · ${delta.messages.length} message(s) · ${formatCount(totalChars)} chars`
-    + `${delta.viaContinuation ? " · continuation" : ""} · toolChoice ${delta.toolChoice}`;
-  const messages = delta.messages.map((m) => {
-    const meta = [
-      badge(m.role, m.role === "user" ? "accent" : "neutral"),
-      `${h(formatCount(m.chars))} chars`,
-      m.toolCallId ? `call <code>${h(m.toolCallId)}</code>` : null,
-      m.toolCallNames?.length ? `calls: ${m.toolCallNames.map((name) => `<code>${h(name)}</code>`).join(" ")}` : null,
-      m.truncatedChars ? badge(`+${formatCount(m.truncatedChars)} truncated`, "warning") : null,
-    ].filter(Boolean).join(" · ");
-    const content = m.content ? `<pre class="args-pre">${h(m.content)}</pre>` : "";
-    return `<div class="round-call">${meta}${content}</div>`;
-  }).join("");
+  const label =
+    `Prompt Δ · ${delta.messages.length} message(s) · ${formatCount(totalChars)} chars` +
+    `${delta.viaContinuation ? " · continuation" : ""} · toolChoice ${delta.toolChoice}`;
+  const messages = delta.messages
+    .map((m) => {
+      const meta = [
+        badge(m.role, m.role === "user" ? "accent" : "neutral"),
+        `${h(formatCount(m.chars))} chars`,
+        m.toolCallId ? `call <code>${h(m.toolCallId)}</code>` : null,
+        m.toolCallNames?.length
+          ? `calls: ${m.toolCallNames.map((name) => `<code>${h(name)}</code>`).join(" ")}`
+          : null,
+        m.truncatedChars ? badge(`+${formatCount(m.truncatedChars)} truncated`, "warning") : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const content = m.content ? `<pre class="args-pre">${h(m.content)}</pre>` : "";
+      return `<div class="round-call">${meta}${content}</div>`;
+    })
+    .join("");
   return `<details class="trace-prompt-delta"><summary>${h(label)}</summary>${messages}</details>`;
 }
 
@@ -76,9 +87,10 @@ function renderToolCall(call: AgenticLoopRound["toolCalls"][number]): string {
   const status = call.status === "failed" ? "✗" : empty ? "∅" : "✓";
   const statusClass = call.status === "failed" ? "is-failed" : empty ? "is-empty" : "is-ok";
   const args = JSON.stringify(call.arguments);
-  const argsHtml = args !== "{}"
-    ? `<span class="trace-call-args">${h(args.length > ARGS_PREVIEW_CHARS ? `${args.slice(0, ARGS_PREVIEW_CHARS)}…` : args)}</span>`
-    : "";
+  const argsHtml =
+    args !== "{}"
+      ? `<span class="trace-call-args">${h(args.length > ARGS_PREVIEW_CHARS ? `${args.slice(0, ARGS_PREVIEW_CHARS)}…` : args)}</span>`
+      : "";
   const hint = empty ? extractResultHint(call) : null;
   return `<div class="trace-call ${statusClass}">
     <span class="trace-call-status">${status}</span>

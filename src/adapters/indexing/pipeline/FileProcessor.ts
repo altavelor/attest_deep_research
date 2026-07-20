@@ -3,7 +3,11 @@ import { VaultFileSummary } from "@application/ports";
 import { isPathIncluded, vaultPathMatchesGlob } from "@shared";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 import { detectTextLanguages } from "./languageDetection";
-import type { FileProcessorOptions, IndexedFileResult, IndexingPerformanceLogEvent } from "../types";
+import type {
+  FileProcessorOptions,
+  IndexedFileResult,
+  IndexingPerformanceLogEvent,
+} from "../types";
 
 const INTERNAL_EXCLUDE_GLOBS = [".ixplorer/**"];
 

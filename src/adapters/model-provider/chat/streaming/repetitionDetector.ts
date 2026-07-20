@@ -16,7 +16,7 @@ export class RepetitionDetector {
     private readonly minRepeats = 4,
     private readonly maxCycleLines = 6,
     private readonly minContentChars = 40,
-  ) { }
+  ) {}
 
   /** Feed the next streamed text fragment (token-sized fragments are fine). */
   push(text: string): void {

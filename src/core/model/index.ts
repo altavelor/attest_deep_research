@@ -3,11 +3,7 @@
 // друг на друга относительно (`./source`), баррель не импортируют — иначе цикл
 // (ловит `npm run depcruise`).
 
-export type {
-  Citation,
-  LanguageCode,
-  LanguageInventoryItem,
-} from "./citation";
+export type { Citation, LanguageCode, LanguageInventoryItem } from "./citation";
 export type {
   DocumentFormat,
   DocumentSourceReference,

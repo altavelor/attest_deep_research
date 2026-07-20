@@ -17,7 +17,7 @@ export class FakeRetriever {
   constructor(
     private readonly result: RetrievalResult,
     private readonly languageInventory: LanguageInventoryItem[] = [],
-  ) { }
+  ) {}
 
   async search(
     query: string,
@@ -40,7 +40,7 @@ export class FakeRetriever {
 export class FakeSearchProvider implements SearchProvider {
   readonly requests: Array<{ query: string; options: unknown }> = [];
 
-  constructor(private readonly results: SearchProviderResult[] = []) { }
+  constructor(private readonly results: SearchProviderResult[] = []) {}
 
   async search(query: string, options: unknown): Promise<SearchProviderResult[]> {
     this.requests.push({ query, options });
@@ -65,7 +65,7 @@ export class FakeChatModel implements ChatModelProvider {
       { content: "Answer.", isComplete: false },
       { content: "", isComplete: true },
     ],
-  ) { }
+  ) {}
 
   async listModels(): Promise<string[]> {
     return ["qwen"];

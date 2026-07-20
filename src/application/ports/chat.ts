@@ -3,11 +3,7 @@
 // storage (SQLite/IndexedDB) means providing another adapter that implements it.
 // DTOs now live in core/chat/savedChat, so this port is platform-neutral.
 
-import type {
-  SavedChat,
-  SavedChatSummary,
-  SaveChatInput,
-} from "@core/chat/savedChat";
+import type { SavedChat, SavedChatSummary, SaveChatInput } from "@core/chat/savedChat";
 
 export type { SavedChat, SavedChatSummary, SaveChatInput };
 

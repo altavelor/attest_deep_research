@@ -16,7 +16,9 @@ const fakeRetriever: ResearchRetriever = {
 describe("SourceManager", () => {
   it("exposes a descriptor for a registered RAG source", () => {
     const sources = new SourceManager();
-    sources.register(new RagSource({ retriever: fakeRetriever, evidence: new ResearchEvidenceRegistry() }));
+    sources.register(
+      new RagSource({ retriever: fakeRetriever, evidence: new ResearchEvidenceRegistry() }),
+    );
 
     const descriptors = sources.descriptors();
     expect(descriptors).toHaveLength(1);
@@ -26,7 +28,9 @@ describe("SourceManager", () => {
 
   it("contributes the RAG source's tools into a ToolManager", () => {
     const sources = new SourceManager();
-    sources.register(new RagSource({ retriever: fakeRetriever, evidence: new ResearchEvidenceRegistry() }));
+    sources.register(
+      new RagSource({ retriever: fakeRetriever, evidence: new ResearchEvidenceRegistry() }),
+    );
 
     const manager = new ToolManager();
     sources.contributeTools(manager);

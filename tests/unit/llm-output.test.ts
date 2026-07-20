@@ -1,8 +1,4 @@
-import {
-  collectChatText,
-  parseLlmJsonObject,
-  type LlmJsonParseDiagnostic,
-} from "@shared";
+import { collectChatText, parseLlmJsonObject, type LlmJsonParseDiagnostic } from "@shared";
 
 describe("llmOutput", () => {
   it("parses a valid JSON object", () => {

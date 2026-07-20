@@ -24,10 +24,7 @@ export interface FileVectorPathResolver {
  * so it shares the store's in-memory cache.
  */
 export class FileVectorIndexReader
-  implements
-    KeywordSearchIndexStore,
-    IndexChunkInventoryStore,
-    LanguageInventoryIndexStore
+  implements KeywordSearchIndexStore, IndexChunkInventoryStore, LanguageInventoryIndexStore
 {
   constructor(
     private readonly state: FileVectorStateAccess,
@@ -91,7 +88,6 @@ export class FileVectorIndexReader
       };
     });
   }
-
 }
 
 function parseInventoryCursor(cursor: string | undefined): number {

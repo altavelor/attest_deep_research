@@ -1,9 +1,4 @@
-import {
-  IxplorerError,
-  errorCodeFromUnknown,
-  isIxplorerError,
-  toUserMessage,
-} from "@core/errors";
+import { IxplorerError, errorCodeFromUnknown, isIxplorerError, toUserMessage } from "@core/errors";
 
 describe("Ixplorer errors", () => {
   it("maps recoverable errors to stable user-facing messages", () => {

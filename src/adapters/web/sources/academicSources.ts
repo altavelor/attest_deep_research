@@ -74,23 +74,17 @@ export const openAlexDefinition: WebSourceDefinition = {
   descriptor: descriptor("openalex"),
   buildRequest: ({ query, limit }) => ({
     url:
-      "https://api.openalex.org/works?search=" +
-      encodeURIComponent(query) +
-      `&per-page=${limit}`,
+      "https://api.openalex.org/works?search=" + encodeURIComponent(query) + `&per-page=${limit}`,
     headers: { accept: "application/json" },
   }),
   parseResponse: (body) =>
     asArray(asRecord(JSON.parse(body)).results).map((entry) => {
       const item = asRecord(entry);
       const primary = asRecord(item.primary_location);
-      const year =
-        typeof item.publication_year === "number" ? ` (${item.publication_year})` : "";
+      const year = typeof item.publication_year === "number" ? ` (${item.publication_year})` : "";
       return {
         title: asString(item.display_name) + year,
-        url:
-          asString(primary.landing_page_url) ||
-          asString(item.doi) ||
-          asString(item.id),
+        url: asString(primary.landing_page_url) || asString(item.doi) || asString(item.id),
         snippet: asString(asRecord(primary.source).display_name),
       };
     }),
@@ -113,8 +107,7 @@ export const europePmcDefinition: WebSourceDefinition = {
       const id = asString(item.id);
       return {
         title: asString(item.title),
-        url:
-          source && id ? `https://europepmc.org/article/${source}/${id}` : asString(item.doi),
+        url: source && id ? `https://europepmc.org/article/${source}/${id}` : asString(item.doi),
         snippet: [asString(item.authorString), asString(item.journalTitle), asString(item.pubYear)]
           .filter(Boolean)
           .join(" · "),
@@ -151,5 +144,8 @@ export const wikipediaDefinition: WebSourceDefinition = {
 
 /** MediaWiki wraps matches in <span class="searchmatch">…</span>. */
 function stripSearchHighlights(html: string): string {
-  return html.replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+  return html
+    .replace(/<[^>]+>/g, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
 }

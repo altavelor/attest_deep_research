@@ -25,7 +25,10 @@ import {
   decodeStoredChunks,
   sourcePathFromReference,
 } from "./FileVectorIndexVector";
-import { buildKeywordPostingRows, countIndexedKeywordChunks } from "../keyword/LightweightKeywordIndex";
+import {
+  buildKeywordPostingRows,
+  countIndexedKeywordChunks,
+} from "../keyword/LightweightKeywordIndex";
 import { languageInventoryFromSources } from "../pipeline/languageDetection";
 import { FileVectorIndexState, FileVectorIndexWriteChanges } from "./FileVectorIndexState";
 
@@ -159,11 +162,11 @@ export class FileVectorIndexPersistence {
     const files: AtomicIndexFile[] =
       changes === undefined || changes.sourcesDirty
         ? [
-          {
-            path: this.pathFor("sources.jsonl"),
-            data: toJsonl(state.sources),
-          },
-        ]
+            {
+              path: this.pathFor("sources.jsonl"),
+              data: toJsonl(state.sources),
+            },
+          ]
         : [];
     let keywordIndexedChunkCount = 0;
 

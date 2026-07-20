@@ -51,9 +51,7 @@ export class FileVectorInventoryStore implements IndexInventoryStore {
   }
 
   findInIndex(options: FindInIndexOptions) {
-    return this.state.withState({ items: [] }, (state) =>
-      findInFileVectorIndex(state, options),
-    );
+    return this.state.withState({ items: [] }, (state) => findInFileVectorIndex(state, options));
   }
 
   summarizeIndexSource(sourcePath: string, maxSections: number) {

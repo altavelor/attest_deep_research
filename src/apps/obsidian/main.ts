@@ -22,7 +22,17 @@ import { toUserMessage } from "@core/errors";
 import { WebSourceHealthTracker } from "@application/web";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
-import { CompositionContext, createDocumentMetadataStoreForProfile, createDocumentSummaryStoreForProfile, createEnrichmentService, createIndexingService, createQueryExpansionService, createResearchService, createRetrieverForProfile, createVectorIndexStoreForProfile } from "./composition/factories";
+import {
+  CompositionContext,
+  createDocumentMetadataStoreForProfile,
+  createDocumentSummaryStoreForProfile,
+  createEnrichmentService,
+  createIndexingService,
+  createQueryExpansionService,
+  createResearchService,
+  createRetrieverForProfile,
+  createVectorIndexStoreForProfile,
+} from "./composition/factories";
 import type { SourceDocumentMetadata, SourceDocumentSummaries } from "@application/ports";
 import type { IndexDescriptionSource, IndexProfile } from "@adapters/indexing";
 import type { IndexRunPlan } from "./ui/settings/IndexRunModal";
@@ -206,7 +216,6 @@ export default class IxplorerPlugin extends Plugin {
     this.indexing.markStale(profileId);
   }
 
-
   async loadIndexReport(profileId: string): Promise<IndexSourceReportItem[]> {
     return createVectorIndexStoreForProfile(
       this.composition,
@@ -239,11 +248,11 @@ export default class IxplorerPlugin extends Plugin {
       ...source,
       ...(summaries.length > 0
         ? {
-          documentOneLiners: summaries.map((item) => ({
-            path: item.sourcePath,
-            oneLiner: item.document.oneLiner,
-          })),
-        }
+            documentOneLiners: summaries.map((item) => ({
+              path: item.sourcePath,
+              oneLiner: item.document.oneLiner,
+            })),
+          }
         : {}),
     };
   }
@@ -323,9 +332,9 @@ export default class IxplorerPlugin extends Plugin {
     const languageInventory = await retriever.getLanguageInventory();
     const queryVariants = queryExpansion
       ? await queryExpansion.buildVariants({
-        query: options.query,
-        languageInventory,
-      })
+          query: options.query,
+          languageInventory,
+        })
       : [];
     const result = await retriever.search(options.query, {
       limit: options.limit,
@@ -347,5 +356,4 @@ export default class IxplorerPlugin extends Plugin {
 
     return path;
   }
-
 }

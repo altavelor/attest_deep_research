@@ -54,14 +54,7 @@ export class WebResearchPipeline {
       return {
         chunks: [],
         citations: [],
-        diagnostics: createWebDiagnostics(
-          question,
-          "direct",
-          queries,
-          search.requests,
-          [],
-          [],
-        ),
+        diagnostics: createWebDiagnostics(question, "direct", queries, search.requests, [], []),
       };
     }
 
@@ -123,8 +116,7 @@ function createWebDiagnostics(
           tokenSetForSearch(originalQuestion, { minLength: 3 }),
         ),
         wasContentFetched: result.source.wasContentFetched,
-        textSource:
-          result.extractedText !== undefined ? "fetched-content" : "search-snippet",
+        textSource: result.extractedText !== undefined ? "fetched-content" : "search-snippet",
         textCharacters: text.length,
         estimatedTokens: estimateTextTokens(text),
         textPreview: normalizeInlineWhitespace(text).slice(0, 240),

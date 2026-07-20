@@ -116,8 +116,7 @@ function footnoteLink(source: SourceReference): string {
       return `[${cleanLabel(source.title || source.url)}](${source.url})`;
     case "markdown": {
       const target = source.blockId ? `${source.path}#^${source.blockId}` : source.path;
-      const heading =
-        source.headingPath.length > 0 ? ` > ${source.headingPath.join(" > ")}` : "";
+      const heading = source.headingPath.length > 0 ? ` > ${source.headingPath.join(" > ")}` : "";
       return wikilink(target, `${source.title || source.path}${heading}`);
     }
     case "pdf":
@@ -132,5 +131,8 @@ function wikilink(target: string, label: string): string {
 }
 
 function cleanLabel(label: string): string {
-  return label.replace(/\s+/g, " ").replace(/[[\]|]/g, " ").trim();
+  return label
+    .replace(/\s+/g, " ")
+    .replace(/[[\]|]/g, " ")
+    .trim();
 }

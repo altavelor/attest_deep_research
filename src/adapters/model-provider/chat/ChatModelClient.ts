@@ -10,13 +10,24 @@ import {
 
 import { IxplorerError } from "@core/errors";
 import { isRecord } from "@shared";
-import { ApiFormat, ChatMessage, ChatModelProvider, ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
+import {
+  ApiFormat,
+  ChatMessage,
+  ChatModelProvider,
+  ChatRequest,
+  ChatResponseChunk,
+  ModelStreamEvent,
+} from "@core/agent";
 import { ChatToolCall } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import { InlineReasoningParser } from "./streaming/InlineReasoningParser";
 import { createOpenAiClient, translateOpenAiError } from "./providers/openAiSdk";
-import { createAnthropicClient, createLoggingFetch, translateAnthropicError } from "./providers/anthropicSdk";
+import {
+  createAnthropicClient,
+  createLoggingFetch,
+  translateAnthropicError,
+} from "./providers/anthropicSdk";
 import { parseTextToolCalls } from "./streaming/textToolCalls";
 import { RepetitionDetector } from "./streaming/repetitionDetector";
 
@@ -292,10 +303,10 @@ export class ChatModelClient implements ChatModelProvider {
     const tools =
       request.tools && request.tools.length > 0
         ? request.tools.map((tool) => ({
-          name: tool.function.name,
-          ...(tool.function.description ? { description: tool.function.description } : {}),
-          input_schema: tool.function.parameters as Anthropic.Tool["input_schema"],
-        }))
+            name: tool.function.name,
+            ...(tool.function.description ? { description: tool.function.description } : {}),
+            input_schema: tool.function.parameters as Anthropic.Tool["input_schema"],
+          }))
         : undefined;
     const body = {
       model: request.model,
@@ -306,19 +317,21 @@ export class ChatModelClient implements ChatModelProvider {
       ...(tools ? { tools, tool_choice: mapAnthropicToolChoice(request) } : {}),
       ...(request.reasoningEnabled
         ? {
-          // Adaptive thinking is the supported on-mode for current Claude
-          // models; `summarized` surfaces the reasoning we stream to the UI.
-          // Adaptive-thinking models reject sampling parameters, so we omit
-          // temperature here.
-          thinking: { type: "adaptive" as const, display: "summarized" as const },
-          ...(request.reasoningEffort
-            ? {
-              output_config: {
-                effort: request.reasoningEffort as NonNullable<Anthropic.OutputConfig["effort"]>,
-              },
-            }
-            : {}),
-        }
+            // Adaptive thinking is the supported on-mode for current Claude
+            // models; `summarized` surfaces the reasoning we stream to the UI.
+            // Adaptive-thinking models reject sampling parameters, so we omit
+            // temperature here.
+            thinking: { type: "adaptive" as const, display: "summarized" as const },
+            ...(request.reasoningEffort
+              ? {
+                  output_config: {
+                    effort: request.reasoningEffort as NonNullable<
+                      Anthropic.OutputConfig["effort"]
+                    >,
+                  },
+                }
+              : {}),
+          }
         : request.temperature !== undefined
           ? { temperature: request.temperature }
           : {}),
@@ -362,7 +375,11 @@ export class ChatModelClient implements ChatModelProvider {
                 visibility: "text",
               });
             }
-            events.push({ type: "reasoning-delta", segmentId: reasoningSegmentId, text: delta.thinking });
+            events.push({
+              type: "reasoning-delta",
+              segmentId: reasoningSegmentId,
+              text: delta.thinking,
+            });
           } else if (delta.type === "text_delta") {
             if (reasoningOpen) {
               reasoningOpen = false;
@@ -406,7 +423,9 @@ export class ChatModelClient implements ChatModelProvider {
   private async *streamOllamaChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     validateOllamaToolChoice(request);
     const hasTools =
-      request.toolChoice?.type !== "none" && request.tools !== undefined && request.tools.length > 0;
+      request.toolChoice?.type !== "none" &&
+      request.tools !== undefined &&
+      request.tools.length > 0;
     const options =
       request.temperature === undefined && request.maxTokens === undefined
         ? undefined
@@ -509,7 +528,6 @@ export class ChatModelClient implements ChatModelProvider {
 
     yield { content: "", isComplete: true, events: [{ type: "complete", stopReason: "complete" }] };
   }
-
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {
@@ -531,7 +549,10 @@ function mapAnthropicToolChoice(request: ChatRequest): Anthropic.ToolChoice {
 }
 
 function normalizeOllamaHost(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, "").replace(/\/api$/, "");
+  return baseUrl
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/api$/, "");
 }
 
 function ollamaThink(effort: string | undefined): boolean | "high" | "medium" | "low" {
@@ -556,7 +577,12 @@ function translateOllamaError(error: unknown, apiKey: string | undefined): Ixplo
     code: "MODEL_PROVIDER_UNAVAILABLE",
     message: "The chat model provider is unavailable.",
     ...(status !== undefined || message
-      ? { details: { ...(status !== undefined ? { status } : {}), ...(message ? { providerMessage: message } : {}) } }
+      ? {
+          details: {
+            ...(status !== undefined ? { status } : {}),
+            ...(message ? { providerMessage: message } : {}),
+          },
+        }
       : {}),
     cause: error,
   });
@@ -671,9 +697,9 @@ function readReasoningDelta(delta: Record<string, unknown>): {
 
 function visibleReasoningDetails(value: unknown):
   | {
-    text: string;
-    visibility: "text" | "summary";
-  }
+      text: string;
+      visibility: "text" | "summary";
+    }
   | undefined {
   const values = Array.isArray(value) ? value : [value];
   const visible: Array<{ text: string; visibility: "text" | "summary" }> = [];
@@ -696,9 +722,9 @@ function visibleReasoningDetails(value: unknown):
   }
   return visible.length > 0
     ? {
-      text: visible.map((item) => item.text).join(""),
-      visibility: visible.every((item) => item.visibility === "summary") ? "summary" : "text",
-    }
+        text: visible.map((item) => item.text).join(""),
+        visibility: visible.every((item) => item.visibility === "summary") ? "summary" : "text",
+      }
     : undefined;
 }
 

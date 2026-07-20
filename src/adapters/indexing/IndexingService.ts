@@ -8,7 +8,12 @@ import { EmbeddingBatcher } from "./pipeline/EmbeddingBatcher";
 import { FileProcessor } from "./pipeline/FileProcessor";
 import { IndexingProgressState } from "./controller/IndexingProgressState";
 import { IndexWriteCoordinator } from "./pipeline/IndexWriteCoordinator";
-import type { IndexedFileResult, IndexingServiceOptions, IndexingState, PendingIndexedFile } from "./types";
+import type {
+  IndexedFileResult,
+  IndexingServiceOptions,
+  IndexingState,
+  PendingIndexedFile,
+} from "./types";
 
 export type {
   IndexedFileResult,

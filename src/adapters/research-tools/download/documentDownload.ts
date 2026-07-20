@@ -96,9 +96,7 @@ export function resolveDownloadPath(
   return joinVaultPath(normalizeVaultPath(defaultFolder), derivedFilename);
 }
 
-export function validateDownloadPath(
-  path: string,
-): { ok: true } | { ok: false; reason: string } {
+export function validateDownloadPath(path: string): { ok: true } | { ok: false; reason: string } {
   if (!path) {
     return { ok: false, reason: "invalid-path" };
   }

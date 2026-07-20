@@ -176,8 +176,8 @@ export function resolveEffectiveReasoning(
     ...(effort ? { effort } : {}),
     summary:
       protocol === "responses" &&
-        profile.reasoning.summary === "auto" &&
-        profile.reasoningCapabilities?.summary === true
+      profile.reasoning.summary === "auto" &&
+      profile.reasoningCapabilities?.summary === true
         ? "auto"
         : "off",
   };

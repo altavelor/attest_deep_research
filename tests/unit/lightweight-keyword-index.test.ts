@@ -65,7 +65,9 @@ describe("LightweightKeywordIndex", () => {
 
     // Постинг заголовочного вхождения несёт headingFrequency.
     const riquetRow = rows.find((row) => row.term === "riquet");
-    expect(riquetRow?.postings.find((p) => p.chunkId === "chunk-heading")?.headingFrequency).toBe(1);
+    expect(riquetRow?.postings.find((p) => p.chunkId === "chunk-heading")?.headingFrequency).toBe(
+      1,
+    );
 
     const matches = rankKeywordPostings("riquet", rows, 3, 2);
     expect(matches[0].chunkId).toBe("chunk-heading");

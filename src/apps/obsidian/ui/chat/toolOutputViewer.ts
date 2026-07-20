@@ -57,7 +57,13 @@ export class ToolOutputViewer {
 }
 
 function formatToolOutputNote(detail: ToolOutputDetail): string {
-  const lines: string[] = [`# ${detail.name}`, "", `> ${detail.intent}`, "", `**Status:** ${detail.status}`];
+  const lines: string[] = [
+    `# ${detail.name}`,
+    "",
+    `> ${detail.intent}`,
+    "",
+    `**Status:** ${detail.status}`,
+  ];
   if (detail.args && Object.keys(detail.args).length > 0) {
     lines.push("", "## Arguments", "", "```json", prettyJson(JSON.stringify(detail.args)), "```");
   }

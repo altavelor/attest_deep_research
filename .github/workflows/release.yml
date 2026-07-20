@@ -84,6 +84,7 @@ jobs:
         run: |
           npm run typecheck
           npm run depcruise
+          npm run format
           npm test
           npm run build
 

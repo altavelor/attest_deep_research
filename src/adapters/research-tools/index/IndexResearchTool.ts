@@ -1,9 +1,6 @@
 import { RetrievedChunk } from "@core/model";
 import { EvidenceRegistry } from "@application/sources";
-import {
-  BoundedSearchInput,
-  parseBoundedSearchInput,
-} from "@application/research";
+import { BoundedSearchInput, parseBoundedSearchInput } from "@application/research";
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { INDEX_SEARCH_TOOL } from "@core/agent";
 import { ResearchRetriever } from "@application/contracts";
@@ -19,9 +16,7 @@ interface SearchIndexInput extends BoundedSearchInput {
 }
 
 /** Reuses the bounded query/limit parser, then validates the index-scoping extras. */
-function parseSearchIndexInput(
-  input: Record<string, unknown>,
-): ToolParseResult<SearchIndexInput> {
+function parseSearchIndexInput(input: Record<string, unknown>): ToolParseResult<SearchIndexInput> {
   const { sourcePath, language, diversify, ...queryAndLimit } = input;
   const base = parseBoundedSearchInput(queryAndLimit);
   if (!base.ok) {

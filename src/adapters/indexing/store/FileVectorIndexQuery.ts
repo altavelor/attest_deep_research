@@ -1,7 +1,11 @@
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { chunkMatchesRetrievalOptions } from "@core/retrieval";
 import { readJsonlIndexFile } from "../inventory/fileIndexFiles";
-import { FileVectorChunkRow, isKeywordPostingRow, KeywordPostingRow } from "./FileVectorIndexFormat";
+import {
+  FileVectorChunkRow,
+  isKeywordPostingRow,
+  KeywordPostingRow,
+} from "./FileVectorIndexFormat";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import type { FileVectorIndexState } from "./FileVectorIndexState";
 import { dotProduct, normalizeVector } from "./FileVectorIndexVector";
@@ -140,4 +144,3 @@ export function queryFileVectorState(
 
   return matches.sort((left, right) => right.score - left.score).slice(0, limit);
 }
-

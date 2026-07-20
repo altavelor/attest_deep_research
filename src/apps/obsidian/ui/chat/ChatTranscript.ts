@@ -4,7 +4,11 @@ import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
-import { buildCitationRefs, ChatCitationRef, renderCitationBlocks } from "./citations/CitationPopover";
+import {
+  buildCitationRefs,
+  ChatCitationRef,
+  renderCitationBlocks,
+} from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
 import { stripRenderedCitationIds } from "./citations/citationText";
 import { ChainItem, ChatDisplayMessage } from "@core/conversation";
@@ -493,7 +497,9 @@ function renderToolNode(
     head.createSpan({
       cls: "ixplorer-chat__tool-badge",
       text: view.badge.text,
-      ...(view.badge.tooltip ? { attr: { "aria-label": view.badge.tooltip, title: view.badge.tooltip } } : {}),
+      ...(view.badge.tooltip
+        ? { attr: { "aria-label": view.badge.tooltip, title: view.badge.tooltip } }
+        : {}),
     });
   }
   if (view.inCell) {

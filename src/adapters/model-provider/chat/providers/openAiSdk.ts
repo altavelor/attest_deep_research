@@ -53,9 +53,7 @@ function createLoggingFetch(baseFetch: typeof fetch, options: LoggingFetchOption
   return async function loggingFetch(input, init) {
     const url = requestUrl(input);
     const method = (init?.method ?? "GET").toUpperCase();
-    const effectiveInit = options.stripAuthorization
-      ? withoutAuthorization(init)
-      : (init ?? {});
+    const effectiveInit = options.stripAuthorization ? withoutAuthorization(init) : (init ?? {});
     const logContext = createLogContext(url, method, effectiveInit, false);
 
     options.logger?.logRequest(logContext);

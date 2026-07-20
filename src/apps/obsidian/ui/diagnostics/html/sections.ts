@@ -19,8 +19,9 @@ import {
 const NAV_SECTIONS = ["findings", "run-trace", "input", "internals"];
 
 export function renderNav(report: DiagnosticReportV3): string {
-  const anchors = NAV_SECTIONS
-    .filter((id) => id !== "findings" || report.findings.findings.length > 0)
+  const anchors = NAV_SECTIONS.filter(
+    (id) => id !== "findings" || report.findings.findings.length > 0,
+  )
     .map((id) => `<a class="nav-anchor" href="#${attr(id)}">${h(id)}</a>`)
     .join("");
   return `<nav class="top-nav" aria-label="Sections"><span class="nav-brand">Ixplorer</span><span class="nav-label">Diagnostic report</span><div class="nav-anchors">${anchors}</div></nav>`;
@@ -30,8 +31,10 @@ export function renderNav(report: DiagnosticReportV3): string {
 
 export function renderHeader(report: DiagnosticReportV3): string {
   const { stats, model } = report;
-  const statusVariant: BadgeVariant = stats.status === "completed" ? "success" : stats.status === "failed" ? "danger" : "neutral";
-  const strategyVariant: BadgeVariant = model.executionStrategy === "agentic" ? "accent" : "neutral";
+  const statusVariant: BadgeVariant =
+    stats.status === "completed" ? "success" : stats.status === "failed" ? "danger" : "neutral";
+  const strategyVariant: BadgeVariant =
+    model.executionStrategy === "agentic" ? "accent" : "neutral";
   const fallback = report.reasoning.agenticLoop?.fallbackReason;
 
   const badges = [
@@ -39,10 +42,15 @@ export function renderHeader(report: DiagnosticReportV3): string {
     model.executionStrategy ? badge(model.executionStrategy, strategyVariant) : "",
     model.name ? badge(model.name, "neutral") : "",
     fallback ? badge(`fallback: ${fallback}`, "danger") : "",
-  ].filter(Boolean).join("");
+  ]
+    .filter(Boolean)
+    .join("");
 
   const metrics = summaryMetrics(report)
-    .map((metric) => `<div class="metric"><span>${h(metric.label)}</span><strong>${h(metric.value)}</strong></div>`)
+    .map(
+      (metric) =>
+        `<div class="metric"><span>${h(metric.label)}</span><strong>${h(metric.value)}</strong></div>`,
+    )
     .join("");
 
   return `<header class="page-header" id="header">
@@ -64,7 +72,8 @@ export function renderFindings(findings: DiagnosticReportV3["findings"]): string
 }
 
 function renderFinding(f: Finding): string {
-  const variant: BadgeVariant = f.severity === "error" ? "danger" : f.severity === "warning" ? "warning" : "neutral";
+  const variant: BadgeVariant =
+    f.severity === "error" ? "danger" : f.severity === "warning" ? "warning" : "neutral";
   const evidenceChips = Object.entries(f.evidence)
     .map(([k, v]) => `<code>${h(k)}: ${h(JSON.stringify(v))}</code>`)
     .join(" ");
@@ -88,22 +97,33 @@ export function renderInput(report: DiagnosticReportV3): string {
     webBody(report),
     modelBody(report),
     warningsBody(report),
-  ].filter(Boolean).join("");
+  ]
+    .filter(Boolean)
+    .join("");
   return collapsedCard("input", "Input", body);
 }
 
 function policyBody(report: DiagnosticReportV3): string {
   const { request } = report;
-  return sub("Agentic policy") + dl([
-    ["Search mode", h(request.searchMode)],
-    ["Policy reason", `<code>${h(request.agenticPolicy.policyReason)}</code>`],
-    ["Bootstrap choice", request.agenticPolicy.bootstrapChoice
-      ? `<code>${h(JSON.stringify(request.agenticPolicy.bootstrapChoice))}</code>`
-      : badge("none", "neutral")],
-    ["Required tools", request.agenticPolicy.requiredTools.length > 0
-      ? request.agenticPolicy.requiredTools.map(tag).join("")
-      : badge("none", "neutral")],
-  ]);
+  return (
+    sub("Agentic policy") +
+    dl([
+      ["Search mode", h(request.searchMode)],
+      ["Policy reason", `<code>${h(request.agenticPolicy.policyReason)}</code>`],
+      [
+        "Bootstrap choice",
+        request.agenticPolicy.bootstrapChoice
+          ? `<code>${h(JSON.stringify(request.agenticPolicy.bootstrapChoice))}</code>`
+          : badge("none", "neutral"),
+      ],
+      [
+        "Required tools",
+        request.agenticPolicy.requiredTools.length > 0
+          ? request.agenticPolicy.requiredTools.map(tag).join("")
+          : badge("none", "neutral"),
+      ],
+    ])
+  );
 }
 
 function contextBody(report: DiagnosticReportV3): string {
@@ -117,31 +137,42 @@ function contextBody(report: DiagnosticReportV3): string {
   html += utilizationBar(budget.utilizationPct);
   html += `<p class="budget-label">${h(budget.usedTokens)} / ${limitStr} tokens${pctStr}</p>`;
   if (budget.groups.length > 0) {
-    const rows = budget.groups.map(
-      (g) => `<tr><td>${h(g.name)}</td><td>${h(g.usedTokens)}</td><td>${h(g.allocatedTokens ?? "—")}</td><td>${h(g.includedItems ?? "—")}</td><td>${h(g.droppedItems)}</td></tr>`
-    ).join("");
+    const rows = budget.groups
+      .map(
+        (g) =>
+          `<tr><td>${h(g.name)}</td><td>${h(g.usedTokens)}</td><td>${h(g.allocatedTokens ?? "—")}</td><td>${h(g.includedItems ?? "—")}</td><td>${h(g.droppedItems)}</td></tr>`,
+      )
+      .join("");
     html += `<table class="data-table"><thead><tr><th>Group</th><th>Used tokens</th><th>Allocated</th><th>Included</th><th>Dropped</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   const allSources = preflight.context.sources;
   if (allSources.length > 0) {
-    const rows = allSources.map((s) => {
-      const statusV: BadgeVariant = s.status === "included" ? "success" : s.status === "failed" ? "danger" : "neutral";
-      const path = s.path.length > 60 ? s.path.slice(0, 57) + "…" : s.path;
-      return `<tr><td class="mono">${h(path)}</td><td>${tag(s.role)}</td><td>${badge(s.status, statusV)}</td><td>${h(s.includedTokens ?? 0)}</td></tr>`;
-    }).join("");
-    html += sub("Context sources") + `<table class="data-table"><thead><tr><th>Path</th><th>Role</th><th>Status</th><th>Tokens</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = allSources
+      .map((s) => {
+        const statusV: BadgeVariant =
+          s.status === "included" ? "success" : s.status === "failed" ? "danger" : "neutral";
+        const path = s.path.length > 60 ? s.path.slice(0, 57) + "…" : s.path;
+        return `<tr><td class="mono">${h(path)}</td><td>${tag(s.role)}</td><td>${badge(s.status, statusV)}</td><td>${h(s.includedTokens ?? 0)}</td></tr>`;
+      })
+      .join("");
+    html +=
+      sub("Context sources") +
+      `<table class="data-table"><thead><tr><th>Path</th><th>Role</th><th>Status</th><th>Tokens</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   if (preflight.index) {
     const idx = preflight.index;
-    html += sub("Index") + dl([
-      ["Status", h(idx.status)],
-      ["Available", yesNo(idx.available)],
-      ["Stale", yesNo(idx.isStale)],
-      ["Indexed files", h(idx.indexedFiles)],
-    ]);
-    if (idx.errorMessage) html += callout("danger", `<strong>Error:</strong> ${h(idx.errorMessage)}`);
+    html +=
+      sub("Index") +
+      dl([
+        ["Status", h(idx.status)],
+        ["Available", yesNo(idx.available)],
+        ["Stale", yesNo(idx.isStale)],
+        ["Indexed files", h(idx.indexedFiles)],
+      ]);
+    if (idx.errorMessage)
+      html += callout("danger", `<strong>Error:</strong> ${h(idx.errorMessage)}`);
   }
 
   return html;
@@ -152,16 +183,23 @@ function retrievalBody(report: DiagnosticReportV3): string {
   if (!retrieval) return "";
   let html = "";
   if (retrieval.queryVariants.length > 0) {
-    html += sub("Query variants") + `<ol>${retrieval.queryVariants.map((q) => `<li>${h(q)}</li>`).join("")}</ol>`;
+    html +=
+      sub("Query variants") +
+      `<ol>${retrieval.queryVariants.map((q) => `<li>${h(q)}</li>`).join("")}</ol>`;
   }
   if (retrieval.rankedChunks.length > 0) {
-    const rows = retrieval.rankedChunks.map((c) => {
-      const statusV: BadgeVariant = c.status === "included" ? "success" : c.status === "dropped" ? "warning" : "neutral";
-      const id12 = c.id.length > 12 ? c.id.slice(0, 12) + "…" : c.id;
-      const dropR = c.dropReason ? tag(c.dropReason) : "";
-      return `<tr><td>${h(c.rank)}</td><td class="mono">${h(id12)}</td><td class="mono">${h(c.path)}</td><td>${h(c.score.toFixed(3))}</td><td>${badge(c.status, statusV)}${dropR}</td></tr>`;
-    }).join("");
-    html += sub("Ranked chunks") + `<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>Path</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = retrieval.rankedChunks
+      .map((c) => {
+        const statusV: BadgeVariant =
+          c.status === "included" ? "success" : c.status === "dropped" ? "warning" : "neutral";
+        const id12 = c.id.length > 12 ? c.id.slice(0, 12) + "…" : c.id;
+        const dropR = c.dropReason ? tag(c.dropReason) : "";
+        return `<tr><td>${h(c.rank)}</td><td class="mono">${h(id12)}</td><td class="mono">${h(c.path)}</td><td>${h(c.score.toFixed(3))}</td><td>${badge(c.status, statusV)}${dropR}</td></tr>`;
+      })
+      .join("");
+    html +=
+      sub("Ranked chunks") +
+      `<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>Path</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   return html;
 }
@@ -171,41 +209,62 @@ function webBody(report: DiagnosticReportV3): string {
   if (!web) return "";
   const included = web.results.filter((r) => r.status === "included").length;
   const dropped = web.results.filter((r) => r.status === "dropped").length;
-  return sub("Web search (preflight)") + dl([
-    ["Query strategy", badge(web.queryStrategy, "neutral")],
-    ["Queries", web.queries.map((q) => `<code>${h(q)}</code>`).join(", ")],
-    ["Results", `${h(included)} included / ${h(dropped)} dropped of ${h(web.results.length)}`],
-    ["Prompt tokens", h(web.finalPrompt.usedTokens)],
-  ]);
+  return (
+    sub("Web search (preflight)") +
+    dl([
+      ["Query strategy", badge(web.queryStrategy, "neutral")],
+      ["Queries", web.queries.map((q) => `<code>${h(q)}</code>`).join(", ")],
+      ["Results", `${h(included)} included / ${h(dropped)} dropped of ${h(web.results.length)}`],
+      ["Prompt tokens", h(web.finalPrompt.usedTokens)],
+    ])
+  );
 }
 
 function modelBody(report: DiagnosticReportV3): string {
   const { model } = report;
   const tc = model.toolCapabilities;
-  const capRows = (["calls", "choiceRequired", "choiceSpecific", "parallelCalls"] as const).map(
-    (flag) => `<tr><td>${h(flag)}</td><td>${yesNo(tc[flag])}</td><td>${badge(tc.provenance[flag] ?? "—", "neutral")}</td></tr>`
-  ).join("");
-  let html = sub("Model") + dl([
-    ["Model", h(model.name || "(unknown)")],
-    ["API format", h(model.apiFormat ?? "(unknown)")],
-    ...(model.reasoning
-      ? ([
-        ["Reasoning protocol", h(model.reasoning.protocol)],
-        ["Configured effort", h(model.reasoning.configuredEffort ?? "—")],
-      ] as Array<[string, string]>)
-      : []),
-  ]);
+  const capRows = (["calls", "choiceRequired", "choiceSpecific", "parallelCalls"] as const)
+    .map(
+      (flag) =>
+        `<tr><td>${h(flag)}</td><td>${yesNo(tc[flag])}</td><td>${badge(tc.provenance[flag] ?? "—", "neutral")}</td></tr>`,
+    )
+    .join("");
+  let html =
+    sub("Model") +
+    dl([
+      ["Model", h(model.name || "(unknown)")],
+      ["API format", h(model.apiFormat ?? "(unknown)")],
+      ...(model.reasoning
+        ? ([
+            ["Reasoning protocol", h(model.reasoning.protocol)],
+            ["Configured effort", h(model.reasoning.configuredEffort ?? "—")],
+          ] as Array<[string, string]>)
+        : []),
+    ]);
   html += `<table class="data-table"><thead><tr><th>Capability</th><th>Value</th><th>Provenance</th></tr></thead><tbody>${capRows}</tbody></table>`;
   if (tc.probe) {
     const p = tc.probe;
     const inconsistent = p.rawCapabilities.calls !== tc.calls;
-    const probeRows = (["required", "specific", "auto"] as const).map(
-      (mode) => `<tr><td><code>${h(mode)}</code></td><td>${p.results[mode].length > 0 ? p.results[mode].map(tag).join("") : badge("none", "neutral")}</td></tr>`
-    ).join("");
-    html += sub("Probe audit")
-      + dl([["Ran at", h(p.ranAt)], ["Model", h(p.modelName)], ["API format", h(p.apiFormat)]])
-      + `<table class="data-table"><thead><tr><th>Mode</th><th>Tools returned</th></tr></thead><tbody>${probeRows}</tbody></table>`
-      + (inconsistent ? callout("warning", `<strong>Probe overridden by manual settings.</strong> Probe found <code>calls=${p.rawCapabilities.calls}</code>, effective value is <code>calls=${tc.calls}</code>.`) : "");
+    const probeRows = (["required", "specific", "auto"] as const)
+      .map(
+        (mode) =>
+          `<tr><td><code>${h(mode)}</code></td><td>${p.results[mode].length > 0 ? p.results[mode].map(tag).join("") : badge("none", "neutral")}</td></tr>`,
+      )
+      .join("");
+    html +=
+      sub("Probe audit") +
+      dl([
+        ["Ran at", h(p.ranAt)],
+        ["Model", h(p.modelName)],
+        ["API format", h(p.apiFormat)],
+      ]) +
+      `<table class="data-table"><thead><tr><th>Mode</th><th>Tools returned</th></tr></thead><tbody>${probeRows}</tbody></table>` +
+      (inconsistent
+        ? callout(
+            "warning",
+            `<strong>Probe overridden by manual settings.</strong> Probe found <code>calls=${p.rawCapabilities.calls}</code>, effective value is <code>calls=${tc.calls}</code>.`,
+          )
+        : "");
   }
   return html;
 }
@@ -213,7 +272,10 @@ function modelBody(report: DiagnosticReportV3): string {
 function warningsBody(report: DiagnosticReportV3): string {
   const warnings = report.preflight.warnings;
   if (warnings.length === 0) return "";
-  return sub("Warnings") + callout("warning", `<ul>${warnings.map((w) => `<li>${h(w)}</li>`).join("")}</ul>`);
+  return (
+    sub("Warnings") +
+    callout("warning", `<ul>${warnings.map((w) => `<li>${h(w)}</li>`).join("")}</ul>`)
+  );
 }
 
 // ─── Internals (collapsed): plugin plumbing counters ─────────────────────────
@@ -225,43 +287,75 @@ export function renderInternals(report: DiagnosticReportV3): string {
   if (reasoning.stream) {
     const s = reasoning.stream;
     const termV: BadgeVariant = s.terminalEventObserved ? "success" : "warning";
-    html += sub("Stream") + dl([
-      ["Protocol", `${h(s.protocol)} (${h(s.protocolSource)})`],
-      ["Dialects", s.observedDialects.length > 0 ? s.observedDialects.map(tag).join("") : badge("none", "neutral")],
-      ["Frames / malformed", `${h(s.frameCount)} / ${h(s.malformedFrameCount)}`],
-      ["Reasoning Δ / Text Δ / Tool Δ", `${h(s.reasoningDeltaCount)} / ${h(s.textDeltaCount)} / ${h(s.toolDeltaCount)}`],
-      ["Terminal event", badge(String(s.terminalEventObserved), termV)],
-      ...(s.firstByteMs !== undefined ? [["First byte", `${h(s.firstByteMs)} ms`] as [string, string]] : []),
-    ]);
+    html +=
+      sub("Stream") +
+      dl([
+        ["Protocol", `${h(s.protocol)} (${h(s.protocolSource)})`],
+        [
+          "Dialects",
+          s.observedDialects.length > 0
+            ? s.observedDialects.map(tag).join("")
+            : badge("none", "neutral"),
+        ],
+        ["Frames / malformed", `${h(s.frameCount)} / ${h(s.malformedFrameCount)}`],
+        [
+          "Reasoning Δ / Text Δ / Tool Δ",
+          `${h(s.reasoningDeltaCount)} / ${h(s.textDeltaCount)} / ${h(s.toolDeltaCount)}`,
+        ],
+        ["Terminal event", badge(String(s.terminalEventObserved), termV)],
+        ...(s.firstByteMs !== undefined
+          ? [["First byte", `${h(s.firstByteMs)} ms`] as [string, string]]
+          : []),
+      ]);
     if (s.warnings.length > 0) {
       html += callout("warning", `<ul>${s.warnings.map((w) => `<li>${h(w)}</li>`).join("")}</ul>`);
     }
   }
 
   if (reasoning.attempts.length > 0) {
-    const rows = reasoning.attempts.map(
-      (a) => `<tr><td>${h(a.attempt)}</td><td>${h(a.protocol)}</td><td>${h(a.status)}</td><td>${yesNo(a.outputEmitted)}</td><td>${h(a.errorCode ?? "—")}</td></tr>`
-    ).join("");
-    html += sub("Attempts") + `<table class="data-table"><thead><tr><th>#</th><th>Protocol</th><th>Status</th><th>Output</th><th>Error</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = reasoning.attempts
+      .map(
+        (a) =>
+          `<tr><td>${h(a.attempt)}</td><td>${h(a.protocol)}</td><td>${h(a.status)}</td><td>${yesNo(a.outputEmitted)}</td><td>${h(a.errorCode ?? "—")}</td></tr>`,
+      )
+      .join("");
+    html +=
+      sub("Attempts") +
+      `<table class="data-table"><thead><tr><th>#</th><th>Protocol</th><th>Status</th><th>Output</th><th>Error</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   if (answer.projection) {
     const p = answer.projection;
-    html += sub("Projection") + dl([
-      ["Reasoning segments", h(p.reasoningSegments)],
-      ["Checkpoints / final commits", `${h(p.checkpointsCreated)} / ${h(p.finalAnswersCommitted)}`],
-      ["Buffered text chars", h(p.bufferedTextChars)],
-    ]);
+    html +=
+      sub("Projection") +
+      dl([
+        ["Reasoning segments", h(p.reasoningSegments)],
+        [
+          "Checkpoints / final commits",
+          `${h(p.checkpointsCreated)} / ${h(p.finalAnswersCommitted)}`,
+        ],
+        ["Buffered text chars", h(p.bufferedTextChars)],
+      ]);
   }
 
   if (answer.delivery) {
     const d = answer.delivery;
-    const persV: BadgeVariant = d.persistenceStatus === "saved" ? "success" : d.persistenceStatus === "failed" ? "danger" : "neutral";
-    html += sub("Delivery") + dl([
-      ["Events / UI patches / renders", `${h(d.projectorEventsReceived)} / ${h(d.uiPatchesApplied)} / ${h(d.markdownRenders)}`],
-      ["Coalesced updates", h(d.coalescedUpdates)],
-      ["Persistence", badge(d.persistenceStatus, persV)],
-    ]);
+    const persV: BadgeVariant =
+      d.persistenceStatus === "saved"
+        ? "success"
+        : d.persistenceStatus === "failed"
+          ? "danger"
+          : "neutral";
+    html +=
+      sub("Delivery") +
+      dl([
+        [
+          "Events / UI patches / renders",
+          `${h(d.projectorEventsReceived)} / ${h(d.uiPatchesApplied)} / ${h(d.markdownRenders)}`,
+        ],
+        ["Coalesced updates", h(d.coalescedUpdates)],
+        ["Persistence", badge(d.persistenceStatus, persV)],
+      ]);
   }
 
   if (answer.unknownCitationIds.length > 0) {

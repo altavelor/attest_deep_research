@@ -10,7 +10,7 @@ import { renderReadableDiagnosticReport } from "./diagnosticReadable";
 export class DiagnosticReportModalController {
   private modal: DiagnosticReportModal | null = null;
 
-  constructor(private readonly app: App) { }
+  constructor(private readonly app: App) {}
 
   open(diagnostics: ContextDiagnostics): void {
     this.close();

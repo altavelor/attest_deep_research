@@ -16,7 +16,7 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
   constructor(
     private readonly vault: Vault,
     private readonly metadataCache: MetadataCache,
-  ) { }
+  ) {}
 
   async discover(request: GraphContextRequest): Promise<GraphContextDiscovery> {
     const availablePaths = new Set(request.availablePaths.map((path) => normalizeVaultPath(path)));
@@ -88,7 +88,8 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
     }
 
     const sortedIncluded = Array.from(included.values()).sort(
-      (left, right) => (right.score ?? 0) - (left.score ?? 0) || left.path.localeCompare(right.path),
+      (left, right) =>
+        (right.score ?? 0) - (left.score ?? 0) || left.path.localeCompare(right.path),
     );
 
     return {
@@ -198,19 +199,34 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
       const resolved = this.resolveLink(target, rootPath, request.availablePaths, aliasIndex);
 
       if (!resolved) {
-        unresolved.push(createGraphCandidate(target || "(unknown)", "unresolved", {
-          from: rootPath,
-          type,
-          depth: edgeDepth,
-        }, "unresolved-link"));
+        unresolved.push(
+          createGraphCandidate(
+            target || "(unknown)",
+            "unresolved",
+            {
+              from: rootPath,
+              type,
+              depth: edgeDepth,
+            },
+            "unresolved-link",
+          ),
+        );
         continue;
       }
 
-      candidates.push(createGraphCandidate(resolved, "included", {
-        from: rootPath,
-        type,
-        depth: edgeDepth,
-      }, undefined, graphEdgeScore(type)));
+      candidates.push(
+        createGraphCandidate(
+          resolved,
+          "included",
+          {
+            from: rootPath,
+            type,
+            depth: edgeDepth,
+          },
+          undefined,
+          graphEdgeScore(type),
+        ),
+      );
     }
   }
 
@@ -225,22 +241,42 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
     edgeDepth: number,
   ): void {
     for (const link of links.slice(0, linkLimit(request, type))) {
-      const resolved = resolveMarkdownLinkTarget(link, rootPath, request.availablePaths, aliasIndex);
+      const resolved = resolveMarkdownLinkTarget(
+        link,
+        rootPath,
+        request.availablePaths,
+        aliasIndex,
+      );
 
       if (!resolved) {
-        unresolved.push(createGraphCandidate(link, "unresolved", {
-          from: rootPath,
-          type,
-          depth: edgeDepth,
-        }, "unresolved-link"));
+        unresolved.push(
+          createGraphCandidate(
+            link,
+            "unresolved",
+            {
+              from: rootPath,
+              type,
+              depth: edgeDepth,
+            },
+            "unresolved-link",
+          ),
+        );
         continue;
       }
 
-      candidates.push(createGraphCandidate(resolved, "included", {
-        from: rootPath,
-        type,
-        depth: edgeDepth,
-      }, undefined, graphEdgeScore(type)));
+      candidates.push(
+        createGraphCandidate(
+          resolved,
+          "included",
+          {
+            from: rootPath,
+            type,
+            depth: edgeDepth,
+          },
+          undefined,
+          graphEdgeScore(type),
+        ),
+      );
     }
   }
 
@@ -263,11 +299,19 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
     const backlinkPaths = Object.keys(backlinkData).slice(0, request.limits.maxBacklinksPerRoot);
 
     for (const path of backlinkPaths) {
-      candidates.push(createGraphCandidate(normalizeVaultPath(path), "included", {
-        from: normalizeVaultPath(path),
-        type: "backlink",
-        depth: edgeDepth,
-      }, undefined, graphEdgeScore("backlink")));
+      candidates.push(
+        createGraphCandidate(
+          normalizeVaultPath(path),
+          "included",
+          {
+            from: normalizeVaultPath(path),
+            type: "backlink",
+            depth: edgeDepth,
+          },
+          undefined,
+          graphEdgeScore("backlink"),
+        ),
+      );
     }
   }
 
@@ -315,7 +359,11 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
       }
 
       const aliases = this.metadataCache.getFileCache(file)?.frontmatter?.aliases;
-      const values = Array.isArray(aliases) ? aliases : typeof aliases === "string" ? [aliases] : [];
+      const values = Array.isArray(aliases)
+        ? aliases
+        : typeof aliases === "string"
+          ? [aliases]
+          : [];
 
       for (const alias of values) {
         if (typeof alias !== "string" || !alias.trim()) {

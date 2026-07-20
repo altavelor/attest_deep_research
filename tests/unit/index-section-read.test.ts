@@ -88,12 +88,7 @@ describe("readIndexSection (Ф2.1)", () => {
   });
 });
 
-function mdChunk(
-  id: string,
-  path: string,
-  text: string,
-  headingPath: string[],
-): EmbeddedChunk {
+function mdChunk(id: string, path: string, text: string, headingPath: string[]): EmbeddedChunk {
   const source: SourceReference = {
     id: `source-${id}`,
     kind: "markdown",
@@ -101,7 +96,14 @@ function mdChunk(
     path,
     headingPath,
   };
-  return { id, source, text, contentHash: `hash-${id}`, embedding: [1, 0], embeddingModel: "nomic" };
+  return {
+    id,
+    source,
+    text,
+    contentHash: `hash-${id}`,
+    embedding: [1, 0],
+    embeddingModel: "nomic",
+  };
 }
 
 function pdfChunk(id: string, path: string, text: string, pageNumber: number): EmbeddedChunk {
@@ -112,7 +114,14 @@ function pdfChunk(id: string, path: string, text: string, pageNumber: number): E
     path,
     pageNumber,
   };
-  return { id, source, text, contentHash: `hash-${id}`, embedding: [0, 1], embeddingModel: "nomic" };
+  return {
+    id,
+    source,
+    text,
+    contentHash: `hash-${id}`,
+    embedding: [0, 1],
+    embeddingModel: "nomic",
+  };
 }
 
 function longText(seed: string): string {

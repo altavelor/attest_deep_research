@@ -124,7 +124,10 @@ export function translateAnthropicError(
   translation: AnthropicErrorTranslation,
 ): IxplorerError | never {
   if (error instanceof IxplorerError) return error;
-  if (error instanceof APIUserAbortError || (error instanceof Error && error.name === "AbortError")) {
+  if (
+    error instanceof APIUserAbortError ||
+    (error instanceof Error && error.name === "AbortError")
+  ) {
     throw error;
   }
 
@@ -150,13 +153,18 @@ export function translateAnthropicError(
   });
 }
 
-function providerErrorDetails(error: APIError, apiKey: string | undefined): Record<string, unknown> {
+function providerErrorDetails(
+  error: APIError,
+  apiKey: string | undefined,
+): Record<string, unknown> {
   const code =
     isRecord(error.error) && typeof error.error.type === "string"
       ? error.error.type.slice(0, 100)
       : undefined;
   const rawMessage =
-    isRecord(error.error) && isRecord(error.error.error) && typeof error.error.error.message === "string"
+    isRecord(error.error) &&
+    isRecord(error.error.error) &&
+    typeof error.error.error.message === "string"
       ? error.error.error.message
       : undefined;
   const message = rawMessage ? sanitizeProviderMessage(rawMessage, apiKey) : undefined;

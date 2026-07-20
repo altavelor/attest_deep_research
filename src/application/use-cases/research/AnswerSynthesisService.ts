@@ -1,6 +1,10 @@
 import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
-import { ContextDiagnostics, IndexDescriptionPromptContext, ToolCallDiagnostic } from "@core/diagnostics";
+import {
+  ContextDiagnostics,
+  IndexDescriptionPromptContext,
+  ToolCallDiagnostic,
+} from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { IxplorerError } from "@core/errors";

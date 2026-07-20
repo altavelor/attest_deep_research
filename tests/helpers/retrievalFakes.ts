@@ -5,7 +5,7 @@ import { RetrievalOptions } from "@core/retrieval";
 import { filterRetrievedChunks } from "@core/retrieval";
 
 export class FakeEmbeddingProvider implements EmbeddingProviderClient {
-  constructor(private readonly embeddings: number[][]) { }
+  constructor(private readonly embeddings: number[][]) {}
 
   async listModels(): Promise<string[]> {
     return ["nomic"];
@@ -33,7 +33,7 @@ export class FakeIndexStore implements IndexStore {
   keywordResults: RetrievedChunk[] = [];
   keywordResultsByQuery = new Map<string, RetrievedChunk[]>();
 
-  constructor(private readonly chunks: RetrievedChunk[]) { }
+  constructor(private readonly chunks: RetrievedChunk[]) {}
 
   async initialize(metadata: {
     embeddingModel: string;
@@ -42,11 +42,11 @@ export class FakeIndexStore implements IndexStore {
     this.initializations.push(metadata);
   }
 
-  async upsert(): Promise<void> { }
+  async upsert(): Promise<void> {}
 
-  async deleteBySourcePath(): Promise<void> { }
+  async deleteBySourcePath(): Promise<void> {}
 
-  async clear(): Promise<void> { }
+  async clear(): Promise<void> {}
 
   async query(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
     this.queries.push({ embedding, limit });

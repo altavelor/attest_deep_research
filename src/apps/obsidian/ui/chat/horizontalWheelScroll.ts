@@ -17,8 +17,7 @@ export function nextHorizontalWheelScrollLeft(state: HorizontalWheelScrollState)
     return null;
   }
 
-  const rawDelta =
-    Math.abs(state.deltaX) > Math.abs(state.deltaY) ? state.deltaX : state.deltaY;
+  const rawDelta = Math.abs(state.deltaX) > Math.abs(state.deltaY) ? state.deltaX : state.deltaY;
 
   if (rawDelta === 0) {
     return null;

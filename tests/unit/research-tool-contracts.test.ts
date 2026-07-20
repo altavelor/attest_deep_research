@@ -67,9 +67,11 @@ describe("research tool contracts", () => {
   });
 
   it("serializes tool output payloads", () => {
-    expect(
-      toolExecutionPayload({ ok: true, value: { query: "models", results: [] } }),
-    ).toEqual({ ok: true, query: "models", results: [] });
+    expect(toolExecutionPayload({ ok: true, value: { query: "models", results: [] } })).toEqual({
+      ok: true,
+      query: "models",
+      results: [],
+    });
     expect(
       toolExecutionPayload({
         ok: true,

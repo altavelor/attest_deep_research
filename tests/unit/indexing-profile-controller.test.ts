@@ -1,7 +1,4 @@
-import {
-  IndexingProfileController,
-  createIndexingStateFromProfile,
-} from "@adapters/indexing";
+import { IndexingProfileController, createIndexingStateFromProfile } from "@adapters/indexing";
 import { IndexingService, IndexingState } from "@adapters/indexing";
 import { IndexProfile } from "@adapters/indexing";
 

@@ -5,7 +5,7 @@ export class FallbackModelRoundProvider implements ModelRoundProvider {
   constructor(
     private readonly primary: ModelRoundProvider,
     private readonly fallback: ModelRoundProvider,
-  ) { }
+  ) {}
 
   listModels(): Promise<string[]> {
     return this.primary.listModels();

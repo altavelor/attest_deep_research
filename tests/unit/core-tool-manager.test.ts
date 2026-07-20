@@ -9,7 +9,10 @@ function makeTool(name: string): Tool<{ value: string }, { echoed: string }> {
     },
     parseInput(input) {
       if (typeof input.value !== "string") {
-        return { ok: false, error: { code: "bad-input", message: "value required", retryable: false } };
+        return {
+          ok: false,
+          error: { code: "bad-input", message: "value required", retryable: false },
+        };
       }
       return { ok: true, value: { value: input.value } };
     },

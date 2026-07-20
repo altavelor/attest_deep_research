@@ -38,6 +38,9 @@ jobs:
       - name: Verify architecture invariants
         run: npm run depcruise
 
+      - name: Verify formatting
+        run: npm run format
+
       - name: Run tests
         run: npm test
 

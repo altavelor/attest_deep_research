@@ -11,7 +11,7 @@ describe("RepetitionDetector", () => {
     feed(
       detector,
       "Wikipedia began as Nupedia.\nIt was slow to produce articles.\n" +
-      "The wiki model launched in 2001.\nGrowth was rapid and global.\n",
+        "The wiki model launched in 2001.\nGrowth was rapid and global.\n",
     );
     expect(detector.isRepeating()).toBe(false);
   });

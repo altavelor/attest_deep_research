@@ -281,7 +281,8 @@ function parseBySchema(
           if (raw === undefined && !field.required) break;
           return invalidField(name);
         }
-        if (field.maxLength !== undefined && raw.length > field.maxLength) return invalidField(name);
+        if (field.maxLength !== undefined && raw.length > field.maxLength)
+          return invalidField(name);
         value[name] = raw;
         break;
       }

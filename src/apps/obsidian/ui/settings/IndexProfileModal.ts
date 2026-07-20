@@ -4,7 +4,11 @@ import { IndexProfile } from "@adapters/indexing";
 import { parseNonNegativeInteger, parsePositiveInteger } from "@shared";
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { DEFAULT_INDEX_PROFILE, createIndexProfile } from "@adapters/settings";
-import { createProfileId, hasDuplicateProfileName, isValidIndexProfileName } from "@adapters/settings";
+import {
+  createProfileId,
+  hasDuplicateProfileName,
+  isValidIndexProfileName,
+} from "@adapters/settings";
 import { EmbeddingModelProfile } from "@adapters/settings";
 import { IndexPathPickerModal } from "./IndexPathPickerModal";
 import { renderModalActions } from "./shared";

@@ -82,7 +82,10 @@ export interface ResearchRetriever {
   listSharedReferences?(options: { minSources: number }): Promise<SharedReference[]>;
   findClaims?(options: FindClaimsOptions): Promise<ClaimGroup[]>;
   findInIndex?(options: FindInIndexOptions): Promise<IndexCursorPage<FindInIndexMatch>>;
-  summarizeIndexSource?(sourcePath: string, maxSections: number): Promise<IndexSourceSummary | null>;
+  summarizeIndexSource?(
+    sourcePath: string,
+    maxSections: number,
+  ): Promise<IndexSourceSummary | null>;
   getIndexSourceOutline?(sourcePath: string): Promise<IndexSourceOutline | null>;
   searchIndexByMetadata?(
     options: IndexMetadataSearchOptions,
@@ -125,24 +128,24 @@ export type ResearchStreamEvent =
   | { type: "checkpoint-complete"; checkpointId: string; round: number }
   | { type: "checkpoint-promote"; checkpointId: string; round: number }
   | {
-    type: "tool-call-start";
-    id: string;
-    name: string;
-    label: string;
-    round: number;
-    args?: Record<string, unknown>;
-    /** Set when this call is nested inside a parent tool-call (e.g. run_subagent). */
-    parentId?: string;
-  }
+      type: "tool-call-start";
+      id: string;
+      name: string;
+      label: string;
+      round: number;
+      args?: Record<string, unknown>;
+      /** Set when this call is nested inside a parent tool-call (e.g. run_subagent). */
+      parentId?: string;
+    }
   | {
-    type: "tool-call-end";
-    id: string;
-    ok: boolean;
-    resolvedLabel?: string;
-    resultSummary?: string;
-    resultJson?: string;
-    parentId?: string;
-  }
+      type: "tool-call-end";
+      id: string;
+      ok: boolean;
+      resolvedLabel?: string;
+      resultSummary?: string;
+      resultJson?: string;
+      parentId?: string;
+    }
   | { type: "sub-agent-phase"; parentId: string; phase: string }
   | { type: "answer-reset" }
   | { type: "context"; diagnostics: ContextDiagnostics }

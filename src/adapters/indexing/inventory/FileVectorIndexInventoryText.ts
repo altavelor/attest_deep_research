@@ -1,11 +1,13 @@
 import { FindInIndexMatch, FindInIndexOptions } from "@application/ports";
 import type { StoredChunk } from "../store/FileVectorIndexState";
 
-export type IndexTextMatcher = RegExp | {
-  kind: "literal";
-  pattern: string;
-  caseSensitive: boolean;
-};
+export type IndexTextMatcher =
+  | RegExp
+  | {
+      kind: "literal";
+      pattern: string;
+      caseSensitive: boolean;
+    };
 
 export function createIndexMatcher(options: FindInIndexOptions): IndexTextMatcher | null {
   if (options.mode === "literal") {
@@ -48,15 +50,30 @@ export function matchesInChunk(
       matcher.lastIndex += 1;
       continue;
     }
-    matches.push(toFindMatch(chunk, sourcePath, match.index, match.index + value.length, matches.length));
+    matches.push(
+      toFindMatch(chunk, sourcePath, match.index, match.index + value.length, matches.length),
+    );
   }
   return matches;
 }
 
 export function frequentTerms(texts: string[]): Array<{ term: string; count: number }> {
   const stop = new Set([
-    "the", "and", "for", "with", "that", "this", "from", "are", "was", "were",
-    "или", "для", "что", "как", "это",
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "are",
+    "was",
+    "were",
+    "или",
+    "для",
+    "что",
+    "как",
+    "это",
   ]);
   const counts = new Map<string, number>();
   for (const text of texts) {

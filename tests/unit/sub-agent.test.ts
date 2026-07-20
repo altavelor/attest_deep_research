@@ -39,7 +39,10 @@ describe("parseSubAgentDirective", () => {
 });
 
 describe("SubAgentTool", () => {
-  function stubRunner(answerText: string, snapshot: ReturnType<typeof buildSnapshot>): SubAgentPort {
+  function stubRunner(
+    answerText: string,
+    snapshot: ReturnType<typeof buildSnapshot>,
+  ): SubAgentPort {
     return {
       run: async (input) => {
         input.onEvent?.({ type: "sub-agent-phase", message: "Searching…" });
@@ -49,7 +52,10 @@ describe("SubAgentTool", () => {
   }
 
   function buildSnapshot(
-    entries: { chunk: ReturnType<typeof retrieved>; tool: "search_web" | "search_index" | "read_note" }[],
+    entries: {
+      chunk: ReturnType<typeof retrieved>;
+      tool: "search_web" | "search_index" | "read_note";
+    }[],
   ) {
     return {
       evidence: entries.map((entry) => entry.chunk),
@@ -67,10 +73,16 @@ describe("SubAgentTool", () => {
 
   it("merges web evidence into the parent registry and returns the answer verbatim", async () => {
     const snapshot = buildSnapshot([
-      { chunk: retrieved("web:sub-1", webSource("https://e.com/x"), "X benchmark text"), tool: "search_web" },
+      {
+        chunk: retrieved("web:sub-1", webSource("https://e.com/x"), "X benchmark text"),
+        tool: "search_web",
+      },
     ]);
     const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner: stubRunner("Fast [url:https://e.com/x].", snapshot), evidence });
+    const tool = new SubAgentTool({
+      runner: stubRunner("Fast [url:https://e.com/x].", snapshot),
+      evidence,
+    });
 
     const result = await tool.execute({ task: "How fast is X?" }, toolContext());
 
@@ -183,12 +195,23 @@ describe("SubAgentRunner", () => {
     // Round 1 searches (registers web evidence); round 2 ends empty (no text) so the
     // loop returns ok:true with an empty answer; round 3 is the forced synthesis pass.
     const chatModel = new FakeChatModel([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a", limit: 3 } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a", limit: 3 } }],
+        },
+      ],
       [{ content: "", isComplete: true }],
       [{ content: "Synthesized from gathered evidence.", isComplete: true }],
     ]);
     const searchProvider = new FakeSearchProvider([
-      { source: webSource("https://e.com/x"), extractedText: "benchmark text", rank: 1, query: "a" },
+      {
+        source: webSource("https://e.com/x"),
+        extractedText: "benchmark text",
+        rank: 1,
+        query: "a",
+      },
     ]);
 
     const runner = new SubAgentRunner({
@@ -208,14 +231,26 @@ describe("SubAgentRunner", () => {
   });
 
   it("treats leaked tool-call markup as no answer and synthesizes instead", async () => {
-    const markupAnswer = '<|tool_calls|>\n<|invoke name="search_web"><|parameter name="query">x</|parameter>';
+    const markupAnswer =
+      '<|tool_calls|>\n<|invoke name="search_web"><|parameter name="query">x</|parameter>';
     const chatModel = new FakeChatModel([
-      [{ content: "", isComplete: true, toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a", limit: 3 } }] }],
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [{ id: "1", name: "search_web", arguments: { query: "a", limit: 3 } }],
+        },
+      ],
       [{ content: markupAnswer, isComplete: true }],
       [{ content: "Real synthesis.", isComplete: true }],
     ]);
     const searchProvider = new FakeSearchProvider([
-      { source: webSource("https://e.com/x"), extractedText: "benchmark text", rank: 1, query: "a" },
+      {
+        source: webSource("https://e.com/x"),
+        extractedText: "benchmark text",
+        rank: 1,
+        query: "a",
+      },
     ]);
 
     const runner = new SubAgentRunner({

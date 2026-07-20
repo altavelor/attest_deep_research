@@ -31,7 +31,12 @@ describe("dedupeNearDuplicateChunks", () => {
   it("keeps genuinely distinct chunks and leaves them unannotated", () => {
     const result = dedupeNearDuplicateChunks([
       chunk("a", "a.pdf", PASSAGE, 0.9),
-      chunk("b", "b.pdf", "Medieval crop rotation alternated legumes with cereals to restore soil nitrogen.", 0.8),
+      chunk(
+        "b",
+        "b.pdf",
+        "Medieval crop rotation alternated legumes with cereals to restore soil nitrogen.",
+        0.8,
+      ),
     ]);
 
     expect(result.map((c) => c.id)).toEqual(["a", "b"]);

@@ -804,9 +804,7 @@ export class IxplorerChatView extends ItemView {
     });
   }
 
-  private async openToolOutput(
-    item: Extract<ChainItem, { kind: "tool-call" }>,
-  ): Promise<void> {
+  private async openToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): Promise<void> {
     const view = describeToolCall({
       name: item.name,
       label: item.label,

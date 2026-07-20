@@ -3,7 +3,12 @@
 
 import { PageFetchProvider, WebPageFetchOptions, WebPageFetchResult } from "@application/ports";
 import { extractReadableText } from "../DuckDuckGoParser";
-import { FetchHttpRuntime, DEFAULT_MAX_CONTENT_CHARS, fetchFailure, requestText } from "./fetchHttp";
+import {
+  FetchHttpRuntime,
+  DEFAULT_MAX_CONTENT_CHARS,
+  fetchFailure,
+  requestText,
+} from "./fetchHttp";
 
 export class ZyteFetchProvider implements PageFetchProvider {
   readonly id = "zyte";
@@ -62,7 +67,5 @@ export class ZyteFetchProvider implements PageFetchProvider {
 
 function toBase64(value: string): string {
   // btoa is available in Obsidian's renderer; Buffer covers the vitest/node path.
-  return typeof btoa === "function"
-    ? btoa(value)
-    : Buffer.from(value, "utf8").toString("base64");
+  return typeof btoa === "function" ? btoa(value) : Buffer.from(value, "utf8").toString("base64");
 }

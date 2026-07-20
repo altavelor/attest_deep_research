@@ -37,7 +37,11 @@ export class SubAgentSource implements DataSource {
 
   tools(): Tool[] {
     return [
-      new SubAgentTool({ runner: this.runner, evidence: this.evidence, toolContext: this.toolContext }),
+      new SubAgentTool({
+        runner: this.runner,
+        evidence: this.evidence,
+        toolContext: this.toolContext,
+      }),
     ];
   }
 }

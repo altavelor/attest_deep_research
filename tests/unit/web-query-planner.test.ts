@@ -27,15 +27,11 @@ function result(url: string, rank: number, query = "q"): SearchProviderResult {
   };
 }
 
-function fakeSource(
-  id: string,
-  results: SearchProviderResult[] | Error,
-): WebSearchSource {
+function fakeSource(id: string, results: SearchProviderResult[] | Error): WebSearchSource {
   const descriptor = findWebSourceDescriptor(id) ?? DUCKDUCKGO_DESCRIPTOR;
   return {
     descriptor: { ...descriptor, id },
-    search: () =>
-      results instanceof Error ? Promise.reject(results) : Promise.resolve(results),
+    search: () => (results instanceof Error ? Promise.reject(results) : Promise.resolve(results)),
   };
 }
 

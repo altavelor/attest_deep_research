@@ -70,9 +70,7 @@ export function resolveCitationTokens(
  * `[url:…]` citations can be resolved back to their registered ids. Non-web
  * chunks (index/notes) carry no URL and are skipped.
  */
-export function webUrlEvidenceIndex(
-  evidence: readonly RetrievedChunk[],
-): Map<string, string> {
+export function webUrlEvidenceIndex(evidence: readonly RetrievedChunk[]): Map<string, string> {
   const index = new Map<string, string>();
   for (const chunk of evidence) {
     if (chunk.source.kind !== "web") continue;

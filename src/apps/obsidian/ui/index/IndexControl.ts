@@ -1,7 +1,13 @@
 import { setIcon } from "obsidian";
 
 import { IndexingState } from "@adapters/indexing";
-import { formatIndexControlSummary, formatIndexingProgressLabel, formatIndexingStateLabel, formatProgressPercent, indexingProgressValue } from "@apps/obsidian/ui/chat/conversationFormatting";
+import {
+  formatIndexControlSummary,
+  formatIndexingProgressLabel,
+  formatIndexingStateLabel,
+  formatProgressPercent,
+  indexingProgressValue,
+} from "@apps/obsidian/ui/chat/conversationFormatting";
 
 export interface IndexControlActions {
   start(indexProfileId?: string): void | Promise<unknown>;
@@ -24,8 +30,9 @@ export function renderIndexControl(containerEl: HTMLElement, options: IndexContr
   const state = options.state;
   const isError = state?.status === "error";
   const root = containerEl.createDiv({
-    cls: `ixplorer-index-control${options.compact ? " ixplorer-index-control--compact" : ""}${isError ? " ixplorer-index-control--error" : ""
-      }`,
+    cls: `ixplorer-index-control${options.compact ? " ixplorer-index-control--compact" : ""}${
+      isError ? " ixplorer-index-control--error" : ""
+    }`,
   });
 
   const summary = root.createDiv({ cls: "ixplorer-index-control__summary" });

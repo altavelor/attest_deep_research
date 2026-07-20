@@ -137,7 +137,10 @@ export class WebQueryPlanner implements SearchProvider {
   }
 }
 
-function fetchUnavailable(): { ok: false; error: { code: string; message: string; retryable: false } } {
+function fetchUnavailable(): {
+  ok: false;
+  error: { code: string; message: string; retryable: false };
+} {
   return {
     ok: false,
     error: {

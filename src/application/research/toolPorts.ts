@@ -13,11 +13,7 @@ import type { Citation } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { UrlStatusChecker } from "@application/contracts/research";
-import type {
-  AgentLoopOptions,
-  AgentLoopEvent,
-  AgentLoopResult,
-} from "@core/agent";
+import type { AgentLoopOptions, AgentLoopEvent, AgentLoopResult } from "@core/agent";
 import type { ToolManager } from "@application/tools/ToolManager";
 import type { ResearchSearchMode } from "@application/contracts/research";
 

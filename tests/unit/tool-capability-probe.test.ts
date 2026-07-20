@@ -3,7 +3,7 @@ import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 
 class ProbeProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
-  constructor(private readonly respond: (request: ChatRequest) => ChatResponseChunk) { }
+  constructor(private readonly respond: (request: ChatRequest) => ChatResponseChunk) {}
   async listModels(): Promise<string[]> {
     return ["m"];
   }
@@ -22,11 +22,15 @@ describe("probeToolControlCapabilities", () => {
         request.toolChoice?.type === "specific"
           ? [{ id: "specific", name: request.toolChoice.name, arguments: {} }]
           : [
-            { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
-            { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
-          ],
+              { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
+              { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
+            ],
     }));
-    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    const result = await probeToolControlCapabilities({
+      provider,
+      model: "m",
+      apiFormat: "openai-compatible",
+    });
     expect(result.calls).toBe(true);
     expect(result.choiceRequired).toBe(true);
     expect(result.choiceSpecific).toBe(true);
@@ -42,7 +46,11 @@ describe("probeToolControlCapabilities", () => {
 
   it("fails closed on text, wrong tools, and Ollama", async () => {
     const textProvider = new ProbeProvider(() => ({ content: "no", isComplete: true }));
-    const result = await probeToolControlCapabilities({ provider: textProvider, model: "m", apiFormat: "anthropic" });
+    const result = await probeToolControlCapabilities({
+      provider: textProvider,
+      model: "m",
+      apiFormat: "anthropic",
+    });
     expect(result.calls).toBe(false);
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);
@@ -53,7 +61,11 @@ describe("probeToolControlCapabilities", () => {
     const unused = new ProbeProvider(() => {
       throw new Error("must not run");
     });
-    const ollamaResult = await probeToolControlCapabilities({ provider: unused, model: "m", apiFormat: "ollama" });
+    const ollamaResult = await probeToolControlCapabilities({
+      provider: unused,
+      model: "m",
+      apiFormat: "ollama",
+    });
     expect(ollamaResult.calls).toBe(false);
     expect(ollamaResult.choiceRequired).toBe(false);
     expect(ollamaResult.choiceSpecific).toBe(false);
@@ -74,7 +86,11 @@ describe("probeToolControlCapabilities", () => {
         },
       ],
     }));
-    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    const result = await probeToolControlCapabilities({
+      provider,
+      model: "m",
+      apiFormat: "openai-compatible",
+    });
     expect(result.calls).toBe(false);
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);
@@ -95,7 +111,11 @@ describe("probeToolControlCapabilities", () => {
       }
       return { content: "", isComplete: true };
     });
-    const result = await probeToolControlCapabilities({ provider, model: "m", apiFormat: "openai-compatible" });
+    const result = await probeToolControlCapabilities({
+      provider,
+      model: "m",
+      apiFormat: "openai-compatible",
+    });
     expect(result.calls).toBe(true);
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);

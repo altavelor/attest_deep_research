@@ -31,7 +31,15 @@ describe("core/retrieval", () => {
       text: "x",
       score: 1,
       contentHash: "w",
-      source: { kind: "web", id: "w", title: "t", url: "https://e.com", snippet: "", retrievedAt: "", wasContentFetched: false },
+      source: {
+        kind: "web",
+        id: "w",
+        title: "t",
+        url: "https://e.com",
+        snippet: "",
+        retrievedAt: "",
+        wasContentFetched: false,
+      },
     };
     const out = filterRetrievedChunks([chunk("a", "x", 1), web], {
       limit: 10,

@@ -80,9 +80,7 @@ function modelRequestUserMessage(error: IxplorerError): string {
   const causeMessage = errorMessage(error.cause);
   if (causeMessage) return causeMessage;
 
-  return error.message !== USER_MESSAGES[error.code]
-    ? error.message
-    : USER_MESSAGES[error.code];
+  return error.message !== USER_MESSAGES[error.code] ? error.message : USER_MESSAGES[error.code];
 }
 
 function detailMessage(value: unknown): string | undefined {

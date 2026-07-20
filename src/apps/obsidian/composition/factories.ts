@@ -40,10 +40,7 @@ import { ResearchService } from "@application/use-cases/research";
 import { PluginDebugLogger } from "@adapters/settings";
 import { resolveToolCapabilities } from "@adapters/settings";
 import { isResponsesCapabilityCurrent } from "@adapters/settings";
-import {
-  capabilityCacheKey,
-  recordObservedReasoningFormat,
-} from "@adapters/settings";
+import { capabilityCacheKey, recordObservedReasoningFormat } from "@adapters/settings";
 import type { ReasoningResponseFormat } from "@adapters/settings";
 import {
   ChatModelProfile,
@@ -131,12 +128,12 @@ export function createResearchService(
   );
   const capabilitySnapshot =
     settings.modelCapabilityCache[
-    capabilityCacheKey({
-      baseUrl: chatServer.baseUrl,
-      apiKey: chatServer.apiKey,
-      model: chatProfile.modelName,
-      protocol: effectiveProtocol,
-    })
+      capabilityCacheKey({
+        baseUrl: chatServer.baseUrl,
+        apiKey: chatServer.apiKey,
+        model: chatProfile.modelName,
+        protocol: effectiveProtocol,
+      })
     ];
 
   return new ResearchService({
@@ -199,12 +196,12 @@ export function createResearchService(
     },
     noteTools: toolsEnabled
       ? new NoteToolService({
-        files: contextFiles,
-        extractors: contextExtractors,
-        getActiveFilePath: () => ctx.app.workspace.getActiveFile()?.path,
-        writer: vaultWriter,
-        noteMutationAccess: chatProfile.noteMutationAccess,
-      })
+          files: contextFiles,
+          extractors: contextExtractors,
+          getActiveFilePath: () => ctx.app.workspace.getActiveFile()?.path,
+          writer: vaultWriter,
+          noteMutationAccess: chatProfile.noteMutationAccess,
+        })
       : undefined,
     vaultWriter,
     downloadFolder: settings.downloadFolder,
@@ -218,7 +215,10 @@ export function createIndexingService(
 ): IndexingService {
   const settings = ctx.getSettings();
   const indexProfile = requireIndexProfile(settings, profileId);
-  const embeddingProfile = requireEmbeddingModelProfile(settings, indexProfile.embeddingModelProfileId);
+  const embeddingProfile = requireEmbeddingModelProfile(
+    settings,
+    indexProfile.embeddingModelProfileId,
+  );
 
   return new IndexingService({
     files: new ObsidianVaultFileProvider(ctx.app.vault),
@@ -353,30 +353,30 @@ export function createChatModelClient(
     logger: ctx.logger,
     ...(profile
       ? {
-        onReasoningObserved: (observation: { protocol: "chat-completions"; dialect: string }) => {
-          const identity = {
-            baseUrl: server.baseUrl,
-            apiKey: server.apiKey,
-            model: profile.modelName,
-            protocol: observation.protocol,
-          };
-          const key = capabilityCacheKey(identity);
-          const settings = ctx.getSettings();
-          const current = settings.modelCapabilityCache[key];
-          const observedFormat = (
-            observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
-          ) as ReasoningResponseFormat;
-          if (current?.reasoning.responseFormats.includes(observedFormat)) {
-            return;
-          }
-          settings.modelCapabilityCache = recordObservedReasoningFormat(
-            settings.modelCapabilityCache,
-            identity,
-            observation.dialect,
-          );
-          void ctx.saveSettings();
-        },
-      }
+          onReasoningObserved: (observation: { protocol: "chat-completions"; dialect: string }) => {
+            const identity = {
+              baseUrl: server.baseUrl,
+              apiKey: server.apiKey,
+              model: profile.modelName,
+              protocol: observation.protocol,
+            };
+            const key = capabilityCacheKey(identity);
+            const settings = ctx.getSettings();
+            const current = settings.modelCapabilityCache[key];
+            const observedFormat = (
+              observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
+            ) as ReasoningResponseFormat;
+            if (current?.reasoning.responseFormats.includes(observedFormat)) {
+              return;
+            }
+            settings.modelCapabilityCache = recordObservedReasoningFormat(
+              settings.modelCapabilityCache,
+              identity,
+              observation.dialect,
+            );
+            void ctx.saveSettings();
+          },
+        }
       : {}),
   });
 }

@@ -90,10 +90,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     label: "Google Programmable Search",
     category: "serp",
     strengths: ["general"],
-    credentials: [
-      apiKey(),
-      { key: "engineId", label: "Search engine ID (cx)", secret: false },
-    ],
+    credentials: [apiKey(), { key: "engineId", label: "Search engine ID (cx)", secret: false }],
     homepage: "https://programmablesearchengine.google.com/",
     freeTierNote: "100 queries/day free",
   },

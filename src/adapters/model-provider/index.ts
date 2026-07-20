@@ -16,7 +16,10 @@ export { ChatCompletionsRoundAdapter } from "./chat/rounds/ChatCompletionsRoundA
 export { FallbackModelRoundProvider } from "./chat/rounds/FallbackModelRoundProvider";
 
 export { resolveResponsesProviderPolicy } from "./chat/responses/ResponsesProviderPolicy";
-export type { ResponsesPolicyDecision, ResponsesPolicyInput } from "./chat/responses/ResponsesProviderPolicy";
+export type {
+  ResponsesPolicyDecision,
+  ResponsesPolicyInput,
+} from "./chat/responses/ResponsesProviderPolicy";
 
 export { OpenAiResponsesClient } from "./chat/responses/OpenAiResponsesClient";
 export type { OpenAiResponsesClientOptions } from "./chat/responses/OpenAiResponsesClient";

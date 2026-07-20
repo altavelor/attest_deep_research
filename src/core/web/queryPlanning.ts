@@ -4,13 +4,7 @@
 
 import { WebSourceDescriptor } from "./webSources";
 
-export const WEB_QUERY_INTENTS = [
-  "academic",
-  "code",
-  "news",
-  "encyclopedic",
-  "general",
-] as const;
+export const WEB_QUERY_INTENTS = ["academic", "code", "news", "encyclopedic", "general"] as const;
 
 export type WebQueryIntent = (typeof WEB_QUERY_INTENTS)[number];
 

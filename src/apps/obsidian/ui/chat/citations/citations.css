@@ -28,7 +28,7 @@
   vertical-align: baseline;
 }
 
-.ixplorer-chat__citation-anchor+.ixplorer-chat__citation-anchor {
+.ixplorer-chat__citation-anchor + .ixplorer-chat__citation-anchor {
   margin-inline-start: 0.25rem;
 }
 

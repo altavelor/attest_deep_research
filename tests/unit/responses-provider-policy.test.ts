@@ -1,7 +1,4 @@
-import {
-  resolveResponsesProviderPolicy,
-  ResponsesPolicyInput,
-} from "@adapters/model-provider";
+import { resolveResponsesProviderPolicy, ResponsesPolicyInput } from "@adapters/model-provider";
 import { ReasoningCapabilitySettings } from "@adapters/settings";
 
 const capabilities: ReasoningCapabilitySettings = {

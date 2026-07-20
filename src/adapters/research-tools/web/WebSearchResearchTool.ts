@@ -1,9 +1,6 @@
 import { SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
-import {
-  WebSearchInput,
-  parseWebSearchInput,
-} from "@application/research";
+import { WebSearchInput, parseWebSearchInput } from "@application/research";
 import { toolFailure } from "@core/agent";
 import { WEB_SEARCH_TOOL } from "@core/agent";
 import { WEB_QUERY_INTENTS, WEB_QUERY_RECENCIES } from "@core/web";

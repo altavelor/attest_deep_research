@@ -2,10 +2,7 @@ import { Notice } from "obsidian";
 
 import type IxplorerPlugin from "@apps/obsidian/main";
 import { ChatModelClient } from "@adapters/model-provider";
-import {
-  isResponsesCapabilityCurrent,
-  probeResponsesCapabilities,
-} from "@adapters/settings";
+import { isResponsesCapabilityCurrent, probeResponsesCapabilities } from "@adapters/settings";
 import { startChatProfileProbes as startChatProfileProbeTasks } from "@adapters/settings";
 import {
   fetchAvailableModels,
@@ -13,16 +10,9 @@ import {
   verifyEmbeddingCapability,
   DiscoveredModel,
 } from "@adapters/settings";
-import {
-  probeToolControlCapabilities,
-  ToolCapabilityProbeResult,
-} from "@adapters/settings";
+import { probeToolControlCapabilities, ToolCapabilityProbeResult } from "@adapters/settings";
 import { createToolCapabilitySettings } from "@adapters/settings";
-import {
-  capabilityCacheKey,
-  ModelCapabilitySnapshot,
-  unknownSnapshot,
-} from "@adapters/settings";
+import { capabilityCacheKey, ModelCapabilitySnapshot, unknownSnapshot } from "@adapters/settings";
 import { probeReasoningVisibility } from "@adapters/settings";
 import { ChatModelProfile, ServerProfile } from "@adapters/settings";
 
@@ -180,12 +170,12 @@ export class SettingsCapabilityProber {
         }),
       probeResponses: shouldProbeResponses
         ? () =>
-          probeResponsesCapabilities({
-            server,
-            model: target.modelName,
-            efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
-            logger: this.plugin.logger,
-          })
+            probeResponsesCapabilities({
+              server,
+              model: target.modelName,
+              efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
+              logger: this.plugin.logger,
+            })
         : undefined,
       onTools: async (probe) => {
         let saved: unknown;

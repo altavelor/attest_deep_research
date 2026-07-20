@@ -1,10 +1,7 @@
 import { ChatMessage } from "@core/agent/protocol";
 import { RetrievedChunk } from "@core/model/source";
 import { sourceLabel } from "@core/retrieval/citations";
-import {
-  AttachedFileManifestEntry,
-  buildAttachmentManifestSection,
-} from "./attachments";
+import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
 
 export const RESEARCH_SYSTEM_PROMPT =
@@ -55,8 +52,8 @@ function buildVaultToolsSection(toolNames: readonly string[]): string {
     "",
     "### How to call a tool",
     "Invoke tools through the function-calling mechanism — emit a real tool call, not text.",
-    "Do NOT write the call as prose or pseudo-syntax such as `list_notes(path=\"\")`,",
-    '`<tool_call>...`, or a JSON code block. Use the plain tool name without any namespace prefix',
+    'Do NOT write the call as prose or pseudo-syntax such as `list_notes(path="")`,',
+    "`<tool_call>...`, or a JSON code block. Use the plain tool name without any namespace prefix",
     "(call `list_notes`, not `ixplorer.list_notes`). Make one call, then wait for its result.",
   ].join("\n");
 }

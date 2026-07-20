@@ -60,7 +60,9 @@ export function toolCallSummary(calls: ToolCallDiagnostic[]): string {
       const marks = [
         group.failed > 0 ? "✗" : null,
         group.empty === group.count && group.count > 0 ? "∅" : null,
-      ].filter(Boolean).join("");
+      ]
+        .filter(Boolean)
+        .join("");
       return `${group.count}× ${group.name}${marks ? ` ${marks}` : ""}`;
     })
     .join(" · ");
@@ -89,11 +91,16 @@ export function summaryMetrics(report: DiagnosticReportV3): SummaryMetric[] {
   if (loop) {
     metrics.push({
       label: "Rounds",
-      value: loop.budgets ? `${loop.totalRounds} / ${loop.budgets.maxRounds}` : String(loop.totalRounds),
+      value: loop.budgets
+        ? `${loop.totalRounds} / ${loop.budgets.maxRounds}`
+        : String(loop.totalRounds),
     });
     metrics.push({
       label: "Tool calls",
-      value: loop.duplicateCalls > 0 ? `${loop.totalCalls} (${loop.duplicateCalls} dup)` : String(loop.totalCalls),
+      value:
+        loop.duplicateCalls > 0
+          ? `${loop.totalCalls} (${loop.duplicateCalls} dup)`
+          : String(loop.totalCalls),
     });
     if (loop.budgets) {
       metrics.push({
@@ -112,6 +119,9 @@ export function summaryMetrics(report: DiagnosticReportV3): SummaryMetric[] {
       value: `${formatCount(tokens.inputTokens)} / ${formatCount(tokens.outputTokens)} / ${formatCount(tokens.reasoningTokens)}`,
     });
   }
-  metrics.push({ label: "Context tokens", value: formatCount(report.preflight.context.budget.usedTokens) });
+  metrics.push({
+    label: "Context tokens",
+    value: formatCount(report.preflight.context.budget.usedTokens),
+  });
   return metrics;
 }

@@ -1,8 +1,4 @@
-import {
-  DEFAULT_SETTINGS,
-  cloneIndexProfile,
-  createIndexProfile,
-} from "@adapters/settings";
+import { DEFAULT_SETTINGS, cloneIndexProfile, createIndexProfile } from "@adapters/settings";
 import { readSettings } from "@adapters/settings";
 import {
   formatListInput,
@@ -26,9 +22,9 @@ import { IxplorerSettings } from "@adapters/settings";
 describe("Ixplorer settings", () => {
   it("uses local-first safe defaults when saved data is absent or not current", () => {
     expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
-    expect(readSettings({ lanceDbFolder: ".ixplorer/old-index", includeFolders: ["Notes"] })).toEqual(
-      DEFAULT_SETTINGS,
-    );
+    expect(
+      readSettings({ lanceDbFolder: ".ixplorer/old-index", includeFolders: ["Notes"] }),
+    ).toEqual(DEFAULT_SETTINGS);
     expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
@@ -210,17 +206,16 @@ function currentSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSet
     ...overrides,
     serverProfiles: overrides.serverProfiles?.map((profile) => ({ ...profile })) ?? [],
     chatModelProfiles: overrides.chatModelProfiles?.map((profile) => ({ ...profile })) ?? [],
-    embeddingModelProfiles: overrides.embeddingModelProfiles?.map((profile) => ({ ...profile })) ?? [],
-    indexProfiles:
-      overrides.indexProfiles?.map(cloneIndexProfile) ??
-      [
-        createIndexProfile({
-          ...DEFAULT_SETTINGS.indexProfiles[0],
-          isSuspended: false,
-          suspendedReason: undefined,
-          embeddingModelProfileId: "",
-        }),
-      ],
+    embeddingModelProfiles:
+      overrides.embeddingModelProfiles?.map((profile) => ({ ...profile })) ?? [],
+    indexProfiles: overrides.indexProfiles?.map(cloneIndexProfile) ?? [
+      createIndexProfile({
+        ...DEFAULT_SETTINGS.indexProfiles[0],
+        isSuspended: false,
+        suspendedReason: undefined,
+        embeddingModelProfileId: "",
+      }),
+    ],
     includeFolders: overrides.includeFolders ?? [...DEFAULT_SETTINGS.includeFolders],
     excludeGlobs: overrides.excludeGlobs ?? [...DEFAULT_SETTINGS.excludeGlobs],
     modelCapabilityCache: overrides.modelCapabilityCache ?? {},

@@ -51,7 +51,10 @@ export const WebPageMetadataTool = defineTool<
       return toolFailure("web-metadata-failed", "Metadata fetch failed.", true);
     }
     if (!result || typeof result !== "object" || typeof result.ok !== "boolean") {
-      return toolFailure("web-metadata-invalid-response", "Metadata fetch returned an invalid response.");
+      return toolFailure(
+        "web-metadata-invalid-response",
+        "Metadata fetch returned an invalid response.",
+      );
     }
     if (!result.ok) {
       return result;
@@ -59,7 +62,10 @@ export const WebPageMetadataTool = defineTool<
 
     const finalUrl = validatePublicWebUrl(result.finalUrl);
     if (!finalUrl.ok || typeof result.metadata !== "object" || result.metadata === null) {
-      return toolFailure("web-metadata-invalid-response", "Metadata fetch returned unsafe metadata.");
+      return toolFailure(
+        "web-metadata-invalid-response",
+        "Metadata fetch returned unsafe metadata.",
+      );
     }
 
     return {

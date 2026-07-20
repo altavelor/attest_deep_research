@@ -9,11 +9,7 @@ import {
 } from "@adapters/settings";
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
-import {
-  createProfileId,
-  hasDuplicateProfileName,
-  isValidProfileName,
-} from "@adapters/settings";
+import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
 import { parsePositiveInteger } from "@shared";
 import { optionalNumber, renderModalActions } from "./shared";
 
@@ -63,8 +59,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       : "off";
   private reasoningCapabilities =
     this.options.kind === "chat" &&
-      this.options.profile &&
-      "reasoningCapabilities" in this.options.profile
+    this.options.profile &&
+    "reasoningCapabilities" in this.options.profile
       ? this.options.profile.reasoningCapabilities
       : undefined;
   private contextLength =
@@ -429,18 +425,18 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const profile =
       this.options.kind === "chat"
         ? {
-          ...baseProfile,
-          toolsEnabled: this.toolsEnabled,
-          noteMutationAccess: this.toolsEnabled,
-          reasoning: {
-            mode: this.reasoningMode,
-            ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
-            summary: this.reasoningSummary,
-          },
-          reasoningCapabilities: this.reasoningCapabilities,
-          temperature: optionalNumber(this.temperature),
-          maxTokens: parsePositiveInteger(this.maxTokens) ?? undefined,
-        }
+            ...baseProfile,
+            toolsEnabled: this.toolsEnabled,
+            noteMutationAccess: this.toolsEnabled,
+            reasoning: {
+              mode: this.reasoningMode,
+              ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
+              summary: this.reasoningSummary,
+            },
+            reasoningCapabilities: this.reasoningCapabilities,
+            temperature: optionalNumber(this.temperature),
+            maxTokens: parsePositiveInteger(this.maxTokens) ?? undefined,
+          }
         : baseProfile;
 
     await this.options.onSave(profile as TProfile);

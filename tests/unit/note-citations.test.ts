@@ -29,7 +29,9 @@ function markdownCitation(id: string, path: string, title: string): Citation {
 
 describe("applyNoteCitations", () => {
   it("rewrites a web citation token into a footnote with a clickable URL", () => {
-    const citations = [webCitation(WEB_ID, "Elephants — Wikipedia", "https://en.wikipedia.org/wiki/Elephant")];
+    const citations = [
+      webCitation(WEB_ID, "Elephants — Wikipedia", "https://en.wikipedia.org/wiki/Elephant"),
+    ];
     const { content, count } = applyNoteCitations(
       `Elephants live up to 70 years [${WEB_ID}].`,
       citations,
@@ -45,10 +47,7 @@ describe("applyNoteCitations", () => {
 
   it("reuses one footnote number for a repeated citation", () => {
     const citations = [webCitation(WEB_ID, "Source", "https://example.com")];
-    const { content } = applyNoteCitations(
-      `First [${WEB_ID}]. Second [${WEB_ID}].`,
-      citations,
-    );
+    const { content } = applyNoteCitations(`First [${WEB_ID}]. Second [${WEB_ID}].`, citations);
 
     expect(content).toContain("First [^1]. Second [^1].");
     expect(content.match(/\[\^1\]:/g)).toHaveLength(1);
@@ -103,10 +102,7 @@ describe("applyNoteCitations", () => {
   });
 
   it("turns an unresolved `[url:…]` handle into a plain clickable link", () => {
-    const { content, count } = applyNoteCitations(
-      "See [url:https://example.com/page].",
-      [],
-    );
+    const { content, count } = applyNoteCitations("See [url:https://example.com/page].", []);
 
     expect(count).toBe(0);
     expect(content).toBe("See [https://example.com/page](https://example.com/page).");

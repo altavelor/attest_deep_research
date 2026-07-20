@@ -82,25 +82,25 @@ export class AgenticResearchStrategy implements ResearchStrategy {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const assembled = this.deps.contextAssembler
       ? await this.deps.contextAssembler.assemble({
-        question,
-        contextMode: request.contextMode ?? "include",
-        contextPaths: request.contextPaths ?? [],
-        includeActiveFile: false,
-        chatHistory: request.chatHistory,
-        contextLimitTokens: this.deps.contextLimitTokens,
-        reservedOutputTokens: this.deps.reservedOutputTokens,
-        evidenceLimit: this.deps.evidenceLimit,
-        skipRetrieval: true,
-        // With note tools the model reads large attachments itself (read_note);
-        // without them excerpts remain the only way to deliver the content.
-        largeAttachmentsAsReferences: this.deps.noteTools !== undefined,
-        graph: {
-          enabled: false,
-          includeBacklinks: false,
-          expandFilteredContextThroughLinks: false,
-          depth: 1,
-        },
-      })
+          question,
+          contextMode: request.contextMode ?? "include",
+          contextPaths: request.contextPaths ?? [],
+          includeActiveFile: false,
+          chatHistory: request.chatHistory,
+          contextLimitTokens: this.deps.contextLimitTokens,
+          reservedOutputTokens: this.deps.reservedOutputTokens,
+          evidenceLimit: this.deps.evidenceLimit,
+          skipRetrieval: true,
+          // With note tools the model reads large attachments itself (read_note);
+          // without them excerpts remain the only way to deliver the content.
+          largeAttachmentsAsReferences: this.deps.noteTools !== undefined,
+          graph: {
+            enabled: false,
+            includeBacklinks: false,
+            expandFilteredContextThroughLinks: false,
+            depth: 1,
+          },
+        })
       : undefined;
     // Active note is read upfront and passed as explicit evidence (not via tool loop)
     let activeNoteEvidence: RetrievedChunk[] = [];
@@ -132,8 +132,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       availability: {
         searchMode,
         noteAccess: this.deps.noteTools !== undefined,
-        activeFileAccess:
-          this.deps.noteTools !== undefined && request.includeActiveFile === true,
+        activeFileAccess: this.deps.noteTools !== undefined && request.includeActiveFile === true,
         noteMutationAccess: this.deps.noteTools?.mutationEnabled() === true,
         retrieverAvailable: true,
         webProviderAvailable: this.deps.searchProvider !== undefined,

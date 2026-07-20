@@ -125,9 +125,12 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       const chunks = value?.chunks;
       if (Array.isArray(chunks)) {
         const totalChars = chunks.reduce((sum, chunk) => {
-          return sum + (typeof (chunk as Record<string, unknown>).text === "string"
-            ? ((chunk as Record<string, unknown>).text as string).length
-            : 0);
+          return (
+            sum +
+            (typeof (chunk as Record<string, unknown>).text === "string"
+              ? ((chunk as Record<string, unknown>).text as string).length
+              : 0)
+          );
         }, 0);
         if (totalChars > 0) return `~${(totalChars / 1024).toFixed(1)} kb`;
       }
@@ -148,9 +151,7 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       const value = root.value as Record<string, unknown> | undefined;
       const rows = value?.rows;
       if (Array.isArray(rows)) {
-        const failed = rows.filter(
-          (row) => (row as Record<string, unknown>).ok === false,
-        ).length;
+        const failed = rows.filter((row) => (row as Record<string, unknown>).ok === false).length;
         return failed > 0 ? `${rows.length} docs (${failed} failed)` : `${rows.length} docs`;
       }
       return undefined;

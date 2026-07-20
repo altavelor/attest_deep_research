@@ -1,10 +1,6 @@
 import { WEB_SOURCE_CATALOG, WebSourceProfile } from "@core/web";
 import { IxplorerError } from "@core/errors";
-import {
-  createWebSearchSources,
-  HttpWebSearchSource,
-  WEB_SOURCE_DEFINITIONS,
-} from "@adapters/web";
+import { createWebSearchSources, HttpWebSearchSource, WEB_SOURCE_DEFINITIONS } from "@adapters/web";
 import {
   DEFAULT_SETTINGS,
   getWebSourceProfile,
@@ -290,9 +286,7 @@ describe("HttpWebSearchSource", () => {
   });
 
   it("searches without credentials when all fields are optional", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(JSON.stringify({ hits: [] })));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(JSON.stringify({ hits: [] })));
     const definition = WEB_SOURCE_DEFINITIONS.find(
       (entry) => entry.descriptor.id === "hackernews",
     )!;

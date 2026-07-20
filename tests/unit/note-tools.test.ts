@@ -1,9 +1,14 @@
 import { MarkdownExtractor } from "@adapters/extractors";
 import { ContextFileProvider, VaultWriter } from "@application/ports";
-import { AUTO_CONFIRM, NoteActionConfirmation, NoteToolService, validateMutablePath } from "@adapters/research-tools";
+import {
+  AUTO_CONFIRM,
+  NoteActionConfirmation,
+  NoteToolService,
+  validateMutablePath,
+} from "@adapters/research-tools";
 
 class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) { }
+  constructor(private readonly files: Record<string, string>) {}
 
   async listPaths(): Promise<string[]> {
     return Object.keys(this.files).sort();
@@ -207,7 +212,7 @@ class MemoryVaultWriter implements VaultWriter {
     this.files.delete(path);
   }
 
-  async ensureFolder(_path: string): Promise<void> { }
+  async ensureFolder(_path: string): Promise<void> {}
 }
 
 function makeWriter(initial: Record<string, string> = {}): MemoryVaultWriter {
@@ -277,7 +282,9 @@ describe("create_note tool", () => {
     expect(result.ok).toBe(true);
     const written = writer.files.get("Notes/Elephant.md") ?? "";
     expect(written).toContain("Elephants live up to 70 years [^1].");
-    expect(written).toContain("[^1]: [Elephant — Wikipedia](https://en.wikipedia.org/wiki/Elephant)");
+    expect(written).toContain(
+      "[^1]: [Elephant — Wikipedia](https://en.wikipedia.org/wiki/Elephant)",
+    );
     expect(written).not.toContain("web:abc.");
   });
 

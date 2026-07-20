@@ -1,5 +1,10 @@
 import { IndexProfile } from "@adapters/indexing";
-import { ChatModelProfile, EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
+import {
+  ChatModelProfile,
+  EmbeddingModelProfile,
+  IxplorerSettings,
+  ServerProfile,
+} from "@adapters/settings";
 import {
   getActiveIndexProfile,
   resolveChatModelProfile,
@@ -43,11 +48,11 @@ export function resolveIndexProfileForUse(
 ): IndexProfile {
   const requested = profileId
     ? settings.indexProfiles.find(
-      (profile) =>
-        profile.id === profileId &&
-        profile.isSuspended !== true &&
-        Boolean(profile.lastIndexedAt),
-    )
+        (profile) =>
+          profile.id === profileId &&
+          profile.isSuspended !== true &&
+          Boolean(profile.lastIndexedAt),
+      )
     : undefined;
 
   const active = getActiveIndexProfile(settings);

@@ -38,7 +38,9 @@ describe("verifyCitations", () => {
   });
 
   it("does not flag an id when at least one occurrence is well-supported", () => {
-    const evidence = [chunk("e1", "Photosynthesis converts sunlight into chemical energy in plants.")];
+    const evidence = [
+      chunk("e1", "Photosynthesis converts sunlight into chemical energy in plants."),
+    ];
     const answer =
       "Unrelated boilerplate sentence here [e1]. Photosynthesis converts sunlight into chemical energy [e1].";
     expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
@@ -50,14 +52,23 @@ describe("verifyCitations", () => {
   });
 
   it("skips claims too short to judge", () => {
-    const evidence = [chunk("e1", "A long chunk about quantum entanglement and Bell inequalities.")];
+    const evidence = [
+      chunk("e1", "A long chunk about quantum entanglement and Bell inequalities."),
+    ];
     expect(verifyCitations("As shown [e1].", evidence, noUrls)).toEqual([]);
   });
 
   it("resolves [url:…] tokens through the url map before checking overlap", () => {
-    const evidence = [chunk("w1", "Solar panels convert photons into electricity via the photovoltaic effect.", "web")];
+    const evidence = [
+      chunk(
+        "w1",
+        "Solar panels convert photons into electricity via the photovoltaic effect.",
+        "web",
+      ),
+    ];
     const urlToEvidenceId = new Map([["https://example.com/w1", "w1"]]);
-    const good = "Solar panels convert photons into electricity via the photovoltaic effect [url:https://example.com/w1].";
+    const good =
+      "Solar panels convert photons into electricity via the photovoltaic effect [url:https://example.com/w1].";
     const bad = "The treaty was signed in 1648 ending the war [url:https://example.com/w1].";
     expect(verifyCitations(good, evidence, { urlToEvidenceId })).toEqual([]);
     expect(verifyCitations(bad, evidence, { urlToEvidenceId })).toEqual(["w1"]);

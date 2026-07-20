@@ -51,7 +51,10 @@ function parseFetchWebPagesInput(
   for (const item of raw) {
     const id = typeof item === "string" ? item.trim() : "";
     if (!id || id.length > MAX_RESULT_ID_LENGTH) {
-      return toolFailure("invalid-result-id", "Each resultId must be a non-empty handle (≤200 chars).");
+      return toolFailure(
+        "invalid-result-id",
+        "Each resultId must be a non-empty handle (≤200 chars).",
+      );
     }
     if (seen.has(id)) continue; // de-dupe: fetching the same page twice is wasted work
     seen.add(id);
@@ -84,7 +87,9 @@ export const WebFetchResearchTool = defineTool<
     const pages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
         const fetched = await fetchRegisteredWebPage(deps, resultId, context.callId);
-        return fetched.ok ? { ok: true, ...fetched.value } : { ok: false, resultId, error: fetched.error };
+        return fetched.ok
+          ? { ok: true, ...fetched.value }
+          : { ok: false, resultId, error: fetched.error };
       }),
     );
     const failed = pages.reduce((count, page) => count + (page.ok ? 0 : 1), 0);

@@ -42,9 +42,7 @@ const diagnostics = {
     originalQuestion: "How does anonymous CIA contact work?",
     queryStrategy: "direct",
     queries: ["How does anonymous CIA contact work?"],
-    requests: [
-      { query: "How does anonymous CIA contact work?", limit: 5, maxFetches: 3 },
-    ],
+    requests: [{ query: "How does anonymous CIA contact work?", limit: 5, maxFetches: 3 }],
     results: [
       {
         chunkId: "web:https://example.com/cia-contact",

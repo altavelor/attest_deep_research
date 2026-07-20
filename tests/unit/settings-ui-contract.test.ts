@@ -72,7 +72,9 @@ describe("chat model settings surface", () => {
 
   it("preserves the index path picker scroll position when checkbox selection rerenders", () => {
     expect(source).toContain("preserveScroll?: boolean");
-    expect(source).toContain("const scrollTop = options.preserveScroll ? this.treeEl.scrollTop : null");
+    expect(source).toContain(
+      "const scrollTop = options.preserveScroll ? this.treeEl.scrollTop : null",
+    );
     expect(source).toContain("this.treeEl.scrollTop = scrollTop");
     expect(source).toContain("this.renderTree({ preserveScroll: true })");
   });

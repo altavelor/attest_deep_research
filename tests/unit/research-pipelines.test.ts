@@ -130,7 +130,6 @@ describe("WebResearchPipeline", () => {
       ],
     });
   });
-
 });
 
 describe("AnswerSynthesisService", () => {
@@ -204,7 +203,7 @@ describe("AnswerSynthesisService", () => {
     });
     const stream = service
       .synthesize({ question: "Why?", evidence: [], citations: [], evidenceLimit: 8 })
-    [Symbol.asyncIterator]();
+      [Symbol.asyncIterator]();
 
     await expect(stream.next()).resolves.toEqual({
       done: false,
