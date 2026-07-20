@@ -1,10 +1,10 @@
 {
   "id": "ixplorer",
-  "name": "Ixplorer",
+  "name": "Ixplorer — Deep Research for Obsidian",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Local-first LM Studio research assistant for Obsidian.",
-  "author": "",
-  "authorUrl": "",
+  "description": "Open-source Obsidian plugin for Agentic Vaults & Deep Research.",
+  "author": "altavelor",
+  "authorUrl": "https://github.com/altavelor/ixplorer_deep_research",
   "isDesktopOnly": true
 }

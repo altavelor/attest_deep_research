@@ -10,15 +10,30 @@ Local-first agentic research assistant for Obsidian desktop. Ixplorer indexes se
    npm install
    ```
 
-2. Build the plugin into a development Obsidian vault:
+2. Build the plugin. Output goes to `dist/` inside the repository:
 
    ```bash
-   IXPLORER_OUTPUT_DIR="<vault>/.obsidian/plugins/ixplorer" npm run build
+   npm run build
    ```
 
-3. Enable `Ixplorer` from Obsidian Settings → Community plugins.
+3. Link the build into a development Obsidian vault. Symlink the three build
+   artifacts individually so Obsidian keeps writing plugin settings
+   (`data.json`) into the vault rather than into the repository:
 
-4. Open Settings → Ixplorer and configure server profiles and model profiles.
+   ```bash
+   VAULT="<vault>/.obsidian/plugins/ixplorer"
+   mkdir -p "$VAULT"
+   for f in main.js manifest.json styles.css; do
+     ln -sf "$(pwd)/dist/$f" "$VAULT/$f"
+   done
+   ```
+
+   With the symlinks in place, `npm run dev` rebuilds straight into the vault.
+   Alternatively, set `IXPLORER_OUTPUT_DIR` to build directly into a vault path.
+
+4. Enable `Ixplorer` from Obsidian Settings → Community plugins.
+
+5. Open Settings → Ixplorer and configure server profiles and model profiles.
 
 ## Commands
 
@@ -26,9 +41,9 @@ Local-first agentic research assistant for Obsidian desktop. Ixplorer indexes se
 | ---------------- | ------------------------------------------- |
 | `npm run dev`    | Build in watch mode.                        |
 | `npm run build`  | Type-check and create production `main.js`. |
-| `npm run styles` | Build `release/ixplorer-dev/styles.css` from colocated CSS files. |
+| `npm run styles` | Build `styles.css` from colocated CSS files. |
 | `npm test`       | Run the Vitest suite.                       |
-| `npm run lint`   | Run TypeScript with `--noEmit`.             |
+| `npm run typecheck` | Run TypeScript with `--noEmit`.          |
 | `npm run format` | Check Prettier formatting.                  |
 
 Styles are colocated next to their UI owners under `src/apps/obsidian/ui/`. `src/apps/obsidian/styles.json` defines the artifact order. The Obsidian-facing `styles.css` is generated only in the plugin output directory during `npm run dev` / `npm run build`.

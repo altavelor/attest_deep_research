@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME}"
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+
+          echo "Tag version:      $TAG_VERSION"
+          echo "Manifest version: $MANIFEST_VERSION"
+          echo "Package version:  $PACKAGE_VERSION"
+
+          if [[ "$TAG_VERSION" != "$MANIFEST_VERSION" ]]; then
+            echo "::error::Tag version does not match manifest.json"
+            exit 1
+          fi
+
+          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "::error::Tag version does not match package.json"
+            exit 1
+          fi
+
+      - name: Validate versions.json
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const manifest = JSON.parse(
+            fs.readFileSync("manifest.json", "utf8")
+          );
+
+          const versions = JSON.parse(
+            fs.readFileSync("versions.json", "utf8")
+          );
+
+          const minAppVersion = versions[manifest.version];
+
+          if (!minAppVersion) {
+            throw new Error(
+              `versions.json does not contain version ${manifest.version}`
+            );
+          }
+
+          if (minAppVersion !== manifest.minAppVersion) {
+            throw new Error(
+              `versions.json contains ${minAppVersion}, but manifest.json ` +
+              `contains ${manifest.minAppVersion}`
+            );
+          }
+
+          console.log("versions.json is valid");
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks
+        run: |
+          npm run typecheck
+          npm run depcruise
+          npm test
+          npm run build
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          # All three are required by Obsidian; a missing one must fail the
+          # release rather than ship a plugin without styles.
+          test -f dist/main.js
+          test -f dist/manifest.json
+          test -f dist/styles.css
+
+          cd dist
+          zip "../${{ github.event.repository.name }}-${GITHUB_REF_NAME}.zip" \
+            main.js manifest.json styles.css
+          cd ..
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/main.js \
+            dist/manifest.json \
+            dist/styles.css \
+            "${{ github.event.repository.name }}-${GITHUB_REF_NAME}.zip" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
