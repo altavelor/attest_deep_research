@@ -1,10 +1,10 @@
 {
   "id": "ixplorer",
-  "name": "Ixplorer — Deep Research for Obsidian",
+  "name": "Ixplorer Deep Research",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Open-source Obsidian plugin for Agentic Vaults & Deep Research.",
-  "author": "altavelor",
+  "description": "Open-source AI deep research plugin for Obsidian vaults. Search local notes and web sources, reason over evidence, and produce cited Markdown reports.",
+  "author": "Ilya Burov",
   "authorUrl": "https://github.com/altavelor/ixplorer_deep_research",
   "isDesktopOnly": true
 }
