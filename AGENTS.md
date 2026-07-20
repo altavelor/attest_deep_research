@@ -94,11 +94,18 @@ grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters →
 Перед завершением задачи прогнать и убедиться, что зелено:
 
 ```bash
-npm run typecheck     # = tsc --noEmit
-npm run depcruise     # инварианты слоёв §1 + рантайм-ацикличность §2 (0 errors)
+npm run typecheck      # = tsc --noEmit
+npm run typecheck:core # core платформенно-независим (§1): без DOM, Node и obsidian
+npm run depcruise      # инварианты слоёв §1 + рантайм-ацикличность §2 (0 errors)
 npm test
-npm run build         # tsc + esbuild production
+npm run build          # tsc + esbuild production
 ```
+
+`typecheck:core` компилирует `core` + порты/контракты с `lib: ["ES2022"]` и `types: []`.
+Стандартные веб-глобалы (`URL`, `TextEncoder`, …) объявлены в
+[types/web-standard-globals.d.ts](types/web-standard-globals.d.ts): core вправе опираться
+на язык и веб-стандарты, но не на конкретную платформу. Понадобился Node- или
+Obsidian-API — это порт в `application/ports`, а не новая строка в том файле.
 
 И проверить: инварианты §1 не нарушены; новый файл не перерос ~400 строк без разбиения;
 внешние зависимости заходят через порт, а не прямым импортом адаптера.
