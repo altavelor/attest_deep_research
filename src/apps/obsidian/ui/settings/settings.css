@@ -3,6 +3,28 @@
   flex-direction: column;
 }
 
+.ixplorer-settings-profile-list__name {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.ixplorer-settings-profile-list__tag {
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.ixplorer-settings-profile-list__verification {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ixplorer-chat .is-hidden,
 .ixplorer-index-control.is-hidden {
   display: none;

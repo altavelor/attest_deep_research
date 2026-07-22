@@ -2,14 +2,18 @@ import { App, Modal, Notice, Setting } from "obsidian";
 
 import { DiscoveredModel } from "@adapters/settings";
 import { contextLengthInputAfterDiscovery } from "@adapters/settings";
-import {
-  createToolCapabilitySettings,
-  resolveToolCapabilities,
-  ToolCapabilitySettings,
-} from "@adapters/settings";
+import { createToolCapabilitySettings, ToolCapabilitySettings } from "@adapters/settings";
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
+import {
+  formatEffortLabel,
+  formatCapabilityVerificationStatus,
+  reasoningVerified,
+  toolsVerified,
+  verificationBlockReason,
+  CapabilityVerificationState,
+} from "@adapters/settings";
 import { parsePositiveInteger } from "@shared";
 import { optionalNumber, renderModalActions } from "./shared";
 
@@ -24,6 +28,10 @@ export interface ModelProfileModalOptions<TProfile extends ModelProfile> {
   fetchModels(server: ServerProfile): Promise<DiscoveredModel[]>;
   fetchContextLength?: (server: ServerProfile, modelName: string) => Promise<number | undefined>;
   onSave(profile: TProfile): Promise<void>;
+  onTest?(profile: TProfile): Promise<void>;
+  getCapabilityStatus?(profileId: string): CapabilityVerificationState;
+  subscribeCapabilityStatus?(listener: () => void): () => void;
+  resolveProfile?(profileId: string): TProfile | undefined;
 }
 
 export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
@@ -47,7 +55,9 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       : true;
   private reasoningMode =
     this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
-      ? this.options.profile.reasoning.mode
+      ? this.options.profile.reasoning.mode === "off"
+        ? "off"
+        : "on"
       : "auto";
   private reasoningEffort =
     this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
@@ -68,17 +78,13 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       ? (this.options.profile?.capabilities?.contextLength?.toString() ?? "")
       : "";
   private contextLengthInputEl: HTMLInputElement | null = null;
-  private capabilityChat = this.options.profile?.capabilities?.chat ?? this.options.kind === "chat";
-  private capabilityEmbeddings =
-    this.options.profile?.capabilities?.embeddings ?? this.options.kind === "embedding";
-  private capabilityVision = this.options.profile?.capabilities?.vision ?? false;
-  private capabilityTools = this.options.profile?.capabilities?.toolCalling
-    ? resolveToolCapabilities(this.options.profile.capabilities.toolCalling).capabilities.calls
-    : (this.options.profile?.capabilities?.tools ?? false);
   private toolCapabilitySettings: ToolCapabilitySettings =
     this.options.profile?.capabilities?.toolCalling ?? createToolCapabilitySettings(false);
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
+  private testing = false;
+  private savedProfileId = this.options.profile?.id;
+  private unsubscribeCapabilityStatus: (() => void) | null = null;
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
     this.closeModelMenuOnOutsidePointer(event);
   };
@@ -91,6 +97,21 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   }
 
   onOpen(): void {
+    this.render();
+    this.unsubscribeCapabilityStatus =
+      this.options.subscribeCapabilityStatus?.(() => this.render()) ?? null;
+    document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
+  }
+
+  private render(): void {
+    const currentProfile = this.currentProfile();
+    if (
+      this.options.kind === "chat" &&
+      currentProfile &&
+      "reasoningCapabilities" in currentProfile
+    ) {
+      this.reasoningCapabilities = currentProfile.reasoningCapabilities;
+    }
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
@@ -126,7 +147,6 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           this.modelName = "";
           this.reasoningCapabilities = undefined;
           this.toolCapabilitySettings = createToolCapabilitySettings(false);
-          this.capabilityTools = false;
           if (this.selectedServer()?.apiFormat !== "openai-compatible") {
             this.reasoningMode = "off";
           } else {
@@ -149,7 +169,6 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             if (nextModelName !== this.modelName) {
               this.reasoningCapabilities = undefined;
               this.toolCapabilitySettings = createToolCapabilitySettings(false);
-              this.capabilityTools = false;
             }
             this.modelName = nextModelName;
             this.renderModelMenu();
@@ -180,14 +199,21 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         }),
       );
 
-    if (this.options.kind === "embedding") {
-      this.renderEmbeddingCapabilityControls(contentEl);
-    }
-
+    const capabilityHeading = new Setting(contentEl).setName("Capabilities").setHeading();
+    capabilityHeading.settingEl.addClass("ixplorer-profile-modal__capabilities-heading");
     if (this.options.kind === "chat") {
-      this.renderToolsControl(contentEl);
+      capabilityHeading
+        .setDesc(this.capabilityStatus())
+        .addButton((button) =>
+          button
+            .setButtonText(this.hasCapabilityTestResult() ? "Re-test" : "Test")
+            .onClick(() => void this.test()),
+        );
       this.renderReasoningControls(contentEl);
-      new Setting(contentEl)
+      const advanced = contentEl.createEl("details", { cls: "ixplorer-profile-modal__advanced" });
+      advanced.createEl("summary", { text: "Advanced" });
+      const advancedContent = advanced.createDiv();
+      new Setting(advancedContent)
         .setName("Temperature")
         .setDesc("Optional. Controls response randomness; blank uses the provider or app default.")
         .addText((text) =>
@@ -195,7 +221,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             this.temperature = value.trim();
           }),
         );
-      new Setting(contentEl)
+      new Setting(advancedContent)
         .setName("Max tokens")
         .setDesc(
           "Optional. Limits response length; blank uses provider/model default or 4096 for Anthropic.",
@@ -205,7 +231,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             this.maxTokens = value.trim();
           }),
         );
-      new Setting(contentEl)
+      new Setting(advancedContent)
         .setName("Context size")
         .setDesc(
           "Optional token limit. Filled from model metadata when available and used to enforce the chat context window.",
@@ -216,16 +242,18 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             this.contextLength = value.trim();
           });
         });
+      this.renderToolsControl(advancedContent);
     }
 
     renderModalActions(contentEl, {
       onCancel: () => this.close(),
       onSave: () => void this.save(),
     });
-    document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
   }
 
   onClose(): void {
+    this.unsubscribeCapabilityStatus?.();
+    this.unsubscribeCapabilityStatus = null;
     document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
     this.contentEl.empty();
   }
@@ -292,7 +320,6 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         if (this.modelName !== model.name) {
           this.reasoningCapabilities = undefined;
           this.toolCapabilitySettings = createToolCapabilitySettings(false);
-          this.capabilityTools = false;
         }
         this.modelName = model.name;
         this.modelInputEl!.value = model.name;
@@ -416,9 +443,9 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       serverProfileId: this.serverProfileId,
       modelName: this.modelName,
       capabilities: this.resolveCapabilities(model),
-      isSuspended: this.options.profile?.isSuspended,
-      suspendedReason: this.options.profile?.suspendedReason,
-      createdAt: this.options.profile?.createdAt ?? now,
+      isSuspended: this.currentProfile()?.isSuspended,
+      suspendedReason: this.currentProfile()?.suspendedReason,
+      createdAt: this.currentProfile()?.createdAt ?? now,
       updatedAt: now,
     };
 
@@ -439,102 +466,129 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           }
         : baseProfile;
 
-    await this.options.onSave(profile as TProfile);
+    const saved = profile as TProfile;
+    await this.options.onSave(saved);
+    this.savedProfileId = saved.id;
+    if (this.testing && this.options.onTest) {
+      this.testing = false;
+      await this.options.onTest(saved);
+      return;
+    }
     this.close();
   }
 
   private resolveCapabilities(model: DiscoveredModel | undefined) {
+    const currentProfile = this.currentProfile();
     const contextLength =
       this.options.kind === "chat" ? parsePositiveInteger(this.contextLength) : undefined;
 
     return {
-      chat: this.capabilityChat,
-      embeddings: this.capabilityEmbeddings,
-      vision: this.capabilityVision,
-      tools: this.capabilityTools,
-      toolCalling: this.toolCapabilitySettings,
-      temperature:
-        model?.capabilities.temperature ?? this.options.profile?.capabilities?.temperature,
-      maxTokens: model?.capabilities.maxTokens ?? this.options.profile?.capabilities?.maxTokens,
+      chat: this.options.kind === "chat",
+      embeddings: this.options.kind === "embedding",
+      vision: currentProfile?.capabilities?.vision,
+      tools: currentProfile?.capabilities?.tools,
+      toolCalling: currentProfile?.capabilities?.toolCalling ?? this.toolCapabilitySettings,
+      temperature: model?.capabilities.temperature ?? currentProfile?.capabilities?.temperature,
+      maxTokens: model?.capabilities.maxTokens ?? currentProfile?.capabilities?.maxTokens,
       contextLength,
       maxOutputTokens:
-        model?.capabilities.maxOutputTokens ?? this.options.profile?.capabilities?.maxOutputTokens,
+        model?.capabilities.maxOutputTokens ?? currentProfile?.capabilities?.maxOutputTokens,
       detectionSource:
         model?.capabilities.detectionSource ??
-        this.options.profile?.capabilities?.detectionSource ??
+        currentProfile?.capabilities?.detectionSource ??
         ("format-default" as const),
     };
   }
 
-  private renderEmbeddingCapabilityControls(containerEl: HTMLElement): void {
-    new Setting(containerEl)
-      .setName("Chat")
-      .setDesc(
-        "The model can answer chat requests. Capabilities are set manually for this profile.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.capabilityChat).onChange((value) => {
-          this.capabilityChat = value;
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Embeddings")
-      .setDesc("The model can create embeddings.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.capabilityEmbeddings).onChange((value) => {
-          this.capabilityEmbeddings = value;
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Vision")
-      .setDesc("The model accepts image inputs.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.capabilityVision).onChange((value) => {
-          this.capabilityVision = value;
-        }),
-      );
-  }
-
   private renderReasoningControls(containerEl: HTMLElement): void {
+    const verified = reasoningVerified(this.reasoningCapabilities);
+    const reason = verificationBlockReason(
+      verified,
+      this.reasoningCapabilities?.source === "probe",
+    );
     new Setting(containerEl)
-      .setName("Reasoning")
-      .setDesc(
-        "Reasoning output is detected for any compatible stream. Verified Responses support enables native continuation and controls.",
-      )
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("off", "Off")
-          .addOption("auto", "Auto")
-          .addOption("on", "On")
-          .setValue(this.reasoningMode)
-          .onChange((value) => {
-            this.reasoningMode = value as "off" | "auto" | "on";
-          }),
-      );
+      .setName("Agentic mode")
+      .setDesc(reason ?? "Enable verified agent mode support.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.reasoningMode === "on");
+        toggle.setDisabled(!verified);
+        toggle.onChange((value) => {
+          this.reasoningMode = value ? "on" : "off";
+        });
+      });
     const effortValues = new Set(this.reasoningCapabilities?.efforts ?? []);
     if (this.reasoningEffort) effortValues.add(this.reasoningEffort);
     new Setting(containerEl)
       .setName("Reasoning effort")
-      .setDesc("Auto uses the provider default or a required detected value.")
+      .setDesc(reason ?? "Auto uses the provider default or a verified value.")
       .addDropdown((dropdown) => {
         dropdown.addOption("", "Auto");
-        for (const effort of effortValues) dropdown.addOption(effort, effort);
+        for (const effort of effortValues) dropdown.addOption(effort, formatEffortLabel(effort));
         dropdown.setValue(this.reasoningEffort).onChange((value) => {
           this.reasoningEffort = value;
         });
+        dropdown.setDisabled(!verified || this.reasoningMode === "off");
       });
   }
 
   private renderToolsControl(containerEl: HTMLElement): void {
+    const profile = this.currentProfile() as ChatModelProfile | undefined;
+    const verified = profile ? toolsVerified(profile) : false;
+    const reason = verificationBlockReason(
+      verified,
+      Boolean(profile?.capabilities?.toolCalling?.probe),
+    );
     new Setting(containerEl)
       .setName("Tools")
-      .setDesc("Allow this profile to use tools when support is detected in the background.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.toolsEnabled).onChange((value) => {
+      .setDesc(reason ?? "Allow this profile to use verified tool calls.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.toolsEnabled);
+        toggle.setDisabled(!verified);
+        toggle.onChange((value) => {
           this.toolsEnabled = value;
-        }),
-      );
+        });
+      });
+  }
+
+  private capabilityStatus(): string {
+    const status = this.savedProfileId
+      ? this.options.getCapabilityStatus?.(this.savedProfileId)
+      : undefined;
+    if (status) return formatCapabilityVerificationStatus(status);
+    const profile = this.currentProfile() as ChatModelProfile | undefined;
+    const tools = profile?.capabilities?.toolCalling?.probe;
+    const agent = profile?.reasoningCapabilities;
+    const toolStatus = !tools
+      ? "tools support: Not tested"
+      : tools.calls
+        ? "tools support: Verified"
+        : "tools support: Not verified";
+    const agentStatus =
+      !agent || agent.source !== "probe"
+        ? "agent mode support: Not tested"
+        : agent.responses
+          ? "agent mode support: Verified"
+          : "agent mode support: Not verified";
+    return `${toolStatus} · ${agentStatus}`;
+  }
+
+  private hasCapabilityTestResult(): boolean {
+    const profile = this.currentProfile() as ChatModelProfile | undefined;
+    return Boolean(
+      profile?.capabilities?.toolCalling?.probe ||
+      profile?.reasoningCapabilities?.source === "probe",
+    );
+  }
+
+  private async test(): Promise<void> {
+    if (!this.options.onTest) return;
+    this.testing = true;
+    await this.save();
+  }
+
+  private currentProfile(): TProfile | undefined {
+    return this.savedProfileId
+      ? (this.options.resolveProfile?.(this.savedProfileId) ?? this.options.profile)
+      : this.options.profile;
   }
 }

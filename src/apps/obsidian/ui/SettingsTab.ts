@@ -6,6 +6,8 @@ import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";
 import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
+import { capabilityTags, formatCapabilityVerificationStatus } from "@adapters/settings";
+import { mergeChatProfileSettingsPreservingProbe } from "@adapters/settings";
 import {
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
@@ -35,6 +37,7 @@ import {
 export class IxplorerSettingTab extends PluginSettingTab {
   private unsubscribeIndexing: (() => void) | null = null;
   private unsubscribeEnrichment: (() => void) | null = null;
+  private unsubscribeCapabilityProbes: (() => void) | null = null;
   private readonly fetchedModelsByServerId = new Map<string, DiscoveredModel[]>();
   private readonly pendingIndexActions = new Map<string, IndexPendingAction>();
   private readonly pendingEnrichmentActions = new Map<string, EnrichmentPendingAction>();
@@ -59,6 +62,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.unsubscribeIndexing = null;
     this.unsubscribeEnrichment?.();
     this.unsubscribeEnrichment = null;
+    this.unsubscribeCapabilityProbes?.();
+    this.unsubscribeCapabilityProbes = this.prober.subscribeAll(() => {
+      window.setTimeout(() => this.display(), 0);
+    });
     normalizeSettingsState(this.plugin.settings);
     containerEl.empty();
     containerEl.addClass("ixplorer-settings");
@@ -252,12 +259,26 @@ export class IxplorerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         },
+        onTest: async (profile) => this.prober.startChatProfileProbes(profile.id, true),
+        getCapabilityStatus: (profileId) => {
+          const saved = this.plugin.settings.chatModelProfiles.find(
+            (profile) => profile.id === profileId,
+          );
+          return saved
+            ? this.prober.statusFor(saved)
+            : { tools: "not-tested" as const, agent: "not-tested" as const };
+        },
+        subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
+        resolveProfile: (profileId) =>
+          this.plugin.settings.chatModelProfiles.find((profile) => profile.id === profileId),
       }).open();
     });
 
     for (const profile of this.plugin.settings.chatModelProfiles) {
       this.renderProfileListItem(listEl, {
         name: profile.name,
+        tags: capabilityTags(profile),
+        verificationStatus: formatCapabilityVerificationStatus(this.prober.statusFor(profile)),
         status:
           this.plugin.settings.activeChatModelProfileId === profile.id && !profile.isSuspended
             ? { kind: "is-default", label: "Default", title: "Default chat model" }
@@ -273,10 +294,29 @@ export class IxplorerSettingTab extends PluginSettingTab {
             fetchContextLength: (server, modelName) =>
               this.prober.fetchContextLengthForModel(server, modelName),
             onSave: async (updatedProfile) => {
-              Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
+              Object.assign(
+                profile,
+                mergeChatProfileSettingsPreservingProbe(profile, updatedProfile),
+                {
+                  updatedAt: new Date().toISOString(),
+                },
+              );
               await this.plugin.saveSettings();
               this.display();
             },
+            onTest: async (updatedProfile) =>
+              this.prober.startChatProfileProbes(updatedProfile.id, true),
+            getCapabilityStatus: (profileId) =>
+              this.prober.statusFor(
+                this.plugin.settings.chatModelProfiles.find(
+                  (candidate) => candidate.id === profileId,
+                ) ?? profile,
+              ),
+            subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
+            resolveProfile: (profileId) =>
+              this.plugin.settings.chatModelProfiles.find(
+                (candidate) => candidate.id === profileId,
+              ),
           }).open();
         },
         extraActions: [
@@ -297,7 +337,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
               this.plugin.settings.activeChatModelProfileId === profile.id
                 ? "Default model"
                 : "Set as default model",
-            hidden: this.plugin.settings.activeChatModelProfileId === profile.id,
             disabled:
               profile.isSuspended === true ||
               this.plugin.settings.activeChatModelProfileId === profile.id,
@@ -353,7 +392,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
               this.plugin.settings.activeEmbeddingModelProfileId === profile.id
                 ? "Default model"
                 : "Set as default model",
-            hidden: this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
             disabled:
               profile.isSuspended === true ||
               this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
@@ -429,6 +467,8 @@ export class IxplorerSettingTab extends PluginSettingTab {
     containerEl: HTMLElement,
     options: {
       name: string;
+      tags?: Array<"Agent" | "Tools" | "Instant">;
+      verificationStatus?: string;
       status: ProfileStatus | null;
       canDelete: boolean;
       deleteTooltip: string;
@@ -445,7 +485,16 @@ export class IxplorerSettingTab extends PluginSettingTab {
     },
   ): void {
     const row = containerEl.createDiv({ cls: "ixplorer-settings-profile-list__item" });
-    row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
+    const name = row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
+    for (const tag of options.tags ?? []) {
+      name.createSpan({ cls: "ixplorer-settings-profile-list__tag", text: tag });
+    }
+    if (options.verificationStatus) {
+      name.createSpan({
+        cls: "ixplorer-settings-profile-list__verification",
+        text: options.verificationStatus,
+      });
+    }
     if (options.status) {
       row.createSpan({
         cls: `ixplorer-settings-profile-list__status ${options.status.kind}`,

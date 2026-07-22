@@ -15,7 +15,7 @@ describe("chat model settings surface", () => {
 
   it("keeps Tools and reasoning controls while hiding protocol selection", () => {
     expect(source).toContain('.setName("Tools")');
-    expect(source).toContain('.setName("Reasoning")');
+    expect(source).toContain('.setName("Agentic mode")');
     expect(source).toContain('.setName("Reasoning effort")');
     expect(source).not.toContain('.setName("API protocol")');
 
@@ -43,6 +43,13 @@ describe("chat model settings surface", () => {
     expect(source).toContain(
       'profile.reasoning.summary = reasoningCapabilities.summary ? "auto" : "off"',
     );
+  });
+
+  it("keeps capability test status live in the profile modal", () => {
+    expect(source).toContain("subscribeCapabilityStatus");
+    expect(source).toContain("getCapabilityStatus");
+    expect(source).toContain('setButtonText(this.hasCapabilityTestResult() ? "Re-test" : "Test")');
+    expect(source).toContain("formatCapabilityVerificationStatus");
   });
 
   it("keeps debug-only settings in the final Advanced section", () => {

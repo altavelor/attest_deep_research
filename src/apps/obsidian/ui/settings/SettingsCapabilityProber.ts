@@ -15,6 +15,12 @@ import { createToolCapabilitySettings } from "@adapters/settings";
 import { capabilityCacheKey, ModelCapabilitySnapshot, unknownSnapshot } from "@adapters/settings";
 import { probeReasoningVisibility } from "@adapters/settings";
 import { ChatModelProfile, ServerProfile } from "@adapters/settings";
+import {
+  applyCapabilityVerificationState,
+  CapabilityVerificationState,
+  deriveCapabilityVerificationState,
+  resolvedAgenticModeAfterProbe,
+} from "@adapters/settings";
 
 /** What the prober needs from the settings tab that hosts it. */
 export interface CapabilityProberHost {
@@ -35,11 +41,36 @@ export class SettingsCapabilityProber {
   private readonly plugin: IxplorerPlugin;
   private readonly fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   private readonly requestRedisplay: () => void;
+  private readonly states = new Map<string, CapabilityVerificationState>();
+  private readonly subscribers = new Set<() => void>();
 
   constructor(host: CapabilityProberHost) {
     this.plugin = host.plugin;
     this.fetchedModelsByServerId = host.fetchedModelsByServerId;
     this.requestRedisplay = () => host.requestRedisplay();
+  }
+
+  subscribeAll(listener: () => void): () => void {
+    this.subscribers.add(listener);
+    return () => this.subscribers.delete(listener);
+  }
+
+  statusFor(profile: ChatModelProfile): CapabilityVerificationState {
+    return this.states.get(profile.id) ?? deriveCapabilityVerificationState(profile);
+  }
+
+  private publishState(profileId: string, state: Partial<CapabilityVerificationState>): void {
+    const profile = this.plugin.settings.chatModelProfiles.find(
+      (candidate) => candidate.id === profileId,
+    );
+    this.states.set(
+      profileId,
+      applyCapabilityVerificationState(
+        profile ? this.statusFor(profile) : { tools: "not-tested", agent: "not-tested" },
+        state,
+      ),
+    );
+    this.subscribers.forEach((listener) => listener());
   }
 
   async refreshMetadataCapabilities(): Promise<void> {
@@ -133,7 +164,7 @@ export class SettingsCapabilityProber {
       .catch(() => new Notice(`Capability detection failed for ${savedProfile.name}.`));
   }
 
-  startChatProfileProbes(profileId: string): void {
+  startChatProfileProbes(profileId: string, force = false): void {
     const savedProfile = this.plugin.settings.chatModelProfiles.find(
       (profile) => profile.id === profileId,
     );
@@ -149,12 +180,17 @@ export class SettingsCapabilityProber {
     };
     const shouldProbeResponses =
       server.apiFormat === "openai-compatible" &&
-      savedProfile.reasoning.mode !== "off" &&
-      !isResponsesCapabilityCurrent(
-        savedProfile.reasoningCapabilities,
-        server,
-        savedProfile.modelName,
-      );
+      (force || savedProfile.reasoning.mode !== "off") &&
+      (force ||
+        !isResponsesCapabilityCurrent(
+          savedProfile.reasoningCapabilities,
+          server,
+          savedProfile.modelName,
+        ));
+    this.publishState(profileId, {
+      tools: "testing",
+      ...(shouldProbeResponses ? { agent: "testing" } : {}),
+    });
 
     startChatProfileProbeTasks({
       probeTools: () => this.probeToolsForServer(server, target.modelName),
@@ -173,7 +209,10 @@ export class SettingsCapabilityProber {
             probeResponsesCapabilities({
               server,
               model: target.modelName,
-              efforts: savedProfile.reasoningCapabilities?.efforts ?? [],
+              efforts:
+                this.reasoningEffortsFromCache(server, savedProfile.modelName) ??
+                savedProfile.reasoningCapabilities?.efforts ??
+                [],
               logger: this.plugin.logger,
             })
         : undefined,
@@ -211,6 +250,7 @@ export class SettingsCapabilityProber {
             tools: profile.capabilities.tools,
             toolCalling: profile.capabilities.toolCalling,
           };
+          this.publishState(target.profileId, { tools: probe.calls ? "verified" : "not-verified" });
         });
         this.plugin.logger.logProbeResult({
           probe: "tool-capabilities",
@@ -227,6 +267,13 @@ export class SettingsCapabilityProber {
           if (!profile.reasoning.effort && reasoningCapabilities.defaultEffort) {
             profile.reasoning.effort = reasoningCapabilities.defaultEffort;
           }
+          profile.reasoning.mode = resolvedAgenticModeAfterProbe(
+            profile.reasoning.mode,
+            reasoningCapabilities,
+          );
+        });
+        this.publishState(target.profileId, {
+          agent: reasoningCapabilities.responses ? "verified" : "not-verified",
         });
         this.plugin.logger.logProbeResult({
           probe: "responses-capabilities",
@@ -274,8 +321,35 @@ export class SettingsCapabilityProber {
         });
         this.requestRedisplay();
       },
-      onError: () => new Notice(`Capability detection failed for ${savedProfile.name}.`),
+      onToolsError: () => {
+        this.publishState(target.profileId, { tools: "failed" });
+        new Notice(`Tool capability detection failed for ${savedProfile.name}.`);
+      },
+      onResponsesError: () => {
+        this.publishState(target.profileId, { agent: "failed" });
+        new Notice(`Agent mode capability detection failed for ${savedProfile.name}.`);
+      },
+      onReasoningError: () => new Notice(`Capability detection failed for ${savedProfile.name}.`),
     });
+  }
+
+  private reasoningEffortsFromCache(
+    server: ServerProfile,
+    modelName: string,
+  ): string[] | undefined {
+    for (const protocol of ["responses", "chat-completions"] as const) {
+      const snapshot =
+        this.plugin.settings.modelCapabilityCache[
+          capabilityCacheKey({
+            baseUrl: server.baseUrl,
+            apiKey: server.apiKey,
+            model: modelName,
+            protocol,
+          })
+        ];
+      if (snapshot?.reasoning.efforts?.length) return snapshot.reasoning.efforts;
+    }
+    return undefined;
   }
 
   private async verifyEmbeddingForServer(

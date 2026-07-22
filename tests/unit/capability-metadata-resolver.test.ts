@@ -1,4 +1,8 @@
-import { resolveCapabilityMetadata, resolveWithMetadataResolvers } from "@adapters/settings";
+import {
+  extractReasoningEfforts,
+  resolveCapabilityMetadata,
+  resolveWithMetadataResolvers,
+} from "@adapters/settings";
 
 describe("capability metadata resolvers", () => {
   it("returns unknown when generic metadata has no capability hints", async () => {
@@ -40,5 +44,17 @@ describe("capability metadata resolvers", () => {
         {},
       ),
     ).resolves.toEqual(snapshot);
+  });
+
+  it("uses the first non-empty advertised reasoning effort list and default", () => {
+    const metadata = {
+      supported_reasoning_efforts: ["low", "low", "high"],
+      reasoning: { efforts: ["minimal"], default_effort: "low" },
+    };
+    expect(extractReasoningEfforts(metadata)).toEqual(["low", "high"]);
+    expect(resolveCapabilityMetadata(metadata)?.reasoning).toMatchObject({
+      efforts: ["low", "high"],
+      defaultEffort: "low",
+    });
   });
 });

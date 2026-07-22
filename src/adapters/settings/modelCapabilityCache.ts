@@ -138,6 +138,12 @@ function readSnapshot(value: unknown): ModelCapabilitySnapshot | undefined {
     reasoning: {
       responseFormats: [...new Set(formats)],
       visibleOutput: state(value.reasoning.visibleOutput),
+      ...(stringArray(value.reasoning.efforts).length > 0
+        ? { efforts: stringArray(value.reasoning.efforts) }
+        : {}),
+      ...(typeof value.reasoning.defaultEffort === "string" && value.reasoning.defaultEffort
+        ? { defaultEffort: value.reasoning.defaultEffort }
+        : {}),
     },
     tools: state(value.tools),
     continuation: state(value.continuation),
@@ -147,6 +153,16 @@ function readSnapshot(value: unknown): ModelCapabilitySnapshot | undefined {
     ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}),
     contractVersion: 1,
   };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [
+        ...new Set(
+          value.filter((item): item is string => typeof item === "string" && Boolean(item)),
+        ),
+      ]
+    : [];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

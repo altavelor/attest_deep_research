@@ -31,7 +31,8 @@ export async function probeResponsesCapabilities(
   const base = { checkedAt, contractVersion: RESPONSES_PROBE_CONTRACT_VERSION };
   let lastFailureReason: string | undefined;
   let defaultEffort: string | undefined;
-  for (const effort of [...new Set([...FALLBACK_REASONING_EFFORTS, ...efforts])]) {
+  const candidateEfforts = efforts.length > 0 ? efforts : [...FALLBACK_REASONING_EFFORTS];
+  for (const effort of candidateEfforts) {
     const attempt = await runProbe(options, effort, false);
     lastFailureReason = attempt.failureReason ?? lastFailureReason;
     if (options.signal?.aborted)
