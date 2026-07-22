@@ -1,17 +1,18 @@
-# OPTIONAL blocking AI-review gate — EXAMPLE, not active.
+# Blocking AI-review gate.
 #
-# The built-in review integration (triggered by the REVIEW_TRIGGER comment from
-# scripts/publish-task.sh) publishes findings but is not a required status check.
-# Use this workflow only if you want the AI review to *block* merges via a
-# required status check named "agent-review".
+# On every PR event it runs the review prompt (.github/agent/review.md) and
+# expects the model to end its report with "VERDICT: PASS" or "VERDICT: FAIL".
+#   - FAIL  -> the "agent-review" status check fails (blocks merge); the local
+#             fixer loop (scripts/review-loop.sh) reacts to this and iterates.
+#   - PASS  -> the "agent-review" status check succeeds.
 #
-# This example is vendor-specific: it runs the OpenAI Codex action and needs an
-# OPENAI_API_KEY repository secret. To adapt it to another CLI, replace the
-# "Run review" step with your own runner that consumes .github/agent/review.md
-# and writes a report ending in "VERDICT: PASS" or "VERDICT: FAIL".
+# Requirements to activate:
+#   1. Repository secret OPENAI_API_KEY (platform.openai.com key).
+#      Without it the review job is skipped and the gate is a no-op (never blocks).
 #
-# To activate: rename this file to agent-review.yml, add the required secret,
-# and mark the "agent-review" check as required in a branch ruleset for main.
+# The "Run review" step is vendor-specific (OpenAI Codex action). To use another
+# CLI, replace it with a runner that consumes .github/agent/review.md and writes
+# agent-review.md ending in a VERDICT line.
 
 name: Agent Review Gate
 
@@ -36,7 +37,21 @@ jobs:
       contents: read
 
     steps:
+      - name: Check for API key
+        id: guard
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+            echo "enabled=false" >>"$GITHUB_OUTPUT"
+            echo "::warning::OPENAI_API_KEY is not set; skipping the review gate (no-op pass)."
+          else
+            echo "enabled=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout pull request merge commit
+        if: steps.guard.outputs.enabled == 'true'
         uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
@@ -45,6 +60,7 @@ jobs:
 
       # Vendor-specific step. Replace with your CLI of choice if not using Codex.
       - name: Run review
+        if: steps.guard.outputs.enabled == 'true'
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -54,22 +70,35 @@ jobs:
           codex-args: '["--ephemeral"]'
 
       - name: Display review
-        if: always()
+        if: always() && steps.guard.outputs.enabled == 'true'
         shell: bash
         run: cat agent-review.md
 
-      - name: Enforce verdict
+      - name: Read verdict
+        id: verdict
+        if: steps.guard.outputs.enabled == 'true'
         shell: bash
         run: |
-          verdict="$(grep -E '^VERDICT: (PASS|FAIL)$' agent-review.md | tail -n 1)"
-          if [[ "$verdict" != "VERDICT: PASS" ]]; then
-            echo "::error::Agent review did not pass"
-            exit 1
+          verdict="$(grep -E '^VERDICT: (PASS|FAIL)$' agent-review.md | tail -n 1 || true)"
+          echo "value=${verdict}" >>"$GITHUB_OUTPUT"
+          if [[ "$verdict" == "VERDICT: PASS" ]]; then
+            echo "pass=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "pass=false" >>"$GITHUB_OUTPUT"
           fi
 
       - name: Upload review artifact
-        if: always()
+        if: always() && steps.guard.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: agent-review-${{ github.event.pull_request.number }}
           path: agent-review.md
+
+      - name: Enforce verdict
+        if: steps.guard.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          if [[ "${{ steps.verdict.outputs.pass }}" != "true" ]]; then
+            echo "::error::Agent review did not pass (${{ steps.verdict.outputs.value }})"
+            exit 1
+          fi
