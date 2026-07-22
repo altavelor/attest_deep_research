@@ -160,6 +160,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
         : undefined,
       indexDescription,
       signal: request.signal,
+      disableThinking: true,
     });
 
     return { kind: "completed" };

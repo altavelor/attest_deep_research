@@ -203,6 +203,49 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
+  it("disables extended thinking during Instant synthesis", async () => {
+    let receivedReasoning: unknown;
+    const modelRound = {
+      listModels: async () => ["gpt-5"],
+      runRound: async (request: {
+        reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
+        onDelta?: (delta: { type: "reasoningSummary" | "text"; text: string }) => void;
+      }) => {
+        receivedReasoning = request.reasoning;
+        request.onDelta?.({ type: "reasoningSummary", text: "hidden reasoning" });
+        request.onDelta?.({ type: "text", text: "Answer." });
+        return {
+          items: [
+            { type: "reasoningSummary" as const, text: "hidden reasoning" },
+            { type: "text" as const, text: "Answer." },
+          ],
+          stopReason: "complete" as const,
+        };
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: () => modelRound,
+      modelRound,
+      reasoning: { enabled: true, effort: "high", summary: "auto" },
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel: new FakeChatModel([]),
+      chatModelName: "gpt-5",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({ question: "Answer instantly", mode: "instant", searchMode: "none" }),
+    );
+
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ type: "reasoning", content: "hidden reasoning" }),
+    );
+    expect(events).toContainEqual({ type: "delta", content: "Answer." });
+    expect(receivedReasoning).toEqual({ enabled: false, summary: "off" });
+  });
+
   it("notifies the user when Thinking falls back to Instant", async () => {
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
