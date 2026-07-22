@@ -3,7 +3,7 @@ import { ResearchAnswer } from "@core/answer";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
-import { buildAgenticResearchMessages } from "@core/research";
+import { buildThinkingResearchMessages } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { ToolEvent } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
@@ -13,7 +13,7 @@ import {
   SUB_AGENT_TOOL_START,
 } from "@application/research/subAgentPort";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
-import { AgenticResearchRunner, AgenticResearchFailure } from "../AgenticResearchRunner";
+import { ThinkingResearchRunner, ThinkingResearchFailure } from "../ThinkingResearchRunner";
 import {
   ResearchExecutionContext,
   ResearchStrategy,
@@ -28,13 +28,13 @@ import {
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
 import {
-  agenticBudgets,
+  thinkingBudgets,
   createEmptyContextDiagnostics,
   semanticDegradationWarning,
 } from "./ResearchDiagnostics";
 
-interface AgenticRunResult {
-  result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
+interface ThinkingRunResult {
+  result: Awaited<ReturnType<ThinkingResearchRunner["run"]>>;
   answer: ResearchAnswer;
   diagnostics?: ContextDiagnostics;
 }
@@ -45,7 +45,7 @@ interface AgenticRunResult {
  * context → complete); on failure it returns control to the dispatcher so a
  * deterministic fallback can still produce a diagnostic report.
  */
-export class AgenticResearchStrategy implements ResearchStrategy {
+export class ThinkingResearchStrategy implements ResearchStrategy {
   constructor(private readonly deps: ResearchStrategyDeps) {}
 
   async *execute(
@@ -53,32 +53,32 @@ export class AgenticResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     yield { type: "status", message: "Synthesizing answer..." };
     const liveEvents = createAsyncEventChannel<ResearchStreamEvent>();
-    const agenticPromise = this.run(ctx, (event) => liveEvents.push(event)).finally(() =>
+    const thinkingPromise = this.run(ctx, (event) => liveEvents.push(event)).finally(() =>
       liveEvents.close(),
     );
     for await (const event of liveEvents) yield event;
-    const agentic = await agenticPromise;
-    if (agentic.result.ok) {
-      if (agentic.diagnostics) yield { type: "context", diagnostics: agentic.diagnostics };
-      yield { type: "complete", answer: agentic.answer };
+    const thinking = await thinkingPromise;
+    if (thinking.result.ok) {
+      if (thinking.diagnostics) yield { type: "context", diagnostics: thinking.diagnostics };
+      yield { type: "complete", answer: thinking.answer };
       return { kind: "completed" };
     }
-    if (agentic.result.reason === "cancelled") return { kind: "cancelled" };
+    if (thinking.result.reason === "cancelled") return { kind: "cancelled" };
     // All non-cancel failures (including provider-error) return to the dispatcher
     // so the deterministic fallback still produces a diagnostic report. Throwing
     // here would surface a generic error with no diagnostics to debug from.
     return {
       kind: "failed",
-      failure: agentic.result,
-      answer: agentic.answer,
-      diagnostics: agentic.diagnostics,
+      failure: thinking.result,
+      answer: thinking.answer,
+      diagnostics: thinking.diagnostics,
     };
   }
 
   private async run(
     ctx: ResearchExecutionContext,
     onEvent: (event: ResearchStreamEvent) => void,
-  ): Promise<AgenticRunResult> {
+  ): Promise<ThinkingRunResult> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const assembled = this.deps.contextAssembler
       ? await this.deps.contextAssembler.assemble({
@@ -151,7 +151,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       request.forceSubAgent === true && created.tools.has(SUB_AGENT_TOOL)
         ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
         : policy;
-    const messages = buildAgenticResearchMessages({
+    const messages = buildThinkingResearchMessages({
       question,
       chatHistory: request.chatHistory,
       requiredTools: effectivePolicy.requiredTools,
@@ -168,15 +168,15 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       estimateTextTokens(messages.map((message) => message.content).join("\n")) +
       estimateTextTokens(JSON.stringify(created.tools.definitions())) +
       (this.deps.reservedOutputTokens ?? 0);
-    const maxResultChars = resolveAgenticMaxResultChars({
+    const maxResultChars = resolveThinkingMaxResultChars({
       contextLimitTokens: this.deps.contextLimitTokens,
       usedTokens: estimatedTokens,
     });
-    let result: Awaited<ReturnType<AgenticResearchRunner["run"]>>;
+    let result: Awaited<ReturnType<ThinkingResearchRunner["run"]>>;
     if (this.deps.contextLimitTokens && estimatedTokens > this.deps.contextLimitTokens) {
-      result = emptyAgenticFailure("context-limit-exceeded", maxResultChars);
+      result = emptyThinkingFailure("context-limit-exceeded", maxResultChars);
     } else {
-      result = await new AgenticResearchRunner({
+      result = await new ThinkingResearchRunner({
         modelRound: this.deps.modelRound ?? this.deps.modelRoundFactory(this.deps.chatModel),
         model: this.deps.chatModelName,
         messages,
@@ -247,9 +247,9 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       assembled?.diagnostics ??
       createEmptyContextDiagnostics(
         request.contextMode ?? "include",
-        result.ok ? "agentic" : "deterministic-fallback",
+        result.ok ? "thinking" : "instant-fallback",
       );
-    diagnostics.executionStrategy = result.ok ? "agentic" : "deterministic-fallback";
+    diagnostics.executionStrategy = result.ok ? "thinking" : "instant-fallback";
     diagnostics.question = question;
     diagnostics.modelName = this.deps.chatModelName;
     diagnostics.modelApiFormat = this.deps.apiFormat;
@@ -277,7 +277,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
         diagnostics.warnings.push(warning);
       }
     }
-    diagnostics.agentic = {
+    diagnostics.thinking = {
       policyReason: policy.reason,
       requiredTools: [...effectivePolicy.requiredTools],
       bootstrapChoice: policy.bootstrapChoice,
@@ -295,7 +295,7 @@ export class AgenticResearchStrategy implements ResearchStrategy {
       promptDeltas: result.promptRounds,
       reasoningSegments: result.reasoningSegments,
       stopReasons: result.stopReasons,
-      budgets: agenticBudgets(result.totalResultChars, result.maxResultChars),
+      budgets: thinkingBudgets(result.totalResultChars, result.maxResultChars),
     };
     if (this.deps.reasoningDiagnostics) {
       diagnostics.reasoning = {
@@ -365,7 +365,7 @@ function emitNestedSubAgentEvent(
   }
 }
 
-export function resolveAgenticMaxResultChars(input: {
+export function resolveThinkingMaxResultChars(input: {
   contextLimitTokens?: number;
   usedTokens: number;
 }): number {
@@ -379,10 +379,10 @@ export function resolveAgenticMaxResultChars(input: {
   return Math.max(fallback, Math.min(1_000_000, targetChars));
 }
 
-function emptyAgenticFailure(
-  reason: AgenticResearchFailure["reason"],
+function emptyThinkingFailure(
+  reason: ThinkingResearchFailure["reason"],
   maxResultChars: number,
-): AgenticResearchFailure {
+): ThinkingResearchFailure {
   return {
     ok: false,
     reason,

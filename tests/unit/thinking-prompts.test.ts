@@ -1,4 +1,4 @@
-import { buildAgenticResearchMessages, buildResearchSystemPrompt } from "@core/research";
+import { buildThinkingResearchMessages, buildResearchSystemPrompt } from "@core/research";
 import {
   CREATE_NOTE_TOOL,
   SUB_AGENT_TOOL,
@@ -20,7 +20,7 @@ function systemText(overrides: {
   question?: string;
   requiredTools?: readonly string[];
 }): string {
-  const messages = buildAgenticResearchMessages({
+  const messages = buildThinkingResearchMessages({
     question: overrides.question ?? "Q",
     requiredTools: overrides.requiredTools ?? [],
     toolContext: {
@@ -35,8 +35,8 @@ function systemText(overrides: {
 describe("current date anchoring", () => {
   const now = new Date("2026-07-02T12:00:00Z");
 
-  it("anchors the agentic system prompt to the current date", () => {
-    const messages = buildAgenticResearchMessages({
+  it("anchors the thinking system prompt to the current date", () => {
+    const messages = buildThinkingResearchMessages({
       question: "Q",
       requiredTools: [],
       toolContext: { coreVariant: "research", availableTools: [] },
@@ -46,16 +46,16 @@ describe("current date anchoring", () => {
     expect(system).toContain("Current date: Thursday, 2026-07-02");
   });
 
-  it("anchors the eager research system prompt to the current date", () => {
+  it("anchors the instant research system prompt to the current date", () => {
     expect(buildResearchSystemPrompt({ now })).toContain("Current date: Thursday, 2026-07-02");
     // Without an injected clock the line is still present (real today).
     expect(buildResearchSystemPrompt()).toContain("Current date:");
   });
 });
 
-describe("agentic research prompts", () => {
+describe("thinking research prompts", () => {
   it("contains trusted policy, bounded explicit context, history, and index description", () => {
-    const messages = buildAgenticResearchMessages({
+    const messages = buildThinkingResearchMessages({
       question: "Question",
       chatHistory: [{ role: "user", content: "Earlier" }],
       requiredTools: [INDEX_SEARCH_TOOL],

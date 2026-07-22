@@ -34,10 +34,12 @@ describe("FileChatStore", () => {
       chatSettings: {
         chatModelProfileId: "chat-model",
         searchMode: "none",
+        researchMode: "thinking",
       },
     });
 
     expect((await store.loadChat("chat-none"))?.chatSettings?.searchMode).toBe("none");
+    expect((await store.loadChat("chat-none"))?.chatSettings?.researchMode).toBe("thinking");
   });
 
   it("saves a chat and lists summaries by most recent update", async () => {

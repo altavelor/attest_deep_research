@@ -1,8 +1,30 @@
 import { getMentionCandidates } from "@apps/obsidian/ui/chat/mentionAutocomplete";
 import { nextHorizontalWheelScrollLeft } from "@apps/obsidian/ui/chat/horizontalWheelScroll";
 import { isSupportedContextDocumentPath } from "@shared";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 describe("chat composer", () => {
+  it("shows an Instant/Thinking selector beside the source selector", () => {
+    const source = readFileSync(resolve("src/apps/obsidian/ui/chat/ChatComposer.ts"), "utf8");
+
+    expect(source).toContain('{ id: "instant", name: "Instant" }');
+    expect(source).toContain('{ id: "thinking", name: "Thinking" }');
+    expect(source).toContain('ariaLabel: "Research mode"');
+    expect(source.indexOf("sourcesModeDropdown")).toBeLessThan(
+      source.indexOf("researchModeDropdown"),
+    );
+  });
+
+  it("uses Thinking mode for an explicit sub-agent directive", () => {
+    const source = readFileSync(
+      resolve("src/apps/obsidian/ui/chat/research/ResearchQuestionController.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('mode: forceSubAgent ? "thinking" : this.options.getResearchMode(),');
+  });
+
   it("offers context documents for an @ query", () => {
     expect(getMentionCandidates("cache", ["Concepts/Cache.md", "Notes/Other.md"])).toEqual([
       {

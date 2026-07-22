@@ -13,8 +13,11 @@ export function readSettings(savedData: unknown): IxplorerSettings {
 }
 
 function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
+  const { forceEagerResearch: _ignoredLegacyForceEagerResearch, ...currentSettings } =
+    settings as IxplorerSettings & { forceEagerResearch?: unknown };
+
   return {
-    ...settings,
+    ...currentSettings,
     serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
     chatModelProfiles: settings.chatModelProfiles.map((profile) => ({
       ...profile,
@@ -78,7 +81,6 @@ function isCurrentSettings(value: unknown): value is IxplorerSettings {
     typeof settings.expandFilteredContextThroughLinks === "boolean" &&
     typeof settings.graphContextDepth === "number" &&
     typeof settings.useWebWhenFreshnessNeeded === "boolean" &&
-    typeof settings.forceEagerResearch === "boolean" &&
     typeof settings.debugMode === "boolean" &&
     settings.modelCapabilityCache !== undefined &&
     typeof settings.modelCapabilityCache === "object" &&

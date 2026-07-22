@@ -60,14 +60,14 @@ describe("chat model settings surface", () => {
       source.indexOf("private renderProfileSettings"),
     );
     expect(advancedRenderer).toContain("this.renderDebugSettings(contentEl)");
-    expect(advancedRenderer).toContain("Force eager research mode");
+    expect(advancedRenderer).not.toContain("Force instant research mode");
 
     const searchRenderer = source.slice(
       source.indexOf("private renderSearchEngineSettings"),
       source.indexOf("private renderProfileSettings"),
     );
     expect(searchRenderer).not.toContain("Debug mode");
-    expect(searchRenderer).not.toContain("Force eager research mode");
+    expect(searchRenderer).not.toContain("Force instant research mode");
   });
 
   it("preserves the index path picker scroll position when checkbox selection rerenders", () => {

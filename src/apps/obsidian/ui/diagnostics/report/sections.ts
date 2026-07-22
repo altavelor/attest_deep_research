@@ -1,6 +1,6 @@
 import { ContextDiagnostics } from "@core/diagnostics";
 import {
-  AgenticLoopRound,
+  ThinkingLoopRound,
   AnswerSection,
   ModelSection,
   PreflightSection,
@@ -10,10 +10,10 @@ import {
 } from "./types";
 
 export function buildModelSection(d: ContextDiagnostics): ModelSection {
-  const agentic = d.agentic;
+  const thinking = d.thinking;
   const provenance: Record<string, string> = {};
-  if (agentic?.capabilityProvenance) {
-    Object.assign(provenance, agentic.capabilityProvenance);
+  if (thinking?.capabilityProvenance) {
+    Object.assign(provenance, thinking.capabilityProvenance);
   }
 
   return {
@@ -102,7 +102,9 @@ export function buildPreflightSection(d: ContextDiagnostics): PreflightSection {
 }
 
 export function buildRequestSection(d: ContextDiagnostics): RequestSection {
-  const agentic = d.agentic;
+  const thinking = d.thinking;
+  const policyReason =
+    thinking?.policyReason ?? (d.executionStrategy === "instant" ? "instant-selected" : "unknown");
   const retrieval = d.retrieval ?? {
     queryVariants: [],
     includedChunkIds: [],
@@ -126,10 +128,10 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
 
   return {
     searchMode: d.searchMode ?? "unknown",
-    agenticPolicy: {
-      policyReason: agentic?.policyReason ?? "unknown",
-      requiredTools: agentic?.requiredTools ?? [],
-      bootstrapChoice: agentic?.bootstrapChoice ?? null,
+    thinkingPolicy: {
+      policyReason,
+      requiredTools: thinking?.requiredTools ?? [],
+      bootstrapChoice: thinking?.bootstrapChoice ?? null,
     },
     retrieval: {
       queryVariants: retrieval.queryVariants,
@@ -153,15 +155,15 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
 }
 
 export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
-  const agentic = d.agentic;
+  const thinking = d.thinking;
   const tools = d.tools ?? [];
 
   // Build per-round breakdown from phases + tool calls tagged with round
-  let rounds: AgenticLoopRound[] = [];
-  if (agentic && agentic.phases && agentic.phases.length > 0) {
-    const segments = agentic.reasoningSegments ?? [];
-    const promptDeltas = agentic.promptDeltas ?? [];
-    rounds = agentic.phases.map((phase, index) => {
+  let rounds: ThinkingLoopRound[] = [];
+  if (thinking && thinking.phases && thinking.phases.length > 0) {
+    const segments = thinking.reasoningSegments ?? [];
+    const promptDeltas = thinking.promptDeltas ?? [];
+    rounds = thinking.phases.map((phase, index) => {
       const roundNumber = index + 1;
       const roundCalls = tools.filter((t) => t.round === roundNumber);
       const roundSegments = segments
@@ -189,16 +191,16 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
       ...(a.fallbackDecision ? { fallbackDecision: a.fallbackDecision } : {}),
     })),
     stream: d.stream ?? null,
-    agenticLoop: agentic
+    thinkingLoop: thinking
       ? {
-          totalRounds: agentic.rounds,
-          totalCalls: agentic.totalCalls,
-          duplicateCalls: agentic.duplicateCalls,
-          satisfiedTools: agentic.satisfiedTools,
-          repairedTools: agentic.repairedTools,
-          ...(agentic.fallbackReason ? { fallbackReason: agentic.fallbackReason } : {}),
-          stopReasons: agentic.stopReasons ?? [],
-          budgets: agentic.budgets ?? null,
+          totalRounds: thinking.rounds,
+          totalCalls: thinking.totalCalls,
+          duplicateCalls: thinking.duplicateCalls,
+          satisfiedTools: thinking.satisfiedTools,
+          repairedTools: thinking.repairedTools,
+          ...(thinking.fallbackReason ? { fallbackReason: thinking.fallbackReason } : {}),
+          stopReasons: thinking.stopReasons ?? [],
+          budgets: thinking.budgets ?? null,
           rounds,
         }
       : null,
@@ -218,8 +220,8 @@ export function buildAnswerSection(d: ContextDiagnostics): AnswerSection {
   return {
     projection: d.projection ?? null,
     delivery: d.delivery ?? null,
-    unknownCitationIds: d.agentic?.unknownCitationIds ?? [],
-    unverifiedCitations: d.agentic?.unverifiedCitations ?? [],
+    unknownCitationIds: d.thinking?.unknownCitationIds ?? [],
+    unverifiedCitations: d.thinking?.unverifiedCitations ?? [],
   };
 }
 

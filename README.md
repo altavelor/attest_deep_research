@@ -257,16 +257,14 @@ Fix-loop tuning: `MAX_REVIEW_ITERS`, `REVIEW_POLL_INTERVAL`,
 # 1. Create a structured task (uses .github/ISSUE_TEMPLATE/agent-task.yml)
 gh issue create --template agent-task.yml
 
-# 2. Implement: create the task branch and run the agent on a normalized prompt
+# 2. Implement + publish: create the task branch, run the agent on a normalized
+#    prompt, commit its work, validate (npm run check), push, and open a draft
+#    PR linked to the issue. No review is requested here.
 scripts/agent-task.sh <issue-number>
 
-# 3. Publish: validate (npm run check), push, open a draft PR linked to the
-#    issue, and request an independent AI review
-scripts/publish-task.sh <issue-number>
-
-# 4. Review loop: wait for the review; on failure feed the findings (and any
-#    fixes the reviewer pushed itself) to the agent, re-validate, push, and
-#    re-request review until it passes
+# 3. Review loop: request an independent AI review, then on failure feed the
+#    findings (and any fixes the reviewer pushed itself) to the agent,
+#    re-validate, push, and re-request review until it passes
 scripts/review-loop.sh <issue-number>
 ```
 

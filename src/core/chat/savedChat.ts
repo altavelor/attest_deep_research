@@ -6,6 +6,7 @@
 import { ChatDisplayMessage } from "@core/conversation/model";
 import { ResearchAnswer } from "@core/answer";
 import { ResearchSearchMode } from "@core/research/searchMode";
+import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
 
 export const CHAT_SCHEMA_VERSION = 2;
@@ -16,6 +17,8 @@ export interface SavedChatSettings {
   indexProfileId?: string;
   searchMode: ResearchSearchMode;
   contextMode?: ContextMode;
+  /** Defaults to Instant for chats saved before research-mode persistence. */
+  researchMode?: ResearchMode;
 }
 
 export interface SavedChat {
@@ -103,6 +106,10 @@ function isSavedChatSettings(value: unknown): value is SavedChatSettings {
       settings.searchMode === "webOnly") &&
     (settings.contextMode === undefined ||
       settings.contextMode === "include" ||
-      settings.contextMode === "filter")
+      settings.contextMode === "filter") &&
+    (settings.researchMode === undefined ||
+      settings.researchMode === "instant" ||
+      settings.researchMode === "thinking" ||
+      settings.researchMode === "deep-research")
   );
 }

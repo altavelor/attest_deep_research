@@ -178,7 +178,6 @@ export function createResearchService(
     searchProvider: createSearchProvider(ctx),
     urlStatusChecker: new FetchUrlStatusChecker({ fetch: obsidianRequestFetch }),
     toolsEnabled,
-    forceEagerResearch: settings.forceEagerResearch,
     toolCapabilities: toolResolution.capabilities,
     toolCapabilityProvenance: toolResolution.provenance,
     toolCapabilityProbeAudit: chatProfile.capabilities?.toolCalling?.probeAudit,

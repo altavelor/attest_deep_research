@@ -118,8 +118,8 @@ describe("readable diagnostic HTML (v3)", () => {
 
   it("renders the per-round incremental prompt delta", () => {
     const diagnostics = diagnosticFixture();
-    diagnostics.agentic = {
-      policyReason: "eligible",
+    diagnostics.thinking = {
+      policyReason: "thinking-eligible",
       requiredTools: [],
       satisfiedTools: [],
       repairedTools: [],

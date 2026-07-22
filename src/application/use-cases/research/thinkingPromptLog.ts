@@ -6,7 +6,7 @@ import { PromptDeltaMessageDiagnostic, RoundPromptDeltaDiagnostic } from "@core/
 const MESSAGE_CONTENT_CAP = 6_000;
 
 /**
- * Builds the incremental prompt-delta record for one agentic round: the messages
+ * Builds the incremental prompt-delta record for one thinking round: the messages
  * appended to the transcript since the previous round's request (round 1 sees the
  * full initial prompt) plus, in provider-continuation mode, the tool outputs that
  * travel outside `messages`.

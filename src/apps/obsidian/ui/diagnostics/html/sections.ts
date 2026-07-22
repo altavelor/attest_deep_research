@@ -34,8 +34,8 @@ export function renderHeader(report: DiagnosticReportV3): string {
   const statusVariant: BadgeVariant =
     stats.status === "completed" ? "success" : stats.status === "failed" ? "danger" : "neutral";
   const strategyVariant: BadgeVariant =
-    model.executionStrategy === "agentic" ? "accent" : "neutral";
-  const fallback = report.reasoning.agenticLoop?.fallbackReason;
+    model.executionStrategy === "thinking" ? "accent" : "neutral";
+  const fallback = report.reasoning.thinkingLoop?.fallbackReason;
 
   const badges = [
     badge(stats.status || "unknown", statusVariant),
@@ -106,20 +106,20 @@ export function renderInput(report: DiagnosticReportV3): string {
 function policyBody(report: DiagnosticReportV3): string {
   const { request } = report;
   return (
-    sub("Agentic policy") +
+    sub("Thinking policy") +
     dl([
       ["Search mode", h(request.searchMode)],
-      ["Policy reason", `<code>${h(request.agenticPolicy.policyReason)}</code>`],
+      ["Policy reason", `<code>${h(request.thinkingPolicy.policyReason)}</code>`],
       [
         "Bootstrap choice",
-        request.agenticPolicy.bootstrapChoice
-          ? `<code>${h(JSON.stringify(request.agenticPolicy.bootstrapChoice))}</code>`
+        request.thinkingPolicy.bootstrapChoice
+          ? `<code>${h(JSON.stringify(request.thinkingPolicy.bootstrapChoice))}</code>`
           : badge("none", "neutral"),
       ],
       [
         "Required tools",
-        request.agenticPolicy.requiredTools.length > 0
-          ? request.agenticPolicy.requiredTools.map(tag).join("")
+        request.thinkingPolicy.requiredTools.length > 0
+          ? request.thinkingPolicy.requiredTools.map(tag).join("")
           : badge("none", "neutral"),
       ],
     ])

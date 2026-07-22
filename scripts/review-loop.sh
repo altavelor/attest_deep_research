@@ -17,6 +17,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/lib/output.sh
+source "$script_dir/lib/output.sh"
+
 # shellcheck source=scripts/agent.env
 [[ -f "$script_dir/agent.env" ]] && source "$script_dir/agent.env"
 
@@ -40,19 +43,19 @@ cd "$repo_root"
 
 for command in git gh jq npm; do
   if ! command -v "$command" >/dev/null 2>&1; then
-    echo "Required command is not installed: $command" >&2
+    err "Required command is not installed: $command"
     exit 1
   fi
 done
 
 if [[ -z "$AGENT_EXEC_CMD" ]]; then
-  echo "AGENT_EXEC_CMD is not set in scripts/agent.env; cannot run the fixer." >&2
+  err "AGENT_EXEC_CMD is not set in scripts/agent.env; cannot run the fixer"
   exit 1
 fi
 
 branch="$(git branch --show-current)"
 if [[ -z "$branch" || "$branch" == "$BASE_BRANCH" ]]; then
-  echo "Run from a task branch (not detached HEAD, not $BASE_BRANCH)." >&2
+  err "Run from a task branch (not detached HEAD, not $BASE_BRANCH)"
   exit 1
 fi
 
@@ -60,7 +63,8 @@ pr_number="$(
   gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty'
 )"
 if [[ -z "$pr_number" ]]; then
-  echo "No open pull request for branch $branch. Publish it first (scripts/publish-task.sh)." >&2
+  err "No open pull request for branch $branch"
+  hint "Create the branch, PR, and push first: scripts/agent-task.sh <issue-number>"
   exit 1
 fi
 
@@ -68,7 +72,7 @@ pr_author="$(gh pr view "$pr_number" --json author --jq '.author.login')"
 
 trigger_review() {
   if [[ -z "$REVIEW_TRIGGER" ]]; then
-    echo "REVIEW_TRIGGER is not set in scripts/agent.env; cannot request a review." >&2
+    err "REVIEW_TRIGGER is not set in scripts/agent.env; cannot request a review"
     return 1
   fi
   gh pr comment "$pr_number" \
@@ -131,27 +135,28 @@ collect_findings() {
 }
 
 for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
-  echo "== Iteration $iter/$MAX_REVIEW_ITERS on PR #$pr_number (source: $REVIEW_SOURCE) =="
+  rule
+  step "Iteration ${C_BOLD}$iter/$MAX_REVIEW_ITERS${C_RESET} on PR ${C_BOLD}#$pr_number${C_RESET} ${C_DIM}(source: $REVIEW_SOURCE)${C_RESET}"
 
   if [[ "$REVIEW_SOURCE" == "comments" ]]; then
     since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "Requesting Codex review and polling PR comments since $since..."
+    step "Requesting review and polling PR comments since $since"
     trigger_review || exit 1
     result="$(wait_for_review_comments "$since")"
   else
-    echo "Waiting for status check '$CHECK_NAME'..."
+    step "Waiting for status check '$CHECK_NAME'"
     result="$(wait_for_review)"
   fi
 
   case "$result" in
     pass)
-      echo "Review passed. Nothing to fix."
+      ok "Review passed. Nothing to fix."
       exit 0 ;;
     timeout)
-      echo "Timed out waiting for the review after ${POLL_TIMEOUT}s." >&2
+      err "Timed out waiting for the review after ${POLL_TIMEOUT}s"
       exit 1 ;;
     fail)
-      echo "Review failed. Incorporating the reviewer's own fixes, then the rest..." ;;
+      warn "Review reported findings; incorporating the reviewer's fixes, then the rest" ;;
   esac
 
   before="$(git rev-parse HEAD)"
@@ -161,8 +166,8 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
   # edits and only addresses what is still open, instead of racing/duplicating.
   if ! git pull --rebase origin "$branch"; then
     git rebase --abort 2>/dev/null || true
-    echo "Could not rebase onto origin/$branch (conflicting fixes from the review" >&2
-    echo "integration). Resolve manually on PR #$pr_number." >&2
+    err "Could not rebase onto origin/$branch (conflicting fixes from the review integration)"
+    hint "Resolve manually on PR #$pr_number"
     exit 1
   fi
 
@@ -177,14 +182,18 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
     collect_findings
   )"
 
-  echo "Running local agent on the remaining findings..."
+  rule
+  step "Running local agent on the remaining findings"
+  rule
   printf '%s\n' "$prompt" | eval "$AGENT_EXEC_CMD"
+  rule
 
-  echo "Running validation..."
+  step "Validating (npm run check)"
   if ! npm run check; then
-    echo "Validation failed after the fixer run. Stopping for manual inspection." >&2
+    err "Validation failed after the fixer run; stopping for manual inspection"
     exit 1
   fi
+  ok "Validation passed"
 
   # The agent may or may not commit on its own; capture any leftover changes.
   if [[ -n "$(git status --porcelain)" ]]; then
@@ -194,30 +203,31 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
 
   after="$(git rev-parse HEAD)"
   if [[ "$before" == "$after" ]]; then
-    echo "Neither the reviewer nor the local fixer changed anything; cannot make" >&2
-    echo "progress on PR #$pr_number. Stopping." >&2
+    err "Neither the reviewer nor the local fixer changed anything; cannot make progress on PR #$pr_number"
     exit 1
   fi
 
   # Reconcile once more in case the reviewer pushed during the fixer run.
   if ! git pull --rebase origin "$branch"; then
     git rebase --abort 2>/dev/null || true
-    echo "Could not rebase before pushing; resolve manually on PR #$pr_number." >&2
+    err "Could not rebase before pushing; resolve manually on PR #$pr_number"
     exit 1
   fi
 
+  step "Pushing fixes for iteration $iter"
   git push
 
   # In 'comments' mode the next iteration posts the trigger itself (with a fresh
   # $since), so only re-trigger here for 'check' mode. A new push also re-runs
   # the review workflow automatically.
   if [[ "$REVIEW_SOURCE" != "comments" && -n "$REVIEW_TRIGGER" ]]; then
-    echo "Re-triggering review: $REVIEW_TRIGGER"
+    step "Re-triggering review: $REVIEW_TRIGGER"
     gh pr comment "$pr_number" \
       --body "${REVIEW_TRIGGER} the updated pull request. Verify previous blocking findings are resolved and review the complete current diff for new regressions."
   fi
 done
 
-echo "Reached MAX_REVIEW_ITERS=$MAX_REVIEW_ITERS without a passing review." >&2
-echo "Manual intervention required on PR #$pr_number." >&2
+rule
+err "Reached MAX_REVIEW_ITERS=$MAX_REVIEW_ITERS without a passing review"
+hint "Manual intervention required on PR #$pr_number"
 exit 1

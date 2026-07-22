@@ -2,6 +2,7 @@ import { Menu, setIcon } from "obsidian";
 
 import { SavedChatSettings } from "@core/chat/savedChat";
 import type { ResearchSearchMode } from "@application/use-cases/research";
+import type { ResearchMode } from "@core/research";
 import type { ContextMode } from "@core/diagnostics";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 import { getMentionCandidates, MentionCandidate } from "./mentionAutocomplete";
@@ -26,6 +27,7 @@ export interface ComposerControls {
   getModel(): string;
   setModel(id: string): void;
   getSearchMode(): ResearchSearchMode;
+  getResearchMode(): ResearchMode;
   getIndexProfileId(): string;
   setIndexProfileId(id: string): void;
   getContextMode(): ContextMode;
@@ -51,6 +53,7 @@ export interface ChatComposerOptions {
   availableModels: ChatModelSelectOption[];
   availableIndexes: IndexProfileSelectOption[];
   contextFilePaths: string[];
+  researchMode: ResearchMode;
   onSubmit(): void;
   onStop(): void;
   onQuestionInput?(): void;
@@ -59,6 +62,7 @@ export interface ChatComposerOptions {
   onUpdateIndex(indexProfileId: string): void;
   onUpdateContextMode(contextMode: ContextMode): void;
   onUpdateSearchMode(searchMode: ResearchSearchMode): void;
+  onUpdateResearchMode(mode: ResearchMode): void;
 }
 
 interface DropdownItem {
@@ -76,6 +80,11 @@ const SEARCH_MODE_ITEMS: DropdownItem[] = [
 const CONTEXT_MODE_ITEMS: DropdownItem[] = [
   { id: "include", name: "Include" },
   { id: "filter", name: "Filter" },
+];
+
+const RESEARCH_MODE_ITEMS: DropdownItem[] = [
+  { id: "instant", name: "Instant" },
+  { id: "thinking", name: "Thinking" },
 ];
 
 export function renderChatComposer(
@@ -209,6 +218,20 @@ export function renderChatComposer(
   }
   syncIndexButton();
 
+  let currentResearchMode: Extract<ResearchMode, "instant" | "thinking"> =
+    options.researchMode === "thinking" ? "thinking" : "instant";
+  const researchModeDropdown = createMenuDropdown(modelRow, {
+    cls: "ixplorer-chat__dropdown--research-mode",
+    ariaLabel: "Research mode",
+    placeholder: "Instant",
+    items: RESEARCH_MODE_ITEMS,
+    initialId: currentResearchMode,
+    onSelect: (id) => {
+      currentResearchMode = id === "thinking" ? "thinking" : "instant";
+      options.onUpdateResearchMode(currentResearchMode);
+    },
+  });
+
   // Right cluster: context-window indicator, model selector, submit.
   const contextIndicatorEl = modelRow.createSpan({
     cls: "ixplorer-chat__context-indicator",
@@ -257,6 +280,7 @@ export function renderChatComposer(
       modelDropdown.setValue(id);
     },
     getSearchMode: () => currentSearchMode,
+    getResearchMode: () => currentResearchMode,
     getIndexProfileId: () => currentIndexId,
     setIndexProfileId: (id) => {
       currentIndexId = id;
@@ -265,6 +289,7 @@ export function renderChatComposer(
     setDisabled: (disabled) => {
       modelDropdown.setDisabled(disabled);
       sourcesModeDropdown.setDisabled(disabled);
+      researchModeDropdown.setDisabled(disabled);
       contextModeDropdown.setDisabled(disabled);
       indexButton.disabled = disabled || indexButton.hasClass("is-hidden");
       attachButton.disabled = disabled;
