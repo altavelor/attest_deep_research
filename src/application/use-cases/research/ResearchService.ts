@@ -34,16 +34,15 @@ import {
 import { ConversationEngine } from "@application/contracts/conversationView";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
 import { resolveResearchExecutionPolicy } from "@core/research";
-import { AgenticResearchFailure } from "./AgenticResearchRunner";
+import { ThinkingResearchFailure } from "./ThinkingResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";
-import { AgenticResearchStrategy } from "./strategies/AgenticResearchStrategy";
-import { EagerResearchStrategy } from "./strategies/EagerResearchStrategy";
+import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
+import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
 import { SubAgentRunner } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger, SubAgentPort } from "@application/research/subAgentPort";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
-export { selectResearchExecutionStrategy } from "./strategies/searchMode";
 
 export interface ResearchServiceOptions {
   retriever: ResearchRetriever;
@@ -74,7 +73,6 @@ export interface ResearchServiceOptions {
   modelRoundFactory: (chatModel: ChatModelProvider) => ModelRoundProvider;
   toolsEnabled?: boolean;
   getIndexStatus?: () => ContextIndexDiagnostics;
-  forceEagerResearch?: boolean;
   indexDescription?: IndexDescriptionPromptContext;
   toolCapabilities?: ToolCallingCapabilities;
   toolCapabilityProvenance?: Record<string, string>;
@@ -92,9 +90,9 @@ const DEFAULT_TEMPERATURE = 0.2;
 
 /**
  * Coordinates a single research turn. The actual work is delegated to two
- * isolated strategies — {@link AgenticResearchStrategy} (tool-driven) and
- * {@link EagerResearchStrategy} (deterministic) — while this service owns only
- * the policy decision and the cross-strategy fallback from agentic to eager.
+ * isolated strategies — {@link ThinkingResearchStrategy} (tool-driven) and
+ * {@link InstantResearchStrategy} (deterministic) — while this service owns only
+ * the policy decision and the cross-strategy fallback from thinking to instant.
  */
 export class ResearchService implements ConversationEngine {
   private readonly vaultPipeline: VaultResearchPipeline;
@@ -103,14 +101,12 @@ export class ResearchService implements ConversationEngine {
   private readonly chatModel: ChatModelProvider;
   private readonly chatModelName: string;
   private readonly chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
-  private readonly searchProvider?: SearchProvider;
-  private readonly forceEagerResearch: boolean;
   private readonly indexDescription?: IndexDescriptionPromptContext;
   private readonly toolCapabilities: ToolCallingCapabilities;
   private readonly apiFormat?: ApiFormat;
 
-  private readonly agentic: AgenticResearchStrategy;
-  private readonly eager: EagerResearchStrategy;
+  private readonly thinking: ThinkingResearchStrategy;
+  private readonly instant: InstantResearchStrategy;
 
   constructor(options: ResearchServiceOptions) {
     const evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -130,8 +126,6 @@ export class ResearchService implements ConversationEngine {
     this.chatModel = options.chatModel;
     this.chatModelName = options.chatModelName;
     this.chatOptions = chatOptions;
-    this.searchProvider = options.searchProvider;
-    this.forceEagerResearch = options.forceEagerResearch === true;
     this.indexDescription = options.indexDescription;
     this.toolCapabilities = toolCapabilities;
     this.apiFormat = options.apiFormat;
@@ -211,23 +205,21 @@ export class ResearchService implements ConversationEngine {
       now,
       persistFinalAnswer: options.persistFinalAnswer,
     };
-    this.agentic = new AgenticResearchStrategy(deps);
-    this.eager = new EagerResearchStrategy(deps);
+    this.thinking = new ThinkingResearchStrategy(deps);
+    this.instant = new InstantResearchStrategy(deps);
   }
 
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
     const policy = resolveResearchExecutionPolicy({
-      forceEagerResearch: this.forceEagerResearch,
-      searchMode,
-      dependencies: {
-        retriever: true,
-        webProvider: this.searchProvider !== undefined,
-      },
+      mode: request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant"),
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
     });
+    if (policy.strategy === "deep-research") {
+      throw new Error("Deep Research is not available yet.");
+    }
     const indexDescription =
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
@@ -241,14 +233,21 @@ export class ResearchService implements ConversationEngine {
     };
 
     let executionStrategy: ResearchExecutionStrategy = policy.strategy;
-    let failedAgenticAttempt: AgenticResearchFailure | undefined;
+    let failedThinkingAttempt: ThinkingResearchFailure | undefined;
 
-    if (policy.strategy === "agentic") {
-      const outcome = yield* this.agentic.execute(ctx);
+    if (policy.strategy === "instant-fallback") {
+      yield {
+        type: "status",
+        message: "Thinking requires tool calling for this model. Using Instant instead.",
+      };
+    }
+
+    if (policy.strategy === "thinking") {
+      const outcome = yield* this.thinking.execute(ctx);
       if (outcome.kind === "completed" || outcome.kind === "cancelled") return;
-      // Agentic attempt failed. If it gathered partial evidence, synthesize a
+      // Thinking attempt failed. If it gathered partial evidence, synthesize a
       // best-effort answer from it; otherwise fall through to the deterministic
-      // eager pipeline so a diagnostic report is still produced.
+      // instant pipeline so a diagnostic report is still produced.
       const partialEvidence = outcome.answer.evidence ?? [];
       if (partialEvidence.length > 0) {
         yield { type: "status", message: "Synthesizing from partial results…" };
@@ -265,11 +264,11 @@ export class ResearchService implements ConversationEngine {
         });
         return;
       }
-      failedAgenticAttempt = outcome.failure;
-      executionStrategy = "deterministic-fallback";
+      failedThinkingAttempt = outcome.failure;
+      executionStrategy = "instant-fallback";
     }
 
-    yield* this.eager.execute({ ...ctx, executionStrategy, failedAgenticAttempt });
+    yield* this.instant.execute({ ...ctx, executionStrategy, failedThinkingAttempt });
   }
 
   async summarizeChatHistoryForCompaction(

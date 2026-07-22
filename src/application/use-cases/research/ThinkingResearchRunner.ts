@@ -27,9 +27,9 @@ import {
   resolveResultSummary,
 } from "@application/research/toolCallLabel";
 import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
-import { buildRoundPromptDelta } from "./agenticPromptLog";
+import { buildRoundPromptDelta } from "./thinkingPromptLog";
 
-export type AgenticFallbackReason =
+export type ThinkingFallbackReason =
   | "multiple-mandatory-tools-unresolved"
   | "mandatory-repair-failed"
   | "model-round-limit-exceeded"
@@ -39,7 +39,7 @@ export type AgenticFallbackReason =
   | "context-limit-exceeded"
   | "loop-detected";
 
-export interface AgenticResearchRunnerOptions {
+export interface ThinkingResearchRunnerOptions {
   modelRound: ModelRoundProvider;
   model: string;
   messages: ChatMessage[];
@@ -76,9 +76,9 @@ export interface AgenticResearchRunnerOptions {
   onToolEvent?(callId: string, event: ToolEvent): void;
 }
 
-export type AgenticResearchResult = AgenticResearchSuccess | AgenticResearchFailure;
+export type ThinkingResearchResult = ThinkingResearchSuccess | ThinkingResearchFailure;
 
-export interface AgenticResearchSuccess {
+export interface ThinkingResearchSuccess {
   ok: true;
   answerText: string;
   diagnostics: ToolCallDiagnostic[];
@@ -98,9 +98,9 @@ export interface AgenticResearchSuccess {
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
-export interface AgenticResearchFailure {
+export interface ThinkingResearchFailure {
   ok: false;
-  reason: AgenticFallbackReason;
+  reason: ThinkingFallbackReason;
   diagnostics: ToolCallDiagnostic[];
   satisfiedTools: string[];
   repairedTools: string[];
@@ -151,14 +151,14 @@ interface CachedExecution {
   diagnostic?: Record<string, unknown>;
 }
 
-export class AgenticResearchRunner {
+export class ThinkingResearchRunner {
   private readonly modelRound: ModelRoundProvider;
 
-  constructor(private readonly options: AgenticResearchRunnerOptions) {
+  constructor(private readonly options: ThinkingResearchRunnerOptions) {
     this.modelRound = options.modelRound;
   }
 
-  async run(): Promise<AgenticResearchResult> {
+  async run(): Promise<ThinkingResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
     const required = new Set(this.options.policy.requiredTools);
     const satisfied = new Set<string>();
@@ -192,7 +192,7 @@ export class AgenticResearchRunner {
     let continuationRounds = 0;
     const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
 
-    const failure = (reason: AgenticFallbackReason): AgenticResearchFailure => ({
+    const failure = (reason: ThinkingFallbackReason): ThinkingResearchFailure => ({
       ok: false,
       reason,
       diagnostics,
@@ -513,7 +513,7 @@ export class AgenticResearchRunner {
 }
 
 async function collectRound(
-  options: AgenticResearchRunnerOptions,
+  options: ThinkingResearchRunnerOptions,
   modelRound: ModelRoundProvider,
   messages: ChatMessage[],
   toolChoice: ChatRequest["toolChoice"],

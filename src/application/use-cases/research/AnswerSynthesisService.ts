@@ -59,6 +59,8 @@ export interface AnswerSynthesisInput {
   indexDescription?: IndexDescriptionPromptContext;
   signal?: AbortSignal;
   fallback?: { reason: string };
+  /** Instant research must never request or expose model reasoning. */
+  disableThinking?: boolean;
 }
 
 export class AnswerSynthesisService {
@@ -116,6 +118,10 @@ export class AnswerSynthesisService {
     const prompt = buildResearchPrompt(promptOptions);
     let answerText = "";
     let toolDiagnostics: ToolCallDiagnostic[] = [];
+    const reasoning = input.disableThinking
+      ? { enabled: false, summary: "off" as const }
+      : this.reasoning;
+    const shouldExposeReasoning = reasoning?.enabled === true;
 
     yield { type: "status", message: "Synthesizing answer..." };
 
@@ -140,12 +146,12 @@ export class AnswerSynthesisService {
         executeTool: (toolCall) => this.noteTools!.execute(toolCall),
         maxTotalResultChars: undefined,
         signal: input.signal,
-        reasoning: this.reasoning,
+        reasoning,
         onEvent: (event) => events.push(event),
       }).finally(() => events.close());
       for await (const event of events) {
         if (event.type === "delta") yield { type: "delta", content: event.content };
-        else if (event.type === "reasoning") yield event;
+        else if (event.type === "reasoning" && shouldExposeReasoning) yield event;
         else if (
           event.type === "answer-reset" ||
           event.type === "checkpoint-delta" ||
@@ -159,7 +165,7 @@ export class AnswerSynthesisService {
       const result = await resultPromise;
       answerText = result.answerText;
       toolDiagnostics = result.diagnostics;
-      this.applyReasoningDiagnostics(input.contextDiagnostics, {
+      this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
         reasoningItemCount: result.reasoningItemCount,
         continuationRounds: result.continuationRounds,
         ...result.usage,
@@ -174,7 +180,7 @@ export class AnswerSynthesisService {
           temperature: this.chatOptions.temperature,
           maxTokens: this.chatOptions.maxTokens,
           messages,
-          reasoning: this.reasoning,
+          reasoning,
           signal: input.signal,
           onDelta: (delta) => {
             deltas.push(delta);
@@ -185,7 +191,7 @@ export class AnswerSynthesisService {
         if (delta.type === "text") {
           streamedText = true;
           yield { type: "delta", content: delta.text };
-        } else {
+        } else if (shouldExposeReasoning) {
           streamedSummaries = true;
           yield {
             type: "reasoning",
@@ -202,7 +208,7 @@ export class AnswerSynthesisService {
           details: { reason: `model-round-${result.stopReason}` },
         });
       }
-      if (!streamedSummaries) {
+      if (shouldExposeReasoning && !streamedSummaries) {
         const summaries = result.items.filter((item) => item.type === "reasoningSummary");
         for (let index = 0; index < summaries.length; index += 1) {
           yield {
@@ -221,7 +227,7 @@ export class AnswerSynthesisService {
         .filter((item) => item.type === "text")
         .map((item) => item.text)
         .join("");
-      this.applyReasoningDiagnostics(input.contextDiagnostics, {
+      this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
         reasoningItemCount: result.reasoningItemCount ?? 0,
         continuationRounds: 0,
         ...(result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }),
@@ -324,6 +330,7 @@ export class AnswerSynthesisService {
 
   private applyReasoningDiagnostics(
     diagnostics: ContextDiagnostics | undefined,
+    reasoning: AnswerSynthesisServiceOptions["reasoning"],
     counts: Pick<
       NonNullable<ContextDiagnostics["reasoning"]>,
       | "reasoningItemCount"
@@ -336,8 +343,8 @@ export class AnswerSynthesisService {
     if (!diagnostics || !this.reasoningDiagnostics) return;
     diagnostics.reasoning = {
       ...this.reasoningDiagnostics,
-      ...(this.reasoning?.effort ? { configuredEffort: this.reasoning.effort } : {}),
-      summaryRequested: this.reasoning?.summary === "auto",
+      ...(reasoning?.effort ? { configuredEffort: reasoning.effort } : {}),
+      summaryRequested: reasoning?.summary === "auto",
       ...counts,
     };
   }

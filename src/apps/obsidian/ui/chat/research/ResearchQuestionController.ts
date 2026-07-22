@@ -14,6 +14,7 @@ import {
 } from "@application/use-cases/research";
 import { estimateResearchRequestTokens, parseSubAgentDirective } from "@core/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
+import type { ResearchMode } from "@core/research";
 import type { ContextMode } from "@core/diagnostics";
 import { toUserMessage } from "@core/errors";
 import { ResearchAnswer } from "@core/answer";
@@ -51,6 +52,7 @@ export interface ResearchQuestionControllerOptions {
   saveCurrentChat(): Promise<void>;
   createResearchService(): ResearchService;
   getSearchMode(): ResearchSearchMode;
+  getResearchMode(): ResearchMode;
   getContextMode(): ContextMode;
   getActiveFilePath(): string | undefined;
   shouldIncludeActiveFileContext(): boolean;
@@ -210,6 +212,7 @@ export class ResearchQuestionController {
       for await (const event of service.answer({
         question: cleanedQuestion || question,
         forceSubAgent: forceSubAgent || undefined,
+        mode: forceSubAgent ? "thinking" : this.options.getResearchMode(),
         searchMode: this.options.getSearchMode(),
         contextMode: this.options.getContextMode(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,

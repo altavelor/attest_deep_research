@@ -140,7 +140,7 @@ a{color:var(--dr-accent)}
 .card-collapsed>summary.card-eyebrow{cursor:pointer;border-bottom:none;list-style:revert}
 .card-collapsed[open]>summary.card-eyebrow{border-bottom:1px solid var(--dr-border)}
 
-/* Agentic rounds */
+/* Thinking rounds */
 .round-call{padding:6px 0;border-bottom:1px solid var(--dr-border);font-size:12px}
 .round-call:last-child{border-bottom:none}
 .args-pre{background:var(--dr-surface-2);padding:4px 8px;border-radius:4px;overflow-x:auto;margin-top:4px;font-size:11px;white-space:pre-wrap}

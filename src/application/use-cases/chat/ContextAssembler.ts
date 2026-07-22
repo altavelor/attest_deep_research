@@ -51,7 +51,7 @@ export interface ContextAssembleRequest {
   skipRetrieval?: boolean;
   explicitSourcesOnly?: boolean;
   /**
-   * Agentic runs with note tools: large attachments are not inlined as excerpts —
+   * Thinking runs with note tools: large attachments are not inlined as excerpts —
    * they stay tool-addressable references the model reads in full via read_note.
    * Small files (single markdown under the small-file limit) still inline whole.
    */

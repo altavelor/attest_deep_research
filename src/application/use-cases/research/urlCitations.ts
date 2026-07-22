@@ -1,6 +1,6 @@
 // Rewrite the model's inline web-citation handles into human-clickable links.
 //
-// Models cite web sources by the handle `[url:https://…]` (see agenticPrompts).
+// Models cite web sources by the handle `[url:https://…]` (see thinkingPrompts).
 // That token is meant for citation *resolution*, not for a
 // reader — left verbatim in a saved note it renders as inert `[url:…]` text. This
 // turns any still-unresolved URL handle into a plain markdown link so it opens in

@@ -74,5 +74,5 @@ export function describeToolCapability(
   flag: keyof ToolCallingCapabilities,
 ): string {
   const effective = resolveToolCapabilities(settings);
-  return `Needed by agentic research. Current: ${effective.capabilities[flag] ? "enabled" : "disabled"} (${effective.provenance[flag]}).`;
+  return `Needed by thinking research. Current: ${effective.capabilities[flag] ? "enabled" : "disabled"} (${effective.provenance[flag]}).`;
 }

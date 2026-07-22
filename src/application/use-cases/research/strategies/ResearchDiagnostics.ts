@@ -145,8 +145,8 @@ export function createEmptyContextDiagnostics(
 
 /**
  * One report-level warning when index retrieval degraded to keyword-only
- * ranking (semantic path failed). Agentic runs surface it via search_index
- * ToolCallDiagnostic.metadata; eager runs via RetrievalResult.semanticError.
+ * ranking (semantic path failed). Thinking runs surface it via search_index
+ * ToolCallDiagnostic.metadata; instant runs via RetrievalResult.semanticError.
  */
 export function semanticDegradationWarning(
   sources: Array<{ semanticError?: string }>,
@@ -160,7 +160,7 @@ export function semanticDegradationWarning(
   return `Index search degraded to keyword-only ranking: semantic (embedding) search failed — ${errors.join("; ")}`;
 }
 
-export function agenticBudgets(usedResultChars: number, maxResultChars: number) {
+export function thinkingBudgets(usedResultChars: number, maxResultChars: number) {
   return {
     maxRounds: 30,
     maxResultChars,

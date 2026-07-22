@@ -1,26 +1,17 @@
 import { ChatToolChoice, ToolCallingCapabilities } from "@core/agent/tool";
 import { ApiFormat } from "@core/agent/protocol";
 import { ResearchExecutionStrategy } from "@core/diagnostics";
-import { ResearchSearchMode } from "./searchMode";
+import { ResearchMode } from "./researchMode";
 
 export type ResearchPolicyReason =
-  | "forced-eager"
-  | "eligible"
+  | "instant-selected"
+  | "thinking-eligible"
+  | "deep-research-selected"
   | "tool-calls-unavailable"
-  | "specific-choice-unavailable"
-  | "required-choice-unavailable"
-  | "parallel-calls-unavailable"
-  | "retriever-unavailable"
-  | "web-provider-unavailable"
   | "provider-tool-control-unsupported";
 
 export interface ResearchExecutionPolicyInput {
-  forceEagerResearch: boolean;
-  searchMode: ResearchSearchMode;
-  dependencies: {
-    retriever: boolean;
-    webProvider: boolean;
-  };
+  mode: ResearchMode;
   capabilities: ToolCallingCapabilities;
   apiFormat?: ApiFormat;
 }
@@ -42,10 +33,8 @@ export interface ResearchExecutionPolicy {
 export function resolveResearchExecutionPolicy(
   input: ResearchExecutionPolicyInput,
 ): Readonly<ResearchExecutionPolicy> {
-  // Codex-style: the model chooses tools itself (`auto`). The search mode is only
-  // a tool-availability filter (applied in the tool registry), never a mandate.
-  // Grounding against fabrication is handled behaviorally by the citation guard,
-  // not by forcing a specific tool here.
+  // The model chooses tools itself (`auto`); this policy only chooses the
+  // top-level research execution path.
   const base = {
     requiredTools: Object.freeze([] as string[]),
     bootstrapChoice: Object.freeze({ type: "auto" as const }),
@@ -53,13 +42,16 @@ export function resolveResearchExecutionPolicy(
     supportsSpecificChoice: input.capabilities.choiceSpecific,
   };
 
-  if (input.forceEagerResearch) {
-    return freeze({ ...base, strategy: "eager-forced", reason: "forced-eager" });
+  if (input.mode === "instant") {
+    return freeze({ ...base, strategy: "instant", reason: "instant-selected" });
+  }
+  if (input.mode === "deep-research") {
+    return freeze({ ...base, strategy: "deep-research", reason: "deep-research-selected" });
   }
   if (input.apiFormat === "ollama") {
     return freeze({
       ...base,
-      strategy: "deterministic-fallback",
+      strategy: "instant-fallback",
       reason: "provider-tool-control-unsupported",
     });
   }
@@ -69,11 +61,11 @@ export function resolveResearchExecutionPolicy(
   if (!input.capabilities.calls) {
     return freeze({
       ...base,
-      strategy: "deterministic-fallback",
+      strategy: "instant-fallback",
       reason: "tool-calls-unavailable",
     });
   }
-  return freeze({ ...base, strategy: "agentic", reason: "eligible" });
+  return freeze({ ...base, strategy: "thinking", reason: "thinking-eligible" });
 }
 
 function freeze(policy: ResearchExecutionPolicy): Readonly<ResearchExecutionPolicy> {

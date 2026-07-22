@@ -1,4 +1,4 @@
-import { AgenticResearchRunner } from "@application/use-cases/research/AgenticResearchRunner";
+import { ThinkingResearchRunner } from "@application/use-cases/research/ThinkingResearchRunner";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { ResearchExecutionPolicy } from "@core/research";
 import { Tool } from "@core/agent";
@@ -41,8 +41,8 @@ function tool(
 
 function policy(requiredTools: string[]): ResearchExecutionPolicy {
   return {
-    strategy: "agentic",
-    reason: "eligible",
+    strategy: "thinking",
+    reason: "thinking-eligible",
     requiredTools,
     bootstrapChoice:
       requiredTools.length === 1
@@ -53,7 +53,7 @@ function policy(requiredTools: string[]): ResearchExecutionPolicy {
   };
 }
 
-describe("AgenticResearchRunner", () => {
+describe("ThinkingResearchRunner", () => {
   it("keeps Responses continuation outside the message transcript", async () => {
     const search = tool("search_index");
     const continuation: ProviderContinuationState = {
@@ -79,7 +79,7 @@ describe("AgenticResearchRunner", () => {
           : { items: [{ type: "text" as const, text: "final" }], stopReason: "complete" as const };
       }),
     };
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: roundProvider,
       model: "m",
       messages: [{ role: "user", content: "q" }],
@@ -116,7 +116,7 @@ describe("AgenticResearchRunner", () => {
         };
       }),
     };
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: roundProvider,
       model: "m",
       messages: [{ role: "user", content: "q" }],
@@ -143,7 +143,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "final answer", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [{ role: "user", content: "q" }],
@@ -176,7 +176,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "final answer", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [
@@ -221,7 +221,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "done", isComplete: true }],
     ]);
-    const repaired = await new AgenticResearchRunner({
+    const repaired = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(repairProvider),
       model: "m",
       messages: [],
@@ -234,7 +234,7 @@ describe("AgenticResearchRunner", () => {
       name: "search_index",
     });
 
-    const failed = await new AgenticResearchRunner({
+    const failed = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(
         new ScriptedProvider([[{ content: "no tools", isComplete: true }]]),
       ),
@@ -254,7 +254,7 @@ describe("AgenticResearchRunner", () => {
       [{ content: "", isComplete: true, toolCalls: [{ ...call, id: "2" }] }],
       [{ content: "done", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -280,7 +280,7 @@ describe("AgenticResearchRunner", () => {
       [{ content: "", isComplete: true, toolCalls: [{ ...call, id: "2" }] }],
       [{ content: "done", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -323,7 +323,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "synthesized", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -366,7 +366,7 @@ describe("AgenticResearchRunner", () => {
         },
       ],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -397,7 +397,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "synthesized answer", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -456,7 +456,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "final", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -495,7 +495,7 @@ describe("AgenticResearchRunner", () => {
       ],
       [{ content: "final", isComplete: true }],
     ]);
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -539,7 +539,7 @@ describe("AgenticResearchRunner", () => {
       [{ content: "final", isComplete: true }],
     ]);
 
-    const resultPromise = new AgenticResearchRunner({
+    const resultPromise = new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -599,7 +599,7 @@ describe("AgenticResearchRunner", () => {
     ]);
 
     const results: string[] = [];
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],
@@ -647,7 +647,7 @@ describe("AgenticResearchRunner", () => {
       [{ content: "final", isComplete: true }],
     ]);
 
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: new ChatCompletionsRoundAdapter(provider),
       model: "m",
       messages: [],

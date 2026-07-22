@@ -21,39 +21,40 @@ export function computeFindings(sections: ReportSections): FindingsSection {
   const { model, preflight, request, reasoning, answer } = sections;
 
   // error: tool-calls-blocked
-  if (model.toolCapabilities.calls === false && model.executionStrategy !== "eager-forced") {
+  if (model.toolCapabilities.calls === false && model.executionStrategy !== "instant") {
     findings.push({
       severity: "error",
       code: "tool-calls-blocked",
       title: "Tool calls unavailable for this model",
       detail:
-        "The model does not support tool calling. Agentic research requires tool calls. Run the capability probe in Settings to check support, or set tool capabilities manually.",
+        "The model does not support tool calling. Thinking research requires tool calls. Run the capability probe in Settings to check support, or set tool capabilities manually.",
       affectedSection: "model",
       evidence: { calls: false, provenance: model.toolCapabilities.provenance },
     });
   }
 
-  // error: agentic-policy-fallback
+  // error: thinking-policy-fallback
   if (
-    request.agenticPolicy.policyReason !== "eligible" &&
-    request.agenticPolicy.policyReason !== "forced-eager"
+    model.executionStrategy !== "instant" &&
+    request.thinkingPolicy.policyReason !== "thinking-eligible" &&
+    request.thinkingPolicy.policyReason !== "instant-selected"
   ) {
     findings.push({
       severity: "error",
-      code: "agentic-policy-fallback",
-      title: `Agentic mode blocked: ${request.agenticPolicy.policyReason}`,
-      detail: `The research request fell back to deterministic mode because: ${request.agenticPolicy.policyReason}. Check model capabilities and search provider configuration.`,
+      code: "thinking-policy-fallback",
+      title: `Thinking mode blocked: ${request.thinkingPolicy.policyReason}`,
+      detail: `The research request fell back to Instant because: ${request.thinkingPolicy.policyReason}. Check model capabilities and search provider configuration.`,
       affectedSection: "request",
-      evidence: { policyReason: request.agenticPolicy.policyReason },
+      evidence: { policyReason: request.thinkingPolicy.policyReason },
     });
   }
 
   // error: mandatory-tool-unsatisfied
-  if (reasoning.agenticLoop) {
+  if (reasoning.thinkingLoop) {
     const unsatisfied =
-      reasoning.agenticLoop.satisfiedTools !== undefined
-        ? request.agenticPolicy.requiredTools.filter(
-            (t) => !reasoning.agenticLoop!.satisfiedTools.includes(t),
+      reasoning.thinkingLoop.satisfiedTools !== undefined
+        ? request.thinkingPolicy.requiredTools.filter(
+            (t) => !reasoning.thinkingLoop!.satisfiedTools.includes(t),
           )
         : [];
     if (unsatisfied.length > 0) {
@@ -61,12 +62,12 @@ export function computeFindings(sections: ReportSections): FindingsSection {
         severity: "error",
         code: "mandatory-tool-unsatisfied",
         title: "Required tools were not satisfied",
-        detail: `The agentic loop finished without satisfying required tools: ${unsatisfied.join(", ")}. Check tool availability and model behavior.`,
+        detail: `The thinking loop finished without satisfying required tools: ${unsatisfied.join(", ")}. Check tool availability and model behavior.`,
         affectedSection: "reasoning",
         evidence: {
           unsatisfied,
-          satisfiedTools: reasoning.agenticLoop.satisfiedTools,
-          fallbackReason: reasoning.agenticLoop.fallbackReason,
+          satisfiedTools: reasoning.thinkingLoop.satisfiedTools,
+          fallbackReason: reasoning.thinkingLoop.fallbackReason,
         },
       });
     }
@@ -128,20 +129,20 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // warning: agentic-loop-zero-tool-calls
+  // warning: thinking-loop-zero-tool-calls
   if (
-    reasoning.agenticLoop &&
-    reasoning.agenticLoop.totalCalls === 0 &&
-    reasoning.agenticLoop.totalRounds > 0
+    reasoning.thinkingLoop &&
+    reasoning.thinkingLoop.totalCalls === 0 &&
+    reasoning.thinkingLoop.totalRounds > 0
   ) {
     findings.push({
       severity: "warning",
-      code: "agentic-loop-zero-tool-calls",
-      title: "Agentic loop ran but made no tool calls",
+      code: "thinking-loop-zero-tool-calls",
+      title: "Thinking loop ran but made no tool calls",
       detail:
         "The model completed all rounds without calling any tools. The answer may be based on context alone, without retrieval.",
       affectedSection: "reasoning",
-      evidence: { rounds: reasoning.agenticLoop.totalRounds, totalCalls: 0 },
+      evidence: { rounds: reasoning.thinkingLoop.totalRounds, totalCalls: 0 },
     });
   }
 

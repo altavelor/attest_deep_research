@@ -15,7 +15,10 @@ import {
   formatProgressPercent,
   messageDisplayContent,
 } from "@apps/obsidian/ui/chat/conversationFormatting";
-import { chatModelProfileLabel as selectedChatModelProfileLabel } from "@apps/obsidian/ui/chat/chatViewHelpers";
+import {
+  chatModelProfileLabel as selectedChatModelProfileLabel,
+  resolveChatSettings,
+} from "@apps/obsidian/ui/chat/chatViewHelpers";
 import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvidence";
 import { shouldScrollSavedChatsList } from "@apps/obsidian/ui/chat/history/savedChatListState";
 import { ContextDiagnostics } from "@core/diagnostics";
@@ -23,6 +26,31 @@ import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
 
 describe("chat rendering helpers", () => {
+  it("restores saved research mode and defaults legacy chats to Instant", () => {
+    const services = {
+      getChatModelProfiles: () => [{ id: "model", name: "Model" }],
+      getDefaultChatModelProfileId: () => "model",
+      getIndexProfiles: () => [{ id: "index", name: "Index", isIndexed: true }],
+      getDefaultIndexProfileId: () => "index",
+    };
+
+    expect(
+      resolveChatSettings(services, {
+        chatModelProfileId: "model",
+        indexProfileId: "index",
+        searchMode: "indexOnly",
+        researchMode: "thinking",
+      }).researchMode,
+    ).toBe("thinking");
+    expect(
+      resolveChatSettings(services, {
+        chatModelProfileId: "model",
+        indexProfileId: "index",
+        searchMode: "indexOnly",
+      }).researchMode,
+    ).toBe("instant");
+  });
+
   it("keeps included context paths on the sent user message", () => {
     const messages = nextUserMessage([], "Summarize this", ["Docs/one.md", "Docs/two.pdf"]);
 

@@ -106,7 +106,6 @@ export interface IxplorerSettings {
   expandFilteredContextThroughLinks: boolean;
   graphContextDepth: number;
   useWebWhenFreshnessNeeded: boolean;
-  forceEagerResearch: boolean;
   /** Default vault folder for documents downloaded on demand (PDFs etc.). */
   downloadFolder: string;
   debugMode: boolean;

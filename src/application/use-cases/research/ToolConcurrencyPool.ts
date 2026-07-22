@@ -1,4 +1,4 @@
-// Bounded-concurrency limiter used by AgenticResearchRunner to run several
+// Bounded-concurrency limiter used by ThinkingResearchRunner to run several
 // `run_subagent` calls within one round concurrently instead of one at a time.
 // No external dependency: a small counting semaphore over a FIFO wait queue.
 

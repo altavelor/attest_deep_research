@@ -1,5 +1,5 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
-import { buildAgenticResearchMessages } from "@core/research";
+import { buildThinkingResearchMessages } from "@core/research";
 import { PROMPT_TOOL_NAMES, WEB_FETCH_TOOL } from "@core/agent";
 import { ResearchRetriever } from "@application/contracts";
 import { SearchProvider } from "@application/ports";
@@ -60,7 +60,7 @@ function registryFor(searchMode: ResearchSearchMode) {
 function promptFor(searchMode: ResearchSearchMode): { text: string; available: string[] } {
   const created = registryFor(searchMode);
   const available = created.tools.definitions().map((d) => d.function.name);
-  const messages = buildAgenticResearchMessages({
+  const messages = buildThinkingResearchMessages({
     question: "Open a URL and also search my vault",
     requiredTools: [],
     toolContext: {
@@ -80,7 +80,7 @@ function stripAvailabilityRule(text: string): string {
   return text.replace(/## Source availability \(hard limit\)[\s\S]*?(?=\n\n|$)/, "");
 }
 
-describe("agentic prompt ↔ tool registry drift guard", () => {
+describe("thinking prompt ↔ tool registry drift guard", () => {
   it.each(PROFILES)(
     "advertises no tool that the runtime did not register ($name)",
     ({ searchMode }) => {

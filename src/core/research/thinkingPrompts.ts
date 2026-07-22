@@ -30,20 +30,20 @@ import { currentDateLine, ResearchChatHistoryMessage } from "./prompts";
  * of tools the runtime registered (`ToolManager.definitions()`), so the prompt can
  * never mention a tool the model cannot actually call.
  */
-export interface AgenticToolContext {
+export interface ThinkingToolContext {
   coreVariant: "vault" | "research";
   availableTools: readonly string[];
   indexDescription?: string;
 }
 
-export interface BuildAgenticResearchMessagesOptions {
+export interface BuildThinkingResearchMessagesOptions {
   question: string;
   chatHistory?: ResearchChatHistoryMessage[];
   requiredTools: readonly string[];
   explicitEvidence?: RetrievedChunk[];
   /** User-attached vault files; rendered as a manifest so the model sees them as files. */
   attachedFiles?: AttachedFileManifestEntry[];
-  toolContext: AgenticToolContext;
+  toolContext: ThinkingToolContext;
   /** Injectable clock for deterministic tests; defaults to the real current date. */
   now?: Date;
 }
@@ -517,8 +517,8 @@ Each result has:
 - \`path\` — vault path of the source note (for reference only, not for use as evidenceId)`;
 }
 
-export function buildAgenticResearchMessages(
-  options: BuildAgenticResearchMessagesOptions,
+export function buildThinkingResearchMessages(
+  options: BuildThinkingResearchMessagesOptions,
 ): ChatMessage[] {
   const { toolContext } = options;
   const tools: ToolSet = new Set(toolContext.availableTools);

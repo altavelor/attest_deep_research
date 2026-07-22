@@ -4,7 +4,7 @@
 import { MarkdownExtractor, stableId } from "@adapters/extractors";
 import { ContextAssembler } from "@application/use-cases/chat";
 import {
-  buildAgenticResearchMessages,
+  buildThinkingResearchMessages,
   buildAttachmentManifestSection,
   buildResearchPrompt,
 } from "@core/research";
@@ -105,7 +105,7 @@ describe("ContextAssembler attachments", () => {
 });
 
 describe("prompt rendering", () => {
-  it("renders the manifest and annotated explicit section in the eager prompt", () => {
+  it("renders the manifest and annotated explicit section in the instant prompt", () => {
     const prompt = buildResearchPrompt({
       question: "q",
       evidence: [],
@@ -129,9 +129,9 @@ describe("prompt rendering", () => {
     expect(prompt).toContain("read_note, update_note");
   });
 
-  it("includes the manifest in agentic messages gated on read_note", () => {
+  it("includes the manifest in thinking messages gated on read_note", () => {
     const build = (availableTools: string[]) =>
-      buildAgenticResearchMessages({
+      buildThinkingResearchMessages({
         question: "q",
         requiredTools: [],
         attachedFiles: [{ path: "notes/Huge.md", coverage: "reference" }],

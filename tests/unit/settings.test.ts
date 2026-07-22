@@ -87,6 +87,18 @@ describe("Ixplorer settings", () => {
     expect(settings.debugMode).toBe(true);
   });
 
+  it("ignores the removed forceEagerResearch key in existing saved settings", () => {
+    const savedWithLegacyKey = {
+      ...currentSettings(),
+      forceEagerResearch: true,
+    };
+
+    const settings = readSettings(savedWithLegacyKey);
+
+    expect(settings).toEqual(DEFAULT_SETTINGS);
+    expect(settings).not.toHaveProperty("forceEagerResearch");
+  });
+
   it("resolves current tool and reasoning settings", () => {
     const profile = currentSettings({
       serverProfiles: [

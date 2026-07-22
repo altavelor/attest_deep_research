@@ -1,11 +1,11 @@
 // Canonical tool names — the single source of truth shared by tool definitions
-// (adapters), the agentic prompt (core/research), and presence checks
+// (adapters), the thinking prompt (core/research), and presence checks
 // (application). Renaming a tool is a one-line change here that updates the tool's
 // schema, its prompt guidance, and every `has(...)` gate at once — so the prompt
 // can never advertise a tool the runtime does not register.
 //
 // Every registered research tool has a constant here. `PROMPT_TOOL_NAMES` (bottom)
-// is the subset the agentic prompt may reference and drives the drift-guard test.
+// is the subset the thinking prompt may reference and drives the drift-guard test.
 
 // --- Index evidence + inventory ---
 export const INDEX_SEARCH_TOOL = "search_index";
@@ -65,7 +65,7 @@ export const NOTE_EDIT_TOOLS = [
 /** Note mutation (write) tools. */
 export const NOTE_MUTATION_TOOLS = [CREATE_NOTE_TOOL, UPDATE_NOTE_TOOL, DELETE_NOTE_TOOL] as const;
 
-/** Every tool name the agentic prompt may reference. Drives the drift guard test. */
+/** Every tool name the thinking prompt may reference. Drives the drift guard test. */
 export const PROMPT_TOOL_NAMES = [
   INDEX_SEARCH_TOOL,
   READ_INDEX_CHUNK_TOOL,
