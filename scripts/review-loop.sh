@@ -151,20 +151,33 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
       echo "Timed out waiting for the review after ${POLL_TIMEOUT}s." >&2
       exit 1 ;;
     fail)
-      echo "Review failed. Building fixer prompt from findings..." ;;
+      echo "Review failed. Incorporating the reviewer's own fixes, then the rest..." ;;
   esac
+
+  before="$(git rev-parse HEAD)"
+
+  # The review integration (e.g. Codex Cloud) may push its own fix commits to the
+  # PR branch. Pull them first so the local fixer builds on top of the reviewer's
+  # edits and only addresses what is still open, instead of racing/duplicating.
+  if ! git pull --rebase origin "$branch"; then
+    git rebase --abort 2>/dev/null || true
+    echo "Could not rebase onto origin/$branch (conflicting fixes from the review" >&2
+    echo "integration). Resolve manually on PR #$pr_number." >&2
+    exit 1
+  fi
 
   prompt="$(
     cat "$script_dir/../.github/agent/fix.md"
     echo
     echo "Pull request: #${pr_number} (branch ${branch}, base ${BASE_BRANCH})"
     echo
+    echo "The reviewer's own fix commits (if any) are already applied to the working"
+    echo "tree. Only address findings that remain unresolved after those edits."
+    echo
     collect_findings
   )"
 
-  before="$(git rev-parse HEAD)"
-
-  echo "Running local agent..."
+  echo "Running local agent on the remaining findings..."
   printf '%s\n' "$prompt" | eval "$AGENT_EXEC_CMD"
 
   echo "Running validation..."
@@ -181,7 +194,15 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
 
   after="$(git rev-parse HEAD)"
   if [[ "$before" == "$after" ]]; then
-    echo "The agent produced no new commit; nothing changed. Stopping." >&2
+    echo "Neither the reviewer nor the local fixer changed anything; cannot make" >&2
+    echo "progress on PR #$pr_number. Stopping." >&2
+    exit 1
+  fi
+
+  # Reconcile once more in case the reviewer pushed during the fixer run.
+  if ! git pull --rebase origin "$branch"; then
+    git rebase --abort 2>/dev/null || true
+    echo "Could not rebase before pushing; resolve manually on PR #$pr_number." >&2
     exit 1
   fi
 

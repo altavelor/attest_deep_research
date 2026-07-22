@@ -217,6 +217,162 @@ Reports can be viewed in readable or raw JSON format and downloaded to disk.
 
 Use [docs/manual-test-checklist.md](docs/manual-test-checklist.md) before a development release. It covers settings, model connectivity, indexing, retrieval, web search, saving answers, and clearing the local index.
 
+## GitHub Task Automation
+
+Issue-driven tasks are implemented, published, and reviewed through a set of
+scripts in [`scripts/`](scripts/) that drive an AI coding agent via the GitHub
+CLI. The flow is **CLI-neutral**: the agent command and the review trigger are
+configuration, so Codex, Claude Code, Aider, or any other CLI can be plugged in.
+
+Lifecycle: GitHub issue → task branch + implementation → validation → draft PR →
+independent AI review → local fix loop → human merge.
+
+### Prerequisites
+
+- [`gh`](https://cli.github.com/) authenticated (`gh auth login`), plus `git`,
+  `jq`, `npm`, and your chosen agent CLI on `PATH`.
+- Labels created once per repository: `scripts/setup-labels.sh`.
+- For AI review, the review integration configured on the repository (e.g. the
+  Codex GitHub App with Code review enabled at
+  [chatgpt.com/codex](https://chatgpt.com/codex)).
+
+### Configuration — `scripts/agent.env`
+
+The scripts source [`scripts/agent.env`](scripts/agent.env); every value can also
+be overridden through the environment. Key settings:
+
+| Variable         | Purpose                                                                                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BASE_BRANCH`    | Branch task branches are created from and reviewed against (default `main`).                                                                                                                |
+| `AGENT_EXEC_CMD` | Command that runs the agent on a prompt read from STDIN. Examples: `codex exec -`, `claude -p`, `aider --message-file -`.                                                                   |
+| `REVIEW_TRIGGER` | PR comment that triggers the AI review, e.g. `@codex review`.                                                                                                                               |
+| `REVIEW_SOURCE`  | How the fix loop decides pass/fail: `comments` (built-in review posted on the PR — no repo key, uses your review subscription) or `check` (a CI status check — deterministic, needs a key). |
+
+Fix-loop tuning: `MAX_REVIEW_ITERS`, `REVIEW_POLL_INTERVAL`,
+`REVIEW_POLL_TIMEOUT`, and (in `check` mode) `REVIEW_CHECK_NAME`.
+
+### Usage
+
+```bash
+# 1. Create a structured task (uses .github/ISSUE_TEMPLATE/agent-task.yml)
+gh issue create --template agent-task.yml
+
+# 2. Implement: create the task branch and run the agent on a normalized prompt
+scripts/agent-task.sh <issue-number>
+
+# 3. Publish: validate (npm run check), push, open a draft PR linked to the
+#    issue, and request an independent AI review
+scripts/publish-task.sh <issue-number>
+
+# 4. Review loop: wait for the review; on failure feed the findings (and any
+#    fixes the reviewer pushed itself) to the agent, re-validate, push, and
+#    re-request review until it passes
+scripts/review-loop.sh <issue-number>
+```
+
+Merge stays a human decision; the scripts never merge.
+
+### Creating a task issue
+
+The issue is the contract the agent works from, so treat it as a specification
+rather than a one-line command. A good issue states **what** to achieve and
+**how success is verified**, and bounds **where** changes may happen. It should
+cover the same fields the issue form asks for:
+
+- **Goal** — the outcome to achieve.
+- **Context** — why it is needed.
+- **Acceptance criteria** — a checklist of verifiable conditions.
+- **Allowed scope** — files or modules that may change.
+- **Out of scope** — changes that must not be made.
+- **Risks and constraints** — compatibility, security, or architectural limits.
+- **Validation commands** — usually `npm run check`.
+
+The `type:*` label sets the branch prefix (`type:bug` → `fix/…`,
+`type:feature` → `feat/…`, `type:refactor` → `refactor/…`, otherwise `chore/…`),
+and `status:ready` marks it available to pick up.
+
+**Option A — interactive form.** Fills the fields through the GitHub template
+[`.github/ISSUE_TEMPLATE/agent-task.yml`](.github/ISSUE_TEMPLATE/agent-task.yml):
+
+```bash
+gh issue create --template agent-task.yml
+```
+
+**Option B — from a specification file.** Write the task once as a Markdown
+spec and pass it with `--body-file`. This keeps the spec reviewable in git and
+reproducible, and is the better fit for larger tasks:
+
+```bash
+# .github/tasks/search-duplicates.md  (any path works; keeping specs in the
+# repo makes them reviewable and reusable)
+gh issue create \
+  --title "fix(search): prevent duplicate research results" \
+  --label "agent,status:ready,type:bug,risk:medium" \
+  --assignee "@me" \
+  --body-file .github/tasks/search-duplicates.md
+```
+
+A spec file mirrors the form fields, for example:
+
+```md
+## Goal
+
+Prevent duplicate results when the same source is retrieved by both vault and
+web search in one research round.
+
+## Context
+
+Users see the same note or page twice in the evidence list, which inflates the
+token budget and confuses citations.
+
+## Acceptance criteria
+
+- [ ] Evidence is de-duplicated by normalized source identity before synthesis.
+- [ ] Vault and web hits for the same URL collapse into one cited source.
+- [ ] A regression test covers a round that retrieves one source twice.
+
+## Allowed scope
+
+- `src/application/research/`
+- `tests/`
+
+## Out of scope
+
+- Ranking or scoring changes.
+- Any UI changes.
+
+## Risks and constraints
+
+- Must not drop distinct sources that merely share a title.
+- Preserve existing citation numbering behavior.
+
+## Validation commands
+
+npm run check
+```
+
+Once the issue exists, note its number and continue with `scripts/agent-task.sh
+<issue-number>`. To pick up an already-filed task, list what is ready:
+
+```bash
+gh issue list --label "agent,status:ready" --state open \
+  --json number,title,url
+```
+
+### Review sources
+
+- **`comments` (keyless).** The loop posts `REVIEW_TRIGGER` and polls the PR's
+  review comments. A fresh review with new inline findings counts as a failure;
+  one without them counts as a pass. The heuristic depends on how the reviewer
+  formats output and may need tuning. Note the built-in reviewer may skip draft
+  PRs (use `gh pr ready`) and may push its own fix commits — the loop pulls those
+  in before running the local fixer.
+- **`check` (deterministic).** Enable the optional blocking gate by renaming
+  [`.github/workflows/agent-review.yml.example`](.github/workflows/agent-review.yml.example)
+  to `agent-review.yml`, adding the API-key secret it documents, and marking the
+  `agent-review` status check required in a branch ruleset. The workflow emits
+  `VERDICT: PASS` / `VERDICT: FAIL`, and the loop reads that check.
+
 ## Known Limitations
 
 - Desktop Obsidian only; mobile is not supported.
