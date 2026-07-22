@@ -1,0 +1,75 @@
+# OPTIONAL blocking AI-review gate — EXAMPLE, not active.
+#
+# The built-in review integration (triggered by the REVIEW_TRIGGER comment from
+# scripts/publish-task.sh) publishes findings but is not a required status check.
+# Use this workflow only if you want the AI review to *block* merges via a
+# required status check named "agent-review".
+#
+# This example is vendor-specific: it runs the OpenAI Codex action and needs an
+# OPENAI_API_KEY repository secret. To adapt it to another CLI, replace the
+# "Run review" step with your own runner that consumes .github/agent/review.md
+# and writes a report ending in "VERDICT: PASS" or "VERDICT: FAIL".
+#
+# To activate: rename this file to agent-review.yml, add the required secret,
+# and mark the "agent-review" check as required in a branch ruleset for main.
+
+name: Agent Review Gate
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: agent-review
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout pull request merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Vendor-specific step. Replace with your CLI of choice if not using Codex.
+      - name: Run review
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/agent/review.md
+          output-file: agent-review.md
+          sandbox: read-only
+          codex-args: '["--ephemeral"]'
+
+      - name: Display review
+        if: always()
+        shell: bash
+        run: cat agent-review.md
+
+      - name: Enforce verdict
+        shell: bash
+        run: |
+          verdict="$(grep -E '^VERDICT: (PASS|FAIL)$' agent-review.md | tail -n 1)"
+          if [[ "$verdict" != "VERDICT: PASS" ]]; then
+            echo "::error::Agent review did not pass"
+            exit 1
+          fi
+
+      - name: Upload review artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-review-${{ github.event.pull_request.number }}
+          path: agent-review.md

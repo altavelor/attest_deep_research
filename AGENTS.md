@@ -1,119 +1,171 @@
-# Архитектурные правила Ixplorer
+# Ixplorer Repository Instructions
 
-Этот файл — обязательные правила для любого агента (Claude/GPT/etc.), расширяющего
-или рефакторящего код. Они описывают **целевую архитектуру**, к которой приведён
-проект, и которой нужно следовать при добавлении функционала. Не «рекомендации» —
-инварианты: PR/коммит, нарушающий их, считается некорректным.
+## Project and task source
 
----
+Ixplorer is an open-source Obsidian plugin written in TypeScript.
 
-## 1. Слои и правило зависимостей
+For issue-driven work, the linked GitHub issue is the source of truth. Before
+changing code, read the complete issue, identify every acceptance criterion,
+read the applicable `AGENTS.md` files, and inspect the relevant implementation
+and tests. Stay within the issue scope; do not make unrelated refactors.
 
-Код разделён на 4 слоя. **Зависимости направлены строго внутрь** (Dependency Rule).
-Внутренний слой не знает о существовании внешних.
+`AGENTS.md` files may be placed in subdirectories (for example, `src/` or
+`tests/`). Instructions closest to a changed file supplement this file and take
+precedence for that file.
 
-```
-apps  →  adapters  →  application  →  core
-(самый внешний)                      (самый внутренний)
-```
+## Git, commits, and pull requests
 
-| Слой            | Каталог            | Назначение                                                                                              | Кому можно импортировать          |
-| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| **core**        | `src/core/`        | Платформенно-независимая доменная логика и типы. Чистые функции, без I/O.                               | только `core`                     |
-| **application** | `src/application/` | Use-cases, оркестрация. Зависит от core и от **портов** (`application/contracts`, `application/ports`). | `core`, `application`             |
-| **adapters**    | `src/adapters/`    | Реализации портов: провайдеры моделей, индексация, settings, web, glue к Obsidian.                      | `core`, `application`, `adapters` |
-| **apps**        | `src/apps/`        | Точки входа (Obsidian-плагин), composition root, UI.                                                    | любой слой                        |
+Use a task branch named one of:
 
-**Проверяемые инварианты** (машинно, через `dependency-cruiser` — [.dependency-cruiser.cjs](.dependency-cruiser.cjs)):
+- `feat/<issue-number>-<description>`
+- `fix/<issue-number>-<description>`
+- `refactor/<issue-number>-<description>`
+- `chore/<issue-number>-<description>`
 
-```bash
-npm run depcruise    # правила слоёв §1 + детект рантайм-циклов (§2). Должно быть 0 errors.
-```
+Make atomic Conventional Commits. Each commit must contain one logical change
+and use `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, or `chore:`. Do not mix
+unrelated work, generated output, secrets, tokens, environment files, personal
+paths, or local configuration into a commit. Never edit generated files by hand.
+Do not mention yourself in commit messages
 
-Эквивалентная ручная проверка слоёв (должна давать пустой результат) — grep ловит и алиасы `@adapters/…`:
+Before publishing a task branch, run:
 
 ```bash
-grep -rE 'from "[^"]*(adapters|apps|application)/' src/core      # core наружу — запрещено
-grep -rE 'from "[^"]*(adapters|apps)/'           src/application # application → adapters/apps — запрещено
-grep -rE 'from "[^"]*apps/'                       src/adapters    # adapters → apps — запрещено
+npm ci
+npm run check
 ```
 
-**Следствия при расширении:**
+Both commands must pass. `npm run check` runs type checking, the platform-neutral
+core check, tests, dependency-cruiser, formatting, and the production build.
 
-- Новая бизнес-логика → `core` (чистая) или `application` (оркестрация). Не в adapters/apps.
-- Внешняя зависимость (HTTP, файлы, Obsidian API, БД) — только в `adapters`/`apps`. В core/application она входит **через порт-интерфейс**, реализация инжектится.
-- Если `application`-коду нужен новый внешний сервис — объяви **порт** в `application/ports` (или контракт в `application/contracts`) и реализуй в `adapters`. Не импортируй адаптер напрямую.
+After implementation, validate, commit the intended changes, push the task
+branch, and open a pull request against `main`. Link the source issue, request
+an independent Codex review, and do not merge the pull request or mark it ready
+until review findings are resolved. The PR report must include Summary, Linked
+issue, Changes, Validation, Risks, and Review status.
 
----
+## General implementation rules
 
-## 2. Модули и файлы
+- Preserve backward compatibility unless the issue explicitly permits a break.
+- Do not add dependencies without a clear, task-specific justification.
+- Add or update tests for every changed behavior.
+- Handle failures and invalid external input explicitly.
+- Treat external data as untrusted; clean up resources, subscriptions,
+  listeners, timers, and temporary files.
+- Match nearby code style. Comments explain why, not obvious mechanics.
 
-- **Одна ответственность на модуль.** Файл описывает одну связную вещь.
-- **Ориентир по размеру: ~300–400 строк.** Файл, растущий к 600+, — сигнал к разбиению, а не к дописыванию. (Исторический потолок проекта — следствие god-файлов; не воспроизводить.)
-- **Ацикличность.** Рантайм-циклы импортов запрещены (проверяет `npm run depcruise`). Если две группы тянут друг друга, вынеси общую низкоуровневую часть в leaf-модуль (`constants.ts`, `parsers.ts`, `*Diagnostics.ts`) и направь импорты снизу вверх. Циклы, замкнутые только через `import type`, рантайм-безопасны (стираются компилятором) и репортятся как `info` — не блокируют, но остаются кандидатами на разрыв через leaf-модуль типа.
-- **Публичный API модуля — через баррель `index.ts`.** Модуль на границе (bounded-context) выставляет наружу курируемый `index.ts` с намеренно публичными символами; всё остальное — внутренняя реализация, снаружи невидимая. Внешние потребители импортируют `@<layer>/<module>` (напр. `@adapters/research-tools`), а не глубокие пути во внутренности. Баррель — не «export \* со всего»: продакшн-поверхность обычно узкая. Инвариант: файлы **внутри** модуля не импортируют свой баррель (только соседей через `./…`) — иначе цикл. Эталон: [src/adapters/research-tools/index.ts](src/adapters/research-tools/index.ts) (потребитель — [composition/factories.ts](src/apps/obsidian/composition/factories.ts)). White-box юнит-тесты конкретных внутренних классов — легитимное исключение: им можно подключать внутренности напрямую.
-- **Импорты между слоями/модулями — через path-алиасы**, не через `../../../`. Настроены `@core/*`, `@application/*`, `@adapters/*`, `@apps/*`, `@shared/*` (в [tsconfig.json](tsconfig.json), [esbuild.config.mjs](esbuild.config.mjs), [vitest.config.ts](vitest.config.ts) — держать синхронными). Алиасы кросс-модульные; импорт соседа внутри своего модуля остаётся относительным (`./sibling`).
-- **Чистые свободные функции** не должны жить хвостом большого класса — выноси их в соседний helper-модуль.
+## Architecture
 
----
+Dependencies point strictly inward:
 
-## 3. Паттерны по слоям
+```text
+apps -> adapters -> application -> core
+```
 
-### application — изолированные стратегии
+| Layer       | Directory          | Responsibility                                                            | May import                  |
+| ----------- | ------------------ | ------------------------------------------------------------------------- | --------------------------- |
+| core        | `src/core/`        | Platform-neutral domain types and pure logic; no I/O.                     | core                        |
+| application | `src/application/` | Use cases and orchestration; ports and contracts.                         | core, application           |
+| adapters    | `src/adapters/`    | Port implementations: models, indexing, settings, web, and Obsidian glue. | core, application, adapters |
+| apps        | `src/apps/`        | Obsidian entry points, composition root, and UI.                          | any layer                   |
 
-Различные пути исполнения одного use-case — **отдельные сущности за общим интерфейсом**, а не ветки `if/else` в одном методе. Координатор только выбирает стратегию и оркеструет переходы между ними.
-Эталон: `ResearchService` (тонкий диспетчер) + `EagerResearchStrategy` / `AgenticResearchStrategy` за `ResearchStrategy` ([src/application/use-cases/research/](src/application/use-cases/research/)). Общие коллабораторы передаются стратегиям через `ResearchStrategyDeps`, а не через ссылку на сервис.
+Put new business logic in `core` (pure) or `application` (orchestration), not in
+adapters or UI. HTTP, file-system, database, and Obsidian APIs belong only in
+`adapters` or `apps`. Application code accesses an external service through a
+port in `src/application/ports/` or a contract in `src/application/contracts/`;
+implement and inject that port from an adapter. A use case must not construct or
+import its adapter.
 
-### apps — composition root
+`npm run depcruise` enforces the layer boundaries and forbids runtime import
+cycles. Type-only cycles are non-blocking but should be broken by extracting a
+shared type into a low-level leaf module when practical.
 
-Сборка DI-графа (фабрики `create*`) живёт в [src/apps/obsidian/composition/](src/apps/obsidian/composition/) за интерфейсом `CompositionContext`, **не** в теле `Plugin`. `main.ts` хранит только lifecycle и тонкую проводку. Фабрики не обращаются обратно к экземпляру плагина — только к переданному контексту.
+### Modules and imports
 
-### apps/ui — UI не содержит оркестрацию
+- Keep one coherent responsibility per module. Split a file approaching roughly
+  400 lines instead of extending it into a large multi-purpose file.
+- A bounded-context module exposes its intentional public API through a curated
+  `index.ts`; consumers import its layer alias (for example,
+  `@adapters/research-tools`), not internal deep paths. Internal files must not
+  import their own barrel. White-box unit tests may import internals directly.
+- Use cross-module and cross-layer aliases: `@core/*`, `@application/*`,
+  `@adapters/*`, `@apps/*`, and `@shared/*`. Keep aliases synchronized in
+  `tsconfig.json`, `esbuild.config.mjs`, and `vitest.config.ts`. Use relative
+  imports for siblings within the same module.
+- Extract pure free functions from large classes into focused neighbouring helper
+  modules.
 
-- Не-рендеринговая логика (probing, обнаружение capability, поиск, сетевые вызовы) **выносится из UI-классов** в отдельные контроллеры/сервисы. UI делегирует им через узкий контекст/коллбэки. Эталон: `SettingsCapabilityProber` ([src/apps/obsidian/ui/settings/](src/apps/obsidian/ui/settings/)).
-- **Контроллер владеет своим локальным состоянием.** Самодостаточную фичу (локальный стейт + свои DOM-рефы) выноси в контроллер, получающий контекст-интерфейс. Эталон: `IndexSearchController`, `ResearchQuestionController`. **Общий** мутабельный стейт остаётся в хосте-вью.
-- Связь контроллера обратно во вью — через явный коллбэк (`requestRedisplay()`, `onOpenChunk()`), а не через ссылку на вью.
-- Крупные render/builder-файлы дробятся по секциям (`*/sections.ts`, `*/primitives.ts`, `*/styles.ts`, `*/types.ts`), entry-файл остаётся тонким оркестратором + реэкспорт типов. Эталон: `diagnosticReportV3.ts` / `diagnosticHtml.ts`.
+### Layer patterns
 
-### Фабрики и порты инжектятся
+- Model alternative execution paths as separate strategies behind a common
+  interface. The coordinator selects a strategy and orchestrates transitions;
+  it does not grow into a branch-heavy implementation. The research use case
+  demonstrates this with `ResearchService`, `EagerResearchStrategy`, and
+  `AgenticResearchStrategy`.
+- Build the dependency-injection graph in `src/apps/obsidian/composition/`
+  factories behind `CompositionContext`. `main.ts` owns lifecycle and thin
+  wiring only; factories receive context rather than reaching back into the
+  plugin instance.
+- Keep UI classes focused on rendering and event wiring. Move probing,
+  capability discovery, searches, and network calls into services or
+  controllers with a narrow context. A controller owns its local state and DOM
+  references; shared mutable state remains in the host view. Use explicit
+  callbacks such as `requestRedisplay()` or `onOpenChunk()` rather than a
+  reference back to the view.
+- Split large render or builder code into focused sections, primitives, styles,
+  and types. Keep its entry file a thin orchestrator and type re-export surface.
 
-Конкретные реализации (toolset, modelRound, retriever, writer) передаются через опции/конструктор из composition root. Use-case принимает фабрику/порт, а не создаёт адаптер сам.
+## Testing and validation
 
----
+Tests live in `tests/` and use Vitest. Prefer deterministic behavioral tests;
+do not assert private implementation details or use snapshots where explicit
+assertions express the behavior. Mock network calls. Every regression fix needs
+a regression test.
 
-## 4. Тестирование
+Before a refactor that changes execution flow, add characterization tests for
+observable behavior such as streaming-event order and fallback paths. Pure code
+moves, file splits, and barrel extraction do not require new characterization
+tests, but must retain existing coverage. When splitting a source-text contract
+test, update it to inspect all relevant modules in the directory, not a single
+former file.
 
-- Тесты — в `tests/` (vitest, `npm test`).
-- **Перед рефакторингом, меняющим поток исполнения**, сначала напиши характеристические тесты, фиксирующие текущее наблюдаемое поведение (порядок стрим-событий, fallback-ветки), затем рефактори под зелёным набором. Чистые перемещения кода (split, barrel) этого не требуют — достаточно `tsc` + существующего прогона.
-- Контракт-тесты, читающие исходник как текст (`*-contract.test.ts`), при разбиении файла обновляй так, чтобы они читали все относящиеся модули (каталог), а не один файл, — смысл контракта сохраняется.
-
----
-
-## 5. Definition of Done для изменения
-
-Перед завершением задачи прогнать и убедиться, что зелено:
+The repository's complete validation command is `npm run check`. Its individual
+checks are available when diagnosing a failure:
 
 ```bash
-npm run typecheck      # = tsc --noEmit
-npm run typecheck:core # core платформенно-независим (§1): без DOM, Node и obsidian
-npm run depcruise      # инварианты слоёв §1 + рантайм-ацикличность §2 (0 errors)
+npm run typecheck
+npm run typecheck:core
 npm test
-npm run build          # tsc + esbuild production
+npm run depcruise
+npm run format
+npm run build
 ```
 
-`typecheck:core` компилирует `core` + порты/контракты с `lib: ["ES2022"]` и `types: []`.
-Стандартные веб-глобалы (`URL`, `TextEncoder`, …) объявлены в
-[types/web-standard-globals.d.ts](types/web-standard-globals.d.ts): core вправе опираться
-на язык и веб-стандарты, но не на конкретную платформу. Понадобился Node- или
-Obsidian-API — это порт в `application/ports`, а не новая строка в том файле.
+`typecheck:core` compiles `src/core/`, application ports and contracts with
+`lib: ["ES2022"]` and no ambient platform types. Core may use language and web
+standards declared in `types/web-standard-globals.d.ts`, but never Node, DOM, or
+Obsidian APIs; introduce a port instead.
 
-И проверить: инварианты §1 не нарушены; новый файл не перерос ~400 строк без разбиения;
-внешние зависимости заходят через порт, а не прямым импортом адаптера.
+## Pull request reviews
 
----
+Review independently and inspect the complete diff against the PR base branch.
+Do not assume the implementation is correct because its author says so, and do
+not modify the pull-request branch while reviewing. Verify acceptance criteria,
+regressions, public API compatibility, explicit error and input handling,
+meaningful behavioral tests, scope discipline, absence of credentials or local
+configuration, cancellation and races in async work, cleanup of resources, and
+untrusted external-data handling.
 
-## 6. Стиль
+For each actionable finding, give severity, affected file and line, a concrete
+failure scenario, explanation, and the smallest recommended correction.
 
-- Пиши код, читаемый как окружающий: совпадай по идиомам, неймингу и плотности комментариев соседнего кода.
-- Комментарии объясняют **почему**, а не **что**. Не комментируй очевидное.
-- Ссылки на файлы в обсуждениях — кликабельным `path:line`.
+Treat the following as blocking: security vulnerabilities, data-loss risks,
+broken existing behavior, incorrect authorization, unhandled invalid external
+input, resource leaks, correctness-affecting races, unsatisfied acceptance
+criteria, and missing tests for critical changed behavior.
+
+For Obsidian-specific changes, also verify lifecycle use, disposal of registered
+events and DOM handlers, active-editor validation for commands, vault-path
+normalization and containment, renamed/deleted-file handling, cancellation,
+timeouts and malformed network responses, settings-migration preservation, and
+Obsidian Mobile compatibility.

@@ -1,0 +1,62 @@
+name: Agent task
+description: Structured implementation task for Agent
+title: "[Agent]: "
+labels:
+  - agent
+  - status:ready
+
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What must be achieved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this needed?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] First verifiable criterion
+        - [ ] Second verifiable criterion
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Allowed scope
+      description: Files or modules that may be changed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Changes that must not be made.
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and constraints
+      description: Compatibility, security, or architectural constraints.
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation commands
+      value: |
+        npm run check
+    validations:
+      required: true
