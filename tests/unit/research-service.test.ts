@@ -336,6 +336,40 @@ describe("ResearchService", () => {
     expect(chatModel.requests).toHaveLength(2);
   });
 
+  it("uses Thinking when a direct caller forces a sub-agent without selecting a mode", async () => {
+    const chatModel = new FakeChatModel([
+      [{ content: "First attempt", isComplete: true }],
+      [{ content: "Repair attempt", isComplete: true }],
+      [{ content: "Fallback answer", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+
+    await collectAsync(
+      service.answer({ question: "Delegate this", forceSubAgent: true, searchMode: "indexOnly" }),
+    );
+
+    expect(chatModel.requests).toHaveLength(3);
+    expect(chatModel.requests[0].tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ function: expect.objectContaining({ name: "run_subagent" }) }),
+      ]),
+    );
+  });
+
   it("does not require get_active_note when active-file inclusion is enabled without an active file", async () => {
     const chatModel = new FakeChatModel([{ content: "Direct answer", isComplete: true }]);
     const service = new ResearchService({

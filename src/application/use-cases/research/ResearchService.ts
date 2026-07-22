@@ -213,7 +213,7 @@ export class ResearchService implements ConversationEngine {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
     const policy = resolveResearchExecutionPolicy({
-      mode: request.mode ?? "instant",
+      mode: request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant"),
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
     });
