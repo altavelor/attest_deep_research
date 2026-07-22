@@ -1,5 +1,5 @@
 import { ContextFileProvider } from "@application/ports";
-import { ResearchService, selectResearchExecutionStrategy } from "@application/use-cases/research";
+import { ResearchService } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
@@ -173,48 +173,68 @@ describe("extractFollowUpQuestions", () => {
 });
 
 describe("ResearchService", () => {
-  it("selects eager diagnostics without activating an agentic path", () => {
-    expect(selectResearchExecutionStrategy(true)).toBe("eager-forced");
-    expect(selectResearchExecutionStrategy(false)).toBe("eager-default");
+  it("records Instant diagnostics without activating the Thinking path", async () => {
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "Answer instantly",
+        mode: "instant",
+        searchMode: "none",
+        includeContextDiagnostics: true,
+      }),
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: { contextDiagnostics: { executionStrategy: "instant" } },
+    });
+    expect(chatModel.requests).toHaveLength(1);
+    expect(chatModel.requests[0].tools).toBeUndefined();
+    expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
-  it.each([
-    [true, "eager-forced"],
-    [false, "deterministic-fallback"],
-  ] as const)(
-    "reports the iteration-1 execution strategy for forceEagerResearch=%s",
-    async (forceEagerResearch, expected) => {
-      const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
-      const service = new ResearchService({
-        toolsetFactory: createResearchToolRegistry,
-        runToolLoop,
-        modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
-        retriever: new FakeRetriever(emptyRetrieval()),
-        chatModel,
-        chatModelName: "qwen",
-        forceEagerResearch,
-        now: fixedNow,
-      });
+  it("notifies the user when Thinking falls back to Instant", async () => {
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
 
-      const events = await collectAsync(
-        service.answer({
-          question: "Answer eagerly",
-          searchMode: "none",
-          includeContextDiagnostics: true,
-        }),
-      );
+    const events = await collectAsync(
+      service.answer({
+        question: "Answer with tools when possible",
+        mode: "thinking",
+        searchMode: "none",
+        includeContextDiagnostics: true,
+      }),
+    );
 
-      expect(events.at(-1)).toMatchObject({
-        type: "complete",
-        answer: { contextDiagnostics: { executionStrategy: expected } },
-      });
-      expect(chatModel.requests).toHaveLength(1);
-      expect(chatModel.requests[0].tools).toBeUndefined();
-      expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
-    },
-  );
+    expect(events).toContainEqual({
+      type: "status",
+      message: "Thinking requires tool calling for this model. Using Instant instead.",
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: { contextDiagnostics: { executionStrategy: "instant-fallback" } },
+    });
+  });
 
-  it("routes an eligible profile through the agentic loop", async () => {
+  it("routes an eligible profile through the thinking loop", async () => {
     const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Evidence");
     const chatModel = new FakeChatModel([
       [
@@ -224,7 +244,7 @@ describe("ResearchService", () => {
           toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
         },
       ],
-      [{ content: "Agentic answer [idx-1]", isComplete: true }],
+      [{ content: "Thinking answer [idx-1]", isComplete: true }],
     ]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
@@ -248,19 +268,20 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "q",
+        mode: "thinking",
         searchMode: "indexOnly",
         includeContextDiagnostics: true,
       }),
     );
-    expect(visibleAnswerText(events)).toBe("Agentic answer [idx-1]");
+    expect(visibleAnswerText(events)).toBe("Thinking answer [idx-1]");
     expect(events.at(-1)).toMatchObject({
       type: "complete",
       answer: {
-        answer: "Agentic answer [idx-1]",
+        answer: "Thinking answer [idx-1]",
         citations: [],
         contextDiagnostics: {
-          executionStrategy: "agentic",
-          agentic: { requiredTools: [] },
+          executionStrategy: "thinking",
+          thinking: { requiredTools: [] },
         },
       },
     });
@@ -288,6 +309,7 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "Solve a self-contained puzzle",
+        mode: "thinking",
         searchMode: "none",
         includeActiveFile: true,
         includeContextDiagnostics: true,
@@ -298,8 +320,8 @@ describe("ResearchService", () => {
       type: "complete",
       answer: {
         contextDiagnostics: {
-          executionStrategy: "agentic",
-          agentic: { requiredTools: [] },
+          executionStrategy: "thinking",
+          thinking: { requiredTools: [] },
         },
       },
     });
@@ -307,7 +329,7 @@ describe("ResearchService", () => {
 
   it("accepts a direct answer without forcing a tool (Codex-style auto)", async () => {
     // No mandatory tools: a tool-capable model that chooses to answer directly is
-    // accepted as the agentic result, rather than discarded and forced to search.
+    // accepted as the thinking result, rather than discarded and forced to search.
     const chatModel = new FakeChatModel([[{ content: "Direct answer", isComplete: true }]]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
@@ -327,6 +349,7 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "q",
+        mode: "thinking",
         searchMode: "indexOnly",
         includeContextDiagnostics: true,
       }),
@@ -336,15 +359,15 @@ describe("ResearchService", () => {
       type: "complete",
       answer: {
         contextDiagnostics: {
-          executionStrategy: "agentic",
-          agentic: { requiredTools: [], satisfiedTools: [] },
+          executionStrategy: "thinking",
+          thinking: { requiredTools: [], satisfiedTools: [] },
         },
       },
     });
   });
 
-  it("falls back to deterministic diagnostics instead of throwing on agentic provider error", async () => {
-    // First streamChat call (agentic attempt) throws to simulate a provider-side
+  it("falls back to deterministic diagnostics instead of throwing on thinking provider error", async () => {
+    // First streamChat call (thinking attempt) throws to simulate a provider-side
     // tool-calling failure; the deterministic fallback synthesis then succeeds.
     let calls = 0;
     const chatModel: ChatModelProvider = {
@@ -378,6 +401,7 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "show the list of existing notes",
+        mode: "thinking",
         searchMode: "indexOnly",
         includeContextDiagnostics: true,
       }),
@@ -385,19 +409,19 @@ describe("ResearchService", () => {
 
     const complete = events.at(-1);
     if (complete?.type !== "complete") {
-      throw new Error("Expected a complete event despite the agentic provider error");
+      throw new Error("Expected a complete event despite the thinking provider error");
     }
     expect(complete.answer.contextDiagnostics).toMatchObject({
-      executionStrategy: "deterministic-fallback",
-      agentic: { fallbackReason: "provider-error" },
+      executionStrategy: "instant-fallback",
+      thinking: { fallbackReason: "provider-error" },
     });
   });
 
-  it("synthesizes from partial evidence when an agentic attempt fails after gathering evidence", async () => {
+  it("synthesizes from partial evidence when an thinking attempt fails after gathering evidence", async () => {
     // Round 1 records evidence via a successful search_index tool call; round 2
     // throws. Because partial evidence was gathered, the service must take the
     // partial-results synthesis branch (status notice + fallback answer) rather
-    // than re-running the full deterministic eager pipeline.
+    // than re-running the full deterministic instant pipeline.
     const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Partial evidence");
     let calls = 0;
     const chatModel: ChatModelProvider = {
@@ -443,6 +467,7 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "q",
+        mode: "thinking",
         searchMode: "indexOnly",
         includeContextDiagnostics: true,
       }),
@@ -464,8 +489,8 @@ describe("ResearchService", () => {
       isFallback: true,
       fallbackReason: "provider-error",
     });
-    // Partial evidence gathered during the failed agentic attempt is carried into
-    // the synthesis, but citations are intentionally empty: a failed agentic run
+    // Partial evidence gathered during the failed thinking attempt is carried into
+    // the synthesis, but citations are intentionally empty: a failed thinking run
     // produces no cited ids, so the synthesis receives an empty citation list.
     expect(complete.answer.evidence?.map((chunk) => chunk.id)).toContain("idx-1");
     expect(complete.answer.citations).toEqual([]);
@@ -526,7 +551,7 @@ describe("ResearchService", () => {
 
   it("records tool capabilities in diagnostics for the webOnly fallback path", async () => {
     // webOnly has no assembled context, so toolCapabilities must be attached on
-    // the deterministic-fallback branch — otherwise the V3 report defaults calls
+    // the instant-fallback branch — otherwise the V3 report defaults calls
     // to false and raises a spurious tool-calls-blocked error.
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
@@ -597,7 +622,7 @@ describe("ResearchService", () => {
     expect(chatModel.requests[1].messages.at(-1)?.content).toContain("Tool-provided context");
   });
 
-  it("exposes note tools in the agentic loop for none mode", async () => {
+  it("exposes note tools in the thinking loop for none mode", async () => {
     const chatModel = new FakeChatModel([
       [
         {
@@ -632,6 +657,7 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "show notes in ixplorer folder",
+        mode: "thinking",
         searchMode: "none",
         includeContextDiagnostics: true,
       }),
@@ -643,7 +669,7 @@ describe("ResearchService", () => {
     );
     expect(events.at(-1)).toMatchObject({
       type: "complete",
-      answer: { contextDiagnostics: { executionStrategy: "agentic" } },
+      answer: { contextDiagnostics: { executionStrategy: "thinking" } },
     });
   });
 

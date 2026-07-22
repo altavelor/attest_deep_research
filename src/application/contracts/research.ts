@@ -102,13 +102,14 @@ export interface QueryExpansion {
   buildVariants(request: QueryVariantsRequest): Promise<RetrievalQueryVariant[]>;
 }
 
-export type { ResearchSearchMode } from "@core/research";
-import type { ResearchSearchMode } from "@core/research";
+export type { ResearchMode, ResearchSearchMode } from "@core/research";
+import type { ResearchMode, ResearchSearchMode } from "@core/research";
 
 export interface ResearchRequest {
   question: string;
   includeWebSearch?: boolean;
   searchMode?: ResearchSearchMode;
+  mode?: ResearchMode;
   contextPaths?: string[];
   contextMode?: ContextMode;
   activeFilePath?: string;

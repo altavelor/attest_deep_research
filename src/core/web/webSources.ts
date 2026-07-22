@@ -124,7 +124,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     id: "tavily",
     label: "Tavily",
     category: "neural",
-    strengths: ["general", "agentic", "citations"],
+    strengths: ["general", "thinking", "citations"],
     credentials: [apiKey()],
     homepage: "https://tavily.com/",
     freeTierNote: "1,000 credits/month free",

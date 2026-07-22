@@ -2,7 +2,7 @@ import { formatCitation } from "@core/retrieval";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
-import { AgenticResearchFailure } from "../AgenticResearchRunner";
+import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
 import {
   ResearchExecutionContext,
   ResearchStrategy,
@@ -12,7 +12,7 @@ import {
 import { citationsForEvidence, mergeCitations } from "./citations";
 import { emptyRetrievalResult, graphEvidenceFromRetrieval, nonExplicitEvidence } from "./evidence";
 import {
-  agenticBudgets,
+  thinkingBudgets,
   buildRagDiagnosticSnapshot,
   createEmptyContextDiagnostics,
   isRagDebugIntent,
@@ -25,9 +25,9 @@ import {
 /**
  * Deterministic research path: assemble context, retrieve vault + web evidence,
  * plan it under the token budget, then synthesize. Also serves as the fallback
- * when the agentic attempt fails outright. Terminal: it always completes.
+ * when the thinking attempt fails outright. Terminal: it always completes.
  */
-export class EagerResearchStrategy implements ResearchStrategy {
+export class InstantResearchStrategy implements ResearchStrategy {
   constructor(private readonly deps: ResearchStrategyDeps) {}
 
   async *execute(
@@ -35,7 +35,7 @@ export class EagerResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const executionStrategy = ctx.executionStrategy ?? policy.strategy;
-    const failedAgenticAttempt = ctx.failedAgenticAttempt;
+    const failedThinkingAttempt = ctx.failedThinkingAttempt;
 
     const totalReservedTokens = this.deps.reservedOutputTokens ?? 0;
     const totalReservedWithIndexTokens =
@@ -140,7 +140,7 @@ export class EagerResearchStrategy implements ResearchStrategy {
     if (degradation) {
       diagnostics.warnings.push(degradation);
     }
-    this.applyAgenticDiagnostics(diagnostics, policy, failedAgenticAttempt);
+    this.applyThinkingDiagnostics(diagnostics, policy, failedThinkingAttempt);
 
     yield* this.deps.answerSynthesis.synthesize({
       question,
@@ -165,34 +165,34 @@ export class EagerResearchStrategy implements ResearchStrategy {
     return { kind: "completed" };
   }
 
-  private applyAgenticDiagnostics(
+  private applyThinkingDiagnostics(
     diagnostics: ContextDiagnostics,
     policy: ResearchExecutionContext["policy"],
-    failedAgenticAttempt: AgenticResearchFailure | undefined,
+    failedThinkingAttempt: ThinkingResearchFailure | undefined,
   ): void {
-    if (failedAgenticAttempt) {
-      diagnostics.agentic = {
+    if (failedThinkingAttempt) {
+      diagnostics.thinking = {
         policyReason: policy.reason,
         requiredTools: [...policy.requiredTools],
         bootstrapChoice: policy.bootstrapChoice,
-        satisfiedTools: failedAgenticAttempt.satisfiedTools,
-        repairedTools: failedAgenticAttempt.repairedTools,
-        rounds: failedAgenticAttempt.rounds,
-        totalCalls: failedAgenticAttempt.totalCalls,
-        duplicateCalls: failedAgenticAttempt.duplicateCalls,
-        fallbackReason: failedAgenticAttempt.reason,
+        satisfiedTools: failedThinkingAttempt.satisfiedTools,
+        repairedTools: failedThinkingAttempt.repairedTools,
+        rounds: failedThinkingAttempt.rounds,
+        totalCalls: failedThinkingAttempt.totalCalls,
+        duplicateCalls: failedThinkingAttempt.duplicateCalls,
+        fallbackReason: failedThinkingAttempt.reason,
         duplicatedCost: true,
         capabilityProvenance: this.deps.toolCapabilityProvenance,
-        phases: failedAgenticAttempt.phases,
-        reasoningSegments: failedAgenticAttempt.reasoningSegments,
-        stopReasons: failedAgenticAttempt.stopReasons,
-        budgets: agenticBudgets(
-          failedAgenticAttempt.totalResultChars,
-          failedAgenticAttempt.maxResultChars,
+        phases: failedThinkingAttempt.phases,
+        reasoningSegments: failedThinkingAttempt.reasoningSegments,
+        stopReasons: failedThinkingAttempt.stopReasons,
+        budgets: thinkingBudgets(
+          failedThinkingAttempt.totalResultChars,
+          failedThinkingAttempt.maxResultChars,
         ),
       };
-    } else if (policy.strategy === "deterministic-fallback") {
-      diagnostics.agentic = {
+    } else if (policy.strategy === "instant-fallback") {
+      diagnostics.thinking = {
         policyReason: policy.reason,
         requiredTools: [...policy.requiredTools],
         bootstrapChoice: policy.bootstrapChoice,

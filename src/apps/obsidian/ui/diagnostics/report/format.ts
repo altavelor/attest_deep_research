@@ -2,7 +2,7 @@
 // Kept free of DOM/markup so the round-summary logic is unit-testable.
 
 import { ToolCallDiagnostic } from "@core/diagnostics";
-import { AgenticLoopRound, DiagnosticReportV3 } from "./types";
+import { ThinkingLoopRound, DiagnosticReportV3 } from "./types";
 
 export function formatCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -68,12 +68,12 @@ export function toolCallSummary(calls: ToolCallDiagnostic[]): string {
     .join(" · ");
 }
 
-export function reasoningChars(round: AgenticLoopRound): number {
+export function reasoningChars(round: ThinkingLoopRound): number {
   return round.reasoningSegments.reduce((sum, segment) => sum + segment.chars, 0);
 }
 
 /** Rounds worth auto-expanding: failures, spins, and the answer round. */
-export function isNoteworthyRound(round: AgenticLoopRound): boolean {
+export function isNoteworthyRound(round: ThinkingLoopRound): boolean {
   if (round.toolCalls.some((call) => call.status === "failed")) return true;
   if (round.toolCalls.length > 0 && round.toolCalls.every(isEmptySearchResult)) return true;
   return round.hadTextOutput;
@@ -87,7 +87,7 @@ export interface SummaryMetric {
 /** Headline metrics for the summary strip. */
 export function summaryMetrics(report: DiagnosticReportV3): SummaryMetric[] {
   const metrics: SummaryMetric[] = [];
-  const loop = report.reasoning.agenticLoop;
+  const loop = report.reasoning.thinkingLoop;
   if (loop) {
     metrics.push({
       label: "Rounds",

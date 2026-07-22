@@ -28,7 +28,7 @@ import {
 } from "@application/use-cases/chat/ContextAssembler";
 import { VaultResearchPipeline } from "../VaultResearchPipeline";
 import { WebResearchPipeline } from "../WebResearchPipeline";
-import { AgenticResearchFailure } from "../AgenticResearchRunner";
+import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
 
 /**
  * Collaborators shared by every research execution strategy. Built once by the
@@ -81,16 +81,16 @@ export interface ResearchExecutionContext {
   indexDescription?: IndexDescriptionPromptContext;
   /**
    * Strategy label recorded in diagnostics. Defaults to `policy.strategy`; the
-   * dispatcher overrides it with `deterministic-fallback` when invoking the
-   * eager strategy after a failed agentic attempt. Ignored by the agentic path.
+   * dispatcher overrides it with `instant-fallback` when invoking the
+   * instant strategy after a failed thinking attempt. Ignored by the thinking path.
    */
   executionStrategy?: ResearchExecutionStrategy;
   /**
-   * Present when this run is the deterministic fallback after a failed agentic
-   * attempt, so its diagnostics can be carried into the eager report. Ignored by
-   * the agentic path.
+   * Present when this run is the deterministic fallback after a failed thinking
+   * attempt, so its diagnostics can be carried into the instant report. Ignored by
+   * the thinking path.
    */
-  failedAgenticAttempt?: AgenticResearchFailure;
+  failedThinkingAttempt?: ThinkingResearchFailure;
 }
 
 /**
@@ -103,7 +103,7 @@ export type ResearchStrategyOutcome =
   | { kind: "cancelled" }
   | {
       kind: "failed";
-      failure: AgenticResearchFailure;
+      failure: ThinkingResearchFailure;
       answer: ResearchAnswer;
       diagnostics?: ContextDiagnostics;
     };

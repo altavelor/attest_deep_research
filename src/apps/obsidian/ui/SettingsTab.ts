@@ -97,18 +97,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     const contentEl = details.createDiv({ cls: "ixplorer-settings-advanced__content" });
     this.renderDebugSettings(contentEl);
-
-    new Setting(contentEl)
-      .setName("Force eager research mode")
-      .setDesc(
-        "Force the existing eager research pipeline for every model. Disable this to permit automatic strategy selection when agentic research becomes available.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.forceEagerResearch).onChange(async (value) => {
-          this.plugin.settings.forceEagerResearch = value;
-          await this.plugin.saveSettings();
-        }),
-      );
   }
 
   private renderSearchEngineSettings(containerEl: HTMLElement): void {

@@ -153,7 +153,7 @@ export interface ContextDiagnostics {
   indexDescription?: IndexDescriptionPromptDiagnostics;
   tools: ToolCallDiagnostic[];
   warnings: string[];
-  agentic?: AgenticAttemptDiagnostics;
+  thinking?: ThinkingAttemptDiagnostics;
   reasoning?: ReasoningDiagnostics;
   run?: RunDiagnostics;
   attempts?: AttemptDiagnostics[];
@@ -251,7 +251,7 @@ export interface ReasoningDiagnostics {
 }
 
 /**
- * Attribution of a single reasoning segment to the agentic round and phase that
+ * Attribution of a single reasoning segment to the thinking round and phase that
  * produced it. Lets the diagnostic report map each "thinking" block back to its
  * round/phase instead of guessing from the timeline.
  */
@@ -280,7 +280,7 @@ export interface PromptDeltaMessageDiagnostic {
 }
 
 /**
- * Incremental prompt log for one agentic round: only what was added to the
+ * Incremental prompt log for one thinking round: only what was added to the
  * request since the previous round (round 1 carries the full initial prompt),
  * so the report explains model behaviour without duplicating the whole context
  * every round.
@@ -294,7 +294,7 @@ export interface RoundPromptDeltaDiagnostic {
   messages: PromptDeltaMessageDiagnostic[];
 }
 
-export interface AgenticAttemptDiagnostics {
+export interface ThinkingAttemptDiagnostics {
   policyReason: string;
   requiredTools: string[];
   bootstrapChoice?: ChatToolChoice;
@@ -338,10 +338,10 @@ export interface IndexDescriptionPromptContext {
 }
 
 export type ResearchExecutionStrategy =
-  | "eager-forced"
-  | "eager-default"
-  | "agentic"
-  | "deterministic-fallback";
+  | "instant"
+  | "instant-fallback"
+  | "thinking"
+  | "deep-research";
 
 export interface WebContextDiagnostics {
   originalQuestion: string;

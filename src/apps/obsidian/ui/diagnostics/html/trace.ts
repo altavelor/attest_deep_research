@@ -1,8 +1,8 @@
 // Run trace: the central section of the diagnostic report. One collapsible
-// card per agentic round — prompt Δ, tool calls with outcomes, reasoning size,
+// card per thinking round — prompt Δ, tool calls with outcomes, reasoning size,
 // text output — so the reader can replay why the model behaved the way it did.
 
-import { AgenticLoopRound, DiagnosticReportV3 } from "../report/types";
+import { ThinkingLoopRound, DiagnosticReportV3 } from "../report/types";
 import {
   extractResultHint,
   formatCount,
@@ -16,7 +16,7 @@ import { badge, BadgeVariant, card, h } from "./primitives";
 const ARGS_PREVIEW_CHARS = 160;
 
 export function renderRunTrace(report: DiagnosticReportV3): string {
-  const loop = report.reasoning.agenticLoop;
+  const loop = report.reasoning.thinkingLoop;
   if (!loop || loop.rounds.length === 0) return "";
   const rounds = loop.rounds
     .map((round, index) => renderRound(round, loop.stopReasons[index]))
@@ -24,7 +24,7 @@ export function renderRunTrace(report: DiagnosticReportV3): string {
   return card("run-trace", "Run trace", rounds);
 }
 
-function renderRound(round: AgenticLoopRound, stopReason: string | undefined): string {
+function renderRound(round: ThinkingLoopRound, stopReason: string | undefined): string {
   const phaseV: BadgeVariant =
     round.phase === "bootstrap" ? "accent" : round.phase === "repair" ? "warning" : "neutral";
   const thought = reasoningChars(round);
@@ -55,7 +55,7 @@ function renderRound(round: AgenticLoopRound, stopReason: string | undefined): s
   </details>`;
 }
 
-function renderPromptDelta(round: AgenticLoopRound): string {
+function renderPromptDelta(round: ThinkingLoopRound): string {
   const delta = round.promptDelta;
   if (!delta || delta.messages.length === 0) return "";
   const totalChars = delta.messages.reduce((sum, message) => sum + message.chars, 0);
@@ -82,7 +82,7 @@ function renderPromptDelta(round: AgenticLoopRound): string {
   return `<details class="trace-prompt-delta"><summary>${h(label)}</summary>${messages}</details>`;
 }
 
-function renderToolCall(call: AgenticLoopRound["toolCalls"][number]): string {
+function renderToolCall(call: ThinkingLoopRound["toolCalls"][number]): string {
   const empty = isEmptySearchResult(call);
   const status = call.status === "failed" ? "✗" : empty ? "∅" : "✓";
   const statusClass = call.status === "failed" ? "is-failed" : empty ? "is-empty" : "is-ok";

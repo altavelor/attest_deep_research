@@ -100,7 +100,7 @@ export interface PreflightSection {
 
 export interface RequestSection {
   searchMode: string;
-  agenticPolicy: {
+  thinkingPolicy: {
     policyReason: string;
     requiredTools: string[];
     bootstrapChoice: ChatToolChoice | null;
@@ -125,7 +125,7 @@ export interface RequestSection {
   evidencePlanner: ContextDiagnostics["evidencePlanner"] | null;
 }
 
-export interface AgenticLoopRound {
+export interface ThinkingLoopRound {
   round: number;
   phase: string;
   /** Prompt messages added for this round's request (incremental; round 1 = full prompt). */
@@ -146,7 +146,7 @@ export interface ReasoningSection {
     fallbackDecision?: string;
   }>;
   stream: ContextDiagnostics["stream"] | null;
-  agenticLoop: {
+  thinkingLoop: {
     totalRounds: number;
     totalCalls: number;
     duplicateCalls: number;
@@ -159,7 +159,7 @@ export interface ReasoningSection {
       maxResultChars: number;
       usedResultChars: number;
     } | null;
-    rounds: AgenticLoopRound[];
+    rounds: ThinkingLoopRound[];
   } | null;
   tokens: { inputTokens: number; outputTokens: number; reasoningTokens: number };
   reasoningItemCount: number;

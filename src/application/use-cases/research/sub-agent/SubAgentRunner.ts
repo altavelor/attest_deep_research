@@ -8,7 +8,7 @@
 
 import { ChatMessage, ModelRoundProvider } from "@core/agent";
 import { ResearchExecutionPolicy } from "@core/research";
-import { buildAgenticResearchMessages } from "@core/research";
+import { buildThinkingResearchMessages } from "@core/research";
 import { sourceLabel } from "@core/retrieval";
 import { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { SearchProvider } from "@application/ports/web";
@@ -23,7 +23,7 @@ import {
   SubAgentRunInput,
   SubAgentRunResult,
 } from "@application/research/subAgentPort";
-import { AgenticResearchRunner } from "../AgenticResearchRunner";
+import { ThinkingResearchRunner } from "../ThinkingResearchRunner";
 import { looksLikeLeakedToolCall } from "./leakedToolCallMarkup";
 
 export interface SubAgentRunnerDeps {
@@ -51,8 +51,8 @@ const SYNTHESIS_EXCERPT_CHARS = 1_500;
 // The sub-agent never forces a tool; the model drives its own loop. parallel
 // calls let it fan out sub-queries in one round.
 const SUB_AGENT_POLICY: ResearchExecutionPolicy = Object.freeze({
-  strategy: "agentic",
-  reason: "eligible",
+  strategy: "thinking",
+  reason: "thinking-eligible",
   requiredTools: Object.freeze([] as string[]),
   bootstrapChoice: Object.freeze({ type: "auto" as const }),
   parallelToolCalls: true,
@@ -102,7 +102,7 @@ export class SubAgentRunner implements SubAgentPort {
 
     emit?.({ type: SUB_AGENT_PHASE, message: "Planning…" });
 
-    const messages: ChatMessage[] = buildAgenticResearchMessages({
+    const messages: ChatMessage[] = buildThinkingResearchMessages({
       question: input.task,
       requiredTools: [],
       toolContext: {
@@ -112,7 +112,7 @@ export class SubAgentRunner implements SubAgentPort {
     });
     messages.splice(1, 0, { role: "system", content: SUB_AGENT_FRAMING });
 
-    const result = await new AgenticResearchRunner({
+    const result = await new ThinkingResearchRunner({
       modelRound: this.deps.modelRound,
       model: this.deps.model,
       messages,

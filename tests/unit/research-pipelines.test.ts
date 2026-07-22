@@ -133,7 +133,7 @@ describe("WebResearchPipeline", () => {
 });
 
 describe("AnswerSynthesisService", () => {
-  it("uses Responses rounds for eager synthesis without adding summaries to the final answer", async () => {
+  it("uses Responses rounds for instant synthesis without adding summaries to the final answer", async () => {
     const chatModel = new FakeChatModel([]);
     const service = new AnswerSynthesisService({
       runToolLoop,

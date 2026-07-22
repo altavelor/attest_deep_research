@@ -74,7 +74,7 @@ describe("tool capability resolution", () => {
     });
 
     expect(describeToolCapability(settings, "choiceRequired")).toBe(
-      "Needed by agentic research. Current: enabled (probe).",
+      "Needed by thinking research. Current: enabled (probe).",
     );
   });
 });

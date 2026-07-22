@@ -10,6 +10,7 @@ import {
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import { IndexingState } from "@adapters/indexing";
 import { estimateResearchRequestTokens } from "@core/research";
+import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import { ResearchAnswer } from "@core/answer";
@@ -106,6 +107,7 @@ export class IxplorerChatView extends ItemView {
   private lastAnswer: ResearchAnswer | null = null;
   private attachedContextPaths: string[] = [];
   private currentChatSettings: SavedChatSettings;
+  private currentResearchMode: ResearchMode = "instant";
   private currentChatId: string | null = null;
   private currentChatCreatedAt: string | null = null;
   private savedChatSummaries: SavedChatSummary[] = [];
@@ -171,6 +173,7 @@ export class IxplorerChatView extends ItemView {
           this.currentChatSettings.indexProfileId,
         ),
       getSearchMode: () => this.getSearchMode(),
+      getResearchMode: () => this.currentResearchMode,
       getContextMode: () => this.currentChatSettings.contextMode ?? "include",
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
@@ -278,6 +281,7 @@ export class IxplorerChatView extends ItemView {
         .filter((file) => isContextDocumentPath(file.path))
         .map((file) => file.path)
         .sort(),
+      researchMode: this.currentResearchMode,
       onSubmit: () => void this.researchController.submitQuestion(),
       onStop: () => {
         this.researchController.stopRunningQuestion();
@@ -291,6 +295,9 @@ export class IxplorerChatView extends ItemView {
       onUpdateSearchMode: (searchMode) => {
         void this.updateSearchMode(searchMode);
         this.updateSubmitAvailability();
+      },
+      onUpdateResearchMode: (mode) => {
+        this.currentResearchMode = mode;
       },
     });
     this.progressStatusEl = this.composerRefs.progressStatusEl;
@@ -340,6 +347,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = null;
     this.attachedContextPaths = [];
     this.currentChatSettings = createDefaultChatSettings(this.services);
+    this.currentResearchMode = "instant";
     this.currentChatId = null;
     this.currentChatCreatedAt = null;
     this.editingMessageIndex = null;
@@ -551,6 +559,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
     this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
+    this.currentResearchMode = "instant";
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
     await this.refreshSavedChatSummaries();

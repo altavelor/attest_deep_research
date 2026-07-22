@@ -6,7 +6,7 @@ import {
   isNoteworthyRound,
   toolCallSummary,
 } from "@apps/obsidian/ui/diagnostics/report/format";
-import { AgenticLoopRound } from "@apps/obsidian/ui/diagnostics/report/types";
+import { ThinkingLoopRound } from "@apps/obsidian/ui/diagnostics/report/types";
 import { ToolCallDiagnostic } from "@core/diagnostics";
 
 function call(overrides: Partial<ToolCallDiagnostic>): ToolCallDiagnostic {
@@ -20,7 +20,7 @@ function call(overrides: Partial<ToolCallDiagnostic>): ToolCallDiagnostic {
   };
 }
 
-function round(overrides: Partial<AgenticLoopRound>): AgenticLoopRound {
+function round(overrides: Partial<ThinkingLoopRound>): ThinkingLoopRound {
   return {
     round: 1,
     phase: "research",

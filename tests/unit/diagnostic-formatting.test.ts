@@ -8,7 +8,7 @@ import {
 import { ContextDiagnostics } from "@core/diagnostics";
 
 const diagnostics = {
-  executionStrategy: "eager-forced",
+  executionStrategy: "instant",
   retrieval: {
     queryVariants: ["rag query"],
     includedChunkIds: ["a"],
@@ -110,7 +110,7 @@ describe("diagnostic formatting", () => {
 
   it("v3 report contains execution strategy in model section", () => {
     const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
-    expect(parsed.model.executionStrategy).toBe("eager-forced");
+    expect(parsed.model.executionStrategy).toBe("instant");
   });
 
   it("v3 report contains ranked chunks with scores in request section", () => {
