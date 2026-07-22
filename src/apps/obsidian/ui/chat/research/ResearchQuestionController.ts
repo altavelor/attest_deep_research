@@ -212,7 +212,7 @@ export class ResearchQuestionController {
       for await (const event of service.answer({
         question: cleanedQuestion || question,
         forceSubAgent: forceSubAgent || undefined,
-        mode: this.options.getResearchMode(),
+        mode: forceSubAgent ? "thinking" : this.options.getResearchMode(),
         searchMode: this.options.getSearchMode(),
         contextMode: this.options.getContextMode(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,

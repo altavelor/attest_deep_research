@@ -15,6 +15,16 @@ describe("chat composer", () => {
       source.indexOf("researchModeDropdown"),
     );
   });
+
+  it("uses Thinking mode for an explicit sub-agent directive", () => {
+    const source = readFileSync(
+      resolve("src/apps/obsidian/ui/chat/research/ResearchQuestionController.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('mode: forceSubAgent ? "thinking" : this.options.getResearchMode(),');
+  });
+
   it("offers context documents for an @ query", () => {
     expect(getMentionCandidates("cache", ["Concepts/Cache.md", "Notes/Other.md"])).toEqual([
       {
