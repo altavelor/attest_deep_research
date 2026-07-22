@@ -148,13 +148,12 @@ rule
 printf '%s\n' "$prompt" | eval "$AGENT_EXEC_CMD"
 rule
 
-# The agent is instructed to commit its work, but capture any leftover changes so
-# the branch always reflects the full result before it is published.
+# Require a clean result from the agent so unreviewed files (including secrets or
+# generated output) can never be silently added to the pull request.
 if [[ -n "$(git status --porcelain)" ]]; then
-  step "Committing leftover changes the agent did not stage"
-  git add -A
-  git commit -m "chore(#${ISSUE}): capture remaining agent changes" >/dev/null
-  ok "Committed leftover changes"
+  err "Agent left uncommitted changes; not publishing"
+  hint "Review and commit or discard the changes, then re-run scripts/agent-task.sh $ISSUE"
+  exit 1
 fi
 
 if [[ -z "$(git log "origin/${BASE_BRANCH}..HEAD" --oneline 2>/dev/null)" ]]; then
@@ -162,6 +161,14 @@ if [[ -z "$(git log "origin/${BASE_BRANCH}..HEAD" --oneline 2>/dev/null)" ]]; th
   hint "The agent produced no changes for issue #$ISSUE"
   exit 1
 fi
+
+step "Installing dependencies (npm ci)"
+if ! npm ci; then
+  err "Clean dependency install failed; not publishing"
+  hint "Fix the install failure, then re-run scripts/agent-task.sh $ISSUE"
+  exit 1
+fi
+ok "Dependencies installed"
 
 step "Validating (npm run check)"
 if ! npm run check; then
@@ -196,9 +203,18 @@ Closes #${ISSUE}
 
 ${summary}
 
+## Changes
+
+${summary}
+
 ## Validation
 
+- [x] \`npm ci\`
 - [x] \`npm run check\`
+
+## Risks
+
+- No known risks beyond the normal review required before merge.
 
 ## Review status
 
