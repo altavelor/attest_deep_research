@@ -7,8 +7,10 @@ Workflow:
 2. Read every review finding and inline comment provided below.
 3. Verify each finding against the code, the acceptance criteria, and the
    project architecture before changing anything.
-4. Fix only valid, actionable findings. Do not blindly apply incorrect or
-   out-of-scope suggestions.
+4. Fix only valid, actionable findings that are still unresolved. The reviewer
+   may have already pushed its own fix commits — do not redo or revert those;
+   address only what remains. Do not blindly apply incorrect or out-of-scope
+   suggestions.
 5. Preserve the original task scope; do not make unrelated changes.
 6. Add or update tests for any changed behavior.
 7. Run all validation commands (npm run check).
