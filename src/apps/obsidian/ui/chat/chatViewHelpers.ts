@@ -107,6 +107,7 @@ export function createDefaultChatSettings(services: ChatSettingsServices): Saved
     ),
     searchMode: "indexOnly",
     contextMode: "include",
+    researchMode: "instant",
   };
 }
 
@@ -129,5 +130,6 @@ export function resolveChatSettings(
     ),
     searchMode: settings.searchMode,
     contextMode: settings.contextMode ?? defaults.contextMode,
+    researchMode: settings.researchMode === "thinking" ? "thinking" : "instant",
   };
 }

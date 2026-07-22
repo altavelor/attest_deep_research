@@ -206,6 +206,19 @@ export class InstantResearchStrategy implements ResearchStrategy {
         duplicatedCost: false,
         capabilityProvenance: this.deps.toolCapabilityProvenance,
       };
+    } else {
+      diagnostics.thinking = {
+        policyReason: policy.reason,
+        requiredTools: [...policy.requiredTools],
+        bootstrapChoice: policy.bootstrapChoice,
+        satisfiedTools: [],
+        repairedTools: [],
+        rounds: 0,
+        totalCalls: 0,
+        duplicateCalls: 0,
+        duplicatedCost: false,
+        capabilityProvenance: this.deps.toolCapabilityProvenance,
+      };
     }
   }
 }

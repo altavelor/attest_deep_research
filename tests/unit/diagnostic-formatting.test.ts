@@ -111,6 +111,7 @@ describe("diagnostic formatting", () => {
   it("v3 report contains execution strategy in model section", () => {
     const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
     expect(parsed.model.executionStrategy).toBe("instant");
+    expect(parsed.request.thinkingPolicy.policyReason).toBe("instant-selected");
   });
 
   it("does not report a Thinking fallback for an Instant run", () => {

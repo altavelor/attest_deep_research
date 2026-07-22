@@ -297,7 +297,7 @@ export class IxplorerChatView extends ItemView {
         this.updateSubmitAvailability();
       },
       onUpdateResearchMode: (mode) => {
-        this.currentResearchMode = mode;
+        void this.updateResearchMode(mode);
       },
     });
     this.progressStatusEl = this.composerRefs.progressStatusEl;
@@ -559,7 +559,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
     this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
-    this.currentResearchMode = "instant";
+    this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
     await this.refreshSavedChatSummaries();
@@ -631,6 +631,13 @@ export class IxplorerChatView extends ItemView {
 
   private async updateSearchMode(searchMode: ResearchSearchMode): Promise<void> {
     this.currentChatSettings = { ...this.currentChatSettings, searchMode };
+    await this.saveCurrentChat();
+  }
+
+  private async updateResearchMode(mode: ResearchMode): Promise<void> {
+    const researchMode = mode === "thinking" ? "thinking" : "instant";
+    this.currentResearchMode = researchMode;
+    this.currentChatSettings = { ...this.currentChatSettings, researchMode };
     await this.saveCurrentChat();
   }
 

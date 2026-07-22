@@ -103,6 +103,8 @@ export function buildPreflightSection(d: ContextDiagnostics): PreflightSection {
 
 export function buildRequestSection(d: ContextDiagnostics): RequestSection {
   const thinking = d.thinking;
+  const policyReason =
+    thinking?.policyReason ?? (d.executionStrategy === "instant" ? "instant-selected" : "unknown");
   const retrieval = d.retrieval ?? {
     queryVariants: [],
     includedChunkIds: [],
@@ -127,7 +129,7 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
   return {
     searchMode: d.searchMode ?? "unknown",
     thinkingPolicy: {
-      policyReason: thinking?.policyReason ?? "unknown",
+      policyReason,
       requiredTools: thinking?.requiredTools ?? [],
       bootstrapChoice: thinking?.bootstrapChoice ?? null,
     },

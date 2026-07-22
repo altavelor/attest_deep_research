@@ -196,7 +196,12 @@ describe("ResearchService", () => {
 
     expect(events.at(-1)).toMatchObject({
       type: "complete",
-      answer: { contextDiagnostics: { executionStrategy: "instant" } },
+      answer: {
+        contextDiagnostics: {
+          executionStrategy: "instant",
+          thinking: { policyReason: "instant-selected" },
+        },
+      },
     });
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
