@@ -35,6 +35,7 @@ export function computeFindings(sections: ReportSections): FindingsSection {
 
   // error: thinking-policy-fallback
   if (
+    model.executionStrategy !== "instant" &&
     request.thinkingPolicy.policyReason !== "thinking-eligible" &&
     request.thinkingPolicy.policyReason !== "instant-selected"
   ) {

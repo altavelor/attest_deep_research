@@ -113,6 +113,14 @@ describe("diagnostic formatting", () => {
     expect(parsed.model.executionStrategy).toBe("instant");
   });
 
+  it("does not report a Thinking fallback for an Instant run", () => {
+    const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
+
+    expect(parsed.findings.findings).not.toContainEqual(
+      expect.objectContaining({ code: "thinking-policy-fallback" }),
+    );
+  });
+
   it("v3 report contains ranked chunks with scores in request section", () => {
     const parsed = JSON.parse(formatDiagnosticReport(diagnostics));
     const ranked = parsed.request.retrieval.rankedChunks;
