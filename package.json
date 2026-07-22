@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit --skipLibCheck",
     "typecheck:core": "tsc -p tsconfig.core.json",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
-    "format": "prettier --check ."
+    "format": "prettier --check .",
+    "check": "npm run typecheck && npm run typecheck:core && npm run test && npm run depcruise && npm run format && npm run build"
   },
   "keywords": [
     "obsidian",
