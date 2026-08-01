@@ -26,7 +26,7 @@ export interface ToolCallViewInput {
 
 export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const { name, args = {}, resultJson, status } = input;
-  const intent = describeIntent(name, args, input.label);
+  const intent = describeIntent(name, args, input.label, resultJson);
 
   if (status === "failed") {
     return {
@@ -96,10 +96,14 @@ function argsCell(args: Record<string, unknown>): ToolCell | undefined {
   return { kind: "code", text: JSON.stringify(args) };
 }
 
-function describeIntent(name: string, args: Record<string, unknown>, label: string): string {
+function describeIntent(
+  name: string,
+  args: Record<string, unknown>,
+  label: string,
+  resultJson?: string,
+): string {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   const path = typeof args.path === "string" ? args.path.trim() : "";
-  const url = typeof args.url === "string" ? args.url.trim() : "";
   switch (name) {
     case "search_index":
     case "search_notes": {
@@ -111,8 +115,12 @@ function describeIntent(name: string, args: Record<string, unknown>, label: stri
       return query ? `Searching the web for “${query}”${count}` : "Searching the web";
     }
     case "fetch_web_page": {
-      const target = url || (label && label !== name ? label : "");
-      return target ? `Fetching the page at ${hostOf(target)}` : "Fetching web page";
+      const hosts = fetchedPageHosts(resultJson);
+      const count = fetchPageCount(args, hosts.length);
+      if (hosts.length > 0) {
+        return `Fetching ${count === 1 ? "page" : "pages"} ${count}: ${hosts.join(", ")}`;
+      }
+      return count > 0 ? `Fetching ${count === 1 ? "page" : "pages"} ${count}` : "Fetching pages";
     }
     case "read_note":
       return path ? `Reading the note “${basename(path)}”` : "Reading a note";
@@ -136,6 +144,28 @@ function describeIntent(name: string, args: Record<string, unknown>, label: stri
     }
     default:
       return label && label !== name ? label : name;
+  }
+}
+
+function fetchPageCount(args: Record<string, unknown>, completedCount: number): number {
+  return Array.isArray(args.resultIds) ? args.resultIds.length : completedCount;
+}
+
+function fetchedPageHosts(resultJson?: string): string[] {
+  if (!resultJson) return [];
+  try {
+    const parsed = JSON.parse(resultJson) as { value?: { pages?: unknown } };
+    if (!Array.isArray(parsed.value?.pages)) return [];
+    const hosts = new Set<string>();
+    for (const page of parsed.value.pages) {
+      if (typeof page !== "object" || page === null) continue;
+      const entry = page as { ok?: unknown; finalUrl?: unknown; url?: unknown };
+      const target = typeof entry.finalUrl === "string" ? entry.finalUrl : entry.url;
+      if (entry.ok === true && typeof target === "string") hosts.add(hostOf(target));
+    }
+    return [...hosts];
+  } catch {
+    return [];
   }
 }
 

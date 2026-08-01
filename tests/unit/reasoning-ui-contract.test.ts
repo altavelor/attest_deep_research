@@ -54,8 +54,14 @@ describe("reasoning transcript UI", () => {
   it("renders an active Thinking timeline node while an assistant response is streaming", () => {
     expect(transcript).toContain("renderActiveThinkingNode");
     expect(transcript).toContain('progress?.phase === "streaming"');
+    expect(transcript).toContain("!activeReasoningId");
     expect(transcript).toContain("ixplorer-chat__workflow-node--thinking-active");
     expect(styles).toContain("ixplorer-chat__workflow-node--thinking-active");
+  });
+
+  it("truncates long tool descriptions instead of wrapping them", () => {
+    expect(styles).toContain("text-overflow: ellipsis");
+    expect(styles).toContain("white-space: nowrap");
   });
 
   it("styles the workflow rail, dots, and edit diff", () => {

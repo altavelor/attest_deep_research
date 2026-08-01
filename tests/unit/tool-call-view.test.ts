@@ -28,15 +28,36 @@ describe("describeToolCall detailed intent", () => {
     expect(view.intent).toBe("Searching the vault for “riquet” (under “Notes”, top 5)");
   });
 
-  it("names the host for a web fetch", () => {
+  it("lists fetched page hosts in the web fetch intent", () => {
     const view = describeToolCall({
       name: "fetch_web_page",
       label: "fetch_web_page",
       status: "complete",
-      args: { url: "https://example.com/a/b?c=1" },
+      args: { resultIds: ["a", "b", "c"] },
+      resultJson: JSON.stringify({
+        ok: true,
+        value: {
+          pages: [
+            { ok: true, finalUrl: "https://recipes.example.com/a", content: "" },
+            { ok: true, finalUrl: "https://food.example.org/b", content: "" },
+            { ok: true, finalUrl: "https://recipes.example.com/c", content: "" },
+          ],
+        },
+      }),
     });
 
-    expect(view.intent).toBe("Fetching the page at example.com");
+    expect(view.intent).toBe("Fetching pages 3: recipes.example.com, food.example.org");
+  });
+
+  it("keeps a count-only web fetch intent until page URLs are available", () => {
+    const view = describeToolCall({
+      name: "fetch_web_page",
+      label: "Fetching 3 pages",
+      status: "pending",
+      args: { resultIds: ["a", "b", "c"] },
+    });
+
+    expect(view.intent).toBe("Fetching pages 3");
   });
 
   it("reports created-note size in the intent", () => {

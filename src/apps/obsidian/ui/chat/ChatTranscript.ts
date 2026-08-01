@@ -375,7 +375,7 @@ function renderWorkflowNodes(
         renderToolNode(listEl, item, options, uiState);
       }
     }
-    if (isStreaming) {
+    if (isStreaming && !activeReasoningId) {
       renderActiveThinkingNode(listEl);
     }
     if (listEl.childElementCount === 0) {
