@@ -8,19 +8,23 @@ export interface SavedChatRowActions {
   onDeleteChat?(id: string): void | Promise<void>;
 }
 
+export interface SavedChatsEmptyStateOptions extends SavedChatRowActions {
+  savedChats: SavedChatSummary[];
+  onOpenChat(id: string): void;
+  onViewAll(anchorEl: HTMLElement): void;
+}
+
 export interface SavedChatsPanelOptions extends SavedChatRowActions {
   savedChats: SavedChatSummary[];
   currentChatId: string | null;
   searchQuery: string;
   onSearchQueryChange(query: string): void;
   onOpenChat(id: string): void;
-  onViewAll(anchorEl: HTMLElement): void;
 }
 
 export function renderSavedChatsEmptyState(
   containerEl: HTMLElement,
-  options: Pick<SavedChatsPanelOptions, "savedChats" | "onOpenChat" | "onViewAll"> &
-    SavedChatRowActions,
+  options: SavedChatsEmptyStateOptions,
 ): void {
   const empty = containerEl.createDiv({ cls: "ixplorer-chat__empty-state" });
   const header = empty.createDiv({ cls: "ixplorer-chat__empty-header" });
