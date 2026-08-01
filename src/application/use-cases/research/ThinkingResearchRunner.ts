@@ -7,13 +7,7 @@ import {
   ModelToolOutput,
   ProviderContinuationState,
 } from "@core/agent";
-import {
-  ChatToolCall,
-  ToolEvent,
-  ToolExecution as ResearchToolExecution,
-  toolExecutionPayload,
-} from "@core/agent";
-import { DOWNLOAD_DOCUMENT_TOOL, SUB_AGENT_TOOL } from "@core/agent";
+import { ChatToolCall, ToolEvent } from "@core/agent";
 import {
   ReasoningSegmentAttribution,
   RoundPromptDeltaDiagnostic,
@@ -26,8 +20,18 @@ import {
   resolveLabelFromResult,
   resolveResultSummary,
 } from "@application/research/toolCallLabel";
-import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
 import { buildRoundPromptDelta } from "./thinkingPromptLog";
+import {
+  CachedExecution,
+  contentBearingTool,
+  extractEvidenceIds,
+  launchParallelToolPool,
+  mutationTool,
+  normalizedCallKey,
+  searchTool,
+  serializeExecution,
+  stableJson,
+} from "./thinkingToolExecution";
 
 export type ThinkingFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -143,13 +147,6 @@ const SYNTHESIS_NUDGE =
   "Stop calling tools and write the final answer now from the evidence already gathered, " +
   "citing sources as instructed. If some sub-question is unverified, state that explicitly " +
   "rather than omitting it.";
-
-interface CachedExecution {
-  ok: boolean;
-  retryable: boolean;
-  result: string;
-  diagnostic?: Record<string, unknown>;
-}
 
 export class ThinkingResearchRunner {
   private readonly modelRound: ModelRoundProvider;
@@ -560,114 +557,14 @@ async function collectRound(
   };
 }
 
-function serializeExecution(execution: ResearchToolExecution<unknown>): CachedExecution {
-  return {
-    ok: execution.ok,
-    retryable: execution.ok ? false : execution.error.retryable,
-    result: JSON.stringify(toolExecutionPayload(execution)),
-    ...(execution.diagnostic ? { diagnostic: execution.diagnostic } : {}),
-  };
-}
-
 function missingTools(required: Set<string>, satisfied: Set<string>): string[] {
   return [...required].filter((name) => !satisfied.has(name));
-}
-
-// Pull evidence/chunk identifiers out of a serialized tool result. Regex-based so it
-// tolerates truncated or wrapped payloads where JSON.parse would throw.
-function extractEvidenceIds(result: string): string[] {
-  const ids: string[] = [];
-  const pattern = /"(?:evidenceId|chunkId)"\s*:\s*"([^"]+)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(result)) !== null) {
-    ids.push(match[1]);
-  }
-  return ids;
-}
-
-function normalizedCallKey(call: Pick<ChatToolCall, "name" | "arguments">): string {
-  return `${call.name}:${stableJson(call.arguments)}`;
 }
 
 function normalizedDiagnosticKey(diagnostic: ToolCallDiagnostic): string {
   return `${diagnostic.name}:${stableJson(diagnostic.arguments)}`;
 }
 
-function stableJson(value: Record<string, unknown>): string {
-  return JSON.stringify(canonicalize(value));
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, child]) => [key, canonicalize(child)]),
-  );
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function contentBearingTool(name: string): boolean {
-  return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
-}
-
-// Keyword searches whose only job is to surface evidence ids. run_subagent is excluded:
-// it returns a synthesized answer (rich even when it lists no parseable evidenceId), so
-// counting it as a "fruitless search" would falsely trip loop detection.
-function searchTool(name: string): boolean {
-  return name === "search_web" || name === "search_index";
-}
-
-/**
- * Launches this round's parallel-safe tool calls concurrently instead of leaving
- * them to the sequential per-call loop. run_subagent calls run under their own
- * (smaller) limiter since each spins a nested loop; other read-only tools share a
- * separate limiter. Mutations and downloads are never pooled — they run inline in
- * call order so their side effects stay ordered. Calls already resolved in `cache`
- * are skipped (the loop resolves those itself); identical duplicate calls within
- * the same round share one launch. Returns a map from call id to its in-flight
- * execution promise; the per-call loop awaits the matching entry when present.
- */
-function launchParallelToolPool(
-  calls: ChatToolCall[],
-  cache: Map<string, CachedExecution>,
-  tools: ToolManager,
-  signal: AbortSignal | undefined,
-  onToolEvent: (id: string, event: ToolEvent) => void,
-  subAgentLimit: number,
-  toolLimit: number,
-): Map<string, Promise<ResearchToolExecution<unknown>>> {
-  const subAgentLimiter = new ConcurrencyLimiter(subAgentLimit);
-  const toolLimiter = new ConcurrencyLimiter(toolLimit);
-  const pool = new Map<string, Promise<ResearchToolExecution<unknown>>>();
-  const launchedByKey = new Map<string, Promise<ResearchToolExecution<unknown>>>();
-  for (const call of calls) {
-    if (!parallelSafeTool(call.name)) continue;
-    const key = normalizedCallKey(call);
-    if (cache.has(key)) continue;
-    const limiter = call.name === SUB_AGENT_TOOL ? subAgentLimiter : toolLimiter;
-    const promise =
-      launchedByKey.get(key) ??
-      limiter.run(() =>
-        tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }),
-      );
-    launchedByKey.set(key, promise);
-    pool.set(call.id, promise);
-  }
-  return pool;
-}
-
-function mutationTool(name: string): boolean {
-  return name === "create_note" || name === "update_note" || name === "delete_note";
-}
-
-// Safe to pre-launch concurrently ahead of the sequential loop: read-only tools and
-// sub-agents. Mutations and downloads have side effects / ordering dependence, so they
-// stay inline and run in call order.
-function parallelSafeTool(name: string): boolean {
-  return !mutationTool(name) && name !== DOWNLOAD_DOCUMENT_TOOL;
 }
