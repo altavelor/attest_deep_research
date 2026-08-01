@@ -1,11 +1,12 @@
-import { Menu, setIcon } from "obsidian";
+import { setIcon } from "obsidian";
 
 import { SavedChatSettings } from "@core/chat/savedChat";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ResearchMode } from "@core/research";
 import type { ContextMode } from "@core/diagnostics";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
-import { getMentionCandidates, MentionCandidate } from "./mentionAutocomplete";
+import { createMentionAutocomplete } from "./mentionAutocompleteController";
+import { createMenuDropdown, DropdownItem, showDropdownMenu } from "./chatDropdown";
 
 export interface ChatModelSelectOption {
   id: string;
@@ -64,11 +65,6 @@ export interface ChatComposerOptions {
   onUpdateContextMode(contextMode: ContextMode): void;
   onUpdateSearchMode(searchMode: ResearchSearchMode): void;
   onUpdateResearchMode(mode: ResearchMode): void;
-}
-
-interface DropdownItem {
-  id: string;
-  name: string;
 }
 
 const SEARCH_MODE_ITEMS: DropdownItem[] = [
@@ -132,7 +128,11 @@ export function renderChatComposer(
     },
   });
   const resizeQuestionInput = createTextareaAutoGrow(textareaEl);
-  const mentionState = createMentionAutocomplete(composerPanelEl, textareaEl, options);
+  const mentionState = createMentionAutocomplete(
+    composerPanelEl,
+    textareaEl,
+    options.contextFilePaths,
+  );
   textareaEl.addEventListener("input", () => {
     resizeQuestionInput();
     mentionState.update();
@@ -193,21 +193,19 @@ export function renderChatComposer(
     if (indexButton.disabled) return;
     const items = usableIndexes();
     if (items.length === 0) return;
-    const menu = prepareMenu(new Menu());
-    for (const item of items) {
-      menu.addItem((entry) =>
-        entry
-          .setTitle(item.name)
-          .setChecked(item.id === currentIndexId)
-          .onClick(() => {
-            currentIndexId = item.id;
-            options.onUpdateIndex(item.id);
-          }),
-      );
-    }
-    const rect = indexButton.getBoundingClientRect();
-    menu.showAtPosition({ x: rect.left, y: rect.bottom });
-    decorateShownMenu(menu);
+    showDropdownMenu(indexButton, (menu) => {
+      for (const item of items) {
+        menu.addItem((entry) =>
+          entry
+            .setTitle(item.name)
+            .setChecked(item.id === currentIndexId)
+            .onClick(() => {
+              currentIndexId = item.id;
+              options.onUpdateIndex(item.id);
+            }),
+        );
+      }
+    });
   });
 
   function syncIndexButton(): void {
@@ -329,233 +327,8 @@ export function renderChatComposer(
   };
 }
 
-interface MenuDropdownHandle {
-  el: HTMLButtonElement;
-  setValue(id: string): void;
-  setDisabled(disabled: boolean): void;
-  /** Disable a single option, showing `reason` on hover; pass undefined to re-enable. */
-  setItemDisabled(id: string, reason: string | undefined): void;
-}
-
 const THINKING_BLOCKED_REASON =
   "The selected model does not support Agent mode. Run the capability test in settings or pick an Agent-capable model.";
-
-/** Shared class for every composer selector popup, giving them one width/style. */
-const MENU_CLASS = "ixplorer-chat__menu";
-
-/** Force the DOM-based menu so our CSS applies (native OS menus ignore it). */
-function prepareMenu(menu: Menu): Menu {
-  menu.setUseNativeMenu(false);
-  return menu;
-}
-
-/** Tag the just-shown popup so it picks up the shared width/wrapping styles. */
-function decorateShownMenu(menu: Menu, extraCls?: string): void {
-  const menuEl =
-    (menu as unknown as { dom?: HTMLElement }).dom ??
-    (Array.from(document.querySelectorAll(".menu")).pop() as HTMLElement | undefined);
-  menuEl?.addClass(MENU_CLASS);
-  if (extraCls) {
-    menuEl?.addClass(extraCls);
-  }
-}
-
-/** Compact label+caret button that opens an Obsidian Menu of options. */
-function createMenuDropdown(
-  parentEl: HTMLElement,
-  config: {
-    cls: string;
-    ariaLabel: string;
-    placeholder: string;
-    items: DropdownItem[];
-    initialId: string;
-    onSelect(id: string): void;
-    /** Extra class on the popup, e.g. to override the shared menu width. */
-    menuCls?: string;
-  },
-): MenuDropdownHandle {
-  const wrapEl = parentEl.createSpan({ cls: "ixplorer-chat__dropdown-wrap" });
-  const buttonEl = wrapEl.createEl("button", {
-    cls: `ixplorer-chat__dropdown ${config.cls}`,
-    attr: { type: "button", "aria-label": config.ariaLabel },
-  });
-  const valueEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-value" });
-  const caretEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-caret" });
-  setIcon(caretEl, "chevron-down");
-
-  let currentId = config.initialId;
-  const disabledReasons = new Map<string, string>();
-  const renderLabel = (): void => {
-    const found = config.items.find((item) => item.id === currentId);
-    valueEl.setText(found ? found.name : config.placeholder);
-    buttonEl.setAttr("title", found ? found.name : config.placeholder);
-  };
-  renderLabel();
-
-  buttonEl.addEventListener("click", () => {
-    if (buttonEl.disabled) return;
-    const menu = prepareMenu(new Menu());
-    for (const item of config.items) {
-      const reason = disabledReasons.get(item.id);
-      menu.addItem((entry) => {
-        entry
-          .setTitle(reason ? `${item.name} — ${reason}` : item.name)
-          .setChecked(item.id === currentId);
-        if (reason) {
-          entry.setDisabled(true);
-          return;
-        }
-        entry.onClick(() => {
-          currentId = item.id;
-          renderLabel();
-          config.onSelect(item.id);
-        });
-      });
-    }
-    const rect = buttonEl.getBoundingClientRect();
-    menu.showAtPosition({ x: rect.left, y: rect.bottom });
-    decorateShownMenu(menu, config.menuCls);
-  });
-
-  return {
-    el: buttonEl,
-    setValue: (id) => {
-      currentId = id;
-      renderLabel();
-    },
-    setDisabled: (disabled) => {
-      buttonEl.disabled = disabled;
-    },
-    setItemDisabled: (id, reason) => {
-      if (reason) {
-        disabledReasons.set(id, reason);
-      } else {
-        disabledReasons.delete(id);
-      }
-    },
-  };
-}
-
-function createMentionAutocomplete(
-  containerEl: HTMLElement,
-  textareaEl: HTMLTextAreaElement,
-  options: ChatComposerOptions,
-): {
-  update(): void;
-  handleKeydown(event: KeyboardEvent): boolean;
-} {
-  const autocompleteEl = containerEl.createDiv({
-    cls: "ixplorer-chat__mention-autocomplete is-hidden",
-    attr: { role: "listbox" },
-  });
-  let candidates: MentionCandidate[] = [];
-  let activeIndex = 0;
-  let mentionStart = -1;
-
-  const hide = (): void => {
-    autocompleteEl.addClass("is-hidden");
-    candidates = [];
-    mentionStart = -1;
-    activeIndex = 0;
-  };
-
-  const insert = (candidate: MentionCandidate): void => {
-    const cursor = textareaEl.selectionStart ?? textareaEl.value.length;
-    const before = textareaEl.value.slice(0, mentionStart);
-    const after = textareaEl.value.slice(cursor);
-    const inserted = `@${candidate.insertText}`;
-    textareaEl.value = `${before}${inserted} ${after}`;
-    const nextCursor = before.length + inserted.length + 1;
-    textareaEl.setSelectionRange(nextCursor, nextCursor);
-    textareaEl.dispatchEvent(new Event("input"));
-    textareaEl.focus();
-    hide();
-  };
-
-  const render = (): void => {
-    autocompleteEl.empty();
-    if (candidates.length === 0) {
-      hide();
-      return;
-    }
-
-    autocompleteEl.removeClass("is-hidden");
-    candidates.forEach((candidate, index) => {
-      const item = autocompleteEl.createEl("button", {
-        cls: `ixplorer-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
-        text: candidate.label,
-        attr: {
-          type: "button",
-          role: "option",
-          "aria-selected": String(index === activeIndex),
-        },
-      });
-      item.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        insert(candidate);
-      });
-    });
-  };
-
-  const update = (): void => {
-    const cursor = textareaEl.selectionStart ?? textareaEl.value.length;
-    const beforeCursor = textareaEl.value.slice(0, cursor);
-    const atIndex = beforeCursor.lastIndexOf("@");
-
-    if (atIndex === -1) {
-      hide();
-      return;
-    }
-
-    const token = beforeCursor.slice(atIndex + 1);
-    if (/\n/.test(token) || /\s/.test(token)) {
-      hide();
-      return;
-    }
-
-    mentionStart = atIndex;
-    const query = token.toLowerCase();
-    candidates = getMentionCandidates(query, options.contextFilePaths);
-    activeIndex = 0;
-    render();
-  };
-
-  const handleKeydown = (event: KeyboardEvent): boolean => {
-    if (autocompleteEl.hasClass("is-hidden") || candidates.length === 0) {
-      return false;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      hide();
-      return true;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      activeIndex = Math.min(candidates.length - 1, activeIndex + 1);
-      render();
-      return true;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      activeIndex = Math.max(0, activeIndex - 1);
-      render();
-      return true;
-    }
-
-    if (event.key === "Enter" || event.key === "Tab") {
-      event.preventDefault();
-      insert(candidates[activeIndex]);
-      return true;
-    }
-
-    return false;
-  };
-
-  return { update, handleKeydown };
-}
 
 function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
   let minTextareaHeight = 0;
