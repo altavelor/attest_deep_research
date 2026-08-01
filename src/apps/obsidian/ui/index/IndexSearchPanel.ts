@@ -3,7 +3,6 @@ import { setIcon } from "obsidian";
 import { RetrievedChunk } from "@core/model";
 
 export interface IndexSearchPanelRefs {
-  indexControlEl: HTMLElement;
   profileEl: HTMLSelectElement;
   queryEl: HTMLTextAreaElement;
   topKEl: HTMLInputElement;
@@ -18,6 +17,8 @@ export interface IndexSearchPanelOptions {
   selectedProfileId?: string;
   results: RetrievedChunk[];
   error: string | null;
+  warning: string | null;
+  isSearchBlocked: boolean;
   isSearching: boolean;
   onSubmit(): void;
   onProfileChange?(): void;
@@ -30,9 +31,6 @@ export function renderIndexSearchPanel(
 ): IndexSearchPanelRefs {
   containerEl.empty();
 
-  const indexControlEl = containerEl.createDiv({
-    cls: "ixplorer-index-search__index-control",
-  });
   const form = containerEl.createEl("form", { cls: "ixplorer-index-search__form" });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -60,6 +58,7 @@ export function renderIndexSearchPanel(
     selectedProfile?.id ??
     options.profiles.find((profile) => !profile.isSuspended && profile.isIndexed)?.id ??
     "";
+  profileEl.disabled = !profileEl.value || options.isSearching;
   profileEl.addEventListener("change", () => options.onProfileChange?.());
 
   const filters = form.createDiv({ cls: "ixplorer-index-search__filters" });
@@ -111,6 +110,7 @@ export function renderIndexSearchPanel(
     },
   });
   setIcon(buttonEl, "search");
+  buttonEl.disabled = options.isSearchBlocked || options.isSearching;
 
   const resultsEl = containerEl.createDiv({
     cls: "ixplorer-index-search__results",
@@ -119,7 +119,6 @@ export function renderIndexSearchPanel(
   renderIndexSearchResults(resultsEl, options);
 
   return {
-    indexControlEl,
     profileEl,
     queryEl,
     topKEl,
@@ -132,9 +131,20 @@ export function renderIndexSearchPanel(
 
 export function renderIndexSearchResults(
   containerEl: HTMLElement,
-  options: Pick<IndexSearchPanelOptions, "results" | "error" | "isSearching" | "onOpenResult">,
+  options: Pick<
+    IndexSearchPanelOptions,
+    "results" | "error" | "warning" | "isSearching" | "onOpenResult"
+  >,
 ): void {
   containerEl.empty();
+
+  if (options.warning) {
+    containerEl.createDiv({
+      cls: "ixplorer-index-search__warning",
+      text: options.warning,
+      attr: { role: "alert" },
+    });
+  }
 
   if (options.error) {
     containerEl.createDiv({

@@ -8,7 +8,6 @@ import {
   inferChatTitle,
 } from "@core/chat/savedChat";
 import { chatHistoryForPrompt } from "@application/use-cases/chat";
-import { IndexingState } from "@adapters/indexing";
 import { estimateResearchRequestTokens } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
@@ -43,10 +42,10 @@ import {
   isContextDocumentPath,
 } from "./context/ContextDocumentPickerModal";
 import { expandAttachedContextPaths } from "./context/attachmentPaths";
-import { IndexControlActions } from "@apps/obsidian/ui/index/IndexControl";
 import {
   IndexSearchController,
   IndexSearchOptions,
+  IndexSearchResult,
 } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
 import {
@@ -66,16 +65,10 @@ import {
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
-export type { IndexSearchOptions };
+export type { IndexSearchOptions, IndexSearchResult };
 
 export interface IxplorerChatViewServices {
   createResearchService(chatModelProfileId?: string, indexProfileId?: string): ResearchService;
-  getIndexingState?(indexProfileId?: string): IndexingState | undefined;
-  subscribeToIndexingState?(
-    indexProfileId: string | undefined,
-    listener: (state: IndexingState) => void,
-  ): () => void;
-  indexingActions?: IndexControlActions;
   isWebSearchEnabled(): boolean;
   getChatModel(): string;
   getAvailableChatModels(): string[];
@@ -83,16 +76,15 @@ export interface IxplorerChatViewServices {
   getDefaultChatModelProfileId(): string;
   getDefaultIndexProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
-  searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
+  getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
+  searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   listSavedChats(): Promise<SavedChatSummary[]>;
   loadSavedChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
   renameSavedChat(id: string, title: string): Promise<void>;
   deleteSavedChat(id: string): Promise<void>;
-  isChatIndexControlShown(): boolean;
   isDebugMode(): boolean;
   shouldIncludeActiveFileContext(): boolean;
-  setChatIndexControlShown(shown: boolean): Promise<void>;
 }
 
 export class IxplorerChatView extends ItemView {
@@ -132,7 +124,6 @@ export class IxplorerChatView extends ItemView {
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
     this.closeHistoryPopoverOnOutsidePointer(event);
   };
-  private unsubscribeIndexing: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
     super(leaf);
@@ -199,16 +190,12 @@ export class IxplorerChatView extends ItemView {
       renderMessages: () => this.renderMessages(),
       renderActiveMessage: () => this.scheduleActiveMessageRender(),
       renderAnswerDetails: () => this.renderAnswerDetails(),
-      renderIndexControl: () => this.indexSearch.renderIndexControl(),
     });
     this.indexSearch = new IndexSearchController({
       getIndexProfiles: () => this.services.getIndexProfiles(),
       getSelectedIndexProfileId: () => this.currentChatSettings.indexProfileId ?? "",
-      getActivePanel: () => this.activePanel,
-      getIndexingState: this.services.getIndexingState
-        ? (indexProfileId) => this.services.getIndexingState?.(indexProfileId)
-        : undefined,
-      indexingActions: this.services.indexingActions,
+      getEmbedderWarning: (indexProfileId) =>
+        this.services.getIndexSearchEmbedderWarning(indexProfileId),
       searchIndex: (options) => this.services.searchIndex(options),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
     });
@@ -237,8 +224,6 @@ export class IxplorerChatView extends ItemView {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
     }
-    this.unsubscribeIndexing?.();
-    this.unsubscribeIndexing = null;
     document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
     this.citationPopover.close();
     this.diagnosticModal.close();
@@ -250,6 +235,9 @@ export class IxplorerChatView extends ItemView {
     this.diagnosticModal.close();
     this.contentEl.empty();
     this.contentEl.addClass("ixplorer-chat-view");
+    if (!this.services.isDebugMode()) {
+      this.activePanel = "chat";
+    }
 
     const root = this.contentEl.createDiv({ cls: "ixplorer-chat" });
     const header = root.createDiv({ cls: "ixplorer-chat__header" });
@@ -308,17 +296,12 @@ export class IxplorerChatView extends ItemView {
     this.renderAttachedContext();
     this.updateSubmitAvailability();
 
-    const indexSearchRoot = root.createDiv({
-      cls: `ixplorer-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
-    });
-    this.indexSearch.render(indexSearchRoot);
-
-    this.unsubscribeIndexing?.();
-    this.unsubscribeIndexing =
-      this.services.subscribeToIndexingState?.(this.currentChatSettings.indexProfileId, () => {
-        this.indexSearch.renderIndexControl();
-      }) ?? null;
-    this.indexSearch.renderIndexControl();
+    if (this.services.isDebugMode()) {
+      const indexSearchRoot = root.createDiv({
+        cls: `ixplorer-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
+      });
+      this.indexSearch.render(indexSearchRoot);
+    }
     this.renderMessages();
     this.renderAnswerDetails();
   }
@@ -326,8 +309,9 @@ export class IxplorerChatView extends ItemView {
   private headerOptions(): Parameters<typeof renderPanelTabs>[1] {
     return {
       activePanel: this.activePanel,
+      isDebugMode: this.services.isDebugMode(),
       onPanelChange: (panel) => {
-        this.activePanel = panel;
+        this.activePanel = this.services.isDebugMode() ? panel : "chat";
         this.render();
       },
       onOpenHistory: (anchorEl) => {
