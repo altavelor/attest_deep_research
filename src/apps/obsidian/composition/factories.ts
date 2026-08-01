@@ -1,27 +1,10 @@
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { EmbeddingClient } from "@adapters/model-provider";
-import { DocxExtractor } from "@adapters/extractors";
-import { EpubExtractor } from "@adapters/extractors";
-import { Fb2Extractor } from "@adapters/extractors";
-import { MarkdownExtractor } from "@adapters/extractors";
-import { PdfExtractor } from "@adapters/extractors";
-import { TextExtractor } from "@adapters/extractors";
-import { IndexingService } from "@adapters/indexing";
-import type { IndexingState } from "@adapters/indexing";
-import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
-import { FileVectorInventoryStore } from "@adapters/indexing";
-import { FileVectorIndexReader } from "@adapters/indexing";
 import {
-  FileDocumentClaimStore,
-  FileDocumentMetadataStore,
-  FileDocumentSummaryStore,
   LlmClaimExtractor,
   LlmDocumentMetadataExtractor,
   LlmDocumentSummarizer,
 } from "@adapters/indexing";
 import { EnrichIndexSources } from "@application/use-cases/enrichment";
-import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
-import { RetrievalService } from "@adapters/retrieval";
 import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
@@ -32,7 +15,7 @@ import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
 import { resolveToolCapabilities } from "@adapters/settings";
 import { isResponsesCapabilityCurrent } from "@adapters/settings";
-import { capabilityCacheKey, EmbeddingModelProfile } from "@adapters/settings";
+import { capabilityCacheKey } from "@adapters/settings";
 import {
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
@@ -43,7 +26,6 @@ import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import {
   requireChatModelProfile,
-  requireEmbeddingModelProfile,
   requireServerProfile,
   resolveIndexProfileForUse,
   requireIndexProfile,
@@ -54,6 +36,13 @@ import {
   createQueryExpansionService,
   createResponsesRoundProvider,
 } from "./modelClientFactory";
+import {
+  createContextExtractorsForProfile,
+  createDocumentClaimStoreForProfile,
+  createDocumentMetadataStoreForProfile,
+  createDocumentSummaryStoreForProfile,
+  createRetrieverForProfile,
+} from "./indexingFactory";
 
 export type { CompositionContext } from "./CompositionContext";
 export {
@@ -61,6 +50,17 @@ export {
   createQueryExpansionService,
   createResponsesRoundProvider,
 } from "./modelClientFactory";
+export {
+  createContextExtractorsForProfile,
+  createDocumentClaimStoreForProfile,
+  createDocumentMetadataStoreForProfile,
+  createDocumentSummaryStoreForProfile,
+  createEmbeddingClientForProfile,
+  createExtractorsForProfile,
+  createIndexingService,
+  createRetrieverForProfile,
+  createVectorIndexStoreForProfile,
+} from "./indexingFactory";
 import type { CompositionContext } from "./CompositionContext";
 
 export function createResearchService(
@@ -180,102 +180,6 @@ export function createResearchService(
   });
 }
 
-export function createIndexingService(
-  ctx: CompositionContext,
-  profileId: string,
-  onProgress: (state: IndexingState) => void,
-): IndexingService {
-  const settings = ctx.getSettings();
-  const indexProfile = requireIndexProfile(settings, profileId);
-  const embeddingProfile = requireEmbeddingModelProfile(
-    settings,
-    indexProfile.embeddingModelProfileId,
-  );
-
-  return new IndexingService({
-    files: new ObsidianVaultFileProvider(ctx.app.vault),
-    extractors: createExtractorsForProfile(ctx, indexProfile),
-    embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
-    indexStore: createVectorIndexStoreForProfile(ctx, indexProfile),
-    embeddingModel: embeddingProfile.modelName,
-    includeFolders: indexProfile.includeFolders,
-    excludeGlobs: indexProfile.excludeGlobs,
-    batchSize: indexProfile.embeddingBatchSize,
-    onProgress,
-    logger: ctx.logger,
-  });
-}
-
-export function createEmbeddingClientForProfile(
-  ctx: CompositionContext,
-  embeddingProfile: EmbeddingModelProfile,
-): EmbeddingClient {
-  const server = requireServerProfile(ctx.getSettings(), embeddingProfile.serverProfileId);
-  return new EmbeddingClient({
-    apiFormat: server.apiFormat,
-    baseUrl: server.baseUrl,
-    apiKey: server.apiKey,
-    logger: ctx.logger,
-  });
-}
-
-export function createVectorIndexStoreForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-): FileVectorIndexStore {
-  return new FileVectorIndexStore({
-    folder: ctx.getVaultLocalPath(indexProfile.indexFolder),
-    profileId: indexProfile.id,
-    shardCount: indexProfile.shardCount,
-    onPerformance: (event) => ctx.logger.logIndexingPerformance(event),
-  });
-}
-
-export function createRetrieverForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-): RetrievalService {
-  const embeddingProfile = requireEmbeddingModelProfile(
-    ctx.getSettings(),
-    indexProfile.embeddingModelProfileId,
-  );
-  const indexStore = createVectorIndexStoreForProfile(ctx, indexProfile);
-  const reader = new FileVectorIndexReader(indexStore, indexStore);
-  return new RetrievalService({
-    embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
-    indexStore,
-    embeddingModel: embeddingProfile.modelName,
-    keyword: reader,
-    chunkInventory: reader,
-    languageInventory: reader,
-    inventory: new FileVectorInventoryStore(indexStore),
-    documentMetadata: createDocumentMetadataStoreForProfile(ctx, indexProfile),
-    documentSummaries: createDocumentSummaryStoreForProfile(ctx, indexProfile),
-    documentClaims: createDocumentClaimStoreForProfile(ctx, indexProfile),
-  });
-}
-
-export function createDocumentMetadataStoreForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-): FileDocumentMetadataStore {
-  return new FileDocumentMetadataStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
-}
-
-export function createDocumentSummaryStoreForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-): FileDocumentSummaryStore {
-  return new FileDocumentSummaryStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
-}
-
-export function createDocumentClaimStoreForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-): FileDocumentClaimStore {
-  return new FileDocumentClaimStore(ctx.getVaultLocalPath(indexProfile.indexFolder));
-}
-
 /**
  * Index enrichment (SPEC-corpus-knowledge R3): extracts bibliographic metadata
  * for every indexed source with the active chat model. Triggered explicitly
@@ -319,43 +223,4 @@ export function createSearchProvider(ctx: CompositionContext) {
     logger: ctx.logger,
     health: ctx.webSourceHealth,
   });
-}
-
-export function createExtractorsForProfile(ctx: CompositionContext, indexProfile: IndexProfile) {
-  return buildExtractors(ctx, indexProfile, { scopedMarkdown: true });
-}
-
-export function createContextExtractorsForProfile(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-) {
-  return buildExtractors(ctx, indexProfile, { scopedMarkdown: false });
-}
-
-function buildExtractors(
-  ctx: CompositionContext,
-  indexProfile: IndexProfile,
-  options: { scopedMarkdown: boolean },
-) {
-  const chunk = {
-    maxChunkLength: indexProfile.chunkSize,
-    chunkOverlap: indexProfile.chunkOverlap,
-  };
-  return [
-    new MarkdownExtractor({
-      ...(options.scopedMarkdown
-        ? { includeFolders: indexProfile.includeFolders, excludeGlobs: indexProfile.excludeGlobs }
-        : {}),
-      ...chunk,
-    }),
-    new TextExtractor({ ...chunk }),
-    new PdfExtractor({
-      maxChunkLength: indexProfile.pdfChunkSize,
-      chunkOverlap: indexProfile.pdfChunkOverlap,
-      cache: ctx.pdfTextCache,
-    }),
-    new EpubExtractor({ ...chunk }),
-    new Fb2Extractor({ ...chunk }),
-    new DocxExtractor({ ...chunk }),
-  ];
 }

@@ -1,0 +1,150 @@
+import {
+  DocxExtractor,
+  EpubExtractor,
+  Fb2Extractor,
+  MarkdownExtractor,
+  PdfExtractor,
+  TextExtractor,
+} from "@adapters/extractors";
+import {
+  FileDocumentClaimStore,
+  FileDocumentMetadataStore,
+  FileDocumentSummaryStore,
+  FileVectorIndexReader,
+  FileVectorIndexStore,
+  FileVectorInventoryStore,
+  IndexingService,
+  IndexProfile,
+} from "@adapters/indexing";
+import type { IndexingState } from "@adapters/indexing";
+import { EmbeddingClient } from "@adapters/model-provider";
+import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
+import { RetrievalService } from "@adapters/retrieval";
+import { EmbeddingModelProfile } from "@adapters/settings";
+
+import { CompositionContext } from "./CompositionContext";
+import {
+  requireEmbeddingModelProfile,
+  requireIndexProfile,
+  requireServerProfile,
+} from "./profileResolvers";
+
+export function createIndexingService(
+  ctx: CompositionContext,
+  profileId: string,
+  onProgress: (state: IndexingState) => void,
+): IndexingService {
+  const settings = ctx.getSettings();
+  const indexProfile = requireIndexProfile(settings, profileId);
+  const embeddingProfile = requireEmbeddingModelProfile(
+    settings,
+    indexProfile.embeddingModelProfileId,
+  );
+  return new IndexingService({
+    files: new ObsidianVaultFileProvider(ctx.app.vault),
+    extractors: createExtractorsForProfile(ctx, indexProfile),
+    embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
+    indexStore: createVectorIndexStoreForProfile(ctx, indexProfile),
+    embeddingModel: embeddingProfile.modelName,
+    includeFolders: indexProfile.includeFolders,
+    excludeGlobs: indexProfile.excludeGlobs,
+    batchSize: indexProfile.embeddingBatchSize,
+    onProgress,
+    logger: ctx.logger,
+  });
+}
+
+export function createEmbeddingClientForProfile(
+  ctx: CompositionContext,
+  profile: EmbeddingModelProfile,
+): EmbeddingClient {
+  const server = requireServerProfile(ctx.getSettings(), profile.serverProfileId);
+  return new EmbeddingClient({
+    apiFormat: server.apiFormat,
+    baseUrl: server.baseUrl,
+    apiKey: server.apiKey,
+    logger: ctx.logger,
+  });
+}
+
+export function createVectorIndexStoreForProfile(
+  ctx: CompositionContext,
+  profile: IndexProfile,
+): FileVectorIndexStore {
+  return new FileVectorIndexStore({
+    folder: ctx.getVaultLocalPath(profile.indexFolder),
+    profileId: profile.id,
+    shardCount: profile.shardCount,
+    onPerformance: (event) => ctx.logger.logIndexingPerformance(event),
+  });
+}
+
+export function createRetrieverForProfile(
+  ctx: CompositionContext,
+  profile: IndexProfile,
+): RetrievalService {
+  const embedding = requireEmbeddingModelProfile(
+    ctx.getSettings(),
+    profile.embeddingModelProfileId,
+  );
+  const indexStore = createVectorIndexStoreForProfile(ctx, profile);
+  const reader = new FileVectorIndexReader(indexStore, indexStore);
+  return new RetrievalService({
+    embeddings: createEmbeddingClientForProfile(ctx, embedding),
+    indexStore,
+    embeddingModel: embedding.modelName,
+    keyword: reader,
+    chunkInventory: reader,
+    languageInventory: reader,
+    inventory: new FileVectorInventoryStore(indexStore),
+    documentMetadata: createDocumentMetadataStoreForProfile(ctx, profile),
+    documentSummaries: createDocumentSummaryStoreForProfile(ctx, profile),
+    documentClaims: createDocumentClaimStoreForProfile(ctx, profile),
+  });
+}
+
+export function createDocumentMetadataStoreForProfile(
+  ctx: CompositionContext,
+  profile: IndexProfile,
+): FileDocumentMetadataStore {
+  return new FileDocumentMetadataStore(ctx.getVaultLocalPath(profile.indexFolder));
+}
+export function createDocumentSummaryStoreForProfile(
+  ctx: CompositionContext,
+  profile: IndexProfile,
+): FileDocumentSummaryStore {
+  return new FileDocumentSummaryStore(ctx.getVaultLocalPath(profile.indexFolder));
+}
+export function createDocumentClaimStoreForProfile(
+  ctx: CompositionContext,
+  profile: IndexProfile,
+): FileDocumentClaimStore {
+  return new FileDocumentClaimStore(ctx.getVaultLocalPath(profile.indexFolder));
+}
+export function createExtractorsForProfile(ctx: CompositionContext, profile: IndexProfile) {
+  return buildExtractors(ctx, profile, true);
+}
+export function createContextExtractorsForProfile(ctx: CompositionContext, profile: IndexProfile) {
+  return buildExtractors(ctx, profile, false);
+}
+
+function buildExtractors(ctx: CompositionContext, profile: IndexProfile, scopedMarkdown: boolean) {
+  const chunk = { maxChunkLength: profile.chunkSize, chunkOverlap: profile.chunkOverlap };
+  return [
+    new MarkdownExtractor({
+      ...(scopedMarkdown
+        ? { includeFolders: profile.includeFolders, excludeGlobs: profile.excludeGlobs }
+        : {}),
+      ...chunk,
+    }),
+    new TextExtractor({ ...chunk }),
+    new PdfExtractor({
+      maxChunkLength: profile.pdfChunkSize,
+      chunkOverlap: profile.pdfChunkOverlap,
+      cache: ctx.pdfTextCache,
+    }),
+    new EpubExtractor({ ...chunk }),
+    new Fb2Extractor({ ...chunk }),
+    new DocxExtractor({ ...chunk }),
+  ];
+}
