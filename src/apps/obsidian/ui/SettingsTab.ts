@@ -23,14 +23,13 @@ import {
 } from "./settings/indexProfileStatus";
 import type { EnrichmentPendingAction, IndexPendingAction } from "./settings/indexProfileStatus";
 import { ServerProfileModal } from "./settings/ServerProfileModal";
-import { WebSourcesSection } from "./settings/WebSourcesSection";
+import { RetrievalSettingsSection } from "./settings/RetrievalSettingsSection";
 import { ModelProfileModal } from "./settings/ModelProfileModal";
 import { renderProfileList, renderProfileListItem } from "./settings/ProfileListRenderer";
 import {
   createIconButton,
   formatEnrichmentStatus,
   renderCategoryHeading,
-  renderSubcategoryHeading,
   statusForProfile,
 } from "./settings/shared";
 
@@ -74,7 +73,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.renderQuickStart(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
-    this.renderSearchEngineSettings(containerEl);
+    new RetrievalSettingsSection({
+      app: this.app,
+      settings: this.plugin.settings,
+      webSourceHealth: this.plugin.webSourceHealth,
+      hasActiveChatModel: this.hasActiveChatModel(),
+      saveSettings: () => this.plugin.saveSettings(),
+      requestRedisplay: () => this.display(),
+    }).render(containerEl);
     this.renderAdvancedSettings(containerEl);
     if (!this.metadataRefreshStarted) {
       this.metadataRefreshStarted = true;
@@ -143,97 +149,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
     const contentEl = details.createDiv({ cls: "ixplorer-settings-advanced__content" });
     this.renderDebugSettings(contentEl);
-  }
-
-  private renderSearchEngineSettings(containerEl: HTMLElement): void {
-    containerEl = this.gateHost(containerEl);
-    renderCategoryHeading(
-      containerEl,
-      "Retrieval",
-      "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
-    );
-
-    renderSubcategoryHeading(containerEl, "Local context");
-
-    new Setting(containerEl)
-      .setName("Include active file as context")
-      .setDesc("Automatically include the currently open supported file as explicit chat context.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.includeActiveFileContext).onChange(async (value) => {
-          this.plugin.settings.includeActiveFileContext = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    renderSubcategoryHeading(containerEl, "Obsidian graph");
-
-    new Setting(containerEl)
-      .setName("Use linked notes")
-      .setDesc(
-        "Discover linked notes from @mentions, active files, and included attachments before retrieval.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.useLinkedNotes).onChange(async (value) => {
-          this.plugin.settings.useLinkedNotes = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Include backlinks")
-      .setDesc(
-        "Use one-hop backlinks as graph candidates. Backlink notes are not traversed further.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.includeBacklinks).onChange(async (value) => {
-          this.plugin.settings.includeBacklinks = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Expand filtered files through links")
-      .setDesc("When attached files are in Filter mode, also search their linked graph neighbors.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.expandFilteredContextThroughLinks)
-          .onChange(async (value) => {
-            this.plugin.settings.expandFilteredContextThroughLinks = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Graph depth")
-      .setDesc(
-        "Depth 1 follows direct links, embeds, and backlinks. Depth 2 is reserved for advanced debugging.",
-      )
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("1", "1")
-          .addOption("2", "2")
-          .setValue(String(this.plugin.settings.graphContextDepth))
-          .onChange(async (value) => {
-            this.plugin.settings.graphContextDepth = value === "2" ? 2 : 1;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    renderSubcategoryHeading(containerEl, "Search");
-
-    new Setting(containerEl)
-      .setName("Expand search query")
-      .setDesc(
-        "Generate cross-language query variants before retrieval so notes written in other languages are found. Uses an extra chat-model call per search.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.expandSearchQuery).onChange(async (value) => {
-          this.plugin.settings.expandSearchQuery = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    this.renderWebSearchSettings(containerEl);
   }
 
   private renderProfileSettings(containerEl: HTMLElement): void {
@@ -812,30 +727,5 @@ export class IxplorerSettingTab extends PluginSettingTab {
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not load index report.");
     }
-  }
-
-  private renderWebSearchSettings(containerEl: HTMLElement): void {
-    renderSubcategoryHeading(containerEl, "Web");
-
-    new Setting(containerEl)
-      .setName("Use web for freshness questions")
-      .setDesc(
-        "Give web evidence more budget when a question asks for current, latest, price, or release information.",
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.useWebWhenFreshnessNeeded).onChange(async (value) => {
-          this.plugin.settings.useWebWhenFreshnessNeeded = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new WebSourcesSection({
-      app: this.app,
-      getSettings: () => this.plugin.settings,
-      saveSettings: () => this.plugin.saveSettings(),
-      requestRedisplay: () => this.display(),
-      getSourceIssue: (sourceId) => this.plugin.webSourceHealth.getIssue(sourceId),
-      resetSourceIssue: (sourceId) => this.plugin.webSourceHealth.reset(sourceId),
-    }).render(containerEl);
   }
 }
