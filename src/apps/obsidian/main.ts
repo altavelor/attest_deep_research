@@ -284,6 +284,14 @@ export default class IxplorerPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
+  refreshChatViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)) {
+      if (leaf.view instanceof IxplorerChatView) {
+        leaf.view.redisplay();
+      }
+    }
+  }
+
   private createChatStore(): FileChatStore {
     return new FileChatStore({
       folder: this.getVaultLocalPath(".ixplorer/chats"),

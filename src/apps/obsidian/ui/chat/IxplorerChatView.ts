@@ -231,6 +231,10 @@ export class IxplorerChatView extends ItemView {
     this.contentEl.empty();
   }
 
+  redisplay(): void {
+    this.render();
+  }
+
   private render(): void {
     this.diagnosticModal.close();
     this.contentEl.empty();
