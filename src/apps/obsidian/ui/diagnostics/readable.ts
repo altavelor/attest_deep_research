@@ -2,9 +2,9 @@
 // downloadable HTML export, hosted in a shadow root so its stylesheet and the
 // app's styles cannot leak into each other.
 
-import { diagnosticReportBodyHtml } from "./diagnosticHtml";
-import { DiagnosticReportV3 } from "./diagnostics/report/types";
-import { CSS } from "./diagnostics/html/styles";
+import { diagnosticReportBodyHtml } from "./html/document";
+import { DiagnosticReportV3 } from "./report/types";
+import { CSS } from "./html/styles";
 
 export function renderReadableDiagnosticReport(
   container: HTMLElement,
