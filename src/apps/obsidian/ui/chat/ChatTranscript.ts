@@ -351,7 +351,10 @@ function renderWorkflowNodes(
     return false;
   }
   const isStreaming = progress?.phase === "streaming";
-  const isFinalizing = isStreaming && message.content.trim().length > 0;
+  const isFinalizing =
+    isStreaming &&
+    (message.content.trim().length > 0 ||
+      checkpoints.some((checkpoint) => checkpoint.status === "streaming"));
   const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
 
   if (hasChain) {
@@ -599,14 +602,24 @@ function renderFetchTargets(head: HTMLElement, intent: string, targets: string[]
     cls: "ixplorer-chat__tool-fetch-targets",
     attr: { "aria-label": `Fetching: ${targets.join(", ")}` },
   });
-  targets.forEach((target, index) => {
+  const targetElements = targets.map((target) => {
     const targetEl = targetList.createSpan({
       cls: "ixplorer-chat__tool-fetch-target",
       text: target,
       attr: { "aria-hidden": "true" },
     });
-    targetEl.style.setProperty("--ixplorer-fetch-target-delay", `${index}s`);
+    return targetEl;
   });
+  let index = 0;
+  const showNextTarget = (): void => {
+    if (!targetList.isConnected) return;
+    targetElements.forEach((targetEl, targetIndex) => {
+      targetEl.toggleClass("ixplorer-chat__tool-fetch-target--active", targetIndex === index);
+    });
+    index = (index + 1) % targetElements.length;
+    window.setTimeout(showNextTarget, 1_000);
+  };
+  showNextTarget();
 }
 
 interface ToolCellOptions {

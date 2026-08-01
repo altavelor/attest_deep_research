@@ -61,14 +61,16 @@ describe("reasoning transcript UI", () => {
 
   it("shows Finalizing when final answer tokens arrive before the stream completes", () => {
     expect(transcript).toContain("isFinalizing");
+    expect(transcript).toContain('checkpoint.status === "streaming"');
     expect(transcript).toContain('isFinalizing ? "Finalizing…" : "Thinking…"');
   });
 
   it("animates fetch targets one at a time instead of truncating their list", () => {
     expect(transcript).toContain("renderFetchTargets");
     expect(transcript).toContain("ixplorer-chat__tool-fetch-targets");
+    expect(transcript).toContain("targetList.isConnected");
     expect(styles).toContain("ixplorer-chat__tool-fetch-target");
-    expect(styles).toContain("ixplorer-fetch-target-cycle");
+    expect(styles).toContain("ixplorer-chat__tool-fetch-target--active");
   });
 
   it("truncates non-fetch tool descriptions instead of wrapping them", () => {

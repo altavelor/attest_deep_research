@@ -184,23 +184,12 @@
 }
 
 .ixplorer-chat__tool-fetch-target {
-  position: absolute;
-  left: 0;
-  top: 0;
-  opacity: 0;
-  animation: ixplorer-fetch-target-cycle 1s steps(1, end) forwards;
-  animation-delay: var(--ixplorer-fetch-target-delay);
+  display: none;
 }
 
-@keyframes ixplorer-fetch-target-cycle {
-  0%,
-  99% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
+.ixplorer-chat__tool-fetch-target--active {
+  display: inline;
+  animation: ixplorer-workflow-pulse 1s ease-in-out infinite;
 }
 
 .ixplorer-chat__tool-phase {
