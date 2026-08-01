@@ -29,7 +29,7 @@ import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { CitationPopoverController } from "./citations/CitationPopover";
 import { ChatModelSelectOption } from "./ChatComposer";
 import { formatCitationForChunk } from "./citations/citationFormatting";
-import { DiagnosticReportModalController } from "@apps/obsidian/ui/DiagnosticReportModal";
+import { DiagnosticReportModalController } from "@apps/obsidian/ui/diagnostics/modal";
 import {
   ContextDocumentPickerModal,
   isContextDocumentPath,

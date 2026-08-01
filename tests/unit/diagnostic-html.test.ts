@@ -1,4 +1,4 @@
-import { formatDiagnosticReportHtml } from "@apps/obsidian/ui/diagnosticHtml";
+import { formatDiagnosticReportHtml } from "@apps/obsidian/ui/diagnostics/html/document";
 import { ContextDiagnostics } from "@core/diagnostics";
 
 function diagnosticFixture(): ContextDiagnostics {

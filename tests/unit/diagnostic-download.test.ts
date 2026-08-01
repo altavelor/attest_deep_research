@@ -1,4 +1,4 @@
-import { downloadDiagnosticHtml } from "@apps/obsidian/ui/diagnosticDownload";
+import { downloadDiagnosticHtml } from "@apps/obsidian/ui/diagnostics/download";
 
 describe("diagnostic HTML download", () => {
   it("uses a sanitized filename and always revokes the object URL", () => {
