@@ -349,7 +349,8 @@ export class ResearchQuestionController {
       this.options.setMessages(
         promoteAssistantCheckpoint(this.options.getMessages(), event.checkpointId),
       );
-      this.scheduleActiveRender();
+      this.cancelActiveRender();
+      this.options.renderActiveMessage();
       return;
     }
 
