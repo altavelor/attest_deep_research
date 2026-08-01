@@ -717,8 +717,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
       const canRun = profile.isSuspended !== true && !isBusyElsewhere;
       const isActionPending = Boolean(pendingIndexAction || pendingEnrichmentAction);
 
-      // Единая кнопка запуска: start → update → pause/continue. Настройки
-      // прогона (модели, секции) выбираются в IndexRunModal.
       if (isRunning || isPaused) {
         createIconButton(actions, {
           icon: isPaused ? "play" : "pause",
@@ -875,9 +873,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
     );
     const metadata = profile.lastIndexedAt ? await this.plugin.loadIndexMetadata(profile.id) : [];
     const hasMetadata = metadata.length > 0;
-    // Sidecar-файлы, созданные до появления lastEnrichedAt (или прежней
-    // командой), бэкфиллятся из provenance извлечения — иначе строка никогда
-    // не покажет Stale metadata.
     if (hasMetadata && !profile.lastEnrichedAt) {
       const latest = metadata
         .map((item) => item.extraction.extractedAt)

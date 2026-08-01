@@ -31,6 +31,17 @@ export interface ModelCapabilitySnapshot {
   contractVersion: 1;
 }
 
+export function reasoningEffortCandidates(
+  snapshot: Pick<ModelCapabilitySnapshot, "reasoning">,
+): string[] {
+  const efforts = snapshot.reasoning.efforts?.filter(Boolean) ?? [];
+  return efforts.length > 0
+    ? [...new Set(efforts)]
+    : snapshot.reasoning.defaultEffort
+      ? [snapshot.reasoning.defaultEffort]
+      : [];
+}
+
 export interface CapabilityIdentity {
   baseUrl: string;
   apiKey?: string;

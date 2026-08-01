@@ -17,9 +17,11 @@ import { probeReasoningVisibility } from "@adapters/settings";
 import { ChatModelProfile, ServerProfile } from "@adapters/settings";
 import {
   applyCapabilityVerificationState,
+  capabilityVerificationIdentity,
   CapabilityVerificationState,
   deriveCapabilityVerificationState,
   resolvedAgenticModeAfterProbe,
+  reasoningEffortCandidates,
 } from "@adapters/settings";
 
 /** What the prober needs from the settings tab that hosts it. */
@@ -41,7 +43,10 @@ export class SettingsCapabilityProber {
   private readonly plugin: IxplorerPlugin;
   private readonly fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   private readonly requestRedisplay: () => void;
-  private readonly states = new Map<string, CapabilityVerificationState>();
+  private readonly states = new Map<
+    string,
+    { identity: string; state: CapabilityVerificationState }
+  >();
   private readonly subscribers = new Set<() => void>();
 
   constructor(host: CapabilityProberHost) {
@@ -56,20 +61,23 @@ export class SettingsCapabilityProber {
   }
 
   statusFor(profile: ChatModelProfile): CapabilityVerificationState {
-    return this.states.get(profile.id) ?? deriveCapabilityVerificationState(profile);
+    const cached = this.states.get(profile.id);
+    return cached?.identity === capabilityVerificationIdentity(profile)
+      ? cached.state
+      : deriveCapabilityVerificationState(profile);
   }
 
   private publishState(profileId: string, state: Partial<CapabilityVerificationState>): void {
     const profile = this.plugin.settings.chatModelProfiles.find(
       (candidate) => candidate.id === profileId,
     );
-    this.states.set(
-      profileId,
-      applyCapabilityVerificationState(
+    this.states.set(profileId, {
+      identity: profile ? capabilityVerificationIdentity(profile) : "",
+      state: applyCapabilityVerificationState(
         profile ? this.statusFor(profile) : { tools: "not-tested", agent: "not-tested" },
         state,
       ),
-    );
+    });
     this.subscribers.forEach((listener) => listener());
   }
 
@@ -347,7 +355,10 @@ export class SettingsCapabilityProber {
             protocol,
           })
         ];
-      if (snapshot?.reasoning.efforts?.length) return snapshot.reasoning.efforts;
+      if (snapshot) {
+        const efforts = reasoningEffortCandidates(snapshot);
+        if (efforts.length > 0) return efforts;
+      }
     }
     return undefined;
   }

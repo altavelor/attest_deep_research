@@ -59,7 +59,6 @@ export default class IxplorerPlugin extends Plugin {
       }
       profile.lastEnrichedAt = new Date().toISOString();
       profile.updatedAt = profile.lastEnrichedAt;
-      // Саммари попадают в <index-description> — пересобираем его с one-liner'ами.
       profile.indexDescription = await refreshIndexDescriptionAfterRun(
         profile,
         { indexChanged: true, lastIndexedAt: profile.lastIndexedAt },
@@ -96,8 +95,6 @@ export default class IxplorerPlugin extends Plugin {
         generatedAt,
       );
       profile.lastIndexedAt = state.lastIndexedAt;
-      // indexedFiles — счётчик ЭТОГО прогона: при инкрементальном update
-      // актуальные файлы уходят в skippedFiles. Итог в индексе = сумма обоих.
       profile.indexedFileCount = state.indexedFiles + state.skippedFiles;
       profile.indexSizeBytes = state.indexSizeBytes;
       profile.updatedAt = new Date().toISOString();
@@ -200,9 +197,7 @@ export default class IxplorerPlugin extends Plugin {
     this.addSettingTab(new IxplorerSettingTab(this.app, this));
   }
 
-  onunload(): void {
-    // Settings tabs are managed by Obsidian after registration.
-  }
+  onunload(): void {}
 
   async loadSettings(): Promise<void> {
     this.settings = readSettings(await this.loadData());
@@ -278,15 +273,12 @@ export default class IxplorerPlugin extends Plugin {
         plan.mode === "rebuild"
           ? await this.indexing.rebuild(profileId)
           : await this.indexing.start(profileId);
-      // Пауза/ошибка индексации: метаданные по недоиндексированному корпусу не извлекаем.
       if (state.status === "paused" || state.status === "error") {
         return;
       }
     }
 
     if (plan.metadata) {
-      // lastEnrichedAt пишет onComplete контроллера — до финального
-      // уведомления подписчиков, иначе строка мигает «Stale metadata».
       await this.enrichment.start(profileId, plan.metadata.chatModelProfileId, {
         force: plan.metadata.force,
       });

@@ -90,8 +90,6 @@ export function buildKeywordPostingRows(
   chunks: FileVectorChunkRow[],
   minTokenLength: number,
 ): KeywordPostingRow[] {
-  // frequency — полный TF чанка (тело + заголовки), поэтому всегда ≥ 1;
-  // headingFrequency — заголовочная доля, из которой скоринг делает буст (BM25F-lite).
   const terms = new Map<string, Map<string, { frequency: number; headingFrequency: number }>>();
   const count = (token: string, chunkId: string, inHeading: boolean) => {
     const postings = getOrCreate(

@@ -113,7 +113,6 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
   };
   const rankedChunks = retrieval.rankedChunks ?? [];
 
-  // Compute score stats from ranked chunks
   let scoreStats: RequestSection["retrieval"] extends null
     ? never
     : NonNullable<RequestSection["retrieval"]>["scoreStats"] = null;
@@ -122,7 +121,7 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
     const min = Math.min(...scores);
     const max = Math.max(...scores);
     const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-    const threshold = null; // planner doesn't expose a score cutoff threshold directly
+    const threshold = null;
     scoreStats = { min, max, avg, threshold };
   }
 
@@ -158,7 +157,6 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
   const thinking = d.thinking;
   const tools = d.tools ?? [];
 
-  // Build per-round breakdown from phases + tool calls tagged with round
   let rounds: ThinkingLoopRound[] = [];
   if (thinking && thinking.phases && thinking.phases.length > 0) {
     const segments = thinking.reasoningSegments ?? [];
@@ -175,7 +173,7 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
         promptDelta: promptDeltas.find((delta) => delta.round === roundNumber) ?? null,
         toolCalls: roundCalls,
         reasoningSegments: roundSegments,
-        hadTextOutput: roundCalls.length === 0, // heuristic: no tool calls means text round
+        hadTextOutput: roundCalls.length === 0,
         classification: null,
       };
     });

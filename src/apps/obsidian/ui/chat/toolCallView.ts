@@ -28,8 +28,6 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const { name, args = {}, resultJson, status } = input;
   const intent = describeIntent(name, args, input.label);
 
-  // Failed calls always surface the error payload in the Out cell so the user
-  // can see why the step did not complete.
   if (status === "failed") {
     return {
       intent,
@@ -42,11 +40,9 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     case "read_note":
     case "get_active_note":
     case "delete_note":
-      // Spec: show only which file was read/deleted, no output body.
       return { intent };
 
     case "create_note": {
-      // Spec: show only the text that was added to the created note.
       const content = typeof args.content === "string" ? args.content : "";
       return {
         intent,
@@ -55,7 +51,6 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     }
 
     case "update_note": {
-      // Spec: show the diff between the original and the edited note.
       const diff = noteEditDiff(resultJson);
       return {
         intent,
@@ -98,8 +93,6 @@ function keywordFallbackBadge(resultJson?: string): { text: string; tooltip?: st
 
 function argsCell(args: Record<string, unknown>): ToolCell | undefined {
   if (!args || Object.keys(args).length === 0) return undefined;
-  // Single-line, compact — the full multi-line payload is one click away in the
-  // detail tab. Keeping this on one line lets the transcript stay dense.
   return { kind: "code", text: JSON.stringify(args) };
 }
 

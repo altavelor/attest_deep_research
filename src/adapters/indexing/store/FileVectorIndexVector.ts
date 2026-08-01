@@ -49,7 +49,6 @@ export function decodeStoredChunks(
 
     return {
       row,
-      // subarray — zero-copy view поверх общего буфера шарда.
       embedding: vectorData.subarray(start, end),
     };
   });

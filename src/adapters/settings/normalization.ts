@@ -10,7 +10,6 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
   normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
   normalizeActiveIndexProfile(settings);
-  // Backfilled for settings saved before the download tools existed.
   settings.downloadFolder =
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
@@ -41,7 +40,6 @@ function migrateLegacyWebSettings(settings: IxplorerSettings): void {
   }
   delete legacy.duckDuckGoEnabled;
   delete legacy.duckDuckGoResultLimit;
-  // Interim field from an unreleased hub iteration.
   delete legacy.webSearchResultLimit;
 }
 
@@ -66,7 +64,6 @@ function normalizeWebSources(settings: IxplorerSettings): void {
             ),
           )
         : {};
-    // Interim per-source field from an unreleased hub iteration.
     delete (entry as unknown as Record<string, unknown>).resultLimit;
     return [
       {

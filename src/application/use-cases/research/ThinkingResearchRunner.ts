@@ -181,8 +181,6 @@ export class ThinkingResearchRunner {
     let rounds = 0;
     const phases: string[] = [];
     const promptRounds: RoundPromptDeltaDiagnostic[] = [];
-    // Messages already captured in an earlier round's prompt delta; each round logs
-    // only the tail appended since (incremental prompt log).
     let promptLoggedCount = 0;
     const stopReasons: string[] = [];
     let continuation: ProviderContinuationState | undefined;
@@ -318,12 +316,6 @@ export class ThinkingResearchRunner {
           }
         }
 
-        // Pre-launch this round's parallel-safe tool calls (read-only tools + run_subagent)
-        // up to a bounded concurrency instead of the sequential loop below awaiting each one
-        // in turn. The loop still processes results in call order, so transcript/diagnostics
-        // ordering and budget accounting are unchanged — only wall-clock improves. Mutations
-        // and downloads are excluded (side effects / ordering), and calls already in the
-        // cache are left alone; identical duplicates within a round share one launch.
         const toolPool = forceSynthesis
           ? undefined
           : launchParallelToolPool(
@@ -343,9 +335,6 @@ export class ThinkingResearchRunner {
         let roundAttemptedSearch = false;
         for (const call of response.toolCalls) {
           totalCalls += 1;
-          // Already in synthesis mode (budget spent or loop detected): don't spend more
-          // tool calls. Still answer every tool call id with a stub so the transcript stays
-          // well-formed for the provider.
           if (forceSynthesis) {
             if (continuation) {
               toolOutputs!.push({ callId: call.id, output: SYNTHESIS_TOOL_STUB });
@@ -361,7 +350,6 @@ export class ThinkingResearchRunner {
             call.name === repairTool &&
             execution?.ok === false &&
             execution.retryable;
-          // Mutation tools are never cached: identical args may have different vault state.
           const bypassCache = mutationTool(call.name);
           const cacheHit = !!execution && !retryMandatory && !bypassCache;
           if (execution && !retryMandatory && !bypassCache) {
@@ -389,25 +377,14 @@ export class ThinkingResearchRunner {
             resultSummary,
             execution.result,
           );
-          // Over budget: keep this result out of the transcript and switch the loop
-          // into synthesis mode. We still emit the tool message (as a stub below) so
-          // the provider sees a reply for this call id.
           if (totalResultChars + execution.result.length > maxResultChars) {
             budgetExhausted = true;
           }
           const transcriptResult = budgetExhausted ? SYNTHESIS_TOOL_STUB : execution.result;
           totalResultChars += transcriptResult.length;
-          // A fresh content-bearing read (fetch_web_page / read_note) is progress on
-          // its own: it pulls full page/note text into the transcript even though it
-          // reuses the evidenceId minted at search time. Without this, the normal
-          // deep-research pattern — search once, then read several pages — looks like
-          // "searched, surfaced no new evidence" and trips loop-detection mid-read.
           if (!cacheHit && execution.ok && contentBearingTool(call.name)) {
             roundFetchedContent = true;
           }
-          // A successful keyword search that surfaces no new evidence is a spin signal —
-          // including the empty case (resultCount 0), which yields no evidence ids and so
-          // would otherwise be invisible to no-progress detection below.
           if (execution.ok && searchTool(call.name)) {
             roundAttemptedSearch = true;
           }
@@ -448,10 +425,6 @@ export class ThinkingResearchRunner {
           }
         }
 
-        // No-progress detection: a round spins if every call was an exact duplicate, or it
-        // searched (keyword search_web/search_index) but surfaced nothing new — including
-        // empty results, which carry no evidence id and would otherwise look like a fresh
-        // round. Content-bearing reads (fetch_web_page) always count as progress.
         const allDuplicates = roundDuplicates === response.toolCalls.length;
         const searchedWithoutNewEvidence =
           (roundHadEvidence || roundAttemptedSearch) && !roundNewEvidence && !roundFetchedContent;
@@ -461,10 +434,6 @@ export class ThinkingResearchRunner {
           consecutiveNoProgressRounds = 0;
         }
 
-        // Stop gathering and synthesize when the result budget is spent or the loop is
-        // spinning. Either way the model has evidence in the transcript — far better to let
-        // it write the answer than to discard the session for the deterministic fallback.
-        // toolChoice is forced to "none" above once forceSynthesis is set.
         if (budgetExhausted || consecutiveNoProgressRounds >= 2) {
           if (missingTools(required, satisfied).length > 0) {
             return failure(budgetExhausted ? "tool-result-budget-exceeded" : "loop-detected");
@@ -473,8 +442,6 @@ export class ThinkingResearchRunner {
           if (!synthesisRequested) {
             synthesisRequested = true;
             this.options.onRoundClassified?.(round, "intermediate");
-            // In continuation mode the transport is server-side state, not `messages`, so a
-            // free user turn would desync — toolChoice "none" + the stub outputs are enough.
             if (!continuation) {
               messages.push({ role: "user", content: SYNTHESIS_NUDGE });
             }
@@ -532,8 +499,6 @@ async function collectRound(
 }> {
   let streamedText = false;
   let streamedReasoning = false;
-  // segmentId (post-round-prefix) -> accumulated character count, so attribution
-  // matches the segmentIds the UI renders.
   const segmentChars = new Map<string, number>();
   const recordSegment = (segmentId: string | undefined, text: string): void => {
     if (!segmentId) return;

@@ -56,8 +56,6 @@ export class ChatModelClient implements ChatModelProvider {
     this.apiKey = options.apiKey;
     this.logger = options.logger;
     this.onReasoningObserved = options.onReasoningObserved;
-    // Every provider goes through its official SDK; the SDK owns the
-    // HTTP/SSE protocol, tool-call streaming, and reasoning/thinking decoding.
     if (this.provider === "openai-compatible") {
       this.openai = createOpenAiClient(options);
     } else if (this.provider === "anthropic") {
@@ -151,8 +149,6 @@ export class ChatModelClient implements ChatModelProvider {
   private async *streamOpenAiCompatibleChat(
     request: ChatRequest,
   ): AsyncIterable<ChatResponseChunk> {
-    // Build the request body up front so synchronous validation (e.g. an
-    // unsupported specific tool choice) throws before any network call.
     const body = {
       model: request.model,
       messages: request.messages.map(mapOpenAiMessage),
@@ -258,8 +254,6 @@ export class ChatModelClient implements ChatModelProvider {
         if (events.length > 0) {
           yield { content: textFromEvents(events), isComplete: false, events };
         }
-        // Cut off a model that has collapsed into repeating the same block; finish
-        // gracefully via the terminal block below instead of streaming forever.
         if (repetition.isRepeating()) break;
       }
     } catch (error) {
@@ -271,10 +265,6 @@ export class ChatModelClient implements ChatModelProvider {
     events.push(...inlineReasoning.finish());
     events.push({ type: "complete", stopReason: terminalStopReason });
 
-    // Some OpenAI-compatible servers (notably LM Studio) finish the stream with
-    // `finish_reason: "stop"` even when the model emitted structured tool_calls,
-    // and some local templates leak tool calls as plain text. Recover both here
-    // so the tool loop — and the capability probe — see the calls.
     let toolCalls = toolCallBuilder.build();
     if (!sawNativeToolCall && toolCalls.length === 0) {
       const textCalls = parseTextToolCalls(fullContent, request.tools);
@@ -296,8 +286,6 @@ export class ChatModelClient implements ChatModelProvider {
   }
 
   private async *streamAnthropicChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
-    // Build the params up front so synchronous validation (e.g. an unknown
-    // specific tool choice) throws before any network call.
     const systemMessage = request.messages.find((message) => message.role === "system")?.content;
     const messages = request.messages.filter((message) => message.role !== "system");
     const tools =
@@ -317,10 +305,6 @@ export class ChatModelClient implements ChatModelProvider {
       ...(tools ? { tools, tool_choice: mapAnthropicToolChoice(request) } : {}),
       ...(request.reasoningEnabled
         ? {
-            // Adaptive thinking is the supported on-mode for current Claude
-            // models; `summarized` surfaces the reasoning we stream to the UI.
-            // Adaptive-thinking models reject sampling parameters, so we omit
-            // temperature here.
             thinking: { type: "adaptive" as const, display: "summarized" as const },
             ...(request.reasoningEffort
               ? {
@@ -493,7 +477,6 @@ export class ChatModelClient implements ChatModelProvider {
           yield { content: textFromEvents(events), isComplete: false, events };
         }
 
-        // Cut off a model that has collapsed into repeating the same block.
         if (part.done || repetition.isRepeating()) {
           const finalEvents: ModelStreamEvent[] = [];
           if (reasoningOpen) {
@@ -501,8 +484,6 @@ export class ChatModelClient implements ChatModelProvider {
           }
           finalEvents.push({ type: "complete", stopReason: "complete" });
           let toolCalls = toolCallBuilder.build();
-          // Some local model templates leak tool calls as plain text instead of
-          // structured tool_calls; recover them so the tool loop can proceed.
           if (!sawNativeToolCall && toolCalls.length === 0) {
             for (const textCall of parseTextToolCalls(fullContent, request.tools)) {
               toolCallBuilder.add({
@@ -563,7 +544,6 @@ function ollamaThink(effort: string | undefined): boolean | "high" | "medium" | 
 function translateOllamaError(error: unknown, apiKey: string | undefined): IxplorerError | never {
   if (error instanceof IxplorerError) return error;
   if (error instanceof Error && error.name === "AbortError") throw error;
-  // The Ollama SDK throws a ResponseError carrying the HTTP status_code.
   const status =
     isRecord(error) && typeof error.status_code === "number" ? error.status_code : undefined;
   if (status === 404) {

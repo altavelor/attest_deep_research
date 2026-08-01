@@ -1,6 +1,7 @@
 import {
   capabilityCacheKey,
   CapabilityRefreshCoordinator,
+  reasoningEffortCandidates,
   recordObservedReasoningFormat,
 } from "@adapters/settings";
 
@@ -41,5 +42,13 @@ describe("model capability cache", () => {
     const second = coordinator.begin("profile", "identity-b");
     expect(coordinator.isCurrent(first)).toBe(false);
     expect(coordinator.isCurrent(second)).toBe(true);
+  });
+
+  it("uses an advertised default reasoning effort when no list is available", () => {
+    expect(
+      reasoningEffortCandidates({
+        reasoning: { responseFormats: [], defaultEffort: "minimal", visibleOutput: "unknown" },
+      }),
+    ).toEqual(["minimal"]);
   });
 });

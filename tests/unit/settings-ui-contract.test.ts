@@ -12,6 +12,10 @@ describe("chat model settings surface", () => {
       .filter((file) => file.endsWith(".ts"))
       .map((file) => readFileSync(resolve(settingsDir, file), "utf8")),
   ].join("\n");
+  const chatComposerSource = readFileSync(
+    resolve("src/apps/obsidian/ui/chat/ChatComposer.ts"),
+    "utf8",
+  );
 
   it("keeps Tools and reasoning controls while hiding protocol selection", () => {
     expect(source).toContain('.setName("Tools")');
@@ -53,6 +57,13 @@ describe("chat model settings surface", () => {
     expect(source).toContain("this.testing = false;");
     expect(source).toContain("this.render();");
     expect(source).not.toContain("} else if (!this.toolsVerifiedSeen) {");
+  });
+
+  it("does not retain inline mechanics comments in the chat composer", () => {
+    expect(chatComposerSource).not.toContain(
+      "Right cluster: context-window indicator, model selector, submit.",
+    );
+    expect(chatComposerSource).not.toContain("Thinking mode drives the agentic research strategy");
   });
 
   it("keeps capability test status live in the profile modal", () => {

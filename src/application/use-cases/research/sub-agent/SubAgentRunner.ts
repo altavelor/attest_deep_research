@@ -154,10 +154,6 @@ export class SubAgentRunner implements SubAgentPort {
     });
 
     const snapshot = created.evidence.snapshot();
-    // Synthesize from evidence when the runner returned no usable answer: either it ended
-    // without text (loop-detected, budget, round limit) or the "answer" is leaked tool-call
-    // markup the model emitted as text (its function-call dialect wasn't parsed). Either way
-    // the gathered evidence would otherwise be dumped as nothing at all.
     const usedSynthesisFallback = !answerText.trim() || looksLikeLeakedToolCall(answerText);
     if (usedSynthesisFallback) {
       emit?.({ type: SUB_AGENT_PHASE, message: "Synthesizing evidence…" });
@@ -216,8 +212,6 @@ export class SubAgentRunner implements SubAgentPort {
         tools: [],
         toolChoice: { type: "none" },
         temperature: this.deps.temperature,
-        // Same budget as the main loop — a tighter cap would be shared with reasoning
-        // tokens and truncate the answer, yielding an empty result.
         maxTokens: this.deps.maxTokens,
         reasoning: this.deps.reasoning,
         signal: input.signal,

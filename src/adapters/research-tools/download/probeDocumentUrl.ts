@@ -71,7 +71,6 @@ export async function probeDocumentUrl(
       signal: controller.signal,
       headers: probeHeaders(),
     });
-    // Some servers reject HEAD (405/501) — fall back to a range-limited GET.
     if (response.status === 405 || response.status === 501) {
       response = await fetchImpl.call(globalThis, validated.url, {
         method: "GET",

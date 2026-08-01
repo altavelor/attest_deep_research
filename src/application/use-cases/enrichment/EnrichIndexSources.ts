@@ -440,8 +440,6 @@ export class EnrichIndexSources {
     if (!this.retriever.listIndexChunks) {
       return "";
     }
-    // Хвост документа: последняя страница курсора. Дешевле, чем полный проход:
-    // берём общий размер из outline, если он есть, иначе один проход курсором.
     const outline = await this.retriever.getIndexSourceOutline?.(sourcePath);
     const chunkCount = outline?.chunkCount;
     if (chunkCount && chunkCount > TAIL_CHUNK_LIMIT) {

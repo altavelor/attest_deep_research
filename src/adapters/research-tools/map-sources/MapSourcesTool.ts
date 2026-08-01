@@ -129,9 +129,7 @@ function mergeRowEvidence(evidence: EvidenceRegistry, row: MapSourceRow, callId:
     }
     try {
       evidence.registerIndexChunk(chunk, { callId, query: row.sourcePath });
-    } catch {
-      // Skip a chunk that cannot be registered.
-    }
+    } catch {}
   }
 }
 

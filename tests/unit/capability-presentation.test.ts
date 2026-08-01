@@ -1,5 +1,6 @@
 import {
   applyCapabilityVerificationState,
+  capabilityVerificationIdentity,
   capabilityTags,
   deriveCapabilityVerificationState,
   formatEffortLabel,
@@ -120,5 +121,11 @@ describe("capability presentation helpers", () => {
       tools: "verified",
       agent: "failed",
     });
+  });
+
+  it("changes the verification identity when a profile changes model", () => {
+    expect(capabilityVerificationIdentity(profile())).not.toBe(
+      capabilityVerificationIdentity({ ...profile(), modelName: "other-model" }),
+    );
   });
 });

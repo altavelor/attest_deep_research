@@ -34,9 +34,6 @@ export function createAnthropicClient(options: AnthropicClientOptions): Anthropi
 
   return new Anthropic({
     baseURL,
-    // The SDK refuses to start without a key; Anthropic-compatible proxies may
-    // need none, so use a placeholder and strip the `x-api-key` header in the
-    // fetch wrapper when no real key is configured.
     apiKey: hasApiKey ? (options.apiKey as string) : "missing",
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
@@ -77,8 +74,6 @@ export function createLoggingFetch(
 
     options.logger?.logRequest(logContext);
 
-    // Call through the global receiver: Obsidian's fetch throws "Illegal
-    // invocation" when called with any other `this`.
     const response = await baseFetch.call(globalThis, input, stripHeader ? effectiveInit : init);
 
     options.logger?.logResponse({

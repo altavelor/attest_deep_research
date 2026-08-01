@@ -13,6 +13,12 @@ export interface CapabilityVerificationState {
   agent: CapabilityVerificationPhase;
 }
 
+export function capabilityVerificationIdentity(
+  profile: Pick<ChatModelProfile, "serverProfileId" | "modelName">,
+): string {
+  return JSON.stringify([profile.serverProfileId, profile.modelName]);
+}
+
 export function toolsVerified(profile: Pick<ChatModelProfile, "capabilities">): boolean {
   return profile.capabilities?.toolCalling?.probe?.calls === true;
 }

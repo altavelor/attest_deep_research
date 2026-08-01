@@ -25,7 +25,6 @@ export class ZyteFetchProvider implements PageFetchProvider {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          // Zyte authenticates with HTTP Basic: the API key is the username.
           authorization: `Basic ${toBase64(`${this.apiKey}:`)}`,
         },
         body: JSON.stringify({ url, browserHtml: true }),
@@ -66,6 +65,5 @@ export class ZyteFetchProvider implements PageFetchProvider {
 }
 
 function toBase64(value: string): string {
-  // btoa is available in Obsidian's renderer; Buffer covers the vitest/node path.
   return typeof btoa === "function" ? btoa(value) : Buffer.from(value, "utf8").toString("base64");
 }

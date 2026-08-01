@@ -178,8 +178,6 @@ export class IxplorerChatView extends ItemView {
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
-      // Folder attachments ("path/") expand into their current files only here,
-      // at request time — the composer keeps showing one folder chip.
       getContextPaths: () =>
         expandAttachedContextPaths(
           this.attachedContextPaths,

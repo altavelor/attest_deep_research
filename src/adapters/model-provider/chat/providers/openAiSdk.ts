@@ -30,9 +30,6 @@ export function createOpenAiClient(options: OpenAiClientOptions): OpenAI {
 
   return new OpenAI({
     baseURL,
-    // The SDK refuses to start without an API key; OpenAI-compatible local
-    // servers usually need none, so use a placeholder and strip the resulting
-    // Authorization header in the fetch wrapper when no real key is configured.
     apiKey: hasApiKey ? (options.apiKey as string) : "lm-studio",
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
@@ -58,8 +55,6 @@ function createLoggingFetch(baseFetch: typeof fetch, options: LoggingFetchOption
 
     options.logger?.logRequest(logContext);
 
-    // Call through the global receiver: Obsidian's fetch throws "Illegal
-    // invocation" when called with any other `this`.
     const response = await baseFetch.call(
       globalThis,
       input,

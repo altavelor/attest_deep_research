@@ -22,7 +22,6 @@ export function computeLineDiff(before: string, after: string): DiffHunk[] {
   const afterLines = splitLines(after);
   const script = diffLines(beforeLines, afterLines);
 
-  // Mark which entries are within CONTEXT_LINES of a change.
   const keep = new Array<boolean>(script.length).fill(false);
   for (let i = 0; i < script.length; i += 1) {
     if (script[i].type !== "context") {

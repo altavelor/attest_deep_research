@@ -11,10 +11,8 @@ export function renderReadableDiagnosticReport(
   report: DiagnosticReportV3,
 ): void {
   const shadow = container.shadowRoot ?? container.attachShadow({ mode: "open" });
-  // Follow Obsidian's active theme instead of the OS colour scheme.
   container.classList.toggle("dr-theme-dark", document.body.classList.contains("theme-dark"));
   container.classList.toggle("dr-theme-light", !document.body.classList.contains("theme-dark"));
-  // Sticky in-page nav is redundant inside the modal (it has its own chrome).
   const modalOverrides = ".top-nav{display:none}.layout{width:auto;padding:0 4px 24px}";
   shadow.innerHTML = `<style>${CSS}${modalOverrides}</style><div class="dr-root">${diagnosticReportBodyHtml(report)}</div>`;
 }

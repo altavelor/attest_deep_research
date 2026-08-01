@@ -74,7 +74,6 @@ export class WebSourceModal extends Modal {
 
     await this.options.onSave({
       sourceId: this.options.descriptor.id,
-      // A source cannot stay enabled once its required credentials are gone.
       enabled: this.options.profile.enabled && configured,
       credentials,
     });

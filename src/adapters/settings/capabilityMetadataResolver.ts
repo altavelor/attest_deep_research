@@ -12,9 +12,7 @@ export async function resolveWithMetadataResolvers(
     try {
       const result = await resolver.resolve(metadata);
       if (result) return result;
-    } catch {
-      // Optional metadata cannot disable generic compatible operation.
-    }
+    } catch {}
   }
   return undefined;
 }

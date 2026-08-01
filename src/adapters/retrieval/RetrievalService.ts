@@ -83,7 +83,6 @@ export class RetrievalService {
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
     const scoped = await this.resolveLanguageScope(options);
-    // A language was requested but no source matches it ⇒ nothing to return.
     if (options.language && this.inventory && (scoped.sourcePaths?.length ?? 0) === 0) {
       return { chunks: [], citations: [], usedFallback: false };
     }
@@ -110,8 +109,6 @@ export class RetrievalService {
     const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
     const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
-    // Suppress near-duplicate copies (R8) before filling result slots, so distinct
-    // content wins the top-k and copies of one article don't read as many voices.
     const deduped = dedupeNearDuplicateChunks(ranked);
     const chunks = deduped.slice(0, options.limit);
 

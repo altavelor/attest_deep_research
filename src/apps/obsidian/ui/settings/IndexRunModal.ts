@@ -95,7 +95,6 @@ export class IndexRunModal extends Modal {
       .addToggle((toggle) =>
         toggle.setValue(this.embeddingEnabled).onChange((value) => {
           this.embeddingEnabled = value;
-          // Без индекса метаданные извлекать не из чего.
           if (!value && !this.indexExists()) {
             this.metadataEnabled = false;
           }
@@ -227,8 +226,6 @@ export class IndexRunModal extends Modal {
   }
 
   private submit(mode: IndexRunPlan["mode"]): void {
-    // Смена embedding-модели делает инкрементальный update бессмысленным —
-    // повышаем до rebuild (предупреждение уже показано).
     const effectiveMode = mode !== "start" && this.embeddingModelChanged() ? "rebuild" : mode;
     this.options.onSubmit({
       mode: effectiveMode,

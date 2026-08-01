@@ -39,7 +39,6 @@ export class ContextDocumentPickerModal extends Modal {
     super(app);
     this.selectedPaths = new Set(options.selectedPaths);
     this.tree = buildTree(options.files.map((file) => file.path));
-    // Folders that already contain a selection start expanded.
     for (const selected of this.selectedPaths) {
       for (const ancestor of ancestorFolders(selected)) {
         this.expandedFolders.add(ancestor);

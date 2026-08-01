@@ -105,7 +105,6 @@ export function renderChatComposer(
 
   const composerPanelEl = formEl.createDiv({ cls: "ixplorer-chat__composer-panel" });
 
-  // Attachments row: chips + the Include/Filter control (only when files attached).
   const attachmentsRowEl = composerPanelEl.createDiv({ cls: "ixplorer-chat__attachments-row" });
   const attachedContextEl = attachmentsRowEl.createDiv({ cls: "ixplorer-chat__attachments" });
   enableHorizontalWheelScroll(attachedContextEl);
@@ -152,7 +151,6 @@ export function renderChatComposer(
 
   const modelRow = composerPanelEl.createDiv({ cls: "ixplorer-chat__model-row" });
 
-  // Left cluster: attach + sources (mode selector with a small index sub-button).
   const attachButton = modelRow.createEl("button", {
     cls: "ixplorer-chat__icon-button",
     attr: {
@@ -235,7 +233,6 @@ export function renderChatComposer(
     },
   });
 
-  // Right cluster: context-window indicator, model selector, submit.
   const contextIndicatorEl = modelRow.createSpan({
     cls: "ixplorer-chat__context-indicator",
     attr: {
@@ -261,9 +258,6 @@ export function renderChatComposer(
     },
   });
 
-  // Thinking mode drives the agentic research strategy, so it only makes sense
-  // for models whose Agent capability is verified. Block the option (with a
-  // reason) otherwise, and fall back to Instant if it was already selected.
   function syncResearchModeAvailability(): void {
     const supportsAgent =
       options.availableModels.find((model) => model.id === currentModel)?.supportsAgentMode ===
