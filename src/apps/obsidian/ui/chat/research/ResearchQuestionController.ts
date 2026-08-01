@@ -67,7 +67,6 @@ export interface ResearchQuestionControllerOptions {
   renderMessages(): void;
   renderActiveMessage(): void;
   renderAnswerDetails(): void;
-  renderIndexControl(): void;
 }
 
 export class ResearchQuestionController {
@@ -256,7 +255,6 @@ export class ResearchQuestionController {
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);
-      this.options.renderIndexControl();
     }
   }
 

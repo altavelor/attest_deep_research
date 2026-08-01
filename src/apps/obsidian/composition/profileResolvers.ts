@@ -77,3 +77,33 @@ export function requireIndexProfile(settings: IxplorerSettings, profileId: strin
   }
   return profile;
 }
+
+export function indexSearchEmbedderWarning(
+  settings: IxplorerSettings,
+  indexProfileId: string,
+): string | undefined {
+  const indexProfile = settings.indexProfiles.find((profile) => profile.id === indexProfileId);
+  if (!indexProfile) {
+    return "Select an indexed profile in Ixplorer settings before searching.";
+  }
+
+  const embeddingProfile = settings.embeddingModelProfiles.find(
+    (profile) => profile.id === indexProfile.embeddingModelProfileId,
+  );
+  if (!embeddingProfile) {
+    return "The selected index's embedding model profile is unavailable. Update it in Ixplorer settings.";
+  }
+  if (embeddingProfile.isSuspended) {
+    return "The selected index's embedding model profile is suspended. Update it in Ixplorer settings.";
+  }
+  if (embeddingProfile.capabilities?.embeddings === false) {
+    return "The selected index's embedding model cannot create embeddings. Update it in Ixplorer settings.";
+  }
+
+  const serverProfile = resolveServerProfile(settings, embeddingProfile.serverProfileId);
+  if (!serverProfile || serverProfile.isSuspended) {
+    return "The selected index's embedding server is unavailable. Update it in Ixplorer settings.";
+  }
+
+  return undefined;
+}

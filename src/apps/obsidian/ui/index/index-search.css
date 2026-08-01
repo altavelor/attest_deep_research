@@ -1,7 +1,7 @@
 .ixplorer-index-search {
   display: grid;
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -69,6 +69,13 @@
 .ixplorer-index-search__empty {
   padding: 0.75rem;
   color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.ixplorer-index-search__warning {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-warning);
   font-size: var(--font-ui-small);
 }
 

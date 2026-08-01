@@ -1,11 +1,8 @@
 import { Notice } from "obsidian";
 
-import { IndexingState } from "@adapters/indexing";
 import { RetrievedChunk } from "@core/model";
 import { toUserMessage } from "@core/errors";
 import { IndexProfileSelectOption } from "@apps/obsidian/ui/chat/ChatComposer";
-import { IxplorerPanel } from "@apps/obsidian/ui/chat/ChatHeader";
-import { IndexControlActions, renderIndexControl } from "./IndexControl";
 import {
   IndexSearchPanelRefs,
   renderIndexSearchPanel,
@@ -25,30 +22,31 @@ export interface IndexSearchOptions {
   extension?: string;
 }
 
+export interface IndexSearchResult {
+  chunks: RetrievedChunk[];
+  semanticError?: string;
+}
+
 /** What the index-search panel needs from its host view. */
 export interface IndexSearchControllerContext {
   getIndexProfiles(): IndexProfileSelectOption[];
   getSelectedIndexProfileId(): string;
-  getActivePanel(): IxplorerPanel;
-  getIndexingState?(indexProfileId?: string): IndexingState | undefined;
-  indexingActions?: IndexControlActions;
-  searchIndex(options: IndexSearchOptions): Promise<RetrievedChunk[]>;
+  getEmbedderWarning(indexProfileId: string): string | undefined;
+  searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   onOpenChunk(chunk: RetrievedChunk): void;
 }
 
 /**
- * Owns the index-search panel: its query state, results, and the embedded index
- * control. Self-contained — the host view only forwards render/redisplay calls
- * and supplies data through {@link IndexSearchControllerContext}.
+ * Owns the index-search panel query state and results.
  */
 export class IndexSearchController {
   private results: RetrievedChunk[] = [];
   private error: string | null = null;
+  private semanticError: string | null = null;
   private isSearching = false;
   private rootEl: HTMLElement | null = null;
   private refs: IndexSearchPanelRefs | null = null;
   private resultsEl: HTMLElement | null = null;
-  private indexControlEl: HTMLElement | null = null;
 
   constructor(private readonly ctx: IndexSearchControllerContext) {}
 
@@ -67,38 +65,15 @@ export class IndexSearchController {
       selectedProfileId: this.ctx.getSelectedIndexProfileId(),
       results: this.results,
       error: this.error,
+      warning: this.warning(),
+      isSearchBlocked: this.isSearchBlocked(),
       isSearching: this.isSearching,
       onSubmit: () => void this.submitSearch(),
-      onProfileChange: () => this.renderIndexControl(),
+      onProfileChange: () => this.updateSearchAvailability(),
       onOpenResult: (chunk) => this.ctx.onOpenChunk(chunk),
     });
     this.refs = refs;
-    this.indexControlEl = refs.indexControlEl;
     this.resultsEl = refs.resultsEl;
-    this.renderIndexControl();
-  }
-
-  renderIndexControl(): void {
-    if (!this.indexControlEl) {
-      return;
-    }
-
-    if (this.ctx.getActivePanel() !== "indexSearch") {
-      this.indexControlEl.empty();
-      return;
-    }
-
-    renderIndexControl(this.indexControlEl, {
-      compact: true,
-      profileId: this.refs?.profileEl.value,
-      state: this.ctx.getIndexingState?.(this.refs?.profileEl.value),
-      actions: this.ctx.indexingActions ?? {
-        start: () => undefined,
-        pause: () => undefined,
-        resume: () => undefined,
-        rebuild: () => undefined,
-      },
-    });
   }
 
   private renderResults(): void {
@@ -109,6 +84,7 @@ export class IndexSearchController {
     renderIndexSearchResults(this.resultsEl, {
       results: this.results,
       error: this.error,
+      warning: this.warning(),
       isSearching: this.isSearching,
       onOpenResult: (chunk) => this.ctx.onOpenChunk(chunk),
     });
@@ -117,24 +93,27 @@ export class IndexSearchController {
   private async submitSearch(): Promise<void> {
     const query = this.refs?.queryEl.value.trim() ?? "";
 
-    if (!query || this.isSearching) {
+    if (!query || this.isSearching || this.isSearchBlocked()) {
       return;
     }
 
     this.isSearching = true;
     this.error = null;
+    this.semanticError = null;
     this.results = [];
     this.setDisabled(true);
     this.renderResults();
 
     try {
-      this.results = await this.ctx.searchIndex({
+      const result = await this.ctx.searchIndex({
         profileId: this.refs?.profileEl.value ?? this.ctx.getIndexProfiles()[0]?.id ?? "",
         query,
         limit: readPositiveInteger(this.refs?.topKEl.value, 5),
         minScore: readOptionalNumber(this.refs?.minScoreEl.value),
         extension: normalizeExtensionFilter(this.refs?.extensionEl.value ?? ""),
       });
+      this.results = result.chunks;
+      this.semanticError = result.semanticError ?? null;
     } catch (error) {
       this.error = toUserMessage(error);
       new Notice(toUserMessage(error));
@@ -155,8 +134,46 @@ export class IndexSearchController {
       this.refs?.buttonEl,
     ]) {
       if (element) {
-        element.disabled = disabled;
+        element.disabled = disabled || (element === this.refs?.buttonEl && this.isSearchBlocked());
       }
     }
+  }
+
+  private updateSearchAvailability(): void {
+    this.setDisabled(this.isSearching);
+    this.renderResults();
+  }
+
+  private isSearchBlocked(): boolean {
+    return Boolean(this.ctx.getEmbedderWarning(this.selectedProfileId()));
+  }
+
+  private warning(): string | null {
+    const preflightWarning = this.ctx.getEmbedderWarning(this.selectedProfileId());
+    if (preflightWarning) {
+      return preflightWarning;
+    }
+    return this.semanticError
+      ? "Index search degraded to keyword-only ranking because embedding retrieval is unavailable."
+      : null;
+  }
+
+  private selectedProfileId(): string {
+    if (this.refs?.profileEl.value) {
+      return this.refs.profileEl.value;
+    }
+
+    const profiles = this.ctx.getIndexProfiles();
+    const configuredProfile = profiles.find(
+      (profile) =>
+        profile.id === this.ctx.getSelectedIndexProfileId() &&
+        !profile.isSuspended &&
+        profile.isIndexed === true,
+    );
+    return (
+      configuredProfile?.id ??
+      profiles.find((profile) => !profile.isSuspended && profile.isIndexed === true)?.id ??
+      ""
+    );
   }
 }
