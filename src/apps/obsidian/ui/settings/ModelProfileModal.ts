@@ -6,16 +6,14 @@ import { createToolCapabilitySettings, ToolCapabilitySettings } from "@adapters/
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
-import {
-  formatEffortLabel,
-  formatCapabilityVerificationStatus,
-  reasoningVerified,
-  toolsVerified,
-  verificationBlockReason,
-  CapabilityVerificationState,
-} from "@adapters/settings";
+import { CapabilityVerificationState, reasoningVerified } from "@adapters/settings";
 import { parsePositiveInteger } from "@shared";
 import { optionalNumber, renderModalActions } from "./shared";
+import {
+  ModelProfileCapabilityControlsOptions,
+  renderModelProfileCapabilityControls,
+  renderModelProfileToolsControl,
+} from "./ModelProfileCapabilityControls";
 
 type ModelProfile = ChatModelProfile | EmbeddingModelProfile;
 
@@ -53,7 +51,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.kind === "chat" && this.options.profile && "toolsEnabled" in this.options.profile
       ? this.options.profile.toolsEnabled
       : true;
-  private reasoningMode =
+  private reasoningMode: "off" | "on" | "auto" =
     this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
       ? this.options.profile.reasoning.mode === "off"
         ? "off"
@@ -200,18 +198,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         }),
       );
 
-    const capabilityHeading = new Setting(contentEl).setName("Capabilities").setHeading();
-    capabilityHeading.settingEl.addClass("ixplorer-profile-modal__capabilities-heading");
     if (this.options.kind === "chat") {
-      capabilityHeading.setDesc(this.capabilityStatus()).addButton((button) =>
-        button
-          .setIcon("flask-conical")
-          .setTooltip(
-            `${this.hasCapabilityTestResult() ? "Re-test" : "Test"} capabilities — ${this.capabilityStatus()}`,
-          )
-          .onClick(() => void this.test()),
-      );
-      this.renderReasoningControls(contentEl);
+      this.renderCapabilityControls(contentEl);
       const advanced = contentEl.createEl("details", { cls: "ixplorer-profile-modal__advanced" });
       advanced.createEl("summary", { text: "Advanced" });
       const advancedContent = advanced.createDiv();
@@ -510,119 +498,42 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     };
   }
 
-  private renderReasoningControls(containerEl: HTMLElement): void {
-    const verified = reasoningVerified(this.reasoningCapabilities);
-    if (!verified) {
-      this.reasoningMode = "off";
-    } else if (!this.agentVerifiedSeen) {
-      this.reasoningMode = "on";
-    }
-    this.agentVerifiedSeen = verified;
-    const reason = verificationBlockReason(
-      verified,
-      this.reasoningCapabilities?.source === "probe",
-    );
-    const agenticSetting = new Setting(containerEl)
-      .setName("Agentic mode")
-      .setDesc("Enable verified agent mode support.")
-      .addToggle((toggle) => {
-        toggle.setValue(this.reasoningMode === "on");
-        toggle.setDisabled(!verified);
-        toggle.onChange((value) => {
-          this.reasoningMode = value ? "on" : "off";
-          this.render();
-        });
-      });
-    this.applyDisabledState(agenticSetting, !verified, reason);
-
-    const effortValues = new Set(this.reasoningCapabilities?.efforts ?? []);
-    if (this.reasoningEffort) effortValues.add(this.reasoningEffort);
-    const effortDisabled = !verified || this.reasoningMode === "off";
-    const effortReason = !verified
-      ? reason
-      : this.reasoningMode === "off"
-        ? "Enable agentic mode to choose a reasoning effort."
-        : undefined;
-    const effortSetting = new Setting(containerEl)
-      .setName("Reasoning effort")
-      .setDesc("Auto uses the provider default or a verified value.")
-      .addDropdown((dropdown) => {
-        dropdown.addOption("", "Auto");
-        for (const effort of effortValues) dropdown.addOption(effort, formatEffortLabel(effort));
-        dropdown.setValue(this.reasoningEffort).onChange((value) => {
-          this.reasoningEffort = value;
-        });
-        dropdown.setDisabled(effortDisabled);
-      });
-    this.applyDisabledState(effortSetting, effortDisabled, effortReason);
+  private renderCapabilityControls(containerEl: HTMLElement): void {
+    renderModelProfileCapabilityControls(this.capabilityControlOptions(containerEl));
   }
 
   private renderToolsControl(containerEl: HTMLElement): void {
-    const profile = this.currentProfile() as ChatModelProfile | undefined;
-    const verified = profile ? toolsVerified(profile) : false;
-    if (!verified) {
-      this.toolsEnabled = false;
-    }
-    const reason = verificationBlockReason(
-      verified,
-      Boolean(profile?.capabilities?.toolCalling?.probe),
-    );
-    const toolsSetting = new Setting(containerEl)
-      .setName("Tools")
-      .setDesc(
-        "Let this model call note tools — read, search, and (with edit access) modify vault notes. " +
-          "Index and web research tools in Thinking mode are governed separately.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.toolsEnabled);
-        toggle.setDisabled(!verified);
-        toggle.onChange((value) => {
-          this.toolsEnabled = value;
-        });
-      });
-    this.applyDisabledState(toolsSetting, !verified, reason);
+    renderModelProfileToolsControl(this.capabilityControlOptions(containerEl));
   }
 
-  private applyDisabledState(
-    setting: Setting,
-    disabled: boolean,
-    reason: string | undefined,
-  ): void {
-    if (!disabled) return;
-    setting.settingEl.addClass("ixplorer-profile-modal__setting--disabled");
-    if (reason) {
-      setting.descEl.createDiv({ cls: "ixplorer-profile-modal__warning", text: reason });
-    }
-  }
-
-  private capabilityStatus(): string {
-    const status = this.savedProfileId
-      ? this.options.getCapabilityStatus?.(this.savedProfileId)
-      : undefined;
-    if (status) return formatCapabilityVerificationStatus(status);
-    const profile = this.currentProfile() as ChatModelProfile | undefined;
-    const tools = profile?.capabilities?.toolCalling?.probe;
-    const agent = profile?.reasoningCapabilities;
-    const toolStatus = !tools
-      ? "tools support: Not tested"
-      : tools.calls
-        ? "tools support: Verified"
-        : "tools support: Not verified";
-    const agentStatus =
-      !agent || agent.source !== "probe"
-        ? "agent mode support: Not tested"
-        : agent.responses
-          ? "agent mode support: Verified"
-          : "agent mode support: Not verified";
-    return `${toolStatus} · ${agentStatus}`;
-  }
-
-  private hasCapabilityTestResult(): boolean {
-    const profile = this.currentProfile() as ChatModelProfile | undefined;
-    return Boolean(
-      profile?.capabilities?.toolCalling?.probe ||
-      profile?.reasoningCapabilities?.source === "probe",
-    );
+  private capabilityControlOptions(
+    containerEl: HTMLElement,
+  ): ModelProfileCapabilityControlsOptions {
+    return {
+      containerEl,
+      currentProfile: this.currentProfile() as ChatModelProfile | undefined,
+      savedProfileId: this.savedProfileId,
+      getCapabilityStatus: this.options.getCapabilityStatus,
+      reasoningCapabilities: this.reasoningCapabilities,
+      reasoningMode: this.reasoningMode,
+      reasoningEffort: this.reasoningEffort,
+      toolsEnabled: this.toolsEnabled,
+      agentVerifiedSeen: this.agentVerifiedSeen,
+      onCapabilityTest: () => void this.test(),
+      onReasoningModeChange: (mode) => {
+        this.reasoningMode = mode;
+      },
+      onReasoningEffortChange: (effort) => {
+        this.reasoningEffort = effort;
+      },
+      onToolsEnabledChange: (enabled) => {
+        this.toolsEnabled = enabled;
+      },
+      onAgentVerifiedSeenChange: (verified) => {
+        this.agentVerifiedSeen = verified;
+      },
+      onRequestRerender: () => this.render(),
+    };
   }
 
   private async test(): Promise<void> {

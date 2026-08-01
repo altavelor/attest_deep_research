@@ -70,7 +70,9 @@ describe("chat model settings surface", () => {
     expect(source).toContain("subscribeCapabilityStatus");
     expect(source).toContain("getCapabilityStatus");
     expect(source).toContain('setIcon("flask-conical")');
-    expect(source).toContain('this.hasCapabilityTestResult() ? "Re-test" : "Test"');
+    expect(source).toContain(
+      'hasCapabilityTestResult(options.currentProfile) ? "Re-test" : "Test"',
+    );
     expect(source).toContain("formatCapabilityVerificationStatus");
   });
 
