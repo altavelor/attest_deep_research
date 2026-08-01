@@ -76,6 +76,7 @@ export interface IxplorerChatViewServices {
   loadSavedChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
   renameSavedChat(id: string, title: string): Promise<void>;
+  setSavedChatFavorite(id: string, isFavorite: boolean): Promise<void>;
   deleteSavedChat(id: string): Promise<void>;
   isDebugMode(): boolean;
   shouldIncludeActiveFileContext(): boolean;
@@ -120,6 +121,7 @@ export class IxplorerChatView extends ItemView {
       loadSavedChat: (id) => this.services.loadSavedChat(id),
       saveChat: (input) => this.services.saveChat(input),
       renameSavedChat: (id, title) => this.services.renameSavedChat(id, title),
+      setSavedChatFavorite: (id, isFavorite) => this.services.setSavedChatFavorite(id, isFavorite),
       deleteSavedChat: (id) => this.services.deleteSavedChat(id),
       createSaveInput: () => this.createCurrentChatSaveInput(),
     });
@@ -129,6 +131,7 @@ export class IxplorerChatView extends ItemView {
       getCurrentChatId: () => this.savedChatSession.currentChatId,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onRenameChat: (id, title) => void this.renameSavedChat(id, title),
+      onToggleFavorite: (id) => void this.toggleSavedChatFavorite(id),
       onDeleteChat: (id) => void this.deleteSavedChat(id),
       refreshSavedChats: () => this.savedChatSession.refresh(),
     });
@@ -411,6 +414,7 @@ export class IxplorerChatView extends ItemView {
       onOpenChat: (id) => void this.loadSavedChat(id),
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
       onRenameChat: (id, title) => this.renameSavedChat(id, title),
+      onToggleFavorite: (id) => this.toggleSavedChatFavorite(id),
       onDeleteChat: (id) => this.deleteSavedChat(id),
     });
   }
@@ -446,6 +450,20 @@ export class IxplorerChatView extends ItemView {
       this.render();
     }
     new Notice("Chat deleted.");
+  }
+
+  private async toggleSavedChatFavorite(id: string): Promise<void> {
+    const chat = this.savedChatSession.savedChats.find((summary) => summary.id === id);
+    if (!chat) {
+      return;
+    }
+
+    await this.savedChatSession.setFavorite(id, !chat.isFavorite);
+    if (this.savedChatsPopover.isOpen()) {
+      this.savedChatsPopover.render();
+    } else {
+      this.renderMessages();
+    }
   }
 
   private closeHistoryPopover(): void {

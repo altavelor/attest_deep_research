@@ -5,6 +5,7 @@ export interface SavedChatSessionControllerOptions {
   loadSavedChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
   renameSavedChat(id: string, title: string): Promise<void>;
+  setSavedChatFavorite(id: string, isFavorite: boolean): Promise<void>;
   deleteSavedChat(id: string): Promise<void>;
   createSaveInput(): Omit<SaveChatInput, "id" | "createdAt"> | null;
 }
@@ -68,6 +69,11 @@ export class SavedChatSessionController {
 
   async rename(id: string, title: string): Promise<void> {
     await this.options.renameSavedChat(id, title);
+    await this.refresh();
+  }
+
+  async setFavorite(id: string, isFavorite: boolean): Promise<void> {
+    await this.options.setSavedChatFavorite(id, isFavorite);
     await this.refresh();
   }
 

@@ -45,6 +45,17 @@ describe("SavedChatSessionController", () => {
     expect(controller.currentChatId).toBeNull();
     expect(controller.currentChatCreatedAt).toBe("2026-01-01T00:00:00.000Z");
   });
+
+  it("updates favorite state and refreshes saved chat summaries", async () => {
+    const setSavedChatFavorite = vi.fn(async () => undefined);
+    const savedChats = [{ ...summary("chat-1"), isFavorite: true }];
+    const controller = createController({ savedChats, setSavedChatFavorite });
+
+    await controller.setFavorite("chat-1", true);
+
+    expect(setSavedChatFavorite).toHaveBeenCalledWith("chat-1", true);
+    expect(controller.savedChats).toEqual(savedChats);
+  });
 });
 
 function createController(
@@ -52,6 +63,7 @@ function createController(
     saveChat?: (input: SaveChatInput) => Promise<SavedChat>;
     loadChat?: (id: string) => Promise<SavedChat | null>;
     savedChats?: SavedChatSummary[];
+    setSavedChatFavorite?: (id: string, isFavorite: boolean) => Promise<void>;
   } = {},
 ): SavedChatSessionController {
   return new SavedChatSessionController({
@@ -59,6 +71,7 @@ function createController(
     loadSavedChat: options.loadChat ?? (async () => null),
     saveChat: options.saveChat ?? (async (input) => savedChat(input)),
     renameSavedChat: async () => undefined,
+    setSavedChatFavorite: options.setSavedChatFavorite ?? (async () => undefined),
     deleteSavedChat: async () => undefined,
     createSaveInput: saveInput,
   });
@@ -95,5 +108,6 @@ function summary(id: string): SavedChatSummary {
     title: "Current chat",
     updatedAt: "2026-01-02T00:00:00.000Z",
     messageCount: 0,
+    isFavorite: false,
   };
 }
