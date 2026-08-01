@@ -3,6 +3,7 @@ import {
   messageMarkdownContent,
   nextAssistantMessage,
   nextAssistantReasoning,
+  nextChainToolCallStart,
   nextUserMessage,
   startAssistantProgress,
   shouldShowAnswerNoteActions,
@@ -201,6 +202,25 @@ describe("chat rendering helpers", () => {
         chain: [],
       },
     });
+  });
+
+  it("keeps resolved fetch targets with the pending tool call", () => {
+    const messages = nextChainToolCallStart(
+      startAssistantProgress([]),
+      "fetch-1",
+      "fetch_web_page",
+      "Fetching 2 pages",
+      { resultIds: ["first", "second"] },
+      undefined,
+      ["recipes.example.com", "food.example.org"],
+    );
+
+    expect(messages.at(-1)?.researchProgress?.chain).toContainEqual(
+      expect.objectContaining({
+        id: "fetch-1",
+        fetchTargets: ["recipes.example.com", "food.example.org"],
+      }),
+    );
   });
 
   it("groups streamed reasoning deltas into ordered assistant segments", () => {

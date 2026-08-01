@@ -200,7 +200,17 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             round,
           }),
         onToolCall: (id, name, label, round, args) =>
-          onEvent({ type: "tool-call-start", id, name, label, round, args }),
+          onEvent({
+            type: "tool-call-start",
+            id,
+            name,
+            label,
+            round,
+            args,
+            ...(name === "fetch_web_page"
+              ? { fetchTargets: resolveFetchTargets(args, created.evidence) }
+              : {}),
+          }),
         onToolResult: (id, ok, resolvedLabel, resultSummary, resultJson) =>
           onEvent({
             type: "tool-call-end",
@@ -392,6 +402,25 @@ function emptyThinkingFailure(
     continuationRounds: 0,
     usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
   };
+}
+
+function resolveFetchTargets(
+  args: Record<string, unknown> | undefined,
+  evidence: { resolveWebResult?(resultId: string): { canonicalUrl: string } | undefined },
+): string[] {
+  if (!Array.isArray(args?.resultIds) || !evidence.resolveWebResult) return [];
+  const sites = new Set<string>();
+  for (const resultId of args.resultIds) {
+    if (typeof resultId !== "string") continue;
+    const entry = evidence.resolveWebResult(resultId);
+    if (!entry) continue;
+    try {
+      sites.add(new URL(entry.canonicalUrl).hostname);
+    } catch {
+      sites.add(entry.canonicalUrl);
+    }
+  }
+  return [...sites];
 }
 
 function isChunkList(value: unknown): value is {

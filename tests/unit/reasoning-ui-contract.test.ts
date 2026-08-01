@@ -63,6 +63,8 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain("isFinalizing");
     expect(transcript).toContain('checkpoint.status === "streaming"');
     expect(transcript).toContain('isFinalizing ? "Finalizing…" : "Thinking…"');
+    expect(transcript).toContain('isFinalizing ? "finalizing" : "thinking"');
+    expect(styles).toContain("ixplorer-chat__workflow-dot--finalizing");
   });
 
   it("animates fetch targets one at a time instead of truncating their list", () => {

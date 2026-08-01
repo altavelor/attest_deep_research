@@ -215,6 +215,7 @@ export function nextChainToolCallStart(
   label: string,
   args?: Record<string, unknown>,
   parentId?: string,
+  fetchTargets?: string[],
 ): ChatDisplayMessage[] {
   const last = messages.at(-1);
   const assistant =
@@ -222,7 +223,15 @@ export function nextChainToolCallStart(
       ? last
       : { role: "assistant" as const, content: "", createdAt: new Date().toISOString() };
   const progress = researchProgressFromMessage(assistant, new Date().toISOString());
-  const item: ChainItem = { kind: "tool-call", id, name, label, status: "pending", args };
+  const item: ChainItem = {
+    kind: "tool-call",
+    id,
+    name,
+    label,
+    status: "pending",
+    args,
+    ...(fetchTargets && fetchTargets.length > 0 ? { fetchTargets } : {}),
+  };
   const chain = parentId ? appendChild(progress.chain, parentId, item) : [...progress.chain, item];
   const updated: ChatDisplayMessage = {
     ...assistant,
