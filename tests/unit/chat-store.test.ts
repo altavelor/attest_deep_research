@@ -167,6 +167,39 @@ describe("FileChatStore", () => {
     });
   });
 
+  it("serializes favorite updates with concurrent saves from another repository instance", async () => {
+    const firstStore = new FileChatStore({ folder, createId: () => "shared-chat" });
+    const secondStore = new FileChatStore({ folder });
+    await firstStore.saveChat({
+      messages: [{ role: "user", content: "Original message", createdAt: "2026-06-10T10:00:00Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
+    });
+
+    await Promise.all([
+      firstStore.saveChat({
+        id: "shared-chat",
+        messages: [
+          { role: "user", content: "Original message", createdAt: "2026-06-10T10:00:00Z" },
+          { role: "assistant", content: "Saved answer", createdAt: "2026-06-10T10:01:00Z" },
+        ],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+      }),
+      secondStore.setChatFavorite("shared-chat", true),
+    ]);
+
+    expect(await firstStore.loadChat("shared-chat")).toMatchObject({
+      isFavorite: true,
+      messages: [
+        { role: "user", content: "Original message" },
+        { role: "assistant", content: "Saved answer" },
+      ],
+    });
+  });
+
   it("persists segmented reasoning separately from the assistant answer", async () => {
     const store = new FileChatStore({ folder, createId: () => "reasoning" });
 

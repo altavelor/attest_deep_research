@@ -3,6 +3,16 @@ import { readStyles } from "../helpers/readStyles";
 const styles = readStyles();
 
 describe("saved chat styles", () => {
+  it("constrains a long chat list to the popover's remaining height", () => {
+    const popover = cssRule(".ixplorer-chat__history-popover");
+
+    expect(popover).toContain("width: min(36.4rem, calc(100% - 1rem))");
+    expect(popover).toContain("max-height: min(57.6rem, calc(100% - 1rem))");
+    expect(popover).toContain("grid-template-rows: auto auto auto minmax(0, 1fr)");
+    expect(popover).toContain("overflow: hidden");
+    expect(cssRule(".ixplorer-chat__history-list")).toContain("min-height: 0");
+  });
+
   it("keeps non-star actions hidden in History until the row is hovered or focused", () => {
     expect(
       cssRule(

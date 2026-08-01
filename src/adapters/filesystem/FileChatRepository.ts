@@ -23,6 +23,7 @@ export interface FileChatRepositoryOptions {
 }
 
 export class FileChatRepository implements ChatRepository {
+  private static readonly mutationQueues = new Map<string, Promise<void>>();
   private readonly folder: string;
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -74,73 +75,81 @@ export class FileChatRepository implements ChatRepository {
   }
 
   async saveChat(input: SaveChatInput): Promise<SavedChat> {
-    await mkdir(this.folder, { recursive: true });
-    const now = this.now().toISOString();
     const id = input.id ?? this.createId();
     assertSafeChatId(id);
-    const existing = await this.readChatFile(id);
-    const createdAt = input.createdAt ?? existing?.createdAt ?? now;
-    const chat: SavedChat = {
-      schemaVersion: CHAT_SCHEMA_VERSION,
-      id,
-      title: normalizeTitle(input.title ?? inferChatTitle(input.messages)),
-      createdAt,
-      updatedAt: now,
-      messages: input.messages,
-      lastAnswer: input.lastAnswer,
-      attachedContextPaths: [...input.attachedContextPaths],
-      chatSettings: input.chatSettings,
-      isFavorite: existing?.isFavorite === true,
-    };
+    return this.mutateChat(id, async () => {
+      await mkdir(this.folder, { recursive: true });
+      const now = this.now().toISOString();
+      const existing = await this.readChatFile(id);
+      const createdAt = input.createdAt ?? existing?.createdAt ?? now;
+      const chat: SavedChat = {
+        schemaVersion: CHAT_SCHEMA_VERSION,
+        id,
+        title: normalizeTitle(input.title ?? inferChatTitle(input.messages)),
+        createdAt,
+        updatedAt: now,
+        messages: input.messages,
+        lastAnswer: input.lastAnswer,
+        attachedContextPaths: [...input.attachedContextPaths],
+        chatSettings: input.chatSettings,
+        isFavorite: existing?.isFavorite === true,
+      };
 
-    await writeJsonAtomically(this.chatPath(id), chat);
-    return chat;
+      await writeJsonAtomically(this.chatPath(id), chat);
+      return chat;
+    });
   }
 
   async renameChat(id: string, title: string): Promise<SavedChat | null> {
     assertSafeChatId(id);
-    await mkdir(this.folder, { recursive: true });
-    const existing = await this.readChatFile(id);
+    return this.mutateChat(id, async () => {
+      await mkdir(this.folder, { recursive: true });
+      const existing = await this.readChatFile(id);
 
-    if (!existing) {
-      return null;
-    }
+      if (!existing) {
+        return null;
+      }
 
-    const chat: SavedChat = {
-      ...existing,
-      title: normalizeTitle(title),
-      updatedAt: this.now().toISOString(),
-    };
-    await writeJsonAtomically(this.chatPath(id), chat);
-    return chat;
+      const chat: SavedChat = {
+        ...existing,
+        title: normalizeTitle(title),
+        updatedAt: this.now().toISOString(),
+      };
+      await writeJsonAtomically(this.chatPath(id), chat);
+      return chat;
+    });
   }
 
   async setChatFavorite(id: string, isFavorite: boolean): Promise<SavedChat | null> {
     assertSafeChatId(id);
-    await mkdir(this.folder, { recursive: true });
-    const existing = await this.readChatFile(id);
+    return this.mutateChat(id, async () => {
+      await mkdir(this.folder, { recursive: true });
+      const existing = await this.readChatFile(id);
 
-    if (!existing) {
-      return null;
-    }
+      if (!existing) {
+        return null;
+      }
 
-    const chat: SavedChat = { ...existing, isFavorite };
-    await writeJsonAtomically(this.chatPath(id), chat);
-    return chat;
+      const chat: SavedChat = { ...existing, isFavorite };
+      await writeJsonAtomically(this.chatPath(id), chat);
+      return chat;
+    });
   }
 
   async deleteChat(id: string): Promise<void> {
     assertSafeChatId(id);
 
-    try {
-      await unlink(this.chatPath(id));
-    } catch (error) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return;
-      }
+    await this.mutateChat(id, async () => {
+      try {
+        await unlink(this.chatPath(id));
+      } catch (error) {
+        if (isNodeError(error) && error.code === "ENOENT") {
+          return;
+        }
 
-      throw error;
-    }
+        throw error;
+      }
+    });
   }
 
   private async readChatFile(id: string): Promise<SavedChat | null> {
@@ -159,6 +168,25 @@ export class FileChatRepository implements ChatRepository {
 
   private chatPath(id: string): string {
     return join(this.folder, `${id}.json`);
+  }
+
+  private async mutateChat<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    const path = this.chatPath(id);
+    const previous = FileChatRepository.mutationQueues.get(path) ?? Promise.resolve();
+    const result = previous.catch(() => undefined).then(operation);
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    FileChatRepository.mutationQueues.set(path, settled);
+
+    try {
+      return await result;
+    } finally {
+      if (FileChatRepository.mutationQueues.get(path) === settled) {
+        FileChatRepository.mutationQueues.delete(path);
+      }
+    }
   }
 }
 
