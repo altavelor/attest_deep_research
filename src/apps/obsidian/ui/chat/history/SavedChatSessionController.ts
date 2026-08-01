@@ -75,7 +75,7 @@ export class SavedChatSessionController {
     await this.options.deleteSavedChat(id);
     const wasCurrent = this.currentId === id;
     if (wasCurrent) {
-      this.clearCurrent();
+      this.currentId = null;
     }
     await this.refresh();
     return wasCurrent;
