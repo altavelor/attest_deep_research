@@ -3,7 +3,23 @@ import { resolve } from "path";
 import { readStyles } from "../helpers/readStyles";
 
 describe("reasoning transcript UI", () => {
-  const transcript = readFileSync(resolve("src/apps/obsidian/ui/chat/ChatTranscript.ts"), "utf8");
+  const transcript = [
+    "ChatTranscript.ts",
+    "assistantMessageRenderer.ts",
+    "fetchTargetAnimator.ts",
+    "workflowRenderer.ts",
+    "workflow/reasoningNodeRenderer.ts",
+    "workflow/toolCallNodeRenderer.ts",
+    "workflow/fetchTargetResolver.ts",
+    "citationAnchorRenderer.ts",
+  ]
+    .map((fileName) => readFileSync(resolve("src/apps/obsidian/ui/chat", fileName), "utf8"))
+    .join("\n");
+  const workflow = readFileSync(resolve("src/apps/obsidian/ui/chat/workflowRenderer.ts"), "utf8");
+  const controller = readFileSync(
+    resolve("src/apps/obsidian/ui/chat/research/ResearchQuestionController.ts"),
+    "utf8",
+  );
   const styles = readStyles();
 
   it("renders reasoning, tools, and the answer as one unified workflow", () => {
@@ -46,8 +62,8 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain('if (item.kind === "tool-call")');
     expect(transcript).toContain('if (item.kind === "reasoning")');
     expect(transcript).not.toContain('item.kind === "reasoning" && options.isDebugMode');
-    expect(transcript).toContain("if (options.isDebugMode && view.inCell)");
-    expect(transcript).toContain("if (options.isDebugMode && view.outCell)");
+    expect(transcript).toContain("if (context.isDebugMode && view.inCell)");
+    expect(transcript).toContain("if (context.isDebugMode && view.outCell)");
     expect(transcript).toContain('if (child.kind === "tool-call")');
   });
 
@@ -59,12 +75,26 @@ describe("reasoning transcript UI", () => {
     expect(styles).toContain("ixplorer-chat__workflow-node--thinking-active");
   });
 
+  it("stops marking reasoning as active when a streamed answer checkpoint begins", () => {
+    expect(transcript).toContain("const hasStreamingCheckpoint");
+    expect(transcript).toContain("!hasStreamingCheckpoint");
+    expect(transcript).toContain("chain.at(-1)");
+  });
+
   it("shows Finalizing when final answer tokens arrive before the stream completes", () => {
     expect(transcript).toContain("isFinalizing");
-    expect(transcript).toContain('checkpoint.status === "streaming"');
-    expect(transcript).toContain('isFinalizing ? "Finalizing…" : "Thinking…"');
+    expect(transcript).toContain(
+      'checkpoints.some((checkpoint) => checkpoint.status === "finalizing")',
+    );
+    expect(transcript).toContain('renderActiveThinkingNode(listEl, "Finalizing…")');
     expect(transcript).toContain('isFinalizing ? "finalizing" : "thinking"');
     expect(styles).toContain("ixplorer-chat__workflow-dot--finalizing");
+    expect(controller).toContain("await this.waitForFinalizingFrame()");
+  });
+
+  it("renders at most one active workflow indicator", () => {
+    expect(transcript).toContain("function renderWorkflowIndicator");
+    expect(transcript).toContain("else if (isStreaming && !hasStreamingCheckpoint");
   });
 
   it("animates fetch targets one at a time instead of truncating their list", () => {
@@ -73,6 +103,20 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain("targetList.isConnected");
     expect(styles).toContain("ixplorer-chat__tool-fetch-target");
     expect(styles).toContain("ixplorer-chat__tool-fetch-target--active");
+    expect(transcript).toContain('item.status === "pending"');
+  });
+
+  it("cancels fetch-target animations when the transcript rerenders or closes", () => {
+    expect(transcript).toContain("disposeChatTranscript");
+    expect(transcript).toContain("window.clearTimeout");
+    expect(transcript).toContain("FetchTargetAnimator");
+    expect(transcript).toContain("disposeFetchTargetAnimations");
+  });
+
+  it("passes workflow rendering only its direct dependencies", () => {
+    expect(transcript).toContain("interface WorkflowRenderContext");
+    expect(transcript).toContain("createWorkflowRenderContext");
+    expect(workflow).not.toContain("options: ChatTranscriptOptions");
   });
 
   it("truncates non-fetch tool descriptions instead of wrapping them", () => {

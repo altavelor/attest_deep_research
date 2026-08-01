@@ -51,7 +51,7 @@ export interface ResearchProgressCheckpoint {
   id: string;
   round: number;
   content: string;
-  status: "streaming" | "complete" | "superseded" | "interrupted";
+  status: "streaming" | "finalizing" | "complete" | "superseded" | "interrupted";
 }
 
 export type ChainItem =

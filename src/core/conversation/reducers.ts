@@ -145,6 +145,28 @@ export function completeAssistantCheckpoint(
   ];
 }
 
+export function promoteAssistantCheckpoint(
+  messages: ChatDisplayMessage[],
+  checkpointId: string,
+): ChatDisplayMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      researchProgress: {
+        ...last.researchProgress,
+        checkpoints: last.researchProgress.checkpoints.map((checkpoint) =>
+          checkpoint.id === checkpointId
+            ? { ...checkpoint, status: "finalizing" as const }
+            : checkpoint,
+        ),
+      },
+    },
+  ];
+}
+
 export function resetLastAssistantContent(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
   const last = messages.at(-1);
   if (last?.role !== "assistant") return messages;

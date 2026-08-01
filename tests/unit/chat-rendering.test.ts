@@ -1,8 +1,10 @@
 import {
   attachAnswerDetailsToLastAssistantMessage,
+  nextAssistantCheckpoint,
   messageMarkdownContent,
   nextAssistantMessage,
   nextAssistantReasoning,
+  promoteAssistantCheckpoint,
   nextChainToolCallStart,
   nextUserMessage,
   startAssistantProgress,
@@ -200,6 +202,19 @@ describe("chat rendering helpers", () => {
         phase: "streaming",
         reasoning: { phase: "streaming", segments: [] },
         chain: [],
+      },
+    });
+  });
+
+  it("keeps a classified final answer out of the transcript until completion", () => {
+    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const finalizing = promoteAssistantCheckpoint(streaming, "round-1");
+
+    expect(finalizing.at(-1)).toMatchObject({
+      content: "",
+      researchProgress: {
+        phase: "streaming",
+        checkpoints: [{ id: "round-1", status: "finalizing", content: "Answer" }],
       },
     });
   });

@@ -140,6 +140,7 @@ export class IndexSearchController {
   }
 
   private updateSearchAvailability(): void {
+    this.semanticError = null;
     this.setDisabled(this.isSearching);
     this.renderResults();
   }
