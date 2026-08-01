@@ -3,17 +3,11 @@ import {
   ChatRequest,
   ModelRoundDelta,
   ModelRoundProvider,
-  ModelRoundRequest,
   ModelToolOutput,
   ProviderContinuationState,
 } from "@core/agent";
-import {
-  ChatToolCall,
-  ToolEvent,
-  ToolExecution as ResearchToolExecution,
-  toolExecutionPayload,
-} from "@core/agent";
-import { DOWNLOAD_DOCUMENT_TOOL, SUB_AGENT_TOOL } from "@core/agent";
+import type { ModelRoundRequest } from "@core/agent";
+import { ToolEvent } from "@core/agent";
 import {
   ReasoningSegmentAttribution,
   RoundPromptDeltaDiagnostic,
@@ -21,13 +15,9 @@ import {
 } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { ToolManager } from "@application/tools/ToolManager";
-import {
-  toolCallChainLabel,
-  resolveLabelFromResult,
-  resolveResultSummary,
-} from "@application/research/toolCallLabel";
-import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
 import { buildRoundPromptDelta } from "./thinkingPromptLog";
+import { collectThinkingModelRound } from "./ThinkingModelRoundCollector";
+import { ThinkingToolRoundExecutor } from "./ThinkingToolRoundExecutor";
 
 export type ThinkingFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -125,7 +115,6 @@ const DEFAULT_MAX_ROUNDS = 30;
 // (or several in parallel) lands here as one large tool result; too tight a budget
 // trips the fallback before the model can synthesize.
 export const DEFAULT_MAX_RESULT_CHARS = 80_000;
-const PREVIEW_CHARS = 600;
 // How many run_subagent calls within one round may execute concurrently. The rest
 // queue and run as a slot frees up (see ConcurrencyLimiter).
 const DEFAULT_MAX_PARALLEL_SUB_AGENTS = 3;
@@ -137,47 +126,36 @@ const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 5;
 // budget spent or the model is spinning), plus the nudge that asks it to answer from what
 // it already gathered. Both conditions mean "stop gathering and answer now" — not "fail and
 // hand off to the deterministic fallback", which throws away an otherwise-usable session.
-const SYNTHESIS_TOOL_STUB =
-  "[omitted: stop calling tools — answer from the evidence already gathered]";
 const SYNTHESIS_NUDGE =
   "Stop calling tools and write the final answer now from the evidence already gathered, " +
   "citing sources as instructed. If some sub-question is unverified, state that explicitly " +
   "rather than omitting it.";
 
-interface CachedExecution {
-  ok: boolean;
-  retryable: boolean;
-  result: string;
-  diagnostic?: Record<string, unknown>;
-}
-
 export class ThinkingResearchRunner {
-  private readonly modelRound: ModelRoundProvider;
-
-  constructor(private readonly options: ThinkingResearchRunnerOptions) {
-    this.modelRound = options.modelRound;
-  }
+  constructor(private readonly options: ThinkingResearchRunnerOptions) {}
 
   async run(): Promise<ThinkingResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
     const required = new Set(this.options.policy.requiredTools);
     const satisfied = new Set<string>();
     const repaired = new Set<string>();
-    const diagnostics: ToolCallDiagnostic[] = [];
-    const cache = new Map<string, CachedExecution>();
-    const mandatoryFailures = new Map<string, boolean>();
     const maxRounds = this.options.maxRounds ?? DEFAULT_MAX_ROUNDS;
     const maxResultChars = this.options.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+    const toolExecutor = new ThinkingToolRoundExecutor({
+      tools: this.options.tools,
+      signal: this.options.signal,
+      maxResultChars,
+      maxParallelSubAgents: this.options.maxParallelSubAgents ?? DEFAULT_MAX_PARALLEL_SUB_AGENTS,
+      maxParallelToolCalls: this.options.maxParallelToolCalls ?? DEFAULT_MAX_PARALLEL_TOOL_CALLS,
+      onToolCall: this.options.onToolCall,
+      onToolResult: this.options.onToolResult,
+      onToolEvent: this.options.onToolEvent,
+    });
     let phase: "bootstrap" | "repair" | "research" = "bootstrap";
     let repairTool: string | undefined;
-    let totalCalls = 0;
-    let duplicateCalls = 0;
-    let totalResultChars = 0;
-    let budgetExhausted = false;
     let forceSynthesis = false;
     let synthesisRequested = false;
     let consecutiveNoProgressRounds = 0;
-    const seenEvidenceIds = new Set<string>();
     let rounds = 0;
     const phases: string[] = [];
     const promptRounds: RoundPromptDeltaDiagnostic[] = [];
@@ -193,17 +171,17 @@ export class ThinkingResearchRunner {
     const failure = (reason: ThinkingFallbackReason): ThinkingResearchFailure => ({
       ok: false,
       reason,
-      diagnostics,
+      diagnostics: toolExecutor.diagnostics,
       satisfiedTools: [...satisfied],
       repairedTools: [...repaired],
       rounds,
-      totalCalls,
-      duplicateCalls,
+      totalCalls: toolExecutor.totalCalls,
+      duplicateCalls: toolExecutor.duplicateCalls,
       phases,
       promptRounds,
       stopReasons,
       maxResultChars,
-      totalResultChars,
+      totalResultChars: toolExecutor.totalResultChars,
       reasoningItemCount,
       reasoningSegments,
       continuationRounds,
@@ -229,9 +207,9 @@ export class ThinkingResearchRunner {
           buildRoundPromptDelta(round, toolChoice, messages.slice(promptLoggedCount), toolOutputs),
         );
         promptLoggedCount = messages.length;
-        const response = await collectRound(
+        const response = await collectThinkingModelRound(
           this.options,
-          this.modelRound,
+          this.options.modelRound,
           messages,
           toolChoice,
           continuation,
@@ -267,17 +245,17 @@ export class ThinkingResearchRunner {
             return {
               ok: true,
               answerText: response.content,
-              diagnostics,
+              diagnostics: toolExecutor.diagnostics,
               satisfiedTools: [...satisfied],
               repairedTools: [...repaired],
               rounds,
-              totalCalls,
-              duplicateCalls,
+              totalCalls: toolExecutor.totalCalls,
+              duplicateCalls: toolExecutor.duplicateCalls,
               phases,
               promptRounds,
               stopReasons,
               maxResultChars,
-              totalResultChars,
+              totalResultChars: toolExecutor.totalResultChars,
               reasoningItemCount,
               reasoningSegments,
               continuationRounds,
@@ -305,138 +283,35 @@ export class ThinkingResearchRunner {
             content: response.content,
             toolCalls: response.toolCalls,
           });
+        }
+
+        const toolRound = await toolExecutor.execute({
+          calls: response.toolCalls,
+          round,
+          phase,
+          repairTool,
+          requiredTools: required,
+          satisfiedTools: satisfied,
+          continuation: Boolean(continuation),
+          forceSynthesis,
+        });
+        if (continuation) {
+          toolOutputs = toolRound.toolOutputs;
         } else {
-          toolOutputs = [];
+          messages.push(...toolRound.toolMessages);
         }
 
-        if (!forceSynthesis) {
-          for (const call of response.toolCalls) {
-            const label = toolCallChainLabel(call.name, call.arguments);
-            this.options.onToolCall?.(call.id, call.name, label, round, call.arguments);
-          }
-        }
-
-        const toolPool = forceSynthesis
-          ? undefined
-          : launchParallelToolPool(
-              response.toolCalls,
-              cache,
-              this.options.tools,
-              this.options.signal,
-              (id, event) => this.options.onToolEvent?.(id, event),
-              this.options.maxParallelSubAgents ?? DEFAULT_MAX_PARALLEL_SUB_AGENTS,
-              this.options.maxParallelToolCalls ?? DEFAULT_MAX_PARALLEL_TOOL_CALLS,
-            );
-
-        let roundDuplicates = 0;
-        let roundHadEvidence = false;
-        let roundNewEvidence = false;
-        let roundFetchedContent = false;
-        let roundAttemptedSearch = false;
-        for (const call of response.toolCalls) {
-          totalCalls += 1;
-          if (forceSynthesis) {
-            if (continuation) {
-              toolOutputs!.push({ callId: call.id, output: SYNTHESIS_TOOL_STUB });
-            } else {
-              messages.push({ role: "tool", content: SYNTHESIS_TOOL_STUB, toolCallId: call.id });
-            }
-            continue;
-          }
-          const key = normalizedCallKey(call);
-          let execution = cache.get(key);
-          const retryMandatory =
-            phase === "repair" &&
-            call.name === repairTool &&
-            execution?.ok === false &&
-            execution.retryable;
-          const bypassCache = mutationTool(call.name);
-          const cacheHit = !!execution && !retryMandatory && !bypassCache;
-          if (execution && !retryMandatory && !bypassCache) {
-            duplicateCalls += 1;
-            roundDuplicates += 1;
-          } else {
-            const pooled = toolPool?.get(call.id);
-            const raw = pooled
-              ? await pooled
-              : await this.options.tools.execute(call, {
-                  signal: this.options.signal,
-                  emit: (event) => this.options.onToolEvent?.(call.id, event),
-                });
-            execution = serializeExecution(raw);
-            if (!bypassCache) {
-              cache.set(key, execution);
-            }
-          }
-          const resolvedLabel = resolveLabelFromResult(call.name, execution.result);
-          const resultSummary = resolveResultSummary(call.name, execution.result);
-          this.options.onToolResult?.(
-            call.id,
-            execution.ok,
-            resolvedLabel,
-            resultSummary,
-            execution.result,
-          );
-          if (totalResultChars + execution.result.length > maxResultChars) {
-            budgetExhausted = true;
-          }
-          const transcriptResult = budgetExhausted ? SYNTHESIS_TOOL_STUB : execution.result;
-          totalResultChars += transcriptResult.length;
-          if (!cacheHit && execution.ok && contentBearingTool(call.name)) {
-            roundFetchedContent = true;
-          }
-          if (execution.ok && searchTool(call.name)) {
-            roundAttemptedSearch = true;
-          }
-          const evidenceIds = extractEvidenceIds(execution.result);
-          if (evidenceIds.length > 0) {
-            roundHadEvidence = true;
-            for (const id of evidenceIds) {
-              if (!seenEvidenceIds.has(id)) {
-                roundNewEvidence = true;
-                seenEvidenceIds.add(id);
-              }
-            }
-          }
-          if (execution.ok && required.has(call.name)) satisfied.add(call.name);
-          if (!execution.ok && required.has(call.name)) {
-            mandatoryFailures.set(call.name, execution.retryable);
-          }
-          diagnostics.push({
-            id: call.id,
-            name: call.name,
-            status: execution.ok ? "success" : "failed",
-            arguments: call.arguments,
-            resultPreview: contentBearingTool(call.name)
-              ? "[redacted tool content]"
-              : execution.result.slice(0, PREVIEW_CHARS),
-            resultBytes: execution.result.length,
-            round,
-            ...(cache.get(key) === execution &&
-            diagnostics.some((item) => normalizedDiagnosticKey(item) === key)
-              ? { reason: "duplicate-result-reused" }
-              : {}),
-            ...(execution.diagnostic ? { metadata: execution.diagnostic } : {}),
-          });
-          if (continuation) {
-            toolOutputs!.push({ callId: call.id, output: transcriptResult });
-          } else {
-            messages.push({ role: "tool", content: transcriptResult, toolCallId: call.id });
-          }
-        }
-
-        const allDuplicates = roundDuplicates === response.toolCalls.length;
-        const searchedWithoutNewEvidence =
-          (roundHadEvidence || roundAttemptedSearch) && !roundNewEvidence && !roundFetchedContent;
-        if (response.toolCalls.length > 0 && (allDuplicates || searchedWithoutNewEvidence)) {
+        if (toolRound.noProgress) {
           consecutiveNoProgressRounds += 1;
         } else {
           consecutiveNoProgressRounds = 0;
         }
 
-        if (budgetExhausted || consecutiveNoProgressRounds >= 2) {
+        if (toolExecutor.isBudgetExhausted || consecutiveNoProgressRounds >= 2) {
           if (missingTools(required, satisfied).length > 0) {
-            return failure(budgetExhausted ? "tool-result-budget-exceeded" : "loop-detected");
+            return failure(
+              toolExecutor.isBudgetExhausted ? "tool-result-budget-exceeded" : "loop-detected",
+            );
           }
           forceSynthesis = true;
           if (!synthesisRequested) {
@@ -454,7 +329,7 @@ export class ThinkingResearchRunner {
           if (missing.length === 0) {
             phase = "research";
           } else if (missing.length === 1) {
-            if (mandatoryFailures.get(missing[0]) === false) {
+            if (toolExecutor.mandatoryFailure(missing[0]) === false) {
               return failure("mandatory-repair-failed");
             }
             phase = "repair";
@@ -479,195 +354,10 @@ export class ThinkingResearchRunner {
   }
 }
 
-async function collectRound(
-  options: ThinkingResearchRunnerOptions,
-  modelRound: ModelRoundProvider,
-  messages: ChatMessage[],
-  toolChoice: ChatRequest["toolChoice"],
-  continuation?: ProviderContinuationState,
-  toolOutputs?: ModelToolOutput[],
-  round = 1,
-): Promise<{
-  content: string;
-  toolCalls: ChatToolCall[];
-  continuation?: ProviderContinuationState;
-  stopReason: "complete" | "tool_calls" | "length" | "error";
-  reasoningItemCount: number;
-  reasoningSegments: { segmentId: string; chars: number }[];
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
-  streamedText: boolean;
-}> {
-  let streamedText = false;
-  let streamedReasoning = false;
-  const segmentChars = new Map<string, number>();
-  const recordSegment = (segmentId: string | undefined, text: string): void => {
-    if (!segmentId) return;
-    segmentChars.set(segmentId, (segmentChars.get(segmentId) ?? 0) + text.length);
-  };
-  const result = await modelRound.runRound({
-    model: options.model,
-    messages,
-    tools: options.tools.definitions(),
-    toolChoice,
-    parallelToolCalls: options.policy.parallelToolCalls,
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
-    signal: options.signal,
-    continuation,
-    toolOutputs,
-    reasoning: options.reasoning,
-    onDelta: (delta) => {
-      if (delta.type === "text") streamedText = true;
-      else streamedReasoning = true;
-      const forwarded: ModelRoundDelta =
-        delta.type === "reasoningSummary" && delta.segmentId
-          ? { ...delta, segmentId: `round-${round}-${delta.segmentId}` }
-          : delta;
-      if (forwarded.type === "reasoningSummary") {
-        recordSegment(forwarded.segmentId, forwarded.text);
-      }
-      options.onDelta?.(forwarded, round);
-    },
-  });
-  const content = result.items
-    .filter((item) => item.type === "text")
-    .map((item) => item.text)
-    .join("");
-  if (!streamedText && content) {
-    streamedText = true;
-    options.onDelta?.({ type: "text", text: content }, round);
-  }
-  if (!streamedReasoning) {
-    const summaries = result.items.filter((item) => item.type === "reasoningSummary");
-    for (let index = 0; index < summaries.length; index += 1) {
-      const segmentId = `reasoning-${round}-${index}`;
-      recordSegment(segmentId, summaries[index].text);
-      options.onDelta?.(
-        { type: "reasoningSummary", segmentId, text: summaries[index].text },
-        round,
-      );
-    }
-  }
-  return {
-    content,
-    toolCalls: result.items.filter((item) => item.type === "toolCall").map((item) => item.call),
-    continuation: result.continuation,
-    stopReason: result.stopReason,
-    reasoningItemCount: result.reasoningItemCount ?? 0,
-    reasoningSegments: [...segmentChars].map(([segmentId, chars]) => ({ segmentId, chars })),
-    usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
-    streamedText,
-  };
-}
-
-function serializeExecution(execution: ResearchToolExecution<unknown>): CachedExecution {
-  return {
-    ok: execution.ok,
-    retryable: execution.ok ? false : execution.error.retryable,
-    result: JSON.stringify(toolExecutionPayload(execution)),
-    ...(execution.diagnostic ? { diagnostic: execution.diagnostic } : {}),
-  };
-}
-
 function missingTools(required: Set<string>, satisfied: Set<string>): string[] {
   return [...required].filter((name) => !satisfied.has(name));
 }
 
-// Pull evidence/chunk identifiers out of a serialized tool result. Regex-based so it
-// tolerates truncated or wrapped payloads where JSON.parse would throw.
-function extractEvidenceIds(result: string): string[] {
-  const ids: string[] = [];
-  const pattern = /"(?:evidenceId|chunkId)"\s*:\s*"([^"]+)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(result)) !== null) {
-    ids.push(match[1]);
-  }
-  return ids;
-}
-
-function normalizedCallKey(call: Pick<ChatToolCall, "name" | "arguments">): string {
-  return `${call.name}:${stableJson(call.arguments)}`;
-}
-
-function normalizedDiagnosticKey(diagnostic: ToolCallDiagnostic): string {
-  return `${diagnostic.name}:${stableJson(diagnostic.arguments)}`;
-}
-
-function stableJson(value: Record<string, unknown>): string {
-  return JSON.stringify(canonicalize(value));
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, child]) => [key, canonicalize(child)]),
-  );
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function contentBearingTool(name: string): boolean {
-  return name === "read_note" || name === "get_active_note" || name === "fetch_web_page";
-}
-
-// Keyword searches whose only job is to surface evidence ids. run_subagent is excluded:
-// it returns a synthesized answer (rich even when it lists no parseable evidenceId), so
-// counting it as a "fruitless search" would falsely trip loop detection.
-function searchTool(name: string): boolean {
-  return name === "search_web" || name === "search_index";
-}
-
-/**
- * Launches this round's parallel-safe tool calls concurrently instead of leaving
- * them to the sequential per-call loop. run_subagent calls run under their own
- * (smaller) limiter since each spins a nested loop; other read-only tools share a
- * separate limiter. Mutations and downloads are never pooled — they run inline in
- * call order so their side effects stay ordered. Calls already resolved in `cache`
- * are skipped (the loop resolves those itself); identical duplicate calls within
- * the same round share one launch. Returns a map from call id to its in-flight
- * execution promise; the per-call loop awaits the matching entry when present.
- */
-function launchParallelToolPool(
-  calls: ChatToolCall[],
-  cache: Map<string, CachedExecution>,
-  tools: ToolManager,
-  signal: AbortSignal | undefined,
-  onToolEvent: (id: string, event: ToolEvent) => void,
-  subAgentLimit: number,
-  toolLimit: number,
-): Map<string, Promise<ResearchToolExecution<unknown>>> {
-  const subAgentLimiter = new ConcurrencyLimiter(subAgentLimit);
-  const toolLimiter = new ConcurrencyLimiter(toolLimit);
-  const pool = new Map<string, Promise<ResearchToolExecution<unknown>>>();
-  const launchedByKey = new Map<string, Promise<ResearchToolExecution<unknown>>>();
-  for (const call of calls) {
-    if (!parallelSafeTool(call.name)) continue;
-    const key = normalizedCallKey(call);
-    if (cache.has(key)) continue;
-    const limiter = call.name === SUB_AGENT_TOOL ? subAgentLimiter : toolLimiter;
-    const promise =
-      launchedByKey.get(key) ??
-      limiter.run(() =>
-        tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }),
-      );
-    launchedByKey.set(key, promise);
-    pool.set(call.id, promise);
-  }
-  return pool;
-}
-
-function mutationTool(name: string): boolean {
-  return name === "create_note" || name === "update_note" || name === "delete_note";
-}
-
-// Safe to pre-launch concurrently ahead of the sequential loop: read-only tools and
-// sub-agents. Mutations and downloads have side effects / ordering dependence, so they
-// stay inline and run in call order.
-function parallelSafeTool(name: string): boolean {
-  return !mutationTool(name) && name !== DOWNLOAD_DOCUMENT_TOOL;
 }

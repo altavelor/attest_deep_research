@@ -8,6 +8,8 @@ export type ToolCell =
 export interface ToolCallView {
   /** Human-readable phrase describing what the model is trying to do. */
   intent: string;
+  /** Web sites selected for a fetch, displayed as a one-at-a-time animation. */
+  fetchTargets: string[];
   /** Top "In" cell — the call arguments. Omitted when not useful. */
   inCell?: ToolCell;
   /** Bottom "Out" cell — the result. Omitted for tools that need no output. */
@@ -22,15 +24,24 @@ export interface ToolCallViewInput {
   status: "pending" | "complete" | "failed";
   args?: Record<string, unknown>;
   resultJson?: string;
+  /** Site names resolved from preceding web-search results while a fetch is pending. */
+  fetchTargets?: string[];
+  /** Search resources selected by the web query planner. */
+  searchSources?: string[];
 }
 
 export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const { name, args = {}, resultJson, status } = input;
-  const intent = describeIntent(name, args, input.label);
+  const fetchTargets =
+    name === "fetch_web_page" && status === "pending"
+      ? unique(input.fetchTargets ?? fetchedPageHosts(resultJson))
+      : [];
+  const intent = describeIntent(name, args, input.label, fetchTargets.length, input.searchSources);
 
   if (status === "failed") {
     return {
       intent,
+      fetchTargets,
       inCell: argsCell(args),
       outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
     };
@@ -40,12 +51,13 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     case "read_note":
     case "get_active_note":
     case "delete_note":
-      return { intent };
+      return { intent, fetchTargets };
 
     case "create_note": {
       const content = typeof args.content === "string" ? args.content : "";
       return {
         intent,
+        fetchTargets,
         outCell: content ? { kind: "text", text: content } : undefined,
       };
     }
@@ -54,6 +66,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
       const diff = noteEditDiff(resultJson);
       return {
         intent,
+        fetchTargets,
         outCell: diff ? { kind: "diff", hunks: diff } : undefined,
       };
     }
@@ -61,6 +74,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
     default:
       return {
         intent,
+        fetchTargets,
         inCell: argsCell(args),
         outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
         ...(name === "search_index" ? { badge: keywordFallbackBadge(resultJson) } : {}),
@@ -96,10 +110,15 @@ function argsCell(args: Record<string, unknown>): ToolCell | undefined {
   return { kind: "code", text: JSON.stringify(args) };
 }
 
-function describeIntent(name: string, args: Record<string, unknown>, label: string): string {
+function describeIntent(
+  name: string,
+  args: Record<string, unknown>,
+  label: string,
+  fetchTargetCount: number,
+  searchSources?: string[],
+): string {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   const path = typeof args.path === "string" ? args.path.trim() : "";
-  const url = typeof args.url === "string" ? args.url.trim() : "";
   switch (name) {
     case "search_index":
     case "search_notes": {
@@ -108,11 +127,14 @@ function describeIntent(name: string, args: Record<string, unknown>, label: stri
     }
     case "search_web": {
       const count = typeof args.count === "number" ? ` (top ${args.count})` : "";
-      return query ? `Searching the web for “${query}”${count}` : "Searching the web";
+      const resource =
+        searchSources && searchSources.length > 0 ? searchSources.join(", ") : "the web";
+      return query ? `Searching ${resource} for “${query}”${count}` : `Searching ${resource}`;
     }
     case "fetch_web_page": {
-      const target = url || (label && label !== name ? label : "");
-      return target ? `Fetching the page at ${hostOf(target)}` : "Fetching web page";
+      const count = fetchPageCount(args, fetchTargetCount);
+      if (fetchTargetCount > 0) return `Fetching ${count === 1 ? "page" : "pages"} ${count}:`;
+      return count > 0 ? `Fetching ${count === 1 ? "page" : "pages"} ${count}` : "Fetching pages";
     }
     case "read_note":
       return path ? `Reading the note “${basename(path)}”` : "Reading a note";
@@ -136,6 +158,32 @@ function describeIntent(name: string, args: Record<string, unknown>, label: stri
     }
     default:
       return label && label !== name ? label : name;
+  }
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function fetchPageCount(args: Record<string, unknown>, completedCount: number): number {
+  return Array.isArray(args.resultIds) ? args.resultIds.length : completedCount;
+}
+
+function fetchedPageHosts(resultJson?: string): string[] {
+  if (!resultJson) return [];
+  try {
+    const parsed = JSON.parse(resultJson) as { value?: { pages?: unknown } };
+    if (!Array.isArray(parsed.value?.pages)) return [];
+    const hosts = new Set<string>();
+    for (const page of parsed.value.pages) {
+      if (typeof page !== "object" || page === null) continue;
+      const entry = page as { ok?: unknown; finalUrl?: unknown; url?: unknown };
+      const target = typeof entry.finalUrl === "string" ? entry.finalUrl : entry.url;
+      if (entry.ok === true && typeof target === "string") hosts.add(hostOf(target));
+    }
+    return [...hosts];
+  } catch {
+    return [];
   }
 }
 

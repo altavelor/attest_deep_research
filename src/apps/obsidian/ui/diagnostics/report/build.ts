@@ -6,9 +6,9 @@ import {
   buildReasoningSection,
   buildRequestSection,
   buildStatsSection,
-} from "./diagnostics/report/sections";
-import { computeFindings } from "./diagnostics/report/findings";
-import { DiagnosticReportV3 } from "./diagnostics/report/types";
+} from "./sections";
+import { computeFindings } from "./findings";
+import { DiagnosticReportV3 } from "./types";
 
 export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): DiagnosticReportV3 {
   const model = buildModelSection(diagnostics);

@@ -37,7 +37,11 @@ import {
 import type { SourceDocumentMetadata, SourceDocumentSummaries } from "@application/ports";
 import type { IndexDescriptionSource, IndexProfile } from "@adapters/indexing";
 import type { IndexRunPlan } from "./ui/settings/IndexRunModal";
-import { requireIndexProfile, resolveIndexProfileForUse } from "./composition/profileResolvers";
+import {
+  indexSearchEmbedderWarning,
+  requireIndexProfile,
+  resolveIndexProfileForUse,
+} from "./composition/profileResolvers";
 
 export default class IxplorerPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
@@ -129,20 +133,6 @@ export default class IxplorerPlugin extends Plugin {
         new IxplorerChatView(leaf, {
           createResearchService: (chatModelProfileId, indexProfileId) =>
             createResearchService(this.composition, chatModelProfileId, indexProfileId),
-          getIndexingState: (indexProfileId) =>
-            this.indexing.getState(indexProfileId ?? this.settings.activeIndexProfileId),
-          subscribeToIndexingState: (indexProfileId, listener) =>
-            this.indexing.subscribe(indexProfileId ?? this.settings.activeIndexProfileId, listener),
-          indexingActions: {
-            start: (indexProfileId) =>
-              this.indexing.start(indexProfileId ?? this.settings.activeIndexProfileId),
-            pause: (indexProfileId) =>
-              this.indexing.pause(indexProfileId ?? this.settings.activeIndexProfileId),
-            resume: (indexProfileId) =>
-              this.indexing.resume(indexProfileId ?? this.settings.activeIndexProfileId),
-            rebuild: (indexProfileId) =>
-              this.indexing.rebuild(indexProfileId ?? this.settings.activeIndexProfileId),
-          },
           isWebSearchEnabled: () => this.settings.webSources.some((profile) => profile.enabled),
           getChatModel: () =>
             resolveChatModelProfile(this.settings, this.settings.activeChatModelProfileId)?.name ??
@@ -169,6 +159,8 @@ export default class IxplorerPlugin extends Plugin {
               isSuspended: profile.isSuspended === true,
               isIndexed: Boolean(profile.lastIndexedAt),
             })),
+          getIndexSearchEmbedderWarning: (indexProfileId) =>
+            indexSearchEmbedderWarning(this.settings, indexProfileId),
           searchIndex: (options) => this.searchIndex(options),
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
@@ -177,13 +169,8 @@ export default class IxplorerPlugin extends Plugin {
             await this.createChatStore().renameChat(id, title);
           },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
-          isChatIndexControlShown: () => this.settings.showChatIndexControl,
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () => this.settings.includeActiveFileContext,
-          setChatIndexControlShown: async (shown) => {
-            this.settings.showChatIndexControl = shown;
-            await this.saveSettings();
-          },
         }),
     );
     this.addCommand({
@@ -297,6 +284,14 @@ export default class IxplorerPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
+  refreshChatViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)) {
+      if (leaf.view instanceof IxplorerChatView) {
+        leaf.view.redisplay();
+      }
+    }
+  }
+
   private createChatStore(): FileChatStore {
     return new FileChatStore({
       folder: this.getVaultLocalPath(".ixplorer/chats"),
@@ -338,7 +333,10 @@ export default class IxplorerPlugin extends Plugin {
       queryVariants: queryVariants.length > 0 ? queryVariants : undefined,
     });
 
-    return result.chunks;
+    return {
+      chunks: result.chunks,
+      ...(result.semanticError ? { semanticError: result.semanticError } : {}),
+    };
   }
 
   private getVaultLocalPath(path: string): string {

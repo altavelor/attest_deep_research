@@ -38,10 +38,9 @@ describe("chat model settings surface", () => {
 
   it("refreshes generation capabilities explicitly without requiring profile re-save", () => {
     expect(source).toContain('icon: "flask-conical"');
-    expect(source).toContain("this.prober.startChatProfileProbes(profile.id, true)");
-    expect(source).not.toContain("this.prober.startChatProfileProbes(updatedProfile.id)");
-    expect(source).toContain("startEmbeddingProfileProbe(profile.id)");
-    expect(source).toContain("startEmbeddingProfileProbe(updatedProfile.id)");
+    expect(source).toContain("this.options.prober.startChatProfileProbes(profile.id, true)");
+    expect(source).not.toContain("startChatProfileProbes(updatedProfile.id)");
+    expect(source).toContain("startEmbeddingProfileProbe(saved.id)");
     expect(source).not.toContain("await this.detectChatCapabilities(server)");
     expect(source).not.toContain("await this.options.verifyEmbedding");
     expect(source).toContain(
@@ -70,33 +69,30 @@ describe("chat model settings surface", () => {
     expect(source).toContain("subscribeCapabilityStatus");
     expect(source).toContain("getCapabilityStatus");
     expect(source).toContain('setIcon("flask-conical")');
-    expect(source).toContain('this.hasCapabilityTestResult() ? "Re-test" : "Test"');
+    expect(source).toContain(
+      'hasCapabilityTestResult(options.currentProfile) ? "Re-test" : "Test"',
+    );
     expect(source).toContain("formatCapabilityVerificationStatus");
   });
 
   it("keeps debug-only settings in the final Advanced section", () => {
     const displayBody = source.slice(
       source.indexOf("display(): void"),
-      source.indexOf("private renderDebugSettings"),
+      source.indexOf("hide(): void"),
     );
-    const advancedSectionIndex = source.indexOf("renderAdvancedSettings(containerEl)");
-    const indexingSectionIndex = source.indexOf("renderIndexingSettings(containerEl)");
+    const advancedSectionIndex = source.indexOf("this.renderAdvancedSettings(this.containerEl)");
+    const indexingSectionIndex = source.indexOf(
+      "this.indexProfiles.render(this.gateHost(this.containerEl))",
+    );
     expect(advancedSectionIndex).toBeGreaterThan(indexingSectionIndex);
-    expect(displayBody).not.toContain("renderDebugSettings(containerEl)");
+    expect(displayBody).not.toContain('.setName("Debug mode")');
 
     const advancedRenderer = source.slice(
       source.indexOf("private renderAdvancedSettings"),
-      source.indexOf("private renderProfileSettings"),
+      source.length,
     );
-    expect(advancedRenderer).toContain("this.renderDebugSettings(contentEl)");
+    expect(advancedRenderer).toContain('.setName("Debug mode")');
     expect(advancedRenderer).not.toContain("Force instant research mode");
-
-    const searchRenderer = source.slice(
-      source.indexOf("private renderSearchEngineSettings"),
-      source.indexOf("private renderProfileSettings"),
-    );
-    expect(searchRenderer).not.toContain("Debug mode");
-    expect(searchRenderer).not.toContain("Force instant research mode");
   });
 
   it("preserves the index path picker scroll position when checkbox selection rerenders", () => {

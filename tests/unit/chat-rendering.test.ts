@@ -1,9 +1,14 @@
 import {
   attachAnswerDetailsToLastAssistantMessage,
+  nextAssistantCheckpoint,
   messageMarkdownContent,
   nextAssistantMessage,
   nextAssistantReasoning,
+  promoteAssistantCheckpoint,
+  interruptLastAssistantProgress,
+  nextChainToolCallStart,
   nextUserMessage,
+  startAssistantProgress,
   shouldShowAnswerNoteActions,
   shouldShowDiagnosticAction,
   stripMessageDiagnostics,
@@ -185,6 +190,68 @@ describe("chat rendering helpers", () => {
         evidence: undefined,
       },
     ]);
+  });
+
+  it("creates an empty streaming assistant message before the first model event", () => {
+    const messages = startAssistantProgress(nextUserMessage([], "Find a recipe"));
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      researchProgress: {
+        phase: "streaming",
+        reasoning: { phase: "streaming", segments: [] },
+        chain: [],
+      },
+    });
+  });
+
+  it("keeps a classified final answer out of the transcript until completion", () => {
+    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const finalizing = promoteAssistantCheckpoint(streaming, "round-1");
+
+    expect(finalizing.at(-1)).toMatchObject({
+      content: "",
+      researchProgress: {
+        phase: "streaming",
+        checkpoints: [{ id: "round-1", status: "finalizing", content: "Answer" }],
+      },
+    });
+  });
+
+  it("preserves a classified final answer when the request is cancelled", () => {
+    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const interrupted = interruptLastAssistantProgress(
+      promoteAssistantCheckpoint(streaming, "round-1"),
+    );
+
+    expect(interrupted.at(-1)).toMatchObject({
+      content: "Answer",
+      researchProgress: {
+        phase: "interrupted",
+        checkpoints: [{ id: "round-1", status: "interrupted", content: "Answer" }],
+      },
+    });
+  });
+
+  it("keeps resolved fetch targets with the pending tool call", () => {
+    const messages = nextChainToolCallStart(
+      startAssistantProgress([]),
+      "fetch-1",
+      "fetch_web_page",
+      "Fetching 2 pages",
+      { resultIds: ["first", "second"] },
+      undefined,
+      ["recipes.example.com", "food.example.org"],
+    );
+
+    expect(messages.at(-1)?.researchProgress?.chain).toContainEqual(
+      expect.objectContaining({
+        id: "fetch-1",
+        fetchTargets: ["recipes.example.com", "food.example.org"],
+      }),
+    );
   });
 
   it("groups streamed reasoning deltas into ordered assistant segments", () => {
