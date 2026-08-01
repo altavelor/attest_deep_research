@@ -1,12 +1,6 @@
 import { Notice } from "obsidian";
 
-import {
-  chatHistoryForPrompt,
-  compactableMessages,
-  compactChatMessages,
-  compactionSummaryFromMessages,
-  shouldCompactForContext,
-} from "@application/use-cases/chat";
+import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import {
   AgentRunDiagnosticCollector,
   ResearchService,
@@ -37,6 +31,7 @@ import {
   startAssistantProgress,
   stampLastAssistantModel,
 } from "@core/conversation";
+import { ChatHistoryCompactor } from "./ChatHistoryCompactor";
 
 export interface ResearchQuestionControllerOptions {
   getQuestionInput(): string;
@@ -79,9 +74,11 @@ export class ResearchQuestionController {
   private running = false;
   private activeDiagnostics: AgentRunDiagnosticCollector | null = null;
   private activeRenderHandle: number | null = null;
+  private readonly historyCompactor: ChatHistoryCompactor;
 
   constructor(options: ResearchQuestionControllerOptions) {
     this.options = options;
+    this.historyCompactor = new ChatHistoryCompactor(options);
   }
 
   isRunning(): boolean {
@@ -97,7 +94,7 @@ export class ResearchQuestionController {
 
     if (question === "/compact") {
       this.options.clearQuestionInput();
-      await this.compactHistory({ automatic: false });
+      await this.historyCompactor.compactHistory({ automatic: false });
       return;
     }
 
@@ -106,7 +103,7 @@ export class ResearchQuestionController {
     }
 
     const chatHistory = this.options.getMessages();
-    if (await this.compactIfNeeded(question)) {
+    if (await this.historyCompactor.compactIfNeeded(question)) {
       return this.submitQuestion();
     }
 
@@ -129,7 +126,7 @@ export class ResearchQuestionController {
     const hasAnswer = messages[index + 1]?.role === "assistant";
     const chatHistory = hasAnswer ? messages : messages.slice(0, Math.max(0, index));
 
-    if (await this.compactIfNeeded(question)) {
+    if (await this.historyCompactor.compactIfNeeded(question)) {
       return;
     }
 
@@ -473,80 +470,6 @@ export class ResearchQuestionController {
     this.options.setProgressStatus(message);
     new Notice(message);
     return true;
-  }
-
-  private async compactIfNeeded(question: string): Promise<boolean> {
-    if (
-      !shouldCompactForContext({
-        question,
-        messages: this.options.getMessages(),
-        contextLimitTokens: this.options.getContextLimitTokens(),
-        reservedOutputTokens: this.options.getReservedOutputTokens(),
-      })
-    ) {
-      return false;
-    }
-
-    return this.compactHistory({ automatic: true });
-  }
-
-  private async compactHistory(options: { automatic: boolean }): Promise<boolean> {
-    const messages = this.options.getMessages();
-    const compactable = compactableMessages(messages);
-
-    if (compactable.length === 0) {
-      const message = "There is not enough older chat history to compact.";
-      this.options.setProgressStatus(message);
-      new Notice(message);
-      return false;
-    }
-
-    const status = options.automatic
-      ? "Automatically compacting context to preserve evidence budget..."
-      : "Compacting chat history...";
-    this.options.setProgressStatus(status);
-    if (options.automatic) {
-      this.options.setMessages([
-        ...messages,
-        {
-          role: "assistant",
-          content: "Automatically compacting context to preserve evidence budget.",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      this.options.renderMessages();
-      await this.options.saveCurrentChat();
-    }
-
-    try {
-      const sourceMessages = options.automatic
-        ? compactableMessages(this.options.getMessages())
-        : compactable;
-      const summary = await this.options
-        .createResearchService()
-        .summarizeChatHistoryForCompaction(
-          sourceMessages,
-          compactionSummaryFromMessages(this.options.getMessages()),
-        );
-      const result = compactChatMessages(this.options.getMessages(), { summary });
-
-      if (!result.changed) {
-        return false;
-      }
-
-      this.options.setMessages(result.messages);
-      await this.options.saveCurrentChat();
-      this.options.renderMessages();
-      const done = `Compacted ${result.compactedCount} older message(s).`;
-      this.options.setProgressStatus(done);
-      new Notice(done);
-      return true;
-    } catch (error) {
-      const message = toUserMessage(error);
-      this.options.setProgressStatus(message);
-      new Notice(message);
-      return false;
-    }
   }
 }
 
