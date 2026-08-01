@@ -33,6 +33,7 @@ import {
   nextChainToolCallStart,
   nextUserMessage,
   resetLastAssistantContent,
+  startAssistantProgress,
   stampLastAssistantModel,
 } from "@core/conversation";
 
@@ -198,6 +199,7 @@ export class ResearchQuestionController {
       this.options.clearContextPaths();
       await this.options.saveCurrentChat();
     }
+    this.options.setMessages(startAssistantProgress(this.options.getMessages()));
     this.options.setLastAnswer(null);
     this.options.renderMessages();
     this.options.renderAnswerDetails();
