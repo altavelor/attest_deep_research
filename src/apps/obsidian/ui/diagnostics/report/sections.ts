@@ -193,8 +193,11 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
     stream: d.stream ?? null,
     thinkingLoop: thinking
       ? {
-          totalRounds: thinking.rounds,
-          totalCalls: thinking.totalCalls,
+          totalRounds: Math.max(
+            thinking.rounds,
+            new Set(tools.map((t) => t.round).filter((r): r is number => r !== undefined)).size,
+          ),
+          totalCalls: Math.max(thinking.totalCalls, tools.length),
           duplicateCalls: thinking.duplicateCalls,
           satisfiedTools: thinking.satisfiedTools,
           repairedTools: thinking.repairedTools,

@@ -157,7 +157,9 @@ export function createResearchService(
       maxTokens: chatProfile.maxTokens,
     },
     contextLimitTokens: chatProfile.capabilities?.contextLength,
-    queryExpansion: createQueryExpansionService(ctx, chatProfile, chatServer),
+    ...(settings.expandSearchQuery
+      ? { queryExpansion: createQueryExpansionService(ctx, chatProfile, chatServer) }
+      : {}),
     contextAssembler: new ContextAssembler({
       files: contextFiles,
       extractors: contextExtractors,

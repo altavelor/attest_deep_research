@@ -82,6 +82,11 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.profile?.capabilities?.toolCalling ?? createToolCapabilitySettings(false);
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
+  private toolsVerifiedSeen =
+    this.options.kind === "chat" && this.options.profile
+      ? toolsVerified(this.options.profile as ChatModelProfile)
+      : false;
+  private agentVerifiedSeen = reasoningVerified(this.reasoningCapabilities);
   private testing = false;
   private savedProfileId = this.options.profile?.id;
   private unsubscribeCapabilityStatus: (() => void) | null = null;
@@ -202,13 +207,14 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const capabilityHeading = new Setting(contentEl).setName("Capabilities").setHeading();
     capabilityHeading.settingEl.addClass("ixplorer-profile-modal__capabilities-heading");
     if (this.options.kind === "chat") {
-      capabilityHeading
-        .setDesc(this.capabilityStatus())
-        .addButton((button) =>
-          button
-            .setButtonText(this.hasCapabilityTestResult() ? "Re-test" : "Test")
-            .onClick(() => void this.test()),
-        );
+      capabilityHeading.setDesc(this.capabilityStatus()).addButton((button) =>
+        button
+          .setIcon("flask-conical")
+          .setTooltip(
+            `${this.hasCapabilityTestResult() ? "Re-test" : "Test"} capabilities — ${this.capabilityStatus()}`,
+          )
+          .onClick(() => void this.test()),
+      );
       this.renderReasoningControls(contentEl);
       const advanced = contentEl.createEl("details", { cls: "ixplorer-profile-modal__advanced" });
       advanced.createEl("summary", { text: "Advanced" });
@@ -401,7 +407,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       return;
     }
 
-    if (hasDuplicateProfileName(this.options.profiles, this.name, this.options.profile?.id)) {
+    const existingProfileId = this.savedProfileId ?? this.options.profile?.id;
+    if (hasDuplicateProfileName(this.options.profiles, this.name, existingProfileId)) {
       new Notice("Name must be unique.");
       return;
     }
@@ -438,7 +445,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     const now = new Date().toISOString();
     const baseProfile = {
-      id: this.options.profile?.id ?? createProfileId(`${this.options.kind}-model`),
+      id: existingProfileId ?? createProfileId(`${this.options.kind}-model`),
       name: this.name,
       serverProfileId: this.serverProfileId,
       modelName: this.modelName,
@@ -502,13 +509,19 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
   private renderReasoningControls(containerEl: HTMLElement): void {
     const verified = reasoningVerified(this.reasoningCapabilities);
+    if (!verified) {
+      this.reasoningMode = "off";
+    } else if (!this.agentVerifiedSeen) {
+      this.reasoningMode = "on";
+    }
+    this.agentVerifiedSeen = verified;
     const reason = verificationBlockReason(
       verified,
       this.reasoningCapabilities?.source === "probe",
     );
-    new Setting(containerEl)
+    const agenticSetting = new Setting(containerEl)
       .setName("Agentic mode")
-      .setDesc(reason ?? "Enable verified agent mode support.")
+      .setDesc("Enable verified agent mode support.")
       .addToggle((toggle) => {
         toggle.setValue(this.reasoningMode === "on");
         toggle.setDisabled(!verified);
@@ -516,31 +529,49 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           this.reasoningMode = value ? "on" : "off";
         });
       });
+    this.applyDisabledState(agenticSetting, !verified, reason);
+
     const effortValues = new Set(this.reasoningCapabilities?.efforts ?? []);
     if (this.reasoningEffort) effortValues.add(this.reasoningEffort);
-    new Setting(containerEl)
+    const effortDisabled = !verified || this.reasoningMode === "off";
+    const effortReason = !verified
+      ? reason
+      : this.reasoningMode === "off"
+        ? "Enable agentic mode to choose a reasoning effort."
+        : undefined;
+    const effortSetting = new Setting(containerEl)
       .setName("Reasoning effort")
-      .setDesc(reason ?? "Auto uses the provider default or a verified value.")
+      .setDesc("Auto uses the provider default or a verified value.")
       .addDropdown((dropdown) => {
         dropdown.addOption("", "Auto");
         for (const effort of effortValues) dropdown.addOption(effort, formatEffortLabel(effort));
         dropdown.setValue(this.reasoningEffort).onChange((value) => {
           this.reasoningEffort = value;
         });
-        dropdown.setDisabled(!verified || this.reasoningMode === "off");
+        dropdown.setDisabled(effortDisabled);
       });
+    this.applyDisabledState(effortSetting, effortDisabled, effortReason);
   }
 
   private renderToolsControl(containerEl: HTMLElement): void {
     const profile = this.currentProfile() as ChatModelProfile | undefined;
     const verified = profile ? toolsVerified(profile) : false;
+    if (!verified) {
+      this.toolsEnabled = false;
+    } else if (!this.toolsVerifiedSeen) {
+      this.toolsEnabled = true;
+    }
+    this.toolsVerifiedSeen = verified;
     const reason = verificationBlockReason(
       verified,
       Boolean(profile?.capabilities?.toolCalling?.probe),
     );
-    new Setting(containerEl)
+    const toolsSetting = new Setting(containerEl)
       .setName("Tools")
-      .setDesc(reason ?? "Allow this profile to use verified tool calls.")
+      .setDesc(
+        "Let this model call note tools — read, search, and (with edit access) modify vault notes. " +
+          "Index and web research tools in Thinking mode are governed separately.",
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.toolsEnabled);
         toggle.setDisabled(!verified);
@@ -548,6 +579,19 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           this.toolsEnabled = value;
         });
       });
+    this.applyDisabledState(toolsSetting, !verified, reason);
+  }
+
+  private applyDisabledState(
+    setting: Setting,
+    disabled: boolean,
+    reason: string | undefined,
+  ): void {
+    if (!disabled) return;
+    setting.settingEl.addClass("ixplorer-profile-modal__setting--disabled");
+    if (reason) {
+      setting.descEl.createDiv({ cls: "ixplorer-profile-modal__warning", text: reason });
+    }
   }
 
   private capabilityStatus(): string {

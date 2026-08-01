@@ -11,6 +11,7 @@ import { IxplorerSettingTab } from "./ui/SettingsTab";
 import { PluginDebugLogger } from "@adapters/settings";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
+import { reasoningVerified } from "@adapters/settings";
 import { readSettings } from "@adapters/settings";
 import {
   getActiveIndexProfile,
@@ -160,6 +161,7 @@ export default class IxplorerPlugin extends Plugin {
               contextLength: profile.capabilities?.contextLength,
               maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
+              supportsAgentMode: reasoningVerified(profile.reasoningCapabilities),
             })),
           getDefaultChatModelProfileId: () => this.settings.activeChatModelProfileId,
           getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,

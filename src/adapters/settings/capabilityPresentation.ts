@@ -1,3 +1,4 @@
+import { createToolCapabilitySettings } from "./toolCapabilities";
 import { ChatModelProfile, ReasoningCapabilitySettings } from "./types";
 
 export type CapabilityVerificationPhase =
@@ -82,11 +83,12 @@ export function formatCapabilityVerificationStatus(state: CapabilityVerification
   return `${label("tools support", state.tools)} · ${label("agent mode support", state.agent)}`;
 }
 
-/** Merges editable fields while retaining values that only capability probes own. */
 export function mergeChatProfileSettingsPreservingProbe(
   current: ChatModelProfile,
   updated: ChatModelProfile,
 ): ChatModelProfile {
+  const sameModel =
+    current.serverProfileId === updated.serverProfileId && current.modelName === updated.modelName;
   const editableCapabilities = updated.capabilities ?? current.capabilities;
   return {
     ...updated,
@@ -94,11 +96,13 @@ export function mergeChatProfileSettingsPreservingProbe(
       ? {
           capabilities: {
             ...editableCapabilities,
-            tools: current.capabilities?.tools ?? editableCapabilities.tools,
-            toolCalling: current.capabilities?.toolCalling ?? editableCapabilities.toolCalling,
+            tools: sameModel ? current.capabilities?.tools : undefined,
+            toolCalling: sameModel
+              ? (current.capabilities?.toolCalling ?? editableCapabilities.toolCalling)
+              : createToolCapabilitySettings(false),
           },
         }
       : {}),
-    reasoningCapabilities: current.reasoningCapabilities,
+    reasoningCapabilities: sameModel ? current.reasoningCapabilities : undefined,
   };
 }

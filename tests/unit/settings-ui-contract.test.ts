@@ -33,7 +33,7 @@ describe("chat model settings surface", () => {
   });
 
   it("refreshes generation capabilities explicitly without requiring profile re-save", () => {
-    expect(source).toContain('label: "Refresh capabilities"');
+    expect(source).toContain('icon: "flask-conical"');
     expect(source).toContain("this.prober.startChatProfileProbes(profile.id)");
     expect(source).not.toContain("this.prober.startChatProfileProbes(updatedProfile.id)");
     expect(source).toContain("startEmbeddingProfileProbe(profile.id)");
@@ -48,7 +48,8 @@ describe("chat model settings surface", () => {
   it("keeps capability test status live in the profile modal", () => {
     expect(source).toContain("subscribeCapabilityStatus");
     expect(source).toContain("getCapabilityStatus");
-    expect(source).toContain('setButtonText(this.hasCapabilityTestResult() ? "Re-test" : "Test")');
+    expect(source).toContain('setIcon("flask-conical")');
+    expect(source).toContain('this.hasCapabilityTestResult() ? "Re-test" : "Test"');
     expect(source).toContain("formatCapabilityVerificationStatus");
   });
 

@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   expandFilteredContextThroughLinks: false,
   graphContextDepth: 1,
   useWebWhenFreshnessNeeded: true,
+  expandSearchQuery: true,
   downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
   debugMode: false,
   modelCapabilityCache: {},

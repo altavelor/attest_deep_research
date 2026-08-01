@@ -15,6 +15,8 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
       : DEFAULT_DOWNLOAD_FOLDER;
+  settings.expandSearchQuery =
+    typeof settings.expandSearchQuery === "boolean" ? settings.expandSearchQuery : true;
   migrateLegacyWebSettings(settings);
   normalizeWebSources(settings);
 }

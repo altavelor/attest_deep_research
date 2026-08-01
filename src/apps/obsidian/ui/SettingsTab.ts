@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 
 import type IxplorerPlugin from "@apps/obsidian/main";
 import { IndexProfile } from "@adapters/indexing";
@@ -71,14 +71,52 @@ export class IxplorerSettingTab extends PluginSettingTab {
     containerEl.addClass("ixplorer-settings");
 
     renderCategoryHeading(containerEl, "Ixplorer");
-    this.renderSearchEngineSettings(containerEl);
+    this.renderQuickStart(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
+    this.renderSearchEngineSettings(containerEl);
     this.renderAdvancedSettings(containerEl);
     if (!this.metadataRefreshStarted) {
       this.metadataRefreshStarted = true;
       void this.prober.refreshMetadataCapabilities();
     }
+  }
+
+  private hasActiveChatModel(): boolean {
+    return this.plugin.settings.chatModelProfiles.some((profile) => profile.isSuspended !== true);
+  }
+
+  private renderQuickStart(containerEl: HTMLElement): void {
+    if (this.plugin.settings.serverProfiles.length > 0) {
+      return;
+    }
+
+    const banner = containerEl.createDiv({ cls: "ixplorer-settings__quickstart" });
+    setIcon(banner.createSpan({ cls: "ixplorer-settings__quickstart-icon" }), "rocket");
+    const body = banner.createDiv({ cls: "ixplorer-settings__quickstart-body" });
+    body.createDiv({
+      cls: "ixplorer-settings__quickstart-title",
+      text: "Quick start",
+    });
+    body.createDiv({
+      cls: "ixplorer-settings__quickstart-steps",
+      text: "1. Add a server → 2. Add a chat model → 3. (optional) Add an index",
+    });
+  }
+
+  private gateHost(containerEl: HTMLElement): HTMLElement {
+    if (this.hasActiveChatModel()) {
+      return containerEl;
+    }
+
+    const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
+    const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
+    setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
+    hint.createSpan({ text: "Add a chat model profile first" });
+    return section.createDiv({
+      cls: "ixplorer-settings__gated-content is-disabled",
+      attr: { "aria-disabled": "true" },
+    });
   }
 
   private renderDebugSettings(containerEl: HTMLElement): void {
@@ -107,9 +145,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderSearchEngineSettings(containerEl: HTMLElement): void {
+    containerEl = this.gateHost(containerEl);
     renderCategoryHeading(
       containerEl,
-      "Search engine",
+      "Retrieval",
       "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
     );
 
@@ -177,6 +216,20 @@ export class IxplorerSettingTab extends PluginSettingTab {
             this.plugin.settings.graphContextDepth = value === "2" ? 2 : 1;
             await this.plugin.saveSettings();
           }),
+      );
+
+    renderSubcategoryHeading(containerEl, "Search");
+
+    new Setting(containerEl)
+      .setName("Expand search query")
+      .setDesc(
+        "Generate cross-language query variants before retrieval so notes written in other languages are found. Uses an extra chat-model call per search.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.expandSearchQuery).onChange(async (value) => {
+          this.plugin.settings.expandSearchQuery = value;
+          await this.plugin.saveSettings();
+        }),
       );
 
     this.renderWebSearchSettings(containerEl);
@@ -252,7 +305,17 @@ export class IxplorerSettingTab extends PluginSettingTab {
         fetchContextLength: (server, modelName) =>
           this.prober.fetchContextLengthForModel(server, modelName),
         onSave: async (profile) => {
-          this.plugin.settings.chatModelProfiles.push(profile);
+          // The modal stays open after a Test run with the profile already added,
+          // so a follow-up save updates that entry in place instead of adding a
+          // duplicate with the same id.
+          const existingIndex = this.plugin.settings.chatModelProfiles.findIndex(
+            (candidate) => candidate.id === profile.id,
+          );
+          if (existingIndex >= 0) {
+            this.plugin.settings.chatModelProfiles[existingIndex] = profile;
+          } else {
+            this.plugin.settings.chatModelProfiles.push(profile);
+          }
           if (this.plugin.settings.chatModelProfiles.length === 1) {
             this.plugin.settings.activeChatModelProfileId = profile.id;
           }
@@ -275,10 +338,11 @@ export class IxplorerSettingTab extends PluginSettingTab {
     });
 
     for (const profile of this.plugin.settings.chatModelProfiles) {
+      const capabilityState = this.prober.statusFor(profile);
+      const isTesting = capabilityState.tools === "testing" || capabilityState.agent === "testing";
       this.renderProfileListItem(listEl, {
         name: profile.name,
         tags: capabilityTags(profile),
-        verificationStatus: formatCapabilityVerificationStatus(this.prober.statusFor(profile)),
         status:
           this.plugin.settings.activeChatModelProfileId === profile.id && !profile.isSuspended
             ? { kind: "is-default", label: "Default", title: "Default chat model" }
@@ -321,13 +385,17 @@ export class IxplorerSettingTab extends PluginSettingTab {
         },
         extraActions: [
           {
-            icon: "refresh-cw",
-            className: "ixplorer-settings__refresh-capabilities-action",
-            label: "Refresh capabilities",
+            icon: "flask-conical",
+            className: `ixplorer-settings__test-capabilities-action${
+              isTesting ? " is-testing" : ""
+            }`,
+            label: isTesting
+              ? "Testing capabilities…"
+              : formatCapabilityVerificationStatus(capabilityState),
             onClick: async () => {
               await this.prober.refreshMetadataCapabilities();
               this.prober.startChatProfileProbes(profile.id);
-              new Notice(`Refreshing capabilities for ${profile.name}.`);
+              new Notice(`Testing capabilities for ${profile.name}.`);
             },
           },
           {
@@ -468,7 +536,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
     options: {
       name: string;
       tags?: Array<"Agent" | "Tools" | "Instant">;
-      verificationStatus?: string;
       status: ProfileStatus | null;
       canDelete: boolean;
       deleteTooltip: string;
@@ -485,24 +552,20 @@ export class IxplorerSettingTab extends PluginSettingTab {
     },
   ): void {
     const row = containerEl.createDiv({ cls: "ixplorer-settings-profile-list__item" });
-    const name = row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
-    for (const tag of options.tags ?? []) {
-      name.createSpan({ cls: "ixplorer-settings-profile-list__tag", text: tag });
-    }
-    if (options.verificationStatus) {
-      name.createSpan({
-        cls: "ixplorer-settings-profile-list__verification",
-        text: options.verificationStatus,
-      });
-    }
+    row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
+    const statusCell = row.createDiv({ cls: "ixplorer-settings-profile-list__status-cell" });
     if (options.status) {
-      row.createSpan({
+      statusCell.createSpan({
         cls: `ixplorer-settings-profile-list__status ${options.status.kind}`,
         text: options.status.label,
         attr: { title: options.status.title },
       });
-    } else {
-      row.createSpan({ cls: "ixplorer-settings-profile-list__status-placeholder" });
+    }
+    for (const tag of options.tags ?? []) {
+      statusCell.createSpan({
+        cls: `ixplorer-settings-profile-list__status ixplorer-settings-profile-list__tag--${tag.toLowerCase()}`,
+        text: tag,
+      });
     }
     const actions = row.createDiv({ cls: "ixplorer-settings-profile-list__actions" });
     const defaultAction = options.extraActions?.[0];
@@ -542,6 +605,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderIndexingSettings(containerEl: HTMLElement): void {
+    containerEl = this.gateHost(containerEl);
     new Setting(containerEl).setName("Indexing").setHeading();
 
     const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
