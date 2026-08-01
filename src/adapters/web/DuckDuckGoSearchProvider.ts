@@ -3,7 +3,6 @@ import {
   SearchProvider,
   SearchProviderResult,
   WebPageFetchOptions,
-  WebPageFetchFailure,
   WebPageFetchResult,
   WebPageMetadataResult,
   WebDocumentFetchResult,
@@ -16,7 +15,7 @@ import {
   parseDuckDuckGoResults,
 } from "./DuckDuckGoParser";
 import { HostRequestThrottle } from "./HostRequestThrottle";
-import { validatePublicWebUrl } from "@application/sources";
+import { isDocumentContentType, WebPageFetcher } from "./WebPageFetcher";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -46,8 +45,6 @@ const DEFAULT_RESULT_LIMIT = 5;
 const DEFAULT_MAX_FETCHES = 3;
 const HARD_RESULT_LIMIT = 50;
 const HARD_MAX_FETCHES = 15;
-const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576;
-const DEFAULT_MAX_REDIRECTS = 5;
 // DuckDuckGo's HTML endpoint blocks bursts aggressively. Agents (including deep
 // research sub-agents sharing this instance) can fan out many queries at once, so
 // outbound requests are serialized and spaced, with bounded backoff on 429/503.
@@ -73,7 +70,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly logger?: PluginRequestLogger;
   private requestChain: Promise<void> = Promise.resolve();
   private lastRequestAt = 0;
-  private readonly pageThrottle: HostRequestThrottle;
+  private readonly pageFetcher: WebPageFetcher;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
@@ -92,9 +89,14 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     );
     this.maxSearchRetries = Math.max(0, options.maxSearchRetries ?? DEFAULT_MAX_SEARCH_RETRIES);
     this.rateLimitBackoffMs = Math.max(0, options.rateLimitBackoffMs ?? RATE_LIMIT_BACKOFF_MS);
-    this.pageThrottle = new HostRequestThrottle({
+    const pageThrottle = new HostRequestThrottle({
       perHostIntervalMs: options.pageFetchIntervalMs ?? DEFAULT_PAGE_FETCH_INTERVAL_MS,
       maxConcurrent: options.pageFetchConcurrency ?? DEFAULT_PAGE_FETCH_CONCURRENCY,
+    });
+    this.pageFetcher = new WebPageFetcher({
+      requestPage: (url, timeoutMs) => this.requestPage(url, timeoutMs),
+      throttle: pageThrottle,
+      defaultTimeoutMs: this.timeoutMs,
     });
     this.now = options.now ?? (() => new Date());
     this.logger = options.logger;
@@ -170,7 +172,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 
   async fetchPage(url: string, options: WebPageFetchOptions = {}): Promise<WebPageFetchResult> {
-    const raw = await this.fetchRawPage(url, options);
+    const raw = await this.pageFetcher.fetch(url, options);
     if (!raw.ok) {
       return raw.result;
     }
@@ -181,7 +183,14 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         ? raw.rawText.replace(/\s+/g, " ").trim()
         : extractReadableText(raw.rawText, maxContentChars + 1);
     if (!extracted) {
-      return pageFailure("web-fetch-empty-content", "Page contained no readable text.", false);
+      return {
+        ok: false,
+        error: {
+          code: "web-fetch-empty-content",
+          message: "Page contained no readable text.",
+          retryable: false,
+        },
+      };
     }
     const content = extracted.slice(0, maxContentChars);
 
@@ -201,7 +210,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     url: string,
     options: WebPageFetchOptions = {},
   ): Promise<WebPageMetadataResult> {
-    const raw = await this.fetchRawPage(url, options);
+    const raw = await this.pageFetcher.fetch(url, options);
     if (!raw.ok) {
       return raw.result;
     }
@@ -220,7 +229,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     url: string,
     options: WebPageFetchOptions = {},
   ): Promise<WebDocumentFetchResult> {
-    const raw = await this.fetchRawPage(url, options, isDocumentContentType);
+    const raw = await this.pageFetcher.fetch(url, options, isDocumentContentType);
     if (!raw.ok) {
       return raw.result;
     }
@@ -233,140 +242,6 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       ...(raw.contentDisposition ? { contentDisposition: raw.contentDisposition } : {}),
       bytes: raw.byteLength,
       redirects: raw.redirects,
-    };
-  }
-
-  /** Shared fetch core for fetchPage/fetchMetadata/fetchDocument: follows redirects, reads bounded body. */
-  private fetchRawPage(
-    url: string,
-    options: WebPageFetchOptions,
-    acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
-  ): Promise<RawPageResult> {
-    return this.pageThrottle.run(hostOf(url), () =>
-      this.fetchRawPageNow(url, options, acceptContentType),
-    );
-  }
-
-  private async fetchRawPageNow(
-    url: string,
-    options: WebPageFetchOptions,
-    acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
-  ): Promise<RawPageResult> {
-    const initial = validatePublicWebUrl(url);
-    if (!initial.ok) {
-      return {
-        ok: false,
-        result: pageFailure("unsafe-web-url", "The registered web URL is not allowed.", false, {
-          reason: initial.reason,
-        }),
-      };
-    }
-
-    const timeoutMs = positiveInteger(options.timeoutMs, this.timeoutMs);
-    const maxResponseBytes = positiveInteger(options.maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES);
-    const maxRedirects = nonNegativeInteger(options.maxRedirects, DEFAULT_MAX_REDIRECTS);
-    const redirects: string[] = [];
-    let currentUrl = initial.url;
-
-    for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-      let response: Response;
-      try {
-        response = await this.requestPage(currentUrl, timeoutMs);
-      } catch (error) {
-        if (isAbortError(error)) {
-          return {
-            ok: false,
-            result: pageFailure("web-fetch-timeout", "Page fetch timed out.", true),
-          };
-        }
-        return { ok: false, result: pageFailure("web-fetch-network", "Page fetch failed.", true) };
-      }
-
-      if (isRedirect(response.status)) {
-        const location = response.headers.get("location");
-        await response.body?.cancel();
-        if (!location) {
-          return {
-            ok: false,
-            result: pageFailure("web-fetch-redirect", "Redirect response had no location.", false),
-          };
-        }
-        if (redirectCount === maxRedirects) {
-          return {
-            ok: false,
-            result: pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false),
-          };
-        }
-        const redirected = validatePublicWebUrl(new URL(location, currentUrl).toString());
-        if (!redirected.ok) {
-          return {
-            ok: false,
-            result: pageFailure("web-fetch-redirect", "Redirect target is not allowed.", false, {
-              reason: redirected.reason,
-            }),
-          };
-        }
-        currentUrl = redirected.url;
-        redirects.push(currentUrl);
-        continue;
-      }
-
-      if (!response.ok) {
-        return {
-          ok: false,
-          result: pageFailure(
-            "web-fetch-http",
-            `Page fetch returned HTTP ${response.status}.`,
-            response.status === 429 || response.status >= 500,
-            { status: response.status },
-          ),
-        };
-      }
-
-      const contentType = normalizedContentType(response.headers.get("content-type"));
-      if (!acceptContentType(contentType)) {
-        return {
-          ok: false,
-          result: pageFailure(
-            "web-fetch-content-type",
-            "Page content type is not supported.",
-            false,
-            {
-              contentType,
-            },
-          ),
-        };
-      }
-
-      let body: Awaited<ReturnType<typeof readBoundedBody>>;
-      try {
-        body = await readBoundedBody(response, maxResponseBytes);
-      } catch {
-        return {
-          ok: false,
-          result: pageFailure("web-fetch-network", "Page response could not be read.", true),
-        };
-      }
-      if (!body.ok) {
-        return { ok: false, result: body.result };
-      }
-
-      return {
-        ok: true,
-        url: initial.url,
-        finalUrl: currentUrl,
-        rawText: new TextDecoder().decode(body.bytes),
-        bytes: body.bytes,
-        contentType,
-        contentDisposition: response.headers.get("content-disposition") ?? undefined,
-        byteLength: body.bytes.byteLength,
-        redirects,
-      };
-    }
-
-    return {
-      ok: false,
-      result: pageFailure("web-fetch-redirect", "Page exceeded the redirect limit.", false),
     };
   }
 
@@ -484,20 +359,6 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 }
 
-type RawPageResult =
-  | {
-      ok: true;
-      url: string;
-      finalUrl: string;
-      rawText: string;
-      bytes: Uint8Array;
-      contentType: string;
-      contentDisposition?: string;
-      byteLength: number;
-      redirects: string[];
-    }
-  | { ok: false; result: WebPageFetchFailure };
-
 function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
   if (value === undefined || !Number.isFinite(value)) {
     return fallback;
@@ -518,128 +379,10 @@ function positiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-function nonNegativeInteger(value: number | undefined, fallback: number): number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : fallback;
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Throttle key: the request host, or the raw URL when it cannot be parsed (validation rejects it later). */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
 function isRateLimited(status: number): boolean {
   return status === 429 || status === 503 || status === 202;
-}
-
-function isRedirect(status: number): boolean {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
-}
-
-function normalizedContentType(value: string | null): string {
-  return (value ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
-}
-
-function isSupportedPageContentType(contentType: string): boolean {
-  return (
-    contentType === "text/html" ||
-    contentType === "application/xhtml+xml" ||
-    contentType === "text/plain"
-  );
-}
-
-/** Content types accepted for on-demand document download (primarily PDFs). */
-function isDocumentContentType(contentType: string): boolean {
-  return DOCUMENT_CONTENT_TYPES.has(contentType);
-}
-
-const DOCUMENT_CONTENT_TYPES = new Set<string>([
-  "application/pdf",
-  "application/x-pdf",
-  "application/epub+zip",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/rtf",
-  "text/plain",
-  "application/octet-stream",
-]);
-
-async function readBoundedBody(
-  response: Response,
-  maxBytes: number,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchFailure }> {
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    return {
-      ok: false,
-      result: pageFailure(
-        "web-fetch-response-too-large",
-        "Page response exceeded the size limit.",
-        false,
-        { maxBytes },
-      ),
-    };
-  }
-
-  if (!response.body) {
-    return { ok: true, bytes: new Uint8Array() };
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
-      return {
-        ok: false,
-        result: pageFailure(
-          "web-fetch-response-too-large",
-          "Page response exceeded the size limit.",
-          false,
-          { maxBytes },
-        ),
-      };
-    }
-    chunks.push(value);
-  }
-
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return { ok: true, bytes };
-}
-
-function pageFailure(
-  code: string,
-  message: string,
-  retryable: boolean,
-  details?: Record<string, unknown>,
-): WebPageFetchFailure {
-  return {
-    ok: false,
-    error: { code, message, retryable, ...(details ? { details } : {}) },
-  };
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error && error.name === "AbortError")
-  );
 }

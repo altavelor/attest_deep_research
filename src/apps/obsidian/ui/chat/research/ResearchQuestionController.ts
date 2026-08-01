@@ -1,12 +1,6 @@
 import { Notice } from "obsidian";
 
-import {
-  chatHistoryForPrompt,
-  compactableMessages,
-  compactChatMessages,
-  compactionSummaryFromMessages,
-  shouldCompactForContext,
-} from "@application/use-cases/chat";
+import { chatHistoryForPrompt } from "@application/use-cases/chat";
 import {
   AgentRunDiagnosticCollector,
   ResearchService,
@@ -33,8 +27,11 @@ import {
   nextChainToolCallStart,
   nextUserMessage,
   resetLastAssistantContent,
+  promoteAssistantCheckpoint,
+  startAssistantProgress,
   stampLastAssistantModel,
 } from "@core/conversation";
+import { ChatHistoryCompactor } from "./ChatHistoryCompactor";
 
 export interface ResearchQuestionControllerOptions {
   getQuestionInput(): string;
@@ -67,7 +64,6 @@ export interface ResearchQuestionControllerOptions {
   renderMessages(): void;
   renderActiveMessage(): void;
   renderAnswerDetails(): void;
-  renderIndexControl(): void;
 }
 
 export class ResearchQuestionController {
@@ -78,9 +74,11 @@ export class ResearchQuestionController {
   private running = false;
   private activeDiagnostics: AgentRunDiagnosticCollector | null = null;
   private activeRenderHandle: number | null = null;
+  private readonly historyCompactor: ChatHistoryCompactor;
 
   constructor(options: ResearchQuestionControllerOptions) {
     this.options = options;
+    this.historyCompactor = new ChatHistoryCompactor(options);
   }
 
   isRunning(): boolean {
@@ -96,7 +94,7 @@ export class ResearchQuestionController {
 
     if (question === "/compact") {
       this.options.clearQuestionInput();
-      await this.compactHistory({ automatic: false });
+      await this.historyCompactor.compactHistory({ automatic: false });
       return;
     }
 
@@ -105,7 +103,7 @@ export class ResearchQuestionController {
     }
 
     const chatHistory = this.options.getMessages();
-    if (await this.compactIfNeeded(question)) {
+    if (await this.historyCompactor.compactIfNeeded(question)) {
       return this.submitQuestion();
     }
 
@@ -128,7 +126,7 @@ export class ResearchQuestionController {
     const hasAnswer = messages[index + 1]?.role === "assistant";
     const chatHistory = hasAnswer ? messages : messages.slice(0, Math.max(0, index));
 
-    if (await this.compactIfNeeded(question)) {
+    if (await this.historyCompactor.compactIfNeeded(question)) {
       return;
     }
 
@@ -199,6 +197,7 @@ export class ResearchQuestionController {
       this.options.clearContextPaths();
       await this.options.saveCurrentChat();
     }
+    this.options.setMessages(startAssistantProgress(this.options.getMessages()));
     this.options.setLastAnswer(null);
     this.options.renderMessages();
     this.options.renderAnswerDetails();
@@ -229,7 +228,7 @@ export class ResearchQuestionController {
         if (event.type === "complete" && event.answer.contextDiagnostics) {
           runDiagnostics.complete(event.answer.contextDiagnostics);
         }
-        this.applyResearchEvent(event, runId);
+        await this.applyResearchEvent(event, runId);
         if (event.type === "complete") {
           completed = true;
         }
@@ -256,11 +255,10 @@ export class ResearchQuestionController {
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);
-      this.options.renderIndexControl();
     }
   }
 
-  private applyResearchEvent(event: ResearchStreamEvent, runId: string): void {
+  private async applyResearchEvent(event: ResearchStreamEvent, runId: string): Promise<void> {
     if (this.activeRunId !== runId) return;
     if (event.type === "status") {
       this.options.setProgressStatus(event.message);
@@ -294,6 +292,8 @@ export class ResearchQuestionController {
           event.label,
           event.args,
           event.parentId,
+          event.fetchTargets,
+          event.searchSources,
         ),
       );
       this.scheduleActiveRender();
@@ -346,27 +346,11 @@ export class ResearchQuestionController {
     }
 
     if (event.type === "checkpoint-promote") {
-      const messages = this.options.getMessages();
-      const last = messages.at(-1);
-      const checkpoint = last?.researchProgress?.checkpoints.find(
-        (item) => item.id === event.checkpointId,
+      this.options.setMessages(
+        promoteAssistantCheckpoint(this.options.getMessages(), event.checkpointId),
       );
-      if (checkpoint && last?.researchProgress) {
-        const updated = [
-          ...messages.slice(0, -1),
-          {
-            ...last,
-            researchProgress: {
-              ...last.researchProgress,
-              checkpoints: last.researchProgress.checkpoints.filter(
-                (item) => item.id !== event.checkpointId,
-              ),
-            },
-          },
-        ];
-        this.options.setMessages(nextAssistantMessage(updated, checkpoint.content));
-      }
-      this.scheduleActiveRender();
+      this.cancelActiveRender();
+      this.options.renderActiveMessage();
       return;
     }
 
@@ -377,6 +361,10 @@ export class ResearchQuestionController {
       return;
     }
 
+    if (this.hasFinalizingCheckpoint()) {
+      await this.waitForFinalizingFrame();
+      if (this.activeRunId !== runId) return;
+    }
     this.cancelActiveRender();
     this.options.setLastAnswer(event.answer);
     this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
@@ -434,6 +422,29 @@ export class ResearchQuestionController {
     this.activeRenderHandle = null;
   }
 
+  private hasFinalizingCheckpoint(): boolean {
+    return Boolean(
+      this.options
+        .getMessages()
+        .at(-1)
+        ?.researchProgress?.checkpoints.some((checkpoint) => checkpoint.status === "finalizing"),
+    );
+  }
+
+  private waitForFinalizingFrame(): Promise<void> {
+    return new Promise((resolve) => {
+      let completed = false;
+      const finish = (): void => {
+        if (completed) return;
+        completed = true;
+        window.clearTimeout(fallbackTimer);
+        resolve();
+      };
+      const fallbackTimer = window.setTimeout(finish, 50);
+      window.requestAnimationFrame(finish);
+    });
+  }
+
   private rejectIfContextWindowExceeded(
     question: string,
     chatHistory: ChatDisplayMessage[],
@@ -460,80 +471,6 @@ export class ResearchQuestionController {
     this.options.setProgressStatus(message);
     new Notice(message);
     return true;
-  }
-
-  private async compactIfNeeded(question: string): Promise<boolean> {
-    if (
-      !shouldCompactForContext({
-        question,
-        messages: this.options.getMessages(),
-        contextLimitTokens: this.options.getContextLimitTokens(),
-        reservedOutputTokens: this.options.getReservedOutputTokens(),
-      })
-    ) {
-      return false;
-    }
-
-    return this.compactHistory({ automatic: true });
-  }
-
-  private async compactHistory(options: { automatic: boolean }): Promise<boolean> {
-    const messages = this.options.getMessages();
-    const compactable = compactableMessages(messages);
-
-    if (compactable.length === 0) {
-      const message = "There is not enough older chat history to compact.";
-      this.options.setProgressStatus(message);
-      new Notice(message);
-      return false;
-    }
-
-    const status = options.automatic
-      ? "Automatically compacting context to preserve evidence budget..."
-      : "Compacting chat history...";
-    this.options.setProgressStatus(status);
-    if (options.automatic) {
-      this.options.setMessages([
-        ...messages,
-        {
-          role: "assistant",
-          content: "Automatically compacting context to preserve evidence budget.",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      this.options.renderMessages();
-      await this.options.saveCurrentChat();
-    }
-
-    try {
-      const sourceMessages = options.automatic
-        ? compactableMessages(this.options.getMessages())
-        : compactable;
-      const summary = await this.options
-        .createResearchService()
-        .summarizeChatHistoryForCompaction(
-          sourceMessages,
-          compactionSummaryFromMessages(this.options.getMessages()),
-        );
-      const result = compactChatMessages(this.options.getMessages(), { summary });
-
-      if (!result.changed) {
-        return false;
-      }
-
-      this.options.setMessages(result.messages);
-      await this.options.saveCurrentChat();
-      this.options.renderMessages();
-      const done = `Compacted ${result.compactedCount} older message(s).`;
-      this.options.setProgressStatus(done);
-      new Notice(done);
-      return true;
-    } catch (error) {
-      const message = toUserMessage(error);
-      this.options.setProgressStatus(message);
-      new Notice(message);
-      return false;
-    }
   }
 }
 

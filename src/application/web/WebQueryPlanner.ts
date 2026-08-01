@@ -57,34 +57,16 @@ export class WebQueryPlanner implements SearchProvider {
   }
 
   async search(query: string, options: WebSearchOptions = {}): Promise<SearchProviderResult[]> {
-    const language = options.language ?? detectQueryLanguage(query);
-    const sources = this.options.registry
-      .enabledSources()
-      .filter((source) => this.health.isAvailable(source.descriptor.id))
-      .filter(
-        (source) =>
-          source.descriptor.languages === undefined ||
-          source.descriptor.languages.includes(language),
-      );
-    if (sources.length === 0) {
-      return [];
-    }
+    const selected = this.selectSources(query, options);
+    if (selected.length === 0) return [];
 
-    const intent = options.intent ?? classifyWebQuery(query);
+    const language = options.language ?? detectQueryLanguage(query);
     const recency = options.recency ?? inferQueryRecency(query);
     const searchOptions = {
       ...options,
       language,
       ...(recency ? { recency } : {}),
     };
-    const byId = new Map(sources.map((source) => [source.descriptor.id, source]));
-    const selected = selectSourcesForIntent(
-      sources.map((source) => source.descriptor),
-      intent,
-      this.options.maxSources ?? DEFAULT_MAX_SOURCES,
-    )
-      .map((descriptor) => byId.get(descriptor.id))
-      .filter((source): source is WebSearchSource => source !== undefined);
 
     const lists = await Promise.all(
       selected.map(async (source) => {
@@ -103,6 +85,33 @@ export class WebQueryPlanner implements SearchProvider {
     const merged = mergeRankedResults(lists, (result) => result.source.url);
     const limit = options.limit ?? merged.length;
     return merged.slice(0, limit).map((result, index) => ({ ...result, rank: index + 1 }));
+  }
+
+  searchSourceLabels(query: string, options: WebSearchOptions = {}): readonly string[] {
+    return this.selectSources(query, options).map((source) => source.descriptor.label);
+  }
+
+  private selectSources(query: string, options: WebSearchOptions): WebSearchSource[] {
+    const language = options.language ?? detectQueryLanguage(query);
+    const sources = this.options.registry
+      .enabledSources()
+      .filter((source) => this.health.isAvailable(source.descriptor.id))
+      .filter(
+        (source) =>
+          source.descriptor.languages === undefined ||
+          source.descriptor.languages.includes(language),
+      );
+    if (sources.length === 0) return [];
+
+    const intent = options.intent ?? classifyWebQuery(query);
+    const byId = new Map(sources.map((source) => [source.descriptor.id, source]));
+    return selectSourcesForIntent(
+      sources.map((source) => source.descriptor),
+      intent,
+      this.options.maxSources ?? DEFAULT_MAX_SOURCES,
+    )
+      .map((descriptor) => byId.get(descriptor.id))
+      .filter((source): source is WebSearchSource => source !== undefined);
   }
 
   async fetchPage(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult> {

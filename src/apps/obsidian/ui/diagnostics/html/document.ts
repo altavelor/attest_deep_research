@@ -1,16 +1,10 @@
 import { ContextDiagnostics } from "@core/diagnostics";
-import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
-import { DiagnosticReportV3 } from "./diagnostics/report/types";
-import { h } from "./diagnostics/html/primitives";
-import {
-  renderFindings,
-  renderHeader,
-  renderInput,
-  renderInternals,
-  renderNav,
-} from "./diagnostics/html/sections";
-import { renderRunTrace } from "./diagnostics/html/trace";
-import { CSS } from "./diagnostics/html/styles";
+import { buildDiagnosticReportV3 } from "../report/build";
+import { DiagnosticReportV3 } from "../report/types";
+import { h } from "./primitives";
+import { renderFindings, renderHeader, renderInput, renderInternals, renderNav } from "./sections";
+import { renderRunTrace } from "./trace";
+import { CSS } from "./styles";
 
 export function formatDiagnosticReportHtml(diagnostics: ContextDiagnostics): string {
   return renderDiagnosticHtmlDocument(buildDiagnosticReportV3(diagnostics));

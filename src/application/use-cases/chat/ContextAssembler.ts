@@ -7,7 +7,7 @@ import {
   ContextMode,
   ContextSourceRole,
 } from "@core/diagnostics";
-import { ExtractedChunk, RetrievedChunk } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 
 /** Injected content-hash function (e.g. extractors/common.stableId). Keeps the
  *  assembler free of any concrete (Node crypto) hashing dependency. */
@@ -17,14 +17,20 @@ import {
   DEFAULT_GRAPH_CONTEXT_LIMITS,
   GraphContextProvider,
   GraphContextLimits,
-  GraphRoot,
 } from "@core/research";
 import {
   AttachedFileCoverage,
   AttachedFileManifestEntry,
-  estimateTextTokens,
   ResearchChatHistoryMessage,
 } from "@core/research";
+import {
+  createContextBudget,
+  estimateChunksTokens,
+  estimateHistoryTokens,
+  packChunksByBudget,
+} from "./contextBudget";
+import { ExplicitContextSourceBuilder } from "./ExplicitContextSourceBuilder";
+import { ContextGraphDiscovery } from "./ContextGraphDiscovery";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
@@ -82,17 +88,14 @@ interface ContextCandidate {
   role: ContextSourceRole;
 }
 
-const DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT = 10_000;
-const DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE = 0.45;
-const DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE = 0.35;
-const FALLBACK_TOKENS_PER_EVIDENCE_ITEM = 500;
-
 export class ContextAssembler {
   private readonly files: ContextFileProvider;
   private readonly extractors: Extractor[];
   private readonly graph?: GraphContextProvider;
   private readonly retrieve: ContextAssemblerOptions["retrieve"];
   private readonly generateId: GenerateId;
+  private readonly explicitSourceBuilder: ExplicitContextSourceBuilder;
+  private readonly graphDiscovery: ContextGraphDiscovery;
 
   constructor(options: ContextAssemblerOptions) {
     this.files = options.files;
@@ -100,6 +103,12 @@ export class ContextAssembler {
     this.graph = options.graph;
     this.retrieve = options.retrieve;
     this.generateId = options.generateId;
+    this.explicitSourceBuilder = new ExplicitContextSourceBuilder(
+      this.files,
+      this.extractors,
+      this.generateId,
+    );
+    this.graphDiscovery = new ContextGraphDiscovery(this.graph);
   }
 
   async assemble(request: ContextAssembleRequest): Promise<AssembledContext> {
@@ -117,9 +126,9 @@ export class ContextAssembler {
             ...(request.graph?.limits ?? {}),
           }),
         }
-      : await this.discoverGraphContext(request, availablePaths, mentionPaths);
+      : await this.graphDiscovery.discover(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
-    const budget = createBudget(request);
+    const budget = createContextBudget(request);
     const explicitEvidence: RetrievedChunk[] = [];
     const attachments: AttachedFileManifestEntry[] = [];
     let explicitTokens = 0;
@@ -299,61 +308,6 @@ export class ContextAssembler {
     ]);
   }
 
-  private async discoverGraphContext(
-    request: ContextAssembleRequest,
-    availablePaths: string[],
-    mentionPaths: string[],
-  ): Promise<{ sourcePaths: string[]; diagnostics: ContextDiagnostics["graph"] }> {
-    const graphOptions = request.graph;
-    const limits = { ...DEFAULT_GRAPH_CONTEXT_LIMITS, ...(graphOptions?.limits ?? {}) };
-
-    if (!this.graph || graphOptions?.enabled !== true) {
-      return { sourcePaths: [], diagnostics: createDisabledGraphDiagnostics(limits) };
-    }
-
-    const roots = this.graphRoots(request, mentionPaths);
-    const discovery = await this.graph.discover({
-      question: request.question,
-      roots,
-      availablePaths,
-      includeBacklinks: graphOptions.includeBacklinks,
-      maxDepth: graphOptions.depth,
-      limits,
-    });
-
-    return {
-      sourcePaths: discovery.sourcePaths,
-      diagnostics: discovery.diagnostics,
-    };
-  }
-
-  private graphRoots(request: ContextAssembleRequest, mentionPaths: string[]): GraphRoot[] {
-    const roots: GraphRoot[] = [];
-    const add = (path: string | undefined, role: ContextSourceRole): void => {
-      if (!path || roots.some((root) => root.path === path)) {
-        return;
-      }
-
-      roots.push({ path, role });
-    };
-
-    for (const path of mentionPaths) {
-      add(path, "mention");
-    }
-
-    if (request.includeActiveFile) {
-      add(request.activeFilePath, "active");
-    }
-
-    if (request.contextMode === "include" || request.graph?.expandFilteredContextThroughLinks) {
-      for (const path of request.contextPaths) {
-        add(path, "attached");
-      }
-    }
-
-    return roots;
-  }
-
   private async buildExplicitSource(
     candidate: ContextCandidate,
     request: ContextAssembleRequest,
@@ -363,233 +317,8 @@ export class ContextAssembler {
     diagnostic: ContextDiagnosticSource;
     coverage: AttachedFileCoverage;
   }> {
-    const extractor = this.extractors.find((item) => item.supports(candidate.path));
-
-    if (!extractor) {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "unsupported",
-          reason: "unsupported-file-type",
-        },
-      };
-    }
-
-    let data: ArrayBuffer | string;
-    try {
-      data = await this.files.readFile(candidate.path);
-    } catch {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "missing",
-          reason: "read-failed",
-        },
-      };
-    }
-
-    try {
-      const modifiedTime = (await this.files.getModifiedTime?.(candidate.path)) ?? 0;
-      const size = await this.files.getSize?.(candidate.path);
-      const chunks = await extractor.extract({
-        path: candidate.path,
-        data,
-        modifiedTime,
-        size,
-      });
-      const selected = selectExplicitChunks(chunks, request, remainingTokens, this.generateId);
-
-      if (selected.coverage === "reference") {
-        return {
-          chunks: [],
-          coverage: "reference",
-          diagnostic: {
-            path: candidate.path,
-            role: candidate.role,
-            status: "dropped",
-            reason: "referenced-for-tools",
-            droppedTokens: estimateChunksTokens(chunks),
-          },
-        };
-      }
-
-      return {
-        chunks: selected.chunks,
-        coverage: selected.coverage,
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: selected.chunks.length > 0 ? "included" : "dropped",
-          chunkCount: selected.chunks.length,
-          includedTokens: estimateChunksTokens(selected.chunks),
-          droppedTokens: Math.max(
-            0,
-            estimateChunksTokens(chunks) - estimateChunksTokens(selected.chunks),
-          ),
-          reason: selected.chunks.length > 0 ? undefined : "context-budget-exceeded",
-        },
-      };
-    } catch {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "failed",
-          reason: "extraction-failed",
-        },
-      };
-    }
+    return this.explicitSourceBuilder.build(candidate, request, remainingTokens);
   }
-}
-
-function createBudget(request: ContextAssembleRequest): {
-  explicitTokens: number;
-  retrievalTokens: number;
-} {
-  if (!request.contextLimitTokens) {
-    const fallback = Math.max(1, request.evidenceLimit) * FALLBACK_TOKENS_PER_EVIDENCE_ITEM;
-    return {
-      explicitTokens: fallback,
-      retrievalTokens: fallback,
-    };
-  }
-
-  const reserved = request.reservedOutputTokens ?? 0;
-  const historyTokens = estimateHistoryTokens(request.chatHistory ?? []);
-  const available = Math.max(0, request.contextLimitTokens - reserved - historyTokens);
-
-  return {
-    explicitTokens: Math.max(0, Math.floor(available * DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE)),
-    retrievalTokens: Math.max(0, Math.floor(available * DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE)),
-  };
-}
-
-function selectExplicitChunks(
-  chunks: ExtractedChunk[],
-  request: ContextAssembleRequest,
-  remainingTokens: number,
-  generateId: GenerateId,
-): { chunks: RetrievedChunk[]; coverage: AttachedFileCoverage } {
-  if (chunks.length === 0 || remainingTokens <= 0) {
-    return { chunks: [], coverage: "omitted" };
-  }
-
-  if (isSingleSmallMarkdownFile(chunks, request.smallMarkdownCharLimit)) {
-    const combined = combineMarkdownChunks(chunks, generateId);
-
-    if (estimateTextTokens(combined.text) <= remainingTokens) {
-      return { chunks: [combined], coverage: "full" };
-    }
-  }
-
-  if (request.largeAttachmentsAsReferences) {
-    return { chunks: [], coverage: "reference" };
-  }
-
-  const ranked = rankChunksForQuestion(chunks, request.question);
-  const packed = packChunksByBudget(ranked, remainingTokens);
-  return {
-    chunks: packed,
-    coverage: packed.length === chunks.length ? "full" : "excerpts",
-  };
-}
-
-function isSingleSmallMarkdownFile(
-  chunks: ExtractedChunk[],
-  smallMarkdownCharLimit?: number,
-): boolean {
-  if (!chunks.every((chunk) => chunk.source.kind === "markdown")) {
-    return false;
-  }
-
-  return (
-    chunks.reduce((total, chunk) => total + chunk.text.length, 0) <=
-    (smallMarkdownCharLimit ?? DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT)
-  );
-}
-
-function combineMarkdownChunks(chunks: ExtractedChunk[], generateId: GenerateId): RetrievedChunk {
-  const first = chunks[0];
-  const text = chunks.map((chunk) => chunk.text).join("\n\n");
-  const contentHash = generateId(text);
-  const source =
-    first.source.kind === "markdown"
-      ? {
-          ...first.source,
-          id: generateId(`${first.source.path}:explicit-full:${contentHash}`),
-          title: first.source.path,
-          headingPath: [],
-          startOffset: undefined,
-          endOffset: undefined,
-          blockId: undefined,
-        }
-      : first.source;
-
-  return {
-    id: source.id,
-    source,
-    text,
-    contentHash,
-    score: 1,
-  };
-}
-
-function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): RetrievedChunk[] {
-  const termPatterns = question
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_-]+/u)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 3)
-    .map((term) => new RegExp(`\\b${escapeRegExp(term)}`, "u"));
-
-  return chunks
-    .map((chunk, index) => {
-      const sourceText =
-        chunk.source.kind === "markdown"
-          ? `${chunk.source.path} ${chunk.source.headingPath.join(" ")} ${chunk.text}`
-          : `${"path" in chunk.source ? chunk.source.path : chunk.source.title} ${chunk.text}`;
-      const haystack = sourceText.toLowerCase();
-      const score =
-        termPatterns.reduce((total, pattern) => total + (pattern.test(haystack) ? 1 : 0), 0) +
-        1 / (index + 1_000);
-
-      return { ...chunk, score };
-    })
-    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
-}
-
-function packChunksByBudget<T extends RetrievedChunk>(chunks: T[], budgetTokens: number): T[] {
-  const packed: T[] = [];
-  let usedTokens = 0;
-
-  for (const chunk of chunks) {
-    const tokens = estimateTextTokens(chunk.text);
-
-    if (usedTokens + tokens > budgetTokens) {
-      continue;
-    }
-
-    packed.push(chunk);
-    usedTokens += tokens;
-  }
-
-  return packed;
-}
-
-function estimateChunksTokens(chunks: Array<{ text: string }>): number {
-  return chunks.reduce((total, chunk) => total + estimateTextTokens(chunk.text), 0);
-}
-
-function estimateHistoryTokens(history: ResearchChatHistoryMessage[]): number {
-  return history.reduce((total, message) => total + estimateTextTokens(message.content), 0);
 }
 
 function createEmptyDiagnostics(contextMode: ContextMode): ContextDiagnostics {

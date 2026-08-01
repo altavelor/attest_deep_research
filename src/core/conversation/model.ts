@@ -51,7 +51,7 @@ export interface ResearchProgressCheckpoint {
   id: string;
   round: number;
   content: string;
-  status: "streaming" | "complete" | "superseded" | "interrupted";
+  status: "streaming" | "finalizing" | "complete" | "superseded" | "interrupted";
 }
 
 export type ChainItem =
@@ -71,6 +71,8 @@ export type ChainItem =
       status: "pending" | "complete" | "failed";
       resultSummary?: string;
       args?: Record<string, unknown>;
+      fetchTargets?: string[];
+      searchSources?: string[];
       resultJson?: string;
       /** Live phase of a nested sub-agent run (e.g. run_subagent). */
       phase?: string;

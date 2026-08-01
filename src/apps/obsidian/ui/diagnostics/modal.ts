@@ -1,11 +1,11 @@
 import { App, Modal, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "@core/diagnostics";
-import { copyToClipboard } from "./shared/clipboard";
-import { buildDiagnosticReportV3 } from "./diagnosticReportV3";
-import { renderDiagnosticHtmlDocument } from "./diagnosticHtml";
-import { downloadDiagnosticHtml } from "./diagnosticDownload";
-import { renderReadableDiagnosticReport } from "./diagnosticReadable";
+import { copyToClipboard } from "../shared/clipboard";
+import { buildDiagnosticReportV3 } from "./report/build";
+import { renderDiagnosticHtmlDocument } from "./html/document";
+import { downloadDiagnosticHtml } from "./download";
+import { renderReadableDiagnosticReport } from "./readable";
 
 export class DiagnosticReportModalController {
   private modal: DiagnosticReportModal | null = null;

@@ -61,6 +61,15 @@
   background: var(--text-faint);
 }
 
+.ixplorer-chat__workflow-dot--finalizing {
+  background: var(--color-green, #3ecf8e);
+}
+
+.ixplorer-chat__workflow-node--thinking-active .ixplorer-chat__workflow-dot--thinking,
+.ixplorer-chat__workflow-node--thinking-active .ixplorer-chat__workflow-heading {
+  animation: ixplorer-workflow-pulse 1.2s ease-in-out infinite;
+}
+
 .ixplorer-chat__workflow-dot--tool {
   background: var(--color-purple, #a371f7);
 }
@@ -144,9 +153,10 @@
 
 .ixplorer-chat__tool-head {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: 0.5em;
+  min-width: 0;
 }
 
 .ixplorer-chat__tool-name {
@@ -154,7 +164,36 @@
 }
 
 .ixplorer-chat__tool-intent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
   color: var(--text-muted);
+}
+
+.ixplorer-chat__tool-intent--fetch {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  flex: 0 0 auto;
+}
+
+.ixplorer-chat__tool-fetch-targets {
+  position: relative;
+  display: inline-block;
+  flex: 1 1 auto;
+  min-height: 1.25em;
+  color: var(--text-muted);
+}
+
+.ixplorer-chat__tool-fetch-target {
+  display: none;
+}
+
+.ixplorer-chat__tool-fetch-target--active {
+  display: inline;
+  animation: ixplorer-workflow-pulse 1s ease-in-out infinite;
 }
 
 .ixplorer-chat__tool-phase {

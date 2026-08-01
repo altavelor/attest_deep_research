@@ -50,6 +50,7 @@ export interface NoteToolService {
 
 export interface EvidenceSnapshotProvider {
   snapshot(): ResearchEvidenceSnapshot;
+  resolveWebResult?(resultId: string): { canonicalUrl: string } | undefined;
 }
 
 /** Options the toolset factory accepts (built by the composition root). */

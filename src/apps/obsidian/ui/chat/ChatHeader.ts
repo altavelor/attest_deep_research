@@ -4,12 +4,17 @@ export type IxplorerPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
   activePanel: IxplorerPanel;
+  isDebugMode: boolean;
   onPanelChange(panel: IxplorerPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
   onNewChat(): void;
 }
 
 export function renderPanelTabs(containerEl: HTMLElement, options: ChatHeaderOptions): void {
+  if (!options.isDebugMode) {
+    return;
+  }
+
   const tabs = containerEl.createDiv({ cls: "ixplorer-chat__tabs", attr: { role: "tablist" } });
   createPanelTab(tabs, "chat", "Chat", options);
   createPanelTab(tabs, "indexSearch", "Index search", options);
