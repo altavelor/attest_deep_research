@@ -25,7 +25,10 @@ import {
   resolveChatSettings,
 } from "@apps/obsidian/ui/chat/chatViewHelpers";
 import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvidence";
-import { shouldScrollSavedChatsList } from "@apps/obsidian/ui/chat/history/savedChatListState";
+import {
+  filterSavedChatsByTab,
+  shouldScrollSavedChatsList,
+} from "@apps/obsidian/ui/chat/history/savedChatListState";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
@@ -409,6 +412,31 @@ describe("chat rendering helpers", () => {
   it("enables saved-chat list scrolling only after fifteen visible rows", () => {
     expect(shouldScrollSavedChatsList(15)).toBe(false);
     expect(shouldScrollSavedChatsList(16)).toBe(true);
+  });
+
+  it("shows only favorites on the Favorites tab while retaining them in History", () => {
+    const chats = [
+      {
+        id: "favorite",
+        title: "Favorite",
+        updatedAt: "2026-06-10T10:00:00Z",
+        messageCount: 1,
+        isFavorite: true,
+      },
+      {
+        id: "history",
+        title: "History",
+        updatedAt: "2026-06-10T09:00:00Z",
+        messageCount: 1,
+        isFavorite: false,
+      },
+    ];
+
+    expect(filterSavedChatsByTab(chats, "history").map((chat) => chat.id)).toEqual([
+      "favorite",
+      "history",
+    ]);
+    expect(filterSavedChatsByTab(chats, "favorites").map((chat) => chat.id)).toEqual(["favorite"]);
   });
 });
 

@@ -95,12 +95,14 @@ describe("FileChatStore", () => {
         title: "Older chat",
         updatedAt: "2026-06-10T10:05:00.000Z",
         messageCount: 1,
+        isFavorite: false,
       },
       {
         id: "chat-fixed",
         title: "How do local chats persist?",
         updatedAt: "2026-06-10T10:00:00.000Z",
         messageCount: 1,
+        isFavorite: false,
       },
     ]);
   });
@@ -136,6 +138,33 @@ describe("FileChatStore", () => {
     expect(second.updatedAt).toBe("2026-06-10T10:15:00.000Z");
     expect(second.messages).toHaveLength(2);
     expect(await store.loadChat(first.id)).toEqual(second);
+  });
+
+  it("persists favorite state without changing the saved chat history", async () => {
+    const store = new FileChatStore({ folder, createId: () => "favorite-chat" });
+    await store.saveChat({
+      messages: [{ role: "user", content: "Keep this history", createdAt: "2026-06-10T10:00:00Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
+    });
+
+    await store.setChatFavorite("favorite-chat", true);
+
+    expect(await store.listChats()).toEqual([
+      expect.objectContaining({ id: "favorite-chat", isFavorite: true }),
+    ]);
+    expect(await store.loadChat("favorite-chat")).toMatchObject({
+      isFavorite: true,
+      messages: [{ role: "user", content: "Keep this history" }],
+    });
+
+    await store.setChatFavorite("favorite-chat", false);
+
+    expect(await store.loadChat("favorite-chat")).toMatchObject({
+      isFavorite: false,
+      messages: [{ role: "user", content: "Keep this history" }],
+    });
   });
 
   it("persists segmented reasoning separately from the assistant answer", async () => {
@@ -251,6 +280,30 @@ describe("FileChatStore", () => {
     );
 
     await expect(store.loadChat("missing-settings")).resolves.toBeNull();
+  });
+
+  it("treats legacy saved chats without favorite state as not favorited", async () => {
+    const store = new FileChatStore({ folder });
+    await writeFile(
+      join(folder, "legacy.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: "legacy",
+        title: "Legacy chat",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+      }),
+      "utf8",
+    );
+
+    expect(await store.loadChat("legacy")).toMatchObject({ id: "legacy" });
+    expect(await store.listChats()).toEqual([
+      expect.objectContaining({ id: "legacy", isFavorite: false }),
+    ]);
   });
 
   it("rejects unsafe chat ids", async () => {

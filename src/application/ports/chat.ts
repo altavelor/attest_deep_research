@@ -12,5 +12,6 @@ export interface ChatRepository {
   loadChat(id: string): Promise<SavedChat | null>;
   saveChat(input: SaveChatInput): Promise<SavedChat>;
   renameChat(id: string, title: string): Promise<SavedChat | null>;
+  setChatFavorite(id: string, isFavorite: boolean): Promise<SavedChat | null>;
   deleteChat(id: string): Promise<void>;
 }

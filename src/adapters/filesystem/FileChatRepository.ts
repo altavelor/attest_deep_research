@@ -60,6 +60,7 @@ export class FileChatRepository implements ChatRepository {
         title: chat.title,
         updatedAt: chat.updatedAt,
         messageCount: chat.messages.filter((message) => message.kind !== "compact-summary").length,
+        isFavorite: chat.isFavorite === true,
       });
     }
 
@@ -89,6 +90,7 @@ export class FileChatRepository implements ChatRepository {
       lastAnswer: input.lastAnswer,
       attachedContextPaths: [...input.attachedContextPaths],
       chatSettings: input.chatSettings,
+      isFavorite: existing?.isFavorite === true,
     };
 
     await writeJsonAtomically(this.chatPath(id), chat);
@@ -109,6 +111,20 @@ export class FileChatRepository implements ChatRepository {
       title: normalizeTitle(title),
       updatedAt: this.now().toISOString(),
     };
+    await writeJsonAtomically(this.chatPath(id), chat);
+    return chat;
+  }
+
+  async setChatFavorite(id: string, isFavorite: boolean): Promise<SavedChat | null> {
+    assertSafeChatId(id);
+    await mkdir(this.folder, { recursive: true });
+    const existing = await this.readChatFile(id);
+
+    if (!existing) {
+      return null;
+    }
+
+    const chat: SavedChat = { ...existing, isFavorite };
     await writeJsonAtomically(this.chatPath(id), chat);
     return chat;
   }
