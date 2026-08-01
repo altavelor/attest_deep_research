@@ -92,6 +92,14 @@ describe("reasoning transcript UI", () => {
     expect(controller).toContain("await this.waitForFinalizingFrame()");
   });
 
+  it("renders the Finalizing timeline node before accepting the completed answer", () => {
+    const promotionStart = controller.indexOf('if (event.type === "checkpoint-promote")');
+    const promotionEnd = controller.indexOf('if (event.type === "answer-reset")', promotionStart);
+    const checkpointPromotion = controller.slice(promotionStart, promotionEnd);
+
+    expect(checkpointPromotion).toContain("this.options.renderActiveMessage()");
+  });
+
   it("renders at most one active workflow indicator", () => {
     expect(transcript).toContain("function renderWorkflowIndicator");
     expect(transcript).toContain("else if (isStreaming && !hasStreamingCheckpoint");
