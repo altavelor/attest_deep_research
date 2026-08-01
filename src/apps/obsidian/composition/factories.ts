@@ -53,15 +53,8 @@ import {
   resolveEffectiveReasoning,
   resolveEffectiveTools,
 } from "@adapters/settings";
-import {
-  createFetchFallbackProviders,
-  createWebSearchSources,
-  DuckDuckGoSearchProvider,
-} from "@adapters/web";
 import { FetchUrlStatusChecker } from "@adapters/web";
-import type { SearchProvider, WebSearchSource } from "@application/ports";
-import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
-import { DUCKDUCKGO_DESCRIPTOR } from "@core/web";
+import { WebSourceHealthTracker } from "@application/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
@@ -72,6 +65,7 @@ import {
   resolveIndexProfileForUse,
   requireIndexProfile,
 } from "./profileResolvers";
+import { createWebSearchProvider } from "./webSearchFactory";
 
 /**
  * Collaborators the composition factories need from the plugin host. Keeping
@@ -424,51 +418,11 @@ export function createQueryExpansionService(
   });
 }
 
-/**
- * Web search entry point for research tools. The query planner routes across
- * the enabled hub sources (DuckDuckGo is one of them, from the catalog row).
- * Page fetches run through the fallback chain: native → Jina → Zyte → Wayback.
- */
-export function createSearchProvider(ctx: CompositionContext): SearchProvider | undefined {
-  const settings = ctx.getSettings();
-  const runtime = {
-    fetch: obsidianRequestFetch,
+export function createSearchProvider(ctx: CompositionContext) {
+  return createWebSearchProvider({
+    settings: ctx.getSettings(),
     logger: ctx.logger,
-  };
-
-  const duckDuckGoProfile = settings.webSources.find(
-    (profile) => profile.sourceId === DUCKDUCKGO_DESCRIPTOR.id,
-  );
-  const duckDuckGo = new DuckDuckGoSearchProvider(runtime);
-  const duckDuckGoEnabled = duckDuckGoProfile?.enabled === true;
-  const hubSources = createWebSearchSources(settings.webSources, runtime);
-  const pool: WebSearchSource[] = [
-    ...(duckDuckGoEnabled
-      ? [Object.assign(duckDuckGo, { descriptor: DUCKDUCKGO_DESCRIPTOR })]
-      : []),
-    ...hubSources,
-  ];
-  if (pool.length === 0) {
-    return undefined;
-  }
-
-  const fetchDelegate = new FetchFallbackChain({
-    primary: duckDuckGo,
-    fallbacks: createFetchFallbackProviders(settings.webSources, duckDuckGo, {
-      fetch: obsidianRequestFetch,
-      logger: ctx.logger,
-    }),
-    onFallback: (providerId, failure) =>
-      ctx.logger?.logError(failure.ok ? undefined : failure.error, {
-        url: `fetch-fallback:${providerId}`,
-      }),
-  });
-
-  return new WebQueryPlanner({
-    registry: { enabledSources: () => pool },
-    fetchDelegate,
     health: ctx.webSourceHealth,
-    onSourceError: (sourceId, error) => ctx.logger?.logError(error, { url: `source:${sourceId}` }),
   });
 }
 
