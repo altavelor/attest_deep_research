@@ -26,13 +26,17 @@ export interface ToolCallViewInput {
   resultJson?: string;
   /** Site names resolved from preceding web-search results while a fetch is pending. */
   fetchTargets?: string[];
+  /** Search resources selected by the web query planner. */
+  searchSources?: string[];
 }
 
 export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const { name, args = {}, resultJson, status } = input;
   const fetchTargets =
-    name === "fetch_web_page" ? unique(input.fetchTargets ?? fetchedPageHosts(resultJson)) : [];
-  const intent = describeIntent(name, args, input.label, fetchTargets.length);
+    name === "fetch_web_page" && status === "pending"
+      ? unique(input.fetchTargets ?? fetchedPageHosts(resultJson))
+      : [];
+  const intent = describeIntent(name, args, input.label, fetchTargets.length, input.searchSources);
 
   if (status === "failed") {
     return {
@@ -111,6 +115,7 @@ function describeIntent(
   args: Record<string, unknown>,
   label: string,
   fetchTargetCount: number,
+  searchSources?: string[],
 ): string {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   const path = typeof args.path === "string" ? args.path.trim() : "";
@@ -122,7 +127,9 @@ function describeIntent(
     }
     case "search_web": {
       const count = typeof args.count === "number" ? ` (top ${args.count})` : "";
-      return query ? `Searching the web for “${query}”${count}` : "Searching the web";
+      const resource =
+        searchSources && searchSources.length > 0 ? searchSources.join(", ") : "the web";
+      return query ? `Searching ${resource} for “${query}”${count}` : `Searching ${resource}`;
     }
     case "fetch_web_page": {
       const count = fetchPageCount(args, fetchTargetCount);

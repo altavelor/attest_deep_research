@@ -28,7 +28,7 @@ describe("describeToolCall detailed intent", () => {
     expect(view.intent).toBe("Searching the vault for “riquet” (under “Notes”, top 5)");
   });
 
-  it("lists fetched page hosts in the web fetch intent", () => {
+  it("hides fetched page hosts after the web fetch completes", () => {
     const view = describeToolCall({
       name: "fetch_web_page",
       label: "fetch_web_page",
@@ -46,8 +46,8 @@ describe("describeToolCall detailed intent", () => {
       }),
     });
 
-    expect(view.intent).toBe("Fetching pages 3:");
-    expect(view.fetchTargets).toEqual(["recipes.example.com", "food.example.org"]);
+    expect(view.intent).toBe("Fetching pages 3");
+    expect(view.fetchTargets).toEqual([]);
   });
 
   it("lists requested page hosts while a web fetch is pending", () => {
@@ -61,6 +61,18 @@ describe("describeToolCall detailed intent", () => {
 
     expect(view.intent).toBe("Fetching pages 3:");
     expect(view.fetchTargets).toEqual(["recipes.example.com", "food.example.org"]);
+  });
+
+  it("names the search provider used for a web query", () => {
+    const view = describeToolCall({
+      name: "search_web",
+      label: "search_web",
+      status: "pending",
+      args: { query: "classic syrniki recipe" },
+      searchSources: ["DuckDuckGo", "Brave"],
+    });
+
+    expect(view.intent).toBe("Searching DuckDuckGo, Brave for “classic syrniki recipe”");
   });
 
   it("reports created-note size in the intent", () => {

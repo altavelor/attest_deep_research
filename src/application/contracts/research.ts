@@ -137,6 +137,8 @@ export type ResearchStreamEvent =
       args?: Record<string, unknown>;
       /** Site names resolved from the fetch result IDs before the tool starts. */
       fetchTargets?: string[];
+      /** Search resources selected by the web query planner. */
+      searchSources?: string[];
       /** Set when this call is nested inside a parent tool-call (e.g. run_subagent). */
       parentId?: string;
     }

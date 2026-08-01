@@ -551,6 +551,7 @@ function renderToolNode(
     args: item.args,
     resultJson: item.resultJson,
     fetchTargets,
+    searchSources: item.searchSources,
   });
   const node = listEl.createDiv({
     cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--tool ixplorer-chat__workflow-node--${item.status}`,

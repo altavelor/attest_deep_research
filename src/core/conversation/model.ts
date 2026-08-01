@@ -72,6 +72,7 @@ export type ChainItem =
       resultSummary?: string;
       args?: Record<string, unknown>;
       fetchTargets?: string[];
+      searchSources?: string[];
       resultJson?: string;
       /** Live phase of a nested sub-agent run (e.g. run_subagent). */
       phase?: string;

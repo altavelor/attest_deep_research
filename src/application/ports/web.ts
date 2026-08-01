@@ -90,6 +90,8 @@ export type WebDocumentFetchResult = WebDocumentFetchSuccess | WebPageFetchFailu
 
 export interface SearchProvider {
   search(query: string, options?: WebSearchOptions): Promise<SearchProviderResult[]>;
+  /** Human-readable sources the provider will query for this request. */
+  searchSourceLabels?(query: string, options?: WebSearchOptions): readonly string[];
   fetchPage?(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult>;
   /** Fetch only head metadata (title/OG/author/published) without page text. */
   fetchMetadata?(url: string, options?: WebPageFetchOptions): Promise<WebPageMetadataResult>;

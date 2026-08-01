@@ -216,6 +216,7 @@ export function nextChainToolCallStart(
   args?: Record<string, unknown>,
   parentId?: string,
   fetchTargets?: string[],
+  searchSources?: string[],
 ): ChatDisplayMessage[] {
   const last = messages.at(-1);
   const assistant =
@@ -231,6 +232,7 @@ export function nextChainToolCallStart(
     status: "pending",
     args,
     ...(fetchTargets && fetchTargets.length > 0 ? { fetchTargets } : {}),
+    ...(searchSources && searchSources.length > 0 ? { searchSources } : {}),
   };
   const chain = parentId ? appendChild(progress.chain, parentId, item) : [...progress.chain, item];
   const updated: ChatDisplayMessage = {
