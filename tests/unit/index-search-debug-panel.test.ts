@@ -140,14 +140,19 @@ describe("index-search debug panel", () => {
     const settingsTab = readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8");
     const plugin = readFileSync(resolve("src/apps/obsidian/main.ts"), "utf8");
     const view = readFileSync(resolve("src/apps/obsidian/ui/chat/IxplorerChatView.ts"), "utf8");
+    const composer = readFileSync(
+      resolve("src/apps/obsidian/ui/chat/ChatComposerController.ts"),
+      "utf8",
+    );
 
     expect(settingsTab).toContain("this.plugin.refreshChatViews()");
     expect(plugin).toContain("refreshChatViews(): void");
     expect(plugin).toContain("getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)");
     expect(view).toContain("redisplay(): void");
-    expect(view).toContain('const draft = this.textareaEl?.value ?? "";');
-    expect(view).toContain("this.textareaEl.value = draft;");
-    expect(view).toContain("this.setFormRunning(this.isRunning);");
+    expect(view).toContain("this.composer.render(chatPanel);");
+    expect(composer).toContain("const draft = this.getQuestionInput();");
+    expect(composer).toContain("this.refs.textareaEl.value = draft;");
+    expect(composer).toContain("this.setFormRunning(this.options.isRunning());");
   });
 
   it("preserves keyword fallback results and renders an accessible warning", () => {

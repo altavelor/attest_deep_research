@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 
 import {
   SaveChatInput,
@@ -17,13 +17,7 @@ import { AnswerNoteWriter } from "./research/AnswerNoteWriter";
 import { ToolOutputViewer } from "./toolOutputViewer";
 import { describeToolCall } from "./toolCallView";
 import type { ChainItem } from "@core/conversation";
-import {
-  ChatComposerRefs,
-  ComposerControls,
-  IndexProfileSelectOption,
-  renderAttachedContext as renderComposerAttachedContext,
-  renderChatComposer,
-} from "./ChatComposer";
+import { IndexProfileSelectOption } from "./ChatComposer";
 import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import {
   disposeChatTranscript,
@@ -53,7 +47,7 @@ import {
   resolveChatSettings,
   stripContextDiagnostics,
 } from "./chatViewHelpers";
-import { contextWindowStatus, searchUnavailableMessage } from "./chatViewStatus";
+import { searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
 import { stripMessageDiagnostics } from "@core/conversation";
@@ -61,6 +55,7 @@ import { citationTarget } from "./conversationFormatting";
 import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
 import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
+import { ChatComposerController } from "./ChatComposerController";
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
@@ -106,14 +101,7 @@ export class IxplorerChatView extends ItemView {
 
   private transcriptEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
-  private textareaEl: HTMLTextAreaElement | null = null;
-  private progressStatusEl: HTMLElement | null = null;
-  private contextIndicatorEl: HTMLElement | null = null;
-  private submitButtonEl: HTMLButtonElement | null = null;
-  private submitButtonTooltipEl: HTMLElement | null = null;
-  private attachedContextEl: HTMLElement | null = null;
-  private composerControls: ComposerControls | null = null;
-  private composerRefs: ChatComposerRefs | null = null;
+  private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
 
@@ -144,14 +132,37 @@ export class IxplorerChatView extends ItemView {
       onDeleteChat: (id) => void this.deleteSavedChat(id),
       refreshSavedChats: () => this.savedChatSession.refresh(),
     });
-    this.researchController = new ResearchQuestionController({
-      getQuestionInput: () => this.textareaEl?.value ?? "",
-      clearQuestionInput: () => {
-        if (this.textareaEl) {
-          this.textareaEl.value = "";
-          this.textareaEl.dispatchEvent(new Event("input"));
-        }
+    this.composer = new ChatComposerController({
+      getSettings: () => this.currentChatSettings,
+      getAvailableModels: () => this.services.getChatModelProfiles(),
+      getAvailableIndexes: () => this.services.getIndexProfiles(),
+      getContextFilePaths: () =>
+        this.app.vault
+          .getFiles()
+          .filter((file) => isContextDocumentPath(file.path))
+          .map((file) => file.path)
+          .sort(),
+      getResearchMode: () => this.currentResearchMode,
+      getAttachedContextPaths: () => this.attachedContextPaths,
+      isRunning: () => this.isRunning,
+      getContextWindowUsage: () => this.getContextWindowUsage(),
+      getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
+      onSubmit: () => void this.researchController.submitQuestion(),
+      onStop: () => {
+        this.researchController.stopRunningQuestion();
+        this.composer.setStopping();
       },
+      onOpenContextPicker: () => this.openContextPicker(),
+      onRemoveContextPath: (path) => this.removeAttachedContextPath(path),
+      onUpdateModel: (model) => void this.updateChatModel(model),
+      onUpdateIndex: (indexProfileId) => void this.updateIndexProfile(indexProfileId),
+      onUpdateContextMode: (contextMode) => void this.updateContextMode(contextMode),
+      onUpdateSearchMode: (searchMode) => void this.updateSearchMode(searchMode),
+      onUpdateResearchMode: (mode) => void this.updateResearchMode(mode),
+    });
+    this.researchController = new ResearchQuestionController({
+      getQuestionInput: () => this.composer.getQuestionInput(),
+      clearQuestionInput: () => this.composer.clearQuestionInput(),
       getMessages: () => this.messages,
       setMessages: (messages) => {
         this.messages = messages;
@@ -160,7 +171,7 @@ export class IxplorerChatView extends ItemView {
       setLastAnswer: (answer) => {
         this.lastAnswer = answer;
       },
-      getModelInputValue: () => this.composerControls?.getModel() ?? "",
+      getModelInputValue: () => this.composer.getModel(),
       getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
       getCurrentModelLabel: () => this.getCurrentChatModelLabel(),
       getContextLimitTokens: () => this.getContextLimitTokens(),
@@ -185,14 +196,14 @@ export class IxplorerChatView extends ItemView {
         ),
       clearContextPaths: () => {
         this.attachedContextPaths = [];
-        this.renderAttachedContext();
+        this.composer.renderAttachedContext();
       },
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
         this.editingMessageIndex = index;
       },
-      setProgressStatus: (message) => this.setProgressStatus(message),
-      setFormRunning: (running) => this.setFormRunning(running),
+      setProgressStatus: (message) => this.composer.setProgressStatus(message),
+      setFormRunning: (running) => this.composer.setFormRunning(running),
       setRunningState: (running) => {
         this.isRunning = running;
       },
@@ -247,7 +258,6 @@ export class IxplorerChatView extends ItemView {
   }
 
   private render(): void {
-    const draft = this.textareaEl?.value ?? "";
     this.diagnosticModal.close();
     if (this.transcriptEl) {
       disposeChatTranscript(this.transcriptEl);
@@ -277,44 +287,7 @@ export class IxplorerChatView extends ItemView {
     const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
     this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
 
-    this.composerRefs = renderChatComposer(chatPanel, {
-      settings: this.currentChatSettings,
-      availableModels: this.services.getChatModelProfiles(),
-      availableIndexes: this.services.getIndexProfiles(),
-      contextFilePaths: this.app.vault
-        .getFiles()
-        .filter((file) => isContextDocumentPath(file.path))
-        .map((file) => file.path)
-        .sort(),
-      researchMode: this.currentResearchMode,
-      onSubmit: () => void this.researchController.submitQuestion(),
-      onStop: () => {
-        this.researchController.stopRunningQuestion();
-        this.updateStoppingState();
-      },
-      onQuestionInput: () => this.updateSubmitAvailability(),
-      onOpenContextPicker: () => this.openContextPicker(),
-      onUpdateModel: (model) => void this.updateChatModel(model),
-      onUpdateIndex: (indexProfileId) => void this.updateIndexProfile(indexProfileId),
-      onUpdateContextMode: (contextMode) => void this.updateContextMode(contextMode),
-      onUpdateSearchMode: (searchMode) => {
-        void this.updateSearchMode(searchMode);
-        this.updateSubmitAvailability();
-      },
-      onUpdateResearchMode: (mode) => {
-        void this.updateResearchMode(mode);
-      },
-    });
-    this.progressStatusEl = this.composerRefs.progressStatusEl;
-    this.contextIndicatorEl = this.composerRefs.contextIndicatorEl;
-    this.textareaEl = this.composerRefs.textareaEl;
-    this.submitButtonTooltipEl = this.composerRefs.submitButtonTooltipEl;
-    this.submitButtonEl = this.composerRefs.submitButtonEl;
-    this.attachedContextEl = this.composerRefs.attachedContextEl;
-    this.composerControls = this.composerRefs.controls;
-    this.textareaEl.value = draft;
-    this.renderAttachedContext();
-    this.setFormRunning(this.isRunning);
+    this.composer.render(chatPanel);
 
     if (this.services.isDebugMode()) {
       const indexSearchRoot = root.createDiv({
@@ -367,25 +340,16 @@ export class IxplorerChatView extends ItemView {
       selectedPaths: this.attachedContextPaths,
       onSubmit: (paths) => {
         this.attachedContextPaths = paths;
-        this.renderAttachedContext();
+        this.composer.renderAttachedContext();
         void this.saveCurrentChat();
       },
     }).open();
   }
 
-  private renderAttachedContext(): void {
-    if (!this.attachedContextEl) {
-      return;
-    }
-
-    renderComposerAttachedContext(this.attachedContextEl, this.attachedContextPaths, (path) => {
-      this.attachedContextPaths = this.attachedContextPaths.filter(
-        (candidate) => candidate !== path,
-      );
-      this.renderAttachedContext();
-      void this.saveCurrentChat();
-    });
-    this.composerControls?.setAttachmentsPresent(this.attachedContextPaths.length > 0);
+  private removeAttachedContextPath(path: string): void {
+    this.attachedContextPaths = this.attachedContextPaths.filter((candidate) => candidate !== path);
+    this.composer.renderAttachedContext();
+    void this.saveCurrentChat();
   }
 
   private renderMessages(): void {
@@ -457,11 +421,7 @@ export class IxplorerChatView extends ItemView {
     }
 
     renderChatFollowUps(this.followUpsEl, followUps, (question) => {
-      if (this.textareaEl) {
-        this.textareaEl.value = question;
-        this.textareaEl.dispatchEvent(new Event("input"));
-        this.textareaEl.focus();
-      }
+      this.composer.setQuestionInput(question);
     });
   }
 
@@ -542,12 +502,12 @@ export class IxplorerChatView extends ItemView {
       ...this.currentChatSettings,
       chatModelProfileId: normalizedModel,
     };
-    if (this.composerControls?.getModel() !== this.currentChatSettings.chatModelProfileId) {
-      this.composerControls?.setModel(this.currentChatSettings.chatModelProfileId);
+    if (this.composer.getModel() !== this.currentChatSettings.chatModelProfileId) {
+      this.composer.setModel(this.currentChatSettings.chatModelProfileId);
     }
     await this.saveCurrentChat();
     this.renderMessages();
-    this.updateSubmitAvailability();
+    this.composer.updateSubmitAvailability();
   }
 
   private async updateIndexProfile(indexProfileId: string): Promise<void> {
@@ -557,8 +517,8 @@ export class IxplorerChatView extends ItemView {
       ...this.currentChatSettings,
       indexProfileId: normalizedIndex,
     };
-    if (this.composerControls?.getIndexProfileId() !== this.currentChatSettings.indexProfileId) {
-      this.composerControls?.setIndexProfileId(this.currentChatSettings.indexProfileId ?? "");
+    if (this.composer.getIndexProfileId() !== this.currentChatSettings.indexProfileId) {
+      this.composer.setIndexProfileId(this.currentChatSettings.indexProfileId ?? "");
     }
     await this.saveCurrentChat();
   }
@@ -583,76 +543,8 @@ export class IxplorerChatView extends ItemView {
     await this.saveCurrentChat();
   }
 
-  private updateStoppingState(): void {
-    if (!this.isRunning) {
-      return;
-    }
-
-    if (this.submitButtonEl) {
-      this.submitButtonEl.disabled = true;
-      this.submitButtonEl.dataset.mode = "stop";
-      this.submitButtonEl.empty();
-      setIcon(this.submitButtonEl, "loader");
-    }
-  }
-
-  private setProgressStatus(message: string | null): void {
-    if (!this.progressStatusEl) {
-      return;
-    }
-
-    this.progressStatusEl.setText(message ?? "");
-  }
-
-  private setFormRunning(running: boolean): void {
-    if (this.submitButtonEl) {
-      this.submitButtonEl.disabled = false;
-      this.submitButtonEl.dataset.mode = running ? "stop" : "ask";
-      this.submitButtonEl.empty();
-      setIcon(this.submitButtonEl, running ? "square" : "arrow-up");
-    }
-
-    if (this.textareaEl) {
-      this.textareaEl.disabled = running;
-    }
-
-    this.composerControls?.setDisabled(running);
-
-    this.updateSubmitAvailability();
-  }
-
   private getSearchMode(): ResearchSearchMode {
-    return this.composerControls?.getSearchMode() ?? "indexOnly";
-  }
-
-  private updateSubmitAvailability(): void {
-    if (!this.submitButtonEl) {
-      return;
-    }
-    this.updateContextWindowIndicator();
-
-    if (this.isRunning) {
-      this.submitButtonEl.disabled = false;
-      this.submitButtonEl.setAttr("title", "Stop the current answer");
-      this.submitButtonEl.setAttr("aria-label", "Stop the current answer");
-      this.submitButtonTooltipEl?.setAttr("title", "Stop the current answer");
-      return;
-    }
-
-    const unavailableMessage = this.getSearchUnavailableMessage();
-
-    if (unavailableMessage !== null) {
-      this.submitButtonEl.disabled = true;
-      this.submitButtonEl.setAttr("title", unavailableMessage);
-      this.submitButtonEl.setAttr("aria-label", `Ask unavailable: ${unavailableMessage}`);
-      this.submitButtonTooltipEl?.setAttr("title", unavailableMessage);
-      return;
-    }
-
-    this.submitButtonEl.disabled = false;
-    this.submitButtonEl.setAttr("title", "Ask");
-    this.submitButtonEl.setAttr("aria-label", "Ask");
-    this.submitButtonTooltipEl?.setAttr("title", "Ask");
+    return this.composer.getSearchMode();
   }
 
   private getSearchUnavailableMessage(): string | null {
@@ -664,29 +556,9 @@ export class IxplorerChatView extends ItemView {
     });
   }
 
-  private updateContextWindowIndicator(): void {
-    if (!this.contextIndicatorEl) {
-      return;
-    }
-
-    const usage = this.getContextWindowUsage();
-    if (!usage) {
-      this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", "0%");
-      this.contextIndicatorEl.setAttr("title", "Unknown model context window size");
-      this.contextIndicatorEl.setAttr("aria-label", "Unknown model context window size");
-      return;
-    }
-
-    const status = contextWindowStatus(usage.estimatedTokens, usage.limitTokens);
-    this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${status.usedPercent}%`);
-    this.contextIndicatorEl.toggleClass("is-warning", status.isWarning);
-    this.contextIndicatorEl.setAttr("title", status.title);
-    this.contextIndicatorEl.setAttr("aria-label", status.ariaLabel);
-  }
-
   private getContextWindowUsage(): { estimatedTokens: number; limitTokens: number } | null {
     return contextWindowUsage({
-      question: this.textareaEl?.value.trim() ?? "",
+      question: this.composer.getQuestionInput().trim(),
       messages: this.messages,
       limitTokens: this.getContextLimitTokens(),
       reservedOutputTokens: this.getReservedOutputTokens(),
