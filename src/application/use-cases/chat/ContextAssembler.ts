@@ -25,6 +25,12 @@ import {
   estimateTextTokens,
   ResearchChatHistoryMessage,
 } from "@core/research";
+import {
+  createContextBudget,
+  estimateChunksTokens,
+  estimateHistoryTokens,
+  packChunksByBudget,
+} from "./contextBudget";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
@@ -83,9 +89,6 @@ interface ContextCandidate {
 }
 
 const DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT = 10_000;
-const DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE = 0.45;
-const DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE = 0.35;
-const FALLBACK_TOKENS_PER_EVIDENCE_ITEM = 500;
 
 export class ContextAssembler {
   private readonly files: ContextFileProvider;
@@ -119,7 +122,7 @@ export class ContextAssembler {
         }
       : await this.discoverGraphContext(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
-    const budget = createBudget(request);
+    const budget = createContextBudget(request);
     const explicitEvidence: RetrievedChunk[] = [];
     const attachments: AttachedFileManifestEntry[] = [];
     let explicitTokens = 0;
@@ -450,28 +453,6 @@ export class ContextAssembler {
   }
 }
 
-function createBudget(request: ContextAssembleRequest): {
-  explicitTokens: number;
-  retrievalTokens: number;
-} {
-  if (!request.contextLimitTokens) {
-    const fallback = Math.max(1, request.evidenceLimit) * FALLBACK_TOKENS_PER_EVIDENCE_ITEM;
-    return {
-      explicitTokens: fallback,
-      retrievalTokens: fallback,
-    };
-  }
-
-  const reserved = request.reservedOutputTokens ?? 0;
-  const historyTokens = estimateHistoryTokens(request.chatHistory ?? []);
-  const available = Math.max(0, request.contextLimitTokens - reserved - historyTokens);
-
-  return {
-    explicitTokens: Math.max(0, Math.floor(available * DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE)),
-    retrievalTokens: Math.max(0, Math.floor(available * DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE)),
-  };
-}
-
 function selectExplicitChunks(
   chunks: ExtractedChunk[],
   request: ContextAssembleRequest,
@@ -564,32 +545,6 @@ function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): Retr
       return { ...chunk, score };
     })
     .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
-}
-
-function packChunksByBudget<T extends RetrievedChunk>(chunks: T[], budgetTokens: number): T[] {
-  const packed: T[] = [];
-  let usedTokens = 0;
-
-  for (const chunk of chunks) {
-    const tokens = estimateTextTokens(chunk.text);
-
-    if (usedTokens + tokens > budgetTokens) {
-      continue;
-    }
-
-    packed.push(chunk);
-    usedTokens += tokens;
-  }
-
-  return packed;
-}
-
-function estimateChunksTokens(chunks: Array<{ text: string }>): number {
-  return chunks.reduce((total, chunk) => total + estimateTextTokens(chunk.text), 0);
-}
-
-function estimateHistoryTokens(history: ResearchChatHistoryMessage[]): number {
-  return history.reduce((total, message) => total + estimateTextTokens(message.content), 0);
 }
 
 function createEmptyDiagnostics(contextMode: ContextMode): ContextDiagnostics {
