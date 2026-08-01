@@ -1,5 +1,3 @@
-import { App } from "obsidian";
-
 import { ChatModelClient } from "@adapters/model-provider";
 import { OpenAiResponsesClient } from "@adapters/model-provider";
 import { resolveResponsesProviderPolicy } from "@adapters/model-provider";
@@ -11,9 +9,9 @@ import { EpubExtractor } from "@adapters/extractors";
 import { Fb2Extractor } from "@adapters/extractors";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { PdfExtractor } from "@adapters/extractors";
-import { PdfTextCache } from "@adapters/extractors";
 import { TextExtractor } from "@adapters/extractors";
-import { IndexingService, IndexingState } from "@adapters/indexing";
+import { IndexingService } from "@adapters/indexing";
+import type { IndexingState } from "@adapters/indexing";
 import { FileVectorIndexStore, IndexProfile } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
@@ -37,24 +35,17 @@ import { ObsidianGraphContextProvider } from "@adapters/obsidian/ObsidianGraphCo
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
-import { PluginDebugLogger } from "@adapters/settings";
 import { resolveToolCapabilities } from "@adapters/settings";
 import { isResponsesCapabilityCurrent } from "@adapters/settings";
 import { capabilityCacheKey, recordObservedReasoningFormat } from "@adapters/settings";
 import type { ReasoningResponseFormat } from "@adapters/settings";
-import {
-  ChatModelProfile,
-  EmbeddingModelProfile,
-  IxplorerSettings,
-  ServerProfile,
-} from "@adapters/settings";
+import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import {
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
   resolveEffectiveTools,
 } from "@adapters/settings";
 import { FetchUrlStatusChecker } from "@adapters/web";
-import { WebSourceHealthTracker } from "@application/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
@@ -67,22 +58,8 @@ import {
 } from "./profileResolvers";
 import { createWebSearchProvider } from "./webSearchFactory";
 
-/**
- * Collaborators the composition factories need from the plugin host. Keeping
- * them behind this interface lets the factories build the DI graph without
- * reaching back into the Obsidian `Plugin` instance directly.
- */
-export interface CompositionContext {
-  app: App;
-  logger: PluginDebugLogger;
-  pdfTextCache: PdfTextCache;
-  /** Plugin-lifetime health state of web sources; planners are per-run, this is not. */
-  webSourceHealth: WebSourceHealthTracker;
-  getSettings(): IxplorerSettings;
-  saveSettings(): Promise<void>;
-  getVaultLocalPath(path: string): string;
-  getIndexingState(profileId: string): IndexingState;
-}
+export type { CompositionContext } from "./CompositionContext";
+import type { CompositionContext } from "./CompositionContext";
 
 export function createResearchService(
   ctx: CompositionContext,
