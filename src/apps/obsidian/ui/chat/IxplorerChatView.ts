@@ -58,11 +58,9 @@ import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
 import { stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
-import {
-  positionSavedChatsPopover,
-  renderSavedChatsEmptyState,
-  renderSavedChatsPopoverContent,
-} from "./history/SavedChatsPanel";
+import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
+import { SavedChatSessionController } from "./history/SavedChatSessionController";
+import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
 
 export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
 
@@ -101,10 +99,7 @@ export class IxplorerChatView extends ItemView {
   private attachedContextPaths: string[] = [];
   private currentChatSettings: SavedChatSettings;
   private currentResearchMode: ResearchMode = "instant";
-  private currentChatId: string | null = null;
-  private currentChatCreatedAt: string | null = null;
-  private savedChatSummaries: SavedChatSummary[] = [];
-  private historySearchQuery = "";
+  private readonly savedChatSession: SavedChatSessionController;
   private activePanel: IxplorerPanel = "chat";
   private isRunning = false;
   private editingMessageIndex: number | null = null;
@@ -119,12 +114,8 @@ export class IxplorerChatView extends ItemView {
   private attachedContextEl: HTMLElement | null = null;
   private composerControls: ComposerControls | null = null;
   private composerRefs: ChatComposerRefs | null = null;
-  private historyPopoverEl: HTMLElement | null = null;
-  private historyPopoverAnchorEl: HTMLElement | null = null;
+  private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
-  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
-    this.closeHistoryPopoverOnOutsidePointer(event);
-  };
 
   constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
     super(leaf);
@@ -136,6 +127,23 @@ export class IxplorerChatView extends ItemView {
     this.diagnosticModal = new DiagnosticReportModalController(this.app);
     this.answerNoteWriter = new AnswerNoteWriter(this.app);
     this.toolOutputViewer = new ToolOutputViewer(this.app);
+    this.savedChatSession = new SavedChatSessionController({
+      listSavedChats: () => this.services.listSavedChats(),
+      loadSavedChat: (id) => this.services.loadSavedChat(id),
+      saveChat: (input) => this.services.saveChat(input),
+      renameSavedChat: (id, title) => this.services.renameSavedChat(id, title),
+      deleteSavedChat: (id) => this.services.deleteSavedChat(id),
+      createSaveInput: () => this.createCurrentChatSaveInput(),
+    });
+    this.savedChatsPopover = new SavedChatsPopoverController({
+      hostEl: this.contentEl,
+      getSavedChats: () => this.savedChatSession.savedChats,
+      getCurrentChatId: () => this.savedChatSession.currentChatId,
+      onOpenChat: (id) => void this.loadSavedChat(id),
+      onRenameChat: (id, title) => void this.renameSavedChat(id, title),
+      onDeleteChat: (id) => void this.deleteSavedChat(id),
+      refreshSavedChats: () => this.savedChatSession.refresh(),
+    });
     this.researchController = new ResearchQuestionController({
       getQuestionInput: () => this.textareaEl?.value ?? "",
       clearQuestionInput: () => {
@@ -216,7 +224,7 @@ export class IxplorerChatView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    await this.refreshSavedChatSummaries();
+    await this.savedChatSession.refresh();
     this.render();
   }
 
@@ -225,10 +233,9 @@ export class IxplorerChatView extends ItemView {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
     }
-    document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
     this.citationPopover.close();
     this.diagnosticModal.close();
-    this.closeHistoryPopover();
+    this.savedChatsPopover.close();
     if (this.transcriptEl) {
       disposeChatTranscript(this.transcriptEl);
     }
@@ -343,11 +350,10 @@ export class IxplorerChatView extends ItemView {
     this.attachedContextPaths = [];
     this.currentChatSettings = createDefaultChatSettings(this.services);
     this.currentResearchMode = "instant";
-    this.currentChatId = null;
-    this.currentChatCreatedAt = null;
+    this.savedChatSession.clearCurrent();
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
-    await this.refreshSavedChatSummaries();
+    await this.savedChatSession.refresh();
     this.render();
   }
 
@@ -437,7 +443,7 @@ export class IxplorerChatView extends ItemView {
 
   private renderEmptyChatState(containerEl: HTMLElement): void {
     renderSavedChatsEmptyState(containerEl, {
-      savedChats: this.savedChatSummaries,
+      savedChats: this.savedChatSession.savedChats,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
       onRenameChat: (id, title) => this.renameSavedChat(id, title),
@@ -460,53 +466,22 @@ export class IxplorerChatView extends ItemView {
   }
 
   private async toggleHistoryPopover(anchorEl: HTMLElement): Promise<void> {
-    if (this.historyPopoverEl) {
-      this.closeHistoryPopover();
-      return;
-    }
-
-    await this.refreshSavedChatSummaries();
-    const popover = this.contentEl.createDiv({ cls: "ixplorer-chat__history-popover" });
-    this.historyPopoverEl = popover;
-    this.historyPopoverAnchorEl = anchorEl;
-    this.renderHistoryPopoverContent(popover);
-    positionSavedChatsPopover(this.contentEl, anchorEl, popover);
-    document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
-  }
-
-  private renderHistoryPopoverContent(containerEl: HTMLElement): void {
-    renderSavedChatsPopoverContent(containerEl, {
-      savedChats: this.savedChatSummaries,
-      currentChatId: this.currentChatId,
-      searchQuery: this.historySearchQuery,
-      onSearchQueryChange: (query) => {
-        this.historySearchQuery = query;
-      },
-      onOpenChat: (id) => void this.loadSavedChat(id),
-      onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
-      onRenameChat: (id, title) => this.renameSavedChat(id, title),
-      onDeleteChat: (id) => this.deleteSavedChat(id),
-    });
+    await this.savedChatsPopover.toggle(anchorEl);
   }
 
   private async renameSavedChat(id: string, title: string): Promise<void> {
-    await this.services.renameSavedChat(id, title);
-    await this.refreshSavedChatSummaries();
-    if (this.historyPopoverEl) {
-      this.renderHistoryPopoverContent(this.historyPopoverEl);
+    await this.savedChatSession.rename(id, title);
+    if (this.savedChatsPopover.isOpen()) {
+      this.savedChatsPopover.render();
     } else {
       this.renderMessages();
     }
   }
 
   private async deleteSavedChat(id: string): Promise<void> {
-    await this.services.deleteSavedChat(id);
-    if (this.currentChatId === id) {
-      this.currentChatId = null;
-    }
-    await this.refreshSavedChatSummaries();
-    if (this.historyPopoverEl) {
-      this.renderHistoryPopoverContent(this.historyPopoverEl);
+    await this.savedChatSession.delete(id);
+    if (this.savedChatsPopover.isOpen()) {
+      this.savedChatsPopover.render();
     } else {
       this.render();
     }
@@ -514,42 +489,19 @@ export class IxplorerChatView extends ItemView {
   }
 
   private closeHistoryPopover(): void {
-    document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
-    this.historyPopoverEl?.remove();
-    this.historyPopoverEl = null;
-    this.historyPopoverAnchorEl = null;
-  }
-
-  private closeHistoryPopoverOnOutsidePointer(event: PointerEvent): void {
-    if (!this.historyPopoverEl) {
-      return;
-    }
-
-    const target = event.target;
-    if (!(target instanceof Node)) {
-      return;
-    }
-
-    if (this.historyPopoverEl.contains(target) || this.historyPopoverAnchorEl?.contains(target)) {
-      return;
-    }
-
-    this.closeHistoryPopover();
+    this.savedChatsPopover.close();
   }
 
   private async loadSavedChat(id: string): Promise<void> {
-    await this.saveCurrentChat();
-    const chat = await this.services.loadSavedChat(id);
+    const chat = await this.savedChatSession.load(id);
 
     if (!chat) {
       new Notice("Saved chat was not found.");
-      await this.refreshSavedChatSummaries();
+      await this.savedChatSession.refresh();
       this.render();
       return;
     }
 
-    this.currentChatId = chat.id;
-    this.currentChatCreatedAt = chat.createdAt;
     this.messages = chat.messages;
     this.lastAnswer = chat.lastAnswer;
     this.attachedContextPaths = [...chat.attachedContextPaths];
@@ -557,18 +509,20 @@ export class IxplorerChatView extends ItemView {
     this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
-    await this.refreshSavedChatSummaries();
+    await this.savedChatSession.refresh();
     this.render();
   }
 
   private async saveCurrentChat(): Promise<void> {
+    await this.savedChatSession.saveCurrent();
+  }
+
+  private createCurrentChatSaveInput(): Omit<SaveChatInput, "id" | "createdAt"> | null {
     if (this.messages.length === 0) {
-      return;
+      return null;
     }
 
-    const saved = await this.services.saveChat({
-      id: this.currentChatId ?? undefined,
-      createdAt: this.currentChatCreatedAt ?? undefined,
+    return {
       title: inferChatTitle(this.messages),
       messages: this.services.isDebugMode()
         ? this.messages
@@ -578,14 +532,7 @@ export class IxplorerChatView extends ItemView {
         : stripContextDiagnostics(this.lastAnswer),
       attachedContextPaths: this.attachedContextPaths,
       chatSettings: this.currentChatSettings,
-    });
-    this.currentChatId = saved.id;
-    this.currentChatCreatedAt = saved.createdAt;
-    await this.refreshSavedChatSummaries();
-  }
-
-  private async refreshSavedChatSummaries(): Promise<void> {
-    this.savedChatSummaries = await this.services.listSavedChats();
+    };
   }
 
   private async updateChatModel(model: string): Promise<void> {
