@@ -182,4 +182,34 @@ describe("index-search debug panel", () => {
 
     expect(availabilityUpdater).toContain("this.semanticError = null;");
   });
+
+  it("uses the host-selected profile for the first panel preflight", () => {
+    const controller = readFileSync(
+      resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
+      "utf8",
+    );
+    const renderPanel = controller.slice(
+      controller.indexOf("private renderPanel"),
+      controller.indexOf("private renderResults"),
+    );
+
+    expect(renderPanel).toContain("const selectedProfileId = this.defaultSelectedProfileId();");
+    expect(renderPanel).toContain("warning: this.warning(selectedProfileId)");
+    expect(renderPanel).toContain("isSearchBlocked: this.isSearchBlocked(selectedProfileId)");
+  });
+
+  it("keeps source previews aligned with explicit web-search routing", () => {
+    const strategy = readFileSync(
+      resolve("src/application/use-cases/research/strategies/ThinkingResearchStrategy.ts"),
+      "utf8",
+    );
+    const sourceResolver = strategy.slice(
+      strategy.indexOf("function resolveSearchSources"),
+      strategy.indexOf("function isChunkList"),
+    );
+
+    expect(sourceResolver).toContain("searchSourceOptions(args)");
+    expect(sourceResolver).toContain("isWebQueryIntent(args?.category)");
+    expect(sourceResolver).toContain("isWebQueryRecency(args?.recency)");
+  });
 });

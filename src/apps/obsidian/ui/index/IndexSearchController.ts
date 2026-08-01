@@ -60,13 +60,14 @@ export class IndexSearchController {
       return;
     }
 
+    const selectedProfileId = this.defaultSelectedProfileId();
     const refs = renderIndexSearchPanel(this.rootEl, {
       profiles: this.ctx.getIndexProfiles(),
-      selectedProfileId: this.ctx.getSelectedIndexProfileId(),
+      selectedProfileId,
       results: this.results,
       error: this.error,
-      warning: this.warning(),
-      isSearchBlocked: this.isSearchBlocked(),
+      warning: this.warning(selectedProfileId),
+      isSearchBlocked: this.isSearchBlocked(selectedProfileId),
       isSearching: this.isSearching,
       onSubmit: () => void this.submitSearch(),
       onProfileChange: () => this.updateSearchAvailability(),
@@ -145,12 +146,12 @@ export class IndexSearchController {
     this.renderResults();
   }
 
-  private isSearchBlocked(): boolean {
-    return Boolean(this.ctx.getEmbedderWarning(this.selectedProfileId()));
+  private isSearchBlocked(profileId = this.selectedProfileId()): boolean {
+    return Boolean(this.ctx.getEmbedderWarning(profileId));
   }
 
-  private warning(): string | null {
-    const preflightWarning = this.ctx.getEmbedderWarning(this.selectedProfileId());
+  private warning(profileId = this.selectedProfileId()): string | null {
+    const preflightWarning = this.ctx.getEmbedderWarning(profileId);
     if (preflightWarning) {
       return preflightWarning;
     }
@@ -164,6 +165,10 @@ export class IndexSearchController {
       return this.refs.profileEl.value;
     }
 
+    return this.defaultSelectedProfileId();
+  }
+
+  private defaultSelectedProfileId(): string {
     const profiles = this.ctx.getIndexProfiles();
     const configuredProfile = profiles.find(
       (profile) =>
