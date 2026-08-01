@@ -153,12 +153,6 @@ export class ResearchService implements ConversationEngine {
       runToolLoop: options.runToolLoop,
     });
 
-    // The universal sub-agent reuses the parent chat model. It is created whenever
-    // there is a chat model (always): callers pass a per-turn `toolContext` so the
-    // `run_subagent` / `map_sources` tools it backs mirror whatever the parent has
-    // this turn (index/web/notes). The search provider is only a web-only *fallback*
-    // for the rare call with no `toolContext`, so an index-only profile (no web)
-    // still gets a working sub-agent — the corpus fan-out (map_sources) needs it.
     const subAgentRunner: SubAgentPort = new SubAgentRunner({
       toolsetFactory: options.toolsetFactory,
       ...(options.searchProvider ? { searchProvider: options.searchProvider } : {}),
@@ -245,9 +239,6 @@ export class ResearchService implements ConversationEngine {
     if (policy.strategy === "thinking") {
       const outcome = yield* this.thinking.execute(ctx);
       if (outcome.kind === "completed" || outcome.kind === "cancelled") return;
-      // Thinking attempt failed. If it gathered partial evidence, synthesize a
-      // best-effort answer from it; otherwise fall through to the deterministic
-      // instant pipeline so a diagnostic report is still produced.
       const partialEvidence = outcome.answer.evidence ?? [];
       if (partialEvidence.length > 0) {
         yield { type: "status", message: "Synthesizing from partial results…" };

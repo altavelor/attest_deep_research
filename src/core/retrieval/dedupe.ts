@@ -48,8 +48,6 @@ export function dedupeNearDuplicateChunks(chunks: readonly RetrievedChunk[]): Re
 }
 
 function isNearDuplicate(kept: Kept, shingles: Set<string>, tokenCount: number): boolean {
-  // When either text is too short for 8-grams, compare unigram token sets instead
-  // (a stricter threshold, since short texts overlap more by chance).
   if (kept.tokenCount < SHINGLE_SIZE || tokenCount < SHINGLE_SIZE) {
     return jaccard(kept.shingles, shingles) >= SHORT_TEXT_THRESHOLD;
   }

@@ -64,9 +64,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       return { kind: "completed" };
     }
     if (thinking.result.reason === "cancelled") return { kind: "cancelled" };
-    // All non-cancel failures (including provider-error) return to the dispatcher
-    // so the deterministic fallback still produces a diagnostic report. Throwing
-    // here would surface a generic error with no diagnostics to debug from.
     return {
       kind: "failed",
       failure: thinking.result,
@@ -91,8 +88,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
           reservedOutputTokens: this.deps.reservedOutputTokens,
           evidenceLimit: this.deps.evidenceLimit,
           skipRetrieval: true,
-          // With note tools the model reads large attachments itself (read_note);
-          // without them excerpts remain the only way to deliver the content.
           largeAttachmentsAsReferences: this.deps.noteTools !== undefined,
           graph: {
             enabled: false,
@@ -102,7 +97,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
           },
         })
       : undefined;
-    // Active note is read upfront and passed as explicit evidence (not via tool loop)
     let activeNoteEvidence: RetrievedChunk[] = [];
     if (request.includeActiveFile && request.activeFilePath && this.deps.noteTools) {
       try {
@@ -123,9 +117,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             }));
           }
         }
-      } catch {
-        // Silently ignore — active note is optional context
-      }
+      } catch {}
     }
 
     const created = this.deps.toolsetFactory({
@@ -146,7 +138,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
     });
-    // When the user wrote @run_subagent, compel at least one run_subagent call.
     const effectivePolicy =
       request.forceSubAgent === true && created.tools.has(SUB_AGENT_TOOL)
         ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
@@ -159,7 +150,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       attachedFiles: assembled?.attachments,
       toolContext: {
         coreVariant: searchMode === "none" ? "vault" : "research",
-        // Source of truth: exactly the tools the runtime registered for this run.
         availableTools: created.tools.definitions().map((d) => d.function.name),
         indexDescription: indexDescription?.text,
       },

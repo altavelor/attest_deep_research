@@ -46,9 +46,7 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
         if (this.isValid(parsed)) {
           items.push(parsed);
         }
-      } catch {
-        // Повреждённый sidecar не валит инвентарь — источник просто пере-обогатится.
-      }
+      } catch {}
     }
     return items.sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }

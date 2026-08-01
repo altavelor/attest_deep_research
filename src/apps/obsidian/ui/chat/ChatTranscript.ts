@@ -265,9 +265,6 @@ export function patchActiveAssistantMessage(
   const answerEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__answer-content");
   if (!progressEl || !answerEl) return false;
   const contentEl = progressEl.parentElement;
-  // Capture per-node open/expanded state from the live DOM before destroying it. The chain
-  // items are recreated via spread on every update, so the DOM is the only source of truth
-  // for which "Thinking" blocks the user opened and which tool cells they expanded.
   const uiState = captureWorkflowUiState(progressEl);
   progressEl.empty();
   const hasWorkflow = renderWorkflowNodes(progressEl, message, options, uiState);
@@ -368,13 +365,9 @@ function renderWorkflowNodes(
           uiState,
         });
       } else if (item.kind === "tool-call" && options.isDebugMode) {
-        // Tool-call cards (args + result) are a debug-only surface; regular
-        // users only see reasoning and the final answer.
         renderToolNode(listEl, item, options, uiState);
       }
     }
-    // A tool-only chain renders nothing outside debug mode — drop the empty
-    // rail so it doesn't leave a stray divider above the answer.
     if (listEl.childElementCount === 0) {
       listEl.remove();
       return false;
@@ -552,10 +545,6 @@ function renderToolCell(
   const bodyEl = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-body" });
   renderToolCellBody(bodyEl, cell, options);
 
-  // The inline cell is a clamped preview; clicking (or Enter/Space) opens the
-  // untruncated payload in a tab. But the text must stay selectable, so a click
-  // that ends a text selection copies rather than navigates — only a bare click
-  // opens the detail tab.
   wrap.addEventListener("click", () => {
     if (hasTextSelectionWithin(wrap)) return;
     cellOptions.onOpen();

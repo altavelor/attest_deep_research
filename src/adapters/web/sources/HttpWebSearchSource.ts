@@ -66,9 +66,6 @@ export class HttpWebSearchSource implements WebSearchSource {
       throw this.failure("not-configured", "is not configured.");
     }
 
-    // Keyword APIs match SERP operators and date words literally (usually to
-    // zero results); sanitize the query and hand the intent over as structured
-    // fields for buildRequest to map onto native API parameters.
     let effectiveQuery = trimmedQuery;
     let domains: string[] = [];
     if (this.definition.supportsSiteOperator !== true) {
@@ -170,9 +167,6 @@ export class HttpWebSearchSource implements WebSearchSource {
   }
 
   private httpFailure(status: number): IxplorerError {
-    // 401/403 and 429 are surfaced distinctly (via details.reason) so the hub
-    // can auto-suspend the source (bad key vs. exhausted quota) instead of
-    // retrying blindly.
     if (status === 401 || status === 403) {
       return this.failure("unauthorized", `rejected the credentials (HTTP ${status}).`, undefined, {
         status,

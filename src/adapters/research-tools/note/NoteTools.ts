@@ -223,8 +223,6 @@ export class NoteToolService {
     const mode = args.mode === "append" || args.mode === "prepend" ? args.mode : "replace";
 
     const before = await writer.readFile(path);
-    // Continue footnote numbering past any already present in the file so appended or
-    // prepended citations do not collide with existing ones.
     const startNumber = mode === "replace" ? 1 : maxFootnoteNumber(before) + 1;
     const content = applyNoteCitations(rawContent, this.citations(), startNumber).content;
     if (mode === "replace") {
@@ -240,7 +238,6 @@ export class NoteToolService {
       ok: true,
       path,
       mode,
-      // Display-only fields consumed by the chat UI to render an edit diff.
       before: capDiffText(before),
       after: capDiffText(after),
     });

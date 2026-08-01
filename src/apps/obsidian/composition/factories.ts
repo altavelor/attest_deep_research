@@ -104,8 +104,6 @@ export function createResearchService(
   const contextExtractors = createContextExtractorsForProfile(ctx, indexProfile);
   const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
   const toolsEnabled = resolveEffectiveTools(chatProfile);
-  // A single vault writer backs both note mutations and document downloads; both
-  // are gated by the profile's mutation consent.
   const vaultWriter = chatProfile.noteMutationAccess ? new ObsidianVaultWriter(ctx.app) : undefined;
   let effectiveProtocol = resolveEffectiveChatApiProtocol(chatProfile);
   if (
@@ -157,7 +155,9 @@ export function createResearchService(
       maxTokens: chatProfile.maxTokens,
     },
     contextLimitTokens: chatProfile.capabilities?.contextLength,
-    queryExpansion: createQueryExpansionService(ctx, chatProfile, chatServer),
+    ...(settings.expandSearchQuery
+      ? { queryExpansion: createQueryExpansionService(ctx, chatProfile, chatServer) }
+      : {}),
     contextAssembler: new ContextAssembler({
       files: contextFiles,
       extractors: contextExtractors,
@@ -436,8 +436,6 @@ export function createSearchProvider(ctx: CompositionContext): SearchProvider | 
     logger: ctx.logger,
   };
 
-  // Always constructed: its fetch core serves page fetches even when the
-  // DuckDuckGo search row is disabled.
   const duckDuckGoProfile = settings.webSources.find(
     (profile) => profile.sourceId === DUCKDUCKGO_DESCRIPTOR.id,
   );
@@ -475,7 +473,6 @@ export function createSearchProvider(ctx: CompositionContext): SearchProvider | 
 }
 
 export function createExtractorsForProfile(ctx: CompositionContext, indexProfile: IndexProfile) {
-  // Indexing scopes markdown extraction to the configured folders/globs.
   return buildExtractors(ctx, indexProfile, { scopedMarkdown: true });
 }
 
@@ -483,7 +480,6 @@ export function createContextExtractorsForProfile(
   ctx: CompositionContext,
   indexProfile: IndexProfile,
 ) {
-  // Context assembly reads explicitly requested files, so markdown is unscoped.
   return buildExtractors(ctx, indexProfile, { scopedMarkdown: false });
 }
 

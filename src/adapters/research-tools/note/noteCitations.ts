@@ -54,13 +54,10 @@ export function applyNoteCitations(
   const rewritten = content.replace(
     /\[([^\]\n]+)\]/g,
     (match, inner: string, offset: number, source: string) => {
-      // Leave markdown links `[label](target)` intact.
       if (source[offset + match.length] === "(") {
         return match;
       }
       const token = inner.trim();
-      // URL handle `[url:https://…]` — collapse into a footnote when the URL is a
-      // known citation; otherwise leave it for the linkify pass below.
       if (token.startsWith("url:")) {
         const validated = validatePublicWebUrl(token.slice("url:".length).trim());
         if (!validated.ok) return match;
@@ -72,7 +69,6 @@ export function applyNoteCitations(
     },
   );
 
-  // Any `[url:…]` not resolved to a footnote becomes a plain clickable link.
   const linked = linkifyUrlCitations(rewritten);
 
   if (order.length === 0) {

@@ -33,8 +33,6 @@ class DiagnosticReportModal extends Modal {
   }
 
   onOpen(): void {
-    // Readable view, raw view, and the downloadable HTML all come from the
-    // same v3 report — one report, three hosts.
     const report = buildDiagnosticReportV3(this.diagnostics);
     const rawJson = JSON.stringify(report, null, 2);
     this.modalEl.addClass("ixplorer-chat__diagnostic-modal");

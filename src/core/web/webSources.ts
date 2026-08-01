@@ -74,7 +74,6 @@ export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
  * Sources selectable in settings, in planner-preference order within category.
  */
 export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
-  // --- General SERP ---
   DUCKDUCKGO_DESCRIPTOR,
   {
     id: "brave",
@@ -119,7 +118,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     homepage: "https://docs.searxng.org/",
     freeTierNote: "Free (own instance; JSON format must be enabled)",
   },
-  // --- LLM-oriented / neural ---
   {
     id: "tavily",
     label: "Tavily",
@@ -157,7 +155,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     homepage: "https://firecrawl.dev/",
     freeTierNote: "Free tier credits",
   },
-  // --- Academic ---
   {
     id: "arxiv",
     label: "arXiv",
@@ -198,7 +195,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     freeTierNote: "Free, no key",
     languages: ["en"],
   },
-  // --- Encyclopedia ---
   {
     id: "wikipedia",
     label: "Wikipedia",
@@ -208,7 +204,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     homepage: "https://www.mediawiki.org/wiki/API:Search",
     freeTierNote: "Free, no key",
   },
-  // --- Developer / community ---
   {
     id: "github",
     label: "GitHub",
@@ -239,7 +234,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     freeTierNote: "Free, no key",
     languages: ["en"],
   },
-  // --- Page fetching ---
   {
     id: "zyte",
     label: "Zyte API",
@@ -250,7 +244,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     freeTierNote: "Pay-as-you-go ($5 trial credit); used as a page-fetch fallback",
     capabilities: { search: false, fetchPage: true },
   },
-  // --- News ---
   {
     id: "newsapi",
     label: "NewsAPI.org",

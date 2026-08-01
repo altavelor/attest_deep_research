@@ -97,7 +97,6 @@ export interface IxplorerSettings {
   indexProfiles: IndexProfile[];
   includeFolders: string[];
   excludeGlobs: string[];
-  /** Hub of external search sources; entries exist only for sources the user configured. */
   webSources: WebSourceProfile[];
   showChatIndexControl: boolean;
   includeActiveFileContext: boolean;
@@ -106,7 +105,7 @@ export interface IxplorerSettings {
   expandFilteredContextThroughLinks: boolean;
   graphContextDepth: number;
   useWebWhenFreshnessNeeded: boolean;
-  /** Default vault folder for documents downloaded on demand (PDFs etc.). */
+  expandSearchQuery: boolean;
   downloadFolder: string;
   debugMode: boolean;
   modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;

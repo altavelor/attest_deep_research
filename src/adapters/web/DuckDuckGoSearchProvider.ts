@@ -71,10 +71,8 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly rateLimitBackoffMs: number;
   private readonly now: () => Date;
   private readonly logger?: PluginRequestLogger;
-  // Serializes + spaces all outbound *search* requests across concurrent callers.
   private requestChain: Promise<void> = Promise.resolve();
   private lastRequestAt = 0;
-  // Page fetches use a separate per-host throttle (concurrent across hosts).
   private readonly pageThrottle: HostRequestThrottle;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
@@ -239,9 +237,6 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 
   /** Shared fetch core for fetchPage/fetchMetadata/fetchDocument: follows redirects, reads bounded body. */
-  // Throttled per host so a batch fetch spaces same-host hits but fans out across
-  // distinct hosts. Keyed on the request host (redirect hops inside a single
-  // logical fetch are not re-throttled — they run within this one slot).
   private fetchRawPage(
     url: string,
     options: WebPageFetchOptions,
@@ -456,8 +451,6 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     });
   }
 
-  // No search gate here: throttling is applied once per logical page fetch in
-  // fetchRawPage (so redirect hops don't each pay the per-host interval).
   private requestPage(url: string, timeoutMs: number): Promise<Response> {
     return this.requestPageNow(url, timeoutMs);
   }

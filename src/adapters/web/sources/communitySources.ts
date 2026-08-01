@@ -63,8 +63,6 @@ export const stackExchangeDefinition: WebSourceDefinition = {
 export const hackerNewsDefinition: WebSourceDefinition = {
   descriptor: descriptor("hackernews"),
   buildRequest: ({ query, limit, freshFrom }) => {
-    // With a freshness window, `search_by_date` + a created_at floor keeps out
-    // popular-but-ancient threads that dominate the default relevance ranking.
     const endpoint = freshFrom ? "search_by_date" : "search";
     const numericFilters = freshFrom
       ? `&numericFilters=${encodeURIComponent(
@@ -104,8 +102,6 @@ export const newsApiDefinition: WebSourceDefinition = {
     const url = new URL("https://newsapi.org/v2/everything");
     url.searchParams.set("q", query);
     url.searchParams.set("pageSize", String(limit));
-    // Freshness beats relevance for time-bounded queries: `from` bounds the
-    // window and publishedAt ordering surfaces the newest articles first.
     url.searchParams.set("sortBy", freshFrom ? "publishedAt" : "relevancy");
     if (freshFrom) {
       url.searchParams.set("from", freshFrom);

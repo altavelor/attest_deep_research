@@ -47,7 +47,6 @@ export const googleCseDefinition: WebSourceDefinition = {
     url.searchParams.set("key", credentials.apiKey ?? "");
     url.searchParams.set("cx", credentials.engineId ?? "");
     url.searchParams.set("q", query);
-    // CSE caps `num` at 10.
     url.searchParams.set("num", String(Math.min(limit, 10)));
     if (recency) {
       url.searchParams.set("dateRestrict", { day: "d1", week: "w1", month: "m1" }[recency]);

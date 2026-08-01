@@ -154,7 +154,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit: this.deps.evidenceLimit,
-      toolsEnabled: this.deps.toolsEnabled,
+      toolsEnabled: policy.reason === "instant-selected" ? false : this.deps.toolsEnabled,
       retrievalDiagnostics: isRagDebugIntent(question)
         ? buildRagDiagnosticSnapshot(diagnostics)
         : undefined,

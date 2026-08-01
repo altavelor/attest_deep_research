@@ -56,7 +56,7 @@ export function resolveCitationTokens(
       continue;
     }
     const validated = validatePublicWebUrl(token.slice("url:".length).trim());
-    if (!validated.ok) continue; // malformed/unsafe URL — not a citation we can honor
+    if (!validated.ok) continue;
     const evidenceId = urlToEvidenceId.get(validated.url);
     if (evidenceId) ids.add(evidenceId);
     else unresolvedUrls.add(validated.url);

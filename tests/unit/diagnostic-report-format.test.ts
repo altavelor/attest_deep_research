@@ -6,8 +6,9 @@ import {
   isNoteworthyRound,
   toolCallSummary,
 } from "@apps/obsidian/ui/diagnostics/report/format";
+import { buildReasoningSection } from "@apps/obsidian/ui/diagnostics/report/sections";
 import { ThinkingLoopRound } from "@apps/obsidian/ui/diagnostics/report/types";
-import { ToolCallDiagnostic } from "@core/diagnostics";
+import { ContextDiagnostics, ToolCallDiagnostic } from "@core/diagnostics";
 
 function call(overrides: Partial<ToolCallDiagnostic>): ToolCallDiagnostic {
   return {
@@ -32,6 +33,56 @@ function round(overrides: Partial<ThinkingLoopRound>): ThinkingLoopRound {
     ...overrides,
   };
 }
+
+describe("buildReasoningSection tool-loop reconciliation", () => {
+  it("reports tool calls recorded in d.tools even when the loop counters are hardcoded to 0", () => {
+    const diagnostics = {
+      thinking: {
+        policyReason: "instant-selected",
+        requiredTools: [],
+        bootstrapChoice: { type: "auto" },
+        satisfiedTools: [],
+        repairedTools: [],
+        rounds: 0,
+        totalCalls: 0,
+        duplicateCalls: 0,
+        duplicatedCost: false,
+      },
+      tools: [
+        call({ id: "a", round: 1 }),
+        call({ id: "b", round: 1 }),
+        call({ id: "c", round: 2 }),
+      ],
+    } as unknown as ContextDiagnostics;
+
+    const section = buildReasoningSection(diagnostics);
+
+    expect(section.thinkingLoop?.totalCalls).toBe(3);
+    expect(section.thinkingLoop?.totalRounds).toBe(2);
+  });
+
+  it("keeps the strategy-reported counters when they already exceed the tool count", () => {
+    const diagnostics = {
+      thinking: {
+        policyReason: "thinking-selected",
+        requiredTools: [],
+        bootstrapChoice: { type: "auto" },
+        satisfiedTools: [],
+        repairedTools: [],
+        rounds: 3,
+        totalCalls: 5,
+        duplicateCalls: 0,
+        duplicatedCost: false,
+      },
+      tools: [call({ id: "a", round: 1 })],
+    } as unknown as ContextDiagnostics;
+
+    const section = buildReasoningSection(diagnostics);
+
+    expect(section.thinkingLoop?.totalCalls).toBe(5);
+    expect(section.thinkingLoop?.totalRounds).toBe(3);
+  });
+});
 
 describe("diagnostic report format helpers", () => {
   it("detects an empty keyword search result", () => {

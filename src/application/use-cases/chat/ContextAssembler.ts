@@ -272,10 +272,6 @@ export class ContextAssembler {
       add(path, "mention");
     }
 
-    // Attached files are always explicit prompt context. Filter mode narrows
-    // retrieval to these paths, but must not remove the files themselves from
-    // the request; otherwise the model receives only an empty/partial search
-    // result and cannot answer from the file the user attached.
     for (const path of request.contextPaths) {
       add(path, "attached");
     }
@@ -494,9 +490,6 @@ function selectExplicitChunks(
     }
   }
 
-  // In reference mode a file that cannot inline whole stays a tool-addressable
-  // reference — the model reads it in full via read_note instead of guessing
-  // from relevance-ranked excerpts.
   if (request.largeAttachmentsAsReferences) {
     return { chunks: [], coverage: "reference" };
   }
@@ -550,9 +543,6 @@ function combineMarkdownChunks(chunks: ExtractedChunk[], generateId: GenerateId)
 }
 
 function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): RetrievedChunk[] {
-  // Match on a left word boundary (`\bterm`) rather than a raw substring: this
-  // keeps suffix morphology ("model" → "models") while rejecting incidental
-  // infixes ("art" no longer matches "part").
   const termPatterns = question
     .toLowerCase()
     .split(/[^\p{L}\p{N}_-]+/u)

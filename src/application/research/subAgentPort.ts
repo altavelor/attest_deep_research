@@ -63,7 +63,6 @@ export type SubAgentLogEvent =
   | { type: "tool-call"; round: number; name: string; label: string }
   | { type: "tool-result"; name: string; ok: boolean; summary?: string }
   | {
-      // The sub-agent's bounded tool loop finished (before any synthesis fallback).
       type: "loop-complete";
       ok: boolean;
       reason?: string;

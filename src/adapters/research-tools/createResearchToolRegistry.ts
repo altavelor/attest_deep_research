@@ -37,7 +37,6 @@ export function createResearchToolRegistry(
   const permissions = grantedPermissions(availability);
 
   if (options.noteTools) {
-    // Lets create_note/update_note rewrite raw evidence-ID tokens into footnote links.
     options.noteTools.setCitationProvider(() => evidence.snapshot().citations);
     sources.register(new AttachmentSource({ tools: createNoteTools(options.noteTools) }));
   }
@@ -65,8 +64,6 @@ export function createResearchToolRegistry(
     sources.register(new WebSource({ provider: options.searchProvider, evidence }));
   }
 
-  // Document download is a web capability that also writes to the vault: offered
-  // only when web is active for this turn AND a vault writer is available.
   if (
     options.searchProvider?.fetchDocument &&
     options.vaultWriter &&
@@ -82,10 +79,6 @@ export function createResearchToolRegistry(
     );
   }
 
-  // The sub-agent is universal: offered whenever at least one read source is active
-  // this turn (web, index, or notes) — never in a fully empty profile. It always
-  // gets a read-only view of the current toolset (no mutation, no recursive
-  // run_subagent) regardless of what the parent itself is permitted to do.
   const hasAnyReadSource =
     (options.searchProvider !== undefined && availability.webProviderAvailable) ||
     (options.retriever !== undefined && availability.retrieverAvailable) ||
@@ -104,9 +97,6 @@ export function createResearchToolRegistry(
     );
   }
 
-  // Map-reduce fan-out over documents (SPEC-corpus R5): needs both the sub-agent
-  // runner and an active index retriever (it fans out one scoped sub-agent per
-  // indexed document). MapSources re-scopes the context to a single source per run.
   if (
     options.subAgentRunner &&
     options.retriever &&
@@ -127,9 +117,6 @@ export function createResearchToolRegistry(
     );
   }
 
-  // SourceManager -> ToolManager bridge (SPEC R5 diagram): each registered
-  // source contributes its Tool handlers; the manager gates them by the run's
-  // granted permissions (each tool's `requires`).
   const tools = new ToolManager([], permissions);
   sources.contributeTools(tools);
 
@@ -143,7 +130,6 @@ function grantedPermissions(availability: ResearchToolAvailability): ReadonlySet
   if (availability.activeFileAccess) granted.add(NOTE_PERMISSIONS.active);
   if (availability.noteMutationAccess) {
     granted.add(NOTE_PERMISSIONS.mutate);
-    // Downloading writes into the vault; gate it behind the same mutation consent.
     granted.add(DOWNLOAD_PERMISSIONS.write);
   }
   return granted;

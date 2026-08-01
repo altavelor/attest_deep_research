@@ -103,12 +103,10 @@ const RU_MONTHS =
  */
 export function stripTemporalNoise(query: string): string {
   const cleaned = query
-    // "July 2 2026", "July 2nd, 2026"
     .replace(
       new RegExp(`\\b(${EN_MONTHS})\\s+\\d{1,2}(st|nd|rd|th)?(,)?(\\s+20\\d\\d)?\\b`, "gi"),
       " ",
     )
-    // "2nd July 2026", "2 июля 2026"
     .replace(
       new RegExp(
         `\\b\\d{1,2}(st|nd|rd|th)?\\s+(${EN_MONTHS}|${RU_MONTHS})(\\s+20\\d\\d)?\\b`,
@@ -122,6 +120,5 @@ export function stripTemporalNoise(query: string): string {
     .replace(/\b20\d\d\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  // Never sanitize a query into nothing — the original text beats an empty search.
   return cleaned.length > 0 ? cleaned : query.trim();
 }

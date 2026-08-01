@@ -40,7 +40,6 @@ export function groupClaims(
     claims,
   }));
 
-  // Multi-document subjects first (contradiction candidates), then larger groups.
   groups.sort(
     (left, right) =>
       right.sourcePaths.length - left.sourcePaths.length ||
@@ -48,8 +47,6 @@ export function groupClaims(
       left.subject.localeCompare(right.subject),
   );
 
-  // Bound the total number of claims returned across groups (keeps the tool
-  // result small); drop a group entirely once the budget is spent.
   const bounded: ClaimGroup[] = [];
   let remaining = limit;
   for (const group of groups) {

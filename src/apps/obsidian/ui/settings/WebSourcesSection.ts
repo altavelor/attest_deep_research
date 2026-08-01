@@ -145,7 +145,6 @@ export class WebSourcesSection {
   ): void {
     const cell = row.createDiv({ cls: "ixplorer-settings-websource-list__state" });
     if (!configured) {
-      // Alignment placeholder: the row's only affordance is "Set up…".
       cell.createSpan({ cls: "ixplorer-settings-websource-lamp is-unavailable" });
       return;
     }
@@ -177,7 +176,6 @@ export class WebSourcesSection {
       profile: getWebSourceProfile(this.ctx.getSettings(), descriptor.id),
       onSave: async (updated) => {
         upsertWebSourceProfile(this.ctx.getSettings(), updated);
-        // Credentials changed: a previously suspended source deserves a retry.
         this.ctx.resetSourceIssue(descriptor.id);
         await this.ctx.saveSettings();
         this.ctx.requestRedisplay();

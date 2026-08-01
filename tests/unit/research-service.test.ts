@@ -208,6 +208,39 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
+  it("suppresses the optional tool loop when Instant is selected", async () => {
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: new FakeRetriever(emptyRetrieval()),
+      chatModel,
+      chatModelName: "qwen",
+      toolsEnabled: true,
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: false,
+        choiceSpecific: true,
+        parallelCalls: false,
+      },
+      noteTools: new NoteToolService({
+        files: new MemoryContextFiles({ "Tools/note.md": "Tool-provided context" }),
+        extractors: [new MarkdownExtractor()],
+      }),
+      now: fixedNow,
+    });
+
+    await collectAsync(
+      service.answer({ question: "Answer instantly", mode: "instant", searchMode: "none" }),
+    );
+
+    // Instant is a deterministic single pass: even a tool-capable model gets no tools.
+    expect(chatModel.requests).toHaveLength(1);
+    expect(chatModel.requests[0].tools).toBeUndefined();
+    expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
+  });
+
   it("disables extended thinking during Instant synthesis", async () => {
     let receivedReasoning: unknown;
     const modelRound = {
@@ -672,7 +705,7 @@ describe("ResearchService", () => {
     });
   });
 
-  it("keeps note tools available in none mode", async () => {
+  it("keeps note tools available in none mode on the instant-fallback path", async () => {
     const chatModel = new FakeChatModel([
       [
         {
@@ -690,6 +723,9 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
+      // Ollama forces the instant-fallback strategy, which still exposes the
+      // original prompt's tools (unlike user-selected Instant).
+      apiFormat: "ollama",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({ "Tools/note.md": "Tool-provided context" }),
@@ -698,7 +734,9 @@ describe("ResearchService", () => {
       now: fixedNow,
     });
 
-    await collectAsync(service.answer({ question: "Use the tool", searchMode: "none" }));
+    await collectAsync(
+      service.answer({ question: "Use the tool", mode: "thinking", searchMode: "none" }),
+    );
 
     expect(chatModel.requests[0].tools?.map((tool) => tool.function.name)).toContain("read_note");
     expect(chatModel.requests[1].messages.at(-1)?.content).toContain("Tool-provided context");
@@ -962,6 +1000,9 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
+      // Ollama forces the instant-fallback strategy, where the optional tool loop
+      // remains active (user-selected Instant suppresses it).
+      apiFormat: "ollama",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({
@@ -975,11 +1016,14 @@ describe("ResearchService", () => {
     const events = await collectAsync(
       service.answer({
         question: "Read the tool note.",
+        mode: "thinking",
         includeContextDiagnostics: true,
       }),
     );
 
     expect(events.map((event) => event.type)).toEqual([
+      // Extra leading status: the instant-fallback notice from the Thinking path.
+      "status",
       "status",
       "status",
       "tool-call-start",

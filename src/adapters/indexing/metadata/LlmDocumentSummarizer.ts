@@ -92,11 +92,8 @@ export function parseDocumentSummary(
           oneLiner: (oneLiner || summary).slice(0, MAX_ONE_LINER_CHARS),
         };
       }
-    } catch {
-      // Падает в текстовый fallback ниже.
-    }
+    } catch {}
   }
-  // Модель ответила прозой: используем её как summary, первое предложение — one-liner.
   const fallback = text.trim().slice(0, MAX_DOCUMENT_SUMMARY_CHARS);
   const firstSentence = fallback.split(/(?<=[.!?])\s/)[0] ?? fallback;
   return {
