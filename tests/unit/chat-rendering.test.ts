@@ -5,6 +5,7 @@ import {
   nextAssistantMessage,
   nextAssistantReasoning,
   promoteAssistantCheckpoint,
+  interruptLastAssistantProgress,
   nextChainToolCallStart,
   nextUserMessage,
   startAssistantProgress,
@@ -215,6 +216,21 @@ describe("chat rendering helpers", () => {
       researchProgress: {
         phase: "streaming",
         checkpoints: [{ id: "round-1", status: "finalizing", content: "Answer" }],
+      },
+    });
+  });
+
+  it("preserves a classified final answer when the request is cancelled", () => {
+    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const interrupted = interruptLastAssistantProgress(
+      promoteAssistantCheckpoint(streaming, "round-1"),
+    );
+
+    expect(interrupted.at(-1)).toMatchObject({
+      content: "Answer",
+      researchProgress: {
+        phase: "interrupted",
+        checkpoints: [{ id: "round-1", status: "interrupted", content: "Answer" }],
       },
     });
   });

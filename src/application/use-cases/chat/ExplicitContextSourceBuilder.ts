@@ -159,8 +159,13 @@ function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): Retr
     .filter((term) => term.length >= 3);
   return chunks
     .map((chunk, index) => {
-      const text =
-        `${"path" in chunk.source ? chunk.source.path : chunk.source.title} ${chunk.text}`.toLowerCase();
+      const sourceText =
+        chunk.source.kind === "markdown"
+          ? `${chunk.source.path} ${chunk.source.headingPath.join(" ")}`
+          : "path" in chunk.source
+            ? chunk.source.path
+            : chunk.source.title;
+      const text = `${sourceText} ${chunk.text}`.toLowerCase();
       const score =
         terms.reduce(
           (total, term) => total + (new RegExp(`\\b${escapeRegExp(term)}`, "u").test(text) ? 1 : 0),

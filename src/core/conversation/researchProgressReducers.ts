@@ -112,16 +112,23 @@ export function interruptLastAssistantProgress(
 ): ChatDisplayMessage[] {
   const last = messages.at(-1);
   if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  const finalizingContent = last.researchProgress.checkpoints.reduce<string | undefined>(
+    (content, checkpoint) => (checkpoint.status === "finalizing" ? checkpoint.content : content),
+    undefined,
+  );
   return [
     ...messages.slice(0, -1),
     {
       ...last,
+      content: last.content || finalizingContent || "",
       researchProgress: {
         ...last.researchProgress,
         phase: "interrupted",
         reasoning: { ...last.researchProgress.reasoning, phase: "interrupted" },
         checkpoints: last.researchProgress.checkpoints.map((checkpoint) =>
-          checkpoint.status === "streaming" ? { ...checkpoint, status: "interrupted" } : checkpoint,
+          checkpoint.status === "streaming" || checkpoint.status === "finalizing"
+            ? { ...checkpoint, status: "interrupted" }
+            : checkpoint,
         ),
       },
     },

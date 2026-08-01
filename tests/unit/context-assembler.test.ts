@@ -4,11 +4,14 @@ import { MarkdownExtractor } from "@adapters/extractors";
 import { PdfExtractor, PdfPageTextParser } from "@adapters/extractors";
 import { PdfTextCache } from "@adapters/extractors";
 import { ContextAssembler } from "@application/use-cases/chat";
+import { ExplicitContextSourceBuilder } from "@application/use-cases/chat/ExplicitContextSourceBuilder";
 import { stableId } from "@adapters/extractors";
 import { chatHistoryForPrompt, compactChatMessages } from "@application/use-cases/chat";
 import { GraphContextProvider } from "@core/research";
 import { Extractor } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
+import { ExtractedChunk } from "@core/model";
+import { markdownSource } from "../helpers/factories";
 
 describe("ContextAssembler", () => {
   it("prioritizes explicit files before the active note", async () => {
@@ -94,6 +97,37 @@ describe("ContextAssembler", () => {
       "sodium battery answer",
     );
     expect(result.explicitEvidence[0].text.length).toBeLessThan(10_000);
+  });
+
+  it("ranks a large Markdown attachment by its section heading", async () => {
+    const chunks: ExtractedChunk[] = [
+      {
+        id: "overview",
+        source: markdownSource("Large.md", ["Overview"]),
+        text: "Filler text ".repeat(100),
+        contentHash: "overview",
+      },
+      {
+        id: "target",
+        source: markdownSource("Large.md", ["Battery taxonomy"]),
+        text: "Filler text ".repeat(100),
+        contentHash: "target",
+      },
+    ];
+    const builder = new ExplicitContextSourceBuilder(
+      { listPaths: async () => ["Large.md"], readFile: async () => "large markdown" },
+      [{ supports: () => true, extract: async () => chunks }],
+      stableId,
+    );
+
+    const result = await builder.build(
+      { path: "Large.md", role: "attached" },
+      { question: "Which battery taxonomy applies?", smallMarkdownCharLimit: 1 },
+      300,
+    );
+
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0].source).toMatchObject({ headingPath: ["Battery taxonomy"] });
   });
 
   it("ranks whole-word term matches above incidental infix matches", async () => {
