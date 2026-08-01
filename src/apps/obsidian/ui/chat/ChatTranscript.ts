@@ -548,7 +548,11 @@ function renderToolNode(
     text: TOOL_DISPLAY_NAMES[item.name] ?? item.name,
   });
   if (view.intent) {
-    head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
+    if (view.fetchTargets.length > 0) {
+      renderFetchTargets(head, view.intent, view.fetchTargets);
+    } else {
+      head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
+    }
   }
   if (item.phase && item.status === "pending") {
     head.createSpan({ cls: "ixplorer-chat__tool-phase", text: item.phase });
@@ -584,6 +588,25 @@ function renderToolNode(
       }
     }
   }
+}
+
+function renderFetchTargets(head: HTMLElement, intent: string, targets: string[]): void {
+  head.createSpan({
+    cls: "ixplorer-chat__tool-intent ixplorer-chat__tool-intent--fetch",
+    text: intent,
+  });
+  const targetList = head.createSpan({
+    cls: "ixplorer-chat__tool-fetch-targets",
+    attr: { "aria-label": `Fetching: ${targets.join(", ")}` },
+  });
+  targets.forEach((target, index) => {
+    const targetEl = targetList.createSpan({
+      cls: "ixplorer-chat__tool-fetch-target",
+      text: target,
+      attr: { "aria-hidden": "true" },
+    });
+    targetEl.style.setProperty("--ixplorer-fetch-target-delay", `${index}s`);
+  });
 }
 
 interface ToolCellOptions {

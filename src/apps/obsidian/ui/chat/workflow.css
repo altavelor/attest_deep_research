@@ -168,6 +168,41 @@
   color: var(--text-muted);
 }
 
+.ixplorer-chat__tool-intent--fetch {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  flex: 0 0 auto;
+}
+
+.ixplorer-chat__tool-fetch-targets {
+  position: relative;
+  display: inline-block;
+  flex: 1 1 auto;
+  min-height: 1.25em;
+  color: var(--text-muted);
+}
+
+.ixplorer-chat__tool-fetch-target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  animation: ixplorer-fetch-target-cycle 1s steps(1, end) forwards;
+  animation-delay: var(--ixplorer-fetch-target-delay);
+}
+
+@keyframes ixplorer-fetch-target-cycle {
+  0%,
+  99% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
 .ixplorer-chat__tool-phase {
   color: var(--text-accent);
   font-size: var(--font-ui-smaller);

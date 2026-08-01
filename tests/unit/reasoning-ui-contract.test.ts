@@ -64,7 +64,14 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain('isFinalizing ? "Finalizing…" : "Thinking…"');
   });
 
-  it("truncates long tool descriptions instead of wrapping them", () => {
+  it("animates fetch targets one at a time instead of truncating their list", () => {
+    expect(transcript).toContain("renderFetchTargets");
+    expect(transcript).toContain("ixplorer-chat__tool-fetch-targets");
+    expect(styles).toContain("ixplorer-chat__tool-fetch-target");
+    expect(styles).toContain("ixplorer-fetch-target-cycle");
+  });
+
+  it("truncates non-fetch tool descriptions instead of wrapping them", () => {
     expect(styles).toContain("text-overflow: ellipsis");
     expect(styles).toContain("white-space: nowrap");
   });
