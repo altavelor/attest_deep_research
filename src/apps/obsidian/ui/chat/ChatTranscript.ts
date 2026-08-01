@@ -377,7 +377,13 @@ function renderWorkflowNodes(
           uiState,
         });
       } else if (item.kind === "tool-call") {
-        renderToolNode(listEl, item, options, uiState, fetchTargetsFor(item, fetchTargets));
+        renderToolNode(
+          listEl,
+          item,
+          options,
+          uiState,
+          item.fetchTargets ?? fetchTargetsFor(item, fetchTargets),
+        );
       }
     }
     if (isStreaming && !activeReasoningId) {
@@ -447,10 +453,17 @@ function renderThinkingNode(
 }
 
 function renderActiveThinkingNode(listEl: HTMLElement, label: "Thinking…" | "Finalizing…"): void {
+  const isFinalizing = label === "Finalizing…";
   const node = listEl.createDiv({
-    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active",
+    cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active${
+      isFinalizing ? " ixplorer-chat__workflow-node--finalizing" : ""
+    }`,
   });
-  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
+  node.createSpan({
+    cls: `ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--${
+      isFinalizing ? "finalizing" : "thinking"
+    }`,
+  });
   node.createDiv({
     cls: "ixplorer-chat__workflow-heading",
     text: label,

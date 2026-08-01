@@ -71,6 +71,7 @@ export type ChainItem =
       status: "pending" | "complete" | "failed";
       resultSummary?: string;
       args?: Record<string, unknown>;
+      fetchTargets?: string[];
       resultJson?: string;
       /** Live phase of a nested sub-agent run (e.g. run_subagent). */
       phase?: string;

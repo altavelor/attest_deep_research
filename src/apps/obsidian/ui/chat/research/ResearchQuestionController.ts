@@ -294,6 +294,7 @@ export class ResearchQuestionController {
           event.label,
           event.args,
           event.parentId,
+          event.fetchTargets,
         ),
       );
       this.scheduleActiveRender();
