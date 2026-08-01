@@ -59,6 +59,11 @@ describe("reasoning transcript UI", () => {
     expect(styles).toContain("ixplorer-chat__workflow-node--thinking-active");
   });
 
+  it("shows Finalizing when final answer tokens arrive before the stream completes", () => {
+    expect(transcript).toContain("isFinalizing");
+    expect(transcript).toContain('isFinalizing ? "Finalizing…" : "Thinking…"');
+  });
+
   it("truncates long tool descriptions instead of wrapping them", () => {
     expect(styles).toContain("text-overflow: ellipsis");
     expect(styles).toContain("white-space: nowrap");

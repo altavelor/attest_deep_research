@@ -351,11 +351,13 @@ function renderWorkflowNodes(
     return false;
   }
   const isStreaming = progress?.phase === "streaming";
+  const isFinalizing = isStreaming && message.content.trim().length > 0;
   const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
 
   if (hasChain) {
+    const fetchTargets = fetchTargetsByResultId(chain);
     let activeReasoningId: string | undefined;
-    if (isStreaming) {
+    if (isStreaming && !isFinalizing) {
       for (let i = chain.length - 1; i >= 0; i -= 1) {
         const item = chain[i];
         if (item.kind === "reasoning") {
@@ -372,11 +374,11 @@ function renderWorkflowNodes(
           uiState,
         });
       } else if (item.kind === "tool-call") {
-        renderToolNode(listEl, item, options, uiState);
+        renderToolNode(listEl, item, options, uiState, fetchTargetsFor(item, fetchTargets));
       }
     }
     if (isStreaming && !activeReasoningId) {
-      renderActiveThinkingNode(listEl);
+      renderActiveThinkingNode(listEl, isFinalizing ? "Finalizing…" : "Thinking…");
     }
     if (listEl.childElementCount === 0) {
       listEl.remove();
@@ -396,7 +398,7 @@ function renderWorkflowNodes(
     renderSummaryNode(listEl, checkpoint.content, options);
   }
   if (isStreaming) {
-    renderActiveThinkingNode(listEl);
+    renderActiveThinkingNode(listEl, isFinalizing ? "Finalizing…" : "Thinking…");
   }
   return true;
 }
@@ -441,15 +443,54 @@ function renderThinkingNode(
   void MarkdownRenderer.render(options.app, content, textEl, "", options.markdownContext);
 }
 
-function renderActiveThinkingNode(listEl: HTMLElement): void {
+function renderActiveThinkingNode(listEl: HTMLElement, label: "Thinking…" | "Finalizing…"): void {
   const node = listEl.createDiv({
     cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active",
   });
   node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
   node.createDiv({
     cls: "ixplorer-chat__workflow-heading",
-    text: "Thinking…",
+    text: label,
   });
+}
+
+function fetchTargetsByResultId(chain: ChainItem[]): Map<string, string> {
+  const targets = new Map<string, string>();
+  for (const item of chain) {
+    if (item.kind !== "tool-call" || item.name !== "search_web" || !item.resultJson) continue;
+    try {
+      const parsed = JSON.parse(item.resultJson) as { value?: { results?: unknown } };
+      if (!Array.isArray(parsed.value?.results)) continue;
+      for (const result of parsed.value.results) {
+        if (typeof result !== "object" || result === null) continue;
+        const entry = result as { resultId?: unknown; url?: unknown };
+        if (typeof entry.resultId !== "string" || typeof entry.url !== "string") continue;
+        targets.set(entry.resultId, siteName(entry.url));
+      }
+    } catch {
+      continue;
+    }
+  }
+  return targets;
+}
+
+function fetchTargetsFor(
+  item: Extract<ChainItem, { kind: "tool-call" }>,
+  targetsById: Map<string, string>,
+): string[] | undefined {
+  if (item.name !== "fetch_web_page" || !Array.isArray(item.args?.resultIds)) return undefined;
+  const targets = item.args.resultIds.flatMap((id) =>
+    typeof id === "string" && targetsById.has(id) ? [targetsById.get(id)!] : [],
+  );
+  return targets.length > 0 ? targets : undefined;
+}
+
+function siteName(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }
 
 function renderSummaryNode(
@@ -485,6 +526,7 @@ function renderToolNode(
   item: Extract<ChainItem, { kind: "tool-call" }>,
   options: ChatTranscriptOptions,
   uiState?: WorkflowUiState,
+  fetchTargets?: string[],
 ): void {
   const view = describeToolCall({
     name: item.name,
@@ -492,6 +534,7 @@ function renderToolNode(
     status: item.status,
     args: item.args,
     resultJson: item.resultJson,
+    fetchTargets,
   });
   const node = listEl.createDiv({
     cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--tool ixplorer-chat__workflow-node--${item.status}`,
