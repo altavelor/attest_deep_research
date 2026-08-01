@@ -210,6 +210,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             ...(name === "fetch_web_page"
               ? { fetchTargets: resolveFetchTargets(args, created.evidence) }
               : {}),
+            ...(name === "search_web"
+              ? { searchSources: resolveSearchSources(args, this.deps.searchProvider) }
+              : {}),
           }),
         onToolResult: (id, ok, resolvedLabel, resultSummary, resultJson) =>
           onEvent({
@@ -421,6 +424,14 @@ function resolveFetchTargets(
     }
   }
   return [...sites];
+}
+
+function resolveSearchSources(
+  args: Record<string, unknown> | undefined,
+  provider: { searchSourceLabels?(query: string): readonly string[] } | undefined,
+): string[] {
+  const query = typeof args?.query === "string" ? args.query.trim() : "";
+  return query && provider?.searchSourceLabels ? [...provider.searchSourceLabels(query)] : [];
 }
 
 function isChunkList(value: unknown): value is {
