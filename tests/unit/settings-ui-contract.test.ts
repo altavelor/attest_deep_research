@@ -78,26 +78,21 @@ describe("chat model settings surface", () => {
   it("keeps debug-only settings in the final Advanced section", () => {
     const displayBody = source.slice(
       source.indexOf("display(): void"),
-      source.indexOf("private renderDebugSettings"),
+      source.indexOf("hide(): void"),
     );
-    const advancedSectionIndex = source.indexOf("renderAdvancedSettings(containerEl)");
-    const indexingSectionIndex = source.indexOf("renderIndexingSettings(containerEl)");
+    const advancedSectionIndex = source.indexOf("this.renderAdvancedSettings(this.containerEl)");
+    const indexingSectionIndex = source.indexOf(
+      "this.indexProfiles.render(this.gateHost(this.containerEl))",
+    );
     expect(advancedSectionIndex).toBeGreaterThan(indexingSectionIndex);
-    expect(displayBody).not.toContain("renderDebugSettings(containerEl)");
+    expect(displayBody).not.toContain('.setName("Debug mode")');
 
     const advancedRenderer = source.slice(
       source.indexOf("private renderAdvancedSettings"),
-      source.indexOf("private renderProfileSettings"),
+      source.length,
     );
-    expect(advancedRenderer).toContain("this.renderDebugSettings(contentEl)");
+    expect(advancedRenderer).toContain('.setName("Debug mode")');
     expect(advancedRenderer).not.toContain("Force instant research mode");
-
-    const searchRenderer = source.slice(
-      source.indexOf("private renderSearchEngineSettings"),
-      source.indexOf("private renderProfileSettings"),
-    );
-    expect(searchRenderer).not.toContain("Debug mode");
-    expect(searchRenderer).not.toContain("Force instant research mode");
   });
 
   it("preserves the index path picker scroll position when checkbox selection rerenders", () => {
