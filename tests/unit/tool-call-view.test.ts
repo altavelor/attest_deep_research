@@ -46,7 +46,8 @@ describe("describeToolCall detailed intent", () => {
       }),
     });
 
-    expect(view.intent).toBe("Fetching pages 3: recipes.example.com, food.example.org");
+    expect(view.intent).toBe("Fetching pages 3:");
+    expect(view.fetchTargets).toEqual(["recipes.example.com", "food.example.org"]);
   });
 
   it("lists requested page hosts while a web fetch is pending", () => {
@@ -58,7 +59,8 @@ describe("describeToolCall detailed intent", () => {
       fetchTargets: ["recipes.example.com", "food.example.org", "recipes.example.com"],
     });
 
-    expect(view.intent).toBe("Fetching pages 3: recipes.example.com, food.example.org");
+    expect(view.intent).toBe("Fetching pages 3:");
+    expect(view.fetchTargets).toEqual(["recipes.example.com", "food.example.org"]);
   });
 
   it("reports created-note size in the intent", () => {
