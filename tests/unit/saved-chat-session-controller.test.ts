@@ -34,7 +34,7 @@ describe("SavedChatSessionController", () => {
     expect(controller.currentChatId).toBe("chat-2");
   });
 
-  it("clears the active identity when its chat is deleted", async () => {
+  it("clears the active chat id when its chat is deleted", async () => {
     const controller = createController({
       loadChat: async () => savedChat({ ...saveInput(), id: "chat-1" }),
     });
@@ -43,7 +43,7 @@ describe("SavedChatSessionController", () => {
     await expect(controller.delete("chat-1")).resolves.toBe(true);
 
     expect(controller.currentChatId).toBeNull();
-    expect(controller.currentChatCreatedAt).toBeNull();
+    expect(controller.currentChatCreatedAt).toBe("2026-01-01T00:00:00.000Z");
   });
 });
 
