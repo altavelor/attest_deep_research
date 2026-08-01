@@ -17,7 +17,6 @@ import {
   DEFAULT_GRAPH_CONTEXT_LIMITS,
   GraphContextProvider,
   GraphContextLimits,
-  GraphRoot,
 } from "@core/research";
 import {
   AttachedFileCoverage,
@@ -31,6 +30,7 @@ import {
   packChunksByBudget,
 } from "./contextBudget";
 import { ExplicitContextSourceBuilder } from "./ExplicitContextSourceBuilder";
+import { ContextGraphDiscovery } from "./ContextGraphDiscovery";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
@@ -95,6 +95,7 @@ export class ContextAssembler {
   private readonly retrieve: ContextAssemblerOptions["retrieve"];
   private readonly generateId: GenerateId;
   private readonly explicitSourceBuilder: ExplicitContextSourceBuilder;
+  private readonly graphDiscovery: ContextGraphDiscovery;
 
   constructor(options: ContextAssemblerOptions) {
     this.files = options.files;
@@ -107,6 +108,7 @@ export class ContextAssembler {
       this.extractors,
       this.generateId,
     );
+    this.graphDiscovery = new ContextGraphDiscovery(this.graph);
   }
 
   async assemble(request: ContextAssembleRequest): Promise<AssembledContext> {
@@ -124,7 +126,7 @@ export class ContextAssembler {
             ...(request.graph?.limits ?? {}),
           }),
         }
-      : await this.discoverGraphContext(request, availablePaths, mentionPaths);
+      : await this.graphDiscovery.discover(request, availablePaths, mentionPaths);
     diagnostics.graph = graph.diagnostics;
     const budget = createContextBudget(request);
     const explicitEvidence: RetrievedChunk[] = [];
@@ -304,61 +306,6 @@ export class ContextAssembler {
       ...mentionPaths,
       ...(request.graph?.expandFilteredContextThroughLinks ? graphSourcePaths : []),
     ]);
-  }
-
-  private async discoverGraphContext(
-    request: ContextAssembleRequest,
-    availablePaths: string[],
-    mentionPaths: string[],
-  ): Promise<{ sourcePaths: string[]; diagnostics: ContextDiagnostics["graph"] }> {
-    const graphOptions = request.graph;
-    const limits = { ...DEFAULT_GRAPH_CONTEXT_LIMITS, ...(graphOptions?.limits ?? {}) };
-
-    if (!this.graph || graphOptions?.enabled !== true) {
-      return { sourcePaths: [], diagnostics: createDisabledGraphDiagnostics(limits) };
-    }
-
-    const roots = this.graphRoots(request, mentionPaths);
-    const discovery = await this.graph.discover({
-      question: request.question,
-      roots,
-      availablePaths,
-      includeBacklinks: graphOptions.includeBacklinks,
-      maxDepth: graphOptions.depth,
-      limits,
-    });
-
-    return {
-      sourcePaths: discovery.sourcePaths,
-      diagnostics: discovery.diagnostics,
-    };
-  }
-
-  private graphRoots(request: ContextAssembleRequest, mentionPaths: string[]): GraphRoot[] {
-    const roots: GraphRoot[] = [];
-    const add = (path: string | undefined, role: ContextSourceRole): void => {
-      if (!path || roots.some((root) => root.path === path)) {
-        return;
-      }
-
-      roots.push({ path, role });
-    };
-
-    for (const path of mentionPaths) {
-      add(path, "mention");
-    }
-
-    if (request.includeActiveFile) {
-      add(request.activeFilePath, "active");
-    }
-
-    if (request.contextMode === "include" || request.graph?.expandFilteredContextThroughLinks) {
-      for (const path of request.contextPaths) {
-        add(path, "attached");
-      }
-    }
-
-    return roots;
   }
 
   private async buildExplicitSource(
