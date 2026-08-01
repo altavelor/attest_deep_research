@@ -1,8 +1,4 @@
-import { ChatModelClient } from "@adapters/model-provider";
-import { OpenAiResponsesClient } from "@adapters/model-provider";
-import { resolveResponsesProviderPolicy } from "@adapters/model-provider";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { FallbackModelRoundProvider } from "@adapters/model-provider";
 import { EmbeddingClient } from "@adapters/model-provider";
 import { DocxExtractor } from "@adapters/extractors";
 import { EpubExtractor } from "@adapters/extractors";
@@ -26,7 +22,6 @@ import {
 import { EnrichIndexSources } from "@application/use-cases/enrichment";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
-import { QueryExpansionService } from "@adapters/retrieval";
 import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
@@ -37,9 +32,7 @@ import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
 import { resolveToolCapabilities } from "@adapters/settings";
 import { isResponsesCapabilityCurrent } from "@adapters/settings";
-import { capabilityCacheKey, recordObservedReasoningFormat } from "@adapters/settings";
-import type { ReasoningResponseFormat } from "@adapters/settings";
-import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
+import { capabilityCacheKey, EmbeddingModelProfile } from "@adapters/settings";
 import {
   resolveEffectiveChatApiProtocol,
   resolveEffectiveReasoning,
@@ -47,7 +40,6 @@ import {
 } from "@adapters/settings";
 import { FetchUrlStatusChecker } from "@adapters/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
-import type { ModelRoundProvider } from "@core/agent";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import {
   requireChatModelProfile,
@@ -57,8 +49,18 @@ import {
   requireIndexProfile,
 } from "./profileResolvers";
 import { createWebSearchProvider } from "./webSearchFactory";
+import {
+  createChatModelClient,
+  createQueryExpansionService,
+  createResponsesRoundProvider,
+} from "./modelClientFactory";
 
 export type { CompositionContext } from "./CompositionContext";
+export {
+  createChatModelClient,
+  createQueryExpansionService,
+  createResponsesRoundProvider,
+} from "./modelClientFactory";
 import type { CompositionContext } from "./CompositionContext";
 
 export function createResearchService(
@@ -308,90 +310,6 @@ export function createEnrichmentService(
       provider,
       model: chatProfile.modelName,
     }),
-  });
-}
-
-export function createChatModelClient(
-  ctx: CompositionContext,
-  server: ServerProfile,
-  profile?: ChatModelProfile,
-): ChatModelClient {
-  return new ChatModelClient({
-    apiFormat: server.apiFormat,
-    baseUrl: server.baseUrl,
-    apiKey: server.apiKey,
-    logger: ctx.logger,
-    ...(profile
-      ? {
-          onReasoningObserved: (observation: { protocol: "chat-completions"; dialect: string }) => {
-            const identity = {
-              baseUrl: server.baseUrl,
-              apiKey: server.apiKey,
-              model: profile.modelName,
-              protocol: observation.protocol,
-            };
-            const key = capabilityCacheKey(identity);
-            const settings = ctx.getSettings();
-            const current = settings.modelCapabilityCache[key];
-            const observedFormat = (
-              observation.dialect === "inline-tags" ? "inline_tags" : observation.dialect
-            ) as ReasoningResponseFormat;
-            if (current?.reasoning.responseFormats.includes(observedFormat)) {
-              return;
-            }
-            settings.modelCapabilityCache = recordObservedReasoningFormat(
-              settings.modelCapabilityCache,
-              identity,
-              observation.dialect,
-            );
-            void ctx.saveSettings();
-          },
-        }
-      : {}),
-  });
-}
-
-export function createResponsesRoundProvider(
-  ctx: CompositionContext,
-  profile: ChatModelProfile,
-  server: ServerProfile,
-  effectiveProtocol: "chat-completions" | "responses",
-  reasoning: { enabled: boolean; effort?: string; summary: "off" | "auto" },
-): ModelRoundProvider | undefined {
-  if (effectiveProtocol !== "responses") return undefined;
-  const decision = resolveResponsesProviderPolicy({
-    apiFormat: server.apiFormat,
-    capabilities: profile.reasoningCapabilities,
-    isCapabilityCurrent: profile.reasoningCapabilities
-      ? isResponsesCapabilityCurrent(profile.reasoningCapabilities, server, profile.modelName)
-      : false,
-    reasoning,
-  });
-  const responses = new OpenAiResponsesClient({
-    baseUrl: server.baseUrl,
-    apiKey: server.apiKey,
-    logger: ctx.logger,
-    reasoningEfforts: decision.efforts,
-    reasoningSummary: decision.summary,
-  });
-  return new FallbackModelRoundProvider(
-    responses,
-    new ChatCompletionsRoundAdapter(createChatModelClient(ctx, server)),
-  );
-}
-
-export function createQueryExpansionService(
-  ctx: CompositionContext,
-  chatProfile: ChatModelProfile,
-  server: ServerProfile,
-): QueryExpansionService {
-  return new QueryExpansionService({
-    chatModel: createChatModelClient(ctx, server),
-    chatModelName: chatProfile.modelName,
-    chatOptions: {
-      temperature: chatProfile.temperature,
-      maxTokens: chatProfile.maxTokens,
-    },
   });
 }
 
