@@ -7,7 +7,7 @@ import {
   ContextMode,
   ContextSourceRole,
 } from "@core/diagnostics";
-import { ExtractedChunk, RetrievedChunk } from "@core/model";
+import { RetrievedChunk } from "@core/model";
 
 /** Injected content-hash function (e.g. extractors/common.stableId). Keeps the
  *  assembler free of any concrete (Node crypto) hashing dependency. */
@@ -22,7 +22,6 @@ import {
 import {
   AttachedFileCoverage,
   AttachedFileManifestEntry,
-  estimateTextTokens,
   ResearchChatHistoryMessage,
 } from "@core/research";
 import {
@@ -31,6 +30,7 @@ import {
   estimateHistoryTokens,
   packChunksByBudget,
 } from "./contextBudget";
+import { ExplicitContextSourceBuilder } from "./ExplicitContextSourceBuilder";
 
 export interface ContextAssemblerOptions {
   files: ContextFileProvider;
@@ -88,14 +88,13 @@ interface ContextCandidate {
   role: ContextSourceRole;
 }
 
-const DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT = 10_000;
-
 export class ContextAssembler {
   private readonly files: ContextFileProvider;
   private readonly extractors: Extractor[];
   private readonly graph?: GraphContextProvider;
   private readonly retrieve: ContextAssemblerOptions["retrieve"];
   private readonly generateId: GenerateId;
+  private readonly explicitSourceBuilder: ExplicitContextSourceBuilder;
 
   constructor(options: ContextAssemblerOptions) {
     this.files = options.files;
@@ -103,6 +102,11 @@ export class ContextAssembler {
     this.graph = options.graph;
     this.retrieve = options.retrieve;
     this.generateId = options.generateId;
+    this.explicitSourceBuilder = new ExplicitContextSourceBuilder(
+      this.files,
+      this.extractors,
+      this.generateId,
+    );
   }
 
   async assemble(request: ContextAssembleRequest): Promise<AssembledContext> {
@@ -366,185 +370,8 @@ export class ContextAssembler {
     diagnostic: ContextDiagnosticSource;
     coverage: AttachedFileCoverage;
   }> {
-    const extractor = this.extractors.find((item) => item.supports(candidate.path));
-
-    if (!extractor) {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "unsupported",
-          reason: "unsupported-file-type",
-        },
-      };
-    }
-
-    let data: ArrayBuffer | string;
-    try {
-      data = await this.files.readFile(candidate.path);
-    } catch {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "missing",
-          reason: "read-failed",
-        },
-      };
-    }
-
-    try {
-      const modifiedTime = (await this.files.getModifiedTime?.(candidate.path)) ?? 0;
-      const size = await this.files.getSize?.(candidate.path);
-      const chunks = await extractor.extract({
-        path: candidate.path,
-        data,
-        modifiedTime,
-        size,
-      });
-      const selected = selectExplicitChunks(chunks, request, remainingTokens, this.generateId);
-
-      if (selected.coverage === "reference") {
-        return {
-          chunks: [],
-          coverage: "reference",
-          diagnostic: {
-            path: candidate.path,
-            role: candidate.role,
-            status: "dropped",
-            reason: "referenced-for-tools",
-            droppedTokens: estimateChunksTokens(chunks),
-          },
-        };
-      }
-
-      return {
-        chunks: selected.chunks,
-        coverage: selected.coverage,
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: selected.chunks.length > 0 ? "included" : "dropped",
-          chunkCount: selected.chunks.length,
-          includedTokens: estimateChunksTokens(selected.chunks),
-          droppedTokens: Math.max(
-            0,
-            estimateChunksTokens(chunks) - estimateChunksTokens(selected.chunks),
-          ),
-          reason: selected.chunks.length > 0 ? undefined : "context-budget-exceeded",
-        },
-      };
-    } catch {
-      return {
-        chunks: [],
-        coverage: "omitted",
-        diagnostic: {
-          path: candidate.path,
-          role: candidate.role,
-          status: "failed",
-          reason: "extraction-failed",
-        },
-      };
-    }
+    return this.explicitSourceBuilder.build(candidate, request, remainingTokens);
   }
-}
-
-function selectExplicitChunks(
-  chunks: ExtractedChunk[],
-  request: ContextAssembleRequest,
-  remainingTokens: number,
-  generateId: GenerateId,
-): { chunks: RetrievedChunk[]; coverage: AttachedFileCoverage } {
-  if (chunks.length === 0 || remainingTokens <= 0) {
-    return { chunks: [], coverage: "omitted" };
-  }
-
-  if (isSingleSmallMarkdownFile(chunks, request.smallMarkdownCharLimit)) {
-    const combined = combineMarkdownChunks(chunks, generateId);
-
-    if (estimateTextTokens(combined.text) <= remainingTokens) {
-      return { chunks: [combined], coverage: "full" };
-    }
-  }
-
-  if (request.largeAttachmentsAsReferences) {
-    return { chunks: [], coverage: "reference" };
-  }
-
-  const ranked = rankChunksForQuestion(chunks, request.question);
-  const packed = packChunksByBudget(ranked, remainingTokens);
-  return {
-    chunks: packed,
-    coverage: packed.length === chunks.length ? "full" : "excerpts",
-  };
-}
-
-function isSingleSmallMarkdownFile(
-  chunks: ExtractedChunk[],
-  smallMarkdownCharLimit?: number,
-): boolean {
-  if (!chunks.every((chunk) => chunk.source.kind === "markdown")) {
-    return false;
-  }
-
-  return (
-    chunks.reduce((total, chunk) => total + chunk.text.length, 0) <=
-    (smallMarkdownCharLimit ?? DEFAULT_SMALL_MARKDOWN_CHAR_LIMIT)
-  );
-}
-
-function combineMarkdownChunks(chunks: ExtractedChunk[], generateId: GenerateId): RetrievedChunk {
-  const first = chunks[0];
-  const text = chunks.map((chunk) => chunk.text).join("\n\n");
-  const contentHash = generateId(text);
-  const source =
-    first.source.kind === "markdown"
-      ? {
-          ...first.source,
-          id: generateId(`${first.source.path}:explicit-full:${contentHash}`),
-          title: first.source.path,
-          headingPath: [],
-          startOffset: undefined,
-          endOffset: undefined,
-          blockId: undefined,
-        }
-      : first.source;
-
-  return {
-    id: source.id,
-    source,
-    text,
-    contentHash,
-    score: 1,
-  };
-}
-
-function rankChunksForQuestion(chunks: ExtractedChunk[], question: string): RetrievedChunk[] {
-  const termPatterns = question
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_-]+/u)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 3)
-    .map((term) => new RegExp(`\\b${escapeRegExp(term)}`, "u"));
-
-  return chunks
-    .map((chunk, index) => {
-      const sourceText =
-        chunk.source.kind === "markdown"
-          ? `${chunk.source.path} ${chunk.source.headingPath.join(" ")} ${chunk.text}`
-          : `${"path" in chunk.source ? chunk.source.path : chunk.source.title} ${chunk.text}`;
-      const haystack = sourceText.toLowerCase();
-      const score =
-        termPatterns.reduce((total, pattern) => total + (pattern.test(haystack) ? 1 : 0), 0) +
-        1 / (index + 1_000);
-
-      return { ...chunk, score };
-    })
-    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
 }
 
 function createEmptyDiagnostics(contextMode: ContextMode): ContextDiagnostics {
