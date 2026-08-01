@@ -102,7 +102,7 @@ export function renderSavedChatsPopoverContent(
 
   const filtered = filterSavedChatSummaries(chatsInTab, options.searchQuery);
   const list = containerEl.createDiv({
-    cls: `ixplorer-chat__history-list${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
+    cls: `ixplorer-chat__history-list${options.activeTab === "favorites" ? " is-favorites" : ""}${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
   });
 
   if (filtered.length === 0) {
