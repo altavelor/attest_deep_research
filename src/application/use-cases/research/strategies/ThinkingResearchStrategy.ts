@@ -4,7 +4,9 @@ import { ContextDiagnostics } from "@core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
 import { buildThinkingResearchMessages } from "@core/research";
+import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
+import type { WebSearchOptions } from "@application/ports";
 import { ToolEvent } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
 import {
@@ -428,10 +430,21 @@ function resolveFetchTargets(
 
 function resolveSearchSources(
   args: Record<string, unknown> | undefined,
-  provider: { searchSourceLabels?(query: string): readonly string[] } | undefined,
+  provider:
+    | { searchSourceLabels?(query: string, options?: WebSearchOptions): readonly string[] }
+    | undefined,
 ): string[] {
   const query = typeof args?.query === "string" ? args.query.trim() : "";
-  return query && provider?.searchSourceLabels ? [...provider.searchSourceLabels(query)] : [];
+  return query && provider?.searchSourceLabels
+    ? [...provider.searchSourceLabels(query, searchSourceOptions(args))]
+    : [];
+}
+
+function searchSourceOptions(args: Record<string, unknown> | undefined): WebSearchOptions {
+  return {
+    ...(isWebQueryIntent(args?.category) ? { intent: args.category } : {}),
+    ...(isWebQueryRecency(args?.recency) ? { recency: args.recency } : {}),
+  };
 }
 
 function isChunkList(value: unknown): value is {
