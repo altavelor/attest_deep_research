@@ -1,5 +1,6 @@
 import { SavedChatSummary } from "@core/chat/savedChat";
 import { positionSavedChatsPopover, renderSavedChatsPopoverContent } from "./SavedChatsPanel";
+import { SavedChatListTab } from "./savedChatListState";
 
 export interface SavedChatsPopoverControllerOptions {
   hostEl: HTMLElement;
@@ -7,6 +8,7 @@ export interface SavedChatsPopoverControllerOptions {
   getCurrentChatId(): string | null;
   onOpenChat(id: string): void;
   onRenameChat(id: string, title: string): void;
+  onToggleFavorite(id: string): void;
   onDeleteChat(id: string): void;
   refreshSavedChats(): Promise<void>;
 }
@@ -16,6 +18,7 @@ export class SavedChatsPopoverController {
   private popoverEl: HTMLElement | null = null;
   private anchorEl: HTMLElement | null = null;
   private searchQuery = "";
+  private activeTab: SavedChatListTab = "history";
   private readonly onDocumentPointerDown = (event: PointerEvent): void => {
     const target = event.target;
     if (!(target instanceof Node) || !this.popoverEl) return;
@@ -45,11 +48,17 @@ export class SavedChatsPopoverController {
       savedChats: this.options.getSavedChats(),
       currentChatId: this.options.getCurrentChatId(),
       searchQuery: this.searchQuery,
+      activeTab: this.activeTab,
       onSearchQueryChange: (query) => {
         this.searchQuery = query;
       },
+      onTabChange: (tab) => {
+        this.activeTab = tab;
+        this.render();
+      },
       onOpenChat: this.options.onOpenChat,
       onRenameChat: this.options.onRenameChat,
+      onToggleFavorite: this.options.onToggleFavorite,
       onDeleteChat: this.options.onDeleteChat,
     });
   }

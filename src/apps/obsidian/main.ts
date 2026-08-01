@@ -168,6 +168,9 @@ export default class IxplorerPlugin extends Plugin {
           renameSavedChat: async (id, title) => {
             await this.createChatStore().renameChat(id, title);
           },
+          setSavedChatFavorite: async (id, isFavorite) => {
+            await this.createChatStore().setChatFavorite(id, isFavorite);
+          },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () => this.settings.includeActiveFileContext,

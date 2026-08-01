@@ -1,11 +1,16 @@
 import { setIcon } from "obsidian";
 
 import { SavedChatSummary } from "@core/chat/savedChat";
-import { shouldScrollSavedChatsList } from "./savedChatListState";
+import {
+  filterSavedChatsByTab,
+  SavedChatListTab,
+  shouldScrollSavedChatsList,
+} from "./savedChatListState";
 
 export interface SavedChatRowActions {
   onRenameChat?(id: string, title: string): void | Promise<void>;
   onDeleteChat?(id: string): void | Promise<void>;
+  onToggleFavorite?(id: string): void | Promise<void>;
 }
 
 export interface SavedChatsEmptyStateOptions extends SavedChatRowActions {
@@ -18,7 +23,9 @@ export interface SavedChatsPanelOptions extends SavedChatRowActions {
   savedChats: SavedChatSummary[];
   currentChatId: string | null;
   searchQuery: string;
+  activeTab: SavedChatListTab;
   onSearchQueryChange(query: string): void;
+  onTabChange(tab: SavedChatListTab): void;
   onOpenChat(id: string): void;
 }
 
@@ -66,6 +73,10 @@ export function renderSavedChatsPopoverContent(
 ): void {
   containerEl.empty();
 
+  const tabs = containerEl.createDiv({ cls: "ixplorer-chat__history-tabs" });
+  renderSavedChatsTab(tabs, "history", "History", options);
+  renderSavedChatsTab(tabs, "favorites", "Favorites", options);
+
   const searchRow = containerEl.createDiv({ cls: "ixplorer-chat__history-search" });
   setIcon(searchRow.createSpan({ cls: "ixplorer-chat__history-search-icon" }), "search");
   const searchInput = searchRow.createEl("input", {
@@ -85,18 +96,24 @@ export function renderSavedChatsPopoverContent(
   });
 
   const header = containerEl.createDiv({ cls: "ixplorer-chat__history-header" });
-  header.createSpan({ text: "Recent chats" });
-  header.createSpan({ text: String(options.savedChats.length) });
+  header.createSpan({ text: options.activeTab === "history" ? "Recent chats" : "Favorite chats" });
+  const chatsInTab = filterSavedChatsByTab(options.savedChats, options.activeTab);
+  header.createSpan({ text: String(chatsInTab.length) });
 
-  const filtered = filterSavedChatSummaries(options.savedChats, options.searchQuery);
+  const filtered = filterSavedChatSummaries(chatsInTab, options.searchQuery);
   const list = containerEl.createDiv({
-    cls: `ixplorer-chat__history-list${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
+    cls: `ixplorer-chat__history-list${options.activeTab === "favorites" ? " is-favorites" : ""}${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
   });
 
   if (filtered.length === 0) {
     list.createDiv({
       cls: "ixplorer-chat__history-empty",
-      text: options.savedChats.length === 0 ? "No saved chats yet." : "No matching chats.",
+      text:
+        chatsInTab.length === 0
+          ? options.activeTab === "history"
+            ? "No saved chats yet."
+            : "No favorite chats yet."
+          : "No matching chats.",
     });
     return;
   }
@@ -114,6 +131,23 @@ export function renderSavedChatsPopoverContent(
       searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
     }, 0);
   }
+}
+
+function renderSavedChatsTab(
+  containerEl: HTMLElement,
+  tab: SavedChatListTab,
+  label: string,
+  options: SavedChatsPanelOptions,
+): void {
+  const button = containerEl.createEl("button", {
+    cls: `ixplorer-chat__history-tab${options.activeTab === tab ? " is-active" : ""}`,
+    text: label,
+    attr: {
+      type: "button",
+      "aria-pressed": String(options.activeTab === tab),
+    },
+  });
+  button.addEventListener("click", () => options.onTabChange(tab));
 }
 
 export function positionSavedChatsPopover(
@@ -154,8 +188,27 @@ function renderSavedChatRow(
   meta.createSpan({ text: formatRelativeTime(chat.updatedAt) });
   button.addEventListener("click", () => options.onOpenChat(chat.id));
 
-  if (options.onRenameChat || options.onDeleteChat) {
-    const actions = row.createDiv({ cls: "ixplorer-chat__saved-actions" });
+  if (options.onRenameChat || options.onDeleteChat || options.onToggleFavorite) {
+    const actions = row.createDiv({
+      cls: `ixplorer-chat__saved-actions${chat.isFavorite ? " has-favorite" : ""}`,
+    });
+
+    if (options.onToggleFavorite) {
+      const isFavorite = chat.isFavorite === true;
+      const favoriteButton = actions.createEl("button", {
+        cls: `ixplorer-chat__saved-action${isFavorite ? " is-favorite" : ""}`,
+        attr: {
+          type: "button",
+          "aria-label": isFavorite ? "Remove chat from favorites" : "Add chat to favorites",
+          title: isFavorite ? "Remove from favorites" : "Add to favorites",
+        },
+      });
+      setIcon(favoriteButton, "star");
+      favoriteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void options.onToggleFavorite!(chat.id);
+      });
+    }
 
     if (options.onRenameChat) {
       const editButton = actions.createEl("button", {

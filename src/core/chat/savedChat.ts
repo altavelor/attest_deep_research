@@ -31,6 +31,8 @@ export interface SavedChat {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
+  /** Absent on legacy saved chats, which are treated as not favorited. */
+  isFavorite?: boolean;
 }
 
 export interface SavedChatSummary {
@@ -38,6 +40,7 @@ export interface SavedChatSummary {
   title: string;
   updatedAt: string;
   messageCount: number;
+  isFavorite: boolean;
 }
 
 export interface SaveChatInput {
@@ -86,6 +89,7 @@ export function isSavedChat(value: unknown): value is SavedChat {
     typeof chat.updatedAt === "string" &&
     Array.isArray(chat.messages) &&
     Array.isArray(chat.attachedContextPaths) &&
+    (chat.isFavorite === undefined || typeof chat.isFavorite === "boolean") &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
     isSavedChatSettings(chat.chatSettings)
   );
