@@ -42,6 +42,13 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain("ixplorer-chat__tool-cell");
   });
 
+  it("keeps tool-call headers visible without Debug mode while hiding reasoning and In/Out cells", () => {
+    expect(transcript).toContain('if (item.kind === "tool-call")');
+    expect(transcript).toContain("if (options.isDebugMode && view.inCell)");
+    expect(transcript).toContain("if (options.isDebugMode && view.outCell)");
+    expect(transcript).toContain('if (child.kind === "tool-call")');
+  });
+
   it("styles the workflow rail, dots, and edit diff", () => {
     expect(styles).toContain(".ixplorer-chat__workflow");
     expect(styles).toContain(".ixplorer-chat__workflow-dot--thinking");

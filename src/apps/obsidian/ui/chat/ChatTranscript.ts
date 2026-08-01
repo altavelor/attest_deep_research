@@ -358,13 +358,13 @@ function renderWorkflowNodes(
       }
     }
     for (const item of chain) {
-      if (item.kind === "reasoning") {
+      if (item.kind === "reasoning" && options.isDebugMode) {
         renderThinkingNode(listEl, item.segmentId, item.content, {
           active: item.segmentId === activeReasoningId,
           options,
           uiState,
         });
-      } else if (item.kind === "tool-call" && options.isDebugMode) {
+      } else if (item.kind === "tool-call") {
         renderToolNode(listEl, item, options, uiState);
       }
     }
@@ -373,6 +373,11 @@ function renderWorkflowNodes(
       return false;
     }
     return true;
+  }
+
+  if (!options.isDebugMode) {
+    listEl.remove();
+    return false;
   }
 
   segments.forEach((segment, index) => {
@@ -495,13 +500,13 @@ function renderToolNode(
         : {}),
     });
   }
-  if (view.inCell) {
+  if (options.isDebugMode && view.inCell) {
     renderToolCell(body, `${item.id}:in`, "In", view.inCell, options, {
       variant: "in",
       onOpen: () => options.onOpenToolOutput(item),
     });
   }
-  if (view.outCell) {
+  if (options.isDebugMode && view.outCell) {
     renderToolCell(body, `${item.id}:out`, "Out", view.outCell, options, {
       variant: "out",
       onOpen: () => options.onOpenToolOutput(item),
@@ -512,7 +517,7 @@ function renderToolNode(
       cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested",
     });
     for (const child of item.children) {
-      if (child.kind === "tool-call" && options.isDebugMode) {
+      if (child.kind === "tool-call") {
         renderToolNode(nested, child, options, uiState);
       }
     }
