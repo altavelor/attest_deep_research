@@ -145,6 +145,9 @@ describe("index-search debug panel", () => {
     expect(plugin).toContain("refreshChatViews(): void");
     expect(plugin).toContain("getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)");
     expect(view).toContain("redisplay(): void");
+    expect(view).toContain('const draft = this.textareaEl?.value ?? "";');
+    expect(view).toContain("this.textareaEl.value = draft;");
+    expect(view).toContain("this.setFormRunning(this.isRunning);");
   });
 
   it("preserves keyword fallback results and renders an accessible warning", () => {
@@ -159,5 +162,19 @@ describe("index-search debug panel", () => {
     expect(controller).toContain("semanticError");
     expect(panel).toContain('role: "alert"');
     expect(controller).toContain("Index search degraded to keyword-only ranking");
+  });
+
+  it("clears profile-specific semantic fallback warnings when the selected profile changes", () => {
+    const controller = readFileSync(
+      resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
+      "utf8",
+    );
+
+    const availabilityUpdater = controller.slice(
+      controller.indexOf("private updateSearchAvailability"),
+      controller.indexOf("private isSearchBlocked"),
+    );
+
+    expect(availabilityUpdater).toContain("this.semanticError = null;");
   });
 });

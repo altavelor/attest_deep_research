@@ -33,6 +33,7 @@ import {
   nextChainToolCallStart,
   nextUserMessage,
   resetLastAssistantContent,
+  promoteAssistantCheckpoint,
   startAssistantProgress,
   stampLastAssistantModel,
 } from "@core/conversation";
@@ -230,7 +231,7 @@ export class ResearchQuestionController {
         if (event.type === "complete" && event.answer.contextDiagnostics) {
           runDiagnostics.complete(event.answer.contextDiagnostics);
         }
-        this.applyResearchEvent(event, runId);
+        await this.applyResearchEvent(event, runId);
         if (event.type === "complete") {
           completed = true;
         }
@@ -260,7 +261,7 @@ export class ResearchQuestionController {
     }
   }
 
-  private applyResearchEvent(event: ResearchStreamEvent, runId: string): void {
+  private async applyResearchEvent(event: ResearchStreamEvent, runId: string): Promise<void> {
     if (this.activeRunId !== runId) return;
     if (event.type === "status") {
       this.options.setProgressStatus(event.message);
@@ -348,26 +349,9 @@ export class ResearchQuestionController {
     }
 
     if (event.type === "checkpoint-promote") {
-      const messages = this.options.getMessages();
-      const last = messages.at(-1);
-      const checkpoint = last?.researchProgress?.checkpoints.find(
-        (item) => item.id === event.checkpointId,
+      this.options.setMessages(
+        promoteAssistantCheckpoint(this.options.getMessages(), event.checkpointId),
       );
-      if (checkpoint && last?.researchProgress) {
-        const updated = [
-          ...messages.slice(0, -1),
-          {
-            ...last,
-            researchProgress: {
-              ...last.researchProgress,
-              checkpoints: last.researchProgress.checkpoints.filter(
-                (item) => item.id !== event.checkpointId,
-              ),
-            },
-          },
-        ];
-        this.options.setMessages(nextAssistantMessage(updated, checkpoint.content));
-      }
       this.scheduleActiveRender();
       return;
     }
@@ -379,6 +363,10 @@ export class ResearchQuestionController {
       return;
     }
 
+    if (this.hasFinalizingCheckpoint()) {
+      await this.waitForFinalizingFrame();
+      if (this.activeRunId !== runId) return;
+    }
     this.cancelActiveRender();
     this.options.setLastAnswer(event.answer);
     this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
@@ -434,6 +422,29 @@ export class ResearchQuestionController {
       clearTimeout(this.activeRenderHandle);
     }
     this.activeRenderHandle = null;
+  }
+
+  private hasFinalizingCheckpoint(): boolean {
+    return Boolean(
+      this.options
+        .getMessages()
+        .at(-1)
+        ?.researchProgress?.checkpoints.some((checkpoint) => checkpoint.status === "finalizing"),
+    );
+  }
+
+  private waitForFinalizingFrame(): Promise<void> {
+    return new Promise((resolve) => {
+      let completed = false;
+      const finish = (): void => {
+        if (completed) return;
+        completed = true;
+        window.clearTimeout(fallbackTimer);
+        resolve();
+      };
+      const fallbackTimer = window.setTimeout(finish, 50);
+      window.requestAnimationFrame(finish);
+    });
   }
 
   private rejectIfContextWindowExceeded(

@@ -1,0 +1,157 @@
+import { App, Component } from "obsidian";
+
+import { ChainItem, ChatDisplayMessage } from "@core/conversation";
+import { fetchTargetsByResultId, fetchTargetsFor } from "./workflow/fetchTargetResolver";
+import {
+  renderSummaryNode,
+  renderThinkingNode,
+  renderWorkflowIndicator,
+} from "./workflow/reasoningNodeRenderer";
+import { renderToolNode } from "./workflow/toolCallNodeRenderer";
+
+export interface WorkflowRenderContext {
+  app: App;
+  markdownContext: Component;
+  isDebugMode: boolean;
+  onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
+}
+
+export interface WorkflowUiState {
+  openThinking: Set<string>;
+}
+
+export function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
+  const openThinking = new Set<string>();
+  hostEl.querySelectorAll<HTMLDetailsElement>("details[data-thinking-id]").forEach((el) => {
+    if (el.open && el.dataset.thinkingId) openThinking.add(el.dataset.thinkingId);
+  });
+  return { openThinking };
+}
+
+export function renderWorkflowNodes(
+  hostEl: HTMLElement,
+  message: ChatDisplayMessage,
+  context: WorkflowRenderContext,
+  uiState?: WorkflowUiState,
+): boolean {
+  const progress = message.researchProgress;
+  const segments = progress?.reasoning.segments ?? [];
+  const checkpoints = progress?.checkpoints ?? [];
+  const chain = progress?.chain ?? [];
+  const hasChain = chain.length > 0;
+  if (
+    segments.length === 0 &&
+    checkpoints.length === 0 &&
+    !hasChain &&
+    progress?.phase !== "streaming"
+  ) {
+    return false;
+  }
+
+  const isStreaming = progress?.phase === "streaming";
+  const isFinalizing =
+    isStreaming && checkpoints.some((checkpoint) => checkpoint.status === "finalizing");
+  const hasStreamingCheckpoint = checkpoints.some(
+    (checkpoint) => checkpoint.status === "streaming",
+  );
+  const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
+
+  if (hasChain) {
+    renderChainNodes(listEl, chain, context, {
+      isStreaming,
+      isFinalizing,
+      hasStreamingCheckpoint,
+      uiState,
+    });
+  } else {
+    renderLegacyNodes(listEl, segments, checkpoints, context, {
+      isStreaming,
+      isFinalizing,
+      hasStreamingCheckpoint,
+      uiState,
+    });
+  }
+
+  if (listEl.childElementCount === 0) {
+    listEl.remove();
+    return false;
+  }
+  return true;
+}
+
+function renderChainNodes(
+  listEl: HTMLElement,
+  chain: ChainItem[],
+  context: WorkflowRenderContext,
+  state: WorkflowState,
+): void {
+  const fetchTargets = fetchTargetsByResultId(chain);
+  const latestItem = chain.at(-1);
+  const activeReasoningId =
+    state.isStreaming &&
+    !state.isFinalizing &&
+    !state.hasStreamingCheckpoint &&
+    latestItem?.kind === "reasoning"
+      ? latestItem.segmentId
+      : undefined;
+
+  for (const item of chain) {
+    if (item.kind === "reasoning") {
+      renderThinkingNode(listEl, item.segmentId, item.content, {
+        active: item.segmentId === activeReasoningId,
+        renderContext: context,
+        uiState: state.uiState,
+      });
+    } else if (item.kind === "tool-call") {
+      renderToolNode(
+        listEl,
+        item,
+        context,
+        item.fetchTargets ?? fetchTargetsFor(item, fetchTargets),
+      );
+    }
+  }
+  renderWorkflowIndicator(
+    listEl,
+    state.isStreaming,
+    state.isFinalizing,
+    state.hasStreamingCheckpoint,
+    activeReasoningId,
+  );
+}
+
+function renderLegacyNodes(
+  listEl: HTMLElement,
+  segments: NonNullable<ChatDisplayMessage["researchProgress"]>["reasoning"]["segments"],
+  checkpoints: NonNullable<ChatDisplayMessage["researchProgress"]>["checkpoints"],
+  context: WorkflowRenderContext,
+  state: WorkflowState,
+): void {
+  segments.forEach((segment, index) => {
+    renderThinkingNode(listEl, segment.id, segment.content, {
+      active:
+        state.isStreaming &&
+        !state.isFinalizing &&
+        !state.hasStreamingCheckpoint &&
+        index === segments.length - 1,
+      renderContext: context,
+      uiState: state.uiState,
+    });
+  });
+  for (const checkpoint of checkpoints) {
+    if (checkpoint.status !== "finalizing") renderSummaryNode(listEl, checkpoint.content, context);
+  }
+  renderWorkflowIndicator(
+    listEl,
+    state.isStreaming,
+    state.isFinalizing,
+    state.hasStreamingCheckpoint,
+  );
+}
+
+interface WorkflowState {
+  isStreaming: boolean;
+  isFinalizing: boolean;
+  hasStreamingCheckpoint: boolean;
+  uiState?: WorkflowUiState;
+}

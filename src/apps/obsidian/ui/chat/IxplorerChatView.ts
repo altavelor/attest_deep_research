@@ -28,6 +28,7 @@ import {
 } from "./ChatComposer";
 import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import {
+  disposeChatTranscript,
   patchActiveAssistantMessage,
   renderChatTranscript,
   renderFollowUps as renderChatFollowUps,
@@ -228,6 +229,9 @@ export class IxplorerChatView extends ItemView {
     this.citationPopover.close();
     this.diagnosticModal.close();
     this.closeHistoryPopover();
+    if (this.transcriptEl) {
+      disposeChatTranscript(this.transcriptEl);
+    }
     this.contentEl.empty();
   }
 
@@ -236,7 +240,11 @@ export class IxplorerChatView extends ItemView {
   }
 
   private render(): void {
+    const draft = this.textareaEl?.value ?? "";
     this.diagnosticModal.close();
+    if (this.transcriptEl) {
+      disposeChatTranscript(this.transcriptEl);
+    }
     this.contentEl.empty();
     this.contentEl.addClass("ixplorer-chat-view");
     if (!this.services.isDebugMode()) {
@@ -297,8 +305,9 @@ export class IxplorerChatView extends ItemView {
     this.submitButtonEl = this.composerRefs.submitButtonEl;
     this.attachedContextEl = this.composerRefs.attachedContextEl;
     this.composerControls = this.composerRefs.controls;
+    this.textareaEl.value = draft;
     this.renderAttachedContext();
-    this.updateSubmitAvailability();
+    this.setFormRunning(this.isRunning);
 
     if (this.services.isDebugMode()) {
       const indexSearchRoot = root.createDiv({
