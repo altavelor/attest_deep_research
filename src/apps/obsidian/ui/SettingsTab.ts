@@ -6,13 +6,7 @@ import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";
 import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
-import { capabilityTags, formatCapabilityVerificationStatus } from "@adapters/settings";
-import { mergeChatProfileSettingsPreservingProbe } from "@adapters/settings";
-import {
-  canDeleteEmbeddingModelProfile,
-  canDeleteServerProfile,
-  getActiveIndexProfile,
-} from "@adapters/settings";
+import { getActiveIndexProfile } from "@adapters/settings";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexRunModal } from "./settings/IndexRunModal";
 import { IndexReportModal } from "./settings/IndexReportModal";
@@ -22,16 +16,9 @@ import {
   resolveIndexStatusBadge,
 } from "./settings/indexProfileStatus";
 import type { EnrichmentPendingAction, IndexPendingAction } from "./settings/indexProfileStatus";
-import { ServerProfileModal } from "./settings/ServerProfileModal";
 import { RetrievalSettingsSection } from "./settings/RetrievalSettingsSection";
-import { ModelProfileModal } from "./settings/ModelProfileModal";
-import { renderProfileList, renderProfileListItem } from "./settings/ProfileListRenderer";
-import {
-  createIconButton,
-  formatEnrichmentStatus,
-  renderCategoryHeading,
-  statusForProfile,
-} from "./settings/shared";
+import { ModelProfilesSection } from "./settings/ModelProfilesSection";
+import { createIconButton, formatEnrichmentStatus, renderCategoryHeading } from "./settings/shared";
 
 export class IxplorerSettingTab extends PluginSettingTab {
   private unsubscribeIndexing: (() => void) | null = null;
@@ -152,271 +139,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderProfileSettings(containerEl: HTMLElement): void {
-    renderCategoryHeading(
-      containerEl,
-      "Model profiles",
-      "Configure provider endpoints and the chat or embedding models that use them.",
-    );
-
-    this.renderServerProfiles(containerEl);
-    this.renderChatModelProfiles(containerEl);
-    this.renderEmbeddingModelProfiles(containerEl);
-  }
-
-  private renderServerProfiles(containerEl: HTMLElement): void {
-    const listEl = renderProfileList(containerEl, "Server profiles", () => {
-      new ServerProfileModal(this.app, {
-        profiles: this.plugin.settings.serverProfiles,
-        onSave: async (profile) => {
-          this.plugin.settings.serverProfiles.push(profile);
-          await this.plugin.saveSettings();
-          this.display();
-        },
-      }).open();
-    });
-
-    for (const profile of this.plugin.settings.serverProfiles) {
-      renderProfileListItem(listEl, {
-        name: profile.name,
-        status: statusForProfile(profile),
-        onEdit: () => {
-          new ServerProfileModal(this.app, {
-            profile,
-            profiles: this.plugin.settings.serverProfiles,
-            onSave: async (updatedProfile) => {
-              Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
-              this.fetchedModelsByServerId.delete(profile.id);
-              await this.plugin.saveSettings();
-              this.display();
-            },
-          }).open();
-        },
-        canDelete: canDeleteServerProfile(this.plugin.settings, profile.id),
-        deleteTooltip: canDeleteServerProfile(this.plugin.settings, profile.id)
-          ? "Delete server profile"
-          : "Delete dependent model profiles first",
-        onDelete: async () => {
-          if (!canDeleteServerProfile(this.plugin.settings, profile.id)) {
-            new Notice("Delete dependent model profiles first.");
-            return;
-          }
-          this.plugin.settings.serverProfiles = this.plugin.settings.serverProfiles.filter(
-            (candidate) => candidate.id !== profile.id,
-          );
-          await this.plugin.saveSettings();
-          this.display();
-        },
-      });
-    }
-  }
-
-  private renderChatModelProfiles(containerEl: HTMLElement): void {
-    const listEl = renderProfileList(containerEl, "Chat model profiles", () => {
-      new ModelProfileModal(this.app, {
-        kind: "chat",
-        servers: this.plugin.settings.serverProfiles,
-        profiles: this.plugin.settings.chatModelProfiles,
-        fetchedModelsByServerId: this.fetchedModelsByServerId,
-        fetchModels: (server) => this.prober.fetchModelsForServer(server),
-        fetchContextLength: (server, modelName) =>
-          this.prober.fetchContextLengthForModel(server, modelName),
-        onSave: async (profile) => {
-          const existingIndex = this.plugin.settings.chatModelProfiles.findIndex(
-            (candidate) => candidate.id === profile.id,
-          );
-          if (existingIndex >= 0) {
-            this.plugin.settings.chatModelProfiles[existingIndex] = profile;
-          } else {
-            this.plugin.settings.chatModelProfiles.push(profile);
-          }
-          if (this.plugin.settings.chatModelProfiles.length === 1) {
-            this.plugin.settings.activeChatModelProfileId = profile.id;
-          }
-          await this.plugin.saveSettings();
-          this.display();
-        },
-        onTest: async (profile) => this.prober.startChatProfileProbes(profile.id, true),
-        getCapabilityStatus: (profileId) => {
-          const saved = this.plugin.settings.chatModelProfiles.find(
-            (profile) => profile.id === profileId,
-          );
-          return saved
-            ? this.prober.statusFor(saved)
-            : { tools: "not-tested" as const, agent: "not-tested" as const };
-        },
-        subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
-        resolveProfile: (profileId) =>
-          this.plugin.settings.chatModelProfiles.find((profile) => profile.id === profileId),
-      }).open();
-    });
-
-    for (const profile of this.plugin.settings.chatModelProfiles) {
-      const capabilityState = this.prober.statusFor(profile);
-      const isTesting = capabilityState.tools === "testing" || capabilityState.agent === "testing";
-      renderProfileListItem(listEl, {
-        name: profile.name,
-        tags: capabilityTags(profile),
-        status:
-          this.plugin.settings.activeChatModelProfileId === profile.id && !profile.isSuspended
-            ? { kind: "is-default", label: "Default", title: "Default chat model" }
-            : statusForProfile(profile),
-        onEdit: () => {
-          new ModelProfileModal(this.app, {
-            kind: "chat",
-            profile,
-            servers: this.plugin.settings.serverProfiles,
-            profiles: this.plugin.settings.chatModelProfiles,
-            fetchedModelsByServerId: this.fetchedModelsByServerId,
-            fetchModels: (server) => this.prober.fetchModelsForServer(server),
-            fetchContextLength: (server, modelName) =>
-              this.prober.fetchContextLengthForModel(server, modelName),
-            onSave: async (updatedProfile) => {
-              Object.assign(
-                profile,
-                mergeChatProfileSettingsPreservingProbe(profile, updatedProfile),
-                {
-                  updatedAt: new Date().toISOString(),
-                },
-              );
-              await this.plugin.saveSettings();
-              this.display();
-            },
-            onTest: async (updatedProfile) =>
-              this.prober.startChatProfileProbes(updatedProfile.id, true),
-            getCapabilityStatus: (profileId) =>
-              this.prober.statusFor(
-                this.plugin.settings.chatModelProfiles.find(
-                  (candidate) => candidate.id === profileId,
-                ) ?? profile,
-              ),
-            subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
-            resolveProfile: (profileId) =>
-              this.plugin.settings.chatModelProfiles.find(
-                (candidate) => candidate.id === profileId,
-              ),
-          }).open();
-        },
-        extraActions: [
-          {
-            icon: "flask-conical",
-            className: `ixplorer-settings__test-capabilities-action${
-              isTesting ? " is-testing" : ""
-            }`,
-            label: isTesting
-              ? "Testing capabilities…"
-              : formatCapabilityVerificationStatus(capabilityState),
-            onClick: async () => {
-              await this.prober.refreshMetadataCapabilities();
-              this.prober.startChatProfileProbes(profile.id, true);
-              new Notice(`Testing capabilities for ${profile.name}.`);
-            },
-          },
-          {
-            icon: "star",
-            className: "ixplorer-settings__default-action",
-            label:
-              this.plugin.settings.activeChatModelProfileId === profile.id
-                ? "Default model"
-                : "Set as default model",
-            disabled:
-              profile.isSuspended === true ||
-              this.plugin.settings.activeChatModelProfileId === profile.id,
-            onClick: async () => {
-              this.plugin.settings.activeChatModelProfileId = profile.id;
-              await this.plugin.saveSettings();
-              this.display();
-            },
-          },
-        ],
-        canDelete: true,
-        deleteTooltip: "Delete chat model profile",
-        onDelete: async () => {
-          this.plugin.settings.chatModelProfiles = this.plugin.settings.chatModelProfiles.filter(
-            (candidate) => candidate.id !== profile.id,
-          );
-          await this.plugin.saveSettings();
-          this.display();
-        },
-      });
-    }
-  }
-
-  private renderEmbeddingModelProfiles(containerEl: HTMLElement): void {
-    const listEl = renderProfileList(containerEl, "Embedding model profiles", () => {
-      new ModelProfileModal(this.app, {
-        kind: "embedding",
-        servers: this.plugin.settings.serverProfiles,
-        profiles: this.plugin.settings.embeddingModelProfiles,
-        fetchedModelsByServerId: this.fetchedModelsByServerId,
-        fetchModels: (server) => this.prober.fetchModelsForServer(server),
-        onSave: async (profile) => {
-          this.plugin.settings.embeddingModelProfiles.push(profile);
-          await this.plugin.saveSettings();
-          this.display();
-          this.prober.startEmbeddingProfileProbe(profile.id);
-        },
-      }).open();
-    });
-
-    for (const profile of this.plugin.settings.embeddingModelProfiles) {
-      renderProfileListItem(listEl, {
-        name: profile.name,
-        status:
-          this.plugin.settings.activeEmbeddingModelProfileId === profile.id && !profile.isSuspended
-            ? { kind: "is-default", label: "Default", title: "Default embedding model" }
-            : statusForProfile(profile),
-        extraActions: [
-          {
-            icon: "star",
-            className: "ixplorer-settings__default-action",
-            label:
-              this.plugin.settings.activeEmbeddingModelProfileId === profile.id
-                ? "Default model"
-                : "Set as default model",
-            disabled:
-              profile.isSuspended === true ||
-              this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
-            onClick: async () => {
-              this.plugin.settings.activeEmbeddingModelProfileId = profile.id;
-              await this.plugin.saveSettings();
-              this.display();
-            },
-          },
-        ],
-        onEdit: () => {
-          new ModelProfileModal(this.app, {
-            kind: "embedding",
-            profile,
-            servers: this.plugin.settings.serverProfiles,
-            profiles: this.plugin.settings.embeddingModelProfiles,
-            fetchedModelsByServerId: this.fetchedModelsByServerId,
-            fetchModels: (server) => this.prober.fetchModelsForServer(server),
-            onSave: async (updatedProfile) => {
-              Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
-              await this.plugin.saveSettings();
-              this.display();
-              this.prober.startEmbeddingProfileProbe(updatedProfile.id);
-            },
-          }).open();
-        },
-        canDelete: canDeleteEmbeddingModelProfile(this.plugin.settings, profile.id),
-        deleteTooltip: canDeleteEmbeddingModelProfile(this.plugin.settings, profile.id)
-          ? "Delete embedding model profile"
-          : "This embedding model is used by an index profile",
-        onDelete: async () => {
-          if (!canDeleteEmbeddingModelProfile(this.plugin.settings, profile.id)) {
-            new Notice("This embedding model is used by an index profile.");
-            return;
-          }
-          this.plugin.settings.embeddingModelProfiles =
-            this.plugin.settings.embeddingModelProfiles.filter(
-              (candidate) => candidate.id !== profile.id,
-            );
-          await this.plugin.saveSettings();
-          this.display();
-        },
-      });
-    }
+    new ModelProfilesSection({
+      app: this.app,
+      settings: this.plugin.settings,
+      fetchedModelsByServerId: this.fetchedModelsByServerId,
+      prober: this.prober,
+      saveSettings: () => this.plugin.saveSettings(),
+      requestRedisplay: () => this.display(),
+    }).render(containerEl);
   }
 
   private renderIndexingSettings(containerEl: HTMLElement): void {

@@ -38,10 +38,9 @@ describe("chat model settings surface", () => {
 
   it("refreshes generation capabilities explicitly without requiring profile re-save", () => {
     expect(source).toContain('icon: "flask-conical"');
-    expect(source).toContain("this.prober.startChatProfileProbes(profile.id, true)");
-    expect(source).not.toContain("this.prober.startChatProfileProbes(updatedProfile.id)");
-    expect(source).toContain("startEmbeddingProfileProbe(profile.id)");
-    expect(source).toContain("startEmbeddingProfileProbe(updatedProfile.id)");
+    expect(source).toContain("this.options.prober.startChatProfileProbes(profile.id, true)");
+    expect(source).not.toContain("startChatProfileProbes(updatedProfile.id)");
+    expect(source).toContain("startEmbeddingProfileProbe(saved.id)");
     expect(source).not.toContain("await this.detectChatCapabilities(server)");
     expect(source).not.toContain("await this.options.verifyEmbedding");
     expect(source).toContain(
