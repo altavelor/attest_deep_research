@@ -33,8 +33,6 @@ export interface ResearchExecutionPolicy {
 export function resolveResearchExecutionPolicy(
   input: ResearchExecutionPolicyInput,
 ): Readonly<ResearchExecutionPolicy> {
-  // The model chooses tools itself (`auto`); this policy only chooses the
-  // top-level research execution path.
   const base = {
     requiredTools: Object.freeze([] as string[]),
     bootstrapChoice: Object.freeze({ type: "auto" as const }),
@@ -55,9 +53,6 @@ export function resolveResearchExecutionPolicy(
       reason: "provider-tool-control-unsupported",
     });
   }
-  // The only capability that still matters is whether the model can call tools at
-  // all. Specific/required/parallel choice no longer gate eligibility because we
-  // never force a tool.
   if (!input.capabilities.calls) {
     return freeze({
       ...base,

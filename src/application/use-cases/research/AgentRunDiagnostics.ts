@@ -102,10 +102,6 @@ export class AgentRunDiagnosticCollector {
       duplicateDeltasIgnored: 0,
       classifications: [],
     };
-    // When render instrumentation is wired in (the chat view), report the real
-    // number of DOM renders versus updates that were coalesced into a pending
-    // render. When it is absent (e.g. headless callers), fall back to the
-    // pre-instrumentation convention of one render per UI patch.
     const renderInstrumented = this.markdownRenders + this.coalescedUpdates > 0;
     diagnostics.delivery = {
       projectorEventsReceived: this.uiPatches,

@@ -64,8 +64,6 @@ export function classifyWebQuery(query: string): WebQueryIntent {
 const INTENT_STRENGTHS: Record<WebQueryIntent, string[]> = {
   academic: ["papers", "preprints", "citations-graph", "biomed", "metadata"],
   code: ["code", "qa", "troubleshooting", "repositories", "tech-news"],
-  // Deliberately excludes tech-news/discussions: HN is a strong `code` source
-  // but pollutes general-news results with stale tech threads.
   news: ["news", "fresh"],
   encyclopedic: ["facts", "definitions", "overview"],
   general: ["general"],

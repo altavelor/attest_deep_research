@@ -62,8 +62,6 @@ export function headingsFromTypography(lines: PdfTextLine[], pageCount: number):
     (line) => isHeadingCandidate(line, median) && !repeating.has(normalizeLineText(line.text)),
   );
 
-  // Плотность кандидатов выше ~2 на страницу — типографика документа не
-  // отличает заголовки от текста (сканы, «кричащая» вёрстка); лучше ничего.
   if (candidates.length === 0 || candidates.length > pageCount * 2) {
     return [];
   }

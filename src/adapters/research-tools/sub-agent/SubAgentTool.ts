@@ -74,11 +74,6 @@ export const SubAgentTool = defineTool<
       return toolFailure("sub-agent-failed", "Sub-agent session failed.", true);
     }
 
-    // Merge the sub-agent's gathered evidence into the parent run. Web evidenceIds
-    // are content-addressed by URL and index/note evidenceIds are the retriever's
-    // own stable ids, so re-registering under the same id map lets the sub-agent's
-    // citations (already in the shared `[url:...]` / `[evidenceId]` format) resolve
-    // unchanged in the parent — no text rewriting needed.
     let sourceCount = 0;
     for (const chunk of run.snapshot.evidence) {
       const provenance = run.snapshot.provenance.find((entry) => entry.evidenceId === chunk.id);
@@ -106,9 +101,7 @@ export const SubAgentTool = defineTool<
           });
         }
         sourceCount += 1;
-      } catch {
-        // Skip a source that cannot be registered (e.g. unsafe URL).
-      }
+      } catch {}
     }
 
     return {

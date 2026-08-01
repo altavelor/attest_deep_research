@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 
 import type IxplorerPlugin from "@apps/obsidian/main";
 import { IndexProfile } from "@adapters/indexing";
@@ -6,6 +6,8 @@ import { formatIndexSize } from "@adapters/indexing";
 import { DiscoveredModel } from "@adapters/settings";
 import { MAX_INDEX_PROFILE_COUNT } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
+import { capabilityTags, formatCapabilityVerificationStatus } from "@adapters/settings";
+import { mergeChatProfileSettingsPreservingProbe } from "@adapters/settings";
 import {
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
@@ -35,6 +37,7 @@ import {
 export class IxplorerSettingTab extends PluginSettingTab {
   private unsubscribeIndexing: (() => void) | null = null;
   private unsubscribeEnrichment: (() => void) | null = null;
+  private unsubscribeCapabilityProbes: (() => void) | null = null;
   private readonly fetchedModelsByServerId = new Map<string, DiscoveredModel[]>();
   private readonly pendingIndexActions = new Map<string, IndexPendingAction>();
   private readonly pendingEnrichmentActions = new Map<string, EnrichmentPendingAction>();
@@ -59,19 +62,61 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.unsubscribeIndexing = null;
     this.unsubscribeEnrichment?.();
     this.unsubscribeEnrichment = null;
+    this.unsubscribeCapabilityProbes?.();
+    this.unsubscribeCapabilityProbes = this.prober.subscribeAll(() => {
+      window.setTimeout(() => this.display(), 0);
+    });
     normalizeSettingsState(this.plugin.settings);
     containerEl.empty();
     containerEl.addClass("ixplorer-settings");
 
     renderCategoryHeading(containerEl, "Ixplorer");
-    this.renderSearchEngineSettings(containerEl);
+    this.renderQuickStart(containerEl);
     this.renderProfileSettings(containerEl);
     this.renderIndexingSettings(containerEl);
+    this.renderSearchEngineSettings(containerEl);
     this.renderAdvancedSettings(containerEl);
     if (!this.metadataRefreshStarted) {
       this.metadataRefreshStarted = true;
       void this.prober.refreshMetadataCapabilities();
     }
+  }
+
+  private hasActiveChatModel(): boolean {
+    return this.plugin.settings.chatModelProfiles.some((profile) => profile.isSuspended !== true);
+  }
+
+  private renderQuickStart(containerEl: HTMLElement): void {
+    if (this.plugin.settings.serverProfiles.length > 0) {
+      return;
+    }
+
+    const banner = containerEl.createDiv({ cls: "ixplorer-settings__quickstart" });
+    setIcon(banner.createSpan({ cls: "ixplorer-settings__quickstart-icon" }), "rocket");
+    const body = banner.createDiv({ cls: "ixplorer-settings__quickstart-body" });
+    body.createDiv({
+      cls: "ixplorer-settings__quickstart-title",
+      text: "Quick start",
+    });
+    body.createDiv({
+      cls: "ixplorer-settings__quickstart-steps",
+      text: "1. Add a server → 2. Add a chat model → 3. (optional) Add an index",
+    });
+  }
+
+  private gateHost(containerEl: HTMLElement): HTMLElement {
+    if (this.hasActiveChatModel()) {
+      return containerEl;
+    }
+
+    const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
+    const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
+    setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
+    hint.createSpan({ text: "Add a chat model profile first" });
+    return section.createDiv({
+      cls: "ixplorer-settings__gated-content is-disabled",
+      attr: { "aria-disabled": "true", inert: "" },
+    });
   }
 
   private renderDebugSettings(containerEl: HTMLElement): void {
@@ -100,9 +145,10 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderSearchEngineSettings(containerEl: HTMLElement): void {
+    containerEl = this.gateHost(containerEl);
     renderCategoryHeading(
       containerEl,
-      "Search engine",
+      "Retrieval",
       "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
     );
 
@@ -170,6 +216,20 @@ export class IxplorerSettingTab extends PluginSettingTab {
             this.plugin.settings.graphContextDepth = value === "2" ? 2 : 1;
             await this.plugin.saveSettings();
           }),
+      );
+
+    renderSubcategoryHeading(containerEl, "Search");
+
+    new Setting(containerEl)
+      .setName("Expand search query")
+      .setDesc(
+        "Generate cross-language query variants before retrieval so notes written in other languages are found. Uses an extra chat-model call per search.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.expandSearchQuery).onChange(async (value) => {
+          this.plugin.settings.expandSearchQuery = value;
+          await this.plugin.saveSettings();
+        }),
       );
 
     this.renderWebSearchSettings(containerEl);
@@ -245,19 +305,41 @@ export class IxplorerSettingTab extends PluginSettingTab {
         fetchContextLength: (server, modelName) =>
           this.prober.fetchContextLengthForModel(server, modelName),
         onSave: async (profile) => {
-          this.plugin.settings.chatModelProfiles.push(profile);
+          const existingIndex = this.plugin.settings.chatModelProfiles.findIndex(
+            (candidate) => candidate.id === profile.id,
+          );
+          if (existingIndex >= 0) {
+            this.plugin.settings.chatModelProfiles[existingIndex] = profile;
+          } else {
+            this.plugin.settings.chatModelProfiles.push(profile);
+          }
           if (this.plugin.settings.chatModelProfiles.length === 1) {
             this.plugin.settings.activeChatModelProfileId = profile.id;
           }
           await this.plugin.saveSettings();
           this.display();
         },
+        onTest: async (profile) => this.prober.startChatProfileProbes(profile.id, true),
+        getCapabilityStatus: (profileId) => {
+          const saved = this.plugin.settings.chatModelProfiles.find(
+            (profile) => profile.id === profileId,
+          );
+          return saved
+            ? this.prober.statusFor(saved)
+            : { tools: "not-tested" as const, agent: "not-tested" as const };
+        },
+        subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
+        resolveProfile: (profileId) =>
+          this.plugin.settings.chatModelProfiles.find((profile) => profile.id === profileId),
       }).open();
     });
 
     for (const profile of this.plugin.settings.chatModelProfiles) {
+      const capabilityState = this.prober.statusFor(profile);
+      const isTesting = capabilityState.tools === "testing" || capabilityState.agent === "testing";
       this.renderProfileListItem(listEl, {
         name: profile.name,
+        tags: capabilityTags(profile),
         status:
           this.plugin.settings.activeChatModelProfileId === profile.id && !profile.isSuspended
             ? { kind: "is-default", label: "Default", title: "Default chat model" }
@@ -273,21 +355,44 @@ export class IxplorerSettingTab extends PluginSettingTab {
             fetchContextLength: (server, modelName) =>
               this.prober.fetchContextLengthForModel(server, modelName),
             onSave: async (updatedProfile) => {
-              Object.assign(profile, updatedProfile, { updatedAt: new Date().toISOString() });
+              Object.assign(
+                profile,
+                mergeChatProfileSettingsPreservingProbe(profile, updatedProfile),
+                {
+                  updatedAt: new Date().toISOString(),
+                },
+              );
               await this.plugin.saveSettings();
               this.display();
             },
+            onTest: async (updatedProfile) =>
+              this.prober.startChatProfileProbes(updatedProfile.id, true),
+            getCapabilityStatus: (profileId) =>
+              this.prober.statusFor(
+                this.plugin.settings.chatModelProfiles.find(
+                  (candidate) => candidate.id === profileId,
+                ) ?? profile,
+              ),
+            subscribeCapabilityStatus: (listener) => this.prober.subscribeAll(listener),
+            resolveProfile: (profileId) =>
+              this.plugin.settings.chatModelProfiles.find(
+                (candidate) => candidate.id === profileId,
+              ),
           }).open();
         },
         extraActions: [
           {
-            icon: "refresh-cw",
-            className: "ixplorer-settings__refresh-capabilities-action",
-            label: "Refresh capabilities",
+            icon: "flask-conical",
+            className: `ixplorer-settings__test-capabilities-action${
+              isTesting ? " is-testing" : ""
+            }`,
+            label: isTesting
+              ? "Testing capabilities…"
+              : formatCapabilityVerificationStatus(capabilityState),
             onClick: async () => {
               await this.prober.refreshMetadataCapabilities();
-              this.prober.startChatProfileProbes(profile.id);
-              new Notice(`Refreshing capabilities for ${profile.name}.`);
+              this.prober.startChatProfileProbes(profile.id, true);
+              new Notice(`Testing capabilities for ${profile.name}.`);
             },
           },
           {
@@ -297,7 +402,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
               this.plugin.settings.activeChatModelProfileId === profile.id
                 ? "Default model"
                 : "Set as default model",
-            hidden: this.plugin.settings.activeChatModelProfileId === profile.id,
             disabled:
               profile.isSuspended === true ||
               this.plugin.settings.activeChatModelProfileId === profile.id,
@@ -353,7 +457,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
               this.plugin.settings.activeEmbeddingModelProfileId === profile.id
                 ? "Default model"
                 : "Set as default model",
-            hidden: this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
             disabled:
               profile.isSuspended === true ||
               this.plugin.settings.activeEmbeddingModelProfileId === profile.id,
@@ -429,6 +532,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
     containerEl: HTMLElement,
     options: {
       name: string;
+      tags?: Array<"Agent" | "Tools" | "Instant">;
       status: ProfileStatus | null;
       canDelete: boolean;
       deleteTooltip: string;
@@ -446,14 +550,19 @@ export class IxplorerSettingTab extends PluginSettingTab {
   ): void {
     const row = containerEl.createDiv({ cls: "ixplorer-settings-profile-list__item" });
     row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
+    const statusCell = row.createDiv({ cls: "ixplorer-settings-profile-list__status-cell" });
     if (options.status) {
-      row.createSpan({
+      statusCell.createSpan({
         cls: `ixplorer-settings-profile-list__status ${options.status.kind}`,
         text: options.status.label,
         attr: { title: options.status.title },
       });
-    } else {
-      row.createSpan({ cls: "ixplorer-settings-profile-list__status-placeholder" });
+    }
+    for (const tag of options.tags ?? []) {
+      statusCell.createSpan({
+        cls: `ixplorer-settings-profile-list__status ixplorer-settings-profile-list__tag--${tag.toLowerCase()}`,
+        text: tag,
+      });
     }
     const actions = row.createDiv({ cls: "ixplorer-settings-profile-list__actions" });
     const defaultAction = options.extraActions?.[0];
@@ -493,6 +602,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderIndexingSettings(containerEl: HTMLElement): void {
+    containerEl = this.gateHost(containerEl);
     new Setting(containerEl).setName("Indexing").setHeading();
 
     const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
@@ -607,8 +717,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
       const canRun = profile.isSuspended !== true && !isBusyElsewhere;
       const isActionPending = Boolean(pendingIndexAction || pendingEnrichmentAction);
 
-      // Единая кнопка запуска: start → update → pause/continue. Настройки
-      // прогона (модели, секции) выбираются в IndexRunModal.
       if (isRunning || isPaused) {
         createIconButton(actions, {
           icon: isPaused ? "play" : "pause",
@@ -765,9 +873,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
     );
     const metadata = profile.lastIndexedAt ? await this.plugin.loadIndexMetadata(profile.id) : [];
     const hasMetadata = metadata.length > 0;
-    // Sidecar-файлы, созданные до появления lastEnrichedAt (или прежней
-    // командой), бэкфиллятся из provenance извлечения — иначе строка никогда
-    // не покажет Stale metadata.
     if (hasMetadata && !profile.lastEnrichedAt) {
       const latest = metadata
         .map((item) => item.extraction.extractedAt)

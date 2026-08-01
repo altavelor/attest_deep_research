@@ -86,14 +86,12 @@ function parseArgList(raw: string): Record<string, unknown> {
   if (!trimmed) {
     return {};
   }
-  // `name({"path": ""})` — JSON object passed positionally.
   if (trimmed.startsWith("{")) {
     const parsed = tryParseJson(trimmed);
     if (isRecord(parsed)) {
       return parsed;
     }
   }
-  // `path="", limit=5` keyword-argument form.
   const args: Record<string, unknown> = {};
   for (const pair of splitTopLevel(trimmed)) {
     const eq = pair.indexOf("=");

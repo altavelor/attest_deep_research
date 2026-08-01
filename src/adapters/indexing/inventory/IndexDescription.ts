@@ -69,8 +69,6 @@ export function buildIndexDescription(
     `The committed index contains ${source.sourceCount} sources and ${source.chunkCount} chunks.`,
     `Source types: ${sortedUnique(source.sourceKinds).join(", ") || "unknown"}.`,
     `Languages: ${formatLanguages(source.languageInventory)}.`,
-    // Однострочные саммари заменяют «representative sources», когда есть:
-    // они несравнимо информативнее списка имён файлов.
     oneLiners.length > 0
       ? `Documents:\n${oneLiners
           .map((item) => `- ${normalizeMetadata(item.path)}: ${normalizeMetadata(item.oneLiner)}`)

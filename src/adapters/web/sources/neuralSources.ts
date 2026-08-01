@@ -77,7 +77,6 @@ export const jinaDefinition: WebSourceDefinition = {
     headers: {
       accept: "application/json",
       authorization: `Bearer ${credentials.apiKey ?? ""}`,
-      // Respond format: structured JSON instead of concatenated markdown.
       "x-respond-with": "no-content",
     },
   }),

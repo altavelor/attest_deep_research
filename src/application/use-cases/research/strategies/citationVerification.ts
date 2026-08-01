@@ -57,7 +57,6 @@ export function verifyCitations(
     }
 
     if (overlapRatio(claimShingles, target) >= OVERLAP_THRESHOLD) {
-      // One well-supported occurrence clears the id even if another reads thin.
       verified.add(evidenceId);
       unverified.delete(evidenceId);
     } else {
@@ -93,7 +92,6 @@ function shingles(text: string): Set<string> {
     .filter((token) => token.length >= 2);
   const result = new Set<string>();
   if (tokens.length < SHINGLE_SIZE) {
-    // Short text: fall back to single tokens so tiny chunks/claims still compare.
     for (const token of tokens) {
       result.add(token);
     }

@@ -52,9 +52,7 @@ export class FileDocumentClaimStore implements DocumentClaimStore {
         if (parsed) {
           items.push(parsed);
         }
-      } catch {
-        // A corrupt sidecar does not break the inventory — the source re-enriches.
-      }
+      } catch {}
     }
     return items.sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }
@@ -100,9 +98,7 @@ export function parseClaimsFile(raw: string): SourceDocumentClaims | null {
       if (isClaim(claim)) {
         claims.push(claim);
       }
-    } catch {
-      // Skip a malformed claim line; the rest of the file still loads.
-    }
+    } catch {}
   }
   return {
     schemaVersion: 1,

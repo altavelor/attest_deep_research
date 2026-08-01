@@ -174,7 +174,6 @@ export function readFileVectorIndexSection(
     chunkStart: section[0]?.row.chunkIndex ?? 0,
     chunkEnd: section[section.length - 1]?.row.chunkIndex ?? 0,
     chunks: selected,
-    // Курсор перечитывает усечённый чанк целиком со следующей страницы.
     ...(hasMore ? { nextCursor: String(lastTruncated ? consumed - 1 : consumed) } : {}),
   };
 }

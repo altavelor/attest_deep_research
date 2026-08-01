@@ -152,7 +152,6 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
     ].join("\n"),
   ];
 
-  // Index URL audit tools register alongside search_index — advertise them only then.
   if (tools.has(LIST_INDEX_URLS_TOOL) || tools.has(CHECK_URLS_TOOL)) {
     const audit = [LIST_INDEX_URLS_TOOL, CHECK_URLS_TOOL].filter((name) => tools.has(name));
     sections.push(
@@ -165,7 +164,6 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
     );
   }
 
-  // Editing tools register only when note access is granted.
   const editTools = NOTE_EDIT_TOOLS.filter((name) => tools.has(name));
   if (editTools.length > 0) {
     sections.push(
@@ -534,58 +532,44 @@ export function buildThinkingResearchMessages(
     ].join("\n"),
   ];
 
-  // Core skill — always present
   systemSections.push(
     toolContext.coreVariant === "vault"
       ? CORE_VAULT_SKILL(hasNoteMutation(tools))
       : CORE_RESEARCH_SKILL(tools),
   );
 
-  // Action honesty — universal guard so the model never narrates writes/downloads it
-  // did not actually perform via a tool call. Always present, tool-agnostic.
   systemSections.push(ACTION_HONESTY_RULE);
 
-  // Source availability — bound the model to the sources this profile actually grants,
-  // so it stops and asks to switch mode instead of substituting an unavailable source.
   systemSections.push(buildSourceAvailabilityRule(tools));
 
-  // Index skill — only when the index tool is registered and a description is provided
   if (hasIndex(tools) && toolContext.indexDescription) {
     systemSections.push(buildIndexSkill(sanitize(toolContext.indexDescription)));
   }
 
-  // Web skill — only when the web search tool is registered
   if (hasWeb(tools)) {
     systemSections.push(WEB_SKILL(tools));
   }
 
-  // Download skill — only when the download tool is registered (web active + writable vault)
   if (hasDownload(tools)) {
     systemSections.push(DOWNLOAD_SKILL(tools));
   }
 
-  // Sub-agent skill — only when the run_subagent tool is registered
   if (hasSubAgent(tools)) {
     systemSections.push(SUB_AGENT_SKILL(tools));
   }
 
-  // Fan-out skill — only when map_sources is registered (index-backed corpora)
   if (hasMapSources(tools)) {
     systemSections.push(MAP_SOURCES_SKILL);
   }
 
-  // Knowledge-compilation workflow — only when the index can be read AND notes written
   if (hasCompileKnowledge(tools)) {
     systemSections.push(COMPILE_KNOWLEDGE_SKILL(tools));
   }
 
-  // Contradiction workflow — only when the claim index tool is registered
   if (hasClaims(tools)) {
     systemSections.push(CONTRADICTION_SKILL);
   }
 
-  // Attachment manifest — the user's attached files as files, not just chunks,
-  // so the model can list them and address them with vault tools.
   if (options.attachedFiles?.length) {
     systemSections.push(
       buildAttachmentManifestSection(options.attachedFiles, {
@@ -594,7 +578,6 @@ export function buildThinkingResearchMessages(
     );
   }
 
-  // Explicit evidence
   if (options.explicitEvidence?.length) {
     systemSections.push(
       [

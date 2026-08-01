@@ -52,7 +52,6 @@ export function extractPageMetadata(html: string): PageMetadata {
     canonicalUrl: parseCanonicalLink(head) ?? pick("og:url"),
   };
 
-  // Drop empty fields so callers see only present metadata.
   for (const key of Object.keys(metadata) as (keyof PageMetadata)[]) {
     if (!metadata[key]) delete metadata[key];
   }

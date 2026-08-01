@@ -29,10 +29,8 @@ export class HostRequestThrottle {
   private readonly perHostIntervalMs: number;
   private readonly maxConcurrent: number;
   private readonly now: () => number;
-  // One promise chain per host serializes+spaces same-host requests.
   private readonly hostChain = new Map<string, Promise<void>>();
   private readonly hostLastAt = new Map<string, number>();
-  // Global concurrency limiter shared across hosts.
   private active = 0;
   private readonly waiters: Array<() => void> = [];
 
@@ -57,8 +55,6 @@ export class HostRequestThrottle {
         this.release();
       }
     });
-    // Chain the next same-host request behind this one, swallowing errors so a
-    // single failure does not poison the host's queue.
     this.hostChain.set(
       host,
       result.then(
@@ -74,14 +70,13 @@ export class HostRequestThrottle {
       this.active += 1;
       return Promise.resolve();
     }
-    // No free slot: park until release() hands one over (count stays saturated).
     return new Promise<void>((resolve) => this.waiters.push(resolve));
   }
 
   private release(): void {
     const next = this.waiters.shift();
     if (next) {
-      next(); // hand the slot directly to the next waiter; `active` unchanged
+      next();
     } else {
       this.active -= 1;
     }

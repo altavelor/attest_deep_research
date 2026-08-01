@@ -152,8 +152,6 @@ export class MapSources {
       return { sourcePaths: explicit.slice(0, maxSources), kind: "explicit" };
     }
 
-    // No explicit list: cheap relevance pass — rank documents by a single index
-    // search over the question, fan out only over the distinct top sources.
     let chunks: RetrievedChunk[] = [];
     try {
       const retrieval = await this.deps.retriever.search(input.question, {

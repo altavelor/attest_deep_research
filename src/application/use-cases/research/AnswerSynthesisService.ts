@@ -251,14 +251,9 @@ export class AnswerSynthesisService {
       }
     }
 
-    // Expand the model's short `[S1]` citation labels back to the real evidence
-    // ids the whole downstream (UI anchors, saved-note formatter) keys off, and
-    // keep only the citations the answer actually used (B).
     const { byLabel } = labelResearchEvidence(promptOptions);
     const rewrite = rewriteCitationLabels(answerText, byLabel);
     answerText = rewrite.text;
-    // Cited ids come from the rewritten text so both expanded labels and any raw
-    // `[chunk-id]` a model still emits count as a citation.
     const citedIds = citationIdsFromText(answerText);
     const citations = input.citations.filter((citation) => citedIds.has(citation.id));
 

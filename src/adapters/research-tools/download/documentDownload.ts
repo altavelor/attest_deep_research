@@ -90,7 +90,6 @@ export function resolveDownloadPath(
 ): string {
   if (explicitPath && explicitPath.trim()) {
     const normalized = normalizeVaultPath(explicitPath.trim());
-    // A folder-only path (trailing slash) still needs the derived filename.
     return normalized.endsWith("/") ? joinVaultPath(normalized, derivedFilename) : normalized;
   }
   return joinVaultPath(normalizeVaultPath(defaultFolder), derivedFilename);
@@ -133,9 +132,7 @@ function filenameFromContentDisposition(value: string | null | undefined): strin
   if (star) {
     try {
       return decodeURIComponent(star.trim().replace(/^"|"$/g, ""));
-    } catch {
-      // fall through to the plain form
-    }
+    } catch {}
   }
   const plain = value.match(/filename="?([^";]+)"?/i)?.[1];
   return plain?.trim();

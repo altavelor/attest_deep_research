@@ -13,6 +13,7 @@ export interface ChatModelSelectOption {
   contextLength?: number;
   maxTokens?: number;
   isSuspended?: boolean;
+  supportsAgentMode?: boolean;
 }
 
 export interface IndexProfileSelectOption {
@@ -104,7 +105,6 @@ export function renderChatComposer(
 
   const composerPanelEl = formEl.createDiv({ cls: "ixplorer-chat__composer-panel" });
 
-  // Attachments row: chips + the Include/Filter control (only when files attached).
   const attachmentsRowEl = composerPanelEl.createDiv({ cls: "ixplorer-chat__attachments-row" });
   const attachedContextEl = attachmentsRowEl.createDiv({ cls: "ixplorer-chat__attachments" });
   enableHorizontalWheelScroll(attachedContextEl);
@@ -151,7 +151,6 @@ export function renderChatComposer(
 
   const modelRow = composerPanelEl.createDiv({ cls: "ixplorer-chat__model-row" });
 
-  // Left cluster: attach + sources (mode selector with a small index sub-button).
   const attachButton = modelRow.createEl("button", {
     cls: "ixplorer-chat__icon-button",
     attr: {
@@ -194,7 +193,7 @@ export function renderChatComposer(
     if (indexButton.disabled) return;
     const items = usableIndexes();
     if (items.length === 0) return;
-    const menu = new Menu();
+    const menu = prepareMenu(new Menu());
     for (const item of items) {
       menu.addItem((entry) =>
         entry
@@ -208,6 +207,7 @@ export function renderChatComposer(
     }
     const rect = indexButton.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+    decorateShownMenu(menu);
   });
 
   function syncIndexButton(): void {
@@ -222,6 +222,7 @@ export function renderChatComposer(
     options.researchMode === "thinking" ? "thinking" : "instant";
   const researchModeDropdown = createMenuDropdown(modelRow, {
     cls: "ixplorer-chat__dropdown--research-mode",
+    menuCls: "ixplorer-chat__research-menu",
     ariaLabel: "Research mode",
     placeholder: "Instant",
     items: RESEARCH_MODE_ITEMS,
@@ -232,7 +233,6 @@ export function renderChatComposer(
     },
   });
 
-  // Right cluster: context-window indicator, model selector, submit.
   const contextIndicatorEl = modelRow.createSpan({
     cls: "ixplorer-chat__context-indicator",
     attr: {
@@ -254,8 +254,25 @@ export function renderChatComposer(
     onSelect: (id) => {
       currentModel = id;
       options.onUpdateModel(id);
+      syncResearchModeAvailability();
     },
   });
+
+  function syncResearchModeAvailability(): void {
+    const supportsAgent =
+      options.availableModels.find((model) => model.id === currentModel)?.supportsAgentMode ===
+      true;
+    researchModeDropdown.setItemDisabled(
+      "thinking",
+      supportsAgent ? undefined : THINKING_BLOCKED_REASON,
+    );
+    if (!supportsAgent && currentResearchMode === "thinking") {
+      currentResearchMode = "instant";
+      researchModeDropdown.setValue("instant");
+      options.onUpdateResearchMode("instant");
+    }
+  }
+  syncResearchModeAvailability();
 
   const submitButtonTooltipEl = modelRow.createSpan({ cls: "ixplorer-chat__submit-tooltip" });
   const submitButtonEl = submitButtonTooltipEl.createEl("button", {
@@ -278,6 +295,7 @@ export function renderChatComposer(
     setModel: (id) => {
       currentModel = id;
       modelDropdown.setValue(id);
+      syncResearchModeAvailability();
     },
     getSearchMode: () => currentSearchMode,
     getResearchMode: () => currentResearchMode,
@@ -315,6 +333,31 @@ interface MenuDropdownHandle {
   el: HTMLButtonElement;
   setValue(id: string): void;
   setDisabled(disabled: boolean): void;
+  /** Disable a single option, showing `reason` on hover; pass undefined to re-enable. */
+  setItemDisabled(id: string, reason: string | undefined): void;
+}
+
+const THINKING_BLOCKED_REASON =
+  "The selected model does not support Agent mode. Run the capability test in settings or pick an Agent-capable model.";
+
+/** Shared class for every composer selector popup, giving them one width/style. */
+const MENU_CLASS = "ixplorer-chat__menu";
+
+/** Force the DOM-based menu so our CSS applies (native OS menus ignore it). */
+function prepareMenu(menu: Menu): Menu {
+  menu.setUseNativeMenu(false);
+  return menu;
+}
+
+/** Tag the just-shown popup so it picks up the shared width/wrapping styles. */
+function decorateShownMenu(menu: Menu, extraCls?: string): void {
+  const menuEl =
+    (menu as unknown as { dom?: HTMLElement }).dom ??
+    (Array.from(document.querySelectorAll(".menu")).pop() as HTMLElement | undefined);
+  menuEl?.addClass(MENU_CLASS);
+  if (extraCls) {
+    menuEl?.addClass(extraCls);
+  }
 }
 
 /** Compact label+caret button that opens an Obsidian Menu of options. */
@@ -327,6 +370,8 @@ function createMenuDropdown(
     items: DropdownItem[];
     initialId: string;
     onSelect(id: string): void;
+    /** Extra class on the popup, e.g. to override the shared menu width. */
+    menuCls?: string;
   },
 ): MenuDropdownHandle {
   const wrapEl = parentEl.createSpan({ cls: "ixplorer-chat__dropdown-wrap" });
@@ -339,6 +384,7 @@ function createMenuDropdown(
   setIcon(caretEl, "chevron-down");
 
   let currentId = config.initialId;
+  const disabledReasons = new Map<string, string>();
   const renderLabel = (): void => {
     const found = config.items.find((item) => item.id === currentId);
     valueEl.setText(found ? found.name : config.placeholder);
@@ -348,21 +394,27 @@ function createMenuDropdown(
 
   buttonEl.addEventListener("click", () => {
     if (buttonEl.disabled) return;
-    const menu = new Menu();
+    const menu = prepareMenu(new Menu());
     for (const item of config.items) {
-      menu.addItem((entry) =>
+      const reason = disabledReasons.get(item.id);
+      menu.addItem((entry) => {
         entry
-          .setTitle(item.name)
-          .setChecked(item.id === currentId)
-          .onClick(() => {
-            currentId = item.id;
-            renderLabel();
-            config.onSelect(item.id);
-          }),
-      );
+          .setTitle(reason ? `${item.name} — ${reason}` : item.name)
+          .setChecked(item.id === currentId);
+        if (reason) {
+          entry.setDisabled(true);
+          return;
+        }
+        entry.onClick(() => {
+          currentId = item.id;
+          renderLabel();
+          config.onSelect(item.id);
+        });
+      });
     }
     const rect = buttonEl.getBoundingClientRect();
     menu.showAtPosition({ x: rect.left, y: rect.bottom });
+    decorateShownMenu(menu, config.menuCls);
   });
 
   return {
@@ -373,6 +425,13 @@ function createMenuDropdown(
     },
     setDisabled: (disabled) => {
       buttonEl.disabled = disabled;
+    },
+    setItemDisabled: (id, reason) => {
+      if (reason) {
+        disabledReasons.set(id, reason);
+      } else {
+        disabledReasons.delete(id);
+      }
     },
   };
 }

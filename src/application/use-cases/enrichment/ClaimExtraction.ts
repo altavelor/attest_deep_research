@@ -107,7 +107,6 @@ async function loadSectionText(
   }
   const chunkId = chunks.items[0].chunkId;
 
-  // Prefer the full contiguous run (previews are 500 chars — too little for claims).
   let text = "";
   if (retriever.readIndexChunk) {
     const read = await retriever.readIndexChunk({

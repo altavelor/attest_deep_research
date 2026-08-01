@@ -173,6 +173,19 @@
   color: var(--text-faint);
 }
 
+.menu.ixplorer-chat__menu {
+  max-width: 150px;
+}
+
+.menu.ixplorer-chat__menu .menu-item-title {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+.menu.ixplorer-chat__research-menu {
+  max-width: 260px;
+}
+
 .ixplorer-chat__dropdown-caret svg {
   width: 0.8rem;
   height: 0.8rem;

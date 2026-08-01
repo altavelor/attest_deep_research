@@ -1,4 +1,4 @@
-import { App, Modal, Setting, ToggleComponent } from "obsidian";
+import { App, Modal, Setting, ToggleComponent, setIcon } from "obsidian";
 
 import { IndexProfile } from "@adapters/indexing";
 import { ChatModelProfile, EmbeddingModelProfile } from "@adapters/settings";
@@ -65,7 +65,7 @@ export class IndexRunModal extends Modal {
     });
 
     this.renderEmbeddingSection(contentEl);
-    this.renderMetadataSection(contentEl);
+    this.renderAdvancedSection(contentEl);
     this.warningEl = contentEl.createDiv({ cls: "ixplorer-index-run__warning" });
     this.footerEl = contentEl.createDiv();
     this.refresh();
@@ -95,7 +95,6 @@ export class IndexRunModal extends Modal {
       .addToggle((toggle) =>
         toggle.setValue(this.embeddingEnabled).onChange((value) => {
           this.embeddingEnabled = value;
-          // Без индекса метаданные извлекать не из чего.
           if (!value && !this.indexExists()) {
             this.metadataEnabled = false;
           }
@@ -111,6 +110,27 @@ export class IndexRunModal extends Modal {
         this.refresh();
       });
     });
+  }
+
+  private renderAdvancedSection(containerEl: HTMLElement): void {
+    const details = containerEl.createEl("details", { cls: "ixplorer-index-run__advanced" });
+    details.open = this.metadataEnabled;
+    details.createEl("summary", {
+      cls: "ixplorer-index-run__advanced-summary",
+      text: "Advanced",
+    });
+    const content = details.createDiv({ cls: "ixplorer-index-run__advanced-content" });
+
+    const warning = content.createDiv({ cls: "ixplorer-index-run__token-warning" });
+    setIcon(
+      warning.createSpan({ cls: "ixplorer-index-run__token-warning-icon" }),
+      "alert-triangle",
+    );
+    warning.createSpan({
+      text: "Metadata extraction can take a long time and consume a large number of tokens.",
+    });
+
+    this.renderMetadataSection(content);
   }
 
   private renderMetadataSection(containerEl: HTMLElement): void {
@@ -206,8 +226,6 @@ export class IndexRunModal extends Modal {
   }
 
   private submit(mode: IndexRunPlan["mode"]): void {
-    // Смена embedding-модели делает инкрементальный update бессмысленным —
-    // повышаем до rebuild (предупреждение уже показано).
     const effectiveMode = mode !== "start" && this.embeddingModelChanged() ? "rebuild" : mode;
     this.options.onSubmit({
       mode: effectiveMode,

@@ -10,6 +10,7 @@
 // через `./…`, иначе цикл (ловит `npm run depcruise`).
 
 export * from "./capabilityMetadataResolver";
+export * from "./capabilityPresentation";
 export * from "./chatProfileProbes";
 export * from "./connectionTests";
 export * from "./constants";

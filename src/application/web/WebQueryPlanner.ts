@@ -61,8 +61,6 @@ export class WebQueryPlanner implements SearchProvider {
     const sources = this.options.registry
       .enabledSources()
       .filter((source) => this.health.isAvailable(source.descriptor.id))
-      // A source that cannot answer in the query's language would only waste
-      // a round-trip (and a quota unit) on an empty result.
       .filter(
         (source) =>
           source.descriptor.languages === undefined ||
@@ -95,7 +93,6 @@ export class WebQueryPlanner implements SearchProvider {
           this.health.reportSuccess(source.descriptor.id);
           return results;
         } catch (error) {
-          // One misbehaving source must not sink the whole search.
           this.health.reportFailure(source.descriptor.id, error);
           this.options.onSourceError?.(source.descriptor.id, error);
           return [] as SearchProviderResult[];

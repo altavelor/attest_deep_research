@@ -52,7 +52,9 @@ issue, Changes, Validation, Risks, and Review status.
 - Handle failures and invalid external input explicitly.
 - Treat external data as untrusted; clean up resources, subscriptions,
   listeners, timers, and temporary files.
-- Match nearby code style. Comments explain why, not obvious mechanics.
+- Match nearby code style. Do not add comments in code except a concise description
+  of a function's or class's purpose; limit each such description to 3 sentences
+  and 120 words.
 
 ## Architecture
 

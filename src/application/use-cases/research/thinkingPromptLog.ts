@@ -33,7 +33,6 @@ function promptDeltaMessage(message: ChatMessage): PromptDeltaMessageDiagnostic 
   const content = message.content ?? "";
   const base: PromptDeltaMessageDiagnostic = { role: message.role, chars: content.length };
   if (message.role === "tool") {
-    // Content already lives in the round's ToolCallDiagnostic (redacted where needed).
     return { ...base, ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}) };
   }
   if (message.toolCalls && message.toolCalls.length > 0) {

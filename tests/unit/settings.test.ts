@@ -99,6 +99,18 @@ describe("Ixplorer settings", () => {
     expect(settings).not.toHaveProperty("forceEagerResearch");
   });
 
+  it("defaults query expansion on for settings saved before it became toggleable", () => {
+    const { expandSearchQuery: _omitted, ...withoutFlag } = currentSettings();
+
+    expect(readSettings(withoutFlag).expandSearchQuery).toBe(true);
+  });
+
+  it("preserves an explicit query expansion opt-out", () => {
+    const settings = readSettings(currentSettings({ expandSearchQuery: false }));
+
+    expect(settings.expandSearchQuery).toBe(false);
+  });
+
   it("resolves current tool and reasoning settings", () => {
     const profile = currentSettings({
       serverProfiles: [

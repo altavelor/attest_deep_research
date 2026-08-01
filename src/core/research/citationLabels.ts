@@ -46,9 +46,6 @@ export function labelResearchEvidence(input: EvidenceSectionsInput): LabeledRese
   const seen = new Set<string>();
   let counter = 0;
 
-  // A source that appears in several sections (e.g. an attached note also surfaced
-  // by retrieval) is labeled once — on its first, highest-priority occurrence
-  // (explicit → graph → retrieved → web) — so it costs one citation, not several.
   const assign = (chunks: RetrievedChunk[]): LabeledChunk[] => {
     const labeled: LabeledChunk[] = [];
     for (const chunk of chunks) {

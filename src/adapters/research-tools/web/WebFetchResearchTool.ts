@@ -56,7 +56,7 @@ function parseFetchWebPagesInput(
         "Each resultId must be a non-empty handle (≤200 chars).",
       );
     }
-    if (seen.has(id)) continue; // de-dupe: fetching the same page twice is wasted work
+    if (seen.has(id)) continue;
     seen.add(id);
     resultIds.push(id);
   }

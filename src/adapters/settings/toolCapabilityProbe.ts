@@ -81,11 +81,6 @@ async function runProbe(
       messages: [{ role: "user", content: "Run the requested local synthetic capability check." }],
       tools: PROBE_TOOLS,
       toolChoice,
-      // Reasoning-capable local models (e.g. LM Studio harmony templates) emit a
-      // chain of thought into `content` before the tool call. A tight budget
-      // truncates the stream with finish_reason "length" before any call is
-      // produced, making a tool-capable model look incapable. Give enough room
-      // to finish reasoning and still emit the call.
       maxTokens: 512,
       temperature: 0,
       signal: options.signal,

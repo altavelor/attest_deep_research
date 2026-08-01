@@ -20,7 +20,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
   const findings: Finding[] = [];
   const { model, preflight, request, reasoning, answer } = sections;
 
-  // error: tool-calls-blocked
   if (model.toolCapabilities.calls === false && model.executionStrategy !== "instant") {
     findings.push({
       severity: "error",
@@ -33,7 +32,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // error: thinking-policy-fallback
   if (
     model.executionStrategy !== "instant" &&
     request.thinkingPolicy.policyReason !== "thinking-eligible" &&
@@ -49,7 +47,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // error: mandatory-tool-unsatisfied
   if (reasoning.thinkingLoop) {
     const unsatisfied =
       reasoning.thinkingLoop.satisfiedTools !== undefined
@@ -73,7 +70,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     }
   }
 
-  // warning: all-chunks-dropped
   if (request.retrieval) {
     const ranked = request.retrieval.rankedChunks;
     if (ranked.length > 0 && ranked.every((c) => c.status === "dropped")) {
@@ -92,7 +88,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     }
   }
 
-  // warning: low-retrieval-scores
   if (request.retrieval?.scoreStats) {
     const { avg, threshold } = request.retrieval.scoreStats;
     if (threshold !== null && avg < threshold) {
@@ -112,7 +107,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     }
   }
 
-  // warning: index-files-zero-but-chunks-found
   if (
     preflight.index &&
     preflight.index.indexedFiles === 0 &&
@@ -129,7 +123,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // warning: thinking-loop-zero-tool-calls
   if (
     reasoning.thinkingLoop &&
     reasoning.thinkingLoop.totalCalls === 0 &&
@@ -146,7 +139,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // warning: context-near-limit
   if (
     preflight.context.budget.utilizationPct !== null &&
     preflight.context.budget.utilizationPct > 90
@@ -165,7 +157,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // warning: stream-terminal-missing
   if (reasoning.stream && !reasoning.stream.terminalEventObserved) {
     findings.push({
       severity: "warning",
@@ -178,7 +169,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // info: unknown-citations
   if (answer.unknownCitationIds.length > 0) {
     findings.push({
       severity: "info",
@@ -190,8 +180,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // warning: unverified-citations (R8) — cited chunk exists but its wording does not
-  // overlap the claim, so the citation may be misattributed.
   if (answer.unverifiedCitations.length > 0) {
     findings.push({
       severity: "warning",
@@ -203,7 +191,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // info: index-stale
   if (preflight.index?.isStale) {
     findings.push({
       severity: "info",
@@ -216,7 +203,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     });
   }
 
-  // Sort: errors first, then warnings, then info
   const order = { error: 0, warning: 1, info: 2 } as const;
   findings.sort((a, b) => order[a.severity] - order[b.severity]);
 
