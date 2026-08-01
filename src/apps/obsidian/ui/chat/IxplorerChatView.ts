@@ -7,8 +7,6 @@ import {
   SavedChatSummary,
   inferChatTitle,
 } from "@core/chat/savedChat";
-import { chatHistoryForPrompt } from "@application/use-cases/chat";
-import { estimateResearchRequestTokens } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type { ResearchSearchMode } from "@application/use-cases/research";
@@ -56,6 +54,7 @@ import {
   stripContextDiagnostics,
 } from "./chatViewHelpers";
 import { contextWindowStatus, searchUnavailableMessage } from "./chatViewStatus";
+import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
 import { stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
@@ -739,16 +738,12 @@ export class IxplorerChatView extends ItemView {
   }
 
   private getContextWindowUsage(): { estimatedTokens: number; limitTokens: number } | null {
-    const estimatedTokens = estimateResearchRequestTokens({
+    return contextWindowUsage({
       question: this.textareaEl?.value.trim() ?? "",
-      chatHistory: chatHistoryForPrompt(this.messages),
-      evidence: [],
-      maxEvidenceItems: 0,
+      messages: this.messages,
+      limitTokens: this.getContextLimitTokens(),
       reservedOutputTokens: this.getReservedOutputTokens(),
     });
-    const limitTokens = this.getContextLimitTokens();
-
-    return limitTokens ? { estimatedTokens, limitTokens } : null;
   }
 
   private getContextLimitTokens(): number | undefined {
