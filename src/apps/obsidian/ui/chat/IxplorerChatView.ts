@@ -55,6 +55,7 @@ import {
   resolveChatSettings,
   stripContextDiagnostics,
 } from "./chatViewHelpers";
+import { contextWindowStatus, searchUnavailableMessage } from "./chatViewStatus";
 import { ChatDisplayMessage } from "@core/conversation";
 import { stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
@@ -709,23 +710,12 @@ export class IxplorerChatView extends ItemView {
   }
 
   private getSearchUnavailableMessage(): string | null {
-    if (!this.currentChatSettings.chatModelProfileId) {
-      return "Create and select a chat model profile in Ixplorer settings.";
-    }
-
-    if (
-      this.getSearchMode() !== "webOnly" &&
-      this.getSearchMode() !== "none" &&
-      !this.currentChatSettings.indexProfileId
-    ) {
-      return "Create and select an active index in Ixplorer settings.";
-    }
-
-    return this.getSearchMode() !== "indexOnly" &&
-      this.getSearchMode() !== "none" &&
-      !this.services.isWebSearchEnabled()
-      ? "Enable web search in Ixplorer settings to use this search mode."
-      : null;
+    return searchUnavailableMessage({
+      chatModelProfileId: this.currentChatSettings.chatModelProfileId,
+      indexProfileId: this.currentChatSettings.indexProfileId,
+      searchMode: this.getSearchMode(),
+      isWebSearchEnabled: this.services.isWebSearchEnabled(),
+    });
   }
 
   private updateContextWindowIndicator(): void {
@@ -741,26 +731,11 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    const usedPercent = Math.max(
-      0,
-      Math.min(100, Math.round((usage.estimatedTokens / usage.limitTokens) * 100)),
-    );
-    const leftPercent = Math.max(0, 100 - usedPercent);
-    const isWarning = usedPercent >= 80;
-    const title = [
-      isWarning ? "Context window warning:" : "Context window:",
-      `${usedPercent}% used (${leftPercent}% left)`,
-      `Estimated ${usage.estimatedTokens} of ${usage.limitTokens} tokens`,
-      ...(isWarning ? ["Long history may reduce retrieved evidence budget."] : []),
-    ].join("\n");
-
-    this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${usedPercent}%`);
-    this.contextIndicatorEl.toggleClass("is-warning", isWarning);
-    this.contextIndicatorEl.setAttr("title", title);
-    this.contextIndicatorEl.setAttr(
-      "aria-label",
-      `${isWarning ? "Context window warning" : "Context window"}: ${usedPercent}% used, ${leftPercent}% left`,
-    );
+    const status = contextWindowStatus(usage.estimatedTokens, usage.limitTokens);
+    this.contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${status.usedPercent}%`);
+    this.contextIndicatorEl.toggleClass("is-warning", status.isWarning);
+    this.contextIndicatorEl.setAttr("title", status.title);
+    this.contextIndicatorEl.setAttr("aria-label", status.ariaLabel);
   }
 
   private getContextWindowUsage(): { estimatedTokens: number; limitTokens: number } | null {
