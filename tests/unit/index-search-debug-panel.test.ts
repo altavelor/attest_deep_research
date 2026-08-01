@@ -136,6 +136,17 @@ describe("index-search debug panel", () => {
     expect(panel).not.toContain("indexControlEl");
   });
 
+  it("redisplays open chat views immediately after Debug mode changes", () => {
+    const settingsTab = readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8");
+    const plugin = readFileSync(resolve("src/apps/obsidian/main.ts"), "utf8");
+    const view = readFileSync(resolve("src/apps/obsidian/ui/chat/IxplorerChatView.ts"), "utf8");
+
+    expect(settingsTab).toContain("this.plugin.refreshChatViews()");
+    expect(plugin).toContain("refreshChatViews(): void");
+    expect(plugin).toContain("getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)");
+    expect(view).toContain("redisplay(): void");
+  });
+
   it("preserves keyword fallback results and renders an accessible warning", () => {
     const controller = readFileSync(
       resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),

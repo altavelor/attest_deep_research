@@ -127,6 +127,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
           this.plugin.settings.debugMode = value;
           await this.plugin.saveSettings();
+          this.plugin.refreshChatViews();
         }),
       );
   }
