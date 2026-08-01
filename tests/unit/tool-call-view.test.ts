@@ -49,15 +49,16 @@ describe("describeToolCall detailed intent", () => {
     expect(view.intent).toBe("Fetching pages 3: recipes.example.com, food.example.org");
   });
 
-  it("keeps a count-only web fetch intent until page URLs are available", () => {
+  it("lists requested page hosts while a web fetch is pending", () => {
     const view = describeToolCall({
       name: "fetch_web_page",
       label: "Fetching 3 pages",
       status: "pending",
       args: { resultIds: ["a", "b", "c"] },
+      fetchTargets: ["recipes.example.com", "food.example.org", "recipes.example.com"],
     });
 
-    expect(view.intent).toBe("Fetching pages 3");
+    expect(view.intent).toBe("Fetching pages 3: recipes.example.com, food.example.org");
   });
 
   it("reports created-note size in the intent", () => {

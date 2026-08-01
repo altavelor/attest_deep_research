@@ -22,11 +22,13 @@ export interface ToolCallViewInput {
   status: "pending" | "complete" | "failed";
   args?: Record<string, unknown>;
   resultJson?: string;
+  /** Site names resolved from preceding web-search results while a fetch is pending. */
+  fetchTargets?: string[];
 }
 
 export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const { name, args = {}, resultJson, status } = input;
-  const intent = describeIntent(name, args, input.label, resultJson);
+  const intent = describeIntent(name, args, input.label, resultJson, input.fetchTargets);
 
   if (status === "failed") {
     return {
@@ -101,6 +103,7 @@ function describeIntent(
   args: Record<string, unknown>,
   label: string,
   resultJson?: string,
+  fetchTargets?: string[],
 ): string {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   const path = typeof args.path === "string" ? args.path.trim() : "";
@@ -115,7 +118,7 @@ function describeIntent(
       return query ? `Searching the web for “${query}”${count}` : "Searching the web";
     }
     case "fetch_web_page": {
-      const hosts = fetchedPageHosts(resultJson);
+      const hosts = unique(fetchTargets ?? fetchedPageHosts(resultJson));
       const count = fetchPageCount(args, hosts.length);
       if (hosts.length > 0) {
         return `Fetching ${count === 1 ? "page" : "pages"} ${count}: ${hosts.join(", ")}`;
@@ -145,6 +148,10 @@ function describeIntent(
     default:
       return label && label !== name ? label : name;
   }
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function fetchPageCount(args: Record<string, unknown>, completedCount: number): number {
