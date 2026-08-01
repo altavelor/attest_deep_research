@@ -82,10 +82,6 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.profile?.capabilities?.toolCalling ?? createToolCapabilitySettings(false);
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
-  private toolsVerifiedSeen =
-    this.options.kind === "chat" && this.options.profile
-      ? toolsVerified(this.options.profile as ChatModelProfile)
-      : false;
   private agentVerifiedSeen = reasoningVerified(this.reasoningCapabilities);
   private testing = false;
   private savedProfileId = this.options.profile?.id;
@@ -398,23 +394,27 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
   private async save(): Promise<void> {
     if (!this.name || !this.serverProfileId || !this.modelName) {
+      this.testing = false;
       new Notice("Fill all required fields.");
       return;
     }
 
     if (!isValidProfileName(this.name)) {
+      this.testing = false;
       new Notice(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters.`);
       return;
     }
 
     const existingProfileId = this.savedProfileId ?? this.options.profile?.id;
     if (hasDuplicateProfileName(this.options.profiles, this.name, existingProfileId)) {
+      this.testing = false;
       new Notice("Name must be unique.");
       return;
     }
 
     const server = this.selectedServer();
     if (!server || server.isSuspended) {
+      this.testing = false;
       new Notice("Select an active server profile.");
       return;
     }
@@ -423,6 +423,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       (candidate) => candidate.name === this.modelName,
     );
     if (!model && !this.options.profile) {
+      this.testing = false;
       new Notice("Fetch models before creating a model profile.");
       return;
     }
@@ -434,10 +435,12 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         allowedEfforts &&
         !allowedEfforts.includes(this.reasoningEffort)
       ) {
+        this.testing = false;
         new Notice("Reasoning effort must be provider-default or capability-verified.");
         return;
       }
       if (this.reasoningSummary === "auto" && this.reasoningCapabilities?.summary === false) {
+        this.testing = false;
         new Notice("Reasoning summaries were not verified for this profile.");
         return;
       }
@@ -527,6 +530,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         toggle.setDisabled(!verified);
         toggle.onChange((value) => {
           this.reasoningMode = value ? "on" : "off";
+          this.render();
         });
       });
     this.applyDisabledState(agenticSetting, !verified, reason);
@@ -558,10 +562,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const verified = profile ? toolsVerified(profile) : false;
     if (!verified) {
       this.toolsEnabled = false;
-    } else if (!this.toolsVerifiedSeen) {
-      this.toolsEnabled = true;
     }
-    this.toolsVerifiedSeen = verified;
     const reason = verificationBlockReason(
       verified,
       Boolean(profile?.capabilities?.toolCalling?.probe),

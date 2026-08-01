@@ -34,7 +34,7 @@ describe("chat model settings surface", () => {
 
   it("refreshes generation capabilities explicitly without requiring profile re-save", () => {
     expect(source).toContain('icon: "flask-conical"');
-    expect(source).toContain("this.prober.startChatProfileProbes(profile.id)");
+    expect(source).toContain("this.prober.startChatProfileProbes(profile.id, true)");
     expect(source).not.toContain("this.prober.startChatProfileProbes(updatedProfile.id)");
     expect(source).toContain("startEmbeddingProfileProbe(profile.id)");
     expect(source).toContain("startEmbeddingProfileProbe(updatedProfile.id)");
@@ -43,6 +43,16 @@ describe("chat model settings surface", () => {
     expect(source).toContain(
       'profile.reasoning.summary = reasoningCapabilities.summary ? "auto" : "off"',
     );
+  });
+
+  it("keeps gated settings unavailable to pointer and keyboard input", () => {
+    expect(source).toContain('attr: { "aria-disabled": "true", inert: "" }');
+  });
+
+  it("keeps modal capability controls consistent after state changes", () => {
+    expect(source).toContain("this.testing = false;");
+    expect(source).toContain("this.render();");
+    expect(source).not.toContain("} else if (!this.toolsVerifiedSeen) {");
   });
 
   it("keeps capability test status live in the profile modal", () => {

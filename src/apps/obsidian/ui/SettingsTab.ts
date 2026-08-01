@@ -115,7 +115,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
     hint.createSpan({ text: "Add a chat model profile first" });
     return section.createDiv({
       cls: "ixplorer-settings__gated-content is-disabled",
-      attr: { "aria-disabled": "true" },
+      attr: { "aria-disabled": "true", inert: "" },
     });
   }
 
@@ -305,9 +305,6 @@ export class IxplorerSettingTab extends PluginSettingTab {
         fetchContextLength: (server, modelName) =>
           this.prober.fetchContextLengthForModel(server, modelName),
         onSave: async (profile) => {
-          // The modal stays open after a Test run with the profile already added,
-          // so a follow-up save updates that entry in place instead of adding a
-          // duplicate with the same id.
           const existingIndex = this.plugin.settings.chatModelProfiles.findIndex(
             (candidate) => candidate.id === profile.id,
           );
@@ -394,7 +391,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
               : formatCapabilityVerificationStatus(capabilityState),
             onClick: async () => {
               await this.prober.refreshMetadataCapabilities();
-              this.prober.startChatProfileProbes(profile.id);
+              this.prober.startChatProfileProbes(profile.id, true);
               new Notice(`Testing capabilities for ${profile.name}.`);
             },
           },
