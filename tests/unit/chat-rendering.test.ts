@@ -4,6 +4,7 @@ import {
   nextAssistantMessage,
   nextAssistantReasoning,
   nextUserMessage,
+  startAssistantProgress,
   shouldShowAnswerNoteActions,
   shouldShowDiagnosticAction,
   stripMessageDiagnostics,
@@ -185,6 +186,21 @@ describe("chat rendering helpers", () => {
         evidence: undefined,
       },
     ]);
+  });
+
+  it("creates an empty streaming assistant message before the first model event", () => {
+    const messages = startAssistantProgress(nextUserMessage([], "Find a recipe"));
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      researchProgress: {
+        phase: "streaming",
+        reasoning: { phase: "streaming", segments: [] },
+        chain: [],
+      },
+    });
   });
 
   it("groups streamed reasoning deltas into ordered assistant segments", () => {

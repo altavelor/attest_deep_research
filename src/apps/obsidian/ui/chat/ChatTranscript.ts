@@ -342,7 +342,14 @@ function renderWorkflowNodes(
   const checkpoints = progress?.checkpoints ?? [];
   const chain = progress?.chain ?? [];
   const hasChain = chain.length > 0;
-  if (segments.length === 0 && checkpoints.length === 0 && !hasChain) return false;
+  if (
+    segments.length === 0 &&
+    checkpoints.length === 0 &&
+    !hasChain &&
+    progress?.phase !== "streaming"
+  ) {
+    return false;
+  }
   const isStreaming = progress?.phase === "streaming";
   const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
 
@@ -358,7 +365,7 @@ function renderWorkflowNodes(
       }
     }
     for (const item of chain) {
-      if (item.kind === "reasoning" && options.isDebugMode) {
+      if (item.kind === "reasoning") {
         renderThinkingNode(listEl, item.segmentId, item.content, {
           active: item.segmentId === activeReasoningId,
           options,
@@ -368,16 +375,14 @@ function renderWorkflowNodes(
         renderToolNode(listEl, item, options, uiState);
       }
     }
+    if (isStreaming) {
+      renderActiveThinkingNode(listEl);
+    }
     if (listEl.childElementCount === 0) {
       listEl.remove();
       return false;
     }
     return true;
-  }
-
-  if (!options.isDebugMode) {
-    listEl.remove();
-    return false;
   }
 
   segments.forEach((segment, index) => {
@@ -389,6 +394,9 @@ function renderWorkflowNodes(
   });
   for (const checkpoint of checkpoints) {
     renderSummaryNode(listEl, checkpoint.content, options);
+  }
+  if (isStreaming) {
+    renderActiveThinkingNode(listEl);
   }
   return true;
 }
@@ -431,6 +439,17 @@ function renderThinkingNode(
   }
   const textEl = body.createDiv({ cls: "ixplorer-chat__workflow-text" });
   void MarkdownRenderer.render(options.app, content, textEl, "", options.markdownContext);
+}
+
+function renderActiveThinkingNode(listEl: HTMLElement): void {
+  const node = listEl.createDiv({
+    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active",
+  });
+  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
+  node.createDiv({
+    cls: "ixplorer-chat__workflow-heading",
+    text: "Thinking…",
+  });
 }
 
 function renderSummaryNode(

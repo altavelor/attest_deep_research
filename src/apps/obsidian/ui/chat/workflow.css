@@ -61,6 +61,11 @@
   background: var(--text-faint);
 }
 
+.ixplorer-chat__workflow-node--thinking-active .ixplorer-chat__workflow-dot--thinking,
+.ixplorer-chat__workflow-node--thinking-active .ixplorer-chat__workflow-heading {
+  animation: ixplorer-workflow-pulse 1.2s ease-in-out infinite;
+}
+
 .ixplorer-chat__workflow-dot--tool {
   background: var(--color-purple, #a371f7);
 }

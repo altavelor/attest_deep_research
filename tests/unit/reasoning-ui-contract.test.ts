@@ -42,11 +42,20 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain("ixplorer-chat__tool-cell");
   });
 
-  it("keeps tool-call headers visible without Debug mode while hiding reasoning and In/Out cells", () => {
+  it("keeps reasoning and tool-call headers visible without Debug mode while hiding In/Out cells", () => {
     expect(transcript).toContain('if (item.kind === "tool-call")');
+    expect(transcript).toContain('if (item.kind === "reasoning")');
+    expect(transcript).not.toContain('item.kind === "reasoning" && options.isDebugMode');
     expect(transcript).toContain("if (options.isDebugMode && view.inCell)");
     expect(transcript).toContain("if (options.isDebugMode && view.outCell)");
     expect(transcript).toContain('if (child.kind === "tool-call")');
+  });
+
+  it("renders an active Thinking timeline node while an assistant response is streaming", () => {
+    expect(transcript).toContain("renderActiveThinkingNode");
+    expect(transcript).toContain('progress?.phase === "streaming"');
+    expect(transcript).toContain("ixplorer-chat__workflow-node--thinking-active");
+    expect(styles).toContain("ixplorer-chat__workflow-node--thinking-active");
   });
 
   it("styles the workflow rail, dots, and edit diff", () => {

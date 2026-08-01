@@ -22,6 +22,18 @@ export function nextUserMessage(
   ];
 }
 
+export function startAssistantProgress(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
+  const createdAt = new Date().toISOString();
+  const assistant: ChatDisplayMessage = { role: "assistant", content: "", createdAt };
+  return [
+    ...messages,
+    {
+      ...assistant,
+      researchProgress: researchProgressFromMessage(assistant, createdAt),
+    },
+  ];
+}
+
 export function nextAssistantMessage(
   messages: ChatDisplayMessage[],
   delta: string,
