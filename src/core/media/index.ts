@@ -35,6 +35,7 @@ export {
 } from "./imagePolicy";
 export type { EligibleImageFormat, ImageUrlCheck } from "./imagePolicy";
 
+export { imageQueryVariants } from "./imageQuery";
 export { clampText, toAnswerImage } from "./imageCandidate";
 export type { ImageCandidate, ImageCandidateOrigin } from "./imageCandidate";
 
