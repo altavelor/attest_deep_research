@@ -23,7 +23,15 @@ export interface DocumentImageInput {
   data: ArrayBuffer | string;
   /** Skips byte extraction when the caller only needs the manifest entries. */
   metadataOnly?: boolean;
+  /**
+   * Resolves a wiki embed or Markdown link target to a vault path, the way the
+   * host application would. Absent ⇒ targets are resolved relative to the
+   * containing document.
+   */
+  resolveLinkedPath?: LinkedPathResolver;
 }
+
+export type LinkedPathResolver = (target: string, fromPath: string) => string | undefined;
 
 export interface DocumentImageExtractor {
   supports(path: string): boolean;

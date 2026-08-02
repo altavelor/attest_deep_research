@@ -53,8 +53,26 @@ function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-const pngBytes = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
-const jpegBytes = Buffer.concat([Buffer.from("ffd8ffe0", "hex"), Buffer.alloc(64, 0x11)]);
+function png(width: number, height: number): Buffer {
+  const header = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+  const size = Buffer.alloc(8);
+  size.writeUInt32BE(width, 0);
+  size.writeUInt32BE(height, 4);
+  return Buffer.concat([header, size, Buffer.alloc(4, 0)]);
+}
+
+function jpeg(width: number, height: number): Buffer {
+  const frame = Buffer.alloc(11);
+  frame.writeUInt16BE(0xffc0, 0);
+  frame.writeUInt16BE(9, 2);
+  frame.writeUInt8(8, 4);
+  frame.writeUInt16BE(height, 5);
+  frame.writeUInt16BE(width, 7);
+  return Buffer.concat([Buffer.from("ffd8", "hex"), frame, Buffer.alloc(32, 0x11)]);
+}
+
+const pngBytes = png(64, 64);
+const jpegBytes = jpeg(64, 64);
 
 describe("markdown and text image extraction", () => {
   it("extracts wiki embeds and vault-relative markdown links", () => {
@@ -68,8 +86,30 @@ describe("markdown and text image extraction", () => {
         "![Vector](assets/logo.svg)",
       ].join("\n\n"),
     });
-    expect(refs.map((ref) => ref.linkedPath)).toEqual(["assets/diagram.png", "assets/photo.jpg"]);
+    expect(refs.map((ref) => ref.linkedPath)).toEqual([
+      "assets/diagram.png",
+      "notes/assets/photo.jpg",
+    ]);
     expect(refs[0]!.alt).toBe("Diagram of the flow");
+  });
+
+  it("resolves markdown links relative to the containing document", () => {
+    const refs = extractDocumentImages({
+      path: "docs/note.md",
+      data: "![](images/photo.png)",
+    });
+    expect(refs.map((ref) => ref.linkedPath)).toEqual(["docs/images/photo.png"]);
+    expect(refs[0]!.locator).toBe("link:docs/images/photo.png");
+  });
+
+  it("prefers the host link resolver over relative resolution", () => {
+    const refs = extractDocumentImages({
+      path: "docs/note.md",
+      data: "![[photo.png]]",
+      resolveLinkedPath: (target, fromPath) =>
+        target === "photo.png" && fromPath === "docs/note.md" ? "attachments/photo.png" : undefined,
+    });
+    expect(refs.map((ref) => ref.linkedPath)).toEqual(["attachments/photo.png"]);
   });
 
   it("returns no images for plain text", () => {
@@ -101,6 +141,16 @@ describe("docx image extraction", () => {
     const data = zip({ "word/media/image1.png": pngBytes });
     const refs = extractDocumentImages({ path: "docs/r.docx", data, metadataOnly: true });
     expect(refs[0]!.data).toBeUndefined();
+  });
+
+  it("rejects members whose decoded dimensions exceed the limit", () => {
+    const data = zip({ "word/media/bomb.png": png(60_000, 60_000) });
+    expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
+  });
+
+  it("rejects members whose header declares no readable size", () => {
+    const data = zip({ "word/media/image1.png": Buffer.alloc(64, 0x00) });
+    expect(extractDocumentImages({ path: "docs/opaque.docx", data })).toEqual([]);
   });
 
   it("degrades to no images for a corrupt archive", () => {
