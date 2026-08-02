@@ -298,6 +298,9 @@ const RICH_MEDIA_SKILL = (tools: ToolSet): string => {
       0,
       "- Call search_images first, then pass 1–4 of the returned `imageId` handles to",
       "  present_image_gallery. URLs are rejected; only handles from this answer work.",
+      "- Query search_images with two or three concrete subject words, not the user's full",
+      "  question: image resources match short file metadata, and English matches best.",
+      "  On `no-image-candidates`, retry once with fewer or English words before giving up.",
     );
   }
 

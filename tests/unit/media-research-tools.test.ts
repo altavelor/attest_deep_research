@@ -48,7 +48,7 @@ describe("search_images", () => {
     expect(artifacts.resolve("img_1")?.id).toBe("a");
   });
 
-  it("keeps working when one provider fails", async () => {
+  it("reports the failing provider while still returning the working one", async () => {
     const tool = new ImageSearchTool({
       registry: {
         enabledImageSources: () => [fakeSource(new Error("boom")), fakeSource([candidate("c")])],
@@ -58,6 +58,7 @@ describe("search_images", () => {
     const result = (await run(tool, { query: "cats", limit: 6 })) as any;
     expect(result.ok).toBe(true);
     expect(result.value.diagnostics.resultCount).toBe(1);
+    expect(result.value.diagnostics.failedSources).toEqual(["Wikimedia Commons"]);
   });
 
   it("includes candidates from documents already read in the run", async () => {
@@ -77,14 +78,60 @@ describe("search_images", () => {
     expect(result.value.diagnostics.sourcesQueried).toEqual(["vault documents"]);
   });
 
-  it("fails cleanly when nothing is available", async () => {
+  it("reports that no image resource is enabled instead of a bare no-match", async () => {
     const tool = new ImageSearchTool({
       registry: { enabledImageSources: () => [] },
       artifacts: new AnswerArtifactRegistry(),
     });
     const result = (await run(tool, { query: "cats", limit: 6 })) as any;
     expect(result.ok).toBe(false);
-    expect(result.error.code).toBe("no-image-candidates");
+    expect(result.error.code).toBe("no-image-sources");
+  });
+
+  it("distinguishes a broken provider from a genuine no-match", async () => {
+    const failing = new ImageSearchTool({
+      registry: { enabledImageSources: () => [fakeSource(new Error("boom"))] },
+      artifacts: new AnswerArtifactRegistry(),
+    });
+    const failed = (await run(failing, { query: "cats", limit: 6 })) as any;
+    expect(failed.error.code).toBe("image-search-failed");
+    expect(failed.error.retryable).toBe(true);
+
+    const empty = new ImageSearchTool({
+      registry: { enabledImageSources: () => [fakeSource([])] },
+      artifacts: new AnswerArtifactRegistry(),
+    });
+    const noMatch = (await run(empty, { query: "cats", limit: 6 })) as any;
+    expect(noMatch.error.code).toBe("no-image-candidates");
+    expect(noMatch.error.message).toMatch(/two or three concrete subject words/);
+  });
+
+  it("broadens the query when the literal one matches nothing", async () => {
+    const source = fakeSource([]);
+    (source.searchImages as any).mockImplementation(async (query: string) =>
+      query === "солнечной системы планеты" ? [candidate("a")] : [],
+    );
+    const tool = new ImageSearchTool({
+      registry: { enabledImageSources: () => [source] },
+      artifacts: new AnswerArtifactRegistry(),
+    });
+    const result = (await run(tool, { query: "схема солнечной системы планеты", limit: 6 })) as any;
+    expect(result.ok).toBe(true);
+    expect(result.value.diagnostics.effectiveQuery).toBe("солнечной системы планеты");
+  });
+
+  it("surfaces images from pages already fetched in this run", async () => {
+    const artifacts = new AnswerArtifactRegistry();
+    artifacts.register([candidate("page-1", { origin: "page" })]);
+    const tool = new ImageSearchTool({
+      registry: { enabledImageSources: () => [fakeSource([])] },
+      artifacts,
+    });
+    const result = (await run(tool, { query: "solar system", limit: 6 })) as any;
+    expect(result.ok).toBe(true);
+    expect(result.value.images).toHaveLength(1);
+    expect(result.value.images[0].origin).toBe("page");
+    expect(result.value.diagnostics.sourcesQueried).toContain("fetched pages");
   });
 });
 

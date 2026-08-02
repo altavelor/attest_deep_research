@@ -10,13 +10,20 @@ import {
   ToolParseResult,
   toolFailure,
 } from "@core/agent";
-import { ARTIFACT_LIMITS, CHART_TYPES, ImageCandidate, toAnswerImage } from "@core/media";
+import {
+  ARTIFACT_LIMITS,
+  CHART_TYPES,
+  ImageCandidate,
+  imageQueryVariants,
+  toAnswerImage,
+} from "@core/media";
 import { validateChartInput } from "@core/media";
 import type { ImageSearchRegistry } from "@application/ports";
 import { defineTool, enumOf, int, str, strArray, text } from "@application/sources/tools";
 import { AnswerArtifactRegistry } from "./AnswerArtifactRegistry";
 
 const MAX_QUERY_LENGTH = 200;
+const FETCHED_PAGES_LABEL = "fetched pages";
 
 export interface ImageSearchDeps {
   registry: ImageSearchRegistry;
@@ -40,7 +47,15 @@ export interface SearchImagesOutput {
     licence?: string;
     origin: string;
   }>;
-  diagnostics: { resultCount: number; sourcesQueried: string[]; untrustedEvidence: true };
+  diagnostics: {
+    resultCount: number;
+    sourcesQueried: string[];
+    /** Set when a broader query variant was needed to get any match. */
+    effectiveQuery?: string;
+    /** Resources that errored; their absence from the results is not a "no match". */
+    failedSources?: string[];
+    untrustedEvidence: true;
+  };
 }
 
 /**
@@ -51,14 +66,18 @@ export interface SearchImagesOutput {
 export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, SearchImagesOutput>({
   name: IMAGE_SEARCH_TOOL,
   description:
-    "Find images for the answer from the enabled image resources and from documents already read in this run. Returns opaque imageIds to pass to present_image_gallery. Never returns raw URLs you can invent.",
+    "Find images for the answer from the enabled image resources, from documents read in this run, and from pages already fetched with fetch_web_page. Use two or three concrete subject words rather than a full question — resources index short file metadata, and English matches best. Returns opaque imageIds to pass to present_image_gallery; it never returns URLs you can invent.",
   schema: {
-    query: str(MAX_QUERY_LENGTH, { required: true, description: "What the image should show." }),
+    query: str(MAX_QUERY_LENGTH, {
+      required: true,
+      description: "Two or three concrete subject words describing what the image shows.",
+    }),
     limit: int(1, 12, 6, { description: "Maximum candidates to return." }),
   },
   execute: async (deps, input) => {
     const sources = deps.registry.enabledImageSources();
     const queried: string[] = [];
+    const failedSources: string[] = [];
     const collected: ImageCandidate[] = [];
 
     const local = await Promise.resolve(deps.documentCandidates?.() ?? []);
@@ -67,30 +86,44 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
       collected.push(...local.slice(0, input.limit));
     }
 
-    const settled = await Promise.allSettled(
-      sources.map((source) => source.searchImages(input.query, { limit: input.limit })),
-    );
-    settled.forEach((outcome, index) => {
-      const source = sources[index]!;
-      if (outcome.status !== "fulfilled") return;
-      queried.push(source.descriptor.label);
-      collected.push(...outcome.value);
-    });
-
-    if (collected.length === 0) {
-      return toolFailure(
-        "no-image-candidates",
-        sources.length === 0 && local.length === 0
-          ? "No image resources are enabled and no read document contains images."
-          : "No eligible images were found for this query.",
+    let effectiveQuery = input.query;
+    for (const variant of imageQueryVariants(input.query)) {
+      const settled = await Promise.allSettled(
+        sources.map((source) => source.searchImages(variant, { limit: input.limit })),
       );
+      let found = 0;
+      settled.forEach((outcome, index) => {
+        const label = sources[index]!.descriptor.label;
+        if (outcome.status !== "fulfilled") {
+          if (!failedSources.includes(label)) failedSources.push(label);
+          return;
+        }
+        if (!queried.includes(label)) queried.push(label);
+        found += outcome.value.length;
+        collected.push(...outcome.value);
+      });
+      effectiveQuery = variant;
+      if (found > 0) break;
     }
 
     const registered = deps.artifacts.register(collected.slice(0, input.limit));
+    const fromFetchedPages = deps.artifacts
+      .registeredByOrigin("page")
+      .filter((entry) => !registered.some((item) => item.handle === entry.handle))
+      .slice(0, Math.max(0, input.limit - registered.length));
+    const results = [...registered, ...fromFetchedPages];
+
+    if (results.length === 0) {
+      return imageSearchFailure(sources.length, failedSources, local.length);
+    }
+    if (fromFetchedPages.length > 0 && !queried.includes(FETCHED_PAGES_LABEL)) {
+      queried.push(FETCHED_PAGES_LABEL);
+    }
+
     return {
       ok: true,
       value: {
-        images: registered.map(({ handle, candidate }) => ({
+        images: results.map(({ handle, candidate }) => ({
           imageId: handle,
           alt: candidate.alt,
           ...(candidate.caption ? { caption: candidate.caption } : {}),
@@ -102,14 +135,41 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
           origin: candidate.origin,
         })),
         diagnostics: {
-          resultCount: registered.length,
+          resultCount: results.length,
           sourcesQueried: queried,
+          ...(effectiveQuery !== input.query ? { effectiveQuery } : {}),
+          ...(failedSources.length > 0 ? { failedSources } : {}),
           untrustedEvidence: true as const,
         },
       },
     };
   },
 });
+
+/** Distinguishes "nothing enabled", "provider broke" and "genuinely no match". */
+function imageSearchFailure(
+  sourceCount: number,
+  failedSources: readonly string[],
+  localCount: number,
+) {
+  if (sourceCount === 0 && localCount === 0) {
+    return toolFailure(
+      "no-image-sources",
+      "No image resource is enabled, no read document contains images, and no fetched page referenced one. Enable Wikimedia Commons or Openverse under External sources, or fetch a page that carries images.",
+    );
+  }
+  if (failedSources.length > 0 && failedSources.length === sourceCount) {
+    return toolFailure(
+      "image-search-failed",
+      `Every image resource failed to answer (${failedSources.join(", ")}).`,
+      true,
+    );
+  }
+  return toolFailure(
+    "no-image-candidates",
+    "No eligible images matched. Image resources index short English file metadata, so retry with two or three concrete subject words (English works best) instead of a full question.",
+  );
+}
 
 interface PresentGalleryInput {
   imageIds: string[];

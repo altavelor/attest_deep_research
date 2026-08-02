@@ -9,6 +9,7 @@ import {
   validateImageUrl,
   isSafeVaultImagePath,
   hasDisplayableDimensions,
+  imageQueryVariants,
   type AnswerArtifact,
   type ChartArtifact,
   type ImageCandidate,
@@ -169,6 +170,36 @@ describe("candidate normalization", () => {
         sourceLabel: "outside",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("image query shaping", () => {
+  it("drops medium words so a natural-language query can still match", () => {
+    expect(imageQueryVariants("схема солнечной системы планеты")).toEqual([
+      "схема солнечной системы планеты",
+      "солнечной системы планеты",
+      "солнечной системы",
+    ]);
+  });
+
+  it("keeps the query when every word is a medium word", () => {
+    expect(imageQueryVariants("диаграмма схема")).toEqual(["диаграмма схема"]);
+  });
+
+  it("does not repeat a variant for an already short query", () => {
+    expect(imageQueryVariants("solar system")).toEqual(["solar system"]);
+  });
+
+  it("caps a long query to its leading content terms", () => {
+    expect(imageQueryVariants("photo of a red fox in deep winter snow")).toEqual([
+      "photo of a red fox in deep winter snow",
+      "of a red fox",
+      "of a",
+    ]);
+  });
+
+  it("returns nothing for an empty query", () => {
+    expect(imageQueryVariants("   ")).toEqual([]);
   });
 });
 

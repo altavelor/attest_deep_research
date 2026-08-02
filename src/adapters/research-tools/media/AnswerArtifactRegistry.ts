@@ -7,6 +7,7 @@ import {
   AnswerArtifact,
   ARTIFACT_LIMITS,
   ImageCandidate,
+  ImageCandidateOrigin,
   isAnswerArtifact,
   toAnswerImage,
 } from "@core/media";
@@ -51,6 +52,18 @@ export class AnswerArtifactRegistry {
 
   hasCandidates(): boolean {
     return this.candidates.size > 0;
+  }
+
+  /**
+   * Candidates registered earlier in this run, newest first. Pages fetched with
+   * fetch_web_page register their images here, so image search can surface them
+   * even when no provider returned anything.
+   */
+  registeredByOrigin(origin: ImageCandidateOrigin): RegisteredImageCandidate[] {
+    return [...this.candidates.entries()]
+      .filter(([, candidate]) => candidate.origin === origin)
+      .map(([handle, candidate]) => ({ handle, candidate }))
+      .reverse();
   }
 
   /** Adds an artifact, ignoring anything that fails the DTO contract. */
