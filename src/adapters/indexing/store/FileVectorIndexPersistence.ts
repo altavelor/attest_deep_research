@@ -9,6 +9,12 @@ import {
   readFirstJsonlIndexRows,
 } from "../inventory/fileIndexFiles";
 import {
+  IMAGE_MANIFEST_FILE,
+  type ImageManifestEntry,
+  REQUIRED_INDEX_VERSION,
+  serializeImageManifest,
+} from "./FileVectorImageManifest";
+import {
   createFileVectorManifest,
   FileVectorChunkRow,
   FileVectorManifest,
@@ -154,6 +160,7 @@ export class FileVectorIndexPersistence {
   async persistState(
     state: FileVectorIndexState,
     changes?: FileVectorIndexWriteChanges,
+    imageManifest?: readonly ImageManifestEntry[],
   ): Promise<void> {
     const persistStartedAt = Date.now();
     const writeId = this.createWriteId();
@@ -238,7 +245,18 @@ export class FileVectorIndexPersistence {
       keywordIndexedChunkCount,
       keywordMinTokenLength: state.manifest.keywordIndex.minTokenLength,
       languageInventory: languageInventoryFromSources(state.sources),
+      ...(imageManifest !== undefined
+        ? { indexVersion: REQUIRED_INDEX_VERSION }
+        : state.manifest.indexVersion !== undefined
+          ? { indexVersion: state.manifest.indexVersion }
+          : {}),
     });
+    if (imageManifest !== undefined) {
+      files.push({
+        path: this.pathFor(IMAGE_MANIFEST_FILE),
+        data: serializeImageManifest(imageManifest),
+      });
+    }
     this.logPerformance({
       phase: "manifestBuild",
       durationMs: Date.now() - manifestStartedAt,

@@ -35,8 +35,22 @@ export interface IndexStoreWriteSession {
   deleteBySourcePath(path: string): Promise<void>;
   updateSourceSnapshots?(snapshots: IndexSourceSnapshot[]): Promise<void>;
   recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
+  /** Records the document-image manifest of a full rebuild; absent ⇒ no image discovery. */
+  recordDocumentImages?(entries: readonly DocumentImageManifestEntry[]): Promise<void>;
   commit(): Promise<void>;
   rollback(): void;
+}
+
+/** Compact per-document image record persisted by a successful full rebuild. */
+export interface DocumentImageManifestEntry {
+  documentPath: string;
+  contentHash: string;
+  format: string;
+  locator: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface IndexSourceSnapshot {

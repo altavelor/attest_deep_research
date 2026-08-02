@@ -5,6 +5,7 @@ import {
   resolveIndexStatusBadge,
 } from "@apps/obsidian/ui/settings/indexProfileStatus";
 import type { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
+import { REQUIRED_INDEX_VERSION } from "@adapters/indexing";
 
 describe("index profile status in the Index column", () => {
   it("uses short labels for active indexing states and keeps detail in the tooltip", () => {
@@ -97,6 +98,7 @@ describe("index profile status in the Index column", () => {
     const profile = {
       lastIndexedAt: "2026-07-03T10:20:30.000Z",
       lastEnrichedAt: "2026-07-03T09:00:00.000Z",
+      indexVersion: REQUIRED_INDEX_VERSION,
     };
 
     expect(
@@ -119,6 +121,49 @@ describe("index profile status in the Index column", () => {
       kind: "is-suspended",
       label: "Stale metadata",
     });
+  });
+
+  it("marks an index built before document-image metadata as needing a rebuild", () => {
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: true,
+        profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
+        indexing: indexingState(),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({ kind: "is-reindex-required", label: "Reindex required" });
+
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: true,
+        profile: {
+          lastIndexedAt: "2026-07-03T10:20:30.000Z",
+          indexVersion: REQUIRED_INDEX_VERSION,
+        },
+        indexing: indexingState(),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({ kind: "is-default" });
+  });
+
+  it("keeps error and suspended state above the rebuild notice", () => {
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: false,
+        profile: { isSuspended: true, suspendedReason: "Embedder missing" },
+        indexing: indexingState(),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({ kind: "is-suspended", label: "Suspended" });
+
+    expect(
+      resolveIndexStatusBadge({
+        isDefault: false,
+        profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
+        indexing: indexingState({ status: "error", errorMessage: "boom" }),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({ kind: "is-suspended", label: "Error" });
   });
 
   it("shows pending pause and metadata stop actions until the underlying run settles", () => {

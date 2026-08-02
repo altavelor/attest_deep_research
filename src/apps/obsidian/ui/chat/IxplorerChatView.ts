@@ -47,7 +47,7 @@ import {
   resolveChatSettings,
   stripContextDiagnostics,
 } from "./chatViewHelpers";
-import { searchUnavailableMessage } from "./chatViewStatus";
+import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
 import { stripMessageDiagnostics } from "@core/conversation";
@@ -71,6 +71,8 @@ export interface IxplorerChatViewServices {
   getDefaultIndexProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
   getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
+  /** Opens the plugin settings on the index section (used by the rebuild notice). */
+  openIndexSettings(): void;
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   listSavedChats(): Promise<SavedChatSummary[]>;
   loadSavedChat(id: string): Promise<SavedChat | null>;
@@ -538,7 +540,32 @@ export class IxplorerChatView extends ItemView {
     if (this.composer.getIndexProfileId() !== this.currentChatSettings.indexProfileId) {
       this.composer.setIndexProfileId(this.currentChatSettings.indexProfileId ?? "");
     }
+    this.warnAboutLegacyIndexImages(normalizedIndex);
     await this.saveCurrentChat();
+  }
+
+  /**
+   * Non-blocking notice for an index built before document-image metadata
+   * existed. Text search still works, so the question is never blocked.
+   */
+  private warnAboutLegacyIndexImages(indexProfileId: string): void {
+    const profile = this.services
+      .getIndexProfiles()
+      .find((candidate) => candidate.id === indexProfileId);
+    const message = profile?.isIndexed ? legacyIndexImageNotice(profile) : null;
+    if (!message) return;
+
+    const notice = new Notice(`${message}\n`, 12_000);
+    const action = notice.messageEl.createEl("a", {
+      text: "Open index settings",
+      href: "#",
+      cls: "ixplorer-chat__notice-action",
+    });
+    action.addEventListener("click", (event) => {
+      event.preventDefault();
+      this.services.openIndexSettings();
+      notice.hide();
+    });
   }
 
   private async updateContextMode(contextMode: "include" | "filter"): Promise<void> {

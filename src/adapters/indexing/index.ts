@@ -38,5 +38,6 @@ export * from "./pipeline/changeDetection";
 export * from "./pipeline/chunker";
 export * from "./pipeline/languageDetection";
 
+export * from "./store/FileVectorImageManifest";
 export * from "./store/FileVectorIndexReader";
 export * from "./store/FileVectorIndexStore";

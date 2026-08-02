@@ -11,6 +11,7 @@ import {
 } from "@application/ports";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
+import type { ImageManifestEntry } from "./FileVectorImageManifest";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";
 import {
@@ -137,6 +138,7 @@ export class FileVectorIndexStore
     const state = this.requireState();
     const changes = createWriteChanges();
     let closed = false;
+    let imageManifest: ImageManifestEntry[] | undefined;
 
     return {
       upsert: async (chunks) => {
@@ -163,10 +165,14 @@ export class FileVectorIndexStore
           changes.sourcesDirty = true;
         }
       },
+      recordDocumentImages: async (entries) => {
+        ensureWriterOpen();
+        imageManifest = [...(imageManifest ?? []), ...(entries as ImageManifestEntry[])];
+      },
       commit: async () => {
         ensureWriterOpen();
         closed = true;
-        await this.persistence.persistState(state, changes);
+        await this.persistence.persistState(state, changes, imageManifest);
         this.state = state;
       },
       rollback: () => {

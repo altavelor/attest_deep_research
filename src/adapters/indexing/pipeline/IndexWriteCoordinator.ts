@@ -1,4 +1,5 @@
 import type {
+  DocumentImageManifestEntry,
   IndexFailedSourceSnapshot,
   IndexStore,
   IndexStoreWriteSession,
@@ -19,6 +20,7 @@ export class IndexWriteCoordinator {
   private readonly logger?: IndexingLogger;
   private snapshotsLoaded = false;
   private writer: IndexStoreWriteSession | undefined;
+  private imageManifest: DocumentImageManifestEntry[] | undefined;
 
   constructor(options: {
     indexStore: IndexStore;
@@ -42,16 +44,37 @@ export class IndexWriteCoordinator {
 
   async begin(): Promise<void> {
     this.writer = undefined;
+    this.imageManifest = undefined;
   }
 
+  /** Starts collecting the document-image manifest for a full rebuild. */
+  beginImageManifest(): void {
+    this.imageManifest = [];
+  }
+
+  recordDocumentImages(entries: readonly DocumentImageManifestEntry[]): void {
+    if (this.imageManifest === undefined || entries.length === 0) return;
+    this.imageManifest.push(...entries);
+  }
+
+  /**
+   * Commits the run. A full rebuild also writes the image manifest, which is
+   * what advances the persisted index version — partial runs never do.
+   */
   async commit(): Promise<void> {
+    if (this.imageManifest !== undefined) {
+      const writer = await this.getWriter();
+      await writer?.recordDocumentImages?.(this.imageManifest);
+    }
     await this.writer?.commit();
     this.writer = undefined;
+    this.imageManifest = undefined;
   }
 
   rollback(): void {
     this.writer?.rollback();
     this.writer = undefined;
+    this.imageManifest = undefined;
   }
 
   async loadPersistedSnapshots(): Promise<void> {
