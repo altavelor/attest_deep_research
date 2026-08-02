@@ -98,6 +98,11 @@
 
 .ixplorer-chat__answer-content {
   position: relative;
+  /* The answer sits in a grid column, so it needs an explicit minimum of 0:
+     otherwise a wide artifact or an unbreakable link widens the whole chat
+     pane instead of wrapping or scrolling inside its own box. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ixplorer-chat__answer-status-dot {

@@ -3,6 +3,10 @@
   flex-direction: column;
   gap: var(--size-4-4);
   margin-top: var(--size-4-4);
+  /* Grid and flex children default to min-width:auto; without this an artifact
+     wider than the pane scrolls the whole chat view instead of fitting. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ixplorer-artifact {
@@ -11,6 +15,8 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
   background-color: var(--background-primary-alt);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ixplorer-artifact__title {
@@ -27,10 +33,12 @@
 .ixplorer-artifact__attribution {
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
 }
 
 .ixplorer-artifact__source {
   font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
 }
 
 .ixplorer-artifact__unavailable {
@@ -38,7 +46,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--size-4-1);
-  min-height: 96px;
+  min-height: 160px;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
   background-color: var(--background-secondary);
@@ -47,14 +55,18 @@
 
 /* --- Gallery ------------------------------------------------------------ */
 
+/* `min()` keeps the track from exceeding a narrow pane, and `auto-fill` wraps
+   the cards onto as many rows as the width needs. */
 .ixplorer-gallery__grid {
   display: grid;
   gap: var(--size-4-2);
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ixplorer-gallery__grid.is-count-1 {
-  grid-template-columns: minmax(0, 320px);
+  grid-template-columns: minmax(0, min(320px, 100%));
 }
 
 .ixplorer-gallery__card {
@@ -66,6 +78,8 @@
 
 .ixplorer-gallery__trigger {
   padding: 0;
+  min-width: 0;
+  width: 100%;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   background: var(--background-secondary);
@@ -85,7 +99,9 @@
 .ixplorer-gallery__image {
   display: block;
   width: 100%;
-  height: 140px;
+  aspect-ratio: 4 / 3;
+  min-height: 160px;
+  max-height: 240px;
   object-fit: cover;
 }
 
@@ -263,6 +279,10 @@
   color: var(--text-muted);
 }
 
+.ixplorer-chart__data[open] {
+  overflow-x: auto;
+}
+
 .ixplorer-chart__table {
   width: 100%;
   margin-top: var(--size-4-2);
@@ -274,6 +294,12 @@
   padding: var(--size-2-1) var(--size-4-1);
   border-bottom: 1px solid var(--background-modifier-border);
   text-align: left;
+}
+
+/* --- Answer body containment -------------------------------------------- */
+
+.ixplorer-chat__answer-content :is(a, code) {
+  overflow-wrap: anywhere;
 }
 
 /* --- Markdown tables in answers ---------------------------------------- */
