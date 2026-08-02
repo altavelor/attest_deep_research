@@ -119,10 +119,14 @@ export function validateImageUrl(value: string): ImageUrlCheck {
 }
 
 function isNonPublicAddress(hostname: string): boolean {
-  if (hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd")) return true;
+  if (hostname.includes(":")) return isNonPublicIpv6(hostname);
   const parts = hostname.split(".");
   if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part))) return false;
-  const [a, b] = parts.map((part) => Number.parseInt(part, 10)) as [number, number];
+  return isNonPublicIpv4(parts.map((part) => Number.parseInt(part, 10)));
+}
+
+function isNonPublicIpv4(octets: readonly number[]): boolean {
+  const [a, b] = octets as [number, number];
   return (
     a === 0 ||
     a === 10 ||
@@ -132,6 +136,67 @@ function isNonPublicAddress(hostname: string): boolean {
     (a === 192 && b === 168) ||
     a >= 224
   );
+}
+
+/**
+ * Rejects every IPv6 range that cannot host a public image: loopback, the
+ * unspecified address, link-local and unique-local ranges, multicast, and the
+ * embedded-IPv4 forms, which are judged by the IPv4 rules. An address that
+ * cannot be parsed is treated as non-public rather than trusted.
+ */
+function isNonPublicIpv6(hostname: string): boolean {
+  const groups = parseIpv6(hostname);
+  if (!groups) return true;
+
+  const [first, second] = groups as [number, number];
+  const isZeroPrefix = groups.slice(0, 5).every((group) => group === 0);
+  if (isZeroPrefix && (groups[5] === 0 || groups[5] === 0xffff)) {
+    const low = [groups[6]!, groups[7]!];
+    const octets = [low[0]! >> 8, low[0]! & 0xff, low[1]! >> 8, low[1]! & 0xff];
+    if (groups[5] === 0 && groups[6] === 0 && groups[7] !== undefined && groups[7] <= 1) {
+      return true;
+    }
+    return isNonPublicIpv4(octets);
+  }
+  if ((first & 0xff00) === 0xff00) return true;
+  if ((first & 0xffc0) === 0xfe80) return true;
+  if ((first & 0xfe00) === 0xfc00) return true;
+  if (first === 0x0064 && second === 0xff9b) return true;
+  if (first === 0x0100) return true;
+  return false;
+}
+
+/** Expands an IPv6 literal, including a trailing dotted-quad, into eight groups. */
+function parseIpv6(value: string): number[] | undefined {
+  let text = value.toLowerCase().split("%")[0] ?? "";
+  const dotted = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(text);
+  if (dotted) {
+    const octets = dotted[1]!.split(".").map((part) => Number.parseInt(part, 10));
+    if (octets.some((octet) => !Number.isInteger(octet) || octet > 255)) return undefined;
+    const high = ((octets[0]! << 8) | octets[1]!).toString(16);
+    const low = ((octets[2]! << 8) | octets[3]!).toString(16);
+    text = `${text.slice(0, dotted.index)}${high}:${low}`;
+  }
+
+  const halves = text.split("::");
+  if (halves.length > 2) return undefined;
+  const toGroups = (part: string): number[] | undefined => {
+    if (!part) return [];
+    const groups: number[] = [];
+    for (const chunk of part.split(":")) {
+      if (!/^[0-9a-f]{1,4}$/.test(chunk)) return undefined;
+      groups.push(Number.parseInt(chunk, 16));
+    }
+    return groups;
+  };
+
+  const head = toGroups(halves[0] ?? "");
+  const tail = halves.length === 2 ? toGroups(halves[1] ?? "") : [];
+  if (!head || !tail) return undefined;
+  if (halves.length === 1) return head.length === 8 ? head : undefined;
+  const fill = 8 - head.length - tail.length;
+  if (fill < 1) return undefined;
+  return [...head, ...Array.from({ length: fill }, () => 0), ...tail];
 }
 
 /** True when the path stays inside the vault and outside Ixplorer's own folders. */

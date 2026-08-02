@@ -129,12 +129,26 @@ describe("image url and path policy", () => {
     ["https://user:pass@example.com/a.png", "credentials-not-allowed"],
     ["https://localhost/a.png", "local-hostname"],
     ["https://192.168.0.5/a.png", "non-public-address"],
+    ["https://[::1]/a.png", "non-public-address"],
+    ["https://[::]/a.png", "non-public-address"],
+    ["https://[fe80::1]/a.png", "non-public-address"],
+    ["https://[fd12:3456::1]/a.png", "non-public-address"],
+    ["https://[ff02::1]/a.png", "non-public-address"],
+    ["https://[::ffff:127.0.0.1]/a.png", "non-public-address"],
+    ["https://[64:ff9b::7f00:1]/a.png", "non-public-address"],
+    ["https://[fe80:0:0:0:0:0:0:1]/a.png", "non-public-address"],
+    ["https://[not:an:address]/a.png", "invalid-url"],
     ["https://example.com/logo.svg", "unsupported-format"],
     ["not a url", "invalid-url"],
   ])("rejects %s", (url, reason) => {
     const result = validateImageUrl(url);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.reason).toBe(reason);
+  });
+
+  it("accepts a public ipv6 image host", () => {
+    expect(validateImageUrl("https://[2606:4700::1]/a.png").ok).toBe(true);
+    expect(validateImageUrl("https://[::ffff:93.184.216.34]/a.png").ok).toBe(true);
   });
 
   it("accepts a public https image url and strips the fragment", () => {
