@@ -9,7 +9,7 @@ export interface ImageCandidate {
   format?: EligibleImageFormat;
   thumbnailUrl?: string;
   fullUrl?: string;
-  vaultSource?: { documentPath: string; locator: string };
+  vaultSource?: { documentPath: string; locator: string; contentHash?: string };
   alt: string;
   caption?: string;
 
@@ -42,6 +42,9 @@ export function toAnswerImage(candidate: ImageCandidate): AnswerImage | undefine
       ? {
           documentPath: candidate.vaultSource.documentPath,
           locator: candidate.vaultSource.locator.slice(0, 512),
+          ...(candidate.vaultSource.contentHash
+            ? { contentHash: candidate.vaultSource.contentHash.slice(0, 128) }
+            : {}),
         }
       : undefined;
   if (!thumbnailUrl && !fullUrl && !vaultSource) return undefined;

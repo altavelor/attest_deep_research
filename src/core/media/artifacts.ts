@@ -5,6 +5,8 @@ export const CHART_TYPES = ["bar", "line", "scatter", "pie"] as const;
 export type ChartType = (typeof CHART_TYPES)[number];
 
 export interface AnswerImageVaultSource {
+  /** Fingerprint of the document when the image was discovered, when known. */
+  contentHash?: string;
   documentPath: string;
 
   locator: string;
@@ -122,7 +124,8 @@ function isVaultSource(value: unknown): value is AnswerImageVaultSource {
   return (
     isRecord(value) &&
     isBoundedString(value.documentPath, 1024) &&
-    isBoundedString(value.locator, 512)
+    isBoundedString(value.locator, 512) &&
+    isOptionalBoundedString(value.contentHash, 128)
   );
 }
 
