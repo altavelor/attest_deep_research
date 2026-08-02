@@ -10,7 +10,8 @@ export type WebSourceCategory =
   | "encyclopedia"
   | "community"
   | "news"
-  | "fetch";
+  | "fetch"
+  | "image";
 
 /** What the source can do; absent means search-only. */
 export interface WebSourceCapabilities {
@@ -58,6 +59,9 @@ const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCre
   secret: true,
   ...overrides,
 });
+
+export const WIKIMEDIA_COMMONS_SOURCE_ID = "wikimedia-commons";
+export const OPENVERSE_SOURCE_ID = "openverse";
 
 /** Built-in scraper provider; lives in the catalog like any other source but is constructed specially. */
 export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
@@ -253,7 +257,37 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     homepage: "https://newsapi.org/",
     freeTierNote: "100 req/day free (dev tier)",
   },
+  {
+    id: WIKIMEDIA_COMMONS_SOURCE_ID,
+    label: "Wikimedia Commons",
+    category: "image",
+    strengths: ["images", "reference", "public-domain"],
+    credentials: [],
+    homepage: "https://commons.wikimedia.org/",
+    freeTierNote: "Free, no key · used only by image search",
+    capabilities: { search: false, fetchPage: false },
+  },
+  {
+    id: OPENVERSE_SOURCE_ID,
+    label: "Openverse",
+    category: "image",
+    strengths: ["images", "openly-licensed"],
+    credentials: [apiKey({ optional: true, label: "Client token (optional, raises limits)" })],
+    homepage: "https://openverse.org/",
+    freeTierNote: "Free, key optional · used only by image search",
+    capabilities: { search: false, fetchPage: false },
+  },
 ];
+
+/** Sources that answer image queries only; they never take part in text search. */
+export const IMAGE_SOURCE_IDS: readonly string[] = [
+  WIKIMEDIA_COMMONS_SOURCE_ID,
+  OPENVERSE_SOURCE_ID,
+];
+
+export function isImageSourceId(id: string): boolean {
+  return IMAGE_SOURCE_IDS.includes(id);
+}
 
 export function findWebSourceDescriptor(id: string): WebSourceDescriptor | undefined {
   return WEB_SOURCE_CATALOG.find((descriptor) => descriptor.id === id);
