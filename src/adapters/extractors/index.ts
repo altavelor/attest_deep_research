@@ -50,4 +50,9 @@ export {
   supportsDocumentImages,
   TextImageExtractor,
 } from "./images";
-export type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./images";
+export type {
+  DocumentImageExtractor,
+  DocumentImageInput,
+  DocumentImageRef,
+  LinkedPathResolver,
+} from "./images";

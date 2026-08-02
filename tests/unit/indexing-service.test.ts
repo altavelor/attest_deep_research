@@ -701,6 +701,29 @@ describe("IndexingService image manifest", () => {
     expect(state.indexVersion).toBe(REQUIRED_INDEX_VERSION);
   });
 
+  it("resolves wiki embeds through the host resolver while building the manifest", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, "![[photo.png]]")]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      resolveLinkedImagePath: (target, fromPath) =>
+        target === "photo.png" && fromPath === "Research/a.md"
+          ? "Attachments/photo.png"
+          : undefined,
+    });
+
+    await service.rebuild();
+
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({ locator: "link:Attachments/photo.png" }),
+    ]);
+  });
+
   it("writes no manifest and no version bump on an incremental run", async () => {
     const indexStore = new ImageManifestIndexStore();
     const service = new IndexingService({

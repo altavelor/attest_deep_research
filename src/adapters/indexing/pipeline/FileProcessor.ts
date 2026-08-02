@@ -147,7 +147,14 @@ export class FileProcessor {
     if (this.options.collectDocumentImages?.() !== true || !supportsDocumentImages(path)) {
       return [];
     }
-    return extractDocumentImages({ path, data, metadataOnly: true }).map((ref) => ({
+    return extractDocumentImages({
+      path,
+      data,
+      metadataOnly: true,
+      ...(this.options.resolveLinkedImagePath
+        ? { resolveLinkedPath: this.options.resolveLinkedImagePath }
+        : {}),
+    }).map((ref) => ({
       documentPath: path,
       contentHash,
       format: ref.format,

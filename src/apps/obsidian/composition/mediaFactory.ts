@@ -6,7 +6,7 @@
 import { TFile } from "obsidian";
 
 import { documentImageCandidates, extractDocumentImages } from "@adapters/extractors";
-import type { DocumentImageRef } from "@adapters/extractors";
+import type { DocumentImageRef, LinkedPathResolver } from "@adapters/extractors";
 import { createImageSearchSources, StaticImageSearchRegistry } from "@adapters/web";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import type {
@@ -56,7 +56,11 @@ export function createDocumentImageCandidates(
       candidates.push(
         ...documentImageCandidates(
           path,
-          extractDocumentImages({ path, data, resolveLinkedPath: linkResolver(ctx) }),
+          extractDocumentImages({
+            path,
+            data,
+            resolveLinkedPath: createLinkedImagePathResolver(ctx),
+          }),
         ),
       );
     }
@@ -143,7 +147,7 @@ export function createDocumentImageResolver(ctx: CompositionContext): DocumentIm
       const match = extractDocumentImages({
         path: documentPath,
         data,
-        resolveLinkedPath: linkResolver(ctx),
+        resolveLinkedPath: createLinkedImagePathResolver(ctx),
       }).find((ref) => ref.locator === locator);
       return match?.data ? { format: match.format, data: match.data } : undefined;
     },
@@ -151,9 +155,8 @@ export function createDocumentImageResolver(ctx: CompositionContext): DocumentIm
 }
 
 /** Resolves Markdown and wiki-embed targets exactly as Obsidian links do. */
-function linkResolver(ctx: CompositionContext) {
-  return (target: string, fromPath: string): string | undefined =>
-    ctx.app.metadataCache.getFirstLinkpathDest(target, fromPath)?.path;
+export function createLinkedImagePathResolver(ctx: CompositionContext): LinkedPathResolver {
+  return (target, fromPath) => ctx.app.metadataCache.getFirstLinkpathDest(target, fromPath)?.path;
 }
 
 async function readVaultDocument(

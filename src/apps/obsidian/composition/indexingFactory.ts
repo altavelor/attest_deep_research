@@ -23,6 +23,7 @@ import { RetrievalService } from "@adapters/retrieval";
 import { EmbeddingModelProfile } from "@adapters/settings";
 
 import { CompositionContext } from "./CompositionContext";
+import { createLinkedImagePathResolver } from "./mediaFactory";
 import {
   requireEmbeddingModelProfile,
   requireIndexProfile,
@@ -51,6 +52,7 @@ export function createIndexingService(
     batchSize: indexProfile.embeddingBatchSize,
     onProgress,
     logger: ctx.logger,
+    resolveLinkedImagePath: createLinkedImagePathResolver(ctx),
   });
 }
 
