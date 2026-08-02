@@ -18,6 +18,8 @@ export interface FetchWebPageOutput {
   content: string;
   contentType: string;
   truncated: boolean;
+  /** Handles of images this page referenced; pass them to present_image_gallery. */
+  imageIds?: string[];
   untrustedEvidence: true;
 }
 
@@ -32,7 +34,9 @@ export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
   /** Collects page-referenced image candidates for present_image_gallery. */
-  artifacts?: { register(candidates: readonly ImageCandidate[]): unknown };
+  artifacts?: {
+    register(candidates: readonly ImageCandidate[]): ReadonlyArray<{ handle: string }>;
+  };
 }
 
 /**
@@ -84,9 +88,10 @@ export async function fetchRegisteredWebPage(
     return toolFailure("web-fetch-invalid-response", "Page fetch returned unsafe metadata.");
   }
 
-  if (deps.artifacts && Array.isArray(result.pageImages)) {
-    deps.artifacts.register(result.pageImages);
-  }
+  const imageIds =
+    deps.artifacts && Array.isArray(result.pageImages)
+      ? deps.artifacts.register(result.pageImages).map((entry) => entry.handle)
+      : [];
 
   const content = result.content.slice(0, maxContentChars);
   const truncated = result.truncated || content.length < result.content.length;
@@ -107,6 +112,7 @@ export async function fetchRegisteredWebPage(
       content,
       contentType: result.contentType,
       truncated,
+      ...(imageIds.length > 0 ? { imageIds } : {}),
       untrustedEvidence: true,
     },
   };
