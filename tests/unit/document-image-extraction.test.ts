@@ -1,4 +1,4 @@
-import { deflateRawSync } from "zlib";
+import { deflateRawSync, deflateSync } from "zlib";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -246,6 +246,70 @@ describe("pdf image extraction", () => {
     expect(refs[0]).toMatchObject({ locator: "page:1:0", format: "jpeg", width: 800, height: 600 });
   });
 
+  it("re-encodes flate rasters as png so non-jpeg pdfs still yield images", () => {
+    const samples = Buffer.alloc(64 * 64 * 3, 0x40);
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n1 0 obj\n<< /Type /Page /Resources << /XObject << /Im0 2 0 R >> >> >>\nendobj\n",
+        "latin1",
+      ),
+      Buffer.from(
+        "2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /ColorSpace /DeviceRGB /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(samples),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    const refs = extractDocumentImages({
+      path: "docs/lossless.pdf",
+      data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+    });
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({ locator: "page:1:0", format: "png", width: 64, height: 64 });
+    const png = Buffer.from(refs[0]!.data!);
+    expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(png.subarray(12, 16).toString("latin1")).toBe("IHDR");
+    expect(png.readUInt32BE(16)).toBe(64);
+    expect(png.readUInt32BE(20)).toBe(64);
+  });
+
+  it("undoes png predictors before re-encoding", () => {
+    const rows: Buffer[] = [];
+    for (let row = 0; row < 64; row += 1) {
+      rows.push(Buffer.concat([Buffer.from([0]), Buffer.alloc(64 * 3, 0x7f)]));
+    }
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /Columns 64 >> /ColorSpace /DeviceRGB /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(Buffer.concat(rows)),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    const refs = extractDocumentImages({
+      path: "docs/predicted.pdf",
+      data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+    });
+    expect(refs.map((ref) => ref.format)).toEqual(["png"]);
+  });
+
+  it("skips rasters whose colour space it cannot reproduce", () => {
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(Buffer.alloc(64 * 64 * 4, 0x20)),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    expect(
+      extractDocumentImages({
+        path: "docs/cmyk.pdf",
+        data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+      }),
+    ).toEqual([]);
+  });
+
   it("skips tiny rasters", () => {
     const pdf = Buffer.from(
       "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /DCTDecode /Width 1 /Height 1 >>\nstream\nxx\nendstream\nendobj\n",
@@ -261,6 +325,23 @@ describe("pdf image extraction", () => {
 });
 
 describe("candidate mapping", () => {
+  it("carries the document fingerprint on embedded images only", () => {
+    const candidates = documentImageCandidates(
+      "docs/report.pdf",
+      [
+        { locator: "page:1:0", format: "jpeg" },
+        { locator: "link:assets/photo.jpg", format: "jpeg", linkedPath: "assets/photo.jpg" },
+      ],
+      "hash-1",
+    );
+    expect(candidates[0]!.vaultSource).toMatchObject({
+      documentPath: "docs/report.pdf",
+      locator: "page:1:0",
+      contentHash: "hash-1",
+    });
+    expect(candidates[1]!.vaultSource!.contentHash).toBeUndefined();
+  });
+
   it("attributes embedded images to the document and linked ones to the file", () => {
     const candidates = documentImageCandidates("docs/report.docx", [
       { locator: "zip:word/media/image1.png", format: "png", alt: "Sales chart" },

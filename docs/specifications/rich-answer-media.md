@@ -59,7 +59,7 @@ interface AnswerImage {
 }
 ```
 
-`ResearchAnswer.artifacts` is optional; missing means no artefacts. IDs are opaque and per-answer. Persisted artifacts never contain OS paths, raw image bytes, archive member paths, or session resource URLs.
+A vault-backed image carries the document's fingerprint, which is verified before the image is re-extracted, so a replaced document shows the unavailable fallback instead of an unrelated image. `ResearchAnswer.artifacts` is optional; missing means no artefacts. IDs are opaque and per-answer. Persisted artifacts never contain OS paths, raw image bytes, archive member paths, or session resource URLs.
 
 | Tool                    | Availability                              | Contract                                                                                                                            |
 | ----------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -84,7 +84,7 @@ Invalid inputs produce no artifact and never fail the textual answer. The synthe
 | Openverse         | Preserve landing page, thumbnail/full URL, creator where supplied, licence/version/URL, and attribution text. Treat licence data as discovery metadata, not a legal guarantee.                                                                 |
 | Fetched page      | From registered `fetch_web_page` results only: collect up to 8 candidates, preferring `og:image`/`twitter:image`, then content images in document order. Resolve relative URLs, deduplicate, and keep page title/canonical URL as attribution. |
 | `.md` / `.txt`    | Extract supported Obsidian wiki embeds and vault-relative Markdown image links. Plain text has no other intrinsic image form.                                                                                                                  |
-| `.pdf`            | Extract raster image objects using page number and ordinal as locator.                                                                                                                                                                         |
+| `.pdf`            | Extract raster image objects using page number and ordinal as locator. JPEG streams pass through; 8-bit gray/RGB Flate rasters are re-encoded as PNG. Colour spaces that cannot be reproduced exactly (CMYK, indexed, sub-byte depths, JPX) are skipped.                                                                                                                                                                         |
 | `.docx`           | Extract OOXML `word/media` resources and relationship metadata where available.                                                                                                                                                                |
 | `.epub`           | Extract manifest images referenced from spine content.                                                                                                                                                                                         |
 | `.fb2`            | Extract referenced base64 `<binary>` images.                                                                                                                                                                                                   |
