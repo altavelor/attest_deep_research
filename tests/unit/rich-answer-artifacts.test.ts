@@ -78,6 +78,27 @@ describe("answer artifact contracts", () => {
     ).toBe(false);
   });
 
+  it("reapplies pie constraints to persisted charts", () => {
+    const pie = (series: unknown) => ({
+      type: "chart",
+      id: "c1",
+      title: "Share",
+      chartType: "pie",
+      series,
+    });
+    expect(isAnswerArtifact(pie([{ name: "s", points: [{ x: "A", y: 1 }] }]))).toBe(true);
+    expect(
+      isAnswerArtifact(
+        pie([
+          { name: "s", points: [{ x: "A", y: 1 }] },
+          { name: "t", points: [{ x: "B", y: 1 }] },
+        ]),
+      ),
+    ).toBe(false);
+    expect(isAnswerArtifact(pie([{ name: "s", points: [{ x: "A", y: -1 }] }]))).toBe(false);
+    expect(isAnswerArtifact(pie([{ name: "s", points: [{ x: "A", y: 0 }] }]))).toBe(false);
+  });
+
   it("rejects persisted images whose source or hotlink is not a safe url", () => {
     const withSource = (image: Record<string, unknown>): AnswerArtifact => ({
       type: "image-gallery",

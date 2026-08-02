@@ -10,6 +10,7 @@ export {
   CHART_TYPES,
   isAnswerArtifact,
   isAnswerImage,
+  isDrawablePie,
   sanitizeAnswerArtifacts,
 } from "./artifacts";
 export type {

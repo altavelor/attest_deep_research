@@ -174,10 +174,22 @@ export function isAnswerArtifact(value: unknown): value is AnswerArtifact {
       Array.isArray(value.series) &&
       value.series.length > 0 &&
       value.series.length <= ARTIFACT_LIMITS.chartSeries &&
-      value.series.every(isChartSeries)
+      value.series.every(isChartSeries) &&
+      (value.chartType !== "pie" || isDrawablePie(value.series as ChartSeries[]))
     );
   }
   return false;
+}
+
+/**
+ * A pie is drawable only as a single series of non-negative slices with a
+ * positive total; anything else divides by zero or silently drops data.
+ */
+export function isDrawablePie(series: readonly ChartSeries[]): boolean {
+  if (series.length !== 1) return false;
+  const points = series[0]!.points;
+  if (points.some((point) => point.y < 0)) return false;
+  return points.reduce((total, point) => total + point.y, 0) > 0;
 }
 
 /**

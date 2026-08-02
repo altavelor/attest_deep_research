@@ -2,7 +2,14 @@
 // only; every visual is produced locally, so nothing here accepts markup, URLs,
 // styles, or handlers.
 
-import { ARTIFACT_LIMITS, ChartArtifact, ChartSeries, ChartType, CHART_TYPES } from "./artifacts";
+import {
+  ARTIFACT_LIMITS,
+  ChartArtifact,
+  ChartSeries,
+  ChartType,
+  CHART_TYPES,
+  isDrawablePie,
+} from "./artifacts";
 
 export type ChartValidation =
   | { ok: true; value: Omit<ChartArtifact, "id"> }
@@ -109,7 +116,7 @@ function validatePie(chartType: ChartType, series: ChartSeries[]) {
   if (points.some((point) => point.y < 0)) {
     return fail("invalid-pie", "Pie slices must not be negative.");
   }
-  if (points.reduce((total, point) => total + point.y, 0) <= 0) {
+  if (!isDrawablePie(series)) {
     return fail("invalid-pie", "Pie slices must add up to a positive total.");
   }
   return undefined;
