@@ -20,7 +20,7 @@ import {
 } from "@core/media";
 import { validateChartInput } from "@core/media";
 import type { ImageSearchRegistry } from "@application/ports";
-import { defineTool, enumOf, int, str, strArray, text } from "@application/sources/tools";
+import { defineTool, enumOf, int, raw, str, strArray, text } from "@application/sources/tools";
 import { AnswerArtifactRegistry } from "./AnswerArtifactRegistry";
 
 const MAX_QUERY_LENGTH = 200;
@@ -276,13 +276,52 @@ export const PresentChartTool = defineTool<
 >({
   name: PRESENT_CHART_TOOL,
   description:
-    "Render a bar, line, scatter, or pie chart below the answer from data you already have. Supply data only — markup, SVG, styles, and URLs are rejected. Limits: 4 series, 50 points per series.",
+    "Render a bar, line, scatter, or pie chart below the answer from data you already have. `series` is required: [{name, points:[{x,y}]}]. Supply data only — markup, SVG, styles, and URLs are rejected.",
   schema: {
     title: str(ARTIFACT_LIMITS.titleLength, { required: true, description: "Chart title." }),
     chartType: enumOf(CHART_TYPES, { required: true, description: "Chart form." }),
     xLabel: str(ARTIFACT_LIMITS.labelLength, { description: "Category axis label." }),
     yLabel: str(ARTIFACT_LIMITS.labelLength, { description: "Value axis label." }),
     caption: text({ maxLength: ARTIFACT_LIMITS.captionLength, description: "Short caption." }),
+    series: raw(
+      {
+        type: "array",
+        description: `Data to plot. One entry per series; ${ARTIFACT_LIMITS.chartSeries} series max.`,
+        minItems: 1,
+        maxItems: ARTIFACT_LIMITS.chartSeries,
+        items: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              maxLength: ARTIFACT_LIMITS.labelLength,
+              description: "Series name shown in the legend.",
+            },
+            points: {
+              type: "array",
+              description: `Points of this series; ${ARTIFACT_LIMITS.chartPointsPerSeries} max.`,
+              minItems: 1,
+              maxItems: ARTIFACT_LIMITS.chartPointsPerSeries,
+              items: {
+                type: "object",
+                properties: {
+                  x: {
+                    type: ["string", "number"],
+                    description: "Category label or numeric position.",
+                  },
+                  y: { type: "number", description: "Finite numeric value." },
+                },
+                required: ["x", "y"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["name", "points"],
+          additionalProperties: false,
+        },
+      },
+      { required: true },
+    ),
   },
   parse: (input): ToolParseResult<Record<string, unknown>> => {
     const allowed = new Set(["title", "chartType", "xLabel", "yLabel", "caption", "series"]);

@@ -66,9 +66,22 @@ export class ListIndexUrlsTool implements ResearchToolHandler<
       parameters: {
         type: "object",
         properties: {
-          cursor: { type: "string", maxLength: MAX_CURSOR_CHARS },
-          limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT },
-          sourcePath: { type: "string", maxLength: MAX_SOURCE_PATH_CHARS },
+          cursor: {
+            type: "string",
+            maxLength: MAX_CURSOR_CHARS,
+            description: "Opaque cursor from a previous page; omit for the first page.",
+          },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: MAX_LIMIT,
+            description: "Maximum URLs to return.",
+          },
+          sourcePath: {
+            type: "string",
+            maxLength: MAX_SOURCE_PATH_CHARS,
+            description: "Restrict the inventory to this indexed document.",
+          },
         },
         additionalProperties: false,
       },
@@ -181,11 +194,17 @@ export class CheckUrlsTool implements ResearchToolHandler<CheckUrlsInput, CheckU
         properties: {
           urls: {
             type: "array",
+            description: "Absolute http(s) URLs to check for reachability.",
             minItems: 1,
             maxItems: MAX_URLS_PER_CHECK,
             items: { type: "string", maxLength: 2_000 },
           },
-          timeoutMs: { type: "integer", minimum: MIN_TIMEOUT_MS, maximum: MAX_TIMEOUT_MS },
+          timeoutMs: {
+            type: "integer",
+            minimum: MIN_TIMEOUT_MS,
+            maximum: MAX_TIMEOUT_MS,
+            description: "Per-URL timeout in milliseconds.",
+          },
         },
         required: ["urls"],
         additionalProperties: false,

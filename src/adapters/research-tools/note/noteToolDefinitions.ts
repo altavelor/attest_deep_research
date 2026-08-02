@@ -96,7 +96,9 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
         properties: {
           path: { type: "string", description: "Vault-relative file path." },
           maxChars: {
-            type: "number",
+            type: "integer",
+            minimum: 1,
+            maximum: 200_000,
             description: "Optional maximum content characters to return.",
           },
         },
@@ -114,7 +116,12 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
         type: "object",
         properties: {
           query: { type: "string", description: "Search query." },
-          limit: { type: "number", description: "Maximum results to return. Default 5." },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 50,
+            description: "Maximum results to return. Default 5.",
+          },
         },
         required: ["query"],
       },
@@ -131,7 +138,12 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
         properties: {
           prefix: { type: "string", description: "Optional path prefix/folder filter." },
           query: { type: "string", description: "Optional case-insensitive path query." },
-          limit: { type: "number", description: "Maximum paths to return. Default 100." },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 1000,
+            description: "Maximum paths to return. Default 100.",
+          },
         },
         required: [],
       },

@@ -76,7 +76,11 @@ const ReadNoteTool = defineNoteTool({
     "Read the raw content of a vault note by path. For editing only — returned text is NOT citable evidence. To search authoritative sources, use search_index or search_web instead.",
   schema: {
     path: str(MAX_PATH_CHARS, { required: true, description: "Vault-relative file path." }),
-    maxChars: num({ description: "Optional maximum content characters to return." }),
+    maxChars: num({
+      min: 1,
+      max: 200_000,
+      description: "Optional maximum content characters to return.",
+    }),
   },
   requires: (p) => p.has(NOTE_PERMISSIONS.read),
 });
@@ -87,7 +91,7 @@ const SearchNotesTool = defineNoteTool({
     "Find vault notes by keyword match in path or filename. Returns matching paths for editing navigation. Results are NOT evidence and cannot be cited or used to reason about the question.",
   schema: {
     query: str(MAX_QUERY_CHARS, { required: true, description: "Search query." }),
-    limit: num({ description: "Maximum results to return. Default 5." }),
+    limit: num({ min: 1, max: 50, description: "Maximum results to return. Default 5." }),
   },
   requires: (p) => p.has(NOTE_PERMISSIONS.read),
 });
@@ -99,7 +103,7 @@ const ListNotesTool = defineNoteTool({
   schema: {
     prefix: str(MAX_PATH_CHARS, { description: "Optional path prefix/folder filter." }),
     query: str(MAX_QUERY_CHARS, { description: "Optional case-insensitive path query." }),
-    limit: num({ description: "Maximum paths to return. Default 100." }),
+    limit: num({ min: 1, max: 1000, description: "Maximum paths to return. Default 100." }),
   },
   requires: (p) => p.has(NOTE_PERMISSIONS.read),
 });

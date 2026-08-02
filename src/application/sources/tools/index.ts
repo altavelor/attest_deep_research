@@ -13,6 +13,7 @@ export {
   int,
   num,
   okPage,
+  raw,
   str,
   strArray,
   text,

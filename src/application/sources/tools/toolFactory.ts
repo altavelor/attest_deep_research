@@ -20,10 +20,11 @@ export type FieldSpec = Described &
     | { kind: "string"; maxLength: number; required: boolean }
     | { kind: "text"; maxLength?: number; required: boolean }
     | { kind: "integer"; min: number; max: number; default: number }
-    | { kind: "number" }
+    | { kind: "number"; min?: number; max?: number }
     | { kind: "boolean" }
     | { kind: "enum"; values: readonly string[]; required: boolean }
     | { kind: "stringArray"; maxItems: number; itemMaxLength: number }
+    | { kind: "raw"; schema: Record<string, unknown>; required: boolean }
   );
 
 export type FieldSchema = Record<string, FieldSpec>;
@@ -61,9 +62,14 @@ export const text = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/** Optional number: passed through when present, omitted otherwise (the service applies defaults). */
-export const num = (opts: Described = {}): FieldSpec => ({
+/**
+ * Optional number: passed through when present, omitted otherwise (the service
+ * applies defaults). Bounds are advertised to the model and clamp the value.
+ */
+export const num = (opts: Described & { min?: number; max?: number } = {}): FieldSpec => ({
   kind: "number",
+  ...(opts.min !== undefined ? { min: opts.min } : {}),
+  ...(opts.max !== undefined ? { max: opts.max } : {}),
   ...(opts.description ? { description: opts.description } : {}),
 });
 
@@ -80,6 +86,21 @@ export const enumOf = (
   values,
   required: opts.required ?? false,
   ...(opts.description ? { description: opts.description } : {}),
+});
+
+/**
+ * Escape hatch for a shape the DSL cannot express — a nested array of objects,
+ * for instance. The fragment is sent to the model verbatim, and the tool's own
+ * `parse` validates the value, so schema and parser must be kept in step (the
+ * schema-contract test enforces that).
+ */
+export const raw = (
+  schema: Record<string, unknown>,
+  opts: { required?: boolean } = {},
+): FieldSpec => ({
+  kind: "raw",
+  schema,
+  required: opts.required ?? false,
 });
 
 export const strArray = (
@@ -231,7 +252,12 @@ function jsonSchemaForField(field: FieldSpec): Record<string, unknown> {
     case "integer":
       return { type: "integer", minimum: field.min, maximum: field.max, ...described };
     case "number":
-      return { type: "number", ...described };
+      return {
+        type: "number",
+        ...(field.min !== undefined ? { minimum: field.min } : {}),
+        ...(field.max !== undefined ? { maximum: field.max } : {}),
+        ...described,
+      };
     case "boolean":
       return { type: "boolean", ...described };
     case "enum":
@@ -243,6 +269,8 @@ function jsonSchemaForField(field: FieldSpec): Record<string, unknown> {
         maxItems: field.maxItems,
         ...described,
       };
+    case "raw":
+      return { ...field.schema, ...described };
   }
 }
 
@@ -286,8 +314,15 @@ function parseBySchema(
         value[name] = raw;
         break;
       }
+      case "raw":
+        if (raw !== undefined) value[name] = raw;
+        else if (field.required) return invalidField(name);
+        break;
       case "number":
-        if (typeof raw === "number" && Number.isFinite(raw)) value[name] = raw;
+        if (typeof raw === "number" && Number.isFinite(raw)) {
+          const lower = field.min !== undefined ? Math.max(raw, field.min) : raw;
+          value[name] = field.max !== undefined ? Math.min(lower, field.max) : lower;
+        }
         break;
       case "integer":
         value[name] = readLimit(raw, field.default, field.max, field.min);
