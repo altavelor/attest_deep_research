@@ -1,8 +1,3 @@
-// Full-size viewer for a gallery image. Escape and the backdrop close it,
-// arrows move between images when the gallery has more than one, and focus
-// returns to the card that opened it. Object URLs created for embedded document
-// images are revoked when the modal closes.
-
 import { App, Modal, setIcon } from "obsidian";
 
 import type { AnswerImage } from "@core/media";
@@ -12,14 +7,14 @@ import { resolveAnswerImageSource, type ImageSourceResolverOptions } from "./ima
 export interface ImageLightboxOptions extends ImageSourceResolverOptions {
   images: AnswerImage[];
   startIndex: number;
-  /** Element focus returns to after the modal closes. */
+
   returnFocusTo?: HTMLElement;
 }
 
 export class ImageLightboxModal extends Modal {
   private index: number;
   private revokeCurrent?: () => void;
-  /** Incremented per render so a slow resolution can detect it is stale. */
+
   private renderGeneration = 0;
   private closed = false;
 

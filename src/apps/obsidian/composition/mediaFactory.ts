@@ -1,8 +1,3 @@
-// Composition of the rich-media collaborators: the enabled image-search
-// registry and the resolver that turns context documents into image candidates.
-// Reading happens for documents already attached to the request, plus the image
-// records a full rebuild wrote into the index manifest.
-
 import { TFile } from "obsidian";
 
 import { documentImageCandidates, extractDocumentImages } from "@adapters/extractors";

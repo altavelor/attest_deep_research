@@ -21,7 +21,6 @@ export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
   artifacts: AnswerArtifactRegistry;
   tools: ToolManager;
-  /** Introspection view of the data sources that contributed tools. */
   sources: SourceManager;
 }
 

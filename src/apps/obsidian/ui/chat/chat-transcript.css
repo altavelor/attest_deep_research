@@ -3,9 +3,7 @@
   display: grid;
   gap: 0.5rem;
   padding: 0.75rem;
-  /* Opt back into text selection: sidebar leaves inherit user-select:none from
-     Obsidian's panel chrome, which would make question/thinking/answer text
-     uncopyable. Interactive bits (thinking caret, diff gap) re-disable it. */
+
   user-select: text;
   -webkit-user-select: text;
 }
@@ -98,9 +96,7 @@
 
 .ixplorer-chat__answer-content {
   position: relative;
-  /* The answer sits in a grid column, so it needs an explicit minimum of 0:
-     otherwise a wide artifact or an unbreakable link widens the whole chat
-     pane instead of wrapping or scrolling inside its own box. */
+
   min-width: 0;
   max-width: 100%;
 }

@@ -1,6 +1,3 @@
-// Jina Reader (r.jina.ai): fetches a URL as LLM-ready markdown. First fallback
-// in the page-fetch chain — handles JS-rendered pages the native fetcher can't.
-
 import { PageFetchProvider, WebPageFetchOptions, WebPageFetchResult } from "@application/ports";
 import {
   FetchHttpRuntime,

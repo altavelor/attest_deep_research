@@ -16,7 +16,6 @@ import { normalizeVector, sourcePathFromReference } from "./FileVectorIndexVecto
 
 export interface StoredChunk {
   row: FileVectorChunkRow;
-  /** Normalized vector; Float32Array keeps 50k+ chunks compact and dot-product fast. */
   embedding: Float32Array;
 }
 
@@ -26,11 +25,6 @@ export interface FileVectorIndexState {
   chunksByShard: Map<string, StoredChunk[]>;
 }
 
-/**
- * Narrow read port over the committed state: resolve it (from cache or disk),
- * run `run`, or return `fallback` when no committed index exists. Lets read-only
- * collaborators (inventory) share the store's cache without depending on the store.
- */
 export interface FileVectorStateAccess {
   withState<T>(fallback: T, run: (state: FileVectorIndexState) => T | Promise<T>): Promise<T>;
 }

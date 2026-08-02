@@ -22,11 +22,10 @@ export interface IndexProfileSelectOption {
   name: string;
   isSuspended?: boolean;
   isIndexed?: boolean;
-  /** Layout version of the profile's index; absent means the legacy layout. */
+
   indexVersion?: number;
 }
 
-/** Imperative handle the host view uses to read/sync composer control state. */
 export interface ComposerControls {
   getModel(): string;
   setModel(id: string): void;
@@ -35,9 +34,9 @@ export interface ComposerControls {
   getIndexProfileId(): string;
   setIndexProfileId(id: string): void;
   getContextMode(): ContextMode;
-  /** Disable all settings controls (during an in-flight run). */
+
   setDisabled(disabled: boolean): void;
-  /** Show the Include/Filter control only when context documents are attached. */
+
   setAttachmentsPresent(present: boolean): void;
 }
 

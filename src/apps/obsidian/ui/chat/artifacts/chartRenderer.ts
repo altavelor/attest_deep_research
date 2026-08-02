@@ -1,8 +1,3 @@
-// Renders a chart artifact as local SVG. Every node is created here from
-// validated data — no provider or model markup, URL, style attribute, script,
-// or event handler ever reaches the DOM. An equivalent Markdown data table is
-// rendered next to the figure so the chart is readable without vision.
-
 import { chartDataTable, formatNumber, type ChartArtifact, type ChartSeries } from "@core/media";
 import {
   buildChartScale,

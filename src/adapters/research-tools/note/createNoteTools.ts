@@ -1,8 +1,3 @@
-// Note-tool factory (stage 1 of the tool-uniformity work). Declares the note
-// tools as ordinary `defineTool` definitions whose thin `execute` delegates to
-// the NoteToolService — which does all the work. Lives in adapters because it
-// binds the concrete service; the declarations themselves only touch the port.
-
 import { Tool, ToolContext, ToolExecution, ToolPermissions, toolFailure } from "@core/agent";
 import {
   CREATE_NOTE_TOOL,
@@ -16,7 +11,6 @@ import {
 import { NoteToolService } from "@application/research";
 import { bool, defineTool, enumOf, FieldSchema, num, str, text } from "@application/sources/tools";
 
-/** Permission names a run may grant; mapped from availability by the composition. */
 export const NOTE_PERMISSIONS = {
   read: "note.read",
   active: "note.active",

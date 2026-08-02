@@ -1,6 +1,3 @@
-// Core domain model: source references and chunks.
-// Platform-neutral: no imports from obsidian, DOM, fs, or other layers.
-
 export type SourceKind = "markdown" | "pdf" | "document" | "web";
 
 export type DocumentFormat = "fb2" | "epub" | "txt" | "docx";
@@ -26,7 +23,7 @@ export interface PdfSourceReference extends SourceReferenceBase {
   pageNumber: number;
   startOffset?: number;
   endOffset?: number;
-  /** Section path from the PDF outline or typography heuristics; absent in older indexes. */
+
   headingPath?: string[];
 }
 
@@ -66,8 +63,7 @@ export interface EmbeddedChunk extends ExtractedChunk {
 
 export interface RetrievedChunk extends ExtractedChunk {
   score: number;
-  /** Retrieval-time near-duplicate annotation (SPEC-corpus R8): sourcePaths of
-   * suppressed near-duplicate copies this chunk stands in for. */
+
   duplicates?: readonly string[];
 }
 

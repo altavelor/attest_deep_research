@@ -1,13 +1,7 @@
-// Relevance ranking for image candidates gathered from several resources.
-// Providers return results in their own order and cannot be compared directly,
-// so candidates are scored on shared, locally observable signals and merged into
-// one list. Pure: no I/O, no network, no provider-specific knowledge.
-
 import type { ImageCandidate, ImageCandidateOrigin } from "./imageCandidate";
 
 const MIN_TERM_LENGTH = 3;
 
-/** Boilerplate assets that match a query by accident far more often than not. */
 const JUNK_NAME = /(logo|icon|sprite|avatar|banner|placeholder|spacer|thumb_default|no[-_]image)/i;
 
 const ORIGIN_WEIGHT: Record<ImageCandidateOrigin, number> = {
@@ -28,12 +22,6 @@ const WEIGHTS = {
 const GOOD_PIXELS = { min: 120_000, max: 16_000_000 } as const;
 const EXTREME_ASPECT = 4;
 
-/**
- * Where the long tail is cut. The relative floor keeps a result only while it
- * stays close to the best one found, so a query with a few strong matches does
- * not drag in a dozen weak ones; the absolute floor removes candidates that
- * scored themselves into junk territory regardless of how weak the field is.
- */
 export const RELEVANCE_CUTOFF = {
   relativeToBest: 0.55,
   absolute: 0,

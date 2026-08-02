@@ -1,9 +1,5 @@
 import { App, Notice, TFile } from "obsidian";
 
-/**
- * Full tool-call payload used to render the detail note. The transcript keeps
- * only a clamped preview inline; clicking a cell opens this in a real tab.
- */
 export interface ToolOutputDetail {
   name: string;
   intent: string;

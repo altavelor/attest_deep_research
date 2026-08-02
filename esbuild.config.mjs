@@ -5,9 +5,6 @@ import { join, resolve } from "path";
 import process from "process";
 import { buildStyles } from "./scripts/build-styles.mjs";
 
-// Path aliases mirror tsconfig.json "paths" and vitest.config.ts so the same
-// import specifiers resolve identically under tsc, the bundle, and tests.
-// esbuild remaps subpaths automatically (e.g. "@core/research/x" -> src/core/research/x).
 const srcAliases = {
   "@core": resolve("src/core"),
   "@application": resolve("src/application"),
@@ -58,9 +55,7 @@ const context = await esbuild.context({
     "@lezer/highlight",
     "@lezer/lr",
     ...builtins,
-    // The Anthropic SDK lazily imports node:fs / node:path for Workload
-    // Identity Federation; Obsidian runs on Electron where Node builtins exist
-    // at runtime, so externalize the node:-prefixed forms too.
+
     ...builtins.map((name) => `node:${name}`),
   ],
   format: "cjs",

@@ -155,8 +155,7 @@ describe("ThinkingResearchRunner", () => {
       answerText: "final answer",
       satisfiedTools: ["search_index"],
     });
-    // Intermediate text is not the answer (it does remain visible in the
-    // promptRounds log, which mirrors the real transcript by design).
+
     expect(result.ok && result.answerText).toBe("final answer");
     expect(provider.requests.map((request) => request.toolChoice)).toEqual([
       { type: "specific", name: "search_index" },
@@ -189,7 +188,7 @@ describe("ThinkingResearchRunner", () => {
 
     expect(result.ok).toBe(true);
     expect(result.promptRounds).toHaveLength(2);
-    // Round 1 carries the full initial prompt.
+
     expect(result.promptRounds[0]).toMatchObject({
       round: 1,
       toolChoice: JSON.stringify({ type: "specific", name: "search_index" }),
@@ -198,7 +197,7 @@ describe("ThinkingResearchRunner", () => {
         { role: "user", content: "q" },
       ],
     });
-    // Round 2 carries only what the loop appended: assistant tool call + tool result.
+
     const round2 = result.promptRounds[1];
     expect(round2.round).toBe(2);
     expect(round2.messages.map((m) => m.role)).toEqual(["assistant", "tool"]);
@@ -292,9 +291,6 @@ describe("ThinkingResearchRunner", () => {
   });
 
   it("stops gathering and synthesizes when distinct queries surface no new evidence", async () => {
-    // Distinct args each round (no exact-duplicate cache hit), but every search returns
-    // the same chunk: round 1 makes progress, rounds 2-3 spin. Instead of failing to the
-    // deterministic fallback, the loop switches to a tool-free synthesis round.
     const execute = vi
       .fn()
       .mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1", chunkId: "e1" }] } });
@@ -330,15 +326,13 @@ describe("ThinkingResearchRunner", () => {
       tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
     }).run();
-    // Gathering stops after 3 spinning rounds; the 4th round is forced tool-free.
+
     expect(result).toMatchObject({ ok: true, answerText: "synthesized" });
     expect(execute).toHaveBeenCalledTimes(3);
     expect(provider.requests[3].toolChoice).toEqual({ type: "none" });
   });
 
   it("loop-detected still fails when a mandatory tool is unsatisfied", async () => {
-    // No evidence ever surfaces and the required tool never returns a usable result, so the
-    // run cannot honor its contract — synthesis is not an option, it must fall back.
     const execute = vi
       .fn()
       .mockResolvedValue({ ok: false, error: { code: "x", message: "no", retryable: false } });
@@ -377,9 +371,6 @@ describe("ThinkingResearchRunner", () => {
   });
 
   it("synthesizes from gathered evidence when the result budget is exhausted", async () => {
-    // A single oversized result blows the budget. The run must NOT fail to the
-    // deterministic fallback — it should force a tool-free synthesis round and return
-    // the model's own answer, with the offending result kept out of the transcript.
     const huge = "x".repeat(200);
     const search = tool(
       "search_web",
@@ -407,7 +398,7 @@ describe("ThinkingResearchRunner", () => {
     }).run();
 
     expect(result).toMatchObject({ ok: true, answerText: "synthesized answer" });
-    // The second request is forced tool-free, and the oversized result was stubbed out.
+
     const synthesisRequest = provider.requests[1];
     expect(synthesisRequest.toolChoice).toEqual({ type: "none" });
     const toolMessage = synthesisRequest.messages.find((m) => m.role === "tool");
@@ -420,10 +411,6 @@ describe("ThinkingResearchRunner", () => {
   });
 
   it("treats consecutive fetch_web_page reads as progress, not a loop", async () => {
-    // The deep-research pattern: search once, then read several pages. fetch_web_page
-    // reuses the evidenceId minted at search time, so rounds 2-3 surface no NEW id —
-    // but each pulls fresh page content, which must count as progress (otherwise the
-    // session loop-detects mid-read and never synthesizes).
     const search = tool(
       "search_index",
       vi.fn().mockResolvedValue({ ok: true, value: { results: [{ evidenceId: "e1" }] } }),
@@ -569,8 +556,7 @@ describe("ThinkingResearchRunner", () => {
     let started = 0;
     let releaseAll!: () => void;
     const allStarted = new Promise<void>((resolve) => (releaseAll = resolve));
-    // Each read execute blocks until every sibling has started: only true
-    // concurrency lets all three run, so `peak` reaches 3.
+
     const search = tool(
       "search_index",
       vi.fn().mockImplementation(async (input: { q?: string }) => {
@@ -616,7 +602,7 @@ describe("ThinkingResearchRunner", () => {
   it("runs mutation tools inline in call order, never overlapping", async () => {
     let active = 0;
     let peak = 0;
-    // Fallback release so a (correct) sequential run does not deadlock on the barrier.
+
     let started = 0;
     let releaseAll!: () => void;
     const bothStarted = new Promise<void>((resolve) => (releaseAll = resolve));

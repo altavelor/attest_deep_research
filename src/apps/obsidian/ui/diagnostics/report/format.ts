@@ -1,6 +1,3 @@
-// Pure formatting/aggregation helpers for the diagnostic report views.
-// Kept free of DOM/markup so the round-summary logic is unit-testable.
-
 import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ThinkingLoopRound, DiagnosticReportV3 } from "./types";
 

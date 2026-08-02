@@ -1,6 +1,3 @@
-// Pure bibliography logic (SPEC-corpus-knowledge R3): reference normalization
-// and shared-reference computation across document metadata. No I/O.
-
 import {
   DocumentReference,
   DocumentReferenceNormalized,
@@ -85,11 +82,6 @@ function referenceMatchKey(reference: DocumentReference): string | undefined {
   return undefined;
 }
 
-/**
- * Title key: the longest run of words before a year/venue marker, lowercased
- * and stripped of punctuation. Crude, but stable across citation styles for
- * the common "Authors. Title. Venue, Year." shapes.
- */
 function referenceTitleKey(raw: string): string | undefined {
   const cleaned = raw
     .toLowerCase()

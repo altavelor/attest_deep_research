@@ -1,7 +1,3 @@
-// Format dispatcher for document image extraction. Extraction runs only for
-// documents already in the request context or read by a tool; nothing here scans
-// the vault to discover images.
-
 import { clampText, ImageCandidate, isSafeVaultImagePath } from "@core/media";
 import { fileNameFromPath } from "../common";
 import { DocxImageExtractor, EpubImageExtractor } from "./archiveImages";

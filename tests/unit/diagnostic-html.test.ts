@@ -73,7 +73,7 @@ describe("readable diagnostic HTML (v3)", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("Ixplorer");
-    // Warning text must be HTML-escaped
+
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script");
     expect(html).not.toMatch(/(?:src|href)=["']https?:/);
@@ -91,7 +91,7 @@ describe("readable diagnostic HTML (v3)", () => {
 
   it("renders stream section with frame count", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
-    // frameCount=4 should appear somewhere in the reasoning section
+
     expect(html).toContain("4");
   });
 
@@ -142,7 +142,7 @@ describe("readable diagnostic HTML (v3)", () => {
       ],
     };
     const html = formatDiagnosticReportHtml(diagnostics);
-    // Prompt content is rendered escaped, tool results by reference only.
+
     expect(html).toContain("system prompt &lt;contents&gt;");
     expect(html).toContain("call-1");
     expect(html).toContain("Prompt Δ");

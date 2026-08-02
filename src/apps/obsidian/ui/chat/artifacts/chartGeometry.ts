@@ -1,6 +1,3 @@
-// Pure geometry for the answer charts. Keeping the maths out of the renderer
-// keeps the DOM code thin and lets the layout be tested without a document.
-
 import type { ChartArtifact, ChartPoint, ChartSeries } from "@core/media";
 
 export const CHART_VIEWPORT = {
@@ -14,13 +11,13 @@ export interface ChartScale {
   minY: number;
   maxY: number;
   plot: { x: number; y: number; width: number; height: number };
-  /** Horizontal centre of a category slot. */
+
   xFor(categoryIndex: number): number;
-  /** Horizontal position of a point; undefined when its category is unknown. */
+
   xForPoint(point: ChartPoint): number | undefined;
   yFor(value: number): number;
   bandWidth: number;
-  /** True when x is plotted by magnitude rather than by category order. */
+
   numericX: boolean;
 }
 
@@ -138,7 +135,6 @@ export function pieSlices(series: ChartSeries): PieSlice[] {
   });
 }
 
-/** Distinct shapes so colour is never the only differentiator between series. */
 export const SERIES_SHAPES = ["circle", "square", "triangle", "diamond"] as const;
 
 export const SERIES_DASHES = ["", "6 3", "2 3", "10 3 2 3"] as const;

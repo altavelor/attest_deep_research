@@ -1,11 +1,3 @@
-// Builds the enabled image-search sources from the user's web-source profiles.
-//
-// Two kinds of resource contribute. Wikimedia Commons and Openverse are
-// dedicated image resources, toggled independently and off by default. The
-// general engines (Brave, Google, Serper, SearXNG) expose an image endpoint,
-// but querying it spends the user's quota, so they join image search only after
-// an explicit per-source opt-in on top of being enabled for text search.
-
 import { OPENVERSE_SOURCE_ID, WIKIMEDIA_COMMONS_SOURCE_ID } from "@core/web";
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
 import type { ImageSearchRegistry, ImageSearchSource } from "@application/ports";

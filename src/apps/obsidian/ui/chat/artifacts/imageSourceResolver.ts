@@ -1,8 +1,3 @@
-// Resolves an answer image to something an <img> can display. Third-party
-// images are hotlinked as-is; vault files resolve to a vault resource path; and
-// document-embedded images are re-extracted into a temporary object URL that the
-// caller must revoke on rerender or disposal.
-
 import { App, TFile } from "obsidian";
 
 import type { AnswerImage } from "@core/media";
@@ -11,7 +6,7 @@ import type { DocumentImageResolver } from "@application/ports";
 
 export interface ResolvedImageSource {
   src: string;
-  /** Object URLs must be revoked once the element is discarded. */
+
   revoke?: () => void;
 }
 

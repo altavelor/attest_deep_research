@@ -9,9 +9,9 @@ export const RESEARCH_SYSTEM_PROMPT =
 
 export interface ResearchSystemPromptOptions {
   indexDescription?: string;
-  /** Names of vault note tools available in this turn. When present, a usage section is appended. */
+
   noteToolNames?: readonly string[];
-  /** Injectable clock for deterministic tests; defaults to the real current date. */
+
   now?: Date;
 }
 
@@ -100,9 +100,9 @@ export interface BuildResearchPromptOptions {
   webEvidence?: RetrievedChunk[];
   retrievalDiagnostics?: string;
   maxEvidenceItems: number;
-  /** User-attached vault files; rendered as a manifest so the model sees them as files. */
+
   attachedFiles?: AttachedFileManifestEntry[];
-  /** Whether vault note tools are registered for this turn (drives manifest guidance). */
+
   noteToolsAvailable?: boolean;
 }
 
@@ -239,9 +239,6 @@ function formatChatHistory(messages: ResearchChatHistoryMessage[]): string {
     .trim();
 }
 
-// Safety valve so one pathologically large chunk cannot dominate a section (and
-// crowd out other sources). Kept well above the small-file inline limit (~10k
-// chars) so whole-file "full" coverage is never silently clipped.
 const MAX_EVIDENCE_ITEM_CHARS = 16_000;
 const EVIDENCE_TRUNCATION_MARKER = " …[truncated]";
 

@@ -342,13 +342,6 @@ export class FileVectorIndexStore
     }
   }
 
-  /**
-   * Resolve the committed state from cache or disk, cache it, and run `run`.
-   * Returns `fallback` when no committed index exists. Centralizes the
-   * load-or-null + cache dance shared by every read/inventory method. Public so
-   * read-only collaborators (e.g. the inventory store) can share this cache via
-   * the {@link FileVectorStateAccess} port.
-   */
   async withState<T>(
     fallback: T,
     run: (state: FileVectorIndexState) => T | Promise<T>,

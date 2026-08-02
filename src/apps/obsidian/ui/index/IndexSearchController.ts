@@ -27,7 +27,6 @@ export interface IndexSearchResult {
   semanticError?: string;
 }
 
-/** What the index-search panel needs from its host view. */
 export interface IndexSearchControllerContext {
   getIndexProfiles(): IndexProfileSelectOption[];
   getSelectedIndexProfileId(): string;

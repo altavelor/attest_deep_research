@@ -22,7 +22,6 @@ interface MatrixRow {
 
 export interface MapSourcesOutput {
   question: string;
-  /** Evidence matrix rows — document × stance, each with `[evidenceId]` citations. */
   rows: MatrixRow[];
   diagnostics: {
     selection: "explicit" | "relevance";
@@ -36,13 +35,6 @@ const MAX_QUESTION_CHARS = 1_000;
 const MAX_SOURCE_PATHS = 20;
 const MAX_SOURCE_PATH_CHARS = 500;
 
-/**
- * Fan-out over corpus documents: launches one scoped sub-agent per source
- * (locked to that document's index path), then returns an evidence matrix —
- * document × stance with `[evidenceId]` citations. Use for corpus-wide compare
- * questions ("where do these papers agree/disagree on X"), not single lookups.
- * One document failing degrades to a flagged row instead of failing the call.
- */
 export const MapSourcesTool = defineTool<
   { mapper: MapSources; evidence: EvidenceRegistry },
   MapSourcesInputDto,
@@ -120,8 +112,6 @@ export const MapSourcesTool = defineTool<
   },
 });
 
-// Re-register each source's index chunks into the parent registry. evidenceIds
-// are the retriever's own stable ids, so the row's citations resolve unchanged.
 function mergeRowEvidence(evidence: EvidenceRegistry, row: MapSourceRow, callId: string): void {
   for (const chunk of row.snapshot.evidence) {
     if (chunk.source.kind === "web") {

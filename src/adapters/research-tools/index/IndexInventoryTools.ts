@@ -373,7 +373,6 @@ function pageOrCount(result: unknown, input: { limit: number; countOnly?: boolea
   return okPage(page, input.limit);
 }
 
-/** Registry of retriever-backed index inventory tools; the single source of truth. */
 export const INDEX_INVENTORY_TOOLS: ReadonlyArray<new (retriever: ResearchRetriever) => Tool> = [
   ListIndexSourcesTool,
   ListIndexChunksTool,

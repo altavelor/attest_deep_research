@@ -1,7 +1,3 @@
-// Generic engine executing a declarative WebSourceDefinition: one HTTP request,
-// pure parse, mapping to SearchProviderResult. Per-source specifics stay in the
-// definitions; error wrapping and rate-limit signalling stay here.
-
 import { IxplorerError } from "@core/errors";
 import {
   areCredentialsComplete,

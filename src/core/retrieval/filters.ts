@@ -1,5 +1,3 @@
-// Core retrieval: chunk filtering by query options (stage 2). Pure domain logic.
-
 import { RetrievedChunk, SourceReference } from "@core/model/source";
 import { RetrievalOptions } from "./query";
 

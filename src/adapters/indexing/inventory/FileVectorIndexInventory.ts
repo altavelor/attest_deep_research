@@ -199,10 +199,6 @@ function headingSectionBounds(
   return [start, end];
 }
 
-/**
- * No headings available: treat very short chunks as section titles. The run
- * starts at the nearest title at/before the hit and ends before the next one.
- */
 const TITLE_LIKE_MAX_CHARS = 100;
 
 function heuristicSectionBounds(chunks: StoredChunk[], index: number): [number, number] {

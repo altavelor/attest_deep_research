@@ -1,8 +1,3 @@
-// Diagnostics contracts (stage 1, tasks 1.4 + 2.1).
-// Domain result DTOs produced by research orchestration and consumed by the
-// conversation model (core) and the UI diagnostic report. They depend only on
-// core/agent, so they live in core to keep the conversation model platform-neutral.
-
 import { ApiFormat, ChatApiProtocol } from "./agent/protocol";
 import { ChatToolChoice, ToolCallingCapabilities } from "./agent/tool";
 
@@ -117,17 +112,17 @@ export interface ToolCapabilityProbeAudit {
 export interface ContextDiagnostics {
   reportSchemaVersion?: 2;
   executionStrategy?: ResearchExecutionStrategy;
-  /** The user's original question, trimmed. Added in v3. */
+
   question?: string;
-  /** Chat model name. Added in v3. */
+
   modelName?: string;
-  /** API format of the chat model. Added in v3. */
+
   modelApiFormat?: ApiFormat;
-  /** Search mode used for this request. Added in v3. */
+
   searchMode?: string;
-  /** Probe audit trail. Added in v3. */
+
   probeAudit?: ToolCapabilityProbeAudit;
-  /** Effective tool calling capabilities used for policy resolution. Added in v3. */
+
   toolCapabilities?: ToolCallingCapabilities;
   contextMode: ContextMode;
   explicitSources: ContextDiagnosticSource[];
@@ -250,11 +245,6 @@ export interface ReasoningDiagnostics {
   reasoningTokens: number;
 }
 
-/**
- * Attribution of a single reasoning segment to the thinking round and phase that
- * produced it. Lets the diagnostic report map each "thinking" block back to its
- * round/phase instead of guessing from the timeline.
- */
 export interface ReasoningSegmentAttribution {
   segmentId: string;
   round: number;
@@ -262,34 +252,23 @@ export interface ReasoningSegmentAttribution {
   chars: number;
 }
 
-/**
- * One message appended to the model prompt since the previous round's request.
- * Tool results carry only `toolCallId` + `chars` — their content is already
- * captured (and redacted where needed) in the round's ToolCallDiagnostic.
- */
 export interface PromptDeltaMessageDiagnostic {
   role: string;
   chars: number;
-  /** Full text for system/user/assistant messages, capped; absent for tool results. */
+
   content?: string;
-  /** Characters cut from `content` by the per-message cap. */
+
   truncatedChars?: number;
   toolCallId?: string;
-  /** Names of tool calls the assistant emitted in this message. */
+
   toolCallNames?: string[];
 }
 
-/**
- * Incremental prompt log for one thinking round: only what was added to the
- * request since the previous round (round 1 carries the full initial prompt),
- * so the report explains model behaviour without duplicating the whole context
- * every round.
- */
 export interface RoundPromptDeltaDiagnostic {
   round: number;
-  /** Serialized toolChoice sent with this round's request. */
+
   toolChoice: string;
-  /** True when the round rode provider-side continuation state (tool outputs, not messages). */
+
   viaContinuation?: boolean;
   messages: PromptDeltaMessageDiagnostic[];
 }
@@ -307,7 +286,7 @@ export interface ThinkingAttemptDiagnostics {
   duplicatedCost: boolean;
   capabilityProvenance?: Record<string, string>;
   unknownCitationIds?: string[];
-  /** Cited evidence ids whose surrounding claim does not lexically overlap the chunk (R8). */
+
   unverifiedCitations?: string[];
   phases?: string[];
   promptDeltas?: RoundPromptDeltaDiagnostic[];

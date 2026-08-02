@@ -25,9 +25,7 @@ export interface IndexProfile {
   isSuspended?: boolean;
   suspendedReason?: string;
   lastIndexedAt?: string;
-  /** Layout version of the last successful full rebuild; absent means legacy (0). */
   indexVersion?: number;
-  /** Completion time of the last metadata enrichment run (SPEC-corpus R3). */
   lastEnrichedAt?: string;
   indexedFileCount?: number;
   indexSizeBytes?: number;
@@ -63,7 +61,7 @@ export interface FileVectorManifest {
   languageInventory?: LanguageInventoryItem[];
   chunkCount: number;
   sourceCount: number;
-  /** Layout capability version; absent means the legacy layout (0). */
+
   indexVersion?: number;
   updatedAt: string;
   writeId: string;
@@ -116,7 +114,7 @@ export interface KeywordPostingRow {
   postings: Array<{
     chunkId: string;
     frequency: number;
-    /** Term frequency inside the chunk's headingPath; absent in v1 files (reads as 0). */
+
     headingFrequency?: number;
   }>;
 }
@@ -129,7 +127,7 @@ export interface CreateFileVectorManifestOptions {
   writeId: string;
   shardCount?: number;
   shards?: FileVectorShardManifest[];
-  /** Layout capability version; omit to keep the legacy layout. */
+
   indexVersion?: number;
   chunkCount?: number;
   sourceCount?: number;

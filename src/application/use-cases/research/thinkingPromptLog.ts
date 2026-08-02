@@ -1,8 +1,6 @@
 import { ChatMessage, ChatRequest, ModelToolOutput } from "@core/agent";
 import { PromptDeltaMessageDiagnostic, RoundPromptDeltaDiagnostic } from "@core/diagnostics";
 
-// Cap per logged message so a huge initial context doesn't balloon the report;
-// the cut is reported via `truncatedChars` so nothing disappears silently.
 const MESSAGE_CONTENT_CAP = 6_000;
 
 /**

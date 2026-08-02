@@ -41,7 +41,6 @@ export class IndexingService {
   private readonly now: () => Date;
   private readonly snapshots = new Map<string, FileSnapshot>();
   private readonly progress: IndexingProgressState;
-  /** True only while a full rebuild runs; gates image-manifest collection. */
   private collectingDocumentImages = false;
   private readonly fileProcessor: FileProcessor;
   private readonly writer: IndexWriteCoordinator;

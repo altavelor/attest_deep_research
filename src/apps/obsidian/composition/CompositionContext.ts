@@ -5,7 +5,6 @@ import { PdfTextCache } from "@adapters/extractors";
 import { IxplorerSettings, PluginDebugLogger } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 
-/** Collaborators composition factories receive from the plugin host. */
 export interface CompositionContext {
   app: App;
   logger: PluginDebugLogger;

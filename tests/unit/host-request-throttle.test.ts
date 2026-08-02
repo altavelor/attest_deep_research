@@ -30,7 +30,7 @@ describe("HostRequestThrottle", () => {
     });
 
     await flush();
-    // Both started without either finishing: distinct hosts do not serialize.
+
     expect(aStarted).toBe(true);
     expect(bStarted).toBe(true);
 
@@ -52,7 +52,7 @@ describe("HostRequestThrottle", () => {
     });
 
     await flush();
-    expect(secondStarted).toBe(false); // waits behind the first same-host request
+    expect(secondStarted).toBe(false);
 
     first.resolve();
     await Promise.all([p1, p2]);
@@ -72,7 +72,7 @@ describe("HostRequestThrottle", () => {
     );
 
     await flush();
-    // Only maxConcurrent=2 may run; the third parks until a slot frees.
+
     expect(started).toEqual([true, true, false]);
 
     gates[0].resolve();

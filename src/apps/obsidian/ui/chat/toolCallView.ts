@@ -7,15 +7,14 @@ export type ToolCell =
   | { kind: "diff"; hunks: DiffHunk[] };
 
 export interface ToolCallView {
-  /** Human-readable phrase describing what the model is trying to do. */
   intent: string;
-  /** Web sites selected for a fetch, displayed as a one-at-a-time animation. */
+
   fetchTargets: string[];
-  /** Top "In" cell — the call arguments. Omitted when not useful. */
+
   inCell?: ToolCell;
-  /** Bottom "Out" cell — the result. Omitted for tools that need no output. */
+
   outCell?: ToolCell;
-  /** Short warning chip next to the tool head (e.g. degraded search mode). */
+
   badge?: { text: string; tooltip?: string };
 }
 
@@ -25,9 +24,9 @@ export interface ToolCallViewInput {
   status: "pending" | "complete" | "failed";
   args?: Record<string, unknown>;
   resultJson?: string;
-  /** Site names resolved from preceding web-search results while a fetch is pending. */
+
   fetchTargets?: string[];
-  /** Search resources selected by the web query planner. */
+
   searchSources?: string[];
 }
 

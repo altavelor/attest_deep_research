@@ -12,7 +12,6 @@ import { searchFileVectorKeywords } from "./FileVectorIndexQuery";
 import type { FileVectorStateAccess } from "./FileVectorIndexState";
 import { sourcePathFromReference } from "./FileVectorIndexVector";
 
-/** Resolves an index-relative path to an absolute path on disk. */
 export interface FileVectorPathResolver {
   pathFor(relativePath: string): string;
 }

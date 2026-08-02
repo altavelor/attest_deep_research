@@ -8,11 +8,6 @@ import {
 } from "@core/agent";
 import { ResearchRetriever } from "@application/contracts/research";
 
-// --- Field schema mini-DSL -------------------------------------------------
-// Each field carries enough metadata to derive *both* the JSON schema sent to
-// the model *and* the runtime parser, so the two can never drift. The allow-list
-// of accepted properties is simply `Object.keys(schema)`.
-
 type Described = { description?: string };
 
 export type FieldSpec = Described &
@@ -52,7 +47,6 @@ export const int = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/** Free-form string preserved verbatim (no trimming) — for note bodies and other content. */
 export const text = (
   opts: { required?: boolean; maxLength?: number; description?: string } = {},
 ): FieldSpec => ({
@@ -62,10 +56,6 @@ export const text = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/**
- * Optional number: passed through when present, omitted otherwise (the service
- * applies defaults). Bounds are advertised to the model and clamp the value.
- */
 export const num = (opts: Described & { min?: number; max?: number } = {}): FieldSpec => ({
   kind: "number",
   ...(opts.min !== undefined ? { min: opts.min } : {}),
@@ -88,12 +78,6 @@ export const enumOf = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/**
- * Escape hatch for a shape the DSL cannot express — a nested array of objects,
- * for instance. The fragment is sent to the model verbatim, and the tool's own
- * `parse` validates the value, so schema and parser must be kept in step (the
- * schema-contract test enforces that).
- */
 export const raw = (
   schema: Record<string, unknown>,
   opts: { required?: boolean } = {},
@@ -114,21 +98,15 @@ export const strArray = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-// --- Declarative tool definition -------------------------------------------
-
 export interface ToolSpec<TDeps, TInput, TOutput> {
   name: string;
   description: string;
-  /** Drives both the model-facing JSON schema and (by default) the parser. */
+
   schema: FieldSchema;
-  /**
-   * Optional parser override for tools whose validation/error codes are bespoke.
-   * Receives the tool's deps so it can validate against them. Defaults to the
-   * schema-driven parser (allow-list = `Object.keys(schema)`).
-   */
+
   parse?: (input: Record<string, unknown>, deps: TDeps) => ToolParseResult<TInput>;
   execute: (deps: TDeps, input: TInput, context: ToolContext) => Promise<ToolExecution<TOutput>>;
-  /** Permission gate evaluated by the ToolManager; absent ⇒ always available. */
+
   requires?: (permissions: ToolPermissions) => boolean;
 }
 
@@ -165,9 +143,9 @@ export interface InventoryToolSpec<TInput> {
   name: string;
   description: string;
   schema: FieldSchema;
-  /** Method on the retriever that backs this tool; absence ⇒ "unsupported". */
+
   capability: keyof ResearchRetriever;
-  /** Failure code + message used when the backing call throws. */
+
   errorCode: string;
   errorMessage: string;
   run(retriever: ResearchRetriever, input: TInput): Promise<unknown>;
@@ -218,8 +196,6 @@ export function toolDefinition(name: string, description: string, schema: FieldS
   };
 }
 
-// --- Shared result shaping --------------------------------------------------
-
 export function okPage<T>(result: { items: T[]; nextCursor?: string }, limit: number): unknown {
   return { ...result, diagnostics: diagnostics(result.items.length, limit) };
 }
@@ -227,8 +203,6 @@ export function okPage<T>(result: { items: T[]; nextCursor?: string }, limit: nu
 export function diagnostics(resultCount: number, limit: number) {
   return { resultCount, limit, untrustedEvidence: true as const };
 }
-
-// --- Schema → JSON schema + parser -----------------------------------------
 
 function toJsonSchema(schema: FieldSchema): Record<string, unknown> {
   const properties: Record<string, unknown> = {};

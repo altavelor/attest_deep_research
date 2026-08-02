@@ -106,12 +106,6 @@ describe("model-facing tool schemas", () => {
   });
 });
 
-/**
- * A tool may replace the schema-driven parser with its own. When it does, the
- * two can drift: `present_chart` once validated a `series` argument that its
- * schema never advertised, so the model could not know the field existed and
- * every first call failed. This catches that class of defect statically.
- */
 describe("custom parsers stay in step with their schema", () => {
   function toolSources(directory: string): string[] {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

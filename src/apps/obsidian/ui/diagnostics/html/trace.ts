@@ -1,7 +1,3 @@
-// Run trace: the central section of the diagnostic report. One collapsible
-// card per thinking round — prompt Δ, tool calls with outcomes, reasoning size,
-// text output — so the reader can replay why the model behaved the way it did.
-
 import { ThinkingLoopRound, DiagnosticReportV3 } from "../report/types";
 import {
   extractResultHint,

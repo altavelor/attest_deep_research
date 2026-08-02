@@ -1,18 +1,9 @@
-// Rewrite the model's inline web-citation handles into human-clickable links.
-//
-// Models cite web sources by the handle `[url:https://…]` (see thinkingPrompts).
-// That token is meant for citation *resolution*, not for a
-// reader — left verbatim it renders as inert `[url:…]` text. This turns any
-// still-unresolved URL handle into a plain markdown link so it opens in the
-// browser. Malformed or non-public URLs are left untouched (not a link we honor).
-
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 const URL_CITATION = /\[url:([^\]\n]+)\]/g;
 const MAX_LABEL_LENGTH = 60;
 
 export interface LinkifyUrlCitationsOptions {
-  /** Builds the visible link text; defaults to the full URL. */
   label?(url: string): string;
 }
 

@@ -1,6 +1,3 @@
-// Core domain: static catalog of external web search sources.
-// Platform-neutral metadata only — endpoints and parsing live in adapters/web.
-
 import type { WebQueryLanguage } from "./queryContext";
 
 export type WebSourceCategory =
@@ -13,21 +10,19 @@ export type WebSourceCategory =
   | "fetch"
   | "image";
 
-/** What the source can do; absent means search-only. */
 export interface WebSourceCapabilities {
   search: boolean;
   fetchPage: boolean;
-  /** Serves an image endpoint reused by image search; needs no extra credentials. */
+
   images?: boolean;
 }
 
-/** Declarative credential field; drives settings UI generation and enable-gating. */
 export interface WebSourceCredentialField {
   key: string;
   label: string;
-  /** Masked in UI (API keys). Base URLs and engine ids are not secret. */
+
   secret: boolean;
-  /** Optional credentials raise limits but are not required to enable the source. */
+
   optional?: boolean;
   placeholder?: string;
 }
@@ -36,28 +31,23 @@ export interface WebSourceDescriptor {
   id: string;
   label: string;
   category: WebSourceCategory;
-  /** Query-planner hints: what this source is strong at. */
+
   strengths: string[];
   credentials: WebSourceCredentialField[];
   homepage: string;
-  /** Short free-tier note shown in settings. */
+
   freeTierNote: string;
-  /** Absent ⇒ search-only. */
+
   capabilities?: WebSourceCapabilities;
-  /** Query languages this source can answer; absent ⇒ any language. */
+
   languages?: readonly WebQueryLanguage[];
 }
 
-/** Per-source user configuration persisted in settings. */
 export interface WebSourceProfile {
   sourceId: string;
   enabled: boolean;
   credentials: Record<string, string>;
-  /**
-   * Opt-in for engines that also serve images: enabling a source for text
-   * search never enrols it in image search, because that spends extra quota.
-   * Absent ⇒ off. Ignored by sources without an image endpoint.
-   */
+
   imageSearchEnabled?: boolean;
 }
 
@@ -71,7 +61,6 @@ const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCre
 export const WIKIMEDIA_COMMONS_SOURCE_ID = "wikimedia-commons";
 export const OPENVERSE_SOURCE_ID = "openverse";
 
-/** Built-in scraper provider; lives in the catalog like any other source but is constructed specially. */
 export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
   id: "duckduckgo",
   label: "DuckDuckGo",
@@ -82,9 +71,6 @@ export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
   freeTierNote: "Free, no key",
 };
 
-/**
- * Sources selectable in settings, in planner-preference order within category.
- */
 export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
   DUCKDUCKGO_DESCRIPTOR,
   {
@@ -291,7 +277,6 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
   },
 ];
 
-/** Sources that answer image queries only; they never take part in text search. */
 export const IMAGE_SOURCE_IDS: readonly string[] = [
   WIKIMEDIA_COMMONS_SOURCE_ID,
   OPENVERSE_SOURCE_ID,

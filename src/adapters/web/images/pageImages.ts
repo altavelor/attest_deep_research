@@ -1,7 +1,3 @@
-// Extracts image candidates from fetched page HTML. Social preview images win
-// over content images; everything else keeps document order. HTML is untrusted,
-// so only attribute values that survive URL and format validation are kept.
-
 import {
   clampText,
   hasDisplayableDimensions,
@@ -18,7 +14,7 @@ const LINK_CANONICAL = /<link\b[^>]*rel=["']?canonical["']?[^>]*>/i;
 
 export interface PageImageExtractionInput {
   html: string;
-  /** Final URL after redirects; used to resolve relative sources. */
+
   baseUrl: string;
 }
 

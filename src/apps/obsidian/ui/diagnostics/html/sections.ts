@@ -14,8 +14,6 @@ import {
   yesNo,
 } from "./primitives";
 
-// ─── Nav ──────────────────────────────────────────────────────────────────────
-
 const NAV_SECTIONS = ["findings", "run-trace", "input", "internals"];
 
 export function renderNav(report: DiagnosticReportV3): string {
@@ -26,8 +24,6 @@ export function renderNav(report: DiagnosticReportV3): string {
     .join("");
   return `<nav class="top-nav" aria-label="Sections"><span class="nav-brand">Ixplorer</span><span class="nav-label">Diagnostic report</span><div class="nav-anchors">${anchors}</div></nav>`;
 }
-
-// ─── Header + summary strip ───────────────────────────────────────────────────
 
 export function renderHeader(report: DiagnosticReportV3): string {
   const { stats, model } = report;
@@ -62,8 +58,6 @@ export function renderHeader(report: DiagnosticReportV3): string {
   </header>`;
 }
 
-// ─── Findings ─────────────────────────────────────────────────────────────────
-
 export function renderFindings(findings: DiagnosticReportV3["findings"]): string {
   if (findings.findings.length === 0) return "";
   const items = findings.findings.map((f) => renderFinding(f)).join("");
@@ -86,8 +80,6 @@ function renderFinding(f: Finding): string {
     ${evidenceChips ? `<p class="finding-evidence">${evidenceChips}</p>` : ""}
   </div>`;
 }
-
-// ─── Input (collapsed): what the run was given ────────────────────────────────
 
 export function renderInput(report: DiagnosticReportV3): string {
   const body = [
@@ -277,8 +269,6 @@ function warningsBody(report: DiagnosticReportV3): string {
     callout("warning", `<ul>${warnings.map((w) => `<li>${h(w)}</li>`).join("")}</ul>`)
   );
 }
-
-// ─── Internals (collapsed): plugin plumbing counters ─────────────────────────
 
 export function renderInternals(report: DiagnosticReportV3): string {
   const { reasoning, answer } = report;

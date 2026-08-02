@@ -40,17 +40,12 @@ export interface RetrievalServiceOptions {
   embeddings: EmbeddingProviderClient;
   indexStore: IndexStore;
   embeddingModel: string;
-  /**
-   * Optional retrieval capabilities, injected explicitly by the composition root
-   * rather than discovered by sniffing methods on {@link indexStore}. A single
-   * concrete store may be passed into several slots; absent capabilities degrade
-   * to empty results.
-   */
+
   keyword?: KeywordSearchIndexStore;
   chunkInventory?: IndexChunkInventoryStore;
   languageInventory?: LanguageInventoryIndexStore;
   inventory?: IndexInventoryStore;
-  /** Enrichment sidecars (R3/R4/R7); absent capability degrades to "unsupported". */
+
   documentMetadata?: DocumentMetadataStore;
   documentSummaries?: DocumentSummaryStore;
   documentClaims?: DocumentClaimStore;
@@ -373,7 +368,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Upper bound on sources resolved for a language scope; ample for real vaults.
 const LANGUAGE_SCOPE_LIMIT = 1000;
 
 function describeSemanticError(error: unknown): string {

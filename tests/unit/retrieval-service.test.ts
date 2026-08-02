@@ -17,9 +17,6 @@ import {
 import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "@application/ports";
 
-// A single fake store stands in for every retrieval capability here; the
-// composition root wires capabilities explicitly, so the test mirrors that by
-// routing the one fake into each slot it structurally supports.
 function makeRetrievalService(options: {
   embeddings: EmbeddingProviderClient;
   indexStore: IndexStore;

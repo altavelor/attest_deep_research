@@ -1,8 +1,3 @@
-// UI presentation formatters (stage 1, task 2.2). Split out of ui/rendering.ts.
-// These are presentation-only: indexing status strings, citation link targets,
-// and display content (which strips rendered citation IDs). They depend on UI/
-// indexing concerns and therefore stay in the UI layer, not core/conversation.
-
 import { IndexingState } from "@adapters/indexing";
 import { formatIndexSize } from "@adapters/indexing";
 import { Citation } from "@core/model";

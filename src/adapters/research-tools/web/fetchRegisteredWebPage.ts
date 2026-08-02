@@ -1,9 +1,3 @@
-// Shared page-fetch core for the web-fetch tools (fetch_web_page / fetch_url /
-// fetch_web_section). Given a resultId already registered in the evidence
-// registry, it validates the URL, fetches bounded text through the provider,
-// upgrades the evidence entry, and returns the normalized fetch output. The tools
-// differ only in how the resultId is obtained and how the content is post-shaped.
-
 import { SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
@@ -18,7 +12,7 @@ export interface FetchWebPageOutput {
   content: string;
   contentType: string;
   truncated: boolean;
-  /** Handles of images this page referenced; pass them to present_image_gallery. */
+
   imageIds?: string[];
   untrustedEvidence: true;
 }
@@ -33,7 +27,7 @@ export const DEFAULT_FETCH_OPTIONS = {
 export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
-  /** Collects page-referenced image candidates for present_image_gallery. */
+
   artifacts?: {
     register(candidates: readonly ImageCandidate[]): ReadonlyArray<{ handle: string }>;
   };

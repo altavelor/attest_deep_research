@@ -1,12 +1,5 @@
 import { RetrievedChunk } from "@core/model/source";
 
-// Short, copy-friendly citation labels. Evidence ids are content hashes
-// (`stableId(...)`) or `web:<hash>` — long, opaque tokens the model must
-// reproduce verbatim to cite, which invites typos and hallucinated ids. Instead
-// the prompt presents each evidence item as `[S1]`, `[S2]`, … and the answer is
-// rewritten back to the real ids afterwards, so the whole downstream contract
-// (UI inline anchors, saved-note formatter) still sees raw `[chunk-id]` tokens.
-
 export const CITATION_LABEL_PREFIX = "S";
 
 const LABEL_TOKEN = new RegExp(`^${CITATION_LABEL_PREFIX}\\d+$`, "i");
@@ -22,11 +15,10 @@ export interface LabeledResearchEvidence {
   graph: LabeledChunk[];
   retrieved: LabeledChunk[];
   web: LabeledChunk[];
-  /** Uppercased label (e.g. "S1") → cited chunk id. */
+
   byLabel: Map<string, string>;
 }
 
-/** The evidence sections buildResearchPrompt renders, plus the item cap. */
 export interface EvidenceSectionsInput {
   evidence: RetrievedChunk[];
   explicitEvidence?: RetrievedChunk[];
@@ -74,11 +66,10 @@ export function labelResearchEvidence(input: EvidenceSectionsInput): LabeledRese
 }
 
 export interface CitationRewriteResult {
-  /** Answer text with `[S1]` labels expanded to their real `[chunk-id]` tokens. */
   text: string;
-  /** Chunk ids the answer actually cites (via a known label). */
+
   citedChunkIds: Set<string>;
-  /** Labels the model emitted that map to no evidence — dropped from the text. */
+
   unknownLabels: string[];
 }
 

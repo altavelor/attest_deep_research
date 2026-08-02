@@ -1,5 +1,3 @@
-// Escape + component primitives shared by every diagnostic HTML section.
-
 export function h(value: unknown): string {
   const str = String(value ?? "");
   return str.replace(

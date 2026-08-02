@@ -186,7 +186,6 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
         "Summary of The Sleeping Beauty",
       ]);
 
-      // Повторный прогон: оба sidecar-а свежие → скип без вызовов LLM.
       const second = await enrichment.run();
       expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
     } finally {
@@ -500,7 +499,7 @@ describe("EnrichIndexSources claims (Ф7)", () => {
       const result = await enrichment.run();
 
       expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
-      // "References" is a low-value heading → not handed to the claim extractor.
+
       expect(extractCalls).toEqual(["Findings"]);
       const stored = await claimStore.read("book.pdf");
       expect(stored?.claims).toHaveLength(1);
@@ -511,7 +510,6 @@ describe("EnrichIndexSources claims (Ф7)", () => {
       });
       expect(stored?.generation.model).toBe("claim-model");
 
-      // Both sidecars fresh on the second run → skip, no extractor calls.
       const second = await enrichment.run();
       expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
       expect(extractCalls).toEqual(["Findings"]);

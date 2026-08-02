@@ -1,13 +1,3 @@
-/**
- * Detects degenerate repetition in a streamed text generation so a runaway model
- * (typically small/quantized local models that collapse into a sampling loop) can
- * be cut off instead of streaming the same block forever.
- *
- * It works on completed lines. Repetition is flagged when the tail of the stream
- * consists of the same block of `cycleLines` lines repeated at least `minRepeats`
- * times — this catches both a single line repeated (cycle 1) and a multi-line
- * block repeated (cycle > 1, e.g. an alternating two-line loop).
- */
 export class RepetitionDetector {
   private pending = "";
   private readonly lines: string[] = [];

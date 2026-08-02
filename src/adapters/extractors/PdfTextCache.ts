@@ -7,7 +7,6 @@ export interface PdfTextCacheEntry {
   size: number;
   textHash: string;
   content: PdfPageText[];
-  /** Headings resolved at parse time; cached so re-extraction skips the heuristics. */
   headings?: PdfHeading[];
 }
 

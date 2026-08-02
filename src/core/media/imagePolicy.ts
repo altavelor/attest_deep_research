@@ -1,24 +1,18 @@
-// Pure policy for image eligibility: which encodings may be shown, which URLs
-// may be hotlinked, and which vault-relative paths may be resolved. Adapters and
-// tools share these rules so provider, page, and document candidates are judged
-// identically.
-
 export const ELIGIBLE_IMAGE_FORMATS = ["png", "jpeg", "webp", "gif", "avif"] as const;
 
 export type EligibleImageFormat = (typeof ELIGIBLE_IMAGE_FORMATS)[number];
 
 export const IMAGE_EXTRACTION_LIMITS = {
-  /** Candidates collected from a single fetched page or document. */
   candidatesPerSource: 8,
-  /** Compressed bytes of a single embedded image. */
+
   maxEncodedBytes: 8 * 1024 * 1024,
-  /** Compressed bytes extracted from one document in a single pass. */
+
   maxTotalEncodedBytes: 32 * 1024 * 1024,
-  /** Decoded pixels; guards against decompression-bomb-like assets. */
+
   maxPixels: 40_000_000,
-  /** Members inspected inside a zip-based container. */
+
   maxArchiveEntries: 4000,
-  /** Smallest edge accepted; filters tracking pixels and spacers. */
+
   minEdgePixels: 24,
 } as const;
 

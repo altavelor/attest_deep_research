@@ -49,11 +49,7 @@ export default class IxplorerPlugin extends Plugin {
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
-  /**
-   * Enrichment (SPEC-corpus R3) is user-triggered per index profile from the
-   * settings row — it spends chat-model tokens per document, so it never runs
-   * as an indexing side effect. Incremental by contentHash — re-runs are cheap.
-   */
+
   readonly enrichment = new EnrichmentProfileController({
     createService: (profileId, chatModelProfileId) =>
       createEnrichmentService(this.composition, profileId, chatModelProfileId),

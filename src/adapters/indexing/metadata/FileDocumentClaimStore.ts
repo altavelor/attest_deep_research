@@ -1,8 +1,3 @@
-// Sidecar storage for the claim index (SPEC-corpus R7): one JSONL file per source
-// under `<index folder>/claims/`, named by a stable hash of the source path. The
-// first line is a header (schema/provenance + contentHash for incremental re-runs);
-// each following line is one claim, so the file streams and stays diff-friendly.
-
 import { createHash } from "crypto";
 import { mkdir, readdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";

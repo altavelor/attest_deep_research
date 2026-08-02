@@ -1,7 +1,3 @@
-// Generic engine executing an ImageSourceDefinition: one bounded HTTP request,
-// pure parse, mapping to image candidates. Mirrors HttpWebSearchSource so the
-// per-engine files stay declarative.
-
 import type { ImageCandidate } from "@core/media";
 import type { ImageSearchOptions, ImageSearchSource } from "@application/ports";
 import type { WebSourceDescriptor } from "@core/web";

@@ -1,11 +1,5 @@
 import { requestUrl } from "obsidian";
 
-/**
- * A `fetch`-compatible function backed by Obsidian's `requestUrl` (bypasses
- * CORS). `requestUrl` cannot be cancelled, so an aborted caller stops waiting
- * on it instead: the rejection is raised immediately and the in-flight request
- * is left to settle and be discarded.
- */
 export const obsidianRequestFetch: typeof fetch = async (input, init) => {
   const url =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;

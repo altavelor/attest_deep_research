@@ -1,7 +1,3 @@
-// Validation and text rendering for chart artifacts. The model supplies data
-// only; every visual is produced locally, so nothing here accepts markup, URLs,
-// styles, or handlers.
-
 import {
   ARTIFACT_LIMITS,
   ChartArtifact,

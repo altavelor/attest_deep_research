@@ -1,15 +1,9 @@
-// Compact per-document image manifest written by a successful full rebuild.
-// It stores only what image discovery needs: the document, its content hash, the
-// image format, an opaque locator, and bounded display text — never bytes, OS
-// paths, or archive member paths beyond the opaque locator itself.
-
 import { isRecord } from "@shared";
 import { isNonNegativeInteger } from "@shared";
 import { ELIGIBLE_IMAGE_FORMATS, type EligibleImageFormat } from "@core/media";
 
 export const IMAGE_MANIFEST_FILE = "images.jsonl";
 
-/** Index layouts below this version cannot answer index-based image discovery. */
 export const REQUIRED_INDEX_VERSION = 1;
 
 export const IMAGE_MANIFEST_LIMITS = {

@@ -2,18 +2,6 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 
-/**
- * Architectural guardrail (SPEC stage 1, task T1 / 0.1).
- *
- * Enforces the dependency rule `apps -> adapters -> application -> core`.
- * The codebase migrates into these layers incrementally, so the test maps each
- * file to a layer by its top-level directory under `src/` and only applies a
- * rule when the relevant layer actually has files in it.
- *
- * Two baseline allowlists hold the pre-migration violations. They MUST shrink to
- * empty by the end of stage 1 (task F.1), at which point the gate becomes strict.
- */
-
 const SRC = resolve(__dirname, "..", "..", "src");
 
 type Layer = "core" | "application" | "adapters" | "apps" | "ui" | "legacy";
@@ -22,7 +10,7 @@ type Layer = "core" | "application" | "adapters" | "apps" | "ui" | "legacy";
 function layerOfFile(absPath: string): Layer {
   const rel = relative(SRC, absPath);
   const parts = rel.split(/[\\/]/);
-  // Files directly under src/ (e.g. main.ts) are the app composition root.
+
   if (parts.length === 1) return "apps";
   const top = parts[0];
   switch (top) {
@@ -47,16 +35,11 @@ type Target =
   | { kind: "node-builtin" }
   | { kind: "external" };
 
-/**
- * Every Node builtin, taken from the running runtime rather than a hand-written
- * list: an enumerated allowlist silently lets new specifiers (node:url,
- * node:crypto, …) slip past the core/application guard as they get used.
- */
 const NODE_BUILTINS = new Set(builtinModules);
 
 function isNodeBuiltin(spec: string): boolean {
   const bare = spec.startsWith("node:") ? spec.slice("node:".length) : spec;
-  // Subpath builtins such as "fs/promises" resolve by their parent module.
+
   return NODE_BUILTINS.has(bare) || NODE_BUILTINS.has(bare.split("/")[0]);
 }
 
@@ -98,21 +81,16 @@ interface Violation {
   rule: string;
 }
 
-/** Layers each layer is FORBIDDEN to import (by layer target). */
 const FORBIDDEN_LAYER_IMPORTS: Partial<Record<Layer, Layer[]>> = {
   core: ["application", "adapters", "apps", "ui", "legacy"],
   application: ["adapters", "apps", "ui"],
 };
-/** Bare specifiers each layer is forbidden to import. */
+
 const FORBIDDEN_BARE_IMPORTS: Partial<Record<Layer, Target["kind"][]>> = {
   core: ["obsidian", "node-builtin"],
   application: ["obsidian", "node-builtin"],
 };
 
-/**
- * BASELINE ALLOWLIST — known pre-migration violations of the "only ui/apps may
- * import ui" rule. Shrinks to empty by F.1. Entries are `from` paths (relative to src).
- */
 const UI_IMPORT_ALLOWLIST = new Set<string>([]);
 
 function rel(file: string): string {

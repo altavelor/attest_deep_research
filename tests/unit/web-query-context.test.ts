@@ -1,6 +1,3 @@
-// Recency / language / query-sanitizing behavior added after the "London news"
-// incident: the model wrote dates into queries and got stale or empty results.
-
 import {
   detectQueryLanguage,
   extractSiteFilters,
