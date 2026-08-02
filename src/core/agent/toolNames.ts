@@ -33,6 +33,11 @@ export const WEB_FETCH_URL_TOOL = "fetch_url";
 export const WEB_FETCH_SECTION_TOOL = "fetch_web_section";
 export const WEB_PAGE_METADATA_TOOL = "get_page_metadata";
 
+// --- Rich answer media ---
+export const IMAGE_SEARCH_TOOL = "search_images";
+export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
+export const PRESENT_CHART_TOOL = "present_chart";
+
 // --- Universal sub-agent ---
 export const SUB_AGENT_TOOL = "run_subagent";
 /** Fan-out: one scoped sub-agent per document, reduced to an evidence matrix (SPEC-corpus R5). */
@@ -80,6 +85,9 @@ export const PROMPT_TOOL_NAMES = [
   CHECK_URLS_TOOL,
   PROBE_DOCUMENT_URL_TOOL,
   DOWNLOAD_DOCUMENT_TOOL,
+  IMAGE_SEARCH_TOOL,
+  PRESENT_IMAGE_GALLERY_TOOL,
+  PRESENT_CHART_TOOL,
   ...NOTE_EDIT_TOOLS,
   ...NOTE_MUTATION_TOOLS,
 ] as const;

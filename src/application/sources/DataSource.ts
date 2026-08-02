@@ -12,7 +12,7 @@
 import { Tool } from "@core/agent";
 import { ToolManager } from "@application/tools/ToolManager";
 
-export type SourceKind = "rag" | "web" | "attachments" | "sub-agent";
+export type SourceKind = "rag" | "web" | "attachments" | "sub-agent" | "media";
 
 export interface DataSourceDescriptor {
   id: string;

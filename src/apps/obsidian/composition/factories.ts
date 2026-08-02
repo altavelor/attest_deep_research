@@ -31,6 +31,7 @@ import {
   requireIndexProfile,
 } from "./profileResolvers";
 import { createWebSearchProvider } from "./webSearchFactory";
+import { createDocumentImageCandidates, createImageSearchRegistry } from "./mediaFactory";
 import {
   createChatModelClient,
   createQueryExpansionService,
@@ -149,6 +150,8 @@ export function createResearchService(
       useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
     },
     searchProvider: createSearchProvider(ctx),
+    ...(createImageSearchRegistry(ctx) ? { imageSearch: createImageSearchRegistry(ctx)! } : {}),
+    documentImageCandidates: createDocumentImageCandidates(ctx),
     urlStatusChecker: new FetchUrlStatusChecker({ fetch: obsidianRequestFetch }),
     toolsEnabled,
     toolCapabilities: toolResolution.capabilities,

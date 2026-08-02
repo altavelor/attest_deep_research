@@ -5,6 +5,8 @@
 // root. This keeps application/use-cases free of any adapters import.
 
 import type { SearchProvider } from "@application/ports/web";
+import type { ImageSearchRegistry } from "@application/ports/images";
+import type { AnswerArtifact, ImageCandidate } from "@core/media";
 import type { VaultWriter } from "@application/ports/vault";
 import type { SubAgentPort } from "./subAgentPort";
 import type { ChatModelProvider } from "@core/agent";
@@ -67,11 +69,21 @@ export interface ResearchToolsetOptions {
   vaultWriter?: VaultWriter;
   /** Default vault folder for downloaded documents when the agent gives no explicit path. */
   downloadFolder?: string;
+  /** Enabled image-search resources; absent ⇒ no provider-backed image discovery. */
+  imageSearch?: ImageSearchRegistry;
+  /** Image candidates already available from documents in this request's context. */
+  documentImageCandidates?: () => Promise<ImageCandidate[]> | ImageCandidate[];
+}
+
+/** Artifacts produced during a run; the strategy attaches them to the answer. */
+export interface ArtifactSnapshotProvider {
+  snapshot(): AnswerArtifact[] | undefined;
 }
 
 /** Assembled research toolset (concrete factory lives in adapters). */
 export interface ResearchToolset {
   evidence: EvidenceSnapshotProvider;
+  artifacts: ArtifactSnapshotProvider;
   tools: ToolManager;
   sources: unknown;
 }
