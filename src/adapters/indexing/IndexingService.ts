@@ -89,6 +89,9 @@ export class IndexingService {
       progress: this.progress,
       logger: options.logger,
       collectDocumentImages: () => this.collectingDocumentImages,
+      ...(options.resolveLinkedImagePath
+        ? { resolveLinkedImagePath: options.resolveLinkedImagePath }
+        : {}),
     });
   }
 

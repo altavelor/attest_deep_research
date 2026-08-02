@@ -18,4 +18,9 @@ export {
   TextImageExtractor,
 } from "./markdownImages";
 export { extractPdfImageRefs, PdfImageExtractor } from "./pdfImages";
-export type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
+export type {
+  DocumentImageExtractor,
+  DocumentImageInput,
+  DocumentImageRef,
+  LinkedPathResolver,
+} from "./types";

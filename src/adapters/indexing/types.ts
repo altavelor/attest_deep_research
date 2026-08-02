@@ -5,6 +5,7 @@ import type {
   IndexStore,
   IndexStoreWriteSession,
 } from "@application/ports";
+import type { LinkedPathResolver } from "@adapters/extractors";
 import type { EmbeddingProviderClient } from "@core/agent";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
@@ -75,6 +76,8 @@ export interface IndexingServiceOptions {
   onProgress?: (state: IndexingState) => void;
   logger?: IndexingLogger;
   now?: () => Date;
+  /** Resolves wiki-embed and Markdown image targets the way the host would. */
+  resolveLinkedImagePath?: LinkedPathResolver;
 }
 
 export interface IndexedFileResult {
@@ -151,6 +154,8 @@ export interface FileProcessorOptions {
   logger?: IndexingLogger;
   /** Enables document-image manifest collection; true only during a full rebuild. */
   collectDocumentImages?: () => boolean;
+  /** Resolves wiki-embed and Markdown image targets the way the host would. */
+  resolveLinkedImagePath?: LinkedPathResolver;
 }
 
 export interface EmbeddingBatcherOptions {
