@@ -170,6 +170,30 @@ describe("artifact styles", () => {
   it("keeps gallery focus rings visible for keyboard users", () => {
     expect(cssRule(".ixplorer-gallery__trigger:focus-visible")).toContain("outline");
   });
+
+  it("never lets an artifact widen the chat pane", () => {
+    for (const selector of [
+      ".ixplorer-chat__answer-content",
+      ".ixplorer-artifacts",
+      ".ixplorer-artifact",
+      ".ixplorer-gallery__grid",
+    ]) {
+      expect(cssRule(selector), selector).toContain("min-width: 0");
+      expect(cssRule(selector), selector).toContain("max-width: 100%");
+    }
+  });
+
+  it("wraps gallery cards onto several rows instead of one shrinking row", () => {
+    const grid = cssRule(".ixplorer-gallery__grid");
+    expect(grid).toContain("auto-fill");
+    expect(grid).toContain("min(190px, 100%)");
+  });
+
+  it("gives thumbnails a readable height", () => {
+    const image = cssRule(".ixplorer-gallery__image");
+    expect(image).toContain("aspect-ratio: 4 / 3");
+    expect(image).toContain("min-height: 160px");
+  });
 });
 
 function cssRule(selector: string): string {
