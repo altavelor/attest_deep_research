@@ -65,7 +65,7 @@ export class IndexWriteCoordinator {
   async commit(): Promise<boolean> {
     let manifestWritten = false;
     if (this.imageManifest !== undefined) {
-      const writer = await this.getWriter();
+      const writer = await this.openWriterForManifest();
       if (writer?.recordDocumentImages) {
         await writer.recordDocumentImages(this.imageManifest);
         manifestWritten = true;
@@ -162,6 +162,19 @@ export class IndexWriteCoordinator {
       await writer.recordFailedSourceSnapshots(snapshots);
     } else {
       await this.indexStore.recordFailedSourceSnapshots(snapshots);
+    }
+  }
+
+  /**
+   * A run that embedded nothing never initialized the store, so opening a write
+   * session for the manifest alone would fail. The manifest is then simply not
+   * written and the profile keeps its previous index version.
+   */
+  private async openWriterForManifest(): Promise<IndexStoreWriteSession | undefined> {
+    try {
+      return await this.getWriter();
+    } catch {
+      return undefined;
     }
   }
 
