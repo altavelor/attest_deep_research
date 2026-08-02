@@ -28,6 +28,8 @@ export function readImageDimensions(
       return readGifDimensions(data);
     case "webp":
       return readWebpDimensions(data);
+    case "avif":
+      return readAvifDimensions(data);
     default:
       return undefined;
   }
@@ -130,6 +132,58 @@ function readWebpDimensions(data: Uint8Array): ImageDimensions | undefined {
     const width = 1 + (data[24]! | (data[25]! << 8) | (data[26]! << 16));
     const height = 1 + (data[27]! | (data[28]! << 8) | (data[29]! << 16));
     return { width, height };
+  }
+  return undefined;
+}
+
+const MAX_ISOBMFF_SCAN_BYTES = 65_536;
+
+/**
+ * AVIF stores the display size in an ISOBMFF `ispe` box inside `meta`. The scan
+ * is bounded in both depth and bytes, and only the first `ispe` is read, which
+ * is the primary item's size for the single-image files the extractors accept.
+ */
+function readAvifDimensions(data: Uint8Array): ImageDimensions | undefined {
+  if (data.length < 16) return undefined;
+  const brand = String.fromCharCode(data[4]!, data[5]!, data[6]!, data[7]!);
+  if (brand !== "ftyp") return undefined;
+  return findIspeBox(data, 0, Math.min(data.length, MAX_ISOBMFF_SCAN_BYTES), 0);
+}
+
+function findIspeBox(
+  data: Uint8Array,
+  start: number,
+  end: number,
+  depth: number,
+): ImageDimensions | undefined {
+  if (depth > 4) return undefined;
+  let offset = start;
+
+  while (offset + 8 <= end) {
+    const size = u32(data, offset);
+    if (size === undefined) return undefined;
+    const type = String.fromCharCode(
+      data[offset + 4]!,
+      data[offset + 5]!,
+      data[offset + 6]!,
+      data[offset + 7]!,
+    );
+    const boxEnd = size === 0 ? end : offset + size;
+    if (size !== 0 && (size < 8 || boxEnd > end)) return undefined;
+
+    if (type === "ispe") {
+      const width = u32(data, offset + 12);
+      const height = u32(data, offset + 16);
+      return width && height ? { width, height } : undefined;
+    }
+    if (type === "meta") {
+      const found = findIspeBox(data, offset + 12, boxEnd, depth + 1);
+      if (found) return found;
+    } else if (type === "iprp" || type === "ipco") {
+      const found = findIspeBox(data, offset + 8, boxEnd, depth + 1);
+      if (found) return found;
+    }
+    offset = boxEnd;
   }
   return undefined;
 }

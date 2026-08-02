@@ -71,6 +71,33 @@ function jpeg(width: number, height: number): Buffer {
   return Buffer.concat([Buffer.from("ffd8", "hex"), frame, Buffer.alloc(32, 0x11)]);
 }
 
+function avif(width: number, height: number): Buffer {
+  const ispe = Buffer.alloc(20);
+  ispe.writeUInt32BE(20, 0);
+  ispe.write("ispe", 4, "latin1");
+  ispe.writeUInt32BE(width, 12);
+  ispe.writeUInt32BE(height, 16);
+
+  const ipco = Buffer.concat([Buffer.alloc(8), ispe]);
+  ipco.writeUInt32BE(ipco.length, 0);
+  ipco.write("ipco", 4, "latin1");
+
+  const iprp = Buffer.concat([Buffer.alloc(8), ipco]);
+  iprp.writeUInt32BE(iprp.length, 0);
+  iprp.write("iprp", 4, "latin1");
+
+  const meta = Buffer.concat([Buffer.alloc(12), iprp]);
+  meta.writeUInt32BE(meta.length, 0);
+  meta.write("meta", 4, "latin1");
+
+  const ftyp = Buffer.alloc(16);
+  ftyp.writeUInt32BE(16, 0);
+  ftyp.write("ftyp", 4, "latin1");
+  ftyp.write("avif", 8, "latin1");
+  ftyp.write("avif", 12, "latin1");
+  return Buffer.concat([ftyp, meta]);
+}
+
 const pngBytes = png(64, 64);
 const jpegBytes = jpeg(64, 64);
 
@@ -145,6 +172,17 @@ describe("docx image extraction", () => {
 
   it("rejects members whose decoded dimensions exceed the limit", () => {
     const data = zip({ "word/media/bomb.png": png(60_000, 60_000) });
+    expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
+  });
+
+  it("accepts an avif member whose ispe box declares a displayable size", () => {
+    const data = zip({ "word/media/image1.avif": avif(64, 64) });
+    const refs = extractDocumentImages({ path: "docs/modern.docx", data });
+    expect(refs.map((ref) => ref.locator)).toEqual(["zip:word/media/image1.avif"]);
+  });
+
+  it("rejects an avif member whose declared size is too large", () => {
+    const data = zip({ "word/media/image1.avif": avif(60_000, 60_000) });
     expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
   });
 
@@ -273,5 +311,16 @@ describe("fetched page image extraction", () => {
   it("bounds the candidate count", () => {
     const many = Array.from({ length: 30 }, (_, index) => `<img src="/i/${index}.png"/>`).join("");
     expect(extractPageImages({ html: many, baseUrl: "https://example.com/" })).toHaveLength(8);
+  });
+
+  it("survives out-of-range numeric entities in page metadata", () => {
+    const html = [
+      "<title>Solar &#1114112; &#xD800; &#65; array</title>",
+      '<img src="https://example.com/panel.png" alt="Panel &#1114112;">',
+    ].join("");
+    const candidates = extractPageImages({ html, baseUrl: "https://example.com/a" });
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.sourceLabel).toContain("&#1114112;");
+    expect(candidates[0]!.sourceLabel).toContain("A array");
   });
 });
