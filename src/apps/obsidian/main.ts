@@ -34,6 +34,7 @@ import {
   createRetrieverForProfile,
   createVectorIndexStoreForProfile,
 } from "./composition/factories";
+import { createDocumentImageResolver } from "./composition/mediaFactory";
 import type { SourceDocumentMetadata, SourceDocumentSummaries } from "@application/ports";
 import type { IndexDescriptionSource, IndexProfile } from "@adapters/indexing";
 import type { IndexRunPlan } from "./ui/settings/IndexRunModal";
@@ -175,6 +176,8 @@ export default class IxplorerPlugin extends Plugin {
           getIndexSearchEmbedderWarning: (indexProfileId) =>
             indexSearchEmbedderWarning(this.settings, indexProfileId),
           openIndexSettings: () => this.openSettingsTab(),
+          resolveDocumentImage: (documentPath, locator) =>
+            createDocumentImageResolver(this.composition).resolve(documentPath, locator),
           searchIndex: (options) => this.searchIndex(options),
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),

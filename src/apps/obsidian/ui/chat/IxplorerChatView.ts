@@ -47,6 +47,7 @@ import {
   resolveChatSettings,
   stripContextDiagnostics,
 } from "./chatViewHelpers";
+import type { DocumentImageResolver } from "@application/ports";
 import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
@@ -73,6 +74,8 @@ export interface IxplorerChatViewServices {
   getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
   /** Opens the plugin settings on the index section (used by the rebuild notice). */
   openIndexSettings(): void;
+  /** Re-reads an image embedded in a vault document when rendering an artifact. */
+  resolveDocumentImage?: DocumentImageResolver["resolve"];
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   listSavedChats(): Promise<SavedChatSummary[]>;
   loadSavedChat(id: string): Promise<SavedChat | null>;
@@ -403,6 +406,9 @@ export class IxplorerChatView extends ItemView {
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
       onSaveAnswerToNewNote: (answer) => void this.saveAnswerToNewNote(answer),
       onAppendAnswerToActiveNote: (answer) => void this.appendAnswerToActiveNote(answer),
+      ...(this.services.resolveDocumentImage
+        ? { documentImages: { resolve: this.services.resolveDocumentImage } }
+        : {}),
     };
   }
 
