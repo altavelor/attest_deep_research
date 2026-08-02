@@ -1,0 +1,141 @@
+// Pure policy for image eligibility: which encodings may be shown, which URLs
+// may be hotlinked, and which vault-relative paths may be resolved. Adapters and
+// tools share these rules so provider, page, and document candidates are judged
+// identically.
+
+export const ELIGIBLE_IMAGE_FORMATS = ["png", "jpeg", "webp", "gif", "avif"] as const;
+
+export type EligibleImageFormat = (typeof ELIGIBLE_IMAGE_FORMATS)[number];
+
+export const IMAGE_EXTRACTION_LIMITS = {
+  /** Candidates collected from a single fetched page or document. */
+  candidatesPerSource: 8,
+  /** Compressed bytes of a single embedded image. */
+  maxEncodedBytes: 8 * 1024 * 1024,
+  /** Compressed bytes extracted from one document in a single pass. */
+  maxTotalEncodedBytes: 32 * 1024 * 1024,
+  /** Decoded pixels; guards against decompression-bomb-like assets. */
+  maxPixels: 40_000_000,
+  /** Members inspected inside a zip-based container. */
+  maxArchiveEntries: 4000,
+  /** Smallest edge accepted; filters tracking pixels and spacers. */
+  minEdgePixels: 24,
+} as const;
+
+const EXTENSION_FORMATS: Record<string, EligibleImageFormat> = {
+  png: "png",
+  jpg: "jpeg",
+  jpeg: "jpeg",
+  jfif: "jpeg",
+  webp: "webp",
+  gif: "gif",
+  avif: "avif",
+};
+
+const MIME_FORMATS: Record<string, EligibleImageFormat> = {
+  "image/png": "png",
+  "image/jpeg": "jpeg",
+  "image/jpg": "jpeg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
+
+export function imageFormatFromMimeType(value: string | undefined): EligibleImageFormat | undefined {
+  if (!value) return undefined;
+  return MIME_FORMATS[value.split(";")[0]!.trim().toLowerCase()];
+}
+
+export function imageFormatFromPath(value: string | undefined): EligibleImageFormat | undefined {
+  if (!value) return undefined;
+  const withoutQuery = value.split(/[?#]/)[0] ?? "";
+  const extension = withoutQuery.split(".").pop();
+  if (!extension || extension === withoutQuery) return undefined;
+  return EXTENSION_FORMATS[extension.toLowerCase()];
+}
+
+export function mimeTypeForFormat(format: EligibleImageFormat): string {
+  return `image/${format}`;
+}
+
+export type ImageUrlCheck = { ok: true; url: string } | { ok: false; reason: string };
+
+const BLOCKED_PROTOCOLS = new Set(["data:", "blob:", "file:", "javascript:", "about:"]);
+
+/**
+ * Accepts only public HTTPS image URLs. Third-party images are hotlinked, so
+ * plaintext HTTP, credentials, private hosts, and non-image encodings such as
+ * SVG are rejected before a URL ever reaches the UI.
+ */
+export function validateImageUrl(value: string): ImageUrlCheck {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048) return { ok: false, reason: "invalid-url" };
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: "invalid-url" };
+  }
+  if (BLOCKED_PROTOCOLS.has(url.protocol)) return { ok: false, reason: "blocked-protocol" };
+  if (url.protocol !== "https:") return { ok: false, reason: "insecure-protocol" };
+  if (url.username || url.password) return { ok: false, reason: "credentials-not-allowed" };
+
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost")) {
+    return { ok: false, reason: "local-hostname" };
+  }
+  if (!hostname.includes(".") && !hostname.includes(":")) {
+    return { ok: false, reason: "local-hostname" };
+  }
+  if (isNonPublicAddress(hostname)) return { ok: false, reason: "non-public-address" };
+
+  const format = imageFormatFromPath(url.pathname);
+  if (format === undefined && /\.[a-z0-9]{2,5}$/i.test(url.pathname)) {
+    return { ok: false, reason: "unsupported-format" };
+  }
+  url.hash = "";
+  return { ok: true, url: url.toString() };
+}
+
+function isNonPublicAddress(hostname: string): boolean {
+  if (hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd")) return true;
+  const parts = hostname.split(".");
+  if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part))) return false;
+  const [a, b] = parts.map((part) => Number.parseInt(part, 10)) as [number, number];
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
+/** True when the path stays inside the vault and outside Ixplorer's own folders. */
+export function isSafeVaultImagePath(path: string): boolean {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed.length > 1024) return false;
+  if (trimmed.startsWith("/") || /^[a-z]:[\\/]/i.test(trimmed)) return false;
+  if (trimmed.includes("\\")) return false;
+  const segments = trimmed.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    return false;
+  }
+  return !segments[0]!.startsWith(".");
+}
+
+/** Rejects spacers and tracking pixels when the source declares dimensions. */
+export function hasDisplayableDimensions(width?: number, height?: number): boolean {
+  if (width === undefined && height === undefined) return true;
+  const edges = [width, height].filter((value): value is number => typeof value === "number");
+  if (edges.some((edge) => !Number.isFinite(edge) || edge < IMAGE_EXTRACTION_LIMITS.minEdgePixels)) {
+    return false;
+  }
+  if (width !== undefined && height !== undefined) {
+    return width * height <= IMAGE_EXTRACTION_LIMITS.maxPixels;
+  }
+  return true;
+}

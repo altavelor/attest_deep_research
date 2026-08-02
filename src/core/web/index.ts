@@ -12,6 +12,10 @@ export {
   DUCKDUCKGO_DESCRIPTOR,
   findWebSourceDescriptor,
   areCredentialsComplete,
+  IMAGE_SOURCE_IDS,
+  isImageSourceId,
+  OPENVERSE_SOURCE_ID,
+  WIKIMEDIA_COMMONS_SOURCE_ID,
 } from "./webSources";
 
 export {
