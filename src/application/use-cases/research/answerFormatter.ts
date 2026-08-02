@@ -1,6 +1,7 @@
 import { formatCitationLink } from "./citationLinks";
 import { linkifyUrlCitations } from "./urlCitations";
 import { ResearchAnswer } from "@core/answer";
+import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
 import { Citation } from "@core/model";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
@@ -18,6 +19,7 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
     "",
     renderAnswerBody(answer, citations),
     "",
+    ...artifactSections(answer),
     "## Citations",
     "",
     citationsMarkdown(citations),
@@ -54,6 +56,60 @@ function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]):
   });
 
   return linkifyUrlCitations(numbered);
+}
+
+/**
+ * Exports the answer's artifacts as Markdown: galleries become an attribution
+ * and source-link table, charts become their equivalent data table. Image bytes
+ * are never written into the note.
+ */
+function artifactSections(answer: ResearchAnswer): string[] {
+  const artifacts = sanitizeAnswerArtifacts(answer.artifacts);
+  if (!artifacts) return [];
+
+  const sections: string[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.type === "image-gallery") {
+      sections.push(
+        `## ${artifact.title ?? "Images"}`,
+        "",
+        "| Image | Source | Licence |",
+        "| --- | --- | --- |",
+        ...artifact.images.map((image) =>
+          [
+            "",
+            escapeTableCell(image.alt || image.sourceLabel),
+            galleryImageLink(image),
+            escapeTableCell(
+              image.licensed === true ? (image.licenceName ?? "—") : "Page reference",
+            ),
+            "",
+          ].join(" | "),
+        ),
+        "",
+      );
+      continue;
+    }
+    sections.push(
+      `## ${artifact.title}`,
+      "",
+      chartDataTable(artifact),
+      "",
+      ...(artifact.caption ? [artifact.caption, ""] : []),
+    );
+  }
+  return sections;
+}
+
+function galleryImageLink(image: AnswerImage): string {
+  const label = escapeTableCell(image.sourceLabel);
+  return /^https?:\/\//i.test(image.sourceUrl)
+    ? `[${label}](${image.sourceUrl})`
+    : `[[${image.sourceUrl}]]`;
+}
+
+function escapeTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|");
 }
 
 export function researchAnswerNotePath(answer: ResearchAnswer): string {
