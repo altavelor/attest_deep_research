@@ -167,6 +167,21 @@ describe("artifact styles", () => {
     expect(cssRule(".ixplorer-chat__answer-content table")).toContain("max-width: 100%");
   });
 
+  it("sizes the full-screen viewer at three quarters of the viewport", () => {
+    const modal = cssRule(".modal.ixplorer-lightbox");
+    expect(modal).toContain("width: 75vw");
+    expect(modal).toContain("height: 75vh");
+    expect(modal).toContain("max-width: 75vw");
+    expect(modal).toContain("max-height: 75vh");
+  });
+
+  it("lets the viewer image fill the space the caption does not need", () => {
+    expect(cssRule(".ixplorer-lightbox .ixplorer-lightbox__stage")).toContain("flex: 1 1 auto");
+    const image = cssRule(".ixplorer-lightbox__image");
+    expect(image).toContain("max-height: 100%");
+    expect(image).toContain("object-fit: contain");
+  });
+
   it("keeps gallery focus rings visible for keyboard users", () => {
     expect(cssRule(".ixplorer-gallery__trigger:focus-visible")).toContain("outline");
   });

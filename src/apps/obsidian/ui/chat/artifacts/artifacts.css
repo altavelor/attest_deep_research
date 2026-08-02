@@ -112,17 +112,37 @@
 
 /* --- Lightbox ----------------------------------------------------------- */
 
+/* Three quarters of the viewport, with the image area taking whatever the
+   caption and attribution below it do not need. */
+.modal.ixplorer-lightbox {
+  display: flex;
+  width: 75vw;
+  max-width: 75vw;
+  height: 75vh;
+  max-height: 75vh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal.ixplorer-lightbox .modal-content {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
 .ixplorer-lightbox .ixplorer-lightbox__stage {
   position: relative;
   display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  max-height: 65vh;
 }
 
 .ixplorer-lightbox__image {
   max-width: 100%;
-  max-height: 65vh;
+  max-height: 100%;
   object-fit: contain;
 }
 
@@ -145,6 +165,7 @@
 
 .ixplorer-lightbox__footer {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: var(--size-4-1);
   margin-top: var(--size-4-3);
