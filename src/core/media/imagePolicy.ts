@@ -65,11 +65,11 @@ export type ImageUrlCheck = { ok: true; url: string } | { ok: false; reason: str
 const BLOCKED_PROTOCOLS = new Set(["data:", "blob:", "file:", "javascript:", "about:"]);
 
 /**
- * Accepts only public HTTPS image URLs. Third-party images are hotlinked, so
- * plaintext HTTP, credentials, private hosts, and non-image encodings such as
- * SVG are rejected before a URL ever reaches the UI.
+ * Accepts only public HTTPS URLs: plaintext HTTP, embedded credentials, local
+ * and private hosts, and every non-HTTPS scheme are rejected. Shared by image
+ * hotlinks and by the attribution links rendered next to them.
  */
-export function validateImageUrl(value: string): ImageUrlCheck {
+export function validatePublicHttpsUrl(value: string): ImageUrlCheck {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 2048) return { ok: false, reason: "invalid-url" };
 
@@ -92,12 +92,30 @@ export function validateImageUrl(value: string): ImageUrlCheck {
   }
   if (isNonPublicAddress(hostname)) return { ok: false, reason: "non-public-address" };
 
+  url.hash = "";
+  return { ok: true, url: url.toString() };
+}
+
+/** True when the value is a public HTTPS URL; convenience over the check result. */
+export function isPublicHttpsUrl(value: unknown): boolean {
+  return typeof value === "string" && validatePublicHttpsUrl(value).ok;
+}
+
+/**
+ * Accepts only public HTTPS image URLs. Third-party images are hotlinked, so
+ * plaintext HTTP, credentials, private hosts, and non-image encodings such as
+ * SVG are rejected before a URL ever reaches the UI.
+ */
+export function validateImageUrl(value: string): ImageUrlCheck {
+  const check = validatePublicHttpsUrl(value);
+  if (!check.ok) return check;
+
+  const url = new URL(check.url);
   const format = imageFormatFromPath(url.pathname);
   if (format === undefined && /\.[a-z0-9]{2,5}$/i.test(url.pathname)) {
     return { ok: false, reason: "unsupported-format" };
   }
-  url.hash = "";
-  return { ok: true, url: url.toString() };
+  return check;
 }
 
 function isNonPublicAddress(hostname: string): boolean {

@@ -2,6 +2,8 @@
 // Artifacts are appended after the streamed Markdown answer; they never carry
 // raw bytes, OS paths, or session-scoped resource URLs.
 
+import { isPublicHttpsUrl, isSafeVaultImagePath, validateImageUrl } from "./imagePolicy";
+
 export const CHART_TYPES = ["bar", "line", "scatter", "pie"] as const;
 
 export type ChartType = (typeof CHART_TYPES)[number];
@@ -82,24 +84,43 @@ function isOptionalBoundedString(value: unknown, maxLength: number): boolean {
   return value === undefined || isBoundedString(value, maxLength);
 }
 
+/**
+ * Every URL an artifact carries is re-validated here, because a saved chat is
+ * untrusted input: hotlinks must stay public HTTPS image URLs, and a source or
+ * licence link must be either a public HTTPS page or a contained vault path.
+ */
 export function isAnswerImage(value: unknown): value is AnswerImage {
   if (!isRecord(value)) return false;
+  const hasVaultSource = value.vaultSource !== undefined;
   const hasLocation =
-    isOptionalBoundedString(value.thumbnailUrl, ARTIFACT_LIMITS.urlLength) &&
-    isOptionalBoundedString(value.fullUrl, ARTIFACT_LIMITS.urlLength) &&
-    (value.vaultSource === undefined || isVaultSource(value.vaultSource));
+    isOptionalImageUrl(value.thumbnailUrl) &&
+    isOptionalImageUrl(value.fullUrl) &&
+    (!hasVaultSource || isVaultSource(value.vaultSource));
   return (
     isBoundedString(value.id, ARTIFACT_LIMITS.labelLength) &&
     typeof value.alt === "string" &&
     value.alt.length <= ARTIFACT_LIMITS.altLength &&
     isOptionalBoundedString(value.caption, ARTIFACT_LIMITS.captionLength) &&
     isBoundedString(value.sourceUrl, ARTIFACT_LIMITS.urlLength) &&
+    isSafeSourceUrl(value.sourceUrl, hasVaultSource) &&
     isBoundedString(value.sourceLabel, ARTIFACT_LIMITS.titleLength) &&
     isOptionalBoundedString(value.licenceName, ARTIFACT_LIMITS.labelLength) &&
-    isOptionalBoundedString(value.licenceUrl, ARTIFACT_LIMITS.urlLength) &&
+    (value.licenceUrl === undefined || isPublicHttpsUrl(value.licenceUrl)) &&
     (value.licensed === undefined || typeof value.licensed === "boolean") &&
     hasLocation
   );
+}
+
+function isOptionalImageUrl(value: unknown): boolean {
+  if (value === undefined) return true;
+  return isBoundedString(value, ARTIFACT_LIMITS.urlLength) && validateImageUrl(value as string).ok;
+}
+
+/** A vault-backed image may point at its document; anything else must be HTTPS. */
+function isSafeSourceUrl(value: unknown, hasVaultSource: boolean): boolean {
+  if (typeof value !== "string") return false;
+  if (isPublicHttpsUrl(value)) return true;
+  return hasVaultSource && isSafeVaultImagePath(value);
 }
 
 function isVaultSource(value: unknown): value is AnswerImageVaultSource {

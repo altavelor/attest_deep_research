@@ -29,11 +29,16 @@ export {
   IMAGE_EXTRACTION_LIMITS,
   imageFormatFromMimeType,
   imageFormatFromPath,
+  isPublicHttpsUrl,
   isSafeVaultImagePath,
   mimeTypeForFormat,
   validateImageUrl,
+  validatePublicHttpsUrl,
 } from "./imagePolicy";
 export type { EligibleImageFormat, ImageUrlCheck } from "./imagePolicy";
+
+export { hasDecodableDimensions, readImageDimensions } from "./imageHeader";
+export type { ImageDimensions } from "./imageHeader";
 
 export { imageQueryVariants } from "./imageQuery";
 export {
