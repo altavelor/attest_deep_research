@@ -143,14 +143,15 @@ export class IndexingService {
       this.fileProcessor.canProcessPath(file.path),
     );
     await this.writer.loadPersistedSnapshots();
+    this.progress.setTotalFiles(files.length);
+    await this.writer.begin();
     if (this.collectingDocumentImages) {
       this.writer.beginImageManifest();
     }
-    this.progress.setTotalFiles(files.length);
-    await this.writer.begin();
 
     const pendingChunks: ExtractedChunk[] = [];
     const pendingIndexedFiles: PendingIndexedFile[] = [];
+    let imageManifestWritten = false;
 
     try {
       await this.processFiles(files, pendingChunks, pendingIndexedFiles);
@@ -161,7 +162,7 @@ export class IndexingService {
           indexedFiles: pendingIndexedFiles,
         });
         this.progress.setPhase("writing");
-        await this.writer.commit();
+        imageManifestWritten = await this.writer.commit();
       } else {
         this.writer.rollback();
       }
@@ -173,7 +174,7 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.keepPausedAfterRun();
     } else {
-      if (this.collectingDocumentImages) {
+      if (imageManifestWritten) {
         this.progress.setIndexVersion(REQUIRED_INDEX_VERSION);
       }
       this.progress.complete();
