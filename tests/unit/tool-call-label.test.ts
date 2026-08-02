@@ -22,10 +22,10 @@ describe("toolCallChainLabel", () => {
     expect(result).toBe("a".repeat(60) + "…");
   });
 
-  it("falls back to tool name when query is empty or not a string", () => {
-    expect(toolCallChainLabel("search_index", { query: "" })).toBe("search_index");
-    expect(toolCallChainLabel("search_index", { query: 42 })).toBe("search_index");
-    expect(toolCallChainLabel("search_index", {})).toBe("search_index");
+  it("falls back to a readable tool name when query is empty or not a string", () => {
+    expect(toolCallChainLabel("search_index", { query: "" })).toBe("Search index");
+    expect(toolCallChainLabel("search_index", { query: 42 })).toBe("Search index");
+    expect(toolCallChainLabel("search_index", {})).toBe("Search index");
   });
 
   it("returns Fetching page(s) for fetch_web_page by resultIds count", () => {
@@ -58,8 +58,8 @@ describe("toolCallChainLabel", () => {
     expect(toolCallChainLabel("list_notes", { prefix: "" })).toBe("All notes");
   });
 
-  it("returns tool name for unknown tools", () => {
-    expect(toolCallChainLabel("some_unknown_tool", {})).toBe("some_unknown_tool");
+  it("humanizes the name of an unknown tool instead of showing raw snake_case", () => {
+    expect(toolCallChainLabel("some_unknown_tool", {})).toBe("Some unknown tool");
   });
 });
 

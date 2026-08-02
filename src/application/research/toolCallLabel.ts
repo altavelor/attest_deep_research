@@ -1,3 +1,5 @@
+import { humanizeToolName } from "@core/agent";
+
 const MAX_LABEL_CHARS = 60;
 
 function truncate(value: string): string {
@@ -15,7 +17,9 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
     case "search_index":
     case "search_notes":
     case "search_web":
-      return typeof args.query === "string" && args.query ? truncate(args.query) : name;
+      return typeof args.query === "string" && args.query
+        ? truncate(args.query)
+        : humanizeToolName(name);
     case "fetch_web_page": {
       const count = Array.isArray(args.resultIds) ? args.resultIds.length : 0;
       return count > 1 ? `Fetching ${count} pages` : "Fetching page";
@@ -35,19 +39,19 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
         ? `Fan-out: ${truncate(args.question)}`
         : "Fan-out over sources";
     case "read_note":
-      return basename(args.path) || name;
+      return basename(args.path) || humanizeToolName(name);
     case "get_active_note":
       return "Active note";
     case "list_notes":
       return typeof args.prefix === "string" && args.prefix ? truncate(args.prefix) : "All notes";
     case "create_note":
-      return basename(args.path) || name;
+      return basename(args.path) || humanizeToolName(name);
     case "update_note":
-      return basename(args.path) || name;
+      return basename(args.path) || humanizeToolName(name);
     case "delete_note":
-      return basename(args.path) || name;
+      return basename(args.path) || humanizeToolName(name);
     default:
-      return name;
+      return humanizeToolName(name);
   }
 }
 
