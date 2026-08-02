@@ -53,6 +53,12 @@ export interface WebSourceProfile {
   sourceId: string;
   enabled: boolean;
   credentials: Record<string, string>;
+  /**
+   * Opt-in for engines that also serve images: enabling a source for text
+   * search never enrols it in image search, because that spends extra quota.
+   * Absent ⇒ off. Ignored by sources without an image endpoint.
+   */
+  imageSearchEnabled?: boolean;
 }
 
 const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCredentialField => ({

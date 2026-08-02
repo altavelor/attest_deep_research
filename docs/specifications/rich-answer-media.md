@@ -9,6 +9,7 @@ Draft. Add safe, attributable image galleries, Markdown tables, and simple chart
 - Tables are ordinary Markdown; charts and galleries are typed `AnswerArtifact`s.
 - Images can come from enabled Wikimedia Commons/Openverse resources, fetched web pages, or documents that Ixplorer already supports: `.md`, `.txt`, `.pdf`, `.epub`, `.fb2`, `.docx`.
 - Wikimedia Commons and Openverse are independently toggled **Image search** web resources, disabled by default; they do not affect normal `search_web` ranking.
+- A general engine that also serves images (Brave, Google, Serper, SearXNG) joins image search only after a per-source **Use for image search** opt-in; enabling it for text search never spends quota on image queries.
 - Third-party images are hotlinked only. No proxy, cache, download, vault write, or separate remote-image-loading setting exists in v1.
 - A global `REQUIRED_INDEX_VERSION = 1` enables index-discovered local images. Existing indexes remain usable for text retrieval but require a full rebuild for image discovery.
 - No image generation, OCR, editing, bulk asset management, or arbitrary model HTML/SVG/JS is in scope.

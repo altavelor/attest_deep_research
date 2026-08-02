@@ -14,6 +14,7 @@ export class WebSourceModal extends Modal {
   private readonly credentials: Record<string, string> = {
     ...this.options.profile.credentials,
   };
+  private imageSearchEnabled = this.options.profile.imageSearchEnabled === true;
   constructor(
     app: App,
     private readonly options: WebSourceModalOptions,
@@ -53,6 +54,19 @@ export class WebSourceModal extends Modal {
         });
     }
 
+    if (descriptor.capabilities?.images === true) {
+      new Setting(contentEl)
+        .setName("Use for image search")
+        .setDesc(
+          "Off by default. When on, search_images may query this engine's image endpoint, which spends the same quota as text search.",
+        )
+        .addToggle((toggle) => {
+          toggle.setValue(this.imageSearchEnabled).onChange((value) => {
+            this.imageSearchEnabled = value;
+          });
+        });
+    }
+
     renderModalActions(contentEl, {
       onCancel: () => this.close(),
       onSave: () => void this.save(),
@@ -76,6 +90,9 @@ export class WebSourceModal extends Modal {
       sourceId: this.options.descriptor.id,
       enabled: this.options.profile.enabled && configured,
       credentials,
+      ...(this.options.descriptor.capabilities?.images === true && this.imageSearchEnabled
+        ? { imageSearchEnabled: true }
+        : {}),
     });
     this.close();
   }
