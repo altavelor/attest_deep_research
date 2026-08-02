@@ -16,6 +16,7 @@ import {
   WorkflowRenderContext,
 } from "./workflowRenderer";
 import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
+import { disposeAnswerArtifacts, renderAnswerArtifacts } from "./artifacts";
 
 const renderVersionsByAnswer = new WeakMap<HTMLElement, RenderVersionTracker>();
 
@@ -62,6 +63,7 @@ export function patchAssistantMessageContent(
   if (message.isFallback && answerEl.parentElement) {
     renderFallbackBanner(answerEl.parentElement, message.fallbackReason);
   }
+  disposeAnswerArtifacts(answerEl);
   answerEl.empty();
   renderAssistantAnswer(answerEl, message, options);
   return true;
@@ -95,6 +97,10 @@ function renderAssistantAnswer(
   ).then(() => {
     if (!versionTracker.isCurrent(renderVersion)) return;
     renderInlineCitationAnchors(answerEl, citationRefs, options);
+    renderAnswerArtifacts(answerEl, message.answer?.artifacts, {
+      app: options.app,
+      ...(options.documentImages ? { documentImages: options.documentImages } : {}),
+    });
   });
 }
 

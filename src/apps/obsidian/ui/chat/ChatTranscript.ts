@@ -3,6 +3,7 @@ import { App, Component, setIcon } from "obsidian";
 import { ResearchAnswer } from "@core/answer";
 import { ChainItem, ChatDisplayMessage, shouldShowDiagnosticAction } from "@core/conversation";
 import { ContextDiagnostics } from "@core/diagnostics";
+import type { DocumentImageResolver } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import {
@@ -37,6 +38,8 @@ export interface ChatTranscriptOptions {
   onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
   onSaveAnswerToNewNote(answer: ResearchAnswer): void;
   onAppendAnswerToActiveNote(answer: ResearchAnswer): void;
+  /** Re-reads images embedded in vault documents when rendering artifacts. */
+  documentImages?: DocumentImageResolver;
 }
 
 export function renderChatTranscript(
