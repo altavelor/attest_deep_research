@@ -2,9 +2,9 @@
 //
 // Two kinds of resource contribute. Wikimedia Commons and Openverse are
 // dedicated image resources, toggled independently and off by default. The
-// general engines (Brave, Google, Serper, SearXNG) expose an image endpoint and
-// are used whenever the user already enabled and configured them for text
-// search — they need no separate switch and no extra credentials.
+// general engines (Brave, Google, Serper, SearXNG) expose an image endpoint,
+// but querying it spends the user's quota, so they join image search only after
+// an explicit per-source opt-in on top of being enabled for text search.
 
 import { OPENVERSE_SOURCE_ID, WIKIMEDIA_COMMONS_SOURCE_ID } from "@core/web";
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
@@ -42,6 +42,7 @@ export function createImageSearchSources(
   for (const definition of IMAGE_SOURCE_DEFINITIONS) {
     const engine = usable(definition.sourceId);
     if (!engine) continue;
+    if (byId.get(definition.sourceId)?.imageSearchEnabled !== true) continue;
     sources.push(
       new HttpImageSearchSource(engine.descriptor, definition, engine.credentials, runtime),
     );

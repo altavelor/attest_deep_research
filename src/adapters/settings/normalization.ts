@@ -70,6 +70,9 @@ function normalizeWebSources(settings: IxplorerSettings): void {
         sourceId: descriptor.id,
         enabled: entry.enabled === true && areCredentialsComplete(descriptor, credentials),
         credentials,
+        ...(descriptor.capabilities?.images === true && entry.imageSearchEnabled === true
+          ? { imageSearchEnabled: true }
+          : {}),
       },
     ];
   });
