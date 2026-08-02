@@ -2,7 +2,11 @@
 // the binary id, so a renamed or removed binary degrades to the unavailable
 // fallback instead of showing the wrong image.
 
-import { imageFormatFromMimeType, IMAGE_EXTRACTION_LIMITS } from "@core/media";
+import {
+  hasDecodableDimensions,
+  imageFormatFromMimeType,
+  IMAGE_EXTRACTION_LIMITS,
+} from "@core/media";
 import { readInputText } from "../common";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
 
@@ -46,6 +50,7 @@ export function extractFb2ImageRefs(source: string, metadataOnly: boolean): Docu
         continue;
       }
       if (data.length === 0) continue;
+      if (!hasDecodableDimensions(data, format)) continue;
     }
 
     refs.push({

@@ -1,8 +1,10 @@
 // Raster image objects embedded in a PDF. Only self-contained encodings that a
 // browser can display directly (DCTDecode → JPEG) are extracted; other filters
-// would need re-encoding and are skipped so the answer degrades to text.
+// would need re-encoding and are skipped so the answer degrades to text. When
+// the object declares no size, the JPEG header itself must prove the raster is
+// displayable.
 
-import { IMAGE_EXTRACTION_LIMITS } from "@core/media";
+import { hasDecodableDimensions, IMAGE_EXTRACTION_LIMITS } from "@core/media";
 import { readInputBuffer } from "../common";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
 
@@ -65,6 +67,12 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
     const stream = readStream(buffer, object);
     if (!stream) continue;
     if (stream.length > IMAGE_EXTRACTION_LIMITS.maxEncodedBytes) continue;
+    if (
+      (width === undefined || height === undefined) &&
+      !hasDecodableDimensions(new Uint8Array(stream), "jpeg")
+    ) {
+      continue;
+    }
     totalBytes += stream.length;
     if (totalBytes > IMAGE_EXTRACTION_LIMITS.maxTotalEncodedBytes) break;
 
