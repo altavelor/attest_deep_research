@@ -37,24 +37,33 @@ export async function requestImageJson(
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new IxplorerError("web-search-failed", `${sourceId} responded with ${response.status}.`);
+      throw new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: `${sourceId} responded with ${response.status}.`,
+      });
     }
     const body = await response.text();
     if (body.length > IMAGE_SEARCH_DEFAULTS.maxResponseChars) {
-      throw new IxplorerError("web-search-failed", `${sourceId} returned an oversized response.`);
+      throw new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: `${sourceId} returned an oversized response.`,
+      });
     }
     try {
       return JSON.parse(body);
     } catch {
-      throw new IxplorerError("web-search-failed", `${sourceId} returned a malformed response.`);
+      throw new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: `${sourceId} returned a malformed response.`,
+      });
     }
   } catch (error) {
     if (error instanceof IxplorerError) throw error;
     const aborted = error instanceof Error && error.name === "AbortError";
-    throw new IxplorerError(
-      "web-search-failed",
-      aborted ? `${sourceId} timed out.` : `${sourceId} request failed.`,
-    );
+    throw new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: aborted ? `${sourceId} timed out.` : `${sourceId} request failed.`,
+    });
   } finally {
     clearTimeout(timer);
     init.signal?.removeEventListener("abort", onAbort);

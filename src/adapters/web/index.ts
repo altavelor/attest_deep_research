@@ -26,6 +26,14 @@ export type { WebSourceRuntimeOptions } from "./sources/registry";
 export { HttpWebSearchSource } from "./sources/HttpWebSearchSource";
 export type { HttpWebSearchSourceOptions } from "./sources/HttpWebSearchSource";
 
+export { createImageSearchSources, StaticImageSearchRegistry } from "./images/registry";
+export { OpenverseImageSource, parseOpenversePayload } from "./images/OpenverseImageSource";
+export {
+  parseCommonsPayload,
+  WikimediaCommonsImageSource,
+} from "./images/WikimediaCommonsImageSource";
+export type { ImageSourceHttpOptions } from "./images/imageSourceHttp";
+
 export { createFetchFallbackProviders } from "./fetch/fallbacks";
 export { JinaReaderFetchProvider } from "./fetch/JinaReaderFetchProvider";
 export { ZyteFetchProvider } from "./fetch/ZyteFetchProvider";

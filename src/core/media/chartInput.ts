@@ -2,13 +2,7 @@
 // only; every visual is produced locally, so nothing here accepts markup, URLs,
 // styles, or handlers.
 
-import {
-  ARTIFACT_LIMITS,
-  ChartArtifact,
-  ChartSeries,
-  ChartType,
-  CHART_TYPES,
-} from "./artifacts";
+import { ARTIFACT_LIMITS, ChartArtifact, ChartSeries, ChartType, CHART_TYPES } from "./artifacts";
 
 export type ChartValidation =
   | { ok: true; value: Omit<ChartArtifact, "id"> }
@@ -73,7 +67,9 @@ export function validateChartInput(input: Record<string, unknown>): ChartValidat
   };
 }
 
-function parseSeries(raw: unknown): { ok: true; value: ChartSeries } | { ok: false; code: string; message: string } {
+function parseSeries(
+  raw: unknown,
+): { ok: true; value: ChartSeries } | { ok: false; code: string; message: string } {
   if (!isRecord(raw)) return fail("invalid-series", "Each series must be an object.");
   const name = boundedText(raw.name, ARTIFACT_LIMITS.labelLength);
   if (!name) return fail("invalid-series-name", "Each series needs a non-empty name.");
