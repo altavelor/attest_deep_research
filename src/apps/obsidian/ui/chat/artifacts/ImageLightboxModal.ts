@@ -19,6 +19,9 @@ export interface ImageLightboxOptions extends ImageSourceResolverOptions {
 export class ImageLightboxModal extends Modal {
   private index: number;
   private revokeCurrent?: () => void;
+  /** Incremented per render so a slow resolution can detect it is stale. */
+  private renderGeneration = 0;
+  private closed = false;
 
   constructor(
     app: App,
@@ -29,6 +32,7 @@ export class ImageLightboxModal extends Modal {
   }
 
   onOpen(): void {
+    this.closed = false;
     this.modalEl.addClass("ixplorer-lightbox");
     this.scope.register([], "ArrowRight", () => {
       this.step(1);
@@ -42,6 +46,8 @@ export class ImageLightboxModal extends Modal {
   }
 
   onClose(): void {
+    this.closed = true;
+    this.renderGeneration += 1;
     this.releaseCurrent();
     this.contentEl.empty();
     this.options.returnFocusTo?.focus();
@@ -61,8 +67,10 @@ export class ImageLightboxModal extends Modal {
 
   private async renderCurrent(): Promise<void> {
     const image = this.options.images[this.index];
-    if (!image) return;
+    if (!image || this.closed) return;
 
+    this.renderGeneration += 1;
+    const generation = this.renderGeneration;
     this.releaseCurrent();
     const { contentEl } = this;
     contentEl.empty();
@@ -70,6 +78,10 @@ export class ImageLightboxModal extends Modal {
 
     const stage = contentEl.createDiv({ cls: "ixplorer-lightbox__stage" });
     const resolved = await resolveAnswerImageSource(image, this.options, false);
+    if (this.closed || generation !== this.renderGeneration) {
+      resolved?.revoke?.();
+      return;
+    }
     if (resolved) {
       this.revokeCurrent = resolved.revoke;
       const img = stage.createEl("img", {
