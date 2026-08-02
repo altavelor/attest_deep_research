@@ -31,6 +31,7 @@ const CATEGORY_LABELS: Record<WebSourceCategory, string> = {
   community: "Developer & community",
   news: "News",
   fetch: "Page fetch fallback",
+  image: "Image search",
 };
 
 const ISSUE_LABELS: Record<WebSourceIssue["reason"], string> = {

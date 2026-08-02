@@ -32,8 +32,5 @@ export interface ResolvedDocumentImage {
  * longer contains the referenced image.
  */
 export interface DocumentImageResolver {
-  resolve(
-    documentPath: string,
-    locator: string,
-  ): Promise<ResolvedDocumentImage | undefined>;
+  resolve(documentPath: string, locator: string): Promise<ResolvedDocumentImage | undefined>;
 }

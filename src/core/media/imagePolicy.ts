@@ -41,7 +41,9 @@ const MIME_FORMATS: Record<string, EligibleImageFormat> = {
   "image/avif": "avif",
 };
 
-export function imageFormatFromMimeType(value: string | undefined): EligibleImageFormat | undefined {
+export function imageFormatFromMimeType(
+  value: string | undefined,
+): EligibleImageFormat | undefined {
   if (!value) return undefined;
   return MIME_FORMATS[value.split(";")[0]!.trim().toLowerCase()];
 }
@@ -131,7 +133,9 @@ export function isSafeVaultImagePath(path: string): boolean {
 export function hasDisplayableDimensions(width?: number, height?: number): boolean {
   if (width === undefined && height === undefined) return true;
   const edges = [width, height].filter((value): value is number => typeof value === "number");
-  if (edges.some((edge) => !Number.isFinite(edge) || edge < IMAGE_EXTRACTION_LIMITS.minEdgePixels)) {
+  if (
+    edges.some((edge) => !Number.isFinite(edge) || edge < IMAGE_EXTRACTION_LIMITS.minEdgePixels)
+  ) {
     return false;
   }
   if (width !== undefined && height !== undefined) {
