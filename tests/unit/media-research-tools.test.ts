@@ -6,7 +6,7 @@ import {
   PresentChartTool,
   PresentImageGalleryTool,
 } from "@adapters/research-tools/media/MediaTools";
-import type { ImageCandidate } from "@core/media";
+import { ARTIFACT_LIMITS, type ImageCandidate } from "@core/media";
 import type { ImageSearchSource } from "@application/ports";
 import { findWebSourceDescriptor, WIKIMEDIA_COMMONS_SOURCE_ID } from "@core/web";
 
@@ -155,7 +155,10 @@ describe("present_image_gallery", () => {
 
   it.each([
     [{ imageIds: [] }, "invalid-image-ids"],
-    [{ imageIds: ["a", "b", "c", "d", "e"] }, "too-many-images"],
+    [
+      { imageIds: Array.from({ length: ARTIFACT_LIMITS.galleryImages + 1 }, (_, i) => `img_${i}`) },
+      "too-many-images",
+    ],
     [{ imageIds: ["https://example.com/a.png"], extra: 1 }, "unknown-property"],
   ])("rejects invalid arguments (%#)", (input, code) => {
     const { tool } = toolWith([candidate("a")]);
