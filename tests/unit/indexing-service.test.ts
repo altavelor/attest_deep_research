@@ -1,14 +1,16 @@
 import {
+  DocumentImageManifestEntry,
   Extractor,
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,
   IndexStore,
+  IndexStoreWriteSession,
   SourceSnapshotIndexStore,
 } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { IxplorerError } from "@core/errors";
-import { IndexingService, IndexingFileLogEvent } from "@adapters/indexing";
+import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 
@@ -642,3 +644,78 @@ class FakeIndexStore implements IndexStore, SourceSnapshotIndexStore {
     this.failedSnapshots.push(...snapshots);
   }
 }
+
+class ImageManifestIndexStore extends FakeIndexStore {
+  recordedImages: DocumentImageManifestEntry[] | null = null;
+  private pending: DocumentImageManifestEntry[] | null = null;
+
+  async beginWrite(): Promise<IndexStoreWriteSession> {
+    return {
+      upsert: async (chunks) => {
+        await this.upsert(chunks);
+      },
+      deleteBySourcePath: async (path) => {
+        await this.deleteBySourcePath(path);
+      },
+      updateSourceSnapshots: async (snapshots) => {
+        await this.updateSourceSnapshots(snapshots);
+      },
+      recordDocumentImages: async (entries) => {
+        this.pending = [...(this.pending ?? []), ...entries];
+      },
+      commit: async () => {
+        this.recordedImages = this.pending;
+      },
+      rollback: () => {
+        this.pending = null;
+      },
+    };
+  }
+}
+
+describe("IndexingService image manifest", () => {
+  const noteWithImage = "![Diagram](assets/diagram.png)";
+
+  it("records document images on a full rebuild and advances the index version", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({
+        documentPath: "Research/a.md",
+        locator: "link:Research/assets/diagram.png",
+        format: "png",
+        alt: "Diagram",
+      }),
+    ]);
+    expect(state.indexVersion).toBe(REQUIRED_INDEX_VERSION);
+  });
+
+  it("writes no manifest and no version bump on an incremental run", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.manualReindex();
+
+    expect(indexStore.recordedImages).toBeNull();
+    expect(state.indexVersion).toBeUndefined();
+  });
+});

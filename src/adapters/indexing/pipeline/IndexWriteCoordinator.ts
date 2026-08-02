@@ -58,17 +58,23 @@ export class IndexWriteCoordinator {
   }
 
   /**
-   * Commits the run. A full rebuild also writes the image manifest, which is
-   * what advances the persisted index version — partial runs never do.
+   * Commits the run and reports whether the image manifest was persisted. Only
+   * a full rebuild against a store that supports the manifest writes one, and
+   * only that may advance the persisted index version.
    */
-  async commit(): Promise<void> {
+  async commit(): Promise<boolean> {
+    let manifestWritten = false;
     if (this.imageManifest !== undefined) {
       const writer = await this.getWriter();
-      await writer?.recordDocumentImages?.(this.imageManifest);
+      if (writer?.recordDocumentImages) {
+        await writer.recordDocumentImages(this.imageManifest);
+        manifestWritten = true;
+      }
     }
     await this.writer?.commit();
     this.writer = undefined;
     this.imageManifest = undefined;
+    return manifestWritten;
   }
 
   rollback(): void {
