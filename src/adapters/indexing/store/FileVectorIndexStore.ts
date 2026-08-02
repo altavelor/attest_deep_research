@@ -11,7 +11,7 @@ import {
 } from "@application/ports";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
-import type { ImageManifestEntry } from "./FileVectorImageManifest";
+import { requiresIndexRebuildForImages, type ImageManifestEntry } from "./FileVectorImageManifest";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";
 import {
@@ -193,6 +193,17 @@ export class FileVectorIndexStore
   async clear(): Promise<void> {
     await rm(this.folder, { recursive: true, force: true });
     this.state = null;
+  }
+
+  /**
+   * Document images recorded by the last successful full rebuild. Indexes below
+   * the required version carry no manifest and yield an empty list, so image
+   * discovery simply falls back to the documents attached to the request.
+   */
+  async listDocumentImages(): Promise<ImageManifestEntry[]> {
+    const manifest = await this.persistence.readManifest();
+    if (requiresIndexRebuildForImages(manifest)) return [];
+    return this.persistence.readImageManifest();
   }
 
   async loadSourceSnapshots(): Promise<IndexSourceSnapshot[]> {

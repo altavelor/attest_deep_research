@@ -4,7 +4,7 @@
 
 import { Tool } from "@core/agent";
 import type { ImageCandidate } from "@core/media";
-import type { ImageSearchRegistry } from "@application/ports";
+import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { AnswerArtifactRegistry } from "./AnswerArtifactRegistry";
 import { ImageSearchTool, PresentChartTool, PresentImageGalleryTool } from "./MediaTools";
@@ -12,7 +12,9 @@ import { ImageSearchTool, PresentChartTool, PresentImageGalleryTool } from "./Me
 export interface MediaSourceOptions {
   artifacts: AnswerArtifactRegistry;
   imageSearch?: ImageSearchRegistry;
-  documentCandidates?: () => Promise<ImageCandidate[]> | ImageCandidate[];
+  documentCandidates?: (
+    request: ToolDocumentImageQuery,
+  ) => Promise<ImageCandidate[]> | ImageCandidate[];
   available?: boolean;
 }
 
