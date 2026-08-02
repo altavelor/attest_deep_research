@@ -1,6 +1,8 @@
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
+import type { ImageCandidate } from "@core/media";
+import type { ImageSearchRegistry } from "@application/ports";
 import {
   ContextDiagnostics,
   ContextIndexDiagnostics,
@@ -56,6 +58,10 @@ export interface ResearchStrategyDeps {
   retriever: ResearchRetriever;
   urlStatusChecker?: UrlStatusChecker;
   searchProvider?: SearchProvider;
+  /** Enabled image-search resources for the rich-media tools. */
+  imageSearch?: ImageSearchRegistry;
+  /** Image candidates from the documents attached to the request context. */
+  documentImageCandidates?: (contextPaths: readonly string[]) => Promise<ImageCandidate[]>;
   noteTools?: NoteToolService;
   vaultWriter?: VaultWriter;
   downloadFolder?: string;

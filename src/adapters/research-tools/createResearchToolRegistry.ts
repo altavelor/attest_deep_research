@@ -14,9 +14,12 @@ import { SubAgentSource } from "./sub-agent/SubAgentSource";
 import { MapSourcesSource } from "./map-sources/MapSourcesSource";
 import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
+import { AnswerArtifactRegistry } from "./media/AnswerArtifactRegistry";
+import { MediaSource } from "./media/MediaSource";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
+  artifacts: AnswerArtifactRegistry;
   tools: ToolManager;
   /** Introspection view of the data sources that contributed tools. */
   sources: SourceManager;
@@ -26,6 +29,7 @@ export function createResearchToolRegistry(
   options: ResearchToolsetOptions,
 ): CreatedResearchToolRegistry {
   const evidence = new ResearchEvidenceRegistry();
+  const artifacts = new AnswerArtifactRegistry();
   const availability: ResearchToolAvailability = {
     ...options.availability,
     retrieverAvailable: options.availability.retrieverAvailable && options.retriever !== undefined,
@@ -61,7 +65,7 @@ export function createResearchToolRegistry(
     availability.webProviderAvailable &&
     (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    sources.register(new WebSource({ provider: options.searchProvider, evidence }));
+    sources.register(new WebSource({ provider: options.searchProvider, evidence, artifacts }));
   }
 
   if (
@@ -117,10 +121,22 @@ export function createResearchToolRegistry(
     );
   }
 
+  if (hasAnyReadSource) {
+    sources.register(
+      new MediaSource({
+        artifacts,
+        ...(options.imageSearch ? { imageSearch: options.imageSearch } : {}),
+        ...(options.documentImageCandidates
+          ? { documentCandidates: options.documentImageCandidates }
+          : {}),
+      }),
+    );
+  }
+
   const tools = new ToolManager([], permissions);
   sources.contributeTools(tools);
 
-  return { evidence, tools, sources };
+  return { evidence, artifacts, tools, sources };
 }
 
 /** Map the availability policy onto the opaque permission names tools check. */

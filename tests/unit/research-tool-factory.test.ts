@@ -43,6 +43,8 @@ describe("createResearchToolRegistry", () => {
       "list_index_urls",
       "check_urls",
       "search_web",
+      "present_image_gallery",
+      "present_chart",
     ]);
     expect(first.evidence).not.toBe(second.evidence);
   });
@@ -98,6 +100,8 @@ describe("createResearchToolRegistry", () => {
       "find_claims",
       "list_index_urls",
       "check_urls",
+      "present_image_gallery",
+      "present_chart",
     ]);
   });
 

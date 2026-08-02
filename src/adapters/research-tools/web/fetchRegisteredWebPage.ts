@@ -8,6 +8,7 @@ import { SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "@core/agent";
+import type { ImageCandidate } from "@core/media";
 
 export interface FetchWebPageOutput {
   resultId: string;
@@ -30,6 +31,8 @@ export const DEFAULT_FETCH_OPTIONS = {
 export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
+  /** Collects page-referenced image candidates for present_image_gallery. */
+  artifacts?: { register(candidates: readonly ImageCandidate[]): unknown };
 }
 
 /**
@@ -79,6 +82,10 @@ export async function fetchRegisteredWebPage(
     typeof result.truncated !== "boolean"
   ) {
     return toolFailure("web-fetch-invalid-response", "Page fetch returned unsafe metadata.");
+  }
+
+  if (deps.artifacts && Array.isArray(result.pageImages)) {
+    deps.artifacts.register(result.pageImages);
   }
 
   const content = result.content.slice(0, maxContentChars);

@@ -17,6 +17,9 @@ import {
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
+  IMAGE_SEARCH_TOOL,
+  PRESENT_CHART_TOOL,
+  PRESENT_IMAGE_GALLERY_TOOL,
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
 import { RetrievedChunk } from "@core/model/source";
@@ -277,6 +280,35 @@ const DOWNLOAD_SKILL = (tools: ToolSet): string => {
   return [heading, steps.join("\n")].join("\n\n");
 };
 
+// Visual artifacts are optional: they are worth a call only when a picture or a
+// chart answers the question better than prose. The tools accept data and
+// handles only, never markup — the plugin draws everything locally.
+const RICH_MEDIA_SKILL = (tools: ToolSet): string => {
+  const canSearchImages = tools.has(IMAGE_SEARCH_TOOL);
+  const lines = [
+    "Use these only when a visual genuinely improves the answer. Never use them to decorate.",
+    "- Tables are ordinary Markdown: use headers, at most 8 columns and 30 rows, no HTML.",
+    "- present_chart takes chart DATA (bar, line, scatter, pie): at most 4 series and 50 points",
+    "  per series. Never send SVG, HTML, CSS, scripts, or image URLs — they are rejected.",
+    "- Keep the citation for every visual in the surrounding prose or its caption.",
+  ];
+  if (canSearchImages) {
+    lines.splice(
+      1,
+      0,
+      "- Call search_images first, then pass 1–4 of the returned `imageId` handles to",
+      "  present_image_gallery. URLs are rejected; only handles from this answer work.",
+    );
+  }
+
+  return [
+    `## Showing visuals (${[canSearchImages ? IMAGE_SEARCH_TOOL : "", PRESENT_IMAGE_GALLERY_TOOL, PRESENT_CHART_TOOL].filter(Boolean).join(", ")})`,
+    lines.join("\n"),
+  ].join("\n\n");
+};
+
+const hasRichMedia = (tools: ToolSet): boolean => tools.has(PRESENT_CHART_TOOL);
+
 // The "do it yourself instead" alternatives must be limited to tools this profile
 // actually registered — the sub-agent's own toolset (index/web/notes) always mirrors
 // the parent's, but the skill text must not name a manual tool the parent itself
@@ -493,6 +525,10 @@ export function buildThinkingResearchMessages(
 
   if (hasClaims(tools)) {
     systemSections.push(CONTRADICTION_SKILL);
+  }
+
+  if (hasRichMedia(tools)) {
+    systemSections.push(RICH_MEDIA_SKILL(tools));
   }
 
   if (options.attachedFiles?.length) {

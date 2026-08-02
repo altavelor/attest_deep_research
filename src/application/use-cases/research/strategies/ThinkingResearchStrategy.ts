@@ -136,6 +136,13 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
+      ...(this.deps.imageSearch ? { imageSearch: this.deps.imageSearch } : {}),
+      ...(this.deps.documentImageCandidates
+        ? {
+            documentImageCandidates: () =>
+              this.deps.documentImageCandidates!(request.contextPaths ?? []),
+          }
+        : {}),
       subAgentRunner: this.deps.subAgentRunner,
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
@@ -320,6 +327,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       evidence,
       ...(request.includeContextDiagnostics === true ? { contextDiagnostics: diagnostics } : {}),
       followUpQuestions: result.ok ? extractFollowUpQuestions(result.answerText) : [],
+      ...(result.ok && created.artifacts.snapshot()
+        ? { artifacts: created.artifacts.snapshot()! }
+        : {}),
       createdAt: this.deps.now().toISOString(),
     };
     if (result.ok && this.deps.persistFinalAnswer) await this.deps.persistFinalAnswer(answer);
