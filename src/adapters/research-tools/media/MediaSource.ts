@@ -11,6 +11,8 @@ export interface MediaSourceOptions {
   documentCandidates?: (
     request: ToolDocumentImageQuery,
   ) => Promise<ImageCandidate[]> | ImageCandidate[];
+  /** Vault documents read or retrieved so far in this run. */
+  readDocumentPaths?: () => readonly string[];
   available?: boolean;
 }
 
@@ -42,6 +44,9 @@ export class MediaSource implements DataSource {
           artifacts,
           ...(this.options.documentCandidates
             ? { documentCandidates: this.options.documentCandidates }
+            : {}),
+          ...(this.options.readDocumentPaths
+            ? { readDocumentPaths: this.options.readDocumentPaths }
             : {}),
         }),
       );
