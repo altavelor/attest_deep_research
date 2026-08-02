@@ -144,12 +144,12 @@ function renderBars(
   const baseline = scale.yFor(Math.max(0, scale.minY));
 
   for (const point of series.points) {
-    const index = scale.categories.indexOf(String(point.x));
-    if (index === -1) continue;
+    const centre = scale.xForPoint(point);
+    if (centre === undefined) continue;
     const y = scale.yFor(point.y);
     element(group, "rect", {
       class: "ixplorer-chart__bar",
-      x: String(scale.xFor(index) - scale.bandWidth * 0.4 + slot * seriesIndex),
+      x: String(centre - scale.bandWidth * 0.4 + slot * seriesIndex),
       y: String(Math.min(y, baseline)),
       width: String(Math.max(1, slot - 2)),
       height: String(Math.max(1, Math.abs(baseline - y))),
@@ -166,9 +166,8 @@ function renderMarkers(
 ): void {
   const shape = SERIES_SHAPES[seriesIndex % SERIES_SHAPES.length];
   for (const point of series.points) {
-    const index = scale.categories.indexOf(String(point.x));
-    if (index === -1) continue;
-    const x = scale.xFor(index);
+    const x = scale.xForPoint(point);
+    if (x === undefined) continue;
     const y = scale.yFor(point.y);
     if (shape === "circle") {
       element(group, "circle", {

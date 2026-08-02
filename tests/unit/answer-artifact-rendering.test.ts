@@ -66,6 +66,40 @@ describe("chart geometry", () => {
     expect(CHART_VIEWPORT.width).toBeGreaterThan(0);
   });
 
+  it("places numeric scatter points by magnitude, not by category order", () => {
+    const scatter: ChartArtifact = {
+      type: "chart",
+      id: "c2",
+      title: "Spread",
+      chartType: "scatter",
+      series: [
+        {
+          name: "s",
+          points: [
+            { x: 0, y: 1 },
+            { x: 1, y: 2 },
+            { x: 100, y: 3 },
+          ],
+        },
+      ],
+    };
+    const scale = buildChartScale(scatter);
+    expect(scale.numericX).toBe(true);
+    const [first, second, third] = scatter.series[0]!.points.map(
+      (point) => scale.xForPoint(point)!,
+    );
+    expect(third! - second!).toBeGreaterThan((second! - first!) * 10);
+    expect(first).toBeCloseTo(scale.plot.x, 5);
+    expect(third).toBeCloseTo(scale.plot.x + scale.plot.width, 5);
+  });
+
+  it("keeps categorical spacing for non-scatter charts and string x values", () => {
+    const scale = buildChartScale(barChart);
+    expect(scale.numericX).toBe(false);
+    expect(scale.xForPoint({ x: "Q2", y: 1 })).toBeCloseTo(scale.xFor(1), 5);
+    expect(scale.xForPoint({ x: "Q9", y: 1 })).toBeUndefined();
+  });
+
   it("gives each series a distinct marker shape so colour is not the only cue", () => {
     expect(new Set(SERIES_SHAPES).size).toBe(SERIES_SHAPES.length);
   });

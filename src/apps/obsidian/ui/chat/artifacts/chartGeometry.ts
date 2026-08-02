@@ -1,7 +1,7 @@
 // Pure geometry for the answer charts. Keeping the maths out of the renderer
 // keeps the DOM code thin and lets the layout be tested without a document.
 
-import type { ChartArtifact, ChartSeries } from "@core/media";
+import type { ChartArtifact, ChartPoint, ChartSeries } from "@core/media";
 
 export const CHART_VIEWPORT = {
   width: 640,
@@ -16,8 +16,12 @@ export interface ChartScale {
   plot: { x: number; y: number; width: number; height: number };
   /** Horizontal centre of a category slot. */
   xFor(categoryIndex: number): number;
+  /** Horizontal position of a point; undefined when its category is unknown. */
+  xForPoint(point: ChartPoint): number | undefined;
   yFor(value: number): number;
   bandWidth: number;
+  /** True when x is plotted by magnitude rather than by category order. */
+  numericX: boolean;
 }
 
 export function chartCategories(chart: ChartArtifact): string[] {
@@ -28,11 +32,30 @@ export function chartCategories(chart: ChartArtifact): string[] {
       if (!categories.includes(label)) categories.push(label);
     }
   }
+  if (hasNumericXDomain(chart)) {
+    categories.sort((left, right) => Number(left) - Number(right));
+  }
   return categories;
+}
+
+/**
+ * Scatter points with purely numeric x are quantitative, so they are placed by
+ * magnitude; every other chart keeps evenly spaced category bands.
+ */
+export function hasNumericXDomain(chart: ChartArtifact): boolean {
+  return (
+    chart.chartType === "scatter" &&
+    chart.series.every((series) => series.points.every((point) => typeof point.x === "number"))
+  );
 }
 
 export function buildChartScale(chart: ChartArtifact): ChartScale {
   const categories = chartCategories(chart);
+  const numericX = hasNumericXDomain(chart);
+  const xValues = numericX ? categories.map(Number) : [];
+  const minX = numericX ? Math.min(...xValues) : 0;
+  const maxX = numericX ? Math.max(...xValues) : 0;
+  const xSpan = maxX - minX;
   const values = chart.series.flatMap((series) => series.points.map((point) => point.y));
   const rawMin = Math.min(0, ...values);
   const rawMax = Math.max(0, ...values);
@@ -47,6 +70,12 @@ export function buildChartScale(chart: ChartArtifact): ChartScale {
     height: CHART_VIEWPORT.height - CHART_VIEWPORT.padding.top - CHART_VIEWPORT.padding.bottom,
   };
   const bandWidth = plot.width / Math.max(1, categories.length);
+  const xForValue = (value: number): number =>
+    xSpan === 0 ? plot.x + plot.width / 2 : plot.x + ((value - minX) / xSpan) * plot.width;
+  const xFor = (categoryIndex: number): number =>
+    numericX
+      ? xForValue(Number(categories[categoryIndex] ?? minX))
+      : plot.x + bandWidth * (categoryIndex + 0.5);
 
   return {
     categories,
@@ -54,7 +83,15 @@ export function buildChartScale(chart: ChartArtifact): ChartScale {
     maxY,
     plot,
     bandWidth,
-    xFor: (categoryIndex) => plot.x + bandWidth * (categoryIndex + 0.5),
+    numericX,
+    xFor,
+    xForPoint: (point) => {
+      if (numericX) {
+        return typeof point.x === "number" ? xForValue(point.x) : undefined;
+      }
+      const index = categories.indexOf(String(point.x));
+      return index === -1 ? undefined : xFor(index);
+    },
     yFor: (value) => plot.y + plot.height - ((value - minY) / (maxY - minY || 1)) * plot.height,
   };
 }
@@ -62,8 +99,8 @@ export function buildChartScale(chart: ChartArtifact): ChartScale {
 export function seriesPolyline(series: ChartSeries, scale: ChartScale): string {
   return series.points
     .map((point) => {
-      const index = scale.categories.indexOf(String(point.x));
-      return `${scale.xFor(index === -1 ? 0 : index).toFixed(2)},${scale.yFor(point.y).toFixed(2)}`;
+      const x = scale.xForPoint(point) ?? scale.xFor(0);
+      return `${x.toFixed(2)},${scale.yFor(point.y).toFixed(2)}`;
     })
     .join(" ");
 }
