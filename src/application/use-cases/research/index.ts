@@ -27,4 +27,5 @@ export {
 
 export { citationTarget, formatCitationLink } from "./citationLinks";
 
-export { linkifyUrlCitations } from "./urlCitations";
+export { linkifyUrlCitations, shortUrlCitationLabel } from "./urlCitations";
+export type { LinkifyUrlCitationsOptions } from "./urlCitations";

@@ -3,6 +3,7 @@ import { MarkdownRenderer, setIcon } from "obsidian";
 import { shouldShowAnswerNoteActions } from "@core/conversation";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
+import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import { buildCitationRefs } from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
@@ -90,7 +91,7 @@ function renderAssistantAnswer(
   renderAssistantAnswerHeader(answerEl, message, options);
   void MarkdownRenderer.render(
     options.app,
-    messageMarkdownContent(message),
+    answerMarkdown(message),
     answerEl,
     "",
     options.markdownContext,
@@ -101,6 +102,17 @@ function renderAssistantAnswer(
       app: options.app,
       ...(options.documentImages ? { documentImages: options.documentImages } : {}),
     });
+  });
+}
+
+/**
+ * The model cites web sources with the `[url:https://…]` handle. Left as-is it
+ * renders as inert text, so it becomes a short clickable link before Markdown
+ * rendering; unresolvable handles stay untouched.
+ */
+function answerMarkdown(message: ChatDisplayMessage): string {
+  return linkifyUrlCitations(messageMarkdownContent(message), {
+    label: shortUrlCitationLabel,
   });
 }
 
