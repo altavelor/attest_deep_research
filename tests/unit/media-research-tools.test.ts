@@ -61,6 +61,51 @@ describe("search_images", () => {
     expect(result.value.diagnostics.failedSources).toEqual(["Wikimedia Commons"]);
   });
 
+  it("passes the cancellation signal to providers and stops on abort", async () => {
+    const controller = new AbortController();
+    const source = fakeSource([candidate("a")]);
+    const documentCandidates = vi.fn().mockReturnValue([]);
+    const tool = new ImageSearchTool({
+      registry: { enabledImageSources: () => [source] },
+      artifacts: new AnswerArtifactRegistry(),
+      documentCandidates,
+    });
+
+    const result = (await tool.execute(
+      { query: "cats", limit: 6 } as never,
+      {
+        signal: controller.signal,
+      } as never,
+    )) as any;
+
+    expect(result.ok).toBe(true);
+    expect(documentCandidates).toHaveBeenCalledWith({ query: "cats", signal: controller.signal });
+    expect((source.searchImages as any).mock.calls[0]![1]).toMatchObject({
+      signal: controller.signal,
+    });
+  });
+
+  it("fails fast when the run was already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const source = fakeSource([candidate("a")]);
+    const tool = new ImageSearchTool({
+      registry: { enabledImageSources: () => [source] },
+      artifacts: new AnswerArtifactRegistry(),
+    });
+
+    const result = (await tool.execute(
+      { query: "cats", limit: 6 } as never,
+      {
+        signal: controller.signal,
+      } as never,
+    )) as any;
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe("image-search-cancelled");
+    expect(source.searchImages).not.toHaveBeenCalled();
+  });
+
   it("includes candidates from documents already read in the run", async () => {
     const tool = new ImageSearchTool({
       registry: { enabledImageSources: () => [] },

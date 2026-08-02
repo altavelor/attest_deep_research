@@ -4,8 +4,7 @@ import { VaultWriter } from "@application/ports/vault";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
-import type { ImageCandidate } from "@core/media";
-import type { ImageSearchRegistry } from "@application/ports";
+import type { DocumentImageDiscovery, ImageSearchRegistry } from "@application/ports";
 import {
   ContextIndexDiagnostics,
   IndexDescriptionPromptContext,
@@ -53,7 +52,7 @@ export interface ResearchServiceOptions {
   chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   searchProvider?: SearchProvider;
   imageSearch?: ImageSearchRegistry;
-  documentImageCandidates?: (contextPaths: readonly string[]) => Promise<ImageCandidate[]>;
+  documentImageCandidates?: DocumentImageDiscovery;
   urlStatusChecker?: UrlStatusChecker;
   queryExpansion?: QueryExpansion;
   contextAssembler?: ContextAssembler;
@@ -141,10 +140,6 @@ export class ResearchService implements ConversationEngine {
     });
     const webPipeline = new WebResearchPipeline({
       searchProvider: options.searchProvider,
-      ...(options.imageSearch ? { imageSearch: options.imageSearch } : {}),
-      ...(options.documentImageCandidates
-        ? { documentImageCandidates: options.documentImageCandidates }
-        : {}),
       evidenceLimit,
     });
     this.answerSynthesis = new AnswerSynthesisService({

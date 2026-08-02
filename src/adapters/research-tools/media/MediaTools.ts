@@ -19,7 +19,7 @@ import {
   toAnswerImage,
 } from "@core/media";
 import { validateChartInput } from "@core/media";
-import type { ImageSearchRegistry } from "@application/ports";
+import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports";
 import { defineTool, enumOf, int, raw, str, strArray, text } from "@application/sources/tools";
 import { AnswerArtifactRegistry } from "./AnswerArtifactRegistry";
 
@@ -29,8 +29,10 @@ const FETCHED_PAGES_LABEL = "fetched pages";
 export interface ImageSearchDeps {
   registry: ImageSearchRegistry;
   artifacts: AnswerArtifactRegistry;
-  /** Candidates already available locally (context documents read in this run). */
-  documentCandidates?: () => Promise<ImageCandidate[]> | ImageCandidate[];
+  /** Candidates available locally: context documents and the rebuilt index. */
+  documentCandidates?: (
+    request: ToolDocumentImageQuery,
+  ) => Promise<ImageCandidate[]> | ImageCandidate[];
 }
 
 interface SearchImagesInput {
@@ -75,13 +77,22 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
     }),
     limit: int(1, 24, 10, { description: "Maximum candidates to return." }),
   },
-  execute: async (deps, input) => {
+  execute: async (deps, input, context) => {
+    const signal = context.signal;
     const sources = deps.registry.enabledImageSources();
     const queried: string[] = [];
     const failedSources: string[] = [];
     const collected: ImageCandidate[] = [];
 
-    const local = await Promise.resolve(deps.documentCandidates?.() ?? []);
+    if (signal?.aborted)
+      return toolFailure("image-search-cancelled", "Image search was cancelled.");
+
+    const local = await Promise.resolve(
+      deps.documentCandidates?.({
+        query: input.query,
+        ...(signal ? { signal } : {}),
+      }) ?? [],
+    );
     if (local.length > 0) {
       queried.push("vault documents");
       collected.push(...local.slice(0, input.limit));
@@ -89,8 +100,14 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
 
     let effectiveQuery = input.query;
     for (const variant of imageQueryVariants(input.query)) {
+      if (signal?.aborted) break;
       const settled = await Promise.allSettled(
-        sources.map((source) => source.searchImages(variant, { limit: input.limit })),
+        sources.map((source) =>
+          source.searchImages(variant, {
+            limit: input.limit,
+            ...(signal ? { signal } : {}),
+          }),
+        ),
       );
       let found = 0;
       settled.forEach((outcome, index) => {
@@ -117,6 +134,9 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
     const results = [...registered, ...fromFetchedPages];
 
     if (results.length === 0) {
+      if (signal?.aborted) {
+        return toolFailure("image-search-cancelled", "Image search was cancelled.");
+      }
       return imageSearchFailure(sources.length, failedSources, local.length);
     }
     if (fromFetchedPages.length > 0 && !queried.includes(FETCHED_PAGES_LABEL)) {
@@ -184,15 +204,14 @@ export interface PresentGalleryOutput {
   imageCount: number;
 }
 
-/** Builds a gallery from 1–4 unique handles discovered earlier in the same run. */
+/** Builds a gallery from unique handles discovered earlier in the same run. */
 export const PresentImageGalleryTool = defineTool<
   { artifacts: AnswerArtifactRegistry },
   PresentGalleryInput,
   PresentGalleryOutput
 >({
   name: PRESENT_IMAGE_GALLERY_TOOL,
-  description:
-    "Show up to 12 images found in this run below the answer. Pass only imageIds returned by search_images; URLs are rejected. Keep the citation for each image in nearby prose.",
+  description: `Show up to ${ARTIFACT_LIMITS.galleryImages} images found in this run below the answer. Pass only imageIds returned by search_images; URLs are rejected. Keep the citation for each image in nearby prose.`,
   schema: {
     imageIds: strArray(ARTIFACT_LIMITS.galleryImages, 64, {
       description: `Between 1 and ${ARTIFACT_LIMITS.galleryImages} imageIds from search_images.`,

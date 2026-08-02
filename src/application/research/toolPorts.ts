@@ -5,7 +5,7 @@
 // root. This keeps application/use-cases free of any adapters import.
 
 import type { SearchProvider } from "@application/ports/web";
-import type { ImageSearchRegistry } from "@application/ports/images";
+import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports/images";
 import type { AnswerArtifact, ImageCandidate } from "@core/media";
 import type { VaultWriter } from "@application/ports/vault";
 import type { SubAgentPort } from "./subAgentPort";
@@ -71,8 +71,10 @@ export interface ResearchToolsetOptions {
   downloadFolder?: string;
   /** Enabled image-search resources; absent ⇒ no provider-backed image discovery. */
   imageSearch?: ImageSearchRegistry;
-  /** Image candidates already available from documents in this request's context. */
-  documentImageCandidates?: () => Promise<ImageCandidate[]> | ImageCandidate[];
+  /** Image candidates available from context documents and the rebuilt index. */
+  documentImageCandidates?: (
+    request: ToolDocumentImageQuery,
+  ) => Promise<ImageCandidate[]> | ImageCandidate[];
 }
 
 /** Artifacts produced during a run; the strategy attaches them to the answer. */

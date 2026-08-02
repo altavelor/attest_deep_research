@@ -11,6 +11,7 @@ import {
 import {
   IMAGE_MANIFEST_FILE,
   type ImageManifestEntry,
+  isImageManifestEntry,
   REQUIRED_INDEX_VERSION,
   serializeImageManifest,
 } from "./FileVectorImageManifest";
@@ -71,6 +72,11 @@ export class FileVectorIndexPersistence {
 
   pathFor(relativePath: string): string {
     return join(this.folder, relativePath);
+  }
+
+  /** Image manifest of the last full rebuild; empty when the index predates it. */
+  async readImageManifest(): Promise<ImageManifestEntry[]> {
+    return readJsonlIndexFile(this.pathFor(IMAGE_MANIFEST_FILE), isImageManifestEntry);
   }
 
   async readManifest(): Promise<FileVectorManifest | null> {

@@ -139,8 +139,11 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       ...(this.deps.imageSearch ? { imageSearch: this.deps.imageSearch } : {}),
       ...(this.deps.documentImageCandidates
         ? {
-            documentImageCandidates: () =>
-              this.deps.documentImageCandidates!(request.contextPaths ?? []),
+            documentImageCandidates: (query) =>
+              this.deps.documentImageCandidates!({
+                ...query,
+                contextPaths: request.contextPaths ?? [],
+              }),
           }
         : {}),
       subAgentRunner: this.deps.subAgentRunner,

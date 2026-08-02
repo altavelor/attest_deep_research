@@ -43,6 +43,7 @@ import {
   createDocumentMetadataStoreForProfile,
   createDocumentSummaryStoreForProfile,
   createRetrieverForProfile,
+  createVectorIndexStoreForProfile,
 } from "./indexingFactory";
 
 export type { CompositionContext } from "./CompositionContext";
@@ -151,7 +152,10 @@ export function createResearchService(
     },
     searchProvider: createSearchProvider(ctx),
     ...(createImageSearchRegistry(ctx) ? { imageSearch: createImageSearchRegistry(ctx)! } : {}),
-    documentImageCandidates: createDocumentImageCandidates(ctx),
+    documentImageCandidates: createDocumentImageCandidates(
+      ctx,
+      createVectorIndexStoreForProfile(ctx, indexProfile),
+    ),
     urlStatusChecker: new FetchUrlStatusChecker({ fetch: obsidianRequestFetch }),
     toolsEnabled,
     toolCapabilities: toolResolution.capabilities,
