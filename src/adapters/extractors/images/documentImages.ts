@@ -39,6 +39,7 @@ export function extractDocumentImages(input: DocumentImageInput): DocumentImageR
 export function documentImageCandidates(
   documentPath: string,
   refs: readonly DocumentImageRef[],
+  contentHash?: string,
 ): ImageCandidate[] {
   const label = fileNameFromPath(documentPath);
   return refs.map((ref, index) => ({
@@ -48,6 +49,7 @@ export function documentImageCandidates(
     vaultSource: {
       documentPath: ref.linkedPath ?? documentPath,
       locator: ref.linkedPath ? `file` : ref.locator,
+      ...(contentHash && !ref.linkedPath ? { contentHash } : {}),
     },
     alt: clampText(ref.alt, 300) ?? `Image ${index + 1} from ${label}`,
     ...(clampText(ref.caption, 500) ? { caption: clampText(ref.caption, 500)! } : {}),

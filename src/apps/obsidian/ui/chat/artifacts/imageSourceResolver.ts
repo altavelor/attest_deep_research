@@ -44,6 +44,7 @@ export async function resolveAnswerImageSource(
   const resolved = await options.documentImages?.resolve(
     vaultSource.documentPath,
     vaultSource.locator,
+    vaultSource.contentHash,
   );
   if (!resolved) return undefined;
 

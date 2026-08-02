@@ -78,6 +78,27 @@ describe("answer artifact contracts", () => {
     ).toBe(false);
   });
 
+  it("keeps a bounded document fingerprint on the vault source", () => {
+    const withVault = (vaultSource: unknown) => ({
+      type: "image-gallery",
+      id: "g4",
+      images: [
+        {
+          id: "img1",
+          vaultSource,
+          alt: "Figure",
+          sourceUrl: "docs/report.pdf",
+          sourceLabel: "report.pdf",
+        },
+      ],
+    });
+    const base = { documentPath: "docs/report.pdf", locator: "page:1:0" };
+    expect(isAnswerArtifact(withVault({ ...base, contentHash: "abc" }))).toBe(true);
+    expect(isAnswerArtifact(withVault(base))).toBe(true);
+    expect(isAnswerArtifact(withVault({ ...base, contentHash: "x".repeat(200) }))).toBe(false);
+    expect(isAnswerArtifact(withVault({ ...base, contentHash: 7 }))).toBe(false);
+  });
+
   it("reapplies pie constraints to persisted charts", () => {
     const pie = (series: unknown) => ({
       type: "chart",
