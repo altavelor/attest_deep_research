@@ -33,6 +33,8 @@ export {
   WikimediaCommonsImageSource,
 } from "./images/WikimediaCommonsImageSource";
 export type { ImageSourceHttpOptions } from "./images/imageSourceHttp";
+export { extractPageImages } from "./images/pageImages";
+export type { PageImageExtractionInput } from "./images/pageImages";
 
 export { createFetchFallbackProviders } from "./fetch/fallbacks";
 export { JinaReaderFetchProvider } from "./fetch/JinaReaderFetchProvider";

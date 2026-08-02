@@ -15,6 +15,7 @@ import {
   parseDuckDuckGoResults,
 } from "./DuckDuckGoParser";
 import { HostRequestThrottle } from "./HostRequestThrottle";
+import { extractPageImages } from "./images/pageImages";
 import { isDocumentContentType, WebPageFetcher } from "./WebPageFetcher";
 
 export interface DuckDuckGoSearchProviderOptions {
@@ -203,6 +204,9 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       bytes: raw.byteLength,
       truncated: extracted.length > maxContentChars,
       redirects: raw.redirects,
+      ...(raw.contentType === "text/plain"
+        ? {}
+        : { pageImages: extractPageImages({ html: raw.rawText, baseUrl: raw.finalUrl }) }),
     };
   }
 

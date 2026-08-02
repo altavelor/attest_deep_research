@@ -1,6 +1,7 @@
 // Application ports: web search / fetch contracts (stage 1, task 1.3).
 
 import { WebSourceReference } from "@core/model";
+import type { ImageCandidate } from "@core/media";
 import { ToolError } from "@core/agent";
 import type {
   WebQueryIntent,
@@ -44,6 +45,8 @@ export interface WebPageFetchSuccess {
   bytes: number;
   truncated: boolean;
   redirects: string[];
+  /** Bounded image candidates referenced by the page; absent for non-HTML content. */
+  pageImages?: ImageCandidate[];
 }
 
 export interface WebPageFetchFailure {

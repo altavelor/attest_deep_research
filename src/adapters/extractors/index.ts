@@ -35,3 +35,19 @@ export { PdfTextCache } from "./PdfTextCache";
 export type { PdfTextCacheEntry, PdfTextCacheKey } from "./PdfTextCache";
 
 export { stableId } from "./common";
+
+export {
+  documentImageCandidates,
+  DocxImageExtractor,
+  EpubImageExtractor,
+  extractDocumentImages,
+  extractFb2ImageRefs,
+  extractMarkdownImageRefs,
+  extractPdfImageRefs,
+  Fb2ImageExtractor,
+  MarkdownImageExtractor,
+  PdfImageExtractor,
+  supportsDocumentImages,
+  TextImageExtractor,
+} from "./images";
+export type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./images";
