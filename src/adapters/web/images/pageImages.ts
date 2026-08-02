@@ -124,14 +124,23 @@ function hostOf(value: string): string | undefined {
 
 function decodeEntities(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) =>
-      String.fromCodePoint(Number.parseInt(code, 16)),
+    .replace(/&#x([0-9a-f]+);/gi, (match, code: string) =>
+      codePointOrEntity(match, Number.parseInt(code, 16)),
     )
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#(\d+);/g, (match, code: string) =>
+      codePointOrEntity(match, Number.parseInt(code, 10)),
+    )
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/<[^>]*>/g, " ");
+}
+
+/** Keeps an out-of-range or surrogate numeric entity verbatim instead of throwing. */
+function codePointOrEntity(entity: string, codePoint: number): string {
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
+  if (codePoint >= 0xd800 && codePoint <= 0xdfff) return entity;
+  return String.fromCodePoint(codePoint);
 }
