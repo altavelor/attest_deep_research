@@ -1,9 +1,10 @@
 // Image extraction for the zip-based document formats: DOCX (`word/media` plus
 // relationship metadata) and EPUB (manifest images referenced from the spine).
 // Archive member paths are treated as untrusted: traversal entries and oversized
-// members are skipped.
+// members are skipped, and the decoded size is read from the image header
+// because encoded byte length cannot bound how much memory decoding needs.
 
-import { imageFormatFromMimeType, imageFormatFromPath } from "@core/media";
+import { hasDecodableDimensions, imageFormatFromMimeType, imageFormatFromPath } from "@core/media";
 import { IMAGE_EXTRACTION_LIMITS } from "@core/media";
 import { decodeXmlEntities, ZipArchive } from "../common";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
@@ -66,6 +67,7 @@ function collectArchiveImages(
     const bytes = archive.bytes(entry);
     if (!bytes || bytes.length === 0) continue;
     if (bytes.length > IMAGE_EXTRACTION_LIMITS.maxEncodedBytes) continue;
+    if (!hasDecodableDimensions(bytes, format)) continue;
     totalBytes += bytes.length;
     if (totalBytes > IMAGE_EXTRACTION_LIMITS.maxTotalEncodedBytes) break;
 
