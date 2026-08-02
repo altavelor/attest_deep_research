@@ -176,13 +176,23 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.keepPausedAfterRun();
     } else {
-      if (imageManifestWritten) {
+      if (imageManifestWritten && this.isCompleteRun()) {
         this.progress.setIndexVersion(REQUIRED_INDEX_VERSION);
       }
       this.progress.complete();
     }
 
     return this.getState();
+  }
+
+  /**
+   * True when the run covered every file. A rebuild that skipped a failed
+   * document or deferred files produced an incomplete image manifest, so the
+   * profile must keep its rebuild-required state.
+   */
+  private isCompleteRun(): boolean {
+    const state = this.getState();
+    return state.failedFiles === 0 && state.deferredFiles === 0;
   }
 
   private async processFiles(

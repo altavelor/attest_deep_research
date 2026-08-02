@@ -724,6 +724,46 @@ describe("IndexingService image manifest", () => {
     ]);
   });
 
+  it("keeps a partial rebuild below the required index version", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const failing = new FailingExtractor(".md", "Research/broken.md");
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, noteWithImage),
+        file("Research/broken.md", 1, "boom"),
+      ]),
+      extractors: [failing],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(state.failedFiles).toBe(1);
+    expect(state.indexVersion).toBeUndefined();
+  });
+
+  it("completes a rebuild whose store cannot open a manifest-only session", async () => {
+    const indexStore = new UninitializedWriteStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new EmptyExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(state.status).toBe("idle");
+    expect(state.indexVersion).toBeUndefined();
+  });
+
   it("writes no manifest and no version bump on an incremental run", async () => {
     const indexStore = new ImageManifestIndexStore();
     const service = new IndexingService({
@@ -742,3 +782,40 @@ describe("IndexingService image manifest", () => {
     expect(state.indexVersion).toBeUndefined();
   });
 });
+
+class FailingExtractor implements Extractor {
+  constructor(
+    private readonly extension: string,
+    private readonly failingPath: string,
+  ) {}
+
+  supports(path: string): boolean {
+    return path.endsWith(this.extension);
+  }
+
+  async extract(input: { path: string; data: ArrayBuffer | string }): Promise<ExtractedChunk[]> {
+    if (input.path === this.failingPath) throw new Error("extraction failed");
+    return [markdownChunk(input.path, input.path, String(input.data))];
+  }
+}
+
+class EmptyExtractor implements Extractor {
+  constructor(private readonly extension: string) {}
+
+  supports(path: string): boolean {
+    return path.endsWith(this.extension);
+  }
+
+  async extract(): Promise<ExtractedChunk[]> {
+    return [];
+  }
+}
+
+class UninitializedWriteStore extends FakeIndexStore {
+  async beginWrite(): Promise<IndexStoreWriteSession> {
+    throw new IxplorerError({
+      code: "INDEX_UNAVAILABLE",
+      message: "The file-backed index has not been initialized.",
+    });
+  }
+}
