@@ -17,6 +17,8 @@ export type WebSourceCategory =
 export interface WebSourceCapabilities {
   search: boolean;
   fetchPage: boolean;
+  /** Serves an image endpoint reused by image search; needs no extra credentials. */
+  images?: boolean;
 }
 
 /** Declarative credential field; drives settings UI generation and enable-gating. */
@@ -87,6 +89,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey()],
     homepage: "https://brave.com/search/api/",
     freeTierNote: "2,000 queries/month free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "google-cse",
@@ -96,6 +99,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey(), { key: "engineId", label: "Search engine ID (cx)", secret: false }],
     homepage: "https://programmablesearchengine.google.com/",
     freeTierNote: "100 queries/day free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "serper",
@@ -105,6 +109,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey()],
     homepage: "https://serper.dev/",
     freeTierNote: "2,500 queries free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "searxng",
@@ -121,6 +126,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     ],
     homepage: "https://docs.searxng.org/",
     freeTierNote: "Free (own instance; JSON format must be enabled)",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "tavily",

@@ -60,7 +60,7 @@ export interface ChartArtifact {
 export type AnswerArtifact = ImageGalleryArtifact | ChartArtifact;
 
 export const ARTIFACT_LIMITS = {
-  galleryImages: 4,
+  galleryImages: 12,
   chartSeries: 4,
   chartPointsPerSeries: 50,
   titleLength: 200,

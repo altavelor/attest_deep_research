@@ -15,6 +15,7 @@ import {
   CHART_TYPES,
   ImageCandidate,
   imageQueryVariants,
+  rankImageCandidates,
   toAnswerImage,
 } from "@core/media";
 import { validateChartInput } from "@core/media";
@@ -72,7 +73,7 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
       required: true,
       description: "Two or three concrete subject words describing what the image shows.",
     }),
-    limit: int(1, 12, 6, { description: "Maximum candidates to return." }),
+    limit: int(1, 24, 10, { description: "Maximum candidates to return." }),
   },
   execute: async (deps, input) => {
     const sources = deps.registry.enabledImageSources();
@@ -106,7 +107,9 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
       if (found > 0) break;
     }
 
-    const registered = deps.artifacts.register(collected.slice(0, input.limit));
+    const registered = deps.artifacts.register(
+      rankImageCandidates(collected, input.query, input.limit),
+    );
     const fromFetchedPages = deps.artifacts
       .registeredByOrigin("page")
       .filter((entry) => !registered.some((item) => item.handle === entry.handle))
@@ -189,10 +192,10 @@ export const PresentImageGalleryTool = defineTool<
 >({
   name: PRESENT_IMAGE_GALLERY_TOOL,
   description:
-    "Show 1–4 images found in this run below the answer. Pass only imageIds returned by search_images; URLs are rejected. Keep the citation for each image in nearby prose.",
+    "Show up to 12 images found in this run below the answer. Pass only imageIds returned by search_images; URLs are rejected. Keep the citation for each image in nearby prose.",
   schema: {
     imageIds: strArray(ARTIFACT_LIMITS.galleryImages, 64, {
-      description: "Between one and four imageIds from search_images.",
+      description: `Between 1 and ${ARTIFACT_LIMITS.galleryImages} imageIds from search_images.`,
     }),
     title: str(ARTIFACT_LIMITS.titleLength, { description: "Optional gallery heading." }),
   },

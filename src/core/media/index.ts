@@ -36,6 +36,13 @@ export {
 export type { EligibleImageFormat, ImageUrlCheck } from "./imagePolicy";
 
 export { imageQueryVariants } from "./imageQuery";
+export {
+  queryTerms,
+  rankImageCandidates,
+  RELEVANCE_CUTOFF,
+  scoreImageCandidate,
+} from "./imageRanking";
+export type { ScoredImageCandidate } from "./imageRanking";
 export { clampText, toAnswerImage } from "./imageCandidate";
 export type { ImageCandidate, ImageCandidateOrigin } from "./imageCandidate";
 

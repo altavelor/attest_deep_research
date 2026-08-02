@@ -17,7 +17,12 @@ export interface ImageSourceHttpOptions {
 
 export async function requestImageJson(
   url: string,
-  init: { headers?: Record<string, string>; signal?: AbortSignal },
+  init: {
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+    method?: "GET" | "POST";
+    body?: string;
+  },
   options: ImageSourceHttpOptions,
   sourceId: string,
 ): Promise<unknown> {
@@ -32,8 +37,9 @@ export async function requestImageJson(
 
   try {
     const response = await fetchImpl(url, {
-      method: "GET",
+      method: init.method ?? "GET",
       headers: { accept: "application/json", ...init.headers },
+      ...(init.body !== undefined ? { body: init.body } : {}),
       signal: controller.signal,
     });
     if (!response.ok) {

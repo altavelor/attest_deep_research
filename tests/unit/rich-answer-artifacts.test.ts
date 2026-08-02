@@ -9,6 +9,7 @@ import {
   validateImageUrl,
   isSafeVaultImagePath,
   hasDisplayableDimensions,
+  ARTIFACT_LIMITS,
   imageQueryVariants,
   type AnswerArtifact,
   type ChartArtifact,
@@ -66,12 +67,15 @@ describe("answer artifact contracts", () => {
     expect(artifacts).toEqual([gallery]);
   });
 
-  it("rejects galleries above the four-image limit", () => {
-    const images = Array.from({ length: 5 }, (_, index) => ({
-      ...gallery.images[0]!,
-      id: `img${index}`,
-    }));
-    expect(isAnswerArtifact({ ...gallery, images })).toBe(false);
+  it("accepts a gallery up to the image limit and rejects one above it", () => {
+    const images = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ ...gallery.images[0]!, id: `img${index}` }));
+    expect(isAnswerArtifact({ ...gallery, images: images(ARTIFACT_LIMITS.galleryImages) })).toBe(
+      true,
+    );
+    expect(
+      isAnswerArtifact({ ...gallery, images: images(ARTIFACT_LIMITS.galleryImages + 1) }),
+    ).toBe(false);
   });
 });
 

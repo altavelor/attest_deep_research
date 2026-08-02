@@ -27,6 +27,15 @@ export { HttpWebSearchSource } from "./sources/HttpWebSearchSource";
 export type { HttpWebSearchSourceOptions } from "./sources/HttpWebSearchSource";
 
 export { createImageSearchSources, StaticImageSearchRegistry } from "./images/registry";
+export { HttpImageSearchSource } from "./images/HttpImageSearchSource";
+export {
+  braveImageDefinition,
+  googleCseImageDefinition,
+  IMAGE_SOURCE_DEFINITIONS,
+  searxngImageDefinition,
+  serperImageDefinition,
+} from "./images/engineDefinitions";
+export type { ImageSourceDefinition } from "./images/engineDefinitions";
 export { OpenverseImageSource, parseOpenversePayload } from "./images/OpenverseImageSource";
 export {
   parseCommonsPayload,

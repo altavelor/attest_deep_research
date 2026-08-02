@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  braveImageDefinition,
   createImageSearchSources,
+  HttpImageSearchSource,
+  IMAGE_SOURCE_DEFINITIONS,
   OpenverseImageSource,
   parseCommonsPayload,
   parseOpenversePayload,
@@ -9,6 +12,7 @@ import {
 } from "@adapters/web";
 import {
   findWebSourceDescriptor,
+  WEB_SOURCE_CATALOG,
   OPENVERSE_SOURCE_ID,
   WIKIMEDIA_COMMONS_SOURCE_ID,
   type WebSourceProfile,
@@ -148,6 +152,132 @@ describe("Openverse image source", () => {
     await source.searchImages("mountains");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer secret");
+  });
+});
+
+describe("search-engine image endpoints", () => {
+  const engineFixtures: Record<string, { body: unknown; expected: Record<string, unknown> }> = {
+    brave: {
+      body: {
+        results: [
+          {
+            title: "Solar system",
+            url: "https://astro.example.com/solar",
+            source: "astro.example.com",
+            thumbnail: { src: "https://cdn.brave.com/thumb.jpg" },
+            properties: {
+              url: "https://astro.example.com/img/solar.jpg",
+              width: 1200,
+              height: 800,
+            },
+          },
+        ],
+      },
+      expected: {
+        fullUrl: "https://astro.example.com/img/solar.jpg",
+        sourceUrl: "https://astro.example.com/solar",
+        sourceLabel: "astro.example.com · via Brave Search",
+      },
+    },
+    "google-cse": {
+      body: {
+        items: [
+          {
+            title: "Solar system",
+            link: "https://astro.example.com/img/solar.jpg",
+            displayLink: "astro.example.com",
+            image: {
+              contextLink: "https://astro.example.com/solar",
+              thumbnailLink: "https://cdn.google.com/thumb.jpg",
+              width: 1200,
+              height: 800,
+            },
+          },
+        ],
+      },
+      expected: {
+        fullUrl: "https://astro.example.com/img/solar.jpg",
+        sourceUrl: "https://astro.example.com/solar",
+        sourceLabel: "astro.example.com · via Google Programmable Search",
+      },
+    },
+    serper: {
+      body: {
+        images: [
+          {
+            title: "Solar system",
+            imageUrl: "https://astro.example.com/img/solar.jpg",
+            thumbnailUrl: "https://cdn.serper.dev/thumb.jpg",
+            link: "https://astro.example.com/solar",
+            source: "astro.example.com",
+            imageWidth: 1200,
+            imageHeight: 800,
+          },
+        ],
+      },
+      expected: {
+        fullUrl: "https://astro.example.com/img/solar.jpg",
+        sourceUrl: "https://astro.example.com/solar",
+        sourceLabel: "astro.example.com · via Serper.dev",
+      },
+    },
+    searxng: {
+      body: {
+        results: [
+          {
+            title: "Solar system",
+            img_src: "https://astro.example.com/img/solar.jpg",
+            thumbnail_src: "https://searx.example.org/thumb.jpg",
+            url: "https://astro.example.com/solar",
+            engine: "bing images",
+            img_width: 1200,
+            img_height: 800,
+          },
+        ],
+      },
+      expected: {
+        fullUrl: "https://astro.example.com/img/solar.jpg",
+        sourceUrl: "https://astro.example.com/solar",
+        sourceLabel: "bing images · via SearXNG (self-hosted)",
+      },
+    },
+  };
+
+  for (const definition of IMAGE_SOURCE_DEFINITIONS) {
+    const fixture = engineFixtures[definition.sourceId]!;
+
+    it(`${definition.sourceId}: builds the image request and parses the payload`, async () => {
+      const descriptor = findWebSourceDescriptor(definition.sourceId)!;
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(fixture.body));
+      const source = new HttpImageSearchSource(
+        descriptor,
+        definition,
+        { apiKey: "k", engineId: "cx", baseUrl: "https://searx.example.org" },
+        { fetch: fetchMock as typeof fetch },
+      );
+
+      const results = await source.searchImages("solar system", { limit: 5 });
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject(fixture.expected);
+      expect(results[0]!.licensed).toBeUndefined();
+
+      const [url, init] = fetchMock.mock.calls[0]!;
+      const request = `${String(url)} ${JSON.stringify(init)}`;
+      expect(request.toLowerCase()).toContain("image");
+    });
+  }
+
+  it("covers every engine that declares image support", () => {
+    const declared = WEB_SOURCE_CATALOG.filter((entry) => entry.capabilities?.images === true)
+      .map((entry) => entry.id)
+      .sort();
+    expect(IMAGE_SOURCE_DEFINITIONS.map((entry) => entry.sourceId).sort()).toEqual(declared);
+  });
+
+  it("drops entries without a hosting page or image url", () => {
+    expect(
+      braveImageDefinition.parseResponse({ results: [{ title: "x" }] }, "Brave Search"),
+    ).toEqual([]);
   });
 });
 
