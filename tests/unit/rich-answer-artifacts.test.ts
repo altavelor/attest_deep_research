@@ -77,6 +77,48 @@ describe("answer artifact contracts", () => {
       isAnswerArtifact({ ...gallery, images: images(ARTIFACT_LIMITS.galleryImages + 1) }),
     ).toBe(false);
   });
+
+  it("rejects persisted images whose source or hotlink is not a safe url", () => {
+    const withSource = (image: Record<string, unknown>): AnswerArtifact => ({
+      type: "image-gallery",
+      id: "g2",
+      images: [{ ...gallery.images[0]!, ...image }],
+    });
+
+    expect(isAnswerArtifact(withSource({ sourceUrl: "javascript:alert(1)" }))).toBe(false);
+    expect(isAnswerArtifact(withSource({ sourceUrl: "http://example.com/page" }))).toBe(false);
+    expect(isAnswerArtifact(withSource({ sourceUrl: "https://127.0.0.1/page" }))).toBe(false);
+    expect(isAnswerArtifact(withSource({ fullUrl: "javascript:alert(1)" }))).toBe(false);
+    expect(
+      isAnswerArtifact(withSource({ licenceUrl: "javascript:alert(1)", licenceName: "CC" })),
+    ).toBe(false);
+    expect(
+      sanitizeAnswerArtifacts([withSource({ sourceUrl: "javascript:alert(1)" })]),
+    ).toBeUndefined();
+  });
+
+  it("keeps a vault-backed image whose source is its contained document", () => {
+    const local = {
+      type: "image-gallery",
+      id: "g3",
+      images: [
+        {
+          id: "img1",
+          vaultSource: { documentPath: "docs/report.pdf", locator: "page:1:0" },
+          alt: "Figure",
+          sourceUrl: "docs/report.pdf",
+          sourceLabel: "report.pdf",
+        },
+      ],
+    };
+    expect(isAnswerArtifact(local)).toBe(true);
+    expect(
+      isAnswerArtifact({
+        ...local,
+        images: [{ ...local.images[0]!, sourceUrl: "../outside/report.pdf" }],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("image url and path policy", () => {
