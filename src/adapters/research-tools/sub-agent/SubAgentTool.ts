@@ -58,7 +58,10 @@ export const SubAgentTool = defineTool<
     "deep web research, cross-checking facts, reading and comparing several notes — " +
     "especially when several independent facets can run in parallel (up to 3 at once).",
   schema: {
-    task: str(MAX_TASK_CHARS, { required: true }),
+    task: str(MAX_TASK_CHARS, {
+      required: true,
+      description: "Self-contained task for the sub-agent, including the success criteria.",
+    }),
   },
   parse: parseSubAgentInput,
   execute: async (deps, input, context) => {
