@@ -167,6 +167,14 @@ export class ZipArchive {
   text(path: string): string | undefined {
     return this.entries.get(path)?.toString("utf8");
   }
+
+  bytes(path: string): Buffer | undefined {
+    return this.entries.get(path);
+  }
+
+  names(): string[] {
+    return [...this.entries.keys()];
+  }
 }
 
 function findEndOfCentralDirectory(buffer: Buffer): number {
