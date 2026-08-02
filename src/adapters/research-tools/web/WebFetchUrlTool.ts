@@ -1,10 +1,12 @@
-import { SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
-import { EvidenceRegistry } from "@application/sources";
 import { toolFailure } from "@core/agent";
 import { WEB_FETCH_URL_TOOL } from "@core/agent";
 import { defineTool, str } from "@application/sources/tools";
-import { FetchWebPageOutput, fetchRegisteredWebPage } from "./fetchRegisteredWebPage";
+import {
+  FetchRegisteredWebPageDeps,
+  FetchWebPageOutput,
+  fetchRegisteredWebPage,
+} from "./fetchRegisteredWebPage";
 
 interface FetchUrlInput {
   url: string;
@@ -16,7 +18,7 @@ interface FetchUrlInput {
  * the same evidence/citation pipeline as search-derived results.
  */
 export const WebFetchUrlTool = defineTool<
-  { provider: SearchProvider; evidence: EvidenceRegistry },
+  FetchRegisteredWebPageDeps,
   FetchUrlInput,
   FetchWebPageOutput
 >({
