@@ -20,15 +20,15 @@ Draft. Add safe, attributable image galleries, Markdown tables, and simple chart
 
 ## Architecture
 
-| Layer | Responsibility |
-| --- | --- |
-| `src/core/answer.ts` / conversation | Backward-compatible artifact DTOs and message propagation. |
-| `src/application/ports/` | Image search, vault-document image resolution, and web-fetch contracts. |
-| `src/adapters/research-tools/` | Search, extraction, validation, per-run registry, and tool registration. |
-| `src/adapters/indexing/store/` | Compact image manifest and global index-version state. |
-| `src/adapters/web-sources/` | Wikimedia Commons and Openverse implementations. |
-| `src/apps/obsidian/ui/chat/` | Markdown table treatment, gallery/lightbox, chart renderer, and stale-index notice. |
-| `src/apps/obsidian/ui/settings/` | Web-resource toggles and `Reindex required` index tag. |
+| Layer                               | Responsibility                                                                      |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `src/core/answer.ts` / conversation | Backward-compatible artifact DTOs and message propagation.                          |
+| `src/application/ports/`            | Image search, vault-document image resolution, and web-fetch contracts.             |
+| `src/adapters/research-tools/`      | Search, extraction, validation, per-run registry, and tool registration.            |
+| `src/adapters/indexing/store/`      | Compact image manifest and global index-version state.                              |
+| `src/adapters/web-sources/`         | Wikimedia Commons and Openverse implementations.                                    |
+| `src/apps/obsidian/ui/chat/`        | Markdown table treatment, gallery/lightbox, chart renderer, and stale-index notice. |
+| `src/apps/obsidian/ui/settings/`    | Web-resource toggles and `Reindex required` index tag.                              |
 
 ## Contracts
 
@@ -60,11 +60,11 @@ interface AnswerImage {
 
 `ResearchAnswer.artifacts` is optional; missing means no artefacts. IDs are opaque and per-answer. Persisted artifacts never contain OS paths, raw image bytes, archive member paths, or session resource URLs.
 
-| Tool | Availability | Contract |
-| --- | --- | --- |
-| `search_images` | At least one image resource enabled | Searches enabled resources; returns normalized, bounded candidates with attribution and licence metadata when supplied. |
-| `present_image_gallery` | Image candidates exist in the current run | Accepts 1–4 unique current-run IDs only; it never accepts URLs. |
-| `present_chart` | Model supports tools | Accepts only chart DTO data: ≤4 series and ≤50 points/series; finite values; pie has one non-negative series with a positive total. |
+| Tool                    | Availability                              | Contract                                                                                                                            |
+| ----------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `search_images`         | At least one image resource enabled       | Searches enabled resources; returns normalized, bounded candidates with attribution and licence metadata when supplied.             |
+| `present_image_gallery` | Image candidates exist in the current run | Accepts 1–4 unique current-run IDs only; it never accepts URLs.                                                                     |
+| `present_chart`         | Model supports tools                      | Accepts only chart DTO data: ≤4 series and ≤50 points/series; finite values; pie has one non-negative series with a positive total. |
 
 Invalid inputs produce no artifact and never fail the textual answer. The synthesis prompt uses visuals only when they improve the answer and retains citations in nearby prose/captions.
 
@@ -77,16 +77,16 @@ Invalid inputs produce no artifact and never fail the textual answer. The synthe
 
 ## Image sources and extraction
 
-| Source | Required behavior |
-| --- | --- |
-| Wikimedia Commons | Preserve file page, thumbnail/full URL, title, creator/credit, licence name/URL, and attribution requirement. |
-| Openverse | Preserve landing page, thumbnail/full URL, creator where supplied, licence/version/URL, and attribution text. Treat licence data as discovery metadata, not a legal guarantee. |
-| Fetched page | From registered `fetch_web_page` results only: collect up to 8 candidates, preferring `og:image`/`twitter:image`, then content images in document order. Resolve relative URLs, deduplicate, and keep page title/canonical URL as attribution. |
-| `.md` / `.txt` | Extract supported Obsidian wiki embeds and vault-relative Markdown image links. Plain text has no other intrinsic image form. |
-| `.pdf` | Extract raster image objects using page number and ordinal as locator. |
-| `.docx` | Extract OOXML `word/media` resources and relationship metadata where available. |
-| `.epub` | Extract manifest images referenced from spine content. |
-| `.fb2` | Extract referenced base64 `<binary>` images. |
+| Source            | Required behavior                                                                                                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wikimedia Commons | Preserve file page, thumbnail/full URL, title, creator/credit, licence name/URL, and attribution requirement.                                                                                                                                  |
+| Openverse         | Preserve landing page, thumbnail/full URL, creator where supplied, licence/version/URL, and attribution text. Treat licence data as discovery metadata, not a legal guarantee.                                                                 |
+| Fetched page      | From registered `fetch_web_page` results only: collect up to 8 candidates, preferring `og:image`/`twitter:image`, then content images in document order. Resolve relative URLs, deduplicate, and keep page title/canonical URL as attribution. |
+| `.md` / `.txt`    | Extract supported Obsidian wiki embeds and vault-relative Markdown image links. Plain text has no other intrinsic image form.                                                                                                                  |
+| `.pdf`            | Extract raster image objects using page number and ordinal as locator.                                                                                                                                                                         |
+| `.docx`           | Extract OOXML `word/media` resources and relationship metadata where available.                                                                                                                                                                |
+| `.epub`           | Extract manifest images referenced from spine content.                                                                                                                                                                                         |
+| `.fb2`            | Extract referenced base64 `<binary>` images.                                                                                                                                                                                                   |
 
 Eligible formats are PNG, JPEG, WebP, GIF, and AVIF. Reject SVG, HTML images, remote Markdown image URLs, `data:`/`blob:`/`file:`/`javascript:` URLs, tracking pixels, invalid HTTPS URLs, and unsupported encodings. Extraction occurs only for documents in the current request/context or read by tools; it never scans the vault just to discover images.
 
