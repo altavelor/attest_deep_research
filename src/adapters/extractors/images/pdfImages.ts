@@ -1,5 +1,6 @@
 import { hasDecodableDimensions, IMAGE_EXTRACTION_LIMITS } from "@core/media";
 import { readInputBuffer } from "../common";
+import { pdfRasterToPng, type PdfRasterSpec } from "./pdfRasterPng";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
 
 const OBJECT_HEADER = /(\d+)\s+(\d+)\s+obj\b/g;
@@ -44,7 +45,8 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
       Math.min(object.headerEnd + 2000, object.end),
     );
     if (!/\/Subtype\s*\/Image/.test(header)) continue;
-    if (!/\/Filter\s*(\[\s*)?\/DCTDecode/.test(header)) continue;
+    const encoding = rasterEncoding(header);
+    if (!encoding) continue;
 
     const width = dictNumber(header, "Width");
     const height = dictNumber(header, "Height");
@@ -61,13 +63,21 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
     const stream = readStream(buffer, object);
     if (!stream) continue;
     if (stream.length > IMAGE_EXTRACTION_LIMITS.maxEncodedBytes) continue;
-    if (
+
+    let data = stream;
+    if (encoding === "flate") {
+      if (width === undefined || height === undefined) continue;
+      const png = pdfRasterToPng(stream, rasterSpec(header, width, height));
+      if (!png) continue;
+      data = png;
+    } else if (
       (width === undefined || height === undefined) &&
       !hasDecodableDimensions(new Uint8Array(stream), "jpeg")
     ) {
       continue;
     }
-    totalBytes += stream.length;
+    if (data.length > IMAGE_EXTRACTION_LIMITS.maxEncodedBytes) continue;
+    totalBytes += data.length;
     if (totalBytes > IMAGE_EXTRACTION_LIMITS.maxTotalEncodedBytes) break;
 
     const page = pageByObject.get(object.number) ?? 0;
@@ -76,10 +86,10 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
 
     refs.push({
       locator: `page:${page}:${ordinal}`,
-      format: "jpeg",
+      format: encoding === "flate" ? "png" : "jpeg",
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
-      ...(metadataOnly ? {} : { data: new Uint8Array(stream) }),
+      ...(metadataOnly ? {} : { data: new Uint8Array(data) }),
     });
   }
   return refs;
@@ -149,4 +159,41 @@ function dictNumber(header: string, key: string): number | undefined {
   const match = new RegExp(`/${key}\\s+(\\d+)`).exec(header);
   const value = match ? Number.parseInt(match[1]!, 10) : Number.NaN;
   return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * The raster encodings this extractor can turn into a displayable image: JPEG
+ * streams pass through, Flate rasters are re-encoded, and everything else
+ * (JPX, CCITT, indexed or CMYK samples, image masks) is skipped.
+ */
+function rasterEncoding(header: string): "jpeg" | "flate" | undefined {
+  if (/\/ImageMask\s+true/.test(header)) return undefined;
+  if (/\/Filter\s*(\[\s*)?\/DCTDecode/.test(header)) return "jpeg";
+  if (!/\/Filter\s*(\[\s*)?\/FlateDecode\s*\]?[^\/]*(\/|>>)/.test(header)) return undefined;
+  if (/\/Filter\s*\[[^\]]*\/(DCT|JPX|CCITT|RunLength|LZW|AHx|A85|ASCII)/.test(header)) {
+    return undefined;
+  }
+  if (dictNumber(header, "BitsPerComponent") !== 8) return undefined;
+  return colorComponents(header) === undefined ? undefined : "flate";
+}
+
+/** Component count of the colour space, or undefined when it is not supported. */
+function colorComponents(header: string): number | undefined {
+  if (/\/ColorSpace\s*\/DeviceRGB/.test(header)) return 3;
+  if (/\/ColorSpace\s*\/DeviceGray/.test(header)) return 1;
+  if (/\/ColorSpace\s*\/CalRGB/.test(header)) return 3;
+  if (/\/ColorSpace\s*\/CalGray/.test(header)) return 1;
+  return undefined;
+}
+
+function rasterSpec(header: string, width: number, height: number): PdfRasterSpec {
+  return {
+    width,
+    height,
+    bitsPerComponent: 8,
+    components: colorComponents(header) ?? 3,
+    predictor: dictNumber(header, "Predictor") ?? 1,
+    predictorColumns: dictNumber(header, "Columns") ?? width,
+    predictorColors: dictNumber(header, "Colors") ?? colorComponents(header) ?? 3,
+  };
 }
