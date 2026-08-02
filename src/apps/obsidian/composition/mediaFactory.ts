@@ -2,6 +2,7 @@ import { TFile } from "obsidian";
 
 import { documentImageCandidates, extractDocumentImages } from "@adapters/extractors";
 import type { DocumentImageRef, LinkedPathResolver } from "@adapters/extractors";
+import { hashFileData } from "@adapters/indexing";
 import { createImageSearchSources, StaticImageSearchRegistry } from "@adapters/web";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import type {
@@ -39,7 +40,7 @@ export function createDocumentImageCandidates(
   ctx: CompositionContext,
   indexImages?: DocumentImageManifestReader,
 ): (request: DocumentImageQuery) => Promise<ImageCandidate[]> {
-  return async ({ query, contextPaths, signal }) => {
+  return async ({ query, contextPaths, signal, readPaths }) => {
     const candidates: ImageCandidate[] = [];
     const seenDocuments = new Set<string>();
 
@@ -61,16 +62,23 @@ export function createDocumentImageCandidates(
     }
 
     if (!indexImages || signal?.aborted) return candidates;
-    candidates.push(...(await indexImageCandidates(indexImages, query, seenDocuments)));
+    candidates.push(
+      ...(await indexImageCandidates(indexImages, query, seenDocuments, readPaths ?? [])),
+    );
     return candidates;
   };
 }
 
-/** Turns manifest records the query plausibly matches into per-run candidates. */
+/**
+ * Turns manifest records into per-run candidates. Every image of a document the
+ * run already read or retrieved is eligible; other documents must match the
+ * query text so discovery never turns the whole vault into candidates.
+ */
 async function indexImageCandidates(
   indexImages: DocumentImageManifestReader,
   query: string,
   excludedDocuments: ReadonlySet<string>,
+  readPaths: readonly string[],
 ): Promise<ImageCandidate[]> {
   let entries: DocumentImageManifestEntry[];
   try {
@@ -81,18 +89,21 @@ async function indexImageCandidates(
   if (entries.length === 0) return [];
 
   const terms = queryTerms(query);
-  if (terms.size === 0) return [];
+  const readDocuments = new Set(readPaths);
+  if (terms.size === 0 && readDocuments.size === 0) return [];
 
   const byDocument = new Map<string, DocumentImageRef[]>();
+  const hashByDocument = new Map<string, string>();
   let matched = 0;
   for (const entry of entries) {
     if (matched >= MAX_INDEX_CANDIDATES) break;
     if (excludedDocuments.has(entry.documentPath)) continue;
     if (!isSafeVaultImagePath(entry.documentPath)) continue;
-    if (!matchesQuery(entry, terms)) continue;
+    if (!readDocuments.has(entry.documentPath) && !matchesQuery(entry, terms)) continue;
     const ref = toDocumentImageRef(entry);
     if (!ref) continue;
     matched += 1;
+    if (entry.contentHash) hashByDocument.set(entry.documentPath, entry.contentHash);
     const existing = byDocument.get(entry.documentPath) ?? [];
     existing.push(ref);
     byDocument.set(entry.documentPath, existing);
@@ -100,7 +111,9 @@ async function indexImageCandidates(
 
   const candidates: ImageCandidate[] = [];
   for (const [documentPath, refs] of byDocument) {
-    candidates.push(...documentImageCandidates(documentPath, refs));
+    candidates.push(
+      ...documentImageCandidates(documentPath, refs, hashByDocument.get(documentPath)),
+    );
   }
   return candidates;
 }
@@ -136,9 +149,10 @@ function toDocumentImageRef(entry: DocumentImageManifestEntry): DocumentImageRef
  */
 export function createDocumentImageResolver(ctx: CompositionContext): DocumentImageResolver {
   return {
-    async resolve(documentPath, locator): Promise<ResolvedDocumentImage | undefined> {
+    async resolve(documentPath, locator, contentHash): Promise<ResolvedDocumentImage | undefined> {
       const data = await readVaultDocument(ctx, documentPath);
       if (!data) return undefined;
+      if (contentHash && hashFileData(data) !== contentHash) return undefined;
       const match = extractDocumentImages({
         path: documentPath,
         data,

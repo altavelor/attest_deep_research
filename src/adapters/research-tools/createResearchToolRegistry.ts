@@ -128,6 +128,7 @@ export function createResearchToolRegistry(
         ...(options.documentImageCandidates
           ? { documentCandidates: options.documentImageCandidates }
           : {}),
+        readDocumentPaths: () => vaultEvidencePaths(evidence),
       }),
     );
   }
@@ -148,4 +149,18 @@ function grantedPermissions(availability: ResearchToolAvailability): ReadonlySet
     granted.add(DOWNLOAD_PERMISSIONS.write);
   }
   return granted;
+}
+
+/**
+ * Vault documents the run already read or retrieved. Image discovery treats
+ * their indexed images as eligible even when the query matches only the text.
+ */
+function vaultEvidencePaths(evidence: ResearchEvidenceRegistry): string[] {
+  const paths: string[] = [];
+  for (const chunk of evidence.snapshot().evidence) {
+    const source = chunk.source as { path?: string };
+    const path = typeof source.path === "string" ? source.path : "";
+    if (path && !paths.includes(path)) paths.push(path);
+  }
+  return paths;
 }

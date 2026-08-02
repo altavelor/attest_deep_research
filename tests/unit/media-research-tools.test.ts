@@ -85,6 +85,23 @@ describe("search_images", () => {
     });
   });
 
+  it("tells the candidate provider which documents the run already read", async () => {
+    const documentCandidates = vi.fn().mockReturnValue([]);
+    const tool = new ImageSearchTool({
+      registry: { enabledImageSources: () => [fakeSource([candidate("a")])] },
+      artifacts: new AnswerArtifactRegistry(),
+      documentCandidates,
+      readDocumentPaths: () => ["Reports/annual.pdf"],
+    });
+
+    await run(tool, { query: "climate", limit: 6 });
+
+    expect(documentCandidates).toHaveBeenCalledWith({
+      query: "climate",
+      readPaths: ["Reports/annual.pdf"],
+    });
+  });
+
   it("fails fast when the run was already cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
