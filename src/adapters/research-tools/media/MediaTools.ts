@@ -1,8 +1,3 @@
-// Model-facing tools for rich answer media. `search_images` discovers bounded
-// candidates; `present_image_gallery` and `present_chart` turn already-discovered
-// data into artifacts. None of them accepts markup, styles, or arbitrary URLs,
-// and an invalid call never fails the textual answer.
-
 import {
   IMAGE_SEARCH_TOOL,
   PRESENT_CHART_TOOL,
@@ -29,7 +24,6 @@ const FETCHED_PAGES_LABEL = "fetched pages";
 export interface ImageSearchDeps {
   registry: ImageSearchRegistry;
   artifacts: AnswerArtifactRegistry;
-  /** Candidates available locally: context documents and the rebuilt index. */
   documentCandidates?: (
     request: ToolDocumentImageQuery,
   ) => Promise<ImageCandidate[]> | ImageCandidate[];
@@ -53,19 +47,12 @@ export interface SearchImagesOutput {
   diagnostics: {
     resultCount: number;
     sourcesQueried: string[];
-    /** Set when a broader query variant was needed to get any match. */
     effectiveQuery?: string;
-    /** Resources that errored; their absence from the results is not a "no match". */
     failedSources?: string[];
     untrustedEvidence: true;
   };
 }
 
-/**
- * Searches every enabled image resource plus locally available document images.
- * Returns opaque per-run handles; provider failures are reported as diagnostics
- * rather than failing the call when at least one source answered.
- */
 export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, SearchImagesOutput>({
   name: IMAGE_SEARCH_TOOL,
   description:
@@ -204,7 +191,6 @@ export interface PresentGalleryOutput {
   imageCount: number;
 }
 
-/** Builds a gallery from unique handles discovered earlier in the same run. */
 export const PresentImageGalleryTool = defineTool<
   { artifacts: AnswerArtifactRegistry },
   PresentGalleryInput,
@@ -287,7 +273,6 @@ export interface PresentChartOutput {
   seriesCount: number;
 }
 
-/** Accepts chart data only; the SVG is produced locally from the validated DTO. */
 export const PresentChartTool = defineTool<
   { artifacts: AnswerArtifactRegistry },
   Record<string, unknown>,

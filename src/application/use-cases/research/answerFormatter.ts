@@ -31,13 +31,6 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   ].join("\n");
 }
 
-/**
- * Rewrite the answer body's inline citation tokens into a reader-friendly form.
- * The model cites evidence by its raw chunk id (`[chunk-id]`), which reads as
- * inert noise in a saved note. Each such token is replaced with `[n]`, the same
- * number the source carries in the `## Citations` list below. `[url:…]` handles
- * are turned into plain links as before.
- */
 function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]): string {
   const numberByKey = new Map(
     dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),

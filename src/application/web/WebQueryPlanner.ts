@@ -1,8 +1,3 @@
-// Web query planner: routes a search across enabled hub sources based on the
-// query intent, fanning out and merging with reciprocal rank fusion. Implements
-// SearchProvider, so research tools consume the hub without changes. Page
-// fetching is delegated to the generic fetch provider (DuckDuckGo adapter).
-
 import {
   classifyWebQuery,
   detectQueryLanguage,
@@ -25,19 +20,15 @@ import { WebSourceHealthTracker } from "./WebSourceHealthTracker";
 
 export interface WebQueryPlannerOptions {
   registry: WebSourceRegistry;
-  /** Generic page fetcher; search results never come from it unless it is also in the registry. */
+
   fetchDelegate?: SearchProvider;
-  /** Sources queried per search. */
+
   maxSources?: number;
-  /** Called when one source fails while others still deliver. */
+
   onSourceError?(sourceId: string, error: unknown): void;
-  /**
-   * Shared health state driving auto-suspension. Pass the plugin-lifetime
-   * instance so suspensions survive planner recreation; defaults to a private
-   * tracker configured by the two options below.
-   */
+
   health?: WebSourceHealthTracker;
-  /** How long a rate-limited source sits out before being retried (default tracker only). */
+
   rateLimitCooldownMs?: number;
   now?: () => number;
 }

@@ -1,7 +1,3 @@
-// Builds the ordered page-fetch fallback list (Jina → Zyte → Wayback) from the
-// user's web-source profiles. Jina and Zyte join only when their profile is
-// enabled and holds a key; Wayback is free and always closes the chain.
-
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
 import { PageFetchProvider, SearchProvider } from "@application/ports";
 import { FetchHttpRuntime } from "./fetchHttp";

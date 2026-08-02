@@ -127,7 +127,6 @@ describe("createResearchToolRegistry", () => {
     expect(indexedNames).toContain("run_subagent");
     expect(indexedNames).toContain("map_sources");
 
-    // Web-only: run_subagent is available, but map_sources needs an index.
     const webOnly = createResearchToolRegistry({
       searchProvider: { search: vi.fn().mockResolvedValue([]) },
       subAgentRunner,

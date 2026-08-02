@@ -24,12 +24,11 @@ import {
   reasoningEffortCandidates,
 } from "@adapters/settings";
 
-/** What the prober needs from the settings tab that hosts it. */
 export interface CapabilityProberHost {
   readonly plugin: IxplorerPlugin;
-  /** Shared with the model profile modals so discovered models stay in sync. */
+
   readonly fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
-  /** Re-render the settings tab after a probe mutates a profile. */
+
   requestRedisplay(): void;
 }
 

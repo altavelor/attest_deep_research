@@ -1,8 +1,3 @@
-// Core retrieval: citation formation (stage 2). Pure domain logic — builds the
-// domain Citation (id/source/label). The clickable link TARGET (Obsidian `#^` /
-// `#page=` syntax) is presentation knowledge and lives outside core, in
-// application/use-cases/citationLinks.
-
 import { Citation } from "@core/model/citation";
 import { SourceReference } from "@core/model/source";
 

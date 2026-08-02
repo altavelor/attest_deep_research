@@ -1,19 +1,13 @@
-// Pure, platform-neutral relevance ranking over a page's readable text.
-// fetch_web_page returns whitespace-collapsed text (a single line), so we cannot
-// rely on paragraph breaks: sections are sentence windows and scoring is bounded
-// term-overlap with the query. Deterministic — easy to characterise in tests.
-
 export interface RankedSection {
   text: string;
   score: number;
-  /** Position of the section in reading order (0-based), for stable ordering. */
+
   index: number;
 }
 
 export interface SectionRankingOptions {
-  /** Sentences grouped into one rankable section. */
   sentencesPerSection?: number;
-  /** Maximum sections returned. */
+
   limit?: number;
 }
 

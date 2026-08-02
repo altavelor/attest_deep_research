@@ -21,13 +21,12 @@ export interface ResponseLogContext extends RequestLogContext {
 }
 
 export interface ProbeLogContext {
-  /** Which probe produced the result, e.g. "tool-capabilities". */
   probe: string;
   profileId: string;
   model: string;
-  /** The capability values the probe returned. */
+
   received: unknown;
-  /** The values that were persisted onto the profile / cache. */
+
   saved: unknown;
 }
 

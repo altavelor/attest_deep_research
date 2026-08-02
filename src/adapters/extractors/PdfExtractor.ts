@@ -28,12 +28,6 @@ export interface PdfPageText {
 
 export interface PdfPageTextParser {
   parsePages(data: ArrayBuffer): AsyncIterable<PdfPageText>;
-  /**
-   * Structured parse: page texts plus the raw material for heading extraction
-   * (outline entries resolved to pages, text lines with font sizes). Optional —
-   * parsers without typography access (SimplePdfTextParser) fall back to
-   * `parsePages`, and the document simply gets no headings.
-   */
   parseDocument?(data: ArrayBuffer): Promise<PdfParsedDocument>;
 }
 

@@ -41,7 +41,7 @@ describe("labelResearchEvidence", () => {
     });
 
     expect(labeled.explicit.map((item) => item.label)).toEqual(["S1"]);
-    // The retrieved section skips the already-labeled shared source.
+
     expect(labeled.retrieved.map((item) => item.chunk.id)).toEqual(["r1"]);
     expect(labeled.web).toEqual([]);
     expect(labeled.byLabel.get("S1")).toBe("shared");

@@ -9,8 +9,6 @@ import {
 } from "@core/diagnostics";
 import { RetrievedChunk } from "@core/model";
 
-/** Injected content-hash function (e.g. extractors/common.stableId). Keeps the
- *  assembler free of any concrete (Node crypto) hashing dependency. */
 export type GenerateId = (value: string) => string;
 import {
   createDisabledGraphDiagnostics,
@@ -56,11 +54,7 @@ export interface ContextAssembleRequest {
   smallMarkdownCharLimit?: number;
   skipRetrieval?: boolean;
   explicitSourcesOnly?: boolean;
-  /**
-   * Thinking runs with note tools: large attachments are not inlined as excerpts —
-   * they stay tool-addressable references the model reads in full via read_note.
-   * Small files (single markdown under the small-file limit) still inline whole.
-   */
+
   largeAttachmentsAsReferences?: boolean;
   graph?: {
     enabled: boolean;
@@ -72,7 +66,6 @@ export interface ContextAssembleRequest {
 }
 
 export interface AssembledContext {
-  /** User-attached files with how their content was delivered — prompt manifest data. */
   attachments: AttachedFileManifestEntry[];
   explicitEvidence: RetrievedChunk[];
   retrievalEvidence: RetrievedChunk[];

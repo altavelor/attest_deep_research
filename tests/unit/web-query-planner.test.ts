@@ -153,7 +153,6 @@ describe("WebQueryPlanner", () => {
       maxSources: 1,
     });
 
-    // The query itself classifies as general; the explicit intent routes to arXiv.
     const results = await planner.search("consciousness emergence", { intent: "academic" });
     expect(results.map((item) => item.source.url)).toEqual(["https://arxiv.org/1"]);
   });
@@ -214,7 +213,7 @@ describe("WebQueryPlanner", () => {
     const registry = { enabledSources: () => [brave] };
 
     await new WebQueryPlanner({ registry, health }).search("q1");
-    // Planners are recreated per research run; the tracker keeps the suspension.
+
     await new WebQueryPlanner({ registry, health }).search("q2");
     expect(braveSearch).toHaveBeenCalledTimes(1);
     expect(health.getIssue("brave")).toMatchObject({ reason: "unauthorized" });

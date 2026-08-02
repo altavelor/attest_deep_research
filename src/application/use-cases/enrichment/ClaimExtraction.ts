@@ -1,9 +1,3 @@
-// Claim extraction task (SPEC-corpus R7) — the third pass of index enrichment.
-// For each content section (references and other low-value headings excluded by
-// summarizableSections) the extractor yields short claims tagged with a subject;
-// the whole document's claims become one JSONL sidecar. One section failing
-// yields no claims for that section rather than failing the document.
-
 import {
   ClaimExtractor,
   DocumentClaim,
@@ -129,7 +123,6 @@ async function loadSectionText(
   return { chunkId, text };
 }
 
-// Bounded-concurrency limiter — the same small semaphore used by the fan-out.
 class Limiter {
   private active = 0;
   private readonly queue: (() => void)[] = [];

@@ -1,6 +1,3 @@
-// Application ports: indexing / extraction / index-store contracts (stage 1, task 1.3).
-// Depend only on core domain model.
-
 import { EmbeddedChunk, ExtractedChunk, RetrievedChunk } from "@core/model";
 import { LanguageCode, LanguageInventoryItem } from "@core/model";
 
@@ -35,13 +32,12 @@ export interface IndexStoreWriteSession {
   deleteBySourcePath(path: string): Promise<void>;
   updateSourceSnapshots?(snapshots: IndexSourceSnapshot[]): Promise<void>;
   recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
-  /** Records the document-image manifest of a full rebuild; absent ⇒ no image discovery. */
+
   recordDocumentImages?(entries: readonly DocumentImageManifestEntry[]): Promise<void>;
   commit(): Promise<void>;
   rollback(): void;
 }
 
-/** Compact per-document image record persisted by a successful full rebuild. */
 export interface DocumentImageManifestEntry {
   documentPath: string;
   contentHash: string;

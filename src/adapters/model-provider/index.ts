@@ -1,11 +1,3 @@
-// Публичный API модуля adapters/model-provider — клиенты чата и эмбеддингов,
-// round-адаптеры, политика Responses-провайдера и helpers метаданных моделей.
-// Внутренняя реализация (SDK-провайдеры, streaming-парсеры, common/http|streams)
-// наружу не выставляется; её white-box юнит-тесты подключают напрямую.
-//
-// Инвариант: файлы ВНУТРИ модуля не импортируют этот баррель — только соседей
-// через `./…`, иначе цикл (ловит `npm run depcruise`).
-
 export { ChatModelClient } from "./chat/ChatModelClient";
 export type { ChatModelClientOptions } from "./chat/ChatModelClient";
 

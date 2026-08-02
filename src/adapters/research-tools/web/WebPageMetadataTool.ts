@@ -21,11 +21,6 @@ const METADATA_FETCH_OPTIONS = {
   maxRedirects: 5,
 } as const;
 
-/**
- * Fetch only a page's head metadata (title / Open Graph / author / published
- * date) so the agent can judge a source's authority and freshness before
- * spending budget on the full page text. Metadata is untrusted evidence.
- */
 export const WebPageMetadataTool = defineTool<
   { provider: SearchProvider },
   GetPageMetadataInput,

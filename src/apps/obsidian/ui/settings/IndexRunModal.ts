@@ -3,7 +3,6 @@ import { App, Modal, Setting, ToggleComponent, setIcon } from "obsidian";
 import { IndexProfile } from "@adapters/indexing";
 import { ChatModelProfile, EmbeddingModelProfile } from "@adapters/settings";
 
-/** What the user asked the run to do; sections run sequentially when both are on. */
 export interface IndexRunPlan {
   mode: "start" | "update" | "rebuild";
   embedding?: { embeddingModelProfileId: string };
@@ -12,7 +11,7 @@ export interface IndexRunPlan {
 
 export interface IndexRunModalOptions {
   profile: IndexProfile;
-  /** Whether metadata sidecars already exist for this index. */
+
   hasMetadata: boolean;
   embeddingModels: EmbeddingModelProfile[];
   chatModels: ChatModelProfile[];

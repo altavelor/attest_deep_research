@@ -23,7 +23,6 @@ export interface ToolCapabilityProbeResult extends Pick<
   ToolCallingCapabilities,
   "calls" | "choiceRequired" | "choiceSpecific" | "parallelCalls"
 > {
-  /** Per-mode raw tool-name arrays and timestamp for the audit trail. */
   probeAuditData: {
     ranAt: string;
     results: {

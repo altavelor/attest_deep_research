@@ -1,7 +1,3 @@
-// Platform-neutral DTOs for rich answer artifacts (image galleries and charts).
-// Artifacts are appended after the streamed Markdown answer; they never carry
-// raw bytes, OS paths, or session-scoped resource URLs.
-
 import { isPublicHttpsUrl, isSafeVaultImagePath, validateImageUrl } from "./imagePolicy";
 
 export const CHART_TYPES = ["bar", "line", "scatter", "pie"] as const;
@@ -9,9 +5,8 @@ export const CHART_TYPES = ["bar", "line", "scatter", "pie"] as const;
 export type ChartType = (typeof CHART_TYPES)[number];
 
 export interface AnswerImageVaultSource {
-  /** Vault-relative path of the document the image lives in or is linked from. */
   documentPath: string;
-  /** Opaque, format-specific pointer used to re-extract the image at render time. */
+
   locator: string;
 }
 
@@ -24,10 +19,10 @@ export interface AnswerImage {
   caption?: string;
   sourceUrl: string;
   sourceLabel: string;
-  /** Licence name shown next to the attribution; absent for plain page references. */
+
   licenceName?: string;
   licenceUrl?: string;
-  /** True only when a provider supplied licence metadata for the image itself. */
+
   licensed?: boolean;
 }
 

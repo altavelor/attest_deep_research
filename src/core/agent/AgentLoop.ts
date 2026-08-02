@@ -1,8 +1,3 @@
-// Core agent loop (stage 3). The model<->tools round loop, depending only on the
-// ModelRoundProvider port and a ToolManager-style executeTool callback. Decoupled
-// from any client adapter (callers pass a built ModelRoundProvider) and from
-// research-specific tool labeling (injected via ToolLabeler).
-
 import { IxplorerError } from "@core/errors";
 import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ChatToolCall, ChatToolDefinition } from "./tool";
@@ -14,8 +9,6 @@ import {
   ProviderContinuationState,
 } from "./protocol";
 
-/** Maps tool calls/results to human-facing labels. Injected so the core loop
- *  carries no knowledge of specific tool names. */
 export interface ToolLabeler {
   chainLabel(name: string, args: Record<string, unknown>): string;
   labelFromResult(name: string, result: string): string | undefined;

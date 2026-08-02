@@ -11,11 +11,6 @@ export interface KeywordPosting {
   headingFrequency?: number;
 }
 
-/**
- * Query-ready view over posting rows: term lookup plus the corpus statistics
- * BM25 needs (chunk lengths, average length). Built once per committed index
- * state and cached by the caller — ranking must not rescan all rows per query.
- */
 export interface KeywordPostingLookup {
   get(term: string): KeywordPosting[] | undefined;
   chunkCount: number;
@@ -151,12 +146,8 @@ export function countIndexedKeywordChunks(rows: KeywordPostingRow[]): number {
   return chunkIds.size;
 }
 
-// Классика BM25: k1 — насыщение частоты терма, b — доля нормализации по длине.
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
-// BM25F-lite: вхождение терма в заголовок секции весит в HEADING_WEIGHT раз
-// больше обычного (frequency уже включает заголовочные вхождения — добавляем
-// (W-1) × headingFrequency сверху).
 const HEADING_WEIGHT = 3;
 
 /** Convenience over {@link rankKeywordLookup} for callers holding raw rows (tests). */
@@ -169,9 +160,6 @@ export function rankKeywordPostings(
   return rankKeywordLookup(query, buildKeywordPostingLookup([rows]), minTokenLength, limit);
 }
 
-// BM25 поверх lookup-а. IDF гасит стоп-слова ("the", "with"), нормализация по
-// длине не даёт длинным чанкам выигрывать за счёт объёма — сырой TF-скоринг
-// страдал и тем, и другим.
 export function rankKeywordLookup(
   query: string,
   lookup: KeywordPostingLookup,

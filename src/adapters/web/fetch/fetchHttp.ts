@@ -1,5 +1,3 @@
-// Shared bounded HTTP helper for the page-fetch fallback providers.
-
 import { WebPageFetchFailure } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 

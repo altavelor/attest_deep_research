@@ -31,11 +31,6 @@ import { VaultResearchPipeline } from "../VaultResearchPipeline";
 import { WebResearchPipeline } from "../WebResearchPipeline";
 import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
 
-/**
- * Collaborators shared by every research execution strategy. Built once by the
- * composition in {@link ResearchService} and handed to each strategy so the
- * strategies stay isolated entities rather than reaching back into the service.
- */
 export interface ResearchStrategyDeps {
   chatModel: ChatModelProvider;
   chatModelName: string;
@@ -57,15 +52,15 @@ export interface ResearchStrategyDeps {
   retriever: ResearchRetriever;
   urlStatusChecker?: UrlStatusChecker;
   searchProvider?: SearchProvider;
-  /** Enabled image-search resources for the rich-media tools. */
+
   imageSearch?: ImageSearchRegistry;
-  /** Image candidates from the documents attached to the request context. */
+
   documentImageCandidates?: DocumentImageDiscovery;
   noteTools?: NoteToolService;
   vaultWriter?: VaultWriter;
   downloadFolder?: string;
   toolsetFactory: ResearchToolsetFactory;
-  /** Launches universal sub-agents for the `run_subagent` tool, when available. */
+
   subAgentRunner?: SubAgentPort;
   toolsEnabled: boolean;
   toolCapabilities: ToolCallingCapabilities;
@@ -77,32 +72,18 @@ export interface ResearchStrategyDeps {
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
 }
 
-/** Per-request inputs resolved by the dispatcher before a strategy runs. */
 export interface ResearchExecutionContext {
   request: ResearchRequest;
   question: string;
   searchMode: ResearchSearchMode;
   policy: ResearchExecutionPolicy;
   indexDescription?: IndexDescriptionPromptContext;
-  /**
-   * Strategy label recorded in diagnostics. Defaults to `policy.strategy`; the
-   * dispatcher overrides it with `instant-fallback` when invoking the
-   * instant strategy after a failed thinking attempt. Ignored by the thinking path.
-   */
+
   executionStrategy?: ResearchExecutionStrategy;
-  /**
-   * Present when this run is the deterministic fallback after a failed thinking
-   * attempt, so its diagnostics can be carried into the instant report. Ignored by
-   * the thinking path.
-   */
+
   failedThinkingAttempt?: ThinkingResearchFailure;
 }
 
-/**
- * Result of an attempt, used by the dispatcher to decide whether to fall back.
- * A strategy fully owns its happy path (including emitting the terminal
- * `complete` event); only on `failed` does control return to the dispatcher.
- */
 export type ResearchStrategyOutcome =
   | { kind: "completed" }
   | { kind: "cancelled" }

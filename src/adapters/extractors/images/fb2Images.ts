@@ -1,7 +1,3 @@
-// FB2 stores images as base64 `<binary>` elements keyed by id. The locator is
-// the binary id, so a renamed or removed binary degrades to the unavailable
-// fallback instead of showing the wrong image.
-
 import {
   hasDecodableDimensions,
   imageFormatFromMimeType,

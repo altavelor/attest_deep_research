@@ -1,6 +1,3 @@
-// LLM-oriented source definitions: Tavily, Exa, Jina Search, Firecrawl.
-// These APIs return page content alongside links, so results carry extractedText.
-
 import {
   asArray,
   asRecord,
@@ -9,7 +6,6 @@ import {
   WebSourceDefinition,
 } from "./types";
 
-/** Content from neural APIs can be long; keep parity with page-fetch extraction caps. */
 const MAX_EXTRACTED_TEXT_LENGTH = 12_000;
 
 function boundedText(value: unknown): string | undefined {

@@ -1,8 +1,3 @@
-// Per-run registry of image candidates and produced artifacts. Candidate ids
-// are opaque handles valid only inside the current answer, so the model can
-// never present an arbitrary URL — it can only reference something a tool
-// already discovered in this run.
-
 import {
   AnswerArtifact,
   ARTIFACT_LIMITS,

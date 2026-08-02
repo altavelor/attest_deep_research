@@ -1,5 +1,3 @@
-// Pure queries/updates for web-source hub profiles stored in settings.
-
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
 import { IxplorerSettings } from "./types";
 

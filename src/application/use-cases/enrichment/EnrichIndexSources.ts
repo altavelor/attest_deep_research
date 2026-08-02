@@ -1,9 +1,3 @@
-// Use-case (SPEC-corpus-knowledge R3+R4): per indexed source whose content
-// changed since the last run — extract document metadata (title/authors/year/
-// abstract/references) and, when a summarizer is wired, generate hierarchical
-// summaries (per section + per document). LLM and storage enter through ports;
-// this class only orchestrates.
-
 import {
   ClaimExtractor,
   DocumentClaimStore,
@@ -37,20 +31,20 @@ export interface EnrichIndexSourcesOptions {
   retriever: ResearchRetriever;
   metadataStore: DocumentMetadataStore;
   extractor: DocumentMetadataExtractor;
-  /** Optional summary task (R4): absent ⇒ metadata only. */
+
   summaryStore?: DocumentSummaryStore;
   summarizer?: DocumentSummarizer;
-  /** Optional claim-index task (R7): absent ⇒ no claim extraction. */
+
   claimStore?: DocumentClaimStore;
   claimExtractor?: ClaimExtractor;
-  /** Max concurrent claim-extraction LLM requests per document. */
+
   claimConcurrency?: number;
   now?: () => Date;
-  /** Characters of document head/tail handed to the extractor. */
+
   sampleChars?: number;
-  /** Max concurrent section-level LLM requests. */
+
   sectionSummaryConcurrency?: number;
-  /** Initial delay between retry attempts for transient LLM failures. */
+
   retryBackoffMs?: number;
 }
 
@@ -58,9 +52,9 @@ export interface EnrichmentProgress {
   processed: number;
   total: number;
   sourcePath: string;
-  /** "working" — промежуточный прогресс внутри источника (фазы ниже). */
+
   status: "working" | "extracted" | "skipped" | "failed";
-  /** Set when status === "working". */
+
   phase?: "metadata" | "sections" | "document" | "claims";
   sectionIndex?: number;
   sectionCount?: number;
@@ -117,7 +111,7 @@ export class EnrichIndexSources {
   async run(
     options: {
       signal?: AbortSignal;
-      /** Re-extract even when the stored contentHash matches (user-forced refresh). */
+
       force?: boolean;
       onProgress?: (progress: EnrichmentProgress) => void;
     } = {},

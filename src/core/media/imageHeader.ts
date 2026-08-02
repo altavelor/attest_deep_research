@@ -1,7 +1,3 @@
-// Decoded-size guard for embedded images. Encoded byte length says nothing
-// about how much memory an image needs once decoded, so the intrinsic size is
-// read from the container header before any bytes reach an <img> element.
-
 import { hasDisplayableDimensions } from "./imagePolicy";
 import type { EligibleImageFormat } from "./imagePolicy";
 

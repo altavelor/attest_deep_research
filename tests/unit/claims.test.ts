@@ -37,11 +37,11 @@ describe("groupClaims", () => {
     ];
 
     const groups = groupClaims(sources, { limit: 50 });
-    // "mail forwarding" is covered by both documents → first.
+
     expect(groups[0].subject.toLowerCase()).toBe("mail forwarding");
     expect(groups[0].sourcePaths.sort()).toEqual(["a.pdf", "b.pdf"]);
     expect(groups[0].claims).toHaveLength(2);
-    // Single-document subject still present, but ranked lower.
+
     expect(groups.some((group) => group.subject === "solo topic")).toBe(true);
   });
 
@@ -78,8 +78,6 @@ describe("groupClaims", () => {
   });
 
   it("co-locates contradictory claims about the same subject (contradiction precondition)", () => {
-    // ~synthetic pairs: same subject with opposing statements must land together so
-    // the judge can compare them; unrelated subjects must not be merged.
     const pairs: Array<[string, string, string]> = [
       ["caffeine half-life", "Caffeine half-life is 5 hours.", "Caffeine half-life is 10 hours."],
       ["earth age", "The earth is 4.5 billion years old.", "The earth is 6000 years old."],
@@ -132,7 +130,7 @@ describe("claims JSONL sidecar", () => {
       claim({ sourcePath: "papers/a.pdf", subject: "y", statement: "Y." }),
     ]);
     const serialized = serializeClaimsFile(claims);
-    // One header line + two claim lines.
+
     expect(serialized.split("\n")).toHaveLength(3);
     expect(parseClaimsFile(serialized)).toEqual(claims);
   });

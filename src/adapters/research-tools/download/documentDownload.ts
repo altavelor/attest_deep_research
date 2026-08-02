@@ -1,18 +1,11 @@
-// Shared helpers for the document-download tools: path/filename resolution,
-// content-type gating, size budget and the user-confirmation hook. Pure and
-// I/O-free so both the download tool and its tests can share them.
-
 import { normalizeVaultPath } from "@shared";
 
-/** Hard ceiling on a single downloaded document. Keeps the vault (and memory) sane. */
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 
-/** Permission names a run may grant for download tools; mapped from availability. */
 export const DOWNLOAD_PERMISSIONS = {
   write: "download.write",
 } as const;
 
-/** Requested download the user is asked to confirm before it touches the vault. */
 export interface DownloadActionRequest {
   url: string;
   path: string;
@@ -28,7 +21,6 @@ export const AUTO_CONFIRM_DOWNLOAD: DownloadConfirmation = {
   confirm: async () => true,
 };
 
-/** Map a normalized content-type onto the file extension used when none is in the URL. */
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "application/pdf": "pdf",
   "application/x-pdf": "pdf",
@@ -116,8 +108,6 @@ export function folderOf(path: string): string {
   const index = path.lastIndexOf("/");
   return index > 0 ? path.slice(0, index) : "";
 }
-
-// --- internals -------------------------------------------------------------
 
 function joinVaultPath(folder: string, filename: string): string {
   const trimmed = folder.replace(/\/+$/, "");

@@ -22,7 +22,6 @@ export interface SearchWebOutput {
     invalidResultCount: number;
     snippetsTruncated: number;
     untrustedEvidence: true;
-    /** Present only when the search returned nothing; guides the retry. */
     hint?: string;
   };
 }

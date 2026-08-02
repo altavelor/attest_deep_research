@@ -1,14 +1,9 @@
-// Normalized image candidate produced by providers, page extraction, and
-// document extraction. Candidates are per-run and never persisted; only the
-// answer image derived from one reaches a saved chat.
-
 import { AnswerImage, ARTIFACT_LIMITS } from "./artifacts";
 import { EligibleImageFormat, isSafeVaultImagePath, validateImageUrl } from "./imagePolicy";
 
 export type ImageCandidateOrigin = "provider" | "page" | "document";
 
 export interface ImageCandidate {
-  /** Per-run handle the model passes to present_image_gallery. */
   id: string;
   origin: ImageCandidateOrigin;
   format?: EligibleImageFormat;
@@ -17,12 +12,12 @@ export interface ImageCandidate {
   vaultSource?: { documentPath: string; locator: string };
   alt: string;
   caption?: string;
-  /** Page or file the image is attributed to; always a public URL or vault link. */
+
   sourceUrl: string;
   sourceLabel: string;
   licenceName?: string;
   licenceUrl?: string;
-  /** Only providers that publish per-image licence metadata set this. */
+
   licensed?: boolean;
   width?: number;
   height?: number;

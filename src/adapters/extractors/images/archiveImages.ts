@@ -1,9 +1,3 @@
-// Image extraction for the zip-based document formats: DOCX (`word/media` plus
-// relationship metadata) and EPUB (manifest images referenced from the spine).
-// Archive member paths are treated as untrusted: traversal entries and oversized
-// members are skipped, and the decoded size is read from the image header
-// because encoded byte length cannot bound how much memory decoding needs.
-
 import { hasDecodableDimensions, imageFormatFromMimeType, imageFormatFromPath } from "@core/media";
 import { IMAGE_EXTRACTION_LIMITS } from "@core/media";
 import { decodeXmlEntities, ZipArchive } from "../common";

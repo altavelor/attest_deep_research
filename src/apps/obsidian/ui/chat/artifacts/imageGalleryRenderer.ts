@@ -1,7 +1,3 @@
-// Renders an image-gallery artifact as a row of 1–4 attributed cards. A card
-// opens the full-size viewer; a card whose image cannot load degrades to an
-// attribution-only fallback that still links to the source.
-
 import { App } from "obsidian";
 
 import type { AnswerImage, ImageGalleryArtifact } from "@core/media";

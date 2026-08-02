@@ -1,7 +1,3 @@
-// Per-source task template + tolerant parsing of a sub-agent's free-text answer
-// into a structured stance row. Kept as pure functions so the reduce contract is
-// unit-testable without running an agent (SPEC-corpus R5).
-
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { MAP_SOURCE_STANCES, MapSourceStance } from "./types";
 

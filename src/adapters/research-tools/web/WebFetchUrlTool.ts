@@ -12,11 +12,6 @@ interface FetchUrlInput {
   url: string;
 }
 
-/**
- * Fetch a user-supplied URL directly, without it first appearing in search_web.
- * The URL is registered as a fresh web result so the fetched page flows through
- * the same evidence/citation pipeline as search-derived results.
- */
 export const WebFetchUrlTool = defineTool<
   FetchRegisteredWebPageDeps,
   FetchUrlInput,

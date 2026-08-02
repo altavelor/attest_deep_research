@@ -1,7 +1,3 @@
-// Evidence registry port (SPEC R5). Data sources and their tools depend on this
-// abstraction; the concrete, Node-coupled collector (hashing + UUID handles)
-// lives in adapters and implements it. DTOs reference only core types.
-
 import { Citation } from "@core/model";
 import { RetrievedChunk, SourceReference, WebSourceReference } from "@core/model";
 
@@ -33,7 +29,6 @@ export interface WebHandleEntry extends RegisteredWebResult {
   source: WebSourceReference;
 }
 
-/** What sources/tools need from the evidence collector during a research run. */
 export interface EvidenceRegistry {
   registerIndexChunk(chunk: RetrievedChunk, provenance: { callId: string; query: string }): string;
   registerNoteEvidence(

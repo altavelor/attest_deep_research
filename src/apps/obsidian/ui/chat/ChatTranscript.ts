@@ -39,7 +39,7 @@ export interface ChatTranscriptOptions {
   onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
   onSaveAnswerToNewNote(answer: ResearchAnswer): void;
   onAppendAnswerToActiveNote(answer: ResearchAnswer): void;
-  /** Re-reads images embedded in vault documents when rendering artifacts. */
+
   documentImages?: DocumentImageResolver;
 }
 

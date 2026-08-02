@@ -1,7 +1,3 @@
-// Pure splitting of a rendered text node into literal text and citation
-// anchors. Kept free of the DOM so the token handling — which used to depend on
-// where in the paragraph a token happened to sit — is directly testable.
-
 import { stripRenderedCitationIds } from "./citationText";
 
 const CITATION_TOKEN = /\[([^\]\n]{8,})\]/g;

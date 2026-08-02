@@ -37,7 +37,6 @@ export interface IndexingState {
   indexSizeBytes?: number;
   isStale: boolean;
   indexChanged?: boolean;
-  /** Layout version reached by a successful full rebuild; absent when unchanged. */
   indexVersion?: number;
   errorMessage?: string;
 }
@@ -76,7 +75,6 @@ export interface IndexingServiceOptions {
   onProgress?: (state: IndexingState) => void;
   logger?: IndexingLogger;
   now?: () => Date;
-  /** Resolves wiki-embed and Markdown image targets the way the host would. */
   resolveLinkedImagePath?: LinkedPathResolver;
 }
 
@@ -87,7 +85,6 @@ export interface IndexedFileResult {
   contentHash?: string;
   persistSnapshot?: boolean;
   languages?: string[];
-  /** Image manifest rows discovered in this file during a full rebuild. */
   documentImages?: DocumentImageManifestEntry[];
 }
 
@@ -152,9 +149,7 @@ export interface FileProcessorOptions {
   snapshots: Map<string, FileSnapshot>;
   progress: IndexingProgressState;
   logger?: IndexingLogger;
-  /** Enables document-image manifest collection; true only during a full rebuild. */
   collectDocumentImages?: () => boolean;
-  /** Resolves wiki-embed and Markdown image targets the way the host would. */
   resolveLinkedImagePath?: LinkedPathResolver;
 }
 

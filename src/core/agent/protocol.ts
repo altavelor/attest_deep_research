@@ -1,5 +1,3 @@
-// Core agent: model/chat/embedding protocol contracts. Platform-neutral.
-
 import { ChatToolCall, ChatToolChoice, ChatToolDefinition } from "./tool";
 
 export type ApiFormat = "openai-compatible" | "ollama" | "anthropic";
@@ -96,11 +94,7 @@ export interface ChatRequest {
   toolChoice?: ChatToolChoice;
   parallelToolCalls?: boolean;
   reasoningEnabled?: boolean;
-  /**
-   * Optional reasoning depth hint for providers that support it (Anthropic
-   * `effort`, Ollama think levels). Undefined leaves the provider on its
-   * adaptive default.
-   */
+
   reasoningEffort?: string;
   signal?: AbortSignal;
 }

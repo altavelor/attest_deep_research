@@ -1,8 +1,3 @@
-// Document-download tools. `probe_document_url` triages a link (is it a
-// downloadable document?) without pulling the body; `download_document` fetches
-// the bytes and, after user confirmation, stores them in the vault. Both are
-// thin `defineTool` definitions over the shared helpers.
-
 import { ToolPermissions, toolFailure } from "@core/agent";
 import { DOWNLOAD_DOCUMENT_TOOL, PROBE_DOCUMENT_URL_TOOL } from "@core/agent";
 import { SearchProvider } from "@application/ports";

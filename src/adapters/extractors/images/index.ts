@@ -1,10 +1,3 @@
-// Публичный API подмодуля adapters/extractors/images — извлечение ссылок на
-// изображения из поддерживаемых форматов документов. Реэкспортируется из
-// `@adapters/extractors`.
-//
-// Инвариант: файлы ВНУТРИ модуля не импортируют этот баррель — только соседей
-// через `./…`, иначе цикл (ловит `npm run depcruise`).
-
 export {
   documentImageCandidates,
   extractDocumentImages,

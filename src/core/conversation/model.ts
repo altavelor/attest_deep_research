@@ -1,7 +1,3 @@
-// Core conversation model (stage 1, task 2.1). Platform-neutral domain model of
-// a chat transcript; previously lived in ui/rendering.ts. Consumed by research,
-// chat and ui — none of which should own it.
-
 import { RetrievedChunk } from "@core/model/source";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
@@ -18,7 +14,7 @@ export interface ChatDisplayMessage {
   kind?: "message" | "compact-summary";
   content: string;
   createdAt: string;
-  /** Context documents included with this user request. */
+
   contextPaths?: string[];
   modelName?: string;
   compacted?: boolean;
@@ -74,9 +70,9 @@ export type ChainItem =
       fetchTargets?: string[];
       searchSources?: string[];
       resultJson?: string;
-      /** Live phase of a nested sub-agent run (e.g. run_subagent). */
+
       phase?: string;
-      /** Nested tool calls produced inside this call (e.g. a run_subagent session). */
+
       children?: ChainItem[];
     };
 

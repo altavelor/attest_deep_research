@@ -22,11 +22,7 @@ export interface ResearchExecutionPolicy {
   requiredTools: readonly string[];
   bootstrapChoice: ChatToolChoice;
   parallelToolCalls: boolean;
-  /**
-   * Whether the model can force a specific tool by name (`tool_choice` naming a
-   * single function). When false, callers that need to compel a particular tool
-   * (e.g. repairing a missing mandatory call) must fall back to `required`.
-   */
+
   supportsSpecificChoice: boolean;
 }
 

@@ -1,5 +1,3 @@
-// Публичный API модуля enrichment (SPEC-corpus-knowledge R3).
-
 export { EnrichIndexSources } from "./EnrichIndexSources";
 export type {
   EnrichIndexSourcesOptions,

@@ -1,6 +1,3 @@
-// Sidecar storage for hierarchical document summaries (SPEC-corpus R4):
-// one JSON file per source under `<index folder>/summaries/`.
-
 import { DocumentSummaryStore, SourceDocumentSummaries } from "@application/ports";
 import { JsonSidecarStore } from "./JsonSidecarStore";
 

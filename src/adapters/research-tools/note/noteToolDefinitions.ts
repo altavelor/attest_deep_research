@@ -1,7 +1,3 @@
-// Note-tool JSON schemas (SPEC R5). Pure tool definitions, owned by the
-// application layer so both the concrete NoteToolService (adapters) and the
-// note tool-handlers can share them.
-
 import { ChatToolDefinition } from "@core/agent";
 import {
   CREATE_NOTE_TOOL,

@@ -46,7 +46,7 @@ describe("WebFetchSectionTool", () => {
     if (!execution.ok) return;
     expect(execution.value.sections.length).toBeGreaterThan(0);
     expect(execution.value.sections[0]?.text).toContain("treaty");
-    // The trailing off-topic passage shares no query terms and is dropped.
+
     expect(execution.value.sections.every((s) => !s.text.includes("trade resumed"))).toBe(true);
     expect(execution.value.diagnostics.untrustedEvidence).toBe(true);
   });

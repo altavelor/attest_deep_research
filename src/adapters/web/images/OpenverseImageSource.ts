@@ -1,7 +1,3 @@
-// Openverse image search. Preserves the landing page, thumbnail, creator, and
-// licence metadata the API supplies. Licence fields are discovery metadata, not
-// a legal guarantee — the UI presents them as provider-reported attribution.
-
 import { clampText, hasDisplayableDimensions, ImageCandidate } from "@core/media";
 import { imageFormatFromMimeType, imageFormatFromPath } from "@core/media";
 import type { ImageSearchOptions, ImageSearchSource } from "@application/ports";

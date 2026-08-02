@@ -56,8 +56,6 @@ describe("dedupeNearDuplicateChunks", () => {
   });
 
   it("does not list the same source path twice as its own duplicate", () => {
-    // Two near-identical chunks from the SAME document should collapse without
-    // listing the document as a duplicate of itself.
     const result = dedupeNearDuplicateChunks([
       chunk("a1", "a.pdf", PASSAGE, 0.9),
       chunk("a2", "a.pdf", PASSAGE, 0.85),

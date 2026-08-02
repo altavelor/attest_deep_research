@@ -1,7 +1,3 @@
-// Appends the answer's artifacts after the streamed Markdown. Artifacts are
-// re-validated here so a saved chat written by an older or malformed source can
-// never inject anything the contract forbids.
-
 import { App } from "obsidian";
 
 import { sanitizeAnswerArtifacts, type AnswerArtifact } from "@core/media";

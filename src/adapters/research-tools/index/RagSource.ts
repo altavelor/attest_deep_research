@@ -1,6 +1,3 @@
-// RAG data source (stage 1, task 5.1). Wraps vault retrieval and contributes the
-// index search tool to the agent loop.
-
 import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { IndexResearchTool } from "./IndexResearchTool";

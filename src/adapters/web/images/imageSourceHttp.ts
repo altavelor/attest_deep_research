@@ -1,6 +1,3 @@
-// Shared HTTP plumbing for image providers: bounded JSON requests with a
-// timeout, plus small helpers for reading untrusted provider payloads.
-
 import { IxplorerError } from "@core/errors";
 
 export const IMAGE_SEARCH_DEFAULTS = {

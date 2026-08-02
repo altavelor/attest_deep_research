@@ -7,15 +7,14 @@ export interface BoundedSearchInput {
 }
 
 export interface WebSearchInput extends BoundedSearchInput {
-  /** Model-declared query category; routes the search to matching hub sources. */
   category?: WebQueryIntent;
-  /** Model-declared freshness window; mapped to native date filters per source. */
+
   recency?: WebQueryRecency;
 }
 
 export const DEFAULT_RESEARCH_RESULT_LIMIT = 5;
 export const MAX_RESEARCH_RESULT_LIMIT = 5;
-/** Web searches merge several sources, so broad queries may ask for more links. */
+
 export const MAX_WEB_RESULT_LIMIT = 15;
 export const MAX_RESEARCH_QUERY_CHARS = 240;
 

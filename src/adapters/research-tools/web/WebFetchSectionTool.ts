@@ -26,8 +26,6 @@ export interface FetchWebSectionOutput {
   };
 }
 
-// Larger than the head-truncation budget of fetch_web_page: we re-rank the whole
-// page down to the relevant sections, so we want more of it to rank over.
 const SECTION_FETCH_MAX_CHARS = 48_000;
 
 function parseFetchWebSectionInput(
@@ -54,11 +52,6 @@ function parseFetchWebSectionInput(
   return { ok: true, value: { resultId, query, limit } };
 }
 
-/**
- * Fetch a known web result and return only the sections most relevant to `query`,
- * instead of the head-truncated page. The fetched page is still registered as
- * evidence (full budget) so citations and provenance match fetch_web_page.
- */
 export const WebFetchSectionTool = defineTool<
   { provider: SearchProvider; evidence: EvidenceRegistry },
   FetchWebSectionInput,

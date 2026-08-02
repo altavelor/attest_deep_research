@@ -92,7 +92,6 @@ export interface ResearchRetriever {
   ): Promise<IndexCursorPage<IndexSourceInventoryItem>>;
 }
 
-/** Port for query expansion (concrete LLM-backed impl lives in adapters/retrieval). */
 export interface QueryVariantsRequest {
   query: string;
   languageInventory: LanguageInventoryItem[];
@@ -115,7 +114,7 @@ export interface ResearchRequest {
   activeFilePath?: string;
   includeActiveFile?: boolean;
   includeContextDiagnostics?: boolean;
-  /** Set when the user explicitly requested the sub-agent via an `@run_subagent` mention. */
+
   forceSubAgent?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
   signal?: AbortSignal;
@@ -135,11 +134,11 @@ export type ResearchStreamEvent =
       label: string;
       round: number;
       args?: Record<string, unknown>;
-      /** Site names resolved from the fetch result IDs before the tool starts. */
+
       fetchTargets?: string[];
-      /** Search resources selected by the web query planner. */
+
       searchSources?: string[];
-      /** Set when this call is nested inside a parent tool-call (e.g. run_subagent). */
+
       parentId?: string;
     }
   | {

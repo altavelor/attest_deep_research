@@ -1,5 +1,3 @@
-// Public API of the map-sources fan-out use-case (SPEC-corpus R5).
-
 export { MapSources } from "./MapSources";
 export type { MapSourcesDeps, MapSourcesInput } from "./MapSources";
 export { buildSourceTask, citedEvidenceIds, parseSourceAnswer } from "./mapSourcesParse";

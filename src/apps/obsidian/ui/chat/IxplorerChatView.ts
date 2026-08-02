@@ -72,9 +72,9 @@ export interface IxplorerChatViewServices {
   getDefaultIndexProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
   getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
-  /** Opens the plugin settings on the index section (used by the rebuild notice). */
+
   openIndexSettings(): void;
-  /** Re-reads an image embedded in a vault document when rendering an artifact. */
+
   resolveDocumentImage?: DocumentImageResolver["resolve"];
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   listSavedChats(): Promise<SavedChatSummary[]>;

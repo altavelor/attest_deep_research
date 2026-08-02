@@ -1,14 +1,3 @@
-// External data sources (stage 1, task 5.x / R5).
-//
-// A DataSource is a pluggable provider of context (RAG, web, attachments). Two
-// distinct contracts compose here:
-//   - Tool (core/agent): the runtime path the model invokes during a round.
-//   - DataSource/SourceManager (this module): the registration + introspection
-//     path the application/UI uses to know which sources are available.
-// Each source contributes its tools into a ToolManager; the SourceManager also
-// exposes descriptors so callers can present "available sources" without going
-// through the agent loop.
-
 import { Tool } from "@core/agent";
 import { ToolManager } from "@application/tools/ToolManager";
 
@@ -24,7 +13,7 @@ export interface DataSourceDescriptor {
 
 export interface DataSource {
   readonly descriptor: DataSourceDescriptor;
-  /** The tools this source contributes to the agent loop. */
+
   tools(): Tool[];
 }
 

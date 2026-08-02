@@ -1,8 +1,3 @@
-// HEAD probe for the `probe_document_url` tool: reports whether a URL points at
-// a downloadable document (content-type/size/filename) without transferring the
-// body. Self-contained (its own bounded fetch) so it does not widen the
-// SearchProvider port with a probe-only method.
-
 import { validatePublicWebUrl } from "@application/sources";
 import {
   deriveFilename,
@@ -24,7 +19,6 @@ export interface DocumentProbeResult {
 
 const DEFAULT_PROBE_TIMEOUT_MS = 15_000;
 
-/** Cap on how many URLs a single batch probe fans out to concurrently. */
 const PROBE_CONCURRENCY = 4;
 
 /**

@@ -91,13 +91,13 @@ describe("buildResearchPrompt", () => {
     expect(prompt).toContain("[S1] Research/local.md");
     expect(prompt).toContain("Local evidence");
     expect(prompt).toContain("[S2] Papers/model.pdf p. 3");
-    // Only the first two items are within the limit, so no third label is rendered.
+
     expect(prompt).not.toContain("[S3]");
     expect(prompt).not.toContain("Extra evidence");
   });
 
   it("caps a single oversized evidence item so it cannot dominate the section", () => {
-    const huge = "word ".repeat(6_000); // ~30k chars, above the per-item cap
+    const huge = "word ".repeat(6_000);
     const prompt = buildResearchPrompt({
       question: "Summarize the notes",
       evidence: [retrieved("big-1", markdownSource("Research/big.md"), huge)],
@@ -131,8 +131,7 @@ describe("buildResearchPrompt", () => {
     });
 
     expect(prompt).toContain("Answer the question directly");
-    // Web sources carry a reliability hint so the model weights fetched pages over
-    // snippets and can judge freshness.
+
     expect(prompt).toContain(
       "[S1] Example — https://example.com/tor (fetched page, retrieved 2026-05-16)",
     );
@@ -235,7 +234,6 @@ describe("ResearchService", () => {
       service.answer({ question: "Answer instantly", mode: "instant", searchMode: "none" }),
     );
 
-    // Instant is a deterministic single pass: even a tool-capable model gets no tools.
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
@@ -443,8 +441,6 @@ describe("ResearchService", () => {
   });
 
   it("accepts a direct answer without forcing a tool (Codex-style auto)", async () => {
-    // No mandatory tools: a tool-capable model that chooses to answer directly is
-    // accepted as the thinking result, rather than discarded and forced to search.
     const chatModel = new FakeChatModel([[{ content: "Direct answer", isComplete: true }]]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
@@ -482,8 +478,6 @@ describe("ResearchService", () => {
   });
 
   it("falls back to deterministic diagnostics instead of throwing on thinking provider error", async () => {
-    // First streamChat call (thinking attempt) throws to simulate a provider-side
-    // tool-calling failure; the deterministic fallback synthesis then succeeds.
     let calls = 0;
     const chatModel: ChatModelProvider = {
       async listModels() {
@@ -533,10 +527,6 @@ describe("ResearchService", () => {
   });
 
   it("synthesizes from partial evidence when an thinking attempt fails after gathering evidence", async () => {
-    // Round 1 records evidence via a successful search_index tool call; round 2
-    // throws. Because partial evidence was gathered, the service must take the
-    // partial-results synthesis branch (status notice + fallback answer) rather
-    // than re-running the full deterministic instant pipeline.
     const chunk = retrieved("idx-1", markdownSource("Research/a.md"), "Partial evidence");
     let calls = 0;
     const chatModel: ChatModelProvider = {
@@ -604,9 +594,7 @@ describe("ResearchService", () => {
       isFallback: true,
       fallbackReason: "provider-error",
     });
-    // Partial evidence gathered during the failed thinking attempt is carried into
-    // the synthesis, but citations are intentionally empty: a failed thinking run
-    // produces no cited ids, so the synthesis receives an empty citation list.
+
     expect(complete.answer.evidence?.map((chunk) => chunk.id)).toContain("idx-1");
     expect(complete.answer.citations).toEqual([]);
   });
@@ -665,9 +653,6 @@ describe("ResearchService", () => {
   });
 
   it("records tool capabilities in diagnostics for the webOnly fallback path", async () => {
-    // webOnly has no assembled context, so toolCapabilities must be attached on
-    // the instant-fallback branch — otherwise the V3 report defaults calls
-    // to false and raises a spurious tool-calls-blocked error.
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
@@ -723,8 +708,7 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
-      // Ollama forces the instant-fallback strategy, which still exposes the
-      // original prompt's tools (unlike user-selected Instant).
+
       apiFormat: "ollama",
       toolsEnabled: true,
       noteTools: new NoteToolService({
@@ -1000,8 +984,7 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
-      // Ollama forces the instant-fallback strategy, where the optional tool loop
-      // remains active (user-selected Instant suppresses it).
+
       apiFormat: "ollama",
       toolsEnabled: true,
       noteTools: new NoteToolService({
@@ -1022,7 +1005,6 @@ describe("ResearchService", () => {
     );
 
     expect(events.map((event) => event.type)).toEqual([
-      // Extra leading status: the instant-fallback notice from the Thinking path.
       "status",
       "status",
       "status",
@@ -1116,8 +1098,7 @@ describe("ResearchService", () => {
           question: "How should I use local models?",
           answer:
             "Use local models with citations [local-1].\n\nFollow-up questions:\n1. What should I index next?",
-          // Only the source the answer actually cites is kept (B); the web
-          // sources were gathered but never bracket-cited, so they are dropped.
+
           citations: [expect.objectContaining({ id: "local-1" })],
           evidence: [
             expect.objectContaining({ id: "local-1", text: "Local model notes" }),
@@ -1327,8 +1308,6 @@ describe("ResearchService", () => {
     expect(events.at(-1)).toEqual({
       type: "complete",
       answer: expect.objectContaining({
-        // The answer cites nothing, so no citations are attached (B); the web
-        // source stays in evidence for context/popovers.
         citations: [],
         evidence: [
           expect.objectContaining({

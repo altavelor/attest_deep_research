@@ -91,12 +91,11 @@ describe("MapSources fan-out", () => {
     const result = await mapper.run({ question: "Does X hold?" });
 
     expect(result.diagnostics.selection).toBe("relevance");
-    // Distinct source paths only, in first-seen order.
+
     expect(result.rows.map((row) => row.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
     expect(result.rows.every((row) => row.ok && row.stance === "supports")).toBe(true);
     expect(result.diagnostics.completed).toBe(2);
 
-    // Each sub-agent is hard-scoped: index-only, single source, no recursion.
     for (const input of seen) {
       expect(input.toolContext?.availability.searchMode).toBe("indexOnly");
       expect(input.toolContext?.availability.noteAccess).toBe(false);

@@ -1,6 +1,3 @@
-// Web data source (stage 1, task 5.2). Wraps a web search provider and
-// contributes web search/fetch tools to the agent loop.
-
 import { Tool } from "@core/agent";
 import { SearchProvider } from "@application/ports";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
@@ -15,7 +12,6 @@ import { AnswerArtifactRegistry } from "../media/AnswerArtifactRegistry";
 export interface WebSourceOptions {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
-  /** Collects image candidates referenced by fetched pages. */
   artifacts?: AnswerArtifactRegistry;
   available?: boolean;
 }

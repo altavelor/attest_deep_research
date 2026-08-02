@@ -1,17 +1,7 @@
-// Query shaping for image providers. Commons and Openverse match a query against
-// short file metadata with AND semantics, so a natural-language research question
-// ("схема солнечной системы планеты") matches nothing while its content terms
-// alone match plenty. Callers try the variants in order and stop at the first
-// that yields candidates.
-
 const MAX_QUERY_LENGTH = 200;
 const MAX_CONTENT_TERMS = 4;
 const NARROW_TERM_COUNT = 2;
 
-/**
- * Words naming the medium rather than the subject. They are noise for an image
- * index, where every entry is already an image.
- */
 const MEDIUM_TERMS = new Set([
   "схема",
   "схемы",

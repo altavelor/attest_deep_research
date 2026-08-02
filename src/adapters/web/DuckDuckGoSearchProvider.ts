@@ -23,17 +23,17 @@ export interface DuckDuckGoSearchProviderOptions {
   searchUrl?: string;
   timeoutMs?: number;
   maxExtractedTextLength?: number;
-  /** Result count used when a per-call `limit` is not supplied (user setting). */
+
   defaultResultLimit?: number;
-  /** Minimum spacing between outbound requests, to avoid DuckDuckGo rate limits. */
+
   minRequestIntervalMs?: number;
-  /** Retries on a rate-limited search response before failing. */
+
   maxSearchRetries?: number;
-  /** Base backoff between rate-limit retries (multiplied by attempt number). */
+
   rateLimitBackoffMs?: number;
-  /** Minimum spacing between page fetches to the *same* host (fetch_web_page batch). */
+
   pageFetchIntervalMs?: number;
-  /** Maximum simultaneous page fetches across all hosts. */
+
   pageFetchConcurrency?: number;
   now?: () => Date;
   logger?: PluginRequestLogger;
@@ -46,15 +46,11 @@ const DEFAULT_RESULT_LIMIT = 5;
 const DEFAULT_MAX_FETCHES = 3;
 const HARD_RESULT_LIMIT = 50;
 const HARD_MAX_FETCHES = 15;
-// DuckDuckGo's HTML endpoint blocks bursts aggressively. Agents (including deep
-// research sub-agents sharing this instance) can fan out many queries at once, so
-// outbound requests are serialized and spaced, with bounded backoff on 429/503.
+
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 700;
 const DEFAULT_MAX_SEARCH_RETRIES = 2;
 const RATE_LIMIT_BACKOFF_MS = 1_500;
-// Page fetches hit arbitrary target hosts, not DuckDuckGo, so they get their own
-// per-host throttle instead of the search gate: same-host requests are spaced,
-// distinct hosts run concurrently up to a global cap (fast batch fetch_web_page).
+
 const DEFAULT_PAGE_FETCH_INTERVAL_MS = 250;
 const DEFAULT_PAGE_FETCH_CONCURRENCY = 6;
 

@@ -1,11 +1,3 @@
-// How a tool call is described to the user, in one place.
-//
-// The workflow view shows a title and a one-line intent for every call. Without
-// debug mode that line is *all* the user sees — the argument and result cells
-// stay hidden — so a tool missing an entry here degrades to its raw snake_case
-// name. Keeping title and intent together next to the canonical tool names lets
-// the drift-guard test prove that every registered tool has both.
-
 import {
   CHECK_URLS_TOOL,
   CREATE_NOTE_TOOL,
@@ -45,16 +37,15 @@ import {
 
 export interface ToolIntentContext {
   args: Record<string, unknown>;
-  /** Web resources the query planner selected for this call. */
+
   searchSources?: readonly string[];
-  /** Fetch targets already resolved; drives the "N:" live-animation form. */
+
   fetchTargetCount?: number;
 }
 
 export interface ToolPresentation {
-  /** Short heading shown in bold next to the call. */
   title: string;
-  /** One-line description of what the call is doing, in the user's terms. */
+
   intent(context: ToolIntentContext): string;
 }
 

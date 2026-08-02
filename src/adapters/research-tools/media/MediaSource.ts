@@ -1,7 +1,3 @@
-// Rich-media data source. Contributes the presentation tools always (they need
-// no external service) and the image search tool only when at least one image
-// resource is enabled or a read document supplied candidates.
-
 import { Tool } from "@core/agent";
 import type { ImageCandidate } from "@core/media";
 import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports";

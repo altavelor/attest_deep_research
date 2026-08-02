@@ -1,7 +1,3 @@
-// Wikimedia Commons image search. Uses the MediaWiki generator=search API in
-// the File namespace and preserves the file page, thumbnail, creator/credit and
-// licence metadata Commons requires for attribution.
-
 import { clampText, hasDisplayableDimensions, ImageCandidate } from "@core/media";
 import { imageFormatFromMimeType, imageFormatFromPath } from "@core/media";
 import type { ImageSearchOptions, ImageSearchSource } from "@application/ports";

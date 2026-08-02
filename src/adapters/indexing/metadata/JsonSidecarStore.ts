@@ -1,7 +1,3 @@
-// Generic per-source JSON sidecar storage under the index folder: one file per
-// source, named by a stable hash of the source path (filename-safe for any
-// vault path). Shared by the metadata and summary stores (SPEC-corpus R3/R4).
-
 import { createHash } from "crypto";
 import { mkdir, readdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";

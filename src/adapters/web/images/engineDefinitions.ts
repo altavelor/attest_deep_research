@@ -1,11 +1,3 @@
-// Image endpoints of the general search engines the user has already configured
-// for text search. Declarative like the text-source definitions: how to build
-// the request, and how to turn an untrusted payload into neutral candidates.
-//
-// These engines return no licence metadata, so every candidate stays a page
-// reference — it is attributed to the page that hosts it and is never presented
-// as licensed content.
-
 import {
   clampText,
   hasDisplayableDimensions,
@@ -28,7 +20,6 @@ export interface ImageSourceQueryInput {
 }
 
 export interface ImageSourceDefinition {
-  /** Catalog id of the engine that also serves this image endpoint. */
   sourceId: string;
   buildRequest(input: ImageSourceQueryInput): ImageSourceRequest;
   parseResponse(payload: unknown, sourceLabel: string): ImageCandidate[];

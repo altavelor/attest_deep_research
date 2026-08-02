@@ -1,8 +1,3 @@
-// Saved-chat domain model + validation rules (stage 5). Platform-neutral: the
-// DTOs reference only core types, and the validation/title helpers are pure. The
-// filesystem persistence lives in adapters/filesystem; the repository port lives
-// in application/ports.
-
 import { ChatDisplayMessage } from "@core/conversation/model";
 import { ResearchAnswer } from "@core/answer";
 import { ResearchSearchMode } from "@core/research/searchMode";
@@ -17,7 +12,7 @@ export interface SavedChatSettings {
   indexProfileId?: string;
   searchMode: ResearchSearchMode;
   contextMode?: ContextMode;
-  /** Defaults to Instant for chats saved before research-mode persistence. */
+
   researchMode?: ResearchMode;
 }
 
@@ -31,7 +26,7 @@ export interface SavedChat {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
-  /** Absent on legacy saved chats, which are treated as not favorited. */
+
   isFavorite?: boolean;
 }
 

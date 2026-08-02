@@ -1,7 +1,3 @@
-// Image references in Markdown and plain text. Markdown supports Obsidian wiki
-// embeds and vault-relative image links; plain text has no intrinsic image form,
-// so the extractor deliberately returns nothing for `.txt`.
-
 import { imageFormatFromPath, isSafeVaultImagePath } from "@core/media";
 import { IMAGE_EXTRACTION_LIMITS } from "@core/media";
 import { readInputText } from "../common";
@@ -16,7 +12,6 @@ const WIKI_EMBED = /!\[\[([^\]|\n]+?)(?:\|([^\]\n]*))?\]\]/g;
 const MARKDOWN_IMAGE = /!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g;
 
 export interface MarkdownImageOptions {
-  /** Document the source belongs to; targets are resolved against its folder. */
   documentPath?: string;
   resolveLinkedPath?: LinkedPathResolver;
 }

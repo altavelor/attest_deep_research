@@ -1,6 +1,3 @@
-// Attachment manifest: user-attached files must stay visible to the model as
-// files (path + delivery coverage), not dissolve into anonymous evidence chunks.
-
 import { MarkdownExtractor, stableId } from "@adapters/extractors";
 import { ContextAssembler } from "@application/use-cases/chat";
 import {

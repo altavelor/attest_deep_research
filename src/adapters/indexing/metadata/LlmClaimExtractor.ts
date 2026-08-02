@@ -1,7 +1,3 @@
-// LLM-backed claim extraction (SPEC-corpus R7). For one content section the model
-// returns a strict-JSON array of short, self-contained claims with a normalized
-// subject and free topic tags. Prompt changes must bump CLAIM_PROMPT_VERSION.
-
 import { ChatMessage, ChatModelProvider } from "@core/agent";
 import { ClaimExtractionInput, ClaimExtractor, ExtractedClaim } from "@application/ports";
 

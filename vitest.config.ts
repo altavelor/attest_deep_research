@@ -1,8 +1,6 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
-// Aliases mirror tsconfig.json "paths" and esbuild.config.mjs so tests resolve
-// the same "@core/*" specifiers as tsc and the production bundle.
 export default defineConfig({
   resolve: {
     alias: {
