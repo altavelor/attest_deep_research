@@ -178,6 +178,15 @@ describe("artifact rendering contracts", () => {
     );
   });
 
+  it("disposes artifacts before the whole transcript is re-rendered", () => {
+    const transcript = readFileSync("src/apps/obsidian/ui/chat/ChatTranscript.ts", "utf8");
+    expect(transcript).toContain("disposeAnswerArtifacts(transcriptEl)");
+    const disposeAt = transcript.indexOf("disposeChatTranscript(transcriptEl)");
+    const emptyAt = transcript.indexOf("transcriptEl.empty()");
+    expect(disposeAt).toBeGreaterThan(-1);
+    expect(disposeAt).toBeLessThan(emptyAt);
+  });
+
   it("keeps the lightbox keyboard-accessible and restores focus", () => {
     const lightbox = rendererSources.find((entry) =>
       entry.path.endsWith("ImageLightboxModal.ts"),

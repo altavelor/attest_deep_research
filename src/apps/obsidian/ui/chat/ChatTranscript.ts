@@ -17,6 +17,7 @@ import {
 } from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
+import { disposeAnswerArtifacts } from "./artifacts";
 import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
 
 export interface ChatTranscriptOptions {
@@ -249,8 +250,10 @@ function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): voi
     : anchor.previousScrollTop;
 }
 
+/** Releases everything the transcript owns before its DOM is emptied or replaced. */
 export function disposeChatTranscript(transcriptEl: HTMLElement): void {
   disposeFetchTargetAnimations(transcriptEl);
+  disposeAnswerArtifacts(transcriptEl);
 }
 
 export function renderFollowUps(
