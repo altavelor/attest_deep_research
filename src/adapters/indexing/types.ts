@@ -1,5 +1,10 @@
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
-import type { Extractor, IndexStore, IndexStoreWriteSession } from "@application/ports";
+import type {
+  DocumentImageManifestEntry,
+  Extractor,
+  IndexStore,
+  IndexStoreWriteSession,
+} from "@application/ports";
 import type { EmbeddingProviderClient } from "@core/agent";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
@@ -31,6 +36,8 @@ export interface IndexingState {
   indexSizeBytes?: number;
   isStale: boolean;
   indexChanged?: boolean;
+  /** Layout version reached by a successful full rebuild; absent when unchanged. */
+  indexVersion?: number;
   errorMessage?: string;
 }
 
@@ -77,6 +84,8 @@ export interface IndexedFileResult {
   contentHash?: string;
   persistSnapshot?: boolean;
   languages?: string[];
+  /** Image manifest rows discovered in this file during a full rebuild. */
+  documentImages?: DocumentImageManifestEntry[];
 }
 
 export type PendingIndexedFile = VaultFileSummary & {
@@ -140,6 +149,8 @@ export interface FileProcessorOptions {
   snapshots: Map<string, FileSnapshot>;
   progress: IndexingProgressState;
   logger?: IndexingLogger;
+  /** Enables document-image manifest collection; true only during a full rebuild. */
+  collectDocumentImages?: () => boolean;
 }
 
 export interface EmbeddingBatcherOptions {

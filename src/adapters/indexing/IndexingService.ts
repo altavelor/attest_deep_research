@@ -6,6 +6,7 @@ import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
 import { EmbeddingBatcher } from "./pipeline/EmbeddingBatcher";
 import { FileProcessor } from "./pipeline/FileProcessor";
+import { REQUIRED_INDEX_VERSION } from "./store/FileVectorImageManifest";
 import { IndexingProgressState } from "./controller/IndexingProgressState";
 import { IndexWriteCoordinator } from "./pipeline/IndexWriteCoordinator";
 import type {
@@ -40,6 +41,8 @@ export class IndexingService {
   private readonly now: () => Date;
   private readonly snapshots = new Map<string, FileSnapshot>();
   private readonly progress: IndexingProgressState;
+  /** True only while a full rebuild runs; gates image-manifest collection. */
+  private collectingDocumentImages = false;
   private readonly fileProcessor: FileProcessor;
   private readonly writer: IndexWriteCoordinator;
   private readonly files: IndexingServiceOptions["files"];
@@ -85,6 +88,7 @@ export class IndexingService {
       snapshots: this.snapshots,
       progress: this.progress,
       logger: options.logger,
+      collectDocumentImages: () => this.collectingDocumentImages,
     });
   }
 
@@ -118,7 +122,12 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.resume();
     }
-    return this.manualReindex("rebuild");
+    this.collectingDocumentImages = true;
+    try {
+      return await this.manualReindex("rebuild");
+    } finally {
+      this.collectingDocumentImages = false;
+    }
   }
 
   async manualReindex(
@@ -134,6 +143,9 @@ export class IndexingService {
       this.fileProcessor.canProcessPath(file.path),
     );
     await this.writer.loadPersistedSnapshots();
+    if (this.collectingDocumentImages) {
+      this.writer.beginImageManifest();
+    }
     this.progress.setTotalFiles(files.length);
     await this.writer.begin();
 
@@ -161,6 +173,9 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.keepPausedAfterRun();
     } else {
+      if (this.collectingDocumentImages) {
+        this.progress.setIndexVersion(REQUIRED_INDEX_VERSION);
+      }
       this.progress.complete();
     }
 
@@ -181,6 +196,9 @@ export class IndexingService {
 
       const result = await this.processFileSafely(file);
       this.progress.markFileScanned(file.path);
+      if (result.documentImages) {
+        this.writer.recordDocumentImages(result.documentImages);
+      }
       this.updateCountersAndPending(file, result, pendingChunks, pendingIndexedFiles);
 
       await this.writer.flushPending({

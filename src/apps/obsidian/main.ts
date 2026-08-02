@@ -99,6 +99,9 @@ export default class IxplorerPlugin extends Plugin {
         generatedAt,
       );
       profile.lastIndexedAt = state.lastIndexedAt;
+      if (state.indexVersion !== undefined) {
+        profile.indexVersion = state.indexVersion;
+      }
       profile.indexedFileCount = state.indexedFiles + state.skippedFiles;
       profile.indexSizeBytes = state.indexSizeBytes;
       profile.updatedAt = new Date().toISOString();
@@ -107,6 +110,15 @@ export default class IxplorerPlugin extends Plugin {
   });
 
   readonly webSourceHealth = new WebSourceHealthTracker();
+
+  /** Opens the plugin's settings tab; used by in-chat notices that link to it. */
+  openSettingsTab(): void {
+    const setting = (
+      this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }
+    ).setting;
+    setting?.open();
+    setting?.openTabById(this.manifest.id);
+  }
 
   /** Collaborators the composition factories need from this plugin host. */
   private get composition(): CompositionContext {
@@ -158,9 +170,11 @@ export default class IxplorerPlugin extends Plugin {
               name: profile.name,
               isSuspended: profile.isSuspended === true,
               isIndexed: Boolean(profile.lastIndexedAt),
+              ...(profile.indexVersion !== undefined ? { indexVersion: profile.indexVersion } : {}),
             })),
           getIndexSearchEmbedderWarning: (indexProfileId) =>
             indexSearchEmbedderWarning(this.settings, indexProfileId),
+          openIndexSettings: () => this.openSettingsTab(),
           searchIndex: (options) => this.searchIndex(options),
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),

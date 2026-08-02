@@ -1,6 +1,8 @@
 import type { ExtractedChunk } from "@core/model";
 import { VaultFileSummary } from "@application/ports";
 import { isPathIncluded, vaultPathMatchesGlob } from "@shared";
+import { extractDocumentImages, supportsDocumentImages } from "@adapters/extractors";
+import type { DocumentImageManifestEntry } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 import { detectTextLanguages } from "./languageDetection";
 import type {
@@ -95,6 +97,7 @@ export class FileProcessor {
       durationMs: Date.now() - extractionStartedAt,
       chunkCount: chunks.length,
     });
+    const documentImages = this.collectDocumentImages(file.path, data, contentHash);
     this.options.progress.setFileChunkProgress(file.path, 0, chunks.length);
 
     if (chunks.length === 0) {
@@ -116,6 +119,7 @@ export class FileProcessor {
         contentHash,
         persistSnapshot: true,
         languages,
+        ...(documentImages.length > 0 ? { documentImages } : {}),
       };
     }
 
@@ -127,7 +131,32 @@ export class FileProcessor {
       languages: detectTextLanguages(
         chunks.map((chunk: ExtractedChunk) => chunk.text).join("\n\n"),
       ),
+      ...(documentImages.length > 0 ? { documentImages } : {}),
     };
+  }
+
+  /**
+   * Collects manifest rows for the images a document embeds or links. Runs only
+   * during a full rebuild and never keeps image bytes.
+   */
+  private collectDocumentImages(
+    path: string,
+    data: ArrayBuffer | string,
+    contentHash: string,
+  ): DocumentImageManifestEntry[] {
+    if (this.options.collectDocumentImages?.() !== true || !supportsDocumentImages(path)) {
+      return [];
+    }
+    return extractDocumentImages({ path, data, metadataOnly: true }).map((ref) => ({
+      documentPath: path,
+      contentHash,
+      format: ref.format,
+      locator: ref.locator,
+      ...(ref.alt ? { alt: ref.alt } : {}),
+      ...(ref.caption ? { caption: ref.caption } : {}),
+      ...(ref.width ? { width: ref.width } : {}),
+      ...(ref.height ? { height: ref.height } : {}),
+    }));
   }
 
   canProcessPath(path: string): boolean {

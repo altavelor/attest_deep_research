@@ -22,6 +22,8 @@ export interface IndexProfileSelectOption {
   name: string;
   isSuspended?: boolean;
   isIndexed?: boolean;
+  /** Layout version of the profile's index; absent means the legacy layout. */
+  indexVersion?: number;
 }
 
 /** Imperative handle the host view uses to read/sync composer control state. */
