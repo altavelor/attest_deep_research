@@ -137,3 +137,20 @@ comment body as an artifact. A second job, `coverage-comment`, holds
 `pull-requests: write` and does nothing but download that artifact and post it —
 it never checks out the branch or runs repository code, so the write-scoped token
 is never exposed to code from the pull request.
+
+## Composer and research-controller behaviour (issue #18)
+
+`tests/unit/ui/chat-composer.behaviour.test.ts` and
+`tests/unit/ui/research-question-controller.behaviour.test.ts` execute the chat
+composer and the research question controller under happy-dom with fake timers,
+replacing source-text claims with assertions on rendered DOM state and on the
+order of the render callbacks a stream triggers. Statement coverage of the three
+files, measured with `npm run test:coverage`:
+
+| File                                                 | Before   | After         |
+| ---------------------------------------------------- | -------- | ------------- |
+| `apps/obsidian/ui/chat/ChatComposer.ts`              | 0/413 0% | 353/413 85.5% |
+| `apps/obsidian/ui/chat/ChatComposerController.ts`    | 0/224 0% | 186/224 83.0% |
+| `.../ui/chat/research/ResearchQuestionController.ts` | 0/482 0% | 353/482 73.2% |
+
+`src/apps` statements rise from 20.95% to 28.71% (branches 58.77% to 61.16%).
