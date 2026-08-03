@@ -200,14 +200,19 @@ export class FileVectorIndexStore
   }
 
   /**
-   * Document images recorded by the last successful full rebuild. Indexes below
-   * the required version carry no manifest and yield an empty list, so image
-   * discovery simply falls back to the documents attached to the request.
+   * Document images recorded by the last successful full rebuild, restricted to
+   * sources the index still holds so a deleted or renamed document cannot be
+   * discovered. Indexes below the required version yield an empty list, and
+   * discovery falls back to the documents attached to the request.
    */
   async listDocumentImages(): Promise<ImageManifestEntry[]> {
     const manifest = await this.persistence.readManifest();
     if (requiresIndexRebuildForImages(manifest)) return [];
-    return this.persistence.readImageManifest();
+    const entries = await this.persistence.readImageManifest();
+    return this.withState(entries, (state) => {
+      const indexed = new Set(state.sources.map((source) => source.sourcePath));
+      return entries.filter((entry) => indexed.has(entry.documentPath));
+    });
   }
 
   async loadSourceSnapshots(): Promise<IndexSourceSnapshot[]> {

@@ -90,9 +90,10 @@ export class FileVectorIndexPersistence {
 
   /**
    * Turns recorded rows into the manifest to write. A rebuild replaces the file
-   * outright; an incremental write merges its rows over the stored ones, but
-   * only for an index that already carries a manifest — otherwise a partial
-   * manifest would claim a version the index has not earned.
+   * outright; an incremental write merges its rows over the stored ones and
+   * drops rows of documents the index no longer holds, so deleted and renamed
+   * sources cannot linger. Only an index that already carries a manifest is
+   * merged into, otherwise a partial manifest would claim an unearned version.
    */
   private async resolveImageManifest(
     state: FileVectorIndexState,
@@ -105,8 +106,9 @@ export class FileVectorIndexPersistence {
     if (requiresIndexRebuildForImages(state.manifest)) return undefined;
 
     const touched = new Set(images.scope.documentPaths);
+    const indexed = new Set(state.sources.map((source) => source.sourcePath));
     const kept = (await this.readImageManifest()).filter(
-      (entry) => !touched.has(entry.documentPath),
+      (entry) => !touched.has(entry.documentPath) && indexed.has(entry.documentPath),
     );
     return { mode: "merge", entries: [...kept, ...images.entries] };
   }
