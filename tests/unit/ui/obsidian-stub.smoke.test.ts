@@ -157,6 +157,22 @@ describe("Workspace and WorkspaceLeaf stubs", () => {
     expect(clicks).toBe(0);
   });
 
+  it("attaches the opened view to the document", async () => {
+    const app = new App();
+    const plugin = new SmokePlugin(app);
+    await plugin.onload();
+    const leaf = app.workspace.getLeaf(true);
+
+    await leaf.setViewState({ type: VIEW_TYPE });
+
+    expect(leaf.view?.containerEl.isConnected).toBe(true);
+    expect(leaf.view?.contentEl.querySelector(".smoke-body")?.isConnected).toBe(true);
+
+    await leaf.detach();
+
+    expect(document.body.querySelector(".smoke-body")).toBeNull();
+  });
+
   it("waits for an asynchronous onload before reporting the view as opened", async () => {
     const app = new App();
     const plugin = new SmokePlugin(app);

@@ -12,15 +12,21 @@ export interface ViewState {
  * close/unload lifecycle, so a view that leaks a registration is detectable.
  */
 export class WorkspaceLeaf {
+  readonly containerEl: HTMLElement;
   view: View | null = null;
 
-  constructor(public readonly workspace: Workspace) {}
+  constructor(public readonly workspace: Workspace) {
+    this.containerEl = document.createElement("div");
+    this.containerEl.className = "workspace-leaf";
+  }
 
   async setViewState(state: ViewState): Promise<void> {
     const factory = this.workspace.getViewFactory(state.type);
     if (!factory) throw new Error(`No view registered for type "${state.type}".`);
     await this.closeCurrentView();
     this.view = factory(this);
+    document.body.appendChild(this.containerEl);
+    this.containerEl.appendChild(this.view.containerEl);
     await this.view.load();
     await this.view.onOpen();
   }
@@ -36,6 +42,8 @@ export class WorkspaceLeaf {
     if (!view) return;
     await view.onClose();
     view.unload();
+    view.containerEl.remove();
+    this.containerEl.remove();
   }
 }
 
