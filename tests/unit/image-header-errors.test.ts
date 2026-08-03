@@ -5,6 +5,8 @@ function png(width: number, height: number): Uint8Array {
   const data = new Uint8Array(24);
   data.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
   const view = new DataView(data.buffer);
+  view.setUint32(8, 13);
+  data.set([0x49, 0x48, 0x44, 0x52], 12);
   view.setUint32(16, width);
   view.setUint32(20, height);
   return data;
@@ -87,6 +89,16 @@ describe("readImageDimensions rejects malformed headers", () => {
     expect(readImageDimensions(png(120, 80), "jpeg")).toBeUndefined();
     expect(readImageDimensions(png(120, 80), "webp")).toBeUndefined();
     expect(readImageDimensions(png(120, 80), "avif")).toBeUndefined();
+  });
+
+  it("still trusts the size fields of a PNG whose IHDR chunk header is corrupt", () => {
+    const missingIhdr = png(120, 80);
+    missingIhdr.fill(0, 8, 16);
+    const wrongChunkLength = png(120, 80);
+    new DataView(wrongChunkLength.buffer).setUint32(8, 999);
+
+    expect(readImageDimensions(missingIhdr, "png")).toEqual({ width: 120, height: 80 });
+    expect(readImageDimensions(wrongChunkLength, "png")).toEqual({ width: 120, height: 80 });
   });
 
   it("does not read a size out of a long buffer whose signature belongs to another format", () => {
