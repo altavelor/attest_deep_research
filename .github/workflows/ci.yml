@@ -19,9 +19,13 @@ jobs:
   build:
     name: Build and validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,6 +60,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Build coverage report
+        if: always()
+        shell: bash
+        run: |
+          base=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            git cat-file -e "$base^{commit}" 2>/dev/null || base=""
+          fi
+          if [ -n "$base" ]; then
+            node scripts/coverage-report.mjs --base "$base" --out "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/coverage-report.md"
+          else
+            node scripts/coverage-report.mjs --out "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/coverage-report.md"
+          fi
+
+      - name: Upload coverage report comment body
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-comment
+          path: ${{ runner.temp }}/coverage-report.md
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build plugin
         run: npm run build
 
@@ -76,3 +104,66 @@ jobs:
             dist/styles.css
           if-no-files-found: error
           retention-days: 14
+
+  coverage-comment:
+    name: Publish coverage comment
+    needs: build
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download coverage report comment body
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report-comment
+          path: report
+
+      - name: Publish coverage report comment
+        if: steps.download.outcome == 'success'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- ixplorer-coverage-report -->";
+            const path = "report/coverage-report.md";
+            if (!fs.existsSync(path)) {
+              core.warning("Coverage report artifact is missing; nothing to publish.");
+              return;
+            }
+            const body = fs.readFileSync(path, "utf8");
+            if (!body.startsWith(marker) || body.length > 65536) {
+              core.warning("Coverage report artifact is not a coverage report; nothing to publish.");
+              return;
+            }
+            try {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              const existing = comments.find(
+                (comment) => comment.user?.type === "Bot" && comment.body?.includes(marker),
+              );
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body,
+                });
+              }
+            } catch (error) {
+              core.warning(`Coverage comment not published: ${error.message}`);
+            }
