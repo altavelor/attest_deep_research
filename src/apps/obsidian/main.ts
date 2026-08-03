@@ -172,8 +172,12 @@ export default class IxplorerPlugin extends Plugin {
           getIndexSearchEmbedderWarning: (indexProfileId) =>
             indexSearchEmbedderWarning(this.settings, indexProfileId),
           openIndexSettings: () => this.openSettingsTab(),
-          resolveDocumentImage: (documentPath, locator) =>
-            createDocumentImageResolver(this.composition).resolve(documentPath, locator),
+          resolveDocumentImage: (documentPath, locator, contentHash) =>
+            createDocumentImageResolver(this.composition).resolve(
+              documentPath,
+              locator,
+              contentHash,
+            ),
           searchIndex: (options) => this.searchIndex(options),
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
