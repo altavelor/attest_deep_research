@@ -9,7 +9,7 @@ import { formatReportTimestamp } from "./indexPath";
 export interface IndexReportModalOptions {
   profile: IndexProfile;
   report: IndexSourceReportItem[];
-  /** Enrichment sidecars, when the profile has been enriched (SPEC-corpus R3/R4). */
+
   metadata?: SourceDocumentMetadata[];
   summaries?: SourceDocumentSummaries[];
 }

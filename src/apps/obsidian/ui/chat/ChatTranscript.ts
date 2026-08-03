@@ -3,6 +3,7 @@ import { App, Component, setIcon } from "obsidian";
 import { ResearchAnswer } from "@core/answer";
 import { ChainItem, ChatDisplayMessage, shouldShowDiagnosticAction } from "@core/conversation";
 import { ContextDiagnostics } from "@core/diagnostics";
+import type { DocumentImageResolver } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import {
@@ -16,6 +17,7 @@ import {
 } from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
+import { disposeAnswerArtifacts } from "./artifacts";
 import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
 
 export interface ChatTranscriptOptions {
@@ -37,6 +39,8 @@ export interface ChatTranscriptOptions {
   onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
   onSaveAnswerToNewNote(answer: ResearchAnswer): void;
   onAppendAnswerToActiveNote(answer: ResearchAnswer): void;
+
+  documentImages?: DocumentImageResolver;
 }
 
 export function renderChatTranscript(
@@ -246,8 +250,10 @@ function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): voi
     : anchor.previousScrollTop;
 }
 
+/** Releases everything the transcript owns before its DOM is emptied or replaced. */
 export function disposeChatTranscript(transcriptEl: HTMLElement): void {
   disposeFetchTargetAnimations(transcriptEl);
+  disposeAnswerArtifacts(transcriptEl);
 }
 
 export function renderFollowUps(

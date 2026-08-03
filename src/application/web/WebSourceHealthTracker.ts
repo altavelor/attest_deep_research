@@ -1,20 +1,14 @@
-// Session-scoped health state of hub sources, shared between the query planner
-// (which reports failures and skips suspended sources) and the settings UI
-// (which shows the enabled/problem/off indicator). Lives for the plugin
-// lifetime: planners are recreated per research run, this tracker is not.
-
 import { isIxplorerError } from "@core/errors";
 
 export type WebSourceIssueReason = "unauthorized" | "rate-limited";
 
 export interface WebSourceIssue {
   reason: WebSourceIssueReason;
-  /** Epoch ms when the source may be retried; Infinity until credentials change. */
+
   until: number;
 }
 
 export interface WebSourceHealthTrackerOptions {
-  /** How long a rate-limited source sits out before being retried. */
   rateLimitCooldownMs?: number;
   now?: () => number;
 }

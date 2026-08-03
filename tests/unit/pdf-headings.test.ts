@@ -34,7 +34,7 @@ describe("pdfHeadings", () => {
       "Riquet with the Tuft",
       "THE SLEEPING BEAUTY",
     ]);
-    // Крупный шрифт — уровень 1, капс обычного размера — уровень ниже.
+
     expect(headings[0].level).toBeLessThan(headings[1].level);
   });
 

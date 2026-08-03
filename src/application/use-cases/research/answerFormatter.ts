@@ -1,6 +1,7 @@
 import { formatCitationLink } from "./citationLinks";
 import { linkifyUrlCitations } from "./urlCitations";
 import { ResearchAnswer } from "@core/answer";
+import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
 import { Citation } from "@core/model";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
@@ -18,6 +19,7 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
     "",
     renderAnswerBody(answer, citations),
     "",
+    ...artifactSections(answer),
     "## Citations",
     "",
     citationsMarkdown(citations),
@@ -29,13 +31,6 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   ].join("\n");
 }
 
-/**
- * Rewrite the answer body's inline citation tokens into a reader-friendly form.
- * The model cites evidence by its raw chunk id (`[chunk-id]`), which reads as
- * inert noise in a saved note. Each such token is replaced with `[n]`, the same
- * number the source carries in the `## Citations` list below. `[url:…]` handles
- * are turned into plain links as before.
- */
 function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]): string {
   const numberByKey = new Map(
     dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
@@ -54,6 +49,79 @@ function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]):
   });
 
   return linkifyUrlCitations(numbered);
+}
+
+/**
+ * Exports the answer's artifacts as Markdown: galleries become an attribution
+ * and source-link table, charts become their equivalent data table. Image bytes
+ * are never written into the note.
+ */
+function artifactSections(answer: ResearchAnswer): string[] {
+  const artifacts = sanitizeAnswerArtifacts(answer.artifacts);
+  if (!artifacts) return [];
+
+  const sections: string[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.type === "image-gallery") {
+      sections.push(
+        `## ${artifact.title ?? "Images"}`,
+        "",
+        "| Image | Source | Licence |",
+        "| --- | --- | --- |",
+        ...artifact.images.map((image) =>
+          [
+            "",
+            escapeTableCell(image.alt || image.sourceLabel),
+            galleryImageLink(image),
+            escapeTableCell(
+              image.licensed === true ? (image.licenceName ?? "—") : "Page reference",
+            ),
+            "",
+          ].join(" | "),
+        ),
+        "",
+      );
+      continue;
+    }
+    sections.push(
+      `## ${artifact.title}`,
+      "",
+      chartDataTable(artifact),
+      "",
+      ...(artifact.caption ? [artifact.caption, ""] : []),
+    );
+  }
+  return sections;
+}
+
+/**
+ * Attribution comes from fetched pages and providers, so it is untrusted text.
+ * A label that cannot be escaped safely, or a destination that could terminate
+ * the link, degrades to plain text rather than emitting extra Markdown.
+ */
+function galleryImageLink(image: AnswerImage): string {
+  const label = escapeLinkText(image.sourceLabel);
+  if (/^https?:\/\//i.test(image.sourceUrl)) {
+    const destination = markdownLinkDestination(image.sourceUrl);
+    return destination ? `[${label}](${destination})` : label;
+  }
+  return /[[\]|]/.test(image.sourceUrl) ? label : `[[${image.sourceUrl}]]`;
+}
+
+function markdownLinkDestination(url: string): string | undefined {
+  if (/[\s<>]/.test(url)) return undefined;
+  return url.replace(/\(/g, "%28").replace(/\)/g, "%29");
+}
+
+function escapeLinkText(value: string): string {
+  return escapeTableCell(value).replace(/([[\]])/g, "\\$1");
+}
+
+function escapeTableCell(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/[\r\n]+/g, " ");
 }
 
 export function researchAnswerNotePath(answer: ResearchAnswer): string {

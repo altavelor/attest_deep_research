@@ -17,6 +17,9 @@ import {
   SEARCH_NOTES_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_TOOL,
+  IMAGE_SEARCH_TOOL,
+  PRESENT_CHART_TOOL,
+  PRESENT_IMAGE_GALLERY_TOOL,
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
 import { RetrievedChunk } from "@core/model/source";
@@ -25,12 +28,6 @@ import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./att
 import { currentDateLine, ResearchChatHistoryMessage } from "./prompts";
 import { buildIndexSkill, buildSourceAvailabilityRule } from "./thinkingSourcePrompts";
 
-/**
- * What the prompt needs to know about the run. `availableTools` is the source of
- * truth for which skills/tools the prompt advertises — it must be exactly the set
- * of tools the runtime registered (`ToolManager.definitions()`), so the prompt can
- * never mention a tool the model cannot actually call.
- */
 export interface ThinkingToolContext {
   coreVariant: "vault" | "research";
   availableTools: readonly string[];
@@ -42,10 +39,10 @@ export interface BuildThinkingResearchMessagesOptions {
   chatHistory?: ResearchChatHistoryMessage[];
   requiredTools: readonly string[];
   explicitEvidence?: RetrievedChunk[];
-  /** User-attached vault files; rendered as a manifest so the model sees them as files. */
+
   attachedFiles?: AttachedFileManifestEntry[];
   toolContext: ThinkingToolContext;
-  /** Injectable clock for deterministic tests; defaults to the real current date. */
+
   now?: Date;
 }
 
@@ -56,17 +53,12 @@ const hasIndex = (tools: ToolSet): boolean => tools.has(INDEX_SEARCH_TOOL);
 const hasSubAgent = (tools: ToolSet): boolean => tools.has(SUB_AGENT_TOOL);
 const hasMapSources = (tools: ToolSet): boolean => tools.has(MAP_SOURCES_TOOL);
 const hasClaims = (tools: ToolSet): boolean => tools.has(FIND_CLAIMS_TOOL);
-// Compiling corpus knowledge into notes needs both a readable index (evidence +
-// planning) and note-writing tools; advertised only when both are present.
+
 const hasCompileKnowledge = (tools: ToolSet): boolean => hasIndex(tools) && hasNoteMutation(tools);
 const hasNoteMutation = (tools: ToolSet): boolean =>
   NOTE_MUTATION_TOOLS.some((name) => tools.has(name));
 const hasDownload = (tools: ToolSet): boolean => tools.has(DOWNLOAD_DOCUMENT_TOOL);
 
-// Universal guardrail against the model narrating side effects it never performed
-// (e.g. "I created the folder and saved five notes" when no create_note ran). Only
-// tool results — never prose — count as having done a thing. Kept tool-agnostic so
-// it applies to every profile and does not trip the prompt↔registry drift guard.
 const ACTION_HONESTY_RULE = `
 ## Doing vs. describing (read this before writing a final answer)
 Producing text NEVER changes the vault or the web. A note is created, a file is
@@ -110,7 +102,6 @@ ${includeMutation ? `\n${MUTATION_RULES}` : ""}
 When asked to summarise or synthesise notes: read each relevant note with read_note,
 then compose the summary from the actual note content. Do not invent facts not present in the notes.`.trimStart();
 
-// The evidence tools the profile actually registered, in advertising order.
 function evidenceToolNames(tools: ToolSet): string[] {
   return [INDEX_SEARCH_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL].filter((name) => tools.has(name));
 }
@@ -192,8 +183,6 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
   return sections.join("\n\n");
 };
 
-// fetch_web_page is a separate tool that only registers when the web provider can
-// fetch full pages — so its guidance is conditional on the tool actually being present.
 const WEB_SKILL = (tools: ToolSet): string => {
   const canFetch = tools.has(WEB_FETCH_TOOL);
   const heading = canFetch
@@ -239,10 +228,6 @@ const WEB_SKILL = (tools: ToolSet): string => {
   ].join("\n\n");
 };
 
-// Document download registers only when web is active and the vault is writable, so
-// its guidance is conditional on the tools actually being present. The probe→download
-// order matters: probe is a cheap HEAD check that avoids transferring bodies of pages
-// that are not real documents.
 const DOWNLOAD_SKILL = (tools: ToolSet): string => {
   const canProbe = tools.has(PROBE_DOCUMENT_URL_TOOL);
   const heading = canProbe
@@ -277,10 +262,35 @@ const DOWNLOAD_SKILL = (tools: ToolSet): string => {
   return [heading, steps.join("\n")].join("\n\n");
 };
 
-// The "do it yourself instead" alternatives must be limited to tools this profile
-// actually registered — the sub-agent's own toolset (index/web/notes) always mirrors
-// the parent's, but the skill text must not name a manual tool the parent itself
-// doesn't have (e.g. search_index in a web-only profile).
+const RICH_MEDIA_SKILL = (tools: ToolSet): string => {
+  const canSearchImages = tools.has(IMAGE_SEARCH_TOOL);
+  const lines = [
+    "Use these only when a visual genuinely improves the answer. Never use them to decorate.",
+    "- Tables are ordinary Markdown: use headers, at most 8 columns and 30 rows, no HTML.",
+    "- present_chart takes chart DATA (bar, line, scatter, pie): at most 4 series and 50 points",
+    "  per series. Never send SVG, HTML, CSS, scripts, or image URLs — they are rejected.",
+    "- Keep the citation for every visual in the surrounding prose or its caption.",
+  ];
+  if (canSearchImages) {
+    lines.splice(
+      1,
+      0,
+      "- Call search_images first, then pass the most relevant returned `imageId` handles to",
+      "  present_image_gallery. URLs are rejected; only handles from this answer work.",
+      "- Query search_images with two or three concrete subject words, not the user's full",
+      "  question: image resources match short file metadata, and English matches best.",
+      "  On `no-image-candidates`, retry once with fewer or English words before giving up.",
+    );
+  }
+
+  return [
+    `## Showing visuals (${[canSearchImages ? IMAGE_SEARCH_TOOL : "", PRESENT_IMAGE_GALLERY_TOOL, PRESENT_CHART_TOOL].filter(Boolean).join(", ")})`,
+    lines.join("\n"),
+  ].join("\n\n");
+};
+
+const hasRichMedia = (tools: ToolSet): boolean => tools.has(PRESENT_CHART_TOOL);
+
 const SUB_AGENT_SKILL = (tools: ToolSet): string => {
   const manualAlternatives = [
     INDEX_SEARCH_TOOL,
@@ -321,9 +331,6 @@ budget, not yours, so your context stays compact.
   }`.trimStart();
 };
 
-// Fan-out skill — advertised only when map_sources is registered (needs an index).
-// The reduce contract is an evidence matrix: a document × stance table with a
-// citation on every row, which is also the input format for contradiction work.
 const MAP_SOURCES_SKILL = `
 ## Comparing across documents (map_sources)
 
@@ -350,11 +357,6 @@ do not address the question, and note any row flagged with an \`error\` (that
 document could not be analyzed) rather than treating it as silence.
 `.trimStart();
 
-// Knowledge-compilation workflow (SPEC-corpus R6): turn a corpus into a connected
-// set of vault notes rather than one flat dump. Pure prompt engineering over tools
-// already registered — it only names the ones actually present in this profile so
-// the drift guard and source-availability rule stay honest.
-// "a", "a and b", "a, b and c" — for listing the tools a step may use.
 function humanJoin(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
@@ -413,10 +415,6 @@ build a connected set of notes, not one flat note:
 `.trimStart();
 };
 
-// Contradiction workflow (SPEC-corpus R7). Two layers: cheap claim retrieval
-// (find_claims) then careful verbatim verification before any contradiction is
-// asserted — paraphrases of the same fact are NOT contradictions. Advertised only
-// when the claim index tool is present.
 const CONTRADICTION_SKILL = `
 ## Finding contradictions across the corpus (find_claims)
 
@@ -493,6 +491,10 @@ export function buildThinkingResearchMessages(
 
   if (hasClaims(tools)) {
     systemSections.push(CONTRADICTION_SKILL);
+  }
+
+  if (hasRichMedia(tools)) {
+    systemSections.push(RICH_MEDIA_SKILL(tools));
   }
 
   if (options.attachedFiles?.length) {

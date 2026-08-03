@@ -1,6 +1,3 @@
-// Developer/community and news definitions: GitHub, Stack Exchange,
-// Hacker News (Algolia), NewsAPI.
-
 import {
   asArray,
   asRecord,

@@ -1,6 +1,3 @@
-// Wayback Machine: last-resort fallback — when the live page is gone or
-// blocked, serve the closest archived snapshot. Free, no key.
-
 import {
   PageFetchProvider,
   SearchProvider,
@@ -13,7 +10,6 @@ export class WaybackFetchProvider implements PageFetchProvider {
   readonly id = "wayback";
 
   constructor(
-    /** Fetches the snapshot page itself (the native provider's generic fetch core). */
     private readonly pageFetcher: Pick<SearchProvider, "fetchPage">,
     private readonly runtime: FetchHttpRuntime = {},
   ) {}

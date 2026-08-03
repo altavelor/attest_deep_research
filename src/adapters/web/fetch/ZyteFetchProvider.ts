@@ -1,6 +1,3 @@
-// Zyte API (api.zyte.com/v1/extract): industrial fetcher with browser rendering
-// and antibot handling. Second fallback in the page-fetch chain.
-
 import { PageFetchProvider, WebPageFetchOptions, WebPageFetchResult } from "@application/ports";
 import { extractReadableText } from "../DuckDuckGoParser";
 import {

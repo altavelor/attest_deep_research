@@ -44,8 +44,6 @@ describe("keyword search at corpus scale (Ф0)", () => {
       const first = await reader.searchKeywords("local retrieval", options);
       expect(first.map((result) => result.id)).toEqual(["chunk-a"]);
 
-      // Удаляем keyword-файлы с диска: повторный запрос обязан отработать из
-      // кэша состояния, не читая диск. До Ф0 каждый запрос перечитывал файлы.
       rmSync(join(folder, "keywords"), { recursive: true, force: true });
 
       const second = await reader.searchKeywords("local retrieval", options);

@@ -16,14 +16,11 @@
   white-space: normal;
 }
 
-/* Unified reasoning / tool / answer workflow */
-
 .ixplorer-chat__message-content--workflow {
   position: relative;
   padding-left: 1.3rem;
 }
 
-/* Continuous rail behind the workflow dots, spanning reasoning, tools, and the answer. */
 .ixplorer-chat__message-content--workflow::before {
   content: "";
   position: absolute;
@@ -53,7 +50,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  /* Ring in the background colour masks the rail line passing behind the dot. */
+
   box-shadow: 0 0 0 3px var(--background-primary);
 }
 
@@ -98,7 +95,6 @@
   min-width: 0;
 }
 
-/* Reasoning and tool text share the font of the main answer. */
 .ixplorer-chat__workflow-text > :first-child {
   margin-top: 0;
 }
@@ -113,7 +109,6 @@
   margin-bottom: 0.15rem;
 }
 
-/* Collapsible "Thinking" disclosure for long reasoning blocks. */
 .ixplorer-chat__thinking-summary {
   display: inline-flex;
   align-items: center;
@@ -148,8 +143,6 @@
   padding-top: 0.35rem;
   color: var(--text-muted);
 }
-
-/* Tool call node */
 
 .ixplorer-chat__tool-head {
   display: flex;
@@ -255,7 +248,6 @@
   letter-spacing: 0.04em;
 }
 
-/* "Open full output" affordance — only hinted on hover/focus to stay quiet. */
 .ixplorer-chat__tool-cell-open-hint {
   font-weight: var(--font-normal);
   text-transform: none;
@@ -275,18 +267,16 @@
   overflow: hidden;
   font-size: var(--font-ui-smaller);
   line-height: 1.45;
-  /* Preview text stays selectable/copyable; a bare click still opens the tab. */
+
   user-select: text;
   cursor: text;
 }
 
-/* Arguments render on a single line; the full payload is one click away. */
 .ixplorer-chat__tool-cell--in .ixplorer-chat__tool-cell-body {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-/* Result preview is clamped to ~3 lines with no scrollbar. */
 .ixplorer-chat__tool-cell--out .ixplorer-chat__tool-cell-body {
   max-height: calc(1.45em * 3);
 }
@@ -303,7 +293,6 @@
   background: transparent;
 }
 
-/* Out-cell code wraps so long results fill the 3-line preview before clipping. */
 .ixplorer-chat__tool-cell--out .ixplorer-chat__tool-cell-code {
   white-space: pre-wrap;
 }
@@ -313,8 +302,6 @@
   padding: 0;
   white-space: inherit;
 }
-
-/* Edit diff (update_note) */
 
 .ixplorer-chat__diff {
   font-family: var(--font-monospace);
@@ -357,8 +344,6 @@
 .ixplorer-chat__diff-line--remove .ixplorer-chat__diff-sign {
   color: var(--text-error);
 }
-
-/* Fallback notice */
 
 .ixplorer-chat__fallback-notice {
   display: flex;

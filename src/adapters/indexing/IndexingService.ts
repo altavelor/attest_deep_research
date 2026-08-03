@@ -6,6 +6,7 @@ import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
 import { EmbeddingBatcher } from "./pipeline/EmbeddingBatcher";
 import { FileProcessor } from "./pipeline/FileProcessor";
+import { REQUIRED_INDEX_VERSION } from "./store/FileVectorImageManifest";
 import { IndexingProgressState } from "./controller/IndexingProgressState";
 import { IndexWriteCoordinator } from "./pipeline/IndexWriteCoordinator";
 import type {
@@ -40,6 +41,7 @@ export class IndexingService {
   private readonly now: () => Date;
   private readonly snapshots = new Map<string, FileSnapshot>();
   private readonly progress: IndexingProgressState;
+  private collectingDocumentImages = false;
   private readonly fileProcessor: FileProcessor;
   private readonly writer: IndexWriteCoordinator;
   private readonly files: IndexingServiceOptions["files"];
@@ -85,6 +87,9 @@ export class IndexingService {
       snapshots: this.snapshots,
       progress: this.progress,
       logger: options.logger,
+      ...(options.resolveLinkedImagePath
+        ? { resolveLinkedImagePath: options.resolveLinkedImagePath }
+        : {}),
     });
   }
 
@@ -118,7 +123,12 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.resume();
     }
-    return this.manualReindex("rebuild");
+    this.collectingDocumentImages = true;
+    try {
+      return await this.manualReindex("rebuild");
+    } finally {
+      this.collectingDocumentImages = false;
+    }
   }
 
   async manualReindex(
@@ -136,9 +146,11 @@ export class IndexingService {
     await this.writer.loadPersistedSnapshots();
     this.progress.setTotalFiles(files.length);
     await this.writer.begin();
+    this.writer.beginImageManifest(this.collectingDocumentImages ? "replace" : "merge");
 
     const pendingChunks: ExtractedChunk[] = [];
     const pendingIndexedFiles: PendingIndexedFile[] = [];
+    let imageManifestWritten = false;
 
     try {
       await this.processFiles(files, pendingChunks, pendingIndexedFiles);
@@ -148,8 +160,11 @@ export class IndexingService {
           chunks: pendingChunks,
           indexedFiles: pendingIndexedFiles,
         });
+        if (this.collectingDocumentImages && !this.isCompleteRun()) {
+          this.writer.discardImageManifest();
+        }
         this.progress.setPhase("writing");
-        await this.writer.commit();
+        imageManifestWritten = await this.writer.commit();
       } else {
         this.writer.rollback();
       }
@@ -161,10 +176,23 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.keepPausedAfterRun();
     } else {
+      if (imageManifestWritten) {
+        this.progress.setIndexVersion(REQUIRED_INDEX_VERSION);
+      }
       this.progress.complete();
     }
 
     return this.getState();
+  }
+
+  /**
+   * True when the run covered every file. A rebuild that skipped a failed
+   * document or deferred files produced an incomplete image manifest, so
+   * neither the manifest nor the index version may be persisted.
+   */
+  private isCompleteRun(): boolean {
+    const state = this.getState();
+    return state.failedFiles === 0 && state.deferredFiles === 0;
   }
 
   private async processFiles(
@@ -181,6 +209,9 @@ export class IndexingService {
 
       const result = await this.processFileSafely(file);
       this.progress.markFileScanned(file.path);
+      if (result.documentImages) {
+        this.writer.recordDocumentImages(file.path, result.documentImages);
+      }
       this.updateCountersAndPending(file, result, pendingChunks, pendingIndexedFiles);
 
       await this.writer.flushPending({

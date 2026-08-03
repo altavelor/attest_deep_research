@@ -69,9 +69,7 @@ export interface SearchIndexOutput {
     resultCount: number;
     snippetsTruncated: number;
     untrustedEvidence: true;
-    /** Semantic search contributed nothing; ranking degraded to keyword-only. */
     usedKeywordFallback?: true;
-    /** Failure reason when the semantic (embedding) path errored. */
     semanticError?: string;
   };
 }

@@ -1,7 +1,3 @@
-// Core domain: query context helpers shared by the planner and the source
-// engine — recency inference, language detection, and query sanitizing for
-// keyword APIs that do not understand SERP operators or date words.
-
 export const WEB_QUERY_RECENCIES = ["day", "week", "month"] as const;
 
 export type WebQueryRecency = (typeof WEB_QUERY_RECENCIES)[number];
@@ -21,8 +17,6 @@ interface RecencyRule {
   patterns: RegExp[];
 }
 
-// First matching rule wins; narrower windows come first. `\b` is ASCII-only in
-// JS, so Cyrillic keywords use bare substring patterns (see classifyWebQuery).
 const RECENCY_RULES: RecencyRule[] = [
   {
     recency: "day",

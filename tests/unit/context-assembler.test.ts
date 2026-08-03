@@ -144,8 +144,6 @@ describe("ContextAssembler", () => {
       smallMarkdownCharLimit: 10_000,
     });
 
-    // "Descartes" contains "cart" as an infix; a substring match would falsely
-    // boost it. The word-boundary ranker prefers the real "cart checkout" section.
     expect(result.explicitEvidence[0].text).toContain("Shopping cart checkout");
   });
 

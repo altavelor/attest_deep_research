@@ -10,8 +10,7 @@ const retriever: ResearchRetriever = {
   search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
   listIndexedUrls: vi.fn().mockResolvedValue({ items: [] }),
 };
-// Mirrors the real web composition: when web is enabled the provider can both
-// search and fetch pages, so search_web and fetch_web_page register together.
+
 const provider: SearchProvider = {
   search: vi.fn().mockResolvedValue([]),
   fetchPage: vi.fn().mockResolvedValue({ ok: false }),
@@ -19,7 +18,7 @@ const provider: SearchProvider = {
 };
 const urlStatusChecker = { checkUrls: vi.fn().mockResolvedValue([]) };
 const subAgentRunner = { run: vi.fn() };
-// Minimal service: the registry only needs setCitationProvider + the tool declarations.
+
 const noteTools: NoteToolService = {
   setCitationProvider: () => {},
   definitions: () => [],
@@ -73,9 +72,6 @@ function promptFor(searchMode: ResearchSearchMode): { text: string; available: s
   return { text: stripAvailabilityRule(text), available };
 }
 
-// The "Source availability" block is a deny-list: it deliberately names OFF tools to
-// tell the model it must NOT use them. It is the opposite of advertising, so the drift
-// scan excludes it — otherwise it would flag its own "you have no search_web" line.
 function stripAvailabilityRule(text: string): string {
   return text.replace(/## Source availability \(hard limit\)[\s\S]*?(?=\n\n|$)/, "");
 }

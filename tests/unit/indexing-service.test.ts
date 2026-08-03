@@ -1,14 +1,17 @@
 import {
+  DocumentImageManifestEntry,
+  DocumentImageManifestScope,
   Extractor,
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,
   IndexStore,
+  IndexStoreWriteSession,
   SourceSnapshotIndexStore,
 } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { IxplorerError } from "@core/errors";
-import { IndexingService, IndexingFileLogEvent } from "@adapters/indexing";
+import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 
@@ -640,5 +643,193 @@ class FakeIndexStore implements IndexStore, SourceSnapshotIndexStore {
 
   async recordFailedSourceSnapshots(snapshots: IndexFailedSourceSnapshot[]): Promise<void> {
     this.failedSnapshots.push(...snapshots);
+  }
+}
+
+class ImageManifestIndexStore extends FakeIndexStore {
+  recordedImages: DocumentImageManifestEntry[] | null = null;
+  recordedScope: DocumentImageManifestScope | null = null;
+  private pending: DocumentImageManifestEntry[] | null = null;
+  private pendingScope: DocumentImageManifestScope | null = null;
+
+  async beginWrite(): Promise<IndexStoreWriteSession> {
+    return {
+      upsert: async (chunks) => {
+        await this.upsert(chunks);
+      },
+      deleteBySourcePath: async (path) => {
+        await this.deleteBySourcePath(path);
+      },
+      updateSourceSnapshots: async (snapshots) => {
+        await this.updateSourceSnapshots(snapshots);
+      },
+      recordDocumentImages: async (entries, scope) => {
+        this.pending = [...(this.pending ?? []), ...entries];
+        this.pendingScope = scope;
+      },
+      commit: async () => {
+        this.recordedImages = this.pending;
+        this.recordedScope = this.pendingScope;
+      },
+      rollback: () => {
+        this.pending = null;
+        this.pendingScope = null;
+      },
+    };
+  }
+}
+
+describe("IndexingService image manifest", () => {
+  const noteWithImage = "![Diagram](assets/diagram.png)";
+
+  it("records document images on a full rebuild and advances the index version", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(indexStore.recordedScope).toEqual({ mode: "replace" });
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({
+        documentPath: "Research/a.md",
+        locator: "link:Research/assets/diagram.png",
+        format: "png",
+        alt: "Diagram",
+      }),
+    ]);
+    expect(state.indexVersion).toBe(REQUIRED_INDEX_VERSION);
+  });
+
+  it("resolves wiki embeds through the host resolver while building the manifest", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, "![[photo.png]]")]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      resolveLinkedImagePath: (target, fromPath) =>
+        target === "photo.png" && fromPath === "Research/a.md"
+          ? "Attachments/photo.png"
+          : undefined,
+    });
+
+    await service.rebuild();
+
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({ locator: "link:Attachments/photo.png" }),
+    ]);
+  });
+
+  it("keeps a partial rebuild below the required index version", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const failing = new FailingExtractor(".md", "Research/broken.md");
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, noteWithImage),
+        file("Research/broken.md", 1, "boom"),
+      ]),
+      extractors: [failing],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(state.failedFiles).toBe(1);
+    expect(state.indexVersion).toBeUndefined();
+    expect(indexStore.recordedImages).toBeNull();
+  });
+
+  it("completes a rebuild whose store cannot open a manifest-only session", async () => {
+    const indexStore = new UninitializedWriteStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new EmptyExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.rebuild();
+
+    expect(state.status).toBe("idle");
+    expect(state.indexVersion).toBeUndefined();
+  });
+
+  it("merges the touched documents and bumps no version on an incremental run", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.manualReindex();
+
+    expect(indexStore.recordedScope).toEqual({
+      mode: "merge",
+      documentPaths: ["Research/a.md"],
+    });
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({ documentPath: "Research/a.md" }),
+    ]);
+    expect(state.indexVersion).toBeUndefined();
+  });
+});
+
+class FailingExtractor implements Extractor {
+  constructor(
+    private readonly extension: string,
+    private readonly failingPath: string,
+  ) {}
+
+  supports(path: string): boolean {
+    return path.endsWith(this.extension);
+  }
+
+  async extract(input: { path: string; data: ArrayBuffer | string }): Promise<ExtractedChunk[]> {
+    if (input.path === this.failingPath) throw new Error("extraction failed");
+    return [markdownChunk(input.path, input.path, String(input.data))];
+  }
+}
+
+class EmptyExtractor implements Extractor {
+  constructor(private readonly extension: string) {}
+
+  supports(path: string): boolean {
+    return path.endsWith(this.extension);
+  }
+
+  async extract(): Promise<ExtractedChunk[]> {
+    return [];
+  }
+}
+
+class UninitializedWriteStore extends FakeIndexStore {
+  async beginWrite(): Promise<IndexStoreWriteSession> {
+    throw new IxplorerError({
+      code: "INDEX_UNAVAILABLE",
+      message: "The file-backed index has not been initialized.",
+    });
   }
 }

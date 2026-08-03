@@ -160,9 +160,7 @@ describe("SubAgentRunner", () => {
     const result = await runner.run({ task: "Summarize my notes on X", toolContext });
 
     expect(result.answerText).toBe("Answer.");
-    // The parent's toolContext is passed through unchanged except mutation, which the
-    // caller (createResearchToolRegistry) already forces off before building it — the
-    // runner itself does not re-derive availability.
+
     expect(toolsetOptionsSeen[0]).toMatchObject({ availability: toolContext.availability });
   });
 
@@ -192,8 +190,6 @@ describe("SubAgentRunner", () => {
   });
 
   it("runs a tool-less synthesis pass when the loop ends without an answer", async () => {
-    // Round 1 searches (registers web evidence); round 2 ends empty (no text) so the
-    // loop returns ok:true with an empty answer; round 3 is the forced synthesis pass.
     const chatModel = new FakeChatModel([
       [
         {

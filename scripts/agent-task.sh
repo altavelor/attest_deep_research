@@ -1,23 +1,11 @@
 #!/usr/bin/env bash
-#
-# Prepare a task branch for a GitHub issue, hand a normalized prompt to a coding
-# agent, then commit the result and open a draft pull request linked to the
-# issue. The agent CLI is configured in scripts/agent.env (AGENT_EXEC_CMD) so
-# this workflow is not tied to any single vendor.
-#
-# The independent code review is NOT requested here; scripts/review-loop.sh owns
-# the review request so a single cycle triggers exactly one review.
-#
-# Usage: scripts/agent-task.sh <issue-number>
 
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=scripts/lib/output.sh
 source "$script_dir/lib/output.sh"
 
-# shellcheck source=scripts/agent.env
 [[ -f "$script_dir/agent.env" ]] && source "$script_dir/agent.env"
 
 BASE_BRANCH="${BASE_BRANCH:-main}"
@@ -62,8 +50,6 @@ fi
 
 title="$(jq -r '.title' <<<"$issue_json")"
 
-# Derive the Conventional-Commit branch prefix from the issue's type:* label so
-# branch names match AGENTS.md (feat/fix/refactor/chore). Default to chore.
 prefix="$(jq -r '
   (.labels // []) | map(.name) as $names
   | if ($names | index("type:bug")) then "fix"
@@ -101,8 +87,6 @@ gh issue edit "$ISSUE" \
   --remove-label "status:ready" \
   --add-label "status:in-progress" >/dev/null 2>&1 || true
 
-# The issue body is untrusted external input. It is passed to the agent as task
-# data (a prompt), never executed as a shell command.
 prompt="$(
   jq -r --arg base "$BASE_BRANCH" '
     "Implement GitHub issue #\(.number).
@@ -144,12 +128,9 @@ fi
 rule
 step "Running agent on the task prompt"
 rule
-# Feed the prompt on STDIN so large prompts and special characters are safe.
 printf '%s\n' "$prompt" | eval "$AGENT_EXEC_CMD"
 rule
 
-# Require a clean result from the agent so unreviewed files (including secrets or
-# generated output) can never be silently added to the pull request.
 if [[ -n "$(git status --porcelain)" ]]; then
   err "Agent left uncommitted changes; not publishing"
   hint "Review and commit or discard the changes, then re-run scripts/agent-task.sh $ISSUE"

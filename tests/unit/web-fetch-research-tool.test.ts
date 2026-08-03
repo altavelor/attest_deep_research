@@ -15,7 +15,6 @@ describe("WebFetchResearchTool", () => {
     );
     const tool = new WebFetchResearchTool({ provider, evidence: other });
 
-    // A handle owned by a different registry surfaces as a per-page failure, not a batch error.
     const execution = await executeTool(tool, {
       id: "fetch",
       name: "fetch_web_page",

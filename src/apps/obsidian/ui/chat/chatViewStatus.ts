@@ -1,4 +1,5 @@
 import type { ResearchSearchMode } from "@application/use-cases/research";
+import { requiresIndexRebuildForImages } from "@adapters/indexing";
 
 export function searchUnavailableMessage(input: {
   chatModelProfileId: string;
@@ -20,6 +21,16 @@ export function searchUnavailableMessage(input: {
     return "Enable web search in Ixplorer settings to use this search mode.";
   }
   return null;
+}
+
+/**
+ * Non-blocking notice for an index built before document-image metadata
+ * existed. Text retrieval is unaffected, so this never blocks a question; it
+ * yields null for an up-to-date profile or when no index is selected.
+ */
+export function legacyIndexImageNotice(profile?: { indexVersion?: number }): string | null {
+  if (!profile || !requiresIndexRebuildForImages(profile)) return null;
+  return "Text search works with this index, but image discovery from your documents needs a full rebuild.";
 }
 
 export interface ContextWindowStatus {

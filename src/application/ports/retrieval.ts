@@ -4,7 +4,7 @@ import { RetrievalOptions } from "@core/retrieval";
 export interface IndexCursorPage<T> {
   items: T[];
   nextCursor?: string;
-  /** Total number of matches before pagination (cheap to compute; lets callers report breadth). */
+
   totalCount?: number;
 }
 
@@ -24,7 +24,7 @@ export interface IndexSourceInventoryItem {
   indexedAt: string;
   chunkCount: number;
   languages?: string[];
-  /** Hash of the source content at indexing time; drives incremental enrichment. */
+
   contentHash?: string;
 }
 
@@ -72,10 +72,9 @@ export interface IndexSectionReadOptions {
 }
 
 export interface IndexSectionReadResult {
-  /** Section identity: heading path of the section (empty for heuristic runs). */
   headingPath: string[];
   sourcePath: string;
-  /** chunkIndex range of the whole section, before pagination. */
+
   chunkStart: number;
   chunkEnd: number;
   chunks: IndexChunkReadResult["chunks"];
@@ -89,7 +88,7 @@ export interface FindInIndexOptions {
   caseSensitive?: boolean;
   cursor?: string;
   limit: number;
-  /** Caller intent only: return just the total count, not the matches. */
+
   countOnly?: boolean;
 }
 
@@ -138,7 +137,7 @@ export interface IndexMetadataSearchOptions {
   language?: string;
   cursor?: string;
   limit: number;
-  /** Caller intent only: return just the total count, not the matched sources. */
+
   countOnly?: boolean;
 }
 

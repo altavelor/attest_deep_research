@@ -1,7 +1,3 @@
-// Per-profile state machine for metadata enrichment runs (SPEC-corpus R3).
-// Mirrors IndexingProfileController: the UI subscribes and re-renders rows;
-// the service itself is created lazily per run through the injected factory.
-
 import { EnrichIndexSources, EnrichmentRunResult } from "@application/use-cases/enrichment";
 
 export interface EnrichmentProfileState {
@@ -11,7 +7,6 @@ export interface EnrichmentProfileState {
   extracted: number;
   skipped: number;
   failed: number;
-  /** In-flight detail (status === "running"): what exactly is being processed. */
   currentSourcePath?: string;
   phase?: "metadata" | "sections" | "document" | "claims";
   sectionIndex?: number;
@@ -24,8 +19,6 @@ export interface EnrichmentProfileControllerOptions {
     profileId: string,
     chatModelProfileId: string,
   ): EnrichIndexSources | Promise<EnrichIndexSources>;
-  /** Runs before the final "done" notification, so persisted profile fields
-   * (lastEnrichedAt) are already updated when subscribers re-render. */
   onComplete?(profileId: string, result: EnrichmentRunResult): void | Promise<void>;
   onError?(error: unknown): void;
 }

@@ -1,5 +1,3 @@
-// SERP source definitions: Brave, Google Programmable Search, Serper, SearXNG.
-
 import {
   asArray,
   asRecord,
@@ -10,7 +8,6 @@ import {
   WebSourceQueryInput,
 } from "./types";
 
-/** Brave/Serper/SearXNG freshness codes share the day/week/month shape. */
 const BRAVE_FRESHNESS = { day: "pd", week: "pw", month: "pm" } as const;
 const SERPER_TBS = { day: "qdr:d", week: "qdr:w", month: "qdr:m" } as const;
 

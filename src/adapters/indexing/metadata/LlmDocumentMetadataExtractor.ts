@@ -1,8 +1,3 @@
-// LLM-backed document metadata extraction (SPEC-corpus-knowledge R3). One
-// non-streaming chat call per document; the prompt demands strict JSON and the
-// parser tolerates fenced or prefixed output. Prompt changes must bump
-// EXTRACTION_PROMPT_VERSION so enrichment re-runs on affected sources.
-
 import { ChatMessage, ChatModelProvider } from "@core/agent";
 import {
   DocumentMetadataExtractionInput,

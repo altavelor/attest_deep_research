@@ -14,11 +14,13 @@ import { SubAgentSource } from "./sub-agent/SubAgentSource";
 import { MapSourcesSource } from "./map-sources/MapSourcesSource";
 import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
+import { AnswerArtifactRegistry } from "./media/AnswerArtifactRegistry";
+import { MediaSource } from "./media/MediaSource";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
+  artifacts: AnswerArtifactRegistry;
   tools: ToolManager;
-  /** Introspection view of the data sources that contributed tools. */
   sources: SourceManager;
 }
 
@@ -26,6 +28,7 @@ export function createResearchToolRegistry(
   options: ResearchToolsetOptions,
 ): CreatedResearchToolRegistry {
   const evidence = new ResearchEvidenceRegistry();
+  const artifacts = new AnswerArtifactRegistry();
   const availability: ResearchToolAvailability = {
     ...options.availability,
     retrieverAvailable: options.availability.retrieverAvailable && options.retriever !== undefined,
@@ -61,7 +64,7 @@ export function createResearchToolRegistry(
     availability.webProviderAvailable &&
     (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    sources.register(new WebSource({ provider: options.searchProvider, evidence }));
+    sources.register(new WebSource({ provider: options.searchProvider, evidence, artifacts }));
   }
 
   if (
@@ -117,10 +120,23 @@ export function createResearchToolRegistry(
     );
   }
 
+  if (hasAnyReadSource) {
+    sources.register(
+      new MediaSource({
+        artifacts,
+        ...(options.imageSearch ? { imageSearch: options.imageSearch } : {}),
+        ...(options.documentImageCandidates
+          ? { documentCandidates: options.documentImageCandidates }
+          : {}),
+        readDocumentPaths: () => vaultEvidencePaths(evidence),
+      }),
+    );
+  }
+
   const tools = new ToolManager([], permissions);
   sources.contributeTools(tools);
 
-  return { evidence, tools, sources };
+  return { evidence, artifacts, tools, sources };
 }
 
 /** Map the availability policy onto the opaque permission names tools check. */
@@ -133,4 +149,18 @@ function grantedPermissions(availability: ResearchToolAvailability): ReadonlySet
     granted.add(DOWNLOAD_PERMISSIONS.write);
   }
   return granted;
+}
+
+/**
+ * Vault documents the run already read or retrieved. Image discovery treats
+ * their indexed images as eligible even when the query matches only the text.
+ */
+function vaultEvidencePaths(evidence: ResearchEvidenceRegistry): string[] {
+  const paths: string[] = [];
+  for (const chunk of evidence.snapshot().evidence) {
+    const source = chunk.source as { path?: string };
+    const path = typeof source.path === "string" ? source.path : "";
+    if (path && !paths.includes(path)) paths.push(path);
+  }
+  return paths;
 }

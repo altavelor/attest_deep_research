@@ -1,23 +1,10 @@
 import { MarkdownRenderer } from "obsidian";
 
+import { toolTitle } from "@core/agent";
 import { ChainItem } from "@core/conversation";
 import { animateFetchTargets } from "../fetchTargetAnimator";
 import { describeToolCall, ToolCell } from "../toolCallView";
 import type { WorkflowRenderContext } from "../workflowRenderer";
-
-const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  search_index: "Search index",
-  search_notes: "Search notes",
-  search_web: "Search web",
-  fetch_web_page: "Fetch web page",
-  read_note: "Read note",
-  get_active_note: "Active note",
-  list_notes: "List notes",
-  create_note: "Create note",
-  update_note: "Edit note",
-  delete_note: "Delete note",
-  run_subagent: "Sub-agent",
-};
 
 export function renderToolNode(
   listEl: HTMLElement,
@@ -43,7 +30,7 @@ export function renderToolNode(
   const head = body.createDiv({ cls: "ixplorer-chat__tool-head" });
   head.createSpan({
     cls: "ixplorer-chat__tool-name",
-    text: TOOL_DISPLAY_NAMES[item.name] ?? item.name,
+    text: toolTitle(item.name),
   });
   if (view.intent) {
     if (view.fetchTargets.length > 0) {

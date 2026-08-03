@@ -1,6 +1,8 @@
 import type { ExtractedChunk } from "@core/model";
 import { VaultFileSummary } from "@application/ports";
 import { isPathIncluded, vaultPathMatchesGlob } from "@shared";
+import { extractDocumentImages, supportsDocumentImages } from "@adapters/extractors";
+import type { DocumentImageManifestEntry } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "./changeDetection";
 import { detectTextLanguages } from "./languageDetection";
 import type {
@@ -95,6 +97,7 @@ export class FileProcessor {
       durationMs: Date.now() - extractionStartedAt,
       chunkCount: chunks.length,
     });
+    const documentImages = this.collectDocumentImages(file.path, data, contentHash);
     this.options.progress.setFileChunkProgress(file.path, 0, chunks.length);
 
     if (chunks.length === 0) {
@@ -116,6 +119,7 @@ export class FileProcessor {
         contentHash,
         persistSnapshot: true,
         languages,
+        ...(documentImages ? { documentImages } : {}),
       };
     }
 
@@ -127,7 +131,39 @@ export class FileProcessor {
       languages: detectTextLanguages(
         chunks.map((chunk: ExtractedChunk) => chunk.text).join("\n\n"),
       ),
+      ...(documentImages ? { documentImages } : {}),
     };
+  }
+
+  /**
+   * Collects manifest rows for the images a document embeds or links. Returns
+   * an empty list for a supported document without images, so the caller can
+   * clear that document's stale rows, and undefined for unsupported formats.
+   * Image bytes are never kept.
+   */
+  private collectDocumentImages(
+    path: string,
+    data: ArrayBuffer | string,
+    contentHash: string,
+  ): DocumentImageManifestEntry[] | undefined {
+    if (!supportsDocumentImages(path)) return undefined;
+    return extractDocumentImages({
+      path,
+      data,
+      metadataOnly: true,
+      ...(this.options.resolveLinkedImagePath
+        ? { resolveLinkedPath: this.options.resolveLinkedImagePath }
+        : {}),
+    }).map((ref) => ({
+      documentPath: path,
+      contentHash,
+      format: ref.format,
+      locator: ref.locator,
+      ...(ref.alt ? { alt: ref.alt } : {}),
+      ...(ref.caption ? { caption: ref.caption } : {}),
+      ...(ref.width ? { width: ref.width } : {}),
+      ...(ref.height ? { height: ref.height } : {}),
+    }));
   }
 
   canProcessPath(path: string): boolean {

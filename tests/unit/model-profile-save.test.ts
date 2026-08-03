@@ -68,8 +68,7 @@ describe("chat model profile save", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     };
-    // The modal resets its local probe state on model change, but resolveCapabilities
-    // still copies the old profile's probe into `updated`; the merge must discard it.
+
     const updated = {
       ...current,
       modelName: "model-2",

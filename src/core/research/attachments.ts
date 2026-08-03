@@ -1,18 +1,4 @@
-// Attachment manifest: tells the model which vault files the user attached to
-// the message and how their content was delivered. Without it, attachments
-// dissolve into anonymous evidence chunks and the model cannot list them or
-// address them with vault tools for reading/editing.
-
-/** How an attached file's content reached the prompt. */
-export type AttachedFileCoverage =
-  /** Whole file inlined under Explicit context. */
-  | "full"
-  /** Only relevance-ranked excerpts inlined (file too large for the budget). */
-  | "excerpts"
-  /** Nothing inlined; the model is expected to read it via vault tools. */
-  | "reference"
-  /** Content unavailable (unsupported type, read failure, or budget exhausted). */
-  | "omitted";
+export type AttachedFileCoverage = "full" | "excerpts" | "reference" | "omitted";
 
 export interface AttachedFileManifestEntry {
   path: string;
@@ -20,7 +6,6 @@ export interface AttachedFileManifestEntry {
 }
 
 export interface AttachmentManifestOptions {
-  /** When true, the manifest tells the model it can read/edit these via vault tools. */
   noteToolsAvailable?: boolean;
 }
 

@@ -65,8 +65,6 @@ function parseJsonToolCalls(text: string, known: Set<string>): RawToolCall[] {
   return calls;
 }
 
-// Matches `name(args)`, optionally namespaced (`ixplorer.list_notes(...)`) and
-// optionally preceded by a `call:` style prefix handled by the leading boundary.
 const FUNCTION_CALL_RE = /(?:^|[^\w.])((?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*))\s*\(([\s\S]*?)\)/g;
 
 function parseFunctionCallSyntax(text: string, known: Set<string>): RawToolCall[] {
@@ -123,7 +121,6 @@ function coerceScalar(value: string): unknown {
   return value;
 }
 
-// Splits on top-level commas, ignoring commas inside quotes or brackets.
 function splitTopLevel(value: string): string[] {
   const parts: string[] = [];
   let depth = 0;
@@ -150,7 +147,6 @@ function splitTopLevel(value: string): string[] {
   return parts;
 }
 
-// Scans for balanced `{...}` substrings and returns those that parse as objects.
 function extractJsonObjects(text: string): Record<string, unknown>[] {
   const objects: Record<string, unknown>[] = [];
   let depth = 0;

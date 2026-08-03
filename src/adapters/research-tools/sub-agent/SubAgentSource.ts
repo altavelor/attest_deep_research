@@ -1,8 +1,3 @@
-// Universal sub-agent data source. Contributes the `run_subagent` tool, which lets
-// the orchestrating model launch in-process sub-agents with the same read-only
-// toolset it has for the current turn. Kept separate from WebSource/RagSource so
-// it can be gated independently (it needs a SubAgentPort, not just a provider).
-
 import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { ResearchToolsetOptions, SubAgentPort } from "@application/research";
@@ -12,7 +7,7 @@ import { SubAgentTool } from "./SubAgentTool";
 export interface SubAgentSourceOptions {
   runner: SubAgentPort;
   evidence: EvidenceRegistry;
-  /** The current turn's tool availability + collaborators, handed to every sub-agent session. */
+
   toolContext: ResearchToolsetOptions;
   available?: boolean;
 }

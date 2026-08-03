@@ -17,9 +17,9 @@ export interface WebSourcesSectionContext {
   getSettings(): IxplorerSettings;
   saveSettings(): Promise<void>;
   requestRedisplay(): void;
-  /** Runtime health of a source (auto-suspend state); drives the yellow lamp. */
+
   getSourceIssue(sourceId: string): WebSourceIssue | undefined;
-  /** Clears a recorded issue after the user reconfigures the source. */
+
   resetSourceIssue(sourceId: string): void;
 }
 
@@ -31,6 +31,7 @@ const CATEGORY_LABELS: Record<WebSourceCategory, string> = {
   community: "Developer & community",
   news: "News",
   fetch: "Page fetch fallback",
+  image: "Image search",
 };
 
 const ISSUE_LABELS: Record<WebSourceIssue["reason"], string> = {

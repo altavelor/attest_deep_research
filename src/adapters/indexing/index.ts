@@ -1,18 +1,3 @@
-// Публичный API модуля adapters/indexing — сервис индексации, контроллеры,
-// векторный стор (через FileVectorIndexStore/Reader), инвентарь индекса,
-// pipeline-хелперы (чанкер, детекция изменений/языка) и keyword-индекс.
-//
-// Внутренняя реализация НЕ выставляется: движок pipeline (FileProcessor,
-// EmbeddingBatcher, IndexWriteCoordinator), внутренности стора
-// (FileVectorIndex{State,Vector,Format,Persistence,Query,Language,Errors}),
-// FileVectorIndexInventory[Text], IndexingProgressState и types — приватны и
-// подключаются относительно; их white-box юнит-тесты обращаются к ним напрямую.
-//
-// Инвариант: файлы ВНУТРИ модуля не импортируют этот баррель — только соседей
-// через `./…`, иначе цикл (ловит `npm run depcruise`). Публичные файлы сами
-// реэкспортируют нужные типы (напр. IndexingService → IndexingState), поэтому
-// пофайловый `export *` достаточен; коллизий имён между ними нет (проверяет tsc).
-
 export * from "./IndexingService";
 
 export * from "./controller/EnrichmentProfileController";
@@ -38,5 +23,6 @@ export * from "./pipeline/changeDetection";
 export * from "./pipeline/chunker";
 export * from "./pipeline/languageDetection";
 
+export * from "./store/FileVectorImageManifest";
 export * from "./store/FileVectorIndexReader";
 export * from "./store/FileVectorIndexStore";

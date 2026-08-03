@@ -1,6 +1,3 @@
-// Core domain: static catalog of external web search sources.
-// Platform-neutral metadata only — endpoints and parsing live in adapters/web.
-
 import type { WebQueryLanguage } from "./queryContext";
 
 export type WebSourceCategory =
@@ -10,21 +7,22 @@ export type WebSourceCategory =
   | "encyclopedia"
   | "community"
   | "news"
-  | "fetch";
+  | "fetch"
+  | "image";
 
-/** What the source can do; absent means search-only. */
 export interface WebSourceCapabilities {
   search: boolean;
   fetchPage: boolean;
+
+  images?: boolean;
 }
 
-/** Declarative credential field; drives settings UI generation and enable-gating. */
 export interface WebSourceCredentialField {
   key: string;
   label: string;
-  /** Masked in UI (API keys). Base URLs and engine ids are not secret. */
+
   secret: boolean;
-  /** Optional credentials raise limits but are not required to enable the source. */
+
   optional?: boolean;
   placeholder?: string;
 }
@@ -33,23 +31,24 @@ export interface WebSourceDescriptor {
   id: string;
   label: string;
   category: WebSourceCategory;
-  /** Query-planner hints: what this source is strong at. */
+
   strengths: string[];
   credentials: WebSourceCredentialField[];
   homepage: string;
-  /** Short free-tier note shown in settings. */
+
   freeTierNote: string;
-  /** Absent ⇒ search-only. */
+
   capabilities?: WebSourceCapabilities;
-  /** Query languages this source can answer; absent ⇒ any language. */
+
   languages?: readonly WebQueryLanguage[];
 }
 
-/** Per-source user configuration persisted in settings. */
 export interface WebSourceProfile {
   sourceId: string;
   enabled: boolean;
   credentials: Record<string, string>;
+
+  imageSearchEnabled?: boolean;
 }
 
 const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCredentialField => ({
@@ -59,7 +58,9 @@ const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCre
   ...overrides,
 });
 
-/** Built-in scraper provider; lives in the catalog like any other source but is constructed specially. */
+export const WIKIMEDIA_COMMONS_SOURCE_ID = "wikimedia-commons";
+export const OPENVERSE_SOURCE_ID = "openverse";
+
 export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
   id: "duckduckgo",
   label: "DuckDuckGo",
@@ -70,9 +71,6 @@ export const DUCKDUCKGO_DESCRIPTOR: WebSourceDescriptor = {
   freeTierNote: "Free, no key",
 };
 
-/**
- * Sources selectable in settings, in planner-preference order within category.
- */
 export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
   DUCKDUCKGO_DESCRIPTOR,
   {
@@ -83,6 +81,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey()],
     homepage: "https://brave.com/search/api/",
     freeTierNote: "2,000 queries/month free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "google-cse",
@@ -92,6 +91,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey(), { key: "engineId", label: "Search engine ID (cx)", secret: false }],
     homepage: "https://programmablesearchengine.google.com/",
     freeTierNote: "100 queries/day free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "serper",
@@ -101,6 +101,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     credentials: [apiKey()],
     homepage: "https://serper.dev/",
     freeTierNote: "2,500 queries free",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "searxng",
@@ -117,6 +118,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     ],
     homepage: "https://docs.searxng.org/",
     freeTierNote: "Free (own instance; JSON format must be enabled)",
+    capabilities: { search: true, fetchPage: false, images: true },
   },
   {
     id: "tavily",
@@ -253,7 +255,36 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     homepage: "https://newsapi.org/",
     freeTierNote: "100 req/day free (dev tier)",
   },
+  {
+    id: WIKIMEDIA_COMMONS_SOURCE_ID,
+    label: "Wikimedia Commons",
+    category: "image",
+    strengths: ["images", "reference", "public-domain"],
+    credentials: [],
+    homepage: "https://commons.wikimedia.org/",
+    freeTierNote: "Free, no key · used only by image search",
+    capabilities: { search: false, fetchPage: false },
+  },
+  {
+    id: OPENVERSE_SOURCE_ID,
+    label: "Openverse",
+    category: "image",
+    strengths: ["images", "openly-licensed"],
+    credentials: [apiKey({ optional: true, label: "Client token (optional, raises limits)" })],
+    homepage: "https://openverse.org/",
+    freeTierNote: "Free, key optional · used only by image search",
+    capabilities: { search: false, fetchPage: false },
+  },
 ];
+
+export const IMAGE_SOURCE_IDS: readonly string[] = [
+  WIKIMEDIA_COMMONS_SOURCE_ID,
+  OPENVERSE_SOURCE_ID,
+];
+
+export function isImageSourceId(id: string): boolean {
+  return IMAGE_SOURCE_IDS.includes(id);
+}
 
 export function findWebSourceDescriptor(id: string): WebSourceDescriptor | undefined {
   return WEB_SOURCE_CATALOG.find((descriptor) => descriptor.id === id);

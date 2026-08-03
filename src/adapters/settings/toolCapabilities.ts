@@ -7,7 +7,7 @@ export type ToolCapabilityLayer = Partial<ToolCallingCapabilities>;
 export interface ToolCapabilitySettings {
   formatDefault: ToolCallingCapabilities;
   probe?: ToolCapabilityLayer;
-  /** Audit trail from the last probe run. Stored for v3 diagnostic report. */
+
   probeAudit?: ToolCapabilityProbeAudit;
 }
 

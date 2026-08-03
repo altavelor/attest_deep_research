@@ -9,18 +9,6 @@ import {
   toolFailure,
 } from "@core/agent";
 
-/**
- * Registry the agent loop queries for tools. Holds the handler map, exposes
- * definitions to send to the model, and dispatches calls by name — and gates
- * both by the run's granted permissions (each tool's {@link Tool.requires}).
- *
- * Lives in `application`: it is orchestration, not a core primitive. The core
- * AgentLoop stays decoupled (it consumes `definitions()` + an `executeTool`
- * callback), so moving the manager here does not pull core outward.
- *
- * When constructed without `permissions`, no gating is applied (every tool is
- * available) — keeps composition that doesn't model permissions unchanged.
- */
 export class ToolManager {
   private readonly handlers = new Map<string, Tool<any, any>>();
   private readonly permissions?: ToolPermissions;

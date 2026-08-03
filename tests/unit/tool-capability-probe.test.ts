@@ -35,7 +35,7 @@ describe("probeToolControlCapabilities", () => {
     expect(result.choiceRequired).toBe(true);
     expect(result.choiceSpecific).toBe(true);
     expect(result.parallelCalls).toBe(true);
-    // Audit data
+
     expect(result.probeAuditData.ranAt).toBeTruthy();
     expect(result.probeAuditData.results.required).toContain("ixplorer_probe_a");
     expect(result.probeAuditData.results.specific).toContain("ixplorer_probe_b");
@@ -55,7 +55,7 @@ describe("probeToolControlCapabilities", () => {
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);
     expect(result.parallelCalls).toBe(false);
-    // auto fallback was tried
+
     expect(result.probeAuditData.results.auto).toEqual([]);
 
     const unused = new ProbeProvider(() => {
@@ -101,7 +101,7 @@ describe("probeToolControlCapabilities", () => {
     let callCount = 0;
     const provider = new ProbeProvider((request) => {
       callCount += 1;
-      // Only respond to auto
+
       if (request.toolChoice?.type === "auto") {
         return {
           content: "",
@@ -120,6 +120,6 @@ describe("probeToolControlCapabilities", () => {
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);
     expect(result.probeAuditData.results.auto).toContain("ixplorer_probe_a");
-    expect(callCount).toBe(3); // required, specific, auto
+    expect(callCount).toBe(3);
   });
 });

@@ -16,9 +16,8 @@ const CREDENTIALS: Record<string, string> = {
 };
 
 interface DefinitionFixture {
-  /** Substrings that must appear in the built request URL. */
   urlIncludes: string[];
-  /** Raw response body the API would return for query "obsidian plugins". */
+
   body: string;
   expected: { title: string; url: string; snippet?: string; hasText?: boolean };
 }
@@ -233,7 +232,6 @@ function sourceFor(id: string, fetchMock: typeof fetch): HttpWebSearchSource {
 
 describe("web source definitions", () => {
   it("covers every search-capable catalog entry with a definition and vice versa", () => {
-    // duckduckgo is a bespoke provider; zyte is fetch-only — neither has an HTTP definition.
     const searchCatalogIds = WEB_SOURCE_CATALOG.filter(
       (descriptor) => descriptor.id !== "duckduckgo" && descriptor.capabilities?.search !== false,
     )
@@ -414,7 +412,7 @@ describe("web source settings queries", () => {
     };
     expect(isWebSourceConfigured(settings, "brave")).toBe(true);
     expect(isWebSourceConfigured(settings, "tavily")).toBe(false);
-    // Key-free sources are configured out of the box; unknown ids are not.
+
     expect(isWebSourceConfigured(settings, "wikipedia")).toBe(true);
     expect(isWebSourceConfigured(settings, "nope")).toBe(false);
   });

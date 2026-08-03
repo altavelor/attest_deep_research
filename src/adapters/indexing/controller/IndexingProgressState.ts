@@ -66,6 +66,11 @@ export class IndexingProgressState {
     this.notify();
   }
 
+  /** Records the layout version a completed full rebuild produced. */
+  setIndexVersion(indexVersion: number): void {
+    this.state = { ...this.state, indexVersion };
+  }
+
   setIndexSizeBytes(indexSizeBytes?: number): void {
     this.state = { ...this.state, indexSizeBytes };
     this.notify();

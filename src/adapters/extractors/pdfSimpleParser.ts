@@ -1,7 +1,3 @@
-// Dependency-free PDF text parser (fallback when pdfjs is unavailable, e.g. in
-// tests). Pure code move out of PdfExtractor.ts; no behavior changes. Does not
-// extract typography metrics or outline — heading extraction needs pdfjs.
-
 import { inflateSync } from "zlib";
 
 import type { PdfPageText, PdfPageTextParser } from "./PdfExtractor";

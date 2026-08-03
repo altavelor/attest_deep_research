@@ -434,8 +434,6 @@
   white-space: nowrap;
 }
 
-/* Без собственного скролла: прокручиваются только metadata-блоки внутри строк
-   (see __section-body); длинный список файлов скроллится вместе с модалкой. */
 .ixplorer-index-report__list {
   display: grid;
   border: 1px solid var(--background-modifier-border);
@@ -648,4 +646,8 @@
 
 .ixplorer-settings-profile-list__status.is-suspended {
   color: var(--text-error);
+}
+
+.ixplorer-settings-profile-list__status.is-reindex-required {
+  color: var(--text-warning);
 }

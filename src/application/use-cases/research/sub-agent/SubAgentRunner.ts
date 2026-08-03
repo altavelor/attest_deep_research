@@ -1,11 +1,3 @@
-// In-process universal sub-agent. A self-contained agent loop with the same
-// read-only toolset as the orchestrating (main) model for the current turn
-// (index/web/notes — no mutation, no recursive run_subagent). The orchestrating
-// model launches one or more of these via the `run_subagent` tool; each returns
-// a free-text answer that already cites evidence in the shared citation format
-// (`[url:...]` for web, `[evidenceId]` for index/notes), so no remapping is
-// needed once the evidence is merged into the parent registry.
-
 import { ChatMessage, ModelRoundProvider } from "@core/agent";
 import { ResearchExecutionPolicy } from "@core/research";
 import { buildThinkingResearchMessages } from "@core/research";
@@ -28,19 +20,18 @@ import { looksLikeLeakedToolCall } from "./leakedToolCallMarkup";
 
 export interface SubAgentRunnerDeps {
   toolsetFactory: ResearchToolsetFactory;
-  /** Fallback toolset (web-only) used only when the caller supplies no `toolContext`.
-   * Absent in index-only profiles — callers always pass an explicit `toolContext`. */
+
   searchProvider?: SearchProvider;
-  /** Reuses the parent chat model + round provider by default. */
+
   modelRound: ModelRoundProvider;
   model: string;
   temperature?: number;
   maxTokens?: number;
   reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
-  /** Own budget — smaller than the parent loop so a session stays bounded. */
+
   maxRounds?: number;
   maxResultChars?: number;
-  /** Optional diagnostic sink (gated by debug mode at the composition root). */
+
   logger?: SubAgentLogger;
 }
 
@@ -48,8 +39,6 @@ const DEFAULT_MAX_ROUNDS = 12;
 const DEFAULT_MAX_RESULT_CHARS = 30_000;
 const SYNTHESIS_EXCERPT_CHARS = 1_500;
 
-// The sub-agent never forces a tool; the model drives its own loop. parallel
-// calls let it fan out sub-queries in one round.
 const SUB_AGENT_POLICY: ResearchExecutionPolicy = Object.freeze({
   strategy: "thinking",
   reason: "thinking-eligible",

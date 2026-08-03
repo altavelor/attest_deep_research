@@ -25,7 +25,7 @@ export interface IndexProfile {
   isSuspended?: boolean;
   suspendedReason?: string;
   lastIndexedAt?: string;
-  /** Completion time of the last metadata enrichment run (SPEC-corpus R3). */
+  indexVersion?: number;
   lastEnrichedAt?: string;
   indexedFileCount?: number;
   indexSizeBytes?: number;
@@ -61,6 +61,8 @@ export interface FileVectorManifest {
   languageInventory?: LanguageInventoryItem[];
   chunkCount: number;
   sourceCount: number;
+
+  indexVersion?: number;
   updatedAt: string;
   writeId: string;
 }
@@ -112,7 +114,7 @@ export interface KeywordPostingRow {
   postings: Array<{
     chunkId: string;
     frequency: number;
-    /** Term frequency inside the chunk's headingPath; absent in v1 files (reads as 0). */
+
     headingFrequency?: number;
   }>;
 }
@@ -125,6 +127,8 @@ export interface CreateFileVectorManifestOptions {
   writeId: string;
   shardCount?: number;
   shards?: FileVectorShardManifest[];
+
+  indexVersion?: number;
   chunkCount?: number;
   sourceCount?: number;
   keywordIndexedChunkCount?: number;
@@ -166,6 +170,7 @@ export function createFileVectorManifest(
       indexedChunkCount: options.keywordIndexedChunkCount ?? options.chunkCount ?? 0,
     },
     ...(options.languageInventory ? { languageInventory: options.languageInventory } : {}),
+    ...(options.indexVersion !== undefined ? { indexVersion: options.indexVersion } : {}),
     chunkCount: options.chunkCount ?? sumShardChunks(shards),
     sourceCount: options.sourceCount ?? 0,
     updatedAt: options.updatedAt,
@@ -207,6 +212,7 @@ export function isFileVectorManifest(value: unknown): value is FileVectorManifes
     (value.languageInventory === undefined || isLanguageInventory(value.languageInventory)) &&
     isNonNegativeInteger(value.chunkCount) &&
     isNonNegativeInteger(value.sourceCount) &&
+    (value.indexVersion === undefined || isNonNegativeInteger(value.indexVersion)) &&
     typeof value.updatedAt === "string" &&
     typeof value.writeId === "string"
   );

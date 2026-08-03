@@ -1,8 +1,3 @@
-// Fan-out data source (SPEC-corpus R5). Contributes the `map_sources` tool, which
-// runs one document-scoped sub-agent per source and reduces to an evidence matrix.
-// Gated separately from SubAgentSource: it needs both a sub-agent runner AND an
-// index retriever (it fans out over indexed documents).
-
 import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
@@ -15,7 +10,6 @@ export interface MapSourcesSourceOptions {
   runner: SubAgentPort;
   retriever: ResearchRetriever;
   evidence: EvidenceRegistry;
-  /** The current turn's tool availability + collaborators, scoped per document per run. */
   toolContext: ResearchToolsetOptions;
   available?: boolean;
 }

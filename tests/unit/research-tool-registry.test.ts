@@ -22,7 +22,7 @@ describe("ToolManager", () => {
       definitions: () => [],
       execute: vi.fn(),
     } as unknown as NoteToolService;
-    // No permissions granted for this run.
+
     const registry = new ToolManager(createNoteTools(service), new Set());
 
     const result = await registry.execute({

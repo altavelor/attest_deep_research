@@ -1,4 +1,5 @@
 import type { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
+import { requiresIndexRebuildForImages } from "@adapters/indexing";
 
 export interface IndexColumnStatus {
   kind: "is-indexing" | "is-paused" | "is-pausing" | "is-finished" | "is-enriching" | "is-stopping";
@@ -8,7 +9,7 @@ export interface IndexColumnStatus {
 }
 
 export interface IndexStatusBadge {
-  kind: "is-default" | "is-suspended";
+  kind: "is-default" | "is-suspended" | "is-reindex-required";
   label: string;
   title: string;
 }
@@ -41,6 +42,7 @@ export function resolveIndexStatusBadge(options: {
     suspendedReason?: string;
     lastIndexedAt?: string;
     lastEnrichedAt?: string;
+    indexVersion?: number;
   };
   indexing: Pick<IndexingState, "status" | "isStale" | "errorMessage">;
   enrichment: Pick<EnrichmentProfileState, "status">;
@@ -83,6 +85,15 @@ export function resolveIndexStatusBadge(options: {
       label: "Stale metadata",
       title:
         "The index changed after the last metadata extraction — run Update with the metadata section enabled.",
+    };
+  }
+
+  if (requiresIndexRebuildForImages(profile)) {
+    return {
+      kind: "is-reindex-required",
+      label: "Reindex required",
+      title:
+        "This index was built before document-image metadata existed — run a full rebuild to enable index-based image discovery. Text search keeps working.",
     };
   }
 

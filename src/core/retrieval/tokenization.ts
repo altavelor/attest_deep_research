@@ -1,5 +1,3 @@
-// Core retrieval: search tokenization (stage 2). Pure, platform-neutral.
-
 export function tokenizeForSearch(value: string, options: { minLength?: number } = {}): string[] {
   const minLength = options.minLength ?? 1;
 

@@ -522,6 +522,128 @@ describe("FileVectorIndexStore", () => {
     ).resolves.toBeUndefined();
     expect(existsSync(join(folder, "manifest.json"))).toBe(true);
   });
+
+  it("reads back the document images written by a rebuild", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+
+    const writer = await store.beginWrite();
+    await writer.upsert([chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a")]);
+    await writer.recordDocumentImages!(
+      [
+        {
+          documentPath: "Research/a.md",
+          contentHash: "hash-a",
+          format: "png",
+          locator: "link:Research/assets/diagram.png",
+          alt: "Diagram",
+        },
+      ],
+      { mode: "replace" },
+    );
+    await writer.commit();
+
+    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    await expect(reopened.listDocumentImages()).resolves.toEqual([
+      {
+        documentPath: "Research/a.md",
+        contentHash: "hash-a",
+        format: "png",
+        locator: "link:Research/assets/diagram.png",
+        alt: "Diagram",
+      },
+    ]);
+  });
+
+  it("merges incremental image rows over the stored manifest", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+
+    const rebuild = await store.beginWrite();
+    await rebuild.upsert([
+      chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a"),
+      chunk("chunk-b", "Research/b.md", "note", [0, 1], "hash-b"),
+    ]);
+    await rebuild.recordDocumentImages!(
+      [
+        { documentPath: "Research/a.md", contentHash: "h1", format: "png", locator: "link:a.png" },
+        { documentPath: "Research/b.md", contentHash: "h2", format: "png", locator: "link:b.png" },
+      ],
+      { mode: "replace" },
+    );
+    await rebuild.commit();
+
+    const update = await store.beginWrite();
+    await update.upsert([chunk("chunk-a2", "Research/a.md", "note", [0, 1], "hash-a2")]);
+    await update.recordDocumentImages!(
+      [
+        {
+          documentPath: "Research/a.md",
+          contentHash: "h1b",
+          format: "png",
+          locator: "link:a2.png",
+        },
+      ],
+      { mode: "merge", documentPaths: ["Research/a.md", "Research/c.md"] },
+    );
+    await update.commit();
+
+    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const images = await reopened.listDocumentImages();
+    expect(images.map((entry) => entry.locator).sort()).toEqual(["link:a2.png", "link:b.png"]);
+    expect(JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8")).indexVersion).toBe(1);
+  });
+
+  it("drops image rows of documents the index no longer holds", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+
+    const rebuild = await store.beginWrite();
+    await rebuild.upsert([
+      chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a"),
+      chunk("chunk-b", "Research/b.md", "note", [0, 1], "hash-b"),
+    ]);
+    await rebuild.recordDocumentImages!(
+      [
+        { documentPath: "Research/a.md", contentHash: "h1", format: "png", locator: "link:a.png" },
+        { documentPath: "Research/b.md", contentHash: "h2", format: "png", locator: "link:b.png" },
+      ],
+      { mode: "replace" },
+    );
+    await rebuild.commit();
+
+    const update = await store.beginWrite();
+    await update.deleteBySourcePath("Research/b.md");
+    await update.commit();
+
+    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const images = await reopened.listDocumentImages();
+    expect(images.map((entry) => entry.locator)).toEqual(["link:a.png"]);
+  });
+
+  it("does not create a manifest from an incremental write on a legacy index", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+
+    const update = await store.beginWrite();
+    await update.upsert([chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a")]);
+    await update.recordDocumentImages!(
+      [{ documentPath: "Research/a.md", contentHash: "h1", format: "png", locator: "link:a.png" }],
+      { mode: "merge", documentPaths: ["Research/a.md"] },
+    );
+    await update.commit();
+
+    expect(existsSync(join(folder, "images.jsonl"))).toBe(false);
+    await expect(store.listDocumentImages()).resolves.toEqual([]);
+  });
+
+  it("reports no document images for an index below the required version", async () => {
+    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
+    await store.upsert([chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a")]);
+
+    await expect(store.listDocumentImages()).resolves.toEqual([]);
+  });
 });
 
 function chunk(

@@ -3,7 +3,6 @@ import { SavedChatSettings } from "@core/chat/savedChat";
 import { parsePositiveInteger } from "@shared";
 import { ChatModelSelectOption, IndexProfileSelectOption } from "./ChatComposer";
 
-/** Services subset needed to resolve chat settings against currently available profiles. */
 export interface ChatSettingsServices {
   getChatModelProfiles(): ChatModelSelectOption[];
   getDefaultChatModelProfileId(): string;

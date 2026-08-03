@@ -2,9 +2,6 @@ import { readdirSync, readFileSync } from "fs";
 import { resolve } from "path";
 
 describe("chat model settings surface", () => {
-  // The settings UI is split across SettingsTab.ts and the ./settings modules
-  // (modals, shared helpers). Read them all so the contract holds wherever a
-  // given control lives.
   const settingsDir = resolve("src/apps/obsidian/ui/settings");
   const source = [
     readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8"),

@@ -49,10 +49,7 @@ export interface NoteToolServiceOptions {
   writer?: VaultWriter;
   confirmation?: NoteActionConfirmation;
   noteMutationAccess?: boolean;
-  /**
-   * Supplies the citations gathered during the current research run so that raw
-   * evidence-ID tokens written into notes can be rewritten as footnote links.
-   */
+
   citationProvider?: () => readonly Citation[];
 }
 

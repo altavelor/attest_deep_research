@@ -12,7 +12,6 @@ interface FetchWebPagesInput {
   resultIds: string[];
 }
 
-/** One page in a batch fetch: the page content on success, or a per-page error. */
 export type FetchWebPageResult =
   | ({ ok: true } & FetchWebPageOutput)
   | { ok: false; resultId: string; error: ToolError };
@@ -63,12 +62,6 @@ function parseFetchWebPagesInput(
   return { ok: true, value: { resultIds } };
 }
 
-/**
- * Fetch one or more registered web results in parallel. The model batches every
- * resultId it wants to read into a single call; the pages fan out concurrently
- * (bounded per-host by the provider throttle) instead of one round-trip each.
- * A single page failing does not fail the batch — its error is reported inline.
- */
 export const WebFetchResearchTool = defineTool<
   { provider: SearchProvider; evidence: EvidenceRegistry },
   FetchWebPagesInput,

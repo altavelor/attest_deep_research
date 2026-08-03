@@ -1,6 +1,3 @@
-// Academic and encyclopedia definitions: arXiv, Semantic Scholar, OpenAlex,
-// Europe PMC, Wikipedia. All are free JSON APIs except arXiv (Atom XML).
-
 import {
   asArray,
   asRecord,

@@ -92,8 +92,8 @@ jobs:
       - name: Prepare release files
         shell: bash
         run: |
-          # All three are required by Obsidian; a missing one must fail the
-          # release rather than ship a plugin without styles.
+
+
           test -f dist/main.js
           test -f dist/manifest.json
           test -f dist/styles.css

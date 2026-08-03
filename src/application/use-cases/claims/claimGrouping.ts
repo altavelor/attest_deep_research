@@ -1,9 +1,3 @@
-// Pure grouping for the claim index (SPEC-corpus R7). Given every source's claims
-// and a query, return claims about the same subject gathered across documents —
-// the pre-filtered candidate set an LLM judge then compares pair-by-pair. Kept
-// pure (no I/O) so the retrieval capability is a thin wrapper and the matching is
-// unit-testable.
-
 import type {
   ClaimGroup,
   DocumentClaim,

@@ -77,9 +77,6 @@
   white-space: pre-wrap;
 }
 
-/* Readable panel is a shadow-DOM host: the report body and its stylesheet live
-   inside the shadow root (shared verbatim with the HTML export), so only the
-   host's sizing/scrolling is styled here. */
 .ixplorer-chat__diagnostic-readable {
   width: 100%;
   min-width: 0;
