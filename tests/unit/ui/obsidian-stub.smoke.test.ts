@@ -119,6 +119,24 @@ describe("Workspace and WorkspaceLeaf stubs", () => {
     expect(leaf.view?.contentEl.querySelector(".smoke-body")?.textContent).toBe("ready");
   });
 
+  it("releases what the view registered when its leaf is detached", async () => {
+    const app = new App();
+    const plugin = new SmokePlugin(app);
+    await plugin.onload();
+    const leaf = app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: VIEW_TYPE });
+    const button = container.createEl("button");
+    let clicks = 0;
+    leaf.view?.registerDomEvent(button, "click", () => {
+      clicks += 1;
+    });
+
+    await leaf.detach();
+    button.dispatchEvent(new Event("click"));
+
+    expect(clicks).toBe(0);
+  });
+
   it("closes the view and drops the leaf on detach", async () => {
     const app = new App();
     const plugin = new SmokePlugin(app);
