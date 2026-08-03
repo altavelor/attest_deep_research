@@ -1,9 +1,3 @@
-// Re-encodes the PDF raster encodings a browser cannot display directly. Only
-// the unambiguous cases are converted: 8-bit DeviceGray and DeviceRGB samples
-// compressed with FlateDecode, optionally PNG-predicted. Anything else (CMYK,
-// indexed palettes, sub-byte depths, image masks, JPX) is left to the caller to
-// skip, so no image is ever shown with guessed colours.
-
 import { deflateSync, inflateSync } from "zlib";
 
 export interface PdfRasterSpec {
@@ -73,6 +67,7 @@ function undoPngPredictor(data: Buffer, spec: PdfRasterSpec): Buffer | undefined
   for (let row = 0; row < rows; row += 1) {
     const start = row * (rowBytes + 1);
     const filter = data[start]!;
+    if (filter > 4) return undefined;
     const current = Buffer.from(data.subarray(start + 1, start + 1 + rowBytes));
 
     for (let index = 0; index < rowBytes; index += 1) {
@@ -88,6 +83,7 @@ function undoPngPredictor(data: Buffer, spec: PdfRasterSpec): Buffer | undefined
   return output;
 }
 
+/** Called only for selectors the caller already validated as 0–4. */
 function unfilterByte(
   filter: number,
   raw: number,

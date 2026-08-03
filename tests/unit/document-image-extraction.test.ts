@@ -343,6 +343,28 @@ describe("pdf image extraction", () => {
     ).toEqual([]);
   });
 
+  it("rejects a raster whose row filter selector is out of range", () => {
+    const rows = Buffer.concat(
+      Array.from({ length: 64 }, (_, index) =>
+        Buffer.concat([Buffer.from([index === 3 ? 9 : 0]), Buffer.alloc(64 * 3, 1)]),
+      ),
+    );
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /Columns 64 >> /ColorSpace /DeviceRGB /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(rows),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    expect(
+      extractDocumentImages({
+        path: "docs/corrupt.pdf",
+        data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+      }),
+    ).toEqual([]);
+  });
+
   it("skips rasters whose colour space it cannot reproduce", () => {
     const pdf = Buffer.concat([
       Buffer.from(
