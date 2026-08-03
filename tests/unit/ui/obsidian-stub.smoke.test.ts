@@ -98,6 +98,19 @@ describe("Plugin stub", () => {
     expect(app.workspace.getViewFactory(VIEW_TYPE)).toBeUndefined();
   });
 
+  it("leaves a replacement view factory registered when an earlier plugin unloads", async () => {
+    const app = new App();
+    const first = new SmokePlugin(app);
+    const second = new SmokePlugin(app);
+    await first.onload();
+    await second.onload();
+    const replacement = app.workspace.getViewFactory(VIEW_TYPE);
+
+    first.unload();
+
+    expect(app.workspace.getViewFactory(VIEW_TYPE)).toBe(replacement);
+  });
+
   it("round-trips persisted data through loadData and saveData", async () => {
     const plugin = new SmokePlugin(new App());
 

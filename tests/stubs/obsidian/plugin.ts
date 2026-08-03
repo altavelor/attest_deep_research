@@ -45,7 +45,11 @@ export class Plugin extends Component {
 
   registerView(type: string, factory: (leaf: WorkspaceLeaf) => View): void {
     this.app.workspace.registerViewFactory(type, factory);
-    this.register(() => this.app.workspace.unregisterViewFactory(type));
+    this.register(() => {
+      if (this.app.workspace.getViewFactory(type) === factory) {
+        this.app.workspace.unregisterViewFactory(type);
+      }
+    });
   }
 
   addCommand(command: Command): Command {
