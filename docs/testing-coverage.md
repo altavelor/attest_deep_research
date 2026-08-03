@@ -65,8 +65,9 @@ exercised behaviour does.
 `src/adapters/**` sits about three points below its measured 87.47% statements
 and 79.43% branches. Its branch floor of 76 is also at or below the 76.39%
 measured before the error-branch tests landed, so the threshold encodes the gain
-without depending on it. `src/apps` stays unthresholded until its executable
-tests land; a floor set at today's 20.95% would protect nothing.
+without depending on it. `src/apps` stays unthresholded: issue #18 asks only for
+the `src/adapters` floor. Now that its executable tests have taken it to 56.90%
+statements, a floor for `src/apps` is worth adding as a follow-up.
 
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
@@ -90,21 +91,24 @@ once more paths execute):
 
 ## Current figures
 
-Measured on merged `main` after the error-branch tests and the pull-request
-coverage report landed (1350 tests). This table supersedes the baseline tables
-above, which are kept as the record of where the work started.
+Measured on the merged tree once every issue #18 test suite had landed.
+This table supersedes the baseline tables above, which are kept as the record of
+where the work started.
 
 | Scope             | Statements | Branches | Functions | Lines  |
 | ----------------- | ---------- | -------- | --------- | ------ |
-| total             | 70.44%     | 79.64%   | 84.81%    | 70.44% |
-| `src/core`        | 94.27%     | 87.69%   | 94.49%    | 94.27% |
-| `src/application` | 89.86%     | 82.62%   | 89.09%    | 89.86% |
-| `src/adapters`    | 87.47%     | 79.43%   | 87.25%    | 87.47% |
-| `src/apps`        | 20.95%     | 58.77%   | 57.03%    | 20.95% |
+| total             | 80.67%     | 80.00%   | 75.86%    | 80.67% |
+| `src/core`        | 95.13%     | 87.31%   | 95.96%    | 95.13% |
+| `src/application` | 90.06%     | 83.09%   | 89.70%    | 90.06% |
+| `src/adapters`    | 88.02%     | 79.76%   | 85.53%    | 88.02% |
+| `src/apps`        | 56.90%     | 69.83%   | 48.43%    | 56.90% |
 | `src/shared`      | 95.40%     | 91.53%   | 100.00%   | 95.40% |
 
-`src/apps` is unchanged because its executable tests are still in flight; that
-figure is expected to move once they land, and this table is updated then.
+`src/apps` rose from the 20.95% baseline to 56.90%. The function percentage of
+`src/apps` and of the total fell even as statements rose: V8 only discovers a
+module's nested functions once that module executes, so exercising the chat,
+composer, and settings modules added far more functions to the denominator than
+the tests call directly. Read the statement and branch columns for progress here.
 
 ## Coverage report in a pull request
 
@@ -191,3 +195,31 @@ files, measured with `npm run test:coverage`:
 Measured alone against the 20.95% baseline these tests take `src/apps` to 28.71%
 statements. Together with the settings-prober and plugin-lifecycle tests above,
 `src/apps` now stands at 50.10% statements and 67.53% branches.
+
+## Chat view and retired static contracts (issue #18)
+
+`IxplorerChatView` is now opened through the stub `WorkspaceLeaf`, so panel
+selection under debug mode and transcript disposal on close and on redisplay are
+executed rather than described. The two remaining behavioural source-text
+assertions were replaced by executable tests: the fetch-target animation
+(advance under fake timers, `disposeChatTranscript` cancels the pending timer)
+and the index path picker (`scrollTop` after a selection-triggered rerender).
+`tests/arch/` now holds static policy only — CSS classes, removed controls,
+import boundaries, schema shape, and the comment policy; the executable
+tool-presentation catalog test moved to `tests/unit/`.
+
+`src/apps` measured with `npm run test:coverage` on the same commit, before and
+after these tests:
+
+| Scope      | Statements    | Branches      | Functions     | Lines         |
+| ---------- | ------------- | ------------- | ------------- | ------------- |
+| `src/apps` | 20.95 → 40.58 | 58.77 → 65.02 | 57.03 → 49.49 | 20.95 → 40.58 |
+
+Those are the figures for these tests alone. With the settings-prober,
+plugin-lifecycle, composer, and research-controller tests above, `src/apps`
+reaches 56.90% statements and 69.83% branches — see Current figures.
+
+The function percentage falls while the statement percentage doubles because V8
+only discovers the nested functions of a module once that module executes: the
+newly exercised chat, composer, and settings modules add far more functions to
+the denominator than the tests call directly.
