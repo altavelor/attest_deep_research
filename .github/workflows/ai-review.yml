@@ -65,7 +65,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           PROMT_FILE: .github/agent/review.md
           OUTPUT_FILE: agent-review.md
-          REVIEW_PROVIDERS: "openai/gpt-5.6-luna-pro"
+          REVIEW_PROVIDERS: "openrouter/openai/gpt-5.6-luna-pro"
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
