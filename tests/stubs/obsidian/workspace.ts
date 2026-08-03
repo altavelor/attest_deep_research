@@ -21,7 +21,7 @@ export class WorkspaceLeaf {
     if (!factory) throw new Error(`No view registered for type "${state.type}".`);
     await this.closeCurrentView();
     this.view = factory(this);
-    this.view.load();
+    await this.view.load();
     await this.view.onOpen();
   }
 

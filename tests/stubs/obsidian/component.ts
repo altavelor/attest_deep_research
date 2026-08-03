@@ -9,9 +9,9 @@ export class Component {
   private readonly cleanups: (() => void)[] = [];
   private loaded = false;
 
-  load(): void {
+  async load(): Promise<void> {
     this.loaded = true;
-    this.onload();
+    await this.onload();
   }
 
   unload(): void {
@@ -48,7 +48,7 @@ export class Component {
 
   addChild<T extends Component>(child: T): T {
     this.register(() => child.unload());
-    child.load();
+    void child.load();
     return child;
   }
 
@@ -56,7 +56,7 @@ export class Component {
     return this.cleanups.length;
   }
 
-  onload(): void {}
+  onload(): void | Promise<void> {}
 
   onunload(): void {}
 }

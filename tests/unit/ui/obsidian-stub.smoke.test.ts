@@ -45,6 +45,26 @@ class SmokeView extends ItemView {
   }
 }
 
+const LATE_VIEW_TYPE = "late-smoke-view";
+
+class LateRegisteringView extends ItemView {
+  readonly lifecycle: string[] = [];
+
+  getViewType(): string {
+    return LATE_VIEW_TYPE;
+  }
+
+  async onload(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    this.register(() => {});
+    this.lifecycle.push("onload");
+  }
+
+  async onOpen(): Promise<void> {
+    this.lifecycle.push("onOpen");
+  }
+}
+
 class SmokePlugin extends Plugin {
   async onload(): Promise<void> {
     this.registerView(VIEW_TYPE, (leaf) => new SmokeView(leaf));
@@ -135,6 +155,19 @@ describe("Workspace and WorkspaceLeaf stubs", () => {
     button.dispatchEvent(new Event("click"));
 
     expect(clicks).toBe(0);
+  });
+
+  it("waits for an asynchronous onload before reporting the view as opened", async () => {
+    const app = new App();
+    const plugin = new SmokePlugin(app);
+    plugin.registerView(LATE_VIEW_TYPE, (leaf) => new LateRegisteringView(leaf));
+    const leaf = app.workspace.getLeaf(true);
+
+    await leaf.setViewState({ type: LATE_VIEW_TYPE });
+
+    const view = leaf.view as LateRegisteringView;
+    expect(view.lifecycle).toEqual(["onload", "onOpen"]);
+    expect(view.registrationCount()).toBe(1);
   });
 
   it("releases the previous view when a leaf is given a new view state", async () => {
