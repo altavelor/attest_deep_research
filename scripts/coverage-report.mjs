@@ -92,6 +92,38 @@ export function summarizeScopes(records) {
   return rows;
 }
 
+const C_QUOTE_ESCAPES = { t: 9, n: 10, r: 13, '"': 34, "\\": 92 };
+
+/**
+ * Resolves the post-change path of a `+++` diff header. Git C-quotes paths that
+ * contain unusual bytes, so a quoted header is decoded from its octal escapes;
+ * `/dev/null`, which marks a deleted file, resolves to null.
+ */
+export function parseDiffHeaderPath(header) {
+  const value = header.replace(/\t.*$/, "").trim();
+  if (value === "/dev/null") return null;
+  if (!value.startsWith('"')) return value.replace(/^b\//, "");
+
+  const bytes = [];
+  const body = value.slice(1, value.endsWith('"') ? -1 : undefined);
+  for (let index = 0; index < body.length; index += 1) {
+    if (body[index] !== "\\") {
+      bytes.push(...new TextEncoder().encode(body[index]));
+      continue;
+    }
+    const next = body[index + 1];
+    const octal = /^[0-7]{3}/.exec(body.slice(index + 1));
+    if (octal) {
+      bytes.push(Number.parseInt(octal[0], 8));
+      index += 3;
+      continue;
+    }
+    bytes.push(C_QUOTE_ESCAPES[next] ?? new TextEncoder().encode(next ?? "")[0]);
+    index += 1;
+  }
+  return new TextDecoder().decode(Uint8Array.from(bytes)).replace(/^b\//, "");
+}
+
 /**
  * Extracts the lines added by a unified diff, keyed by the file path after the
  * change. Deletions and context lines are ignored.
@@ -102,7 +134,7 @@ export function parseAddedLines(diffText) {
   let lineNumber = 0;
   for (const line of diffText.split(/\r?\n/)) {
     if (line.startsWith("+++ ")) {
-      path = line.slice(4).trim().replace(/^b\//, "");
+      path = parseDiffHeaderPath(line.slice(4));
       continue;
     }
     if (line.startsWith("@@")) {

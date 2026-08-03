@@ -25,6 +25,7 @@ interface CoverageReportModule {
     branchPercent: number | null;
   }[];
   parseAddedLines(diff: string): Map<string, Set<number>>;
+  parseDiffHeaderPath(header: string): string | null;
   computePatchCoverage(
     records: LcovRecord[],
     added: Map<string, Set<number>>,
@@ -43,6 +44,7 @@ const {
   parseLcov,
   summarizeScopes,
   parseAddedLines,
+  parseDiffHeaderPath,
   computePatchCoverage,
   formatLineRanges,
   renderMarkdown,
@@ -107,6 +109,29 @@ describe("coverage report script", () => {
 
     expect([...(added.get("src/core/example.ts") ?? [])]).toEqual([2, 3, 10]);
     expect(added.size).toBe(1);
+  });
+
+  it("resolves quoted, prefixed and deleted-file diff header paths", () => {
+    expect(parseDiffHeaderPath("b/src/core/example.ts")).toBe("src/core/example.ts");
+    expect(parseDiffHeaderPath("/dev/null")).toBeNull();
+    expect(parseDiffHeaderPath('"b/src/core/wei\\303\\237.ts"')).toBe("src/core/weiß.ts");
+    expect(parseDiffHeaderPath('"b/src/core/a\\tb.ts"')).toBe("src/core/a\tb.ts");
+    expect(parseDiffHeaderPath("b/src/core/example.ts\t2026-08-03 12:00:00")).toBe(
+      "src/core/example.ts",
+    );
+  });
+
+  it("attributes no added lines to a deleted file", () => {
+    const deletion = [
+      "diff --git a/src/core/gone.ts b/src/core/gone.ts",
+      "--- a/src/core/gone.ts",
+      "+++ /dev/null",
+      "@@ -1,2 +0,0 @@",
+      "-const gone = 1;",
+      "-export default gone;",
+    ].join("\n");
+
+    expect(parseAddedLines(deletion).size).toBe(0);
   });
 
   it("reports coverage of the changed lines only", () => {
