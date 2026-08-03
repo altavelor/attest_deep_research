@@ -11,7 +11,9 @@ import { humanizeToolName, TOOL_PRESENTATIONS, toolIntent, toolTitle } from "@co
  */
 function declaredToolNames(): string[] {
   const source = readFileSync(resolve("src/core/agent/toolNames.ts"), "utf8");
-  return [...source.matchAll(/export const \w+_TOOL = "([^"]+)";/g)].map((match) => match[1]!);
+  return [...source.matchAll(/export\s+const\s+\w+_TOOL\s*=\s*"([^"]+)"\s*;/g)].map(
+    (match) => match[1]!,
+  );
 }
 
 describe("tool presentation coverage", () => {
