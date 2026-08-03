@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+
 export interface ElementInit {
   cls?: string | string[];
   text?: string;
@@ -88,6 +90,14 @@ export function installObsidianDomHelpers(): void {
     }
   };
 
+  proto.hasClass = function hasClass(this: Element, name: string) {
+    return this.classList.contains(name);
+  };
+
+  proto.appendText = function appendText(this: Element, text: string) {
+    this.appendChild(this.ownerDocument.createTextNode(text));
+  };
+
   proto.setText = function setText(this: Element, text: string) {
     this.textContent = text;
   };
@@ -111,4 +121,39 @@ export function createContainer(): HTMLElement {
 
 export function resetDom(): void {
   document.body.innerHTML = "";
+}
+
+const FAKED_TIMERS = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+] as const;
+
+/**
+ * Installs fake timers covering the window timers and animation frames UI code
+ * uses, so timer-driven behaviour is advanced explicitly instead of waited on.
+ */
+export function useDomFakeTimers(): void {
+  vi.useFakeTimers({ toFake: [...FAKED_TIMERS] });
+}
+
+export function restoreDomTimers(): void {
+  vi.useRealTimers();
+}
+
+/** Advances fake timers and drains the promises their callbacks resolve. */
+export async function advanceTime(ms: number): Promise<void> {
+  await vi.advanceTimersByTimeAsync(ms);
+}
+
+/** Runs the animation-frame callbacks queued for the next frame. */
+export async function flushAnimationFrames(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(16);
+}
+
+export function pendingTimerCount(): number {
+  return vi.getTimerCount();
 }
