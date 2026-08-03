@@ -12,7 +12,11 @@ concurrency:
 
 jobs:
   review:
-    if: github.event.sender.type != 'Bot'
+    if: |
+      github.event.sender.type != 'Bot' &&
+      (github.event_name == 'pull_request' ||
+       (github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '@ai-review')))
 
     runs-on: ubuntu-latest
 
@@ -37,7 +41,7 @@ jobs:
 
       - name: Run review
         if: steps.guard.outputs.enabled == 'true'
-        uses: the-pr-agent/pr-agent@main
+        uses: the-pr-agent/pr-agent@4a26c38d33d16ea490d6f0dd5c11b06e6c2f2cac
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           openrouter__key: ${{ secrets.OPENROUTER_API_KEY }}
