@@ -4,6 +4,7 @@ import {
   ChartSeries,
   ChartType,
   CHART_TYPES,
+  hasUniqueCategories,
   isDrawablePie,
 } from "./artifacts";
 
@@ -101,6 +102,9 @@ function parseSeries(
       x = label;
     }
     points.push({ x, y });
+  }
+  if (!hasUniqueCategories(points)) {
+    return fail("duplicate-point", `Series "${name}" repeats a point label.`);
   }
   return { ok: true, value: { name, points } };
 }
