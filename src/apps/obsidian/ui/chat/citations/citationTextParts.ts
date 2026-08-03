@@ -1,6 +1,6 @@
-import { stripRenderedCitationIds } from "./citationText";
+import { CITATION_TOKEN_SOURCE, stripRenderedCitationIds } from "./citationText";
 
-const CITATION_TOKEN = /\[([^\]\n]{8,})\]/g;
+const CITATION_TOKEN = new RegExp(CITATION_TOKEN_SOURCE, "g");
 
 export type CitationTextPart =
   | { kind: "text"; value: string }
@@ -11,6 +11,7 @@ export type CitationTextPart =
  * carries no citation token and must be left untouched. Tokens that resolve to
  * a known source become anchors; unresolved ones are dropped regardless of their
  * position, so a paragraph starting with a stale handle no longer keeps it.
+ * Bracketed prose that cannot be a handle is never treated as a token.
  */
 export function splitCitationText(
   text: string,
