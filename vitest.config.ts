@@ -24,6 +24,11 @@ export default defineConfig({
       exclude: ["src/**/*.d.ts"],
       reporter: ["text", "html", "lcov", "json-summary"],
       reportsDirectory: "coverage",
+      thresholds: {
+        perFile: false,
+        "src/core/**": { statements: 90, branches: 83, functions: 90, lines: 90 },
+        "src/application/**": { statements: 86, branches: 79, functions: 86, lines: 86 },
+      },
     },
   },
 });
