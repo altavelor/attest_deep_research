@@ -64,3 +64,47 @@ exercised behaviour does.
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
 ran, not that assertions were meaningful — treat it as a floor, not a goal.
+
+## Coverage report in a pull request
+
+CI runs `scripts/coverage-report.mjs` after `npm run test:coverage`. The script
+reads `coverage/lcov.info` and the pull request's own diff, writes the report to
+the job summary, and posts or updates a single pull-request comment marked with
+`<!-- ixplorer-coverage-report -->`. Nothing is uploaded anywhere: the report is
+produced inside the workflow run from local files only.
+
+Run it locally the same way CI does:
+
+```bash
+npm run test:coverage
+node scripts/coverage-report.mjs --base origin/main   # add --out <file> to append the Markdown
+```
+
+### Changed lines
+
+The first section answers the review question the totals cannot: is the code
+this pull request adds actually exercised? It intersects the lines added by
+`git diff --unified=0 <base>...<head> -- src` with the lines V8 instrumented, so
+only executable added lines under `src/` count — blank lines, comments, type-only
+declarations, and deleted lines are excluded, and a file with no instrumented
+additions does not appear. The `Uncovered lines` column lists the post-change
+line numbers, collapsed into ranges, that no test executed; open them in
+`coverage/index.html` to see the context. Read a low figure here as a list of
+places to test, not as a gate — this section does not fail the build.
+
+### Totals
+
+The second section repeats the layer aggregates above, computed from the same
+LCOV file, so a global regression is visible next to the patch figure. The
+enforced floors remain the `vitest.config.ts` thresholds; the report itself is
+informational.
+
+### When the report is missing or partial
+
+- On a `push` to `main` there is no diff base, so the report prints totals only
+  and says so.
+- For a pull request from a fork the `GITHUB_TOKEN` cannot write comments. The
+  comment step is skipped for forks and is `continue-on-error` besides, so a
+  failed comment never fails CI; read the report in the job summary instead.
+- If the base commit is not in the fetched history, the patch section is skipped
+  rather than reported as fully covered.
