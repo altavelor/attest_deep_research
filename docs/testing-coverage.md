@@ -60,6 +60,14 @@ exercised behaviour does.
 | -------------------- | ---------- | -------- | --------- | ----- |
 | `src/core/**`        | 90         | 83       | 90        | 90    |
 | `src/application/**` | 86         | 79       | 86        | 86    |
+| `src/adapters/**`    | 84         | 76       | 84        | 84    |
+
+`src/adapters/**` sits about three points below its measured 87.47% statements
+and 79.43% branches. Its branch floor of 76 is also at or below the 76.39%
+measured before the error-branch tests landed, so the threshold encodes the gain
+without depending on it. `src/apps` stays unthresholded: issue #18 asks only for
+the `src/adapters` floor. Now that its executable tests have taken it to 56.90%
+statements, a floor for `src/apps` is worth adding as a follow-up.
 
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
@@ -81,9 +89,26 @@ once more paths execute):
 | `adapters/model-provider/chat/streaming/ollamaChatStream.ts` | 39/59 66.1%  | 71/80 88.8%   |
 | `.../chat/responses/OpenAiResponsesStreamParser.ts`          | 36/54 66.7%  | 93/93 100%    |
 
-Aggregates after this change: total 70.44% statements / 79.62% branches,
-`src/core` 94.27% / 87.61%, `src/adapters` 87.47% / 79.43%. The summary table and
-the `src/adapters` threshold are updated separately.
+## Current figures
+
+Measured on the merged tree once every issue #18 test suite had landed.
+This table supersedes the baseline tables above, which are kept as the record of
+where the work started.
+
+| Scope             | Statements | Branches | Functions | Lines  |
+| ----------------- | ---------- | -------- | --------- | ------ |
+| total             | 80.67%     | 80.00%   | 75.86%    | 80.67% |
+| `src/core`        | 95.13%     | 87.31%   | 95.96%    | 95.13% |
+| `src/application` | 90.06%     | 83.09%   | 89.70%    | 90.06% |
+| `src/adapters`    | 88.02%     | 79.76%   | 85.53%    | 88.02% |
+| `src/apps`        | 56.90%     | 69.83%   | 48.43%    | 56.90% |
+| `src/shared`      | 95.40%     | 91.53%   | 100.00%   | 95.40% |
+
+`src/apps` rose from the 20.95% baseline to 56.90%. The function percentage of
+`src/apps` and of the total fell even as statements rose: V8 only discovers a
+module's nested functions once that module executes, so exercising the chat,
+composer, and settings modules added far more functions to the denominator than
+the tests call directly. Read the statement and branch columns for progress here.
 
 ## Coverage report in a pull request
 
@@ -138,6 +163,39 @@ comment body as an artifact. A second job, `coverage-comment`, holds
 it never checks out the branch or runs repository code, so the write-scoped token
 is never exposed to code from the pull request.
 
+## Settings prober and plugin lifecycle (issue #18, `src/apps`)
+
+`tests/unit/ui/settings-prober.behaviour.test.ts` and
+`tests/unit/ui/plugin-lifecycle.behaviour.test.ts` execute the settings tab and
+the plugin entry point against the Obsidian stub, with the capability probes
+mocked so no test reaches the network.
+
+| File                                                    | Statements before | Statements after |
+| ------------------------------------------------------- | ----------------- | ---------------- |
+| `apps/obsidian/main.ts`                                 | 0.00%             | 47.16%           |
+| `apps/obsidian/ui/settings/SettingsCapabilityProber.ts` | 0.00%             | 36.88%           |
+| `apps/obsidian/ui/SettingsTab.ts`                       | 0.00%             | 84.21%           |
+| `src/apps` aggregate                                    | 20.95%            | 47.67%           |
+
+## Composer and research-controller behaviour (issue #18)
+
+`tests/unit/ui/chat-composer.behaviour.test.ts` and
+`tests/unit/ui/research-question-controller.behaviour.test.ts` execute the chat
+composer and the research question controller under happy-dom with fake timers,
+replacing source-text claims with assertions on rendered DOM state and on the
+order of the render callbacks a stream triggers. Statement coverage of the three
+files, measured with `npm run test:coverage`:
+
+| File                                                 | Before   | After         |
+| ---------------------------------------------------- | -------- | ------------- |
+| `apps/obsidian/ui/chat/ChatComposer.ts`              | 0/413 0% | 353/413 85.5% |
+| `apps/obsidian/ui/chat/ChatComposerController.ts`    | 0/224 0% | 186/224 83.0% |
+| `.../ui/chat/research/ResearchQuestionController.ts` | 0/482 0% | 353/482 73.2% |
+
+Measured alone against the 20.95% baseline these tests take `src/apps` to 28.71%
+statements. Together with the settings-prober and plugin-lifecycle tests above,
+`src/apps` now stands at 50.10% statements and 67.53% branches.
+
 ## Chat view and retired static contracts (issue #18)
 
 `IxplorerChatView` is now opened through the stub `WorkspaceLeaf`, so panel
@@ -156,6 +214,10 @@ after these tests:
 | Scope      | Statements    | Branches      | Functions     | Lines         |
 | ---------- | ------------- | ------------- | ------------- | ------------- |
 | `src/apps` | 20.95 → 40.58 | 58.77 → 65.02 | 57.03 → 49.49 | 20.95 → 40.58 |
+
+Those are the figures for these tests alone. With the settings-prober,
+plugin-lifecycle, composer, and research-controller tests above, `src/apps`
+reaches 56.90% statements and 69.83% branches — see Current figures.
 
 The function percentage falls while the statement percentage doubles because V8
 only discovers the nested functions of a module once that module executes: the
