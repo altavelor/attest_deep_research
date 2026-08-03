@@ -14,7 +14,12 @@ import type {
   ResolvedDocumentImage,
 } from "@application/ports";
 import type { EligibleImageFormat, ImageCandidate } from "@core/media";
-import { ELIGIBLE_IMAGE_FORMATS, isSafeVaultImagePath, queryTerms } from "@core/media";
+import {
+  ELIGIBLE_IMAGE_FORMATS,
+  isSafeVaultImagePath,
+  queryTerms,
+  vaultFileFingerprint,
+} from "@core/media";
 import type { CompositionContext } from "./CompositionContext";
 
 const MAX_CONTEXT_DOCUMENTS = 8;
@@ -50,20 +55,27 @@ export function createDocumentImageCandidates(
       if (!data) continue;
       seenDocuments.add(path);
       candidates.push(
-        ...documentImageCandidates(
-          path,
-          extractDocumentImages({
+        ...withLinkedFileFingerprints(
+          ctx,
+          documentImageCandidates(
             path,
-            data,
-            resolveLinkedPath: createLinkedImagePathResolver(ctx),
-          }),
+            extractDocumentImages({
+              path,
+              data,
+              resolveLinkedPath: createLinkedImagePathResolver(ctx),
+            }),
+            hashFileData(data),
+          ),
         ),
       );
     }
 
     if (!indexImages || signal?.aborted) return candidates;
     candidates.push(
-      ...(await indexImageCandidates(indexImages, query, seenDocuments, readPaths ?? [])),
+      ...withLinkedFileFingerprints(
+        ctx,
+        await indexImageCandidates(indexImages, query, seenDocuments, readPaths ?? []),
+      ),
     );
     return candidates;
   };
@@ -161,6 +173,31 @@ export function createDocumentImageResolver(ctx: CompositionContext): DocumentIm
       return match?.data ? { format: match.format, data: match.data } : undefined;
     },
   };
+}
+
+/**
+ * Stamps linked vault images with a cheap stat fingerprint. Embedded images
+ * already carry their document's hash; a linked file is its own asset, so it is
+ * fingerprinted separately and verified before it is displayed.
+ */
+function withLinkedFileFingerprints(
+  ctx: CompositionContext,
+  candidates: readonly ImageCandidate[],
+): ImageCandidate[] {
+  return candidates.map((candidate) => {
+    const vaultSource = candidate.vaultSource;
+    if (!vaultSource || vaultSource.locator !== "file") return candidate;
+    const fingerprint = linkedFileFingerprint(ctx, vaultSource.documentPath);
+    return fingerprint
+      ? { ...candidate, vaultSource: { ...vaultSource, contentHash: fingerprint } }
+      : candidate;
+  });
+}
+
+function linkedFileFingerprint(ctx: CompositionContext, path: string): string | undefined {
+  const file = ctx.app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) return undefined;
+  return vaultFileFingerprint(file.stat.size, file.stat.mtime);
 }
 
 /** Resolves Markdown and wiki-embed targets exactly as Obsidian links do. */

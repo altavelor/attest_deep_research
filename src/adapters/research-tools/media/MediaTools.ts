@@ -27,7 +27,6 @@ export interface ImageSearchDeps {
   documentCandidates?: (
     request: ToolDocumentImageQuery,
   ) => Promise<ImageCandidate[]> | ImageCandidate[];
-  /** Vault documents read or retrieved so far; their images are always eligible. */
   readDocumentPaths?: () => readonly string[];
 }
 

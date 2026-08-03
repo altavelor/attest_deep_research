@@ -1,7 +1,13 @@
 import { App, TFile } from "obsidian";
 
 import type { AnswerImage } from "@core/media";
-import { isSafeVaultImagePath, mimeTypeForFormat, validateImageUrl } from "@core/media";
+import {
+  isSafeVaultImagePath,
+  isVaultFileFingerprint,
+  mimeTypeForFormat,
+  validateImageUrl,
+  vaultFileFingerprint,
+} from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
 
 export interface ResolvedImageSource {
@@ -38,7 +44,15 @@ export async function resolveAnswerImageSource(
 
   if (vaultSource.locator === "file") {
     const file = options.app.vault.getAbstractFileByPath(vaultSource.documentPath);
-    return file instanceof TFile ? { src: options.app.vault.getResourcePath(file) } : undefined;
+    if (!(file instanceof TFile)) return undefined;
+    const fingerprint = vaultFileFingerprint(file.stat.size, file.stat.mtime);
+    if (
+      isVaultFileFingerprint(vaultSource.contentHash) &&
+      vaultSource.contentHash !== fingerprint
+    ) {
+      return undefined;
+    }
+    return { src: options.app.vault.getResourcePath(file) };
   }
 
   const resolved = await options.documentImages?.resolve(
