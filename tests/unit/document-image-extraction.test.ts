@@ -212,6 +212,19 @@ describe("epub image extraction", () => {
     const refs = extractDocumentImages({ path: "books/story.epub", data });
     expect(refs.map((ref) => ref.locator)).toEqual(["zip:OEBPS/images/cover.png"]);
   });
+
+  it("yields nothing when the spine references no image", () => {
+    const data = zip({
+      "META-INF/container.xml": '<container><rootfile full-path="OEBPS/content.opf"/></container>',
+      "OEBPS/content.opf":
+        '<package><manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>' +
+        '<item id="i1" href="images/cover.png" media-type="image/png"/>' +
+        '</manifest><spine><itemref idref="c1"/></spine></package>',
+      "OEBPS/chapter1.xhtml": "<html><body><p>No pictures here.</p></body></html>",
+      "OEBPS/images/cover.png": pngBytes,
+    });
+    expect(extractDocumentImages({ path: "books/plain.epub", data })).toEqual([]);
+  });
 });
 
 describe("fb2 image extraction", () => {

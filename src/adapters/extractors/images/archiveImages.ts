@@ -110,7 +110,11 @@ function docxAltText(archive: ZipArchive): Map<string, string> {
   return altByEntry;
 }
 
-/** EPUB manifest images, restricted to those referenced from spine documents. */
+/**
+ * EPUB manifest images, restricted to those actually referenced from spine
+ * content. A book whose spine references none yields no candidates rather than
+ * exposing covers and unused package assets.
+ */
 function epubManifestImages(archive: ZipArchive): string[] {
   const container = archive.text("META-INF/container.xml");
   const packagePath = container ? (/full-path="([^"]+)"/.exec(container)?.[1] ?? "") : "";
@@ -147,7 +151,7 @@ function epubManifestImages(archive: ZipArchive): string[] {
   return [...manifest.values()]
     .filter((item) => imageFormatFromMimeType(item.mediaType) !== undefined)
     .map((item) => joinArchivePath(packageDirectory, item.href))
-    .filter((entry) => referenced.size === 0 || referenced.has(entry));
+    .filter((entry) => referenced.has(entry));
 }
 
 function boundedNames(archive: ZipArchive): string[] {
