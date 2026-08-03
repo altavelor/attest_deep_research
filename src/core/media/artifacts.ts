@@ -143,8 +143,24 @@ function isChartSeries(value: unknown): value is ChartSeries {
     Array.isArray(value.points) &&
     value.points.length > 0 &&
     value.points.length <= ARTIFACT_LIMITS.chartPointsPerSeries &&
-    value.points.every(isChartPoint)
+    value.points.every(isChartPoint) &&
+    hasUniqueCategories(value.points as ChartPoint[])
   );
+}
+
+/**
+ * A series may plot each category once. Repeated labels would render as extra
+ * marks the equivalent data table cannot express, so the chart is rejected
+ * rather than exported with silently missing rows.
+ */
+export function hasUniqueCategories(points: readonly ChartPoint[]): boolean {
+  const seen = new Set<string>();
+  for (const point of points) {
+    const key = String(point.x);
+    if (seen.has(key)) return false;
+    seen.add(key);
+  }
+  return true;
 }
 
 export function isAnswerArtifact(value: unknown): value is AnswerArtifact {

@@ -99,6 +99,32 @@ describe("answer artifact contracts", () => {
     expect(isAnswerArtifact(withVault({ ...base, contentHash: 7 }))).toBe(false);
   });
 
+  it("rejects a series that repeats a point label", () => {
+    const chart = (points: unknown) => ({
+      type: "chart",
+      id: "c9",
+      title: "Split",
+      chartType: "pie",
+      series: [{ name: "s", points }],
+    });
+    expect(
+      isAnswerArtifact(
+        chart([
+          { x: "Other", y: 1 },
+          { x: "Other", y: 2 },
+        ]),
+      ),
+    ).toBe(false);
+    expect(
+      isAnswerArtifact(
+        chart([
+          { x: "Other", y: 1 },
+          { x: "Rest", y: 2 },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
   it("reapplies pie constraints to persisted charts", () => {
     const pie = (series: unknown) => ({
       type: "chart",
@@ -377,6 +403,22 @@ describe("chart validation", () => {
         ],
       },
       "invalid-pie",
+    ],
+    [
+      {
+        title: "t",
+        chartType: "pie",
+        series: [
+          {
+            name: "a",
+            points: [
+              { x: "Other", y: 1 },
+              { x: "Other", y: 2 },
+            ],
+          },
+        ],
+      },
+      "duplicate-point",
     ],
   ])("rejects invalid input (%#)", (input, code) => {
     const result = validateChartInput(input as Record<string, unknown>);

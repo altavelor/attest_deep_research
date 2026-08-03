@@ -1,6 +1,7 @@
 export {
   ARTIFACT_LIMITS,
   CHART_TYPES,
+  hasUniqueCategories,
   isAnswerArtifact,
   isAnswerImage,
   isDrawablePie,
