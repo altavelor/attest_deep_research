@@ -97,7 +97,7 @@ Vault-file artifacts resolve a contained vault-relative path at render time. Emb
 
 Each full rebuild writes a compact image manifest: document path/hash, format, opaque locator, safe caption/alt text, and bounded display metadata—never bytes or OS paths. `FileVectorManifest.indexVersion` is optional; absent means `0`. Version `1` requires this image manifest.
 
-Only a successful full rebuild advances to `REQUIRED_INDEX_VERSION`; incremental refreshes, failed, paused, or cancelled rebuilds do not. Index profiles below the required version show `Reindex required` in Settings, with the reason that document-image metadata is missing. Selecting one in chat shows a non-blocking warning that text search works but index-based image discovery needs rebuilding, plus an action to open index settings. Error/suspended state has visual priority.
+Only a successful full rebuild advances to `REQUIRED_INDEX_VERSION`; incremental refreshes, failed, paused, or cancelled rebuilds do not. Once the manifest exists, an incremental refresh keeps it consistent by replacing the rows of the documents it re-indexed, so discovery never serves rows for content the index no longer holds. Index profiles below the required version show `Reindex required` in Settings, with the reason that document-image metadata is missing. Selecting one in chat shows a non-blocking warning that text search works but index-based image discovery needs rebuilding, plus an action to open index settings. Error/suspended state has visual priority.
 
 ## Safety, limits, and lifecycle
 

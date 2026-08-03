@@ -119,7 +119,7 @@ export class FileProcessor {
         contentHash,
         persistSnapshot: true,
         languages,
-        ...(documentImages.length > 0 ? { documentImages } : {}),
+        ...(documentImages ? { documentImages } : {}),
       };
     }
 
@@ -131,22 +131,22 @@ export class FileProcessor {
       languages: detectTextLanguages(
         chunks.map((chunk: ExtractedChunk) => chunk.text).join("\n\n"),
       ),
-      ...(documentImages.length > 0 ? { documentImages } : {}),
+      ...(documentImages ? { documentImages } : {}),
     };
   }
 
   /**
-   * Collects manifest rows for the images a document embeds or links. Runs only
-   * during a full rebuild and never keeps image bytes.
+   * Collects manifest rows for the images a document embeds or links. Returns
+   * an empty list for a supported document without images, so the caller can
+   * clear that document's stale rows, and undefined for unsupported formats.
+   * Image bytes are never kept.
    */
   private collectDocumentImages(
     path: string,
     data: ArrayBuffer | string,
     contentHash: string,
-  ): DocumentImageManifestEntry[] {
-    if (this.options.collectDocumentImages?.() !== true || !supportsDocumentImages(path)) {
-      return [];
-    }
+  ): DocumentImageManifestEntry[] | undefined {
+    if (!supportsDocumentImages(path)) return undefined;
     return extractDocumentImages({
       path,
       data,

@@ -1,5 +1,6 @@
 import type {
   DocumentImageManifestEntry,
+  DocumentImageManifestScope,
   IndexFailedSourceSnapshot,
   IndexStore,
   IndexStoreWriteSession,
@@ -21,6 +22,8 @@ export class IndexWriteCoordinator {
   private snapshotsLoaded = false;
   private writer: IndexStoreWriteSession | undefined;
   private imageManifest: DocumentImageManifestEntry[] | undefined;
+  private imageManifestMode: "replace" | "merge" = "merge";
+  private readonly imageDocumentPaths = new Set<string>();
 
   constructor(options: {
     indexStore: IndexStore;
@@ -45,20 +48,32 @@ export class IndexWriteCoordinator {
   async begin(): Promise<void> {
     this.writer = undefined;
     this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
   }
 
-  /** Starts collecting the document-image manifest for a full rebuild. */
-  beginImageManifest(): void {
+  /**
+   * Starts collecting document-image rows. A full rebuild replaces the stored
+   * manifest; an incremental run merges the rows of the documents it touched.
+   */
+  beginImageManifest(mode: "replace" | "merge"): void {
     this.imageManifest = [];
+    this.imageManifestMode = mode;
+    this.imageDocumentPaths.clear();
   }
 
   /** Drops a manifest that would be incomplete, so no version is persisted. */
   discardImageManifest(): void {
     this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
   }
 
-  recordDocumentImages(entries: readonly DocumentImageManifestEntry[]): void {
-    if (this.imageManifest === undefined || entries.length === 0) return;
+  /**
+   * Records the rows of one document. An empty list still marks the document as
+   * touched, so its stale rows are dropped when the manifest is merged.
+   */
+  recordDocumentImages(documentPath: string, entries: readonly DocumentImageManifestEntry[]): void {
+    if (this.imageManifest === undefined) return;
+    this.imageDocumentPaths.add(documentPath);
     this.imageManifest.push(...entries);
   }
 
@@ -68,24 +83,36 @@ export class IndexWriteCoordinator {
    * only that may advance the persisted index version.
    */
   async commit(): Promise<boolean> {
-    let manifestWritten = false;
-    if (this.imageManifest !== undefined) {
+    let rebuiltManifest = false;
+    if (this.imageManifest !== undefined && this.hasImageRowsToWrite()) {
       const writer = await this.openWriterForManifest();
       if (writer?.recordDocumentImages) {
-        await writer.recordDocumentImages(this.imageManifest);
-        manifestWritten = true;
+        await writer.recordDocumentImages(this.imageManifest, this.imageManifestScope());
+        rebuiltManifest = this.imageManifestMode === "replace";
       }
     }
     await this.writer?.commit();
     this.writer = undefined;
     this.imageManifest = undefined;
-    return manifestWritten;
+    this.imageDocumentPaths.clear();
+    return rebuiltManifest;
+  }
+
+  private hasImageRowsToWrite(): boolean {
+    return this.imageManifestMode === "replace" || this.imageDocumentPaths.size > 0;
+  }
+
+  private imageManifestScope(): DocumentImageManifestScope {
+    return this.imageManifestMode === "replace"
+      ? { mode: "replace" }
+      : { mode: "merge", documentPaths: [...this.imageDocumentPaths] };
   }
 
   rollback(): void {
     this.writer?.rollback();
     this.writer = undefined;
     this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
   }
 
   async loadPersistedSnapshots(): Promise<void> {

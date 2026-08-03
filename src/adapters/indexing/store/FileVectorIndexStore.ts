@@ -22,6 +22,7 @@ import type { FileVectorPathResolver } from "./FileVectorIndexReader";
 import {
   FileVectorIndexPersistence,
   FileVectorIndexPersistenceEvent,
+  type ImageManifestWrite,
 } from "./FileVectorIndexPersistence";
 import { queryFileVectorState } from "./FileVectorIndexQuery";
 import {
@@ -138,7 +139,7 @@ export class FileVectorIndexStore
     const state = this.requireState();
     const changes = createWriteChanges();
     let closed = false;
-    let imageManifest: ImageManifestEntry[] | undefined;
+    let imageManifest: ImageManifestWrite | undefined;
 
     return {
       upsert: async (chunks) => {
@@ -165,9 +166,12 @@ export class FileVectorIndexStore
           changes.sourcesDirty = true;
         }
       },
-      recordDocumentImages: async (entries) => {
+      recordDocumentImages: async (entries, scope) => {
         ensureWriterOpen();
-        imageManifest = [...(imageManifest ?? []), ...(entries as ImageManifestEntry[])];
+        imageManifest = {
+          entries: [...(imageManifest?.entries ?? []), ...(entries as ImageManifestEntry[])],
+          scope,
+        };
       },
       commit: async () => {
         ensureWriterOpen();

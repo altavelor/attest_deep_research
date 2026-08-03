@@ -1,5 +1,6 @@
 import {
   DocumentImageManifestEntry,
+  DocumentImageManifestScope,
   Extractor,
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,
@@ -647,7 +648,9 @@ class FakeIndexStore implements IndexStore, SourceSnapshotIndexStore {
 
 class ImageManifestIndexStore extends FakeIndexStore {
   recordedImages: DocumentImageManifestEntry[] | null = null;
+  recordedScope: DocumentImageManifestScope | null = null;
   private pending: DocumentImageManifestEntry[] | null = null;
+  private pendingScope: DocumentImageManifestScope | null = null;
 
   async beginWrite(): Promise<IndexStoreWriteSession> {
     return {
@@ -660,14 +663,17 @@ class ImageManifestIndexStore extends FakeIndexStore {
       updateSourceSnapshots: async (snapshots) => {
         await this.updateSourceSnapshots(snapshots);
       },
-      recordDocumentImages: async (entries) => {
+      recordDocumentImages: async (entries, scope) => {
         this.pending = [...(this.pending ?? []), ...entries];
+        this.pendingScope = scope;
       },
       commit: async () => {
         this.recordedImages = this.pending;
+        this.recordedScope = this.pendingScope;
       },
       rollback: () => {
         this.pending = null;
+        this.pendingScope = null;
       },
     };
   }
@@ -690,6 +696,7 @@ describe("IndexingService image manifest", () => {
 
     const state = await service.rebuild();
 
+    expect(indexStore.recordedScope).toEqual({ mode: "replace" });
     expect(indexStore.recordedImages).toEqual([
       expect.objectContaining({
         documentPath: "Research/a.md",
@@ -765,7 +772,7 @@ describe("IndexingService image manifest", () => {
     expect(state.indexVersion).toBeUndefined();
   });
 
-  it("writes no manifest and no version bump on an incremental run", async () => {
+  it("merges the touched documents and bumps no version on an incremental run", async () => {
     const indexStore = new ImageManifestIndexStore();
     const service = new IndexingService({
       files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
@@ -779,7 +786,13 @@ describe("IndexingService image manifest", () => {
 
     const state = await service.manualReindex();
 
-    expect(indexStore.recordedImages).toBeNull();
+    expect(indexStore.recordedScope).toEqual({
+      mode: "merge",
+      documentPaths: ["Research/a.md"],
+    });
+    expect(indexStore.recordedImages).toEqual([
+      expect.objectContaining({ documentPath: "Research/a.md" }),
+    ]);
     expect(state.indexVersion).toBeUndefined();
   });
 });

@@ -1,5 +1,7 @@
 import { join } from "path";
 
+import type { DocumentImageManifestScope } from "@application/ports";
+
 import {
   AtomicIndexFile,
   atomicWriteIndexFiles,
@@ -13,6 +15,7 @@ import {
   type ImageManifestEntry,
   isImageManifestEntry,
   REQUIRED_INDEX_VERSION,
+  requiresIndexRebuildForImages,
   serializeImageManifest,
 } from "./FileVectorImageManifest";
 import {
@@ -57,6 +60,17 @@ export interface FileVectorIndexPersistenceEvent {
 
 const MANIFEST_FILE = "manifest.json";
 
+/** Rows recorded by a write session, plus how they relate to the stored manifest. */
+export interface ImageManifestWrite {
+  entries: readonly ImageManifestEntry[];
+  scope: DocumentImageManifestScope;
+}
+
+interface ResolvedImageManifest {
+  mode: "replace" | "merge";
+  entries: readonly ImageManifestEntry[];
+}
+
 export class FileVectorIndexPersistence {
   private readonly folder: string;
   private readonly now: () => Date;
@@ -72,6 +86,29 @@ export class FileVectorIndexPersistence {
 
   pathFor(relativePath: string): string {
     return join(this.folder, relativePath);
+  }
+
+  /**
+   * Turns recorded rows into the manifest to write. A rebuild replaces the file
+   * outright; an incremental write merges its rows over the stored ones, but
+   * only for an index that already carries a manifest — otherwise a partial
+   * manifest would claim a version the index has not earned.
+   */
+  private async resolveImageManifest(
+    state: FileVectorIndexState,
+    images?: ImageManifestWrite,
+  ): Promise<ResolvedImageManifest | undefined> {
+    if (!images) return undefined;
+    if (images.scope.mode === "replace") {
+      return { mode: "replace", entries: images.entries };
+    }
+    if (requiresIndexRebuildForImages(state.manifest)) return undefined;
+
+    const touched = new Set(images.scope.documentPaths);
+    const kept = (await this.readImageManifest()).filter(
+      (entry) => !touched.has(entry.documentPath),
+    );
+    return { mode: "merge", entries: [...kept, ...images.entries] };
   }
 
   /** Image manifest of the last full rebuild; empty when the index predates it. */
@@ -166,8 +203,9 @@ export class FileVectorIndexPersistence {
   async persistState(
     state: FileVectorIndexState,
     changes?: FileVectorIndexWriteChanges,
-    imageManifest?: readonly ImageManifestEntry[],
+    images?: ImageManifestWrite,
   ): Promise<void> {
+    const imageManifest = await this.resolveImageManifest(state, images);
     const persistStartedAt = Date.now();
     const writeId = this.createWriteId();
     const updatedAt = this.now().toISOString();
@@ -251,7 +289,7 @@ export class FileVectorIndexPersistence {
       keywordIndexedChunkCount,
       keywordMinTokenLength: state.manifest.keywordIndex.minTokenLength,
       languageInventory: languageInventoryFromSources(state.sources),
-      ...(imageManifest !== undefined
+      ...(imageManifest?.mode === "replace"
         ? { indexVersion: REQUIRED_INDEX_VERSION }
         : state.manifest.indexVersion !== undefined
           ? { indexVersion: state.manifest.indexVersion }
@@ -260,7 +298,7 @@ export class FileVectorIndexPersistence {
     if (imageManifest !== undefined) {
       files.push({
         path: this.pathFor(IMAGE_MANIFEST_FILE),
-        data: serializeImageManifest(imageManifest),
+        data: serializeImageManifest(imageManifest.entries),
       });
     }
     this.logPerformance({
