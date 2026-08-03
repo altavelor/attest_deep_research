@@ -52,6 +52,11 @@ export class IndexWriteCoordinator {
     this.imageManifest = [];
   }
 
+  /** Drops a manifest that would be incomplete, so no version is persisted. */
+  discardImageManifest(): void {
+    this.imageManifest = undefined;
+  }
+
   recordDocumentImages(entries: readonly DocumentImageManifestEntry[]): void {
     if (this.imageManifest === undefined || entries.length === 0) return;
     this.imageManifest.push(...entries);

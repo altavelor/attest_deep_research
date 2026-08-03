@@ -744,6 +744,7 @@ describe("IndexingService image manifest", () => {
 
     expect(state.failedFiles).toBe(1);
     expect(state.indexVersion).toBeUndefined();
+    expect(indexStore.recordedImages).toBeNull();
   });
 
   it("completes a rebuild whose store cannot open a manifest-only session", async () => {

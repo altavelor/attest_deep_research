@@ -163,6 +163,9 @@ export class IndexingService {
           chunks: pendingChunks,
           indexedFiles: pendingIndexedFiles,
         });
+        if (!this.isCompleteRun()) {
+          this.writer.discardImageManifest();
+        }
         this.progress.setPhase("writing");
         imageManifestWritten = await this.writer.commit();
       } else {
@@ -176,7 +179,7 @@ export class IndexingService {
     if (this.progress.isPaused()) {
       this.progress.keepPausedAfterRun();
     } else {
-      if (imageManifestWritten && this.isCompleteRun()) {
+      if (imageManifestWritten) {
         this.progress.setIndexVersion(REQUIRED_INDEX_VERSION);
       }
       this.progress.complete();
@@ -187,8 +190,8 @@ export class IndexingService {
 
   /**
    * True when the run covered every file. A rebuild that skipped a failed
-   * document or deferred files produced an incomplete image manifest, so the
-   * profile must keep its rebuild-required state.
+   * document or deferred files produced an incomplete image manifest, so
+   * neither the manifest nor the index version may be persisted.
    */
   private isCompleteRun(): boolean {
     const state = this.getState();
