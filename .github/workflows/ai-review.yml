@@ -1,8 +1,8 @@
-name: OpenRouter AI Code Review
+name: PR-Agent Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
 
@@ -12,16 +12,14 @@ concurrency:
 
 jobs:
   review:
-    if: |
-      github.event_name == 'pull_request' || 
-      (github.event.issue.pull_request != null && contains(github.event.comment.body, '@ai-review'))
+    if: github.event.sender.type != 'Bot'
 
     runs-on: ubuntu-latest
 
     permissions:
       pull-requests: write
-      contents: read
       issues: write
+      contents: read
 
     steps:
       - name: Check for API key
@@ -32,73 +30,38 @@ jobs:
         run: |
           if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
             echo "enabled=false" >>"$GITHUB_OUTPUT"
-            echo "::warning::OPENROUTER_API_KEY is not set; skipping the review gate (no-op pass)."
+            echo "::warning::OPENROUTER_API_KEY is not set; skipping the review (no-op pass)."
           else
             echo "enabled=true" >>"$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout pull request merge commit
-        if: steps.guard.outputs.enabled == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/merge
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: React to comment
-        if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'eyes'
-            });
-
       - name: Run review
         if: steps.guard.outputs.enabled == 'true'
-        uses: keithah/multi-provider-code-review@main
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-          PROMT_FILE: .github/agent/review.md
-          OUTPUT_FILE: agent-review.md
-          REVIEW_PROVIDERS: "openrouter/openai/gpt-5.6-luna-pro"
+        uses: the-pr-agent/pr-agent@main
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-
-      - name: Display review
-        if: always() && steps.guard.outputs.enabled == 'true' && hashFiles('agent-review.md') != ''
-        shell: bash
-        run: cat agent-review.md
-
-      - name: Read verdict
-        id: verdict
-        if: steps.guard.outputs.enabled == 'true' && hashFiles('agent-review.md') != ''
-        shell: bash
-        run: |
-          verdict="$(grep -E '^VERDICT: (PASS|FAIL)$' agent-review.md | tail -n 1 || true)"
-          echo "value=${verdict}" >>"$GITHUB_OUTPUT"
-          if [[ "$verdict" == "VERDICT: PASS" ]]; then
-            echo "pass=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "pass=false" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload review artifact
-        if: always() && steps.guard.outputs.enabled == 'true' && hashFiles('agent-review.md') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-review-${{ github.event.pull_request.number || github.event.issue.number }}
-          path: agent-review.md
-
-      - name: Enforce verdict
-        if: steps.guard.outputs.enabled == 'true' && steps.verdict.outputs.pass != ''
-        shell: bash
-        run: |
-          if [[ "${{ steps.verdict.outputs.pass }}" != "true" ]]; then
-            echo "::error::Agent review did not pass (${{ steps.verdict.outputs.value }})"
-            exit 1
-          fi
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          openrouter__key: ${{ secrets.OPENROUTER_API_KEY }}
+          config.model: "openrouter/openai/gpt-5.6-luna"
+          config.fallback_models: '["openrouter/anthropic/claude-sonnet-5"]'
+          config.custom_model_max_tokens: "128000"
+          config.publish_output_progress: "false"
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "true"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          pr_reviewer.extra_instructions: |
+            Проект — плагин Obsidian на TypeScript со строгой слоистой архитектурой.
+            Полный свод правил приведён в best_practices.md в корне репозитория.
+            Приоритет при ревью:
+            1. Направление зависимостей apps -> adapters -> application -> core.
+            2. Отсутствие Node, DOM и Obsidian API в src/core/ и в портах application.
+            3. Обращение к внешним сервисам только через порт из src/application/ports/
+               или контракт из src/application/contracts/; use case не импортирует адаптер.
+            4. Импорты между модулями только через алиасы @core/*, @application/*,
+               @adapters/*, @apps/*, @shared/* и публичный index.ts, без глубоких путей.
+            5. Обработка недоверенных внешних данных, отмена асинхронных операций,
+               таймауты, освобождение подписок, слушателей и таймеров.
+            6. Наличие тестов на каждое изменённое поведение и регрессионного теста
+               на каждое исправление бага.
+            Не предлагай комментарии в коде, кроме краткого JSDoc перед функцией
+            или классом. Не предлагай новые зависимости без обоснования.
