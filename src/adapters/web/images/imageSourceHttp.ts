@@ -45,8 +45,8 @@ export async function requestImageJson(
         message: `${sourceId} responded with ${response.status}.`,
       });
     }
-    const body = await response.text();
-    if (body.length > IMAGE_SEARCH_DEFAULTS.maxResponseChars) {
+    const body = await readBoundedText(response, IMAGE_SEARCH_DEFAULTS.maxResponseChars);
+    if (body === undefined) {
       throw new IxplorerError({
         code: "WEB_SEARCH_FAILED",
         message: `${sourceId} returned an oversized response.`,
@@ -92,4 +92,31 @@ export function text(value: unknown): string | undefined {
 
 export function positiveNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * Reads a response body while it stays inside the limit, so an oversized
+ * provider reply is abandoned mid-stream instead of being buffered whole.
+ * Returns undefined once the limit is passed.
+ */
+async function readBoundedText(response: Response, maxChars: number): Promise<string | undefined> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const body = await response.text();
+    return body.length > maxChars ? undefined : body;
+  }
+
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      if (text.length > maxChars) return undefined;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return text + decoder.decode();
 }
