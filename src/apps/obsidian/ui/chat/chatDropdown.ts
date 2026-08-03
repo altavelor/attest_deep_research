@@ -9,7 +9,7 @@ export interface MenuDropdownHandle {
   el: HTMLButtonElement;
   setValue(id: string): void;
   setDisabled(disabled: boolean): void;
-  /** Disable a single option, showing `reason` on hover; pass undefined to re-enable. */
+
   setItemDisabled(id: string, reason: string | undefined): void;
 }
 

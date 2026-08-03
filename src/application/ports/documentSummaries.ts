@@ -1,12 +1,8 @@
-// Ports for hierarchical document summaries (SPEC-corpus-knowledge R4):
-// per-section and per-document summaries generated during index enrichment and
-// stored as sidecars next to the index.
-
 export interface SectionSummary {
   headingPath: string[];
   chunkStart: number;
   chunkEnd: number;
-  /** Stable hash of the section text used to reuse summaries across source-level hash changes. */
+
   sectionHash?: string;
   summary: string;
 }
@@ -14,12 +10,12 @@ export interface SectionSummary {
 export interface SourceDocumentSummaries {
   schemaVersion: 1;
   sourcePath: string;
-  /** contentHash of the source at generation time — drives incremental re-runs. */
+
   contentHash: string;
   sections: SectionSummary[];
   document: {
     summary: string;
-    /** One sentence used in the corpus overview inside the agent prompt. */
+
     oneLiner: string;
   };
   generation: {
@@ -44,7 +40,7 @@ export interface SectionSummaryInput {
 export interface DocumentSummaryInput {
   sourcePath: string;
   title?: string;
-  /** Section summaries when the document has sections, otherwise a head sample. */
+
   sectionSummaries: string[];
 }
 

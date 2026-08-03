@@ -396,7 +396,6 @@ describe("ChatModelClient", () => {
       toolChoice,
       parallelToolCalls: true,
     })) {
-      /* consume */
     }
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.tool_choice).toEqual(expected);
@@ -419,9 +418,8 @@ describe("ChatModelClient", () => {
       model: "claude-opus-4-8",
       messages: [{ role: "user", content: "hi" }],
     })) {
-      /* consume */
     }
-    // The configured trailing /v1 is stripped; the SDK appends its own.
+
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.anthropic.com/v1/messages");
     expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
   });
@@ -532,7 +530,6 @@ describe("ChatModelClient", () => {
       tools: [tool],
       toolChoice: { type: "specific", name: "synthetic_probe" },
     })) {
-      /* consume */
     }
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.tool_choice).toEqual({ type: "tool", name: "synthetic_probe" });
@@ -565,7 +562,6 @@ describe("ChatModelClient", () => {
       ],
       tools: [tool],
     })) {
-      /* consume */
     }
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.messages[1]).toEqual({

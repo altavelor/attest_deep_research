@@ -170,14 +170,13 @@ describe("chat rendering helpers", () => {
       evidence: [cited, uncited],
     };
 
-    // While streaming (no finalized answer) all consulted evidence is shown.
     expect(citationEvidence(streaming as never).map((chunk) => chunk.id)).toEqual(["a", "b"]);
 
     const finalized = {
       ...streaming,
       answer: { citations: [{ id: "a", label: "A", source: markdownSource("A.md") }] },
     };
-    // Once finalized, only the cited source survives — no phantom links.
+
     expect(citationEvidence(finalized as never).map((chunk) => chunk.id)).toEqual(["a"]);
   });
 

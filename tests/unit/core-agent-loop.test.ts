@@ -1,5 +1,3 @@
-// Stage 3: the agent loop runs in core against the ModelRoundProvider port only,
-// with no client adapter and no research labeler.
 import { runAgentLoop } from "@core/agent";
 import type { ModelRoundProvider, ModelRoundResult } from "@core/agent";
 

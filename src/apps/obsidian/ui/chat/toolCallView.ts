@@ -1,3 +1,4 @@
+import { humanizeToolName, toolIntent } from "@core/agent";
 import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
 export type ToolCell =
@@ -6,15 +7,14 @@ export type ToolCell =
   | { kind: "diff"; hunks: DiffHunk[] };
 
 export interface ToolCallView {
-  /** Human-readable phrase describing what the model is trying to do. */
   intent: string;
-  /** Web sites selected for a fetch, displayed as a one-at-a-time animation. */
+
   fetchTargets: string[];
-  /** Top "In" cell — the call arguments. Omitted when not useful. */
+
   inCell?: ToolCell;
-  /** Bottom "Out" cell — the result. Omitted for tools that need no output. */
+
   outCell?: ToolCell;
-  /** Short warning chip next to the tool head (e.g. degraded search mode). */
+
   badge?: { text: string; tooltip?: string };
 }
 
@@ -24,9 +24,9 @@ export interface ToolCallViewInput {
   status: "pending" | "complete" | "failed";
   args?: Record<string, unknown>;
   resultJson?: string;
-  /** Site names resolved from preceding web-search results while a fetch is pending. */
+
   fetchTargets?: string[];
-  /** Search resources selected by the web query planner. */
+
   searchSources?: string[];
 }
 
@@ -110,6 +110,10 @@ function argsCell(args: Record<string, unknown>): ToolCell | undefined {
   return { kind: "code", text: JSON.stringify(args) };
 }
 
+/**
+ * Delegates to the shared presentation catalog; an unregistered tool falls back
+ * to its chain label and then to a humanized name, never to raw snake_case.
+ */
 function describeIntent(
   name: string,
   args: Record<string, unknown>,
@@ -117,56 +121,17 @@ function describeIntent(
   fetchTargetCount: number,
   searchSources?: string[],
 ): string {
-  const query = typeof args.query === "string" ? args.query.trim() : "";
-  const path = typeof args.path === "string" ? args.path.trim() : "";
-  switch (name) {
-    case "search_index":
-    case "search_notes": {
-      const scope = describeSearchScope(args);
-      return query ? `Searching the vault for “${query}”${scope}` : `Searching the vault${scope}`;
-    }
-    case "search_web": {
-      const count = typeof args.count === "number" ? ` (top ${args.count})` : "";
-      const resource =
-        searchSources && searchSources.length > 0 ? searchSources.join(", ") : "the web";
-      return query ? `Searching ${resource} for “${query}”${count}` : `Searching ${resource}`;
-    }
-    case "fetch_web_page": {
-      const count = fetchPageCount(args, fetchTargetCount);
-      if (fetchTargetCount > 0) return `Fetching ${count === 1 ? "page" : "pages"} ${count}:`;
-      return count > 0 ? `Fetching ${count === 1 ? "page" : "pages"} ${count}` : "Fetching pages";
-    }
-    case "read_note":
-      return path ? `Reading the note “${basename(path)}”` : "Reading a note";
-    case "get_active_note":
-      return "Reading the currently active note";
-    case "list_notes": {
-      const prefix = typeof args.prefix === "string" ? args.prefix.trim() : "";
-      return prefix ? `Listing notes under “${prefix}”` : "Listing all notes in the vault";
-    }
-    case "create_note": {
-      const size = typeof args.content === "string" ? ` (${args.content.length} chars)` : "";
-      return path ? `Creating the note “${basename(path)}”${size}` : "Creating a note";
-    }
-    case "update_note":
-      return path ? `Editing the note “${basename(path)}”` : "Editing a note";
-    case "delete_note":
-      return path ? `Deleting the note “${basename(path)}”` : "Deleting a note";
-    case "run_subagent": {
-      const task = typeof args.task === "string" ? args.task.trim() : "";
-      return task ? `Delegating to a sub-agent: “${truncate(task, 80)}”` : "Running a sub-agent";
-    }
-    default:
-      return label && label !== name ? label : name;
-  }
+  const intent = toolIntent(name, {
+    args,
+    fetchTargetCount,
+    ...(searchSources ? { searchSources } : {}),
+  });
+  if (intent) return intent;
+  return label && label !== name ? label : humanizeToolName(name);
 }
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
-}
-
-function fetchPageCount(args: Record<string, unknown>, completedCount: number): number {
-  return Array.isArray(args.resultIds) ? args.resultIds.length : completedCount;
 }
 
 function fetchedPageHosts(resultJson?: string): string[] {
@@ -187,25 +152,12 @@ function fetchedPageHosts(resultJson?: string): string[] {
   }
 }
 
-function describeSearchScope(args: Record<string, unknown>): string {
-  const limit = typeof args.limit === "number" ? args.limit : undefined;
-  const prefix = typeof args.prefix === "string" ? args.prefix.trim() : "";
-  const parts: string[] = [];
-  if (prefix) parts.push(`under “${prefix}”`);
-  if (limit !== undefined) parts.push(`top ${limit}`);
-  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
-}
-
 function hostOf(target: string): string {
   try {
     return new URL(target).hostname || target;
   } catch {
     return target;
   }
-}
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function noteEditDiff(resultJson?: string): DiffHunk[] | undefined {
@@ -233,9 +185,4 @@ function compactJson(value: string): string {
   } catch {
     return value.replace(/\s+/g, " ").trim();
   }
-}
-
-function basename(path: string): string {
-  const last = path.split("/").pop() ?? path;
-  return last.endsWith(".md") ? last.slice(0, -3) : last;
 }

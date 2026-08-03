@@ -1,7 +1,3 @@
-// Машинно-проверяемые архитектурные инварианты (AGENTS.md §1, §2).
-// Заменяет grep-проверки из AGENTS.md §1 и добавляет детект циклов импортов.
-// Запуск: npm run depcruise
-/** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
     {
@@ -48,7 +44,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: "node_modules" },
-    // Учитывать paths-алиасы (@core/* и т.п.) и type-only импорты при анализе.
+
     tsConfig: { fileName: "tsconfig.json" },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

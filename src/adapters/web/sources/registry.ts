@@ -1,7 +1,3 @@
-// Assembles hub sources from the catalog definitions and user profiles.
-// Consumed by the composition root; the query planner (later stage) receives
-// the resulting WebSourceRegistry.
-
 import { areCredentialsComplete, WebSourceProfile } from "@core/web";
 import { WebSearchSource, WebSourceRegistry } from "@application/ports";
 import {

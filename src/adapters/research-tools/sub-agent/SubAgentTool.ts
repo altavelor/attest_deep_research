@@ -10,7 +10,7 @@ export interface SubAgentInput {
 
 export interface SubAgentOutput {
   task: string;
-  /** The sub-agent's free-text answer, already citing sources in the shared format. */
+
   answer: string;
   sourceCount: number;
 }
@@ -37,15 +37,6 @@ function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<Sub
   return { ok: true, value: { task } };
 }
 
-/**
- * Launches an in-process sub-agent for one self-contained task, with the same
- * read-only tools as the orchestrating (main) model (index/web/notes — no
- * mutation, no recursive run_subagent). The main model can issue several calls
- * — sequentially or in parallel — to run multiple independent sessions. Each
- * session's gathered evidence is merged into the parent run so the main model
- * can cite the same sources (URLs and evidenceIds are stable across registries,
- * so the sub-agent's own citations remain valid verbatim).
- */
 export const SubAgentTool = defineTool<
   { runner: SubAgentPort; evidence: EvidenceRegistry; toolContext?: ResearchToolsetOptions },
   SubAgentInput,
@@ -58,7 +49,10 @@ export const SubAgentTool = defineTool<
     "deep web research, cross-checking facts, reading and comparing several notes — " +
     "especially when several independent facets can run in parallel (up to 3 at once).",
   schema: {
-    task: str(MAX_TASK_CHARS, { required: true }),
+    task: str(MAX_TASK_CHARS, {
+      required: true,
+      description: "Self-contained task for the sub-agent, including the success criteria.",
+    }),
   },
   parse: parseSubAgentInput,
   execute: async (deps, input, context) => {

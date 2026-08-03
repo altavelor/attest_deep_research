@@ -1,5 +1,3 @@
-// Core agent: tool-call protocol primitives. Platform-neutral.
-
 export interface ChatToolDefinition {
   type: "function";
   function: {
@@ -35,12 +33,6 @@ export interface ToolError {
   details?: Record<string, unknown>;
 }
 
-// --- Universal tool abstraction + manager (stage 1, task 4.1 / R3) ---
-// A Tool is anything the model can invoke; the ToolManager is how the agent loop
-// discovers and dispatches them. Adding a capability = implement Tool + register;
-// the loop/core never changes.
-
-/** Progress/streaming event a tool can surface mid-execution (forwarded by the caller). */
 export interface ToolEvent {
   type: string;
   message?: string;
@@ -49,20 +41,17 @@ export interface ToolEvent {
 
 export interface ToolContext {
   callId: string;
-  /** Cancellation for long-running tools (e.g. web fetch); honoured by the tool. */
+
   signal: AbortSignal;
-  /** Surface progress out of the tool; the dispatcher decides where it goes. */
+
   emit(event: ToolEvent): void;
 }
 
-/** What a dispatcher (loop / runner) optionally supplies when executing a tool. */
 export interface ToolDispatchContext {
   signal?: AbortSignal;
   emit?: (event: ToolEvent) => void;
 }
 
-// A signal that never aborts, for callers that don't supply one. Cast keeps this
-// platform-neutral: core only relies on the minimal AbortSignal surface.
 const NEVER_ABORT_SIGNAL = {
   aborted: false,
   addEventListener() {},
@@ -84,22 +73,13 @@ export type ToolExecution<T> =
   | { ok: true; value: T; diagnostic?: Record<string, unknown> }
   | { ok: false; error: ToolError; diagnostic?: Record<string, unknown> };
 
-/**
- * Permissions granted for a run, as an opaque set of capability names. Neutral by
- * design: core defines the shape, the application maps its own gating policy onto
- * the names and a tool's {@link Tool.requires} predicate decides against them.
- */
 export type ToolPermissions = ReadonlySet<string>;
 
 export interface Tool<TInput = unknown, TOutput = unknown> {
   definition: ChatToolDefinition;
   parseInput(input: Record<string, unknown>): ToolParseResult<TInput>;
   execute(input: TInput, context: ToolContext): Promise<ToolExecution<TOutput>>;
-  /**
-   * Optional permission gate. When present and the granted permissions do not
-   * satisfy it, the dispatcher (e.g. ToolManager) hides the tool from the model
-   * and refuses to execute it. Absent ⇒ always available.
-   */
+
   requires?(permissions: ToolPermissions): boolean;
 }
 

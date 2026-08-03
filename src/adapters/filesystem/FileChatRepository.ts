@@ -1,6 +1,3 @@
-// Filesystem-backed chat repository (stage 5). The persistence adapter for the
-// ChatRepository port; domain DTOs/rules live in core/chat/savedChat.
-
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "fs/promises";
 import { basename, join } from "path";
 

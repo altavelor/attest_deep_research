@@ -52,7 +52,6 @@ export function normalizeAnthropicBaseUrl(baseUrl: string): string {
 
 export interface LoggingFetchOptions {
   logger?: PluginRequestLogger;
-  /** Name of a header to drop from the outgoing request (case-insensitive). */
   stripHeader?: string;
 }
 

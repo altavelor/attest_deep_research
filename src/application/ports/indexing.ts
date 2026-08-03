@@ -1,6 +1,3 @@
-// Application ports: indexing / extraction / index-store contracts (stage 1, task 1.3).
-// Depend only on core domain model.
-
 import { EmbeddedChunk, ExtractedChunk, RetrievedChunk } from "@core/model";
 import { LanguageCode, LanguageInventoryItem } from "@core/model";
 
@@ -35,8 +32,33 @@ export interface IndexStoreWriteSession {
   deleteBySourcePath(path: string): Promise<void>;
   updateSourceSnapshots?(snapshots: IndexSourceSnapshot[]): Promise<void>;
   recordFailedSourceSnapshots?(snapshots: IndexFailedSourceSnapshot[]): Promise<void>;
+
+  recordDocumentImages?(
+    entries: readonly DocumentImageManifestEntry[],
+    scope: DocumentImageManifestScope,
+  ): Promise<void>;
   commit(): Promise<void>;
   rollback(): void;
+}
+
+/**
+ * How the recorded rows relate to the stored manifest. A full rebuild replaces
+ * it; an incremental write replaces only the rows of the documents it touched,
+ * so image discovery stays consistent with the index without a rebuild.
+ */
+export type DocumentImageManifestScope =
+  | { mode: "replace" }
+  | { mode: "merge"; documentPaths: readonly string[] };
+
+export interface DocumentImageManifestEntry {
+  documentPath: string;
+  contentHash: string;
+  format: string;
+  locator: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface IndexSourceSnapshot {

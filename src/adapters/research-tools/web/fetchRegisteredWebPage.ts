@@ -1,13 +1,8 @@
-// Shared page-fetch core for the web-fetch tools (fetch_web_page / fetch_url /
-// fetch_web_section). Given a resultId already registered in the evidence
-// registry, it validates the URL, fetches bounded text through the provider,
-// upgrades the evidence entry, and returns the normalized fetch output. The tools
-// differ only in how the resultId is obtained and how the content is post-shaped.
-
 import { SearchProvider } from "@application/ports";
 import { validatePublicWebUrl } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolExecution, toolFailure } from "@core/agent";
+import type { ImageCandidate } from "@core/media";
 
 export interface FetchWebPageOutput {
   resultId: string;
@@ -17,6 +12,8 @@ export interface FetchWebPageOutput {
   content: string;
   contentType: string;
   truncated: boolean;
+
+  imageIds?: string[];
   untrustedEvidence: true;
 }
 
@@ -30,6 +27,10 @@ export const DEFAULT_FETCH_OPTIONS = {
 export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
+
+  artifacts?: {
+    register(candidates: readonly ImageCandidate[]): ReadonlyArray<{ handle: string }>;
+  };
 }
 
 /**
@@ -81,6 +82,11 @@ export async function fetchRegisteredWebPage(
     return toolFailure("web-fetch-invalid-response", "Page fetch returned unsafe metadata.");
   }
 
+  const imageIds =
+    deps.artifacts && Array.isArray(result.pageImages)
+      ? deps.artifacts.register(result.pageImages).map((entry) => entry.handle)
+      : [];
+
   const content = result.content.slice(0, maxContentChars);
   const truncated = result.truncated || content.length < result.content.length;
   deps.evidence.upgradeWebPage(resultId, {
@@ -100,6 +106,7 @@ export async function fetchRegisteredWebPage(
       content,
       contentType: result.contentType,
       truncated,
+      ...(imageIds.length > 0 ? { imageIds } : {}),
       untrustedEvidence: true,
     },
   };

@@ -1,9 +1,3 @@
-// Публичный API модуля application/web — планировщик веб-запросов хаба
-// внешних источников. Внешние потребители импортируют `@application/web`.
-//
-// Инвариант: файлы ВНУТРИ модуля не импортируют этот баррель — только соседей
-// через `./…`, иначе цикл (ловит `npm run depcruise`).
-
 export { WebQueryPlanner } from "./WebQueryPlanner";
 export type { WebQueryPlannerOptions } from "./WebQueryPlanner";
 

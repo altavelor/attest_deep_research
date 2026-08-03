@@ -29,8 +29,6 @@ describe("plugin metadata", () => {
     expect(manifest.isDesktopOnly).toBe(true);
   });
 
-  // The release workflow refuses to publish when these drift; failing here
-  // surfaces the mismatch before a tag is pushed rather than mid-release.
   it("keeps package.json and versions.json in sync with the manifest", () => {
     expect(packageJson.version).toBe(manifest.version);
     expect(versions[manifest.version as keyof typeof versions]).toBe(manifest.minAppVersion);

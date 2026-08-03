@@ -1,7 +1,3 @@
-// Page-fetch fallback chain: tries the primary fetcher, then each fallback
-// provider in order (native → Jina → Zyte → Wayback), returning the first
-// successful result. Search/metadata/document calls stay on the primary.
-
 import {
   PageFetchProvider,
   SearchProvider,
@@ -16,7 +12,7 @@ import {
 export interface FetchFallbackChainOptions {
   primary: SearchProvider;
   fallbacks: PageFetchProvider[];
-  /** Called when a link in the chain fails and the next one is tried. */
+
   onFallback?(providerId: string, failure: WebPageFetchResult): void;
 }
 

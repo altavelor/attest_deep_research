@@ -1,6 +1,3 @@
-// Sidecar storage for per-source document metadata (SPEC-corpus-knowledge R3):
-// one JSON file per source under `<index folder>/metadata/`.
-
 import { DocumentMetadataStore, SourceDocumentMetadata } from "@application/ports";
 import { JsonSidecarStore } from "./JsonSidecarStore";
 

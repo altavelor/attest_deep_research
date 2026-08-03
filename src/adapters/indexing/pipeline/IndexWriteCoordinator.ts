@@ -1,4 +1,6 @@
 import type {
+  DocumentImageManifestEntry,
+  DocumentImageManifestScope,
   IndexFailedSourceSnapshot,
   IndexStore,
   IndexStoreWriteSession,
@@ -19,6 +21,9 @@ export class IndexWriteCoordinator {
   private readonly logger?: IndexingLogger;
   private snapshotsLoaded = false;
   private writer: IndexStoreWriteSession | undefined;
+  private imageManifest: DocumentImageManifestEntry[] | undefined;
+  private imageManifestMode: "replace" | "merge" = "merge";
+  private readonly imageDocumentPaths = new Set<string>();
 
   constructor(options: {
     indexStore: IndexStore;
@@ -42,16 +47,72 @@ export class IndexWriteCoordinator {
 
   async begin(): Promise<void> {
     this.writer = undefined;
+    this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
   }
 
-  async commit(): Promise<void> {
+  /**
+   * Starts collecting document-image rows. A full rebuild replaces the stored
+   * manifest; an incremental run merges the rows of the documents it touched.
+   */
+  beginImageManifest(mode: "replace" | "merge"): void {
+    this.imageManifest = [];
+    this.imageManifestMode = mode;
+    this.imageDocumentPaths.clear();
+  }
+
+  /** Drops a manifest that would be incomplete, so no version is persisted. */
+  discardImageManifest(): void {
+    this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
+  }
+
+  /**
+   * Records the rows of one document. An empty list still marks the document as
+   * touched, so its stale rows are dropped when the manifest is merged.
+   */
+  recordDocumentImages(documentPath: string, entries: readonly DocumentImageManifestEntry[]): void {
+    if (this.imageManifest === undefined) return;
+    this.imageDocumentPaths.add(documentPath);
+    this.imageManifest.push(...entries);
+  }
+
+  /**
+   * Commits the run and reports whether the image manifest was persisted. Only
+   * a full rebuild against a store that supports the manifest writes one, and
+   * only that may advance the persisted index version.
+   */
+  async commit(): Promise<boolean> {
+    let rebuiltManifest = false;
+    if (this.imageManifest !== undefined && this.hasImageRowsToWrite()) {
+      const writer = await this.openWriterForManifest();
+      if (writer?.recordDocumentImages) {
+        await writer.recordDocumentImages(this.imageManifest, this.imageManifestScope());
+        rebuiltManifest = this.imageManifestMode === "replace";
+      }
+    }
     await this.writer?.commit();
     this.writer = undefined;
+    this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
+    return rebuiltManifest;
+  }
+
+  private hasImageRowsToWrite(): boolean {
+    return this.imageManifestMode === "replace" || this.imageDocumentPaths.size > 0;
+  }
+
+  private imageManifestScope(): DocumentImageManifestScope {
+    return this.imageManifestMode === "replace"
+      ? { mode: "replace" }
+      : { mode: "merge", documentPaths: [...this.imageDocumentPaths] };
   }
 
   rollback(): void {
     this.writer?.rollback();
     this.writer = undefined;
+    this.imageManifest = undefined;
+    this.imageDocumentPaths.clear();
   }
 
   async loadPersistedSnapshots(): Promise<void> {
@@ -133,6 +194,19 @@ export class IndexWriteCoordinator {
       await writer.recordFailedSourceSnapshots(snapshots);
     } else {
       await this.indexStore.recordFailedSourceSnapshots(snapshots);
+    }
+  }
+
+  /**
+   * A run that embedded nothing never initialized the store, so opening a write
+   * session for the manifest alone would fail. The manifest is then simply not
+   * written and the profile keeps its previous index version.
+   */
+  private async openWriterForManifest(): Promise<IndexStoreWriteSession | undefined> {
+    try {
+      return await this.getWriter();
+    } catch {
+      return undefined;
     }
   }
 

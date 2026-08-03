@@ -1,8 +1,3 @@
-// Document-download data source. Contributes the read-only `probe_document_url`
-// triage tool and the `download_document` mutation tool (gated by the download
-// permission) to the agent loop. Mirrors WebSource: a thin DataSource wiring
-// ports into `defineTool` definitions.
-
 import { Tool } from "@core/agent";
 import { SearchProvider } from "@application/ports";
 import { VaultWriter } from "@application/ports";

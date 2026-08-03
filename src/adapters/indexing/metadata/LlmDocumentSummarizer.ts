@@ -1,7 +1,3 @@
-// LLM-backed hierarchical summarization (SPEC-corpus R4). Section summaries are
-// plain text; the document-level call returns strict JSON (summary + one-liner
-// for the corpus overview). Prompt changes must bump SUMMARY_PROMPT_VERSION.
-
 import { ChatMessage, ChatModelProvider } from "@core/agent";
 import { DocumentSummarizer, DocumentSummaryInput, SectionSummaryInput } from "@application/ports";
 

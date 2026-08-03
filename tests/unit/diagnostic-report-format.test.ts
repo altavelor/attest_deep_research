@@ -91,7 +91,7 @@ describe("diagnostic report format helpers", () => {
     });
     expect(isEmptySearchResult(empty)).toBe(true);
     expect(isEmptySearchResult(call({ resultPreview: '{"results":[{"url":"x"}]}' }))).toBe(false);
-    // Content-bearing tools are never "empty searches".
+
     expect(
       isEmptySearchResult(call({ name: "fetch_web_page", resultPreview: '"results":[]' })),
     ).toBe(false);

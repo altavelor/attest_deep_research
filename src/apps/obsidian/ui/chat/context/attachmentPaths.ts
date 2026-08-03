@@ -1,7 +1,3 @@
-// Attached-context path helpers. Folder attachments are stored as paths with a
-// trailing "/" and expanded into the contained supported files only when the
-// research request is built, so the composer chip stays a single folder entry.
-
 import { isSupportedContextDocumentPath } from "@shared";
 
 export function isFolderAttachmentPath(path: string): boolean {

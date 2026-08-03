@@ -128,7 +128,7 @@ export interface RequestSection {
 export interface ThinkingLoopRound {
   round: number;
   phase: string;
-  /** Prompt messages added for this round's request (incremental; round 1 = full prompt). */
+
   promptDelta: RoundPromptDeltaDiagnostic | null;
   toolCalls: ToolCallDiagnostic[];
   reasoningSegments: Array<{ segmentId: string; chars: number }>;

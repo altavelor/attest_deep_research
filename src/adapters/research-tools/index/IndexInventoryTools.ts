@@ -54,11 +54,19 @@ export const ListIndexSourcesTool = defineInventoryTool<IndexSourceInventoryOpti
   description:
     "List documents, books, and files available in the selected local index. Use before narrowing work to a specific source.",
   schema: {
-    cursor: str(MAX_CURSOR_CHARS),
-    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
-    kind: enumOf(SOURCE_KINDS),
-    pathPrefix: str(MAX_PATH_CHARS),
-    query: str(MAX_QUERY_CHARS),
+    cursor: str(MAX_CURSOR_CHARS, {
+      description: "Opaque cursor from a previous page; omit for the first page.",
+    }),
+    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT, {
+      description: "Maximum documents to return.",
+    }),
+    kind: enumOf(SOURCE_KINDS, { description: "Restrict to one source kind." }),
+    pathPrefix: str(MAX_PATH_CHARS, {
+      description: "Restrict to documents under this vault folder.",
+    }),
+    query: str(MAX_QUERY_CHARS, {
+      description: "Filter documents by a substring of their path or title.",
+    }),
   },
   capability: "listIndexSources",
   errorCode: "index-source-list-failed",
@@ -72,10 +80,19 @@ export const ListIndexChunksTool = defineInventoryTool<IndexChunkListOptions>({
   description:
     "Read chunks from one indexed source in document order, not semantic relevance order. Use for exhaustive passes through a book or file.",
   schema: {
-    sourcePath: str(MAX_PATH_CHARS, { required: true }),
-    cursor: str(MAX_CURSOR_CHARS),
-    limit: int(1, MAX_CHUNK_LIMIT, DEFAULT_CHUNK_LIMIT),
-    headingPath: strArray(12, 160),
+    sourcePath: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault path of the document to list fragments of.",
+    }),
+    cursor: str(MAX_CURSOR_CHARS, {
+      description: "Opaque cursor from a previous page; omit for the first page.",
+    }),
+    limit: int(1, MAX_CHUNK_LIMIT, DEFAULT_CHUNK_LIMIT, {
+      description: "Maximum fragments to return.",
+    }),
+    headingPath: strArray(12, 160, {
+      description: "Restrict to fragments under this heading path, outermost heading first.",
+    }),
   },
   capability: "listIndexChunks",
   errorCode: "index-chunk-list-failed",
@@ -89,10 +106,19 @@ export const ReadIndexChunkTool = defineInventoryTool<IndexChunkReadOptions>({
   description:
     "Read the full text of one indexed chunk plus bounded neighboring chunks for exact context checks.",
   schema: {
-    chunkId: str(240, { required: true }),
-    before: int(0, MAX_NEIGHBORS, 0),
-    after: int(0, MAX_NEIGHBORS, 0),
-    maxChars: int(1, MAX_READ_CHARS, DEFAULT_MAX_CHARS),
+    chunkId: str(240, {
+      required: true,
+      description: "Fragment id from search_index or list_index_chunks.",
+    }),
+    before: int(0, MAX_NEIGHBORS, 0, {
+      description: "How many preceding fragments to include for context.",
+    }),
+    after: int(0, MAX_NEIGHBORS, 0, {
+      description: "How many following fragments to include for context.",
+    }),
+    maxChars: int(1, MAX_READ_CHARS, DEFAULT_MAX_CHARS, {
+      description: "Maximum characters of text to return.",
+    }),
   },
   capability: "readIndexChunk",
   errorCode: "index-chunk-read-failed",
@@ -112,8 +138,13 @@ export const ReadIndexSectionTool = defineInventoryTool<IndexSectionReadOptions>
   description:
     "Read the entire section a chunk belongs to (same heading), in document order. Use when a search hit looks like a heading or a fragment of a larger passage — one call instead of guessing neighbor chunks.",
   schema: {
-    chunkId: str(240, { required: true }),
-    maxChars: int(1, MAX_SECTION_CHARS, DEFAULT_SECTION_CHARS),
+    chunkId: str(240, {
+      required: true,
+      description: "Any fragment id inside the section to read.",
+    }),
+    maxChars: int(1, MAX_SECTION_CHARS, DEFAULT_SECTION_CHARS, {
+      description: "Maximum characters of section text to return.",
+    }),
     cursor: str(MAX_CURSOR_CHARS, {
       description: "Continuation cursor from a previous read of the same section.",
     }),
@@ -136,12 +167,22 @@ export const FindInIndexTool = defineInventoryTool<FindInIndexOptions>({
   description:
     "Find exact literal or regex matches in indexed text without semantic search. Use for URLs, ISBNs, DOIs, dates, TODOs, links, and exact terms.",
   schema: {
-    pattern: str(MAX_PATTERN_CHARS, { required: true }),
-    mode: enumOf(["literal", "regex"], { required: true }),
-    sourcePath: str(MAX_PATH_CHARS),
-    caseSensitive: bool(),
-    cursor: str(MAX_CURSOR_CHARS),
-    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+    pattern: str(MAX_PATTERN_CHARS, {
+      required: true,
+      description: "Text to look for, literal or a regular expression per `mode`.",
+    }),
+    mode: enumOf(["literal", "regex"], {
+      required: true,
+      description: "How to interpret `pattern`.",
+    }),
+    sourcePath: str(MAX_PATH_CHARS, { description: "Restrict the search to this document." }),
+    caseSensitive: bool({ description: "Match case exactly; defaults to case-insensitive." }),
+    cursor: str(MAX_CURSOR_CHARS, {
+      description: "Opaque cursor from a previous page; omit for the first page.",
+    }),
+    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT, {
+      description: "Maximum matches to return.",
+    }),
     countOnly: bool({ description: "Return only the total match count, not the matches." }),
   },
   capability: "findInIndex",
@@ -159,8 +200,13 @@ export const SummarizeIndexSourceTool = defineInventoryTool<{
   description:
     "Return a structural map of an indexed source: headings, approximate size, chunk ranges, and frequent topics.",
   schema: {
-    sourcePath: str(MAX_PATH_CHARS, { required: true }),
-    maxSections: int(1, MAX_SECTIONS, DEFAULT_MAX_SECTIONS),
+    sourcePath: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault path of the document to summarize.",
+    }),
+    maxSections: int(1, MAX_SECTIONS, DEFAULT_MAX_SECTIONS, {
+      description: "Maximum sections to summarize.",
+    }),
   },
   capability: "summarizeIndexSource",
   errorCode: "index-source-summary-failed",
@@ -176,7 +222,10 @@ export const GetIndexSourceOutlineTool = defineInventoryTool<{ sourcePath: strin
   name: GET_INDEX_SOURCE_OUTLINE_TOOL,
   description: "Return only the heading hierarchy and chunk ranges for one indexed source.",
   schema: {
-    sourcePath: str(MAX_PATH_CHARS, { required: true }),
+    sourcePath: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault path of the document whose outline to read.",
+    }),
   },
   capability: "getIndexSourceOutline",
   errorCode: "index-source-outline-failed",
@@ -190,15 +239,23 @@ export const SearchIndexByMetadataTool = defineInventoryTool<IndexMetadataSearch
   description:
     "Search indexed sources by metadata before semantic search: kind, path prefix, extension, title, heading, indexed date, or language.",
   schema: {
-    sourceKind: enumOf(SOURCE_KINDS),
-    pathPrefix: str(MAX_PATH_CHARS),
-    extension: str(20),
-    title: str(MAX_QUERY_CHARS),
-    heading: str(MAX_QUERY_CHARS),
-    indexedAfter: str(40),
-    language: str(40),
-    cursor: str(MAX_CURSOR_CHARS),
-    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+    sourceKind: enumOf(SOURCE_KINDS, { description: "Restrict to one source kind." }),
+    pathPrefix: str(MAX_PATH_CHARS, {
+      description: "Restrict to documents under this vault folder.",
+    }),
+    extension: str(20, { description: "Restrict to this file extension, without the dot." }),
+    title: str(MAX_QUERY_CHARS, { description: "Match a substring of the document title." }),
+    heading: str(MAX_QUERY_CHARS, {
+      description: "Match a substring of any heading in the document.",
+    }),
+    indexedAfter: str(40, { description: "Keep documents indexed after this ISO date." }),
+    language: str(40, { description: "Restrict to this language code." }),
+    cursor: str(MAX_CURSOR_CHARS, {
+      description: "Opaque cursor from a previous page; omit for the first page.",
+    }),
+    limit: int(1, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT, {
+      description: "Maximum documents to return.",
+    }),
     countOnly: bool({
       description: "Return only the total count of matched sources, not the sources.",
     }),
@@ -215,7 +272,10 @@ export const GetSourceMetadataTool = defineInventoryTool<{ sourcePath: string }>
   description:
     "Return extracted bibliographic metadata for one indexed source: title, authors, year, abstract, and its list of references. Available only after index enrichment has run.",
   schema: {
-    sourcePath: str(MAX_PATH_CHARS, { required: true }),
+    sourcePath: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault path of the document whose details to read.",
+    }),
   },
   capability: "getSourceMetadata",
   errorCode: "source-metadata-failed",
@@ -229,7 +289,10 @@ export const GetSourceSummaryTool = defineInventoryTool<{ sourcePath: string }>(
   description:
     "Return generated summaries for one indexed source: a document summary plus per-section summaries with chunk ranges. Use before deep search to pick relevant documents and sections. Available only after index enrichment has run.",
   schema: {
-    sourcePath: str(MAX_PATH_CHARS, { required: true }),
+    sourcePath: str(MAX_PATH_CHARS, {
+      required: true,
+      description: "Vault path of the document whose summary to read.",
+    }),
   },
   capability: "getSourceSummary",
   errorCode: "source-summary-failed",
@@ -310,7 +373,6 @@ function pageOrCount(result: unknown, input: { limit: number; countOnly?: boolea
   return okPage(page, input.limit);
 }
 
-/** Registry of retriever-backed index inventory tools; the single source of truth. */
 export const INDEX_INVENTORY_TOOLS: ReadonlyArray<new (retriever: ResearchRetriever) => Tool> = [
   ListIndexSourcesTool,
   ListIndexChunksTool,

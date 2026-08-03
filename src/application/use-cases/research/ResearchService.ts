@@ -4,6 +4,7 @@ import { VaultWriter } from "@application/ports/vault";
 import { ApiFormat, ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ToolCallingCapabilities } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
+import type { DocumentImageDiscovery, ImageSearchRegistry } from "@application/ports";
 import {
   ContextIndexDiagnostics,
   IndexDescriptionPromptContext,
@@ -50,6 +51,8 @@ export interface ResearchServiceOptions {
   chatModelName: string;
   chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;
   searchProvider?: SearchProvider;
+  imageSearch?: ImageSearchRegistry;
+  documentImageCandidates?: DocumentImageDiscovery;
   urlStatusChecker?: UrlStatusChecker;
   queryExpansion?: QueryExpansion;
   contextAssembler?: ContextAssembler;
@@ -61,15 +64,15 @@ export interface ResearchServiceOptions {
   now?: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   noteTools?: NoteToolService;
-  /** Writes downloaded documents into the vault; enables the download tools when present. */
+
   vaultWriter?: VaultWriter;
-  /** Default vault folder for downloaded documents. */
+
   downloadFolder?: string;
-  /** Builds the research toolset (concrete factory injected by the composition root). */
+
   toolsetFactory: ResearchToolsetFactory;
-  /** Runs the note tool loop (concrete impl injected by the composition root). */
+
   runToolLoop: ToolLoopRunner;
-  /** Builds a default ModelRoundProvider from the chat model (concrete adapter injected by the composition root). */
+
   modelRoundFactory: (chatModel: ChatModelProvider) => ModelRoundProvider;
   toolsEnabled?: boolean;
   getIndexStatus?: () => ContextIndexDiagnostics;
@@ -81,7 +84,7 @@ export interface ResearchServiceOptions {
   modelRound?: ModelRoundProvider;
   reasoning?: { enabled: boolean; effort?: string; summary: "off" | "auto" };
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
-  /** Optional diagnostic sink for the sub-agent (gated by debug mode). */
+
   subAgentLogger?: SubAgentLogger;
 }
 
@@ -185,6 +188,10 @@ export class ResearchService implements ConversationEngine {
       retriever: options.retriever,
       urlStatusChecker: options.urlStatusChecker,
       searchProvider: options.searchProvider,
+      ...(options.imageSearch ? { imageSearch: options.imageSearch } : {}),
+      ...(options.documentImageCandidates
+        ? { documentImageCandidates: options.documentImageCandidates }
+        : {}),
       noteTools: options.noteTools,
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,

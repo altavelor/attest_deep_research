@@ -8,11 +8,6 @@ import {
 } from "@core/agent";
 import { ResearchRetriever } from "@application/contracts/research";
 
-// --- Field schema mini-DSL -------------------------------------------------
-// Each field carries enough metadata to derive *both* the JSON schema sent to
-// the model *and* the runtime parser, so the two can never drift. The allow-list
-// of accepted properties is simply `Object.keys(schema)`.
-
 type Described = { description?: string };
 
 export type FieldSpec = Described &
@@ -20,10 +15,11 @@ export type FieldSpec = Described &
     | { kind: "string"; maxLength: number; required: boolean }
     | { kind: "text"; maxLength?: number; required: boolean }
     | { kind: "integer"; min: number; max: number; default: number }
-    | { kind: "number" }
+    | { kind: "number"; min?: number; max?: number }
     | { kind: "boolean" }
     | { kind: "enum"; values: readonly string[]; required: boolean }
     | { kind: "stringArray"; maxItems: number; itemMaxLength: number }
+    | { kind: "raw"; schema: Record<string, unknown>; required: boolean }
   );
 
 export type FieldSchema = Record<string, FieldSpec>;
@@ -51,7 +47,6 @@ export const int = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/** Free-form string preserved verbatim (no trimming) — for note bodies and other content. */
 export const text = (
   opts: { required?: boolean; maxLength?: number; description?: string } = {},
 ): FieldSpec => ({
@@ -61,9 +56,10 @@ export const text = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-/** Optional number: passed through when present, omitted otherwise (the service applies defaults). */
-export const num = (opts: Described = {}): FieldSpec => ({
+export const num = (opts: Described & { min?: number; max?: number } = {}): FieldSpec => ({
   kind: "number",
+  ...(opts.min !== undefined ? { min: opts.min } : {}),
+  ...(opts.max !== undefined ? { max: opts.max } : {}),
   ...(opts.description ? { description: opts.description } : {}),
 });
 
@@ -82,6 +78,15 @@ export const enumOf = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
+export const raw = (
+  schema: Record<string, unknown>,
+  opts: { required?: boolean } = {},
+): FieldSpec => ({
+  kind: "raw",
+  schema,
+  required: opts.required ?? false,
+});
+
 export const strArray = (
   maxItems: number,
   itemMaxLength: number,
@@ -93,21 +98,15 @@ export const strArray = (
   ...(opts.description ? { description: opts.description } : {}),
 });
 
-// --- Declarative tool definition -------------------------------------------
-
 export interface ToolSpec<TDeps, TInput, TOutput> {
   name: string;
   description: string;
-  /** Drives both the model-facing JSON schema and (by default) the parser. */
+
   schema: FieldSchema;
-  /**
-   * Optional parser override for tools whose validation/error codes are bespoke.
-   * Receives the tool's deps so it can validate against them. Defaults to the
-   * schema-driven parser (allow-list = `Object.keys(schema)`).
-   */
+
   parse?: (input: Record<string, unknown>, deps: TDeps) => ToolParseResult<TInput>;
   execute: (deps: TDeps, input: TInput, context: ToolContext) => Promise<ToolExecution<TOutput>>;
-  /** Permission gate evaluated by the ToolManager; absent ⇒ always available. */
+
   requires?: (permissions: ToolPermissions) => boolean;
 }
 
@@ -144,9 +143,9 @@ export interface InventoryToolSpec<TInput> {
   name: string;
   description: string;
   schema: FieldSchema;
-  /** Method on the retriever that backs this tool; absence ⇒ "unsupported". */
+
   capability: keyof ResearchRetriever;
-  /** Failure code + message used when the backing call throws. */
+
   errorCode: string;
   errorMessage: string;
   run(retriever: ResearchRetriever, input: TInput): Promise<unknown>;
@@ -197,8 +196,6 @@ export function toolDefinition(name: string, description: string, schema: FieldS
   };
 }
 
-// --- Shared result shaping --------------------------------------------------
-
 export function okPage<T>(result: { items: T[]; nextCursor?: string }, limit: number): unknown {
   return { ...result, diagnostics: diagnostics(result.items.length, limit) };
 }
@@ -206,8 +203,6 @@ export function okPage<T>(result: { items: T[]; nextCursor?: string }, limit: nu
 export function diagnostics(resultCount: number, limit: number) {
   return { resultCount, limit, untrustedEvidence: true as const };
 }
-
-// --- Schema → JSON schema + parser -----------------------------------------
 
 function toJsonSchema(schema: FieldSchema): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
@@ -231,7 +226,12 @@ function jsonSchemaForField(field: FieldSpec): Record<string, unknown> {
     case "integer":
       return { type: "integer", minimum: field.min, maximum: field.max, ...described };
     case "number":
-      return { type: "number", ...described };
+      return {
+        type: "number",
+        ...(field.min !== undefined ? { minimum: field.min } : {}),
+        ...(field.max !== undefined ? { maximum: field.max } : {}),
+        ...described,
+      };
     case "boolean":
       return { type: "boolean", ...described };
     case "enum":
@@ -243,6 +243,8 @@ function jsonSchemaForField(field: FieldSpec): Record<string, unknown> {
         maxItems: field.maxItems,
         ...described,
       };
+    case "raw":
+      return { ...field.schema, ...described };
   }
 }
 
@@ -286,8 +288,15 @@ function parseBySchema(
         value[name] = raw;
         break;
       }
+      case "raw":
+        if (raw !== undefined) value[name] = raw;
+        else if (field.required) return invalidField(name);
+        break;
       case "number":
-        if (typeof raw === "number" && Number.isFinite(raw)) value[name] = raw;
+        if (typeof raw === "number" && Number.isFinite(raw)) {
+          const lower = field.min !== undefined ? Math.max(raw, field.min) : raw;
+          value[name] = field.max !== undefined ? Math.min(lower, field.max) : lower;
+        }
         break;
       case "integer":
         value[name] = readLimit(raw, field.default, field.max, field.min);

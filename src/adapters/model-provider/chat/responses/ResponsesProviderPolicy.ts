@@ -1,8 +1,3 @@
-// Pure policy for whether the Responses protocol may be used for a model profile
-// (stage 1, task 6.2). Extracted from main.ts so the branching/validation can be
-// unit-tested without constructing a plugin. Returns the verified reasoning
-// settings to build the client with, or throws IxplorerError describing why not.
-
 import { ApiFormat } from "@core/agent";
 import { IxplorerError } from "@core/errors";
 import { ReasoningCapabilitySettings } from "@adapters/settings/types";
@@ -10,7 +5,6 @@ import { ReasoningCapabilitySettings } from "@adapters/settings/types";
 export interface ResponsesPolicyInput {
   apiFormat: ApiFormat;
   capabilities?: ReasoningCapabilitySettings;
-  /** Result of the staleness probe (caller computes; keeps this function pure). */
   isCapabilityCurrent: boolean;
   reasoning: { enabled: boolean; effort?: string; summary: "off" | "auto" };
 }

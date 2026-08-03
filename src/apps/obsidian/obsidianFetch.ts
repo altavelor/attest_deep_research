@@ -1,10 +1,12 @@
 import { requestUrl } from "obsidian";
 
-/** A `fetch`-compatible function backed by Obsidian's `requestUrl` (bypasses CORS). */
 export const obsidianRequestFetch: typeof fetch = async (input, init) => {
   const url =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-  const response = await requestUrl({
+  const signal = init?.signal ?? undefined;
+  if (signal?.aborted) throw abortError();
+
+  const request = requestUrl({
     url,
     method: init?.method ?? "GET",
     headers: normalizeFetchHeaders(init?.headers),
@@ -12,11 +14,26 @@ export const obsidianRequestFetch: typeof fetch = async (input, init) => {
     throw: false,
   });
 
+  const response = signal ? await raceAbort(request, signal) : await request;
   return new Response(response.arrayBuffer, {
     status: response.status,
     headers: response.headers,
   });
 };
+
+function raceAbort<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    request.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+function abortError(): Error {
+  const error = new Error("The request was aborted.");
+  error.name = "AbortError";
+  return error;
+}
 
 function normalizeFetchHeaders(headers: HeadersInit | undefined): Record<string, string> {
   if (!headers) {

@@ -1,10 +1,3 @@
-// Obsidian citation links. This encodes Obsidian's address syntax (block refs
-// `#^`, `#page=`), so it is presentation/output knowledge, not platform-neutral
-// domain — it must NOT live in core. It sits in application because its only
-// consumer (the answer-note formatter) is here and adapters/ui cannot be reached
-// from this layer. The principled home is an Obsidian output adapter; that move
-// is blocked until the answer-note formatter itself is re-homed there.
-
 import { SourceReference } from "@core/model";
 import { formatCitation } from "@core/retrieval";
 

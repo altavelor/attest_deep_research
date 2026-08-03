@@ -23,10 +23,6 @@ interface KeywordQueryCacheEntry {
   }>;
 }
 
-// Merged-постинги и статистика BM25 строятся один раз на закоммиченное
-// состояние (каждый commit меняет manifest.writeId) — иначе каждый запрос
-// перечитывает keyword-файлы всех шардов с диска, что на десятках тысяч
-// чанков занимает секунды. Promise в кэше дедуплицирует конкурентные сборки.
 const keywordQueryCache = new WeakMap<FileVectorIndexState, KeywordQueryCacheEntry>();
 
 function keywordQueryDataFor(

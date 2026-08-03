@@ -1,6 +1,3 @@
-// Web data source (stage 1, task 5.2). Wraps a web search provider and
-// contributes web search/fetch tools to the agent loop.
-
 import { Tool } from "@core/agent";
 import { SearchProvider } from "@application/ports";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
@@ -10,10 +7,12 @@ import { WebFetchResearchTool } from "./WebFetchResearchTool";
 import { WebFetchUrlTool } from "./WebFetchUrlTool";
 import { WebFetchSectionTool } from "./WebFetchSectionTool";
 import { WebPageMetadataTool } from "./WebPageMetadataTool";
+import { AnswerArtifactRegistry } from "../media/AnswerArtifactRegistry";
 
 export interface WebSourceOptions {
   provider: SearchProvider;
   evidence: EvidenceRegistry;
+  artifacts?: AnswerArtifactRegistry;
   available?: boolean;
 }
 
@@ -21,10 +20,12 @@ export class WebSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
   private readonly provider: SearchProvider;
   private readonly evidence: EvidenceRegistry;
+  private readonly artifacts?: AnswerArtifactRegistry;
 
   constructor(options: WebSourceOptions) {
     this.provider = options.provider;
     this.evidence = options.evidence;
+    this.artifacts = options.artifacts;
     this.descriptor = {
       id: "web",
       kind: "web",
@@ -34,7 +35,11 @@ export class WebSource implements DataSource {
   }
 
   tools(): Tool[] {
-    const deps = { provider: this.provider, evidence: this.evidence };
+    const deps = {
+      provider: this.provider,
+      evidence: this.evidence,
+      ...(this.artifacts ? { artifacts: this.artifacts } : {}),
+    };
     const tools: Tool[] = [new WebSearchResearchTool(deps)];
     if (this.provider.fetchPage) {
       tools.push(

@@ -1,16 +1,9 @@
-// PDF headings (SPEC-corpus-knowledge R1). Pure functions: extraction from a
-// resolved outline or from typography metrics, and heading-path resolution for
-// chunk positions. PDF I/O stays in PdfExtractor; nothing here touches pdfjs.
-
-/** A document heading anchored to a page (offset within the page is resolved later). */
 export interface PdfHeading {
   title: string;
-  /** 1-based; smaller = higher in the hierarchy. */
   level: number;
   pageNumber: number;
 }
 
-/** A text line with the dominant font size, as reported by the PDF parser. */
 export interface PdfTextLine {
   text: string;
   fontSize: number;
@@ -76,7 +69,6 @@ export function headingsFromTypography(lines: PdfTextLine[], pageCount: number):
 }
 
 export interface PositionedPdfHeading extends PdfHeading {
-  /** Offset of the heading inside the normalized text of its page. */
   offsetInPage: number;
 }
 

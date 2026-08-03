@@ -38,7 +38,7 @@ export interface AnswerSynthesisServiceOptions {
   now: () => Date;
   persistFinalAnswer?: (answer: ResearchAnswer) => void | Promise<void>;
   noteTools?: NoteToolService;
-  /** Runs the note tool loop (concrete impl injected by the composition root). */
+
   runToolLoop: ToolLoopRunner;
 }
 
@@ -59,7 +59,7 @@ export interface AnswerSynthesisInput {
   indexDescription?: IndexDescriptionPromptContext;
   signal?: AbortSignal;
   fallback?: { reason: string };
-  /** Instant research must never request or expose model reasoning. */
+
   disableThinking?: boolean;
 }
 

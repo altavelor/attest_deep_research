@@ -32,9 +32,8 @@ export function citationIdsFromText(text: string): Set<string> {
 }
 
 export interface ResolvedCitationTokens {
-  /** Evidence ids the answer cites (URL tokens mapped to their registered id). */
   ids: Set<string>;
-  /** Canonical URLs cited via `[url:…]` that were never gathered for this answer. */
+
   unresolvedUrls: string[];
 }
 

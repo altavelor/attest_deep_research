@@ -1,24 +1,12 @@
-// Per-host request throttle for outbound page fetches. Page fetches target
-// arbitrary hosts, so they must NOT sit behind the DuckDuckGo *search* rate
-// limiter (which serializes every request through one 700ms-spaced chain).
-// Instead this throttle:
-//   - serializes + spaces requests to the *same* host (politeness against a
-//     single origin), and
-//   - runs requests to *different* hosts concurrently, capped by a global limit
-//     that protects the user's IP / Obsidian's request pipe.
-// The net effect: a batch fetch of N pages across N distinct hosts fans out in
-// parallel instead of being serialized at ~1.4 req/s.
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface HostRequestThrottleOptions {
-  /** Minimum spacing between consecutive requests to the same host. */
   perHostIntervalMs?: number;
-  /** Maximum simultaneous in-flight requests across all hosts. */
+
   maxConcurrent?: number;
-  /** Clock injection point for deterministic tests. */
+
   now?: () => number;
 }
 

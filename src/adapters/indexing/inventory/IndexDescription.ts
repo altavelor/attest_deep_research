@@ -45,7 +45,6 @@ export interface IndexDescriptionSource {
   sourceKinds: readonly SourceKind[];
   languageInventory: LanguageInventoryItem[];
   representativeChunks: IndexDescriptionRepresentativeChunk[];
-  /** One-liner summaries per document from enrichment (R4); optional. */
   documentOneLiners?: Array<{ path: string; oneLiner: string }>;
 }
 

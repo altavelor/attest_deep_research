@@ -222,9 +222,7 @@ describe("AnswerSynthesisService", () => {
       value: { type: "delta", content: "Streaming answer" },
     });
     finishRound();
-    while (!(await stream.next()).done) {
-      // Drain the completed answer after proving the deltas arrived live.
-    }
+    while (!(await stream.next()).done) {}
   });
 
   it("streams deltas and completes with a persisted research answer", async () => {

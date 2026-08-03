@@ -1,8 +1,3 @@
-// Keyword ranking for the file-vector retrieval engine. This is the scoring
-// policy of THIS RAG implementation (naive term-frequency over chunk text), not
-// a universal domain primitive, so it lives with the retrieval component rather
-// than in core. Swapping the engine (BM25, vector, hybrid) replaces this file.
-
 import { RetrievedChunk } from "@core/model";
 import { tokenizeForSearch } from "@core/retrieval";
 

@@ -1,22 +1,14 @@
-// Deterministic citation verification (SPEC-corpus R8). For each `[evidenceId]` /
-// `[url:…]` token the answer places after a claim, check that the claim's wording
-// lexically overlaps the cited chunk's text (word-shingle overlap ≥ threshold). A
-// citation whose surrounding claim shares almost nothing with the chunk is likely
-// misattributed — reported so the UI can warn. No LLM: pure string comparison.
-
 import { RetrievedChunk } from "@core/model";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 const SHINGLE_SIZE = 3;
 const OVERLAP_THRESHOLD = 0.18;
-// Below this many shingles the claim window is too short to judge (e.g. "As shown
-// [id]."), so it is left unverified-but-not-flagged to avoid false positives.
+
 const MIN_CLAIM_SHINGLES = 3;
-// How far back from a citation the "claim" reasonably extends.
+
 const CLAIM_WINDOW_CHARS = 240;
 
 export interface CitationVerificationOptions {
-  /** Cited web URLs (canonical) mapped to their evidence id, as the strategy resolves them. */
   urlToEvidenceId: ReadonlyMap<string, string>;
 }
 

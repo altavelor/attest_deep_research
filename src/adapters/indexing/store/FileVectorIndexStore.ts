@@ -11,6 +11,7 @@ import {
 } from "@application/ports";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "@core/model";
 import { throwRebuildRequired } from "./FileVectorIndexErrors";
+import { requiresIndexRebuildForImages, type ImageManifestEntry } from "./FileVectorImageManifest";
 import { DEFAULT_FILE_VECTOR_SHARD_COUNT } from "./FileVectorIndexFormat";
 import type { FileVectorManifest } from "./FileVectorIndexFormat";
 import {
@@ -21,6 +22,7 @@ import type { FileVectorPathResolver } from "./FileVectorIndexReader";
 import {
   FileVectorIndexPersistence,
   FileVectorIndexPersistenceEvent,
+  type ImageManifestWrite,
 } from "./FileVectorIndexPersistence";
 import { queryFileVectorState } from "./FileVectorIndexQuery";
 import {
@@ -137,6 +139,7 @@ export class FileVectorIndexStore
     const state = this.requireState();
     const changes = createWriteChanges();
     let closed = false;
+    let imageManifest: ImageManifestWrite | undefined;
 
     return {
       upsert: async (chunks) => {
@@ -163,10 +166,17 @@ export class FileVectorIndexStore
           changes.sourcesDirty = true;
         }
       },
+      recordDocumentImages: async (entries, scope) => {
+        ensureWriterOpen();
+        imageManifest = {
+          entries: [...(imageManifest?.entries ?? []), ...(entries as ImageManifestEntry[])],
+          scope,
+        };
+      },
       commit: async () => {
         ensureWriterOpen();
         closed = true;
-        await this.persistence.persistState(state, changes);
+        await this.persistence.persistState(state, changes, imageManifest);
         this.state = state;
       },
       rollback: () => {
@@ -187,6 +197,22 @@ export class FileVectorIndexStore
   async clear(): Promise<void> {
     await rm(this.folder, { recursive: true, force: true });
     this.state = null;
+  }
+
+  /**
+   * Document images recorded by the last successful full rebuild, restricted to
+   * sources the index still holds so a deleted or renamed document cannot be
+   * discovered. Indexes below the required version yield an empty list, and
+   * discovery falls back to the documents attached to the request.
+   */
+  async listDocumentImages(): Promise<ImageManifestEntry[]> {
+    const manifest = await this.persistence.readManifest();
+    if (requiresIndexRebuildForImages(manifest)) return [];
+    const entries = await this.persistence.readImageManifest();
+    return this.withState(entries, (state) => {
+      const indexed = new Set(state.sources.map((source) => source.sourcePath));
+      return entries.filter((entry) => indexed.has(entry.documentPath));
+    });
   }
 
   async loadSourceSnapshots(): Promise<IndexSourceSnapshot[]> {
@@ -325,13 +351,6 @@ export class FileVectorIndexStore
     }
   }
 
-  /**
-   * Resolve the committed state from cache or disk, cache it, and run `run`.
-   * Returns `fallback` when no committed index exists. Centralizes the
-   * load-or-null + cache dance shared by every read/inventory method. Public so
-   * read-only collaborators (e.g. the inventory store) can share this cache via
-   * the {@link FileVectorStateAccess} port.
-   */
   async withState<T>(
     fallback: T,
     run: (state: FileVectorIndexState) => T | Promise<T>,

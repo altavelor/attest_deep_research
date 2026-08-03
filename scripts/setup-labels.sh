@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-#
-# Create (or update) the labels used by the agent task workflow. The task and
-# publish scripts assume these labels exist, so run this once per repository
-# before using them.
-#
-# Usage: scripts/setup-labels.sh
 
 set -euo pipefail
 
@@ -13,7 +7,6 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-# label|color|description
 labels=(
   "agent|5319e7|Task intended for an automated coding agent"
   "status:ready|0e8a16|Ready to be picked up"

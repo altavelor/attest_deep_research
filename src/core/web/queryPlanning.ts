@@ -1,7 +1,3 @@
-// Core domain: rule-based web query planning. Pure functions — classification
-// of a query into an intent, selection of catalog sources for that intent, and
-// reciprocal-rank-fusion merging of per-source result lists.
-
 import { WebSourceDescriptor } from "./webSources";
 
 export const WEB_QUERY_INTENTS = ["academic", "code", "news", "encyclopedic", "general"] as const;
@@ -17,8 +13,6 @@ interface IntentRule {
   patterns: RegExp[];
 }
 
-// Order matters: the first matching rule wins. `\b` is ASCII-only in JS, so
-// Cyrillic keywords use bare substring patterns instead of word boundaries.
 const INTENT_RULES: IntentRule[] = [
   {
     intent: "academic",
@@ -60,7 +54,6 @@ export function classifyWebQuery(query: string): WebQueryIntent {
   return "general";
 }
 
-/** Descriptor strengths that satisfy each intent, in preference order. */
 const INTENT_STRENGTHS: Record<WebQueryIntent, string[]> = {
   academic: ["papers", "preprints", "citations-graph", "biomed", "metadata"],
   code: ["code", "qa", "troubleshooting", "repositories", "tech-news"],

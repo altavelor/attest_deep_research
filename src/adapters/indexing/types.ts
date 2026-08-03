@@ -1,5 +1,11 @@
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
-import type { Extractor, IndexStore, IndexStoreWriteSession } from "@application/ports";
+import type {
+  DocumentImageManifestEntry,
+  Extractor,
+  IndexStore,
+  IndexStoreWriteSession,
+} from "@application/ports";
+import type { LinkedPathResolver } from "@adapters/extractors";
 import type { EmbeddingProviderClient } from "@core/agent";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
@@ -31,6 +37,7 @@ export interface IndexingState {
   indexSizeBytes?: number;
   isStale: boolean;
   indexChanged?: boolean;
+  indexVersion?: number;
   errorMessage?: string;
 }
 
@@ -68,6 +75,7 @@ export interface IndexingServiceOptions {
   onProgress?: (state: IndexingState) => void;
   logger?: IndexingLogger;
   now?: () => Date;
+  resolveLinkedImagePath?: LinkedPathResolver;
 }
 
 export interface IndexedFileResult {
@@ -77,6 +85,7 @@ export interface IndexedFileResult {
   contentHash?: string;
   persistSnapshot?: boolean;
   languages?: string[];
+  documentImages?: DocumentImageManifestEntry[];
 }
 
 export type PendingIndexedFile = VaultFileSummary & {
@@ -140,6 +149,7 @@ export interface FileProcessorOptions {
   snapshots: Map<string, FileSnapshot>;
   progress: IndexingProgressState;
   logger?: IndexingLogger;
+  resolveLinkedImagePath?: LinkedPathResolver;
 }
 
 export interface EmbeddingBatcherOptions {

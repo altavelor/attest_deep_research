@@ -35,8 +35,6 @@ describe("LightweightKeywordIndex", () => {
   });
 
   it("ranks a rare-term match above a long chunk saturated with common terms", () => {
-    // Регресс из бага search_index: чанк, набитый частым термом, выигрывал у
-    // чанка с редким термом запроса за счёт сырого TF без IDF и нормализации.
     const commonFiller = Array.from({ length: 50 }, () => "the mail service").join(" ");
     const rows = buildKeywordPostingRows(
       [
@@ -63,7 +61,6 @@ describe("LightweightKeywordIndex", () => {
       3,
     );
 
-    // Постинг заголовочного вхождения несёт headingFrequency.
     const riquetRow = rows.find((row) => row.term === "riquet");
     expect(riquetRow?.postings.find((p) => p.chunkId === "chunk-heading")?.headingFrequency).toBe(
       1,

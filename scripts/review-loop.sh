@@ -1,26 +1,11 @@
 #!/usr/bin/env bash
-#
-# Drive the review/fix cycle for the current task branch from the local machine.
-#
-# GitHub cannot reach a local agent, so this script polls the "agent-review"
-# status check and reacts:
-#   - PASS    -> the review gate is green; this script exits 0.
-#   - FAIL    -> it feeds the review findings to the local agent (AGENT_EXEC_CMD),
-#               runs validation, commits/pushes, re-triggers the review, repeats.
-#
-# It stops after MAX_REVIEW_ITERS iterations, when validation fails, or when the
-# agent produced no new commit (nothing changed).
-#
-# Usage: scripts/review-loop.sh [issue-number]
 
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=scripts/lib/output.sh
 source "$script_dir/lib/output.sh"
 
-# shellcheck source=scripts/agent.env
 [[ -f "$script_dir/agent.env" ]] && source "$script_dir/agent.env"
 
 BASE_BRANCH="${BASE_BRANCH:-main}"
@@ -30,12 +15,6 @@ MAX_REVIEW_ITERS="${MAX_REVIEW_ITERS:-3}"
 CHECK_NAME="${REVIEW_CHECK_NAME:-agent-review}"
 POLL_INTERVAL="${REVIEW_POLL_INTERVAL:-15}"
 POLL_TIMEOUT="${REVIEW_POLL_TIMEOUT:-1800}"
-# Where the pass/fail signal comes from:
-#   check    -> the CI status check named $CHECK_NAME (needs the review workflow
-#               and its API key; deterministic VERDICT).
-#   comments -> the built-in Codex Cloud review posted under the PR (no repo key,
-#               uses your Codex subscription). Heuristic: a fresh review with new
-#               inline findings = fail, a fresh review without them = pass.
 REVIEW_SOURCE="${REVIEW_SOURCE:-check}"
 
 repo_root="$(git rev-parse --show-toplevel)"
@@ -79,9 +58,6 @@ trigger_review() {
     --body "${REVIEW_TRIGGER} the pull request. Review the complete diff against ${BASE_BRANCH} and post inline findings for any blocking issues."
 }
 
-# Poll the built-in review comments; echo pass|fail|timeout. A review counts as
-# complete once a new PR review (by someone other than the author) appears after
-# $since; new inline comments in that window mean there are findings to fix.
 wait_for_review_comments() {
   local since="$1" waited=0 new_reviews new_findings
   while (( waited < POLL_TIMEOUT )); do
@@ -104,7 +80,6 @@ wait_for_review_comments() {
   return 0
 }
 
-# Wait until the review check reaches a terminal state; echo pass|fail|timeout.
 wait_for_review() {
   local waited=0 state
   while (( waited < POLL_TIMEOUT )); do
@@ -161,9 +136,6 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
 
   before="$(git rev-parse HEAD)"
 
-  # The review integration (e.g. Codex Cloud) may push its own fix commits to the
-  # PR branch. Pull them first so the local fixer builds on top of the reviewer's
-  # edits and only addresses what is still open, instead of racing/duplicating.
   if ! git pull --rebase origin "$branch"; then
     git rebase --abort 2>/dev/null || true
     err "Could not rebase onto origin/$branch (conflicting fixes from the review integration)"
@@ -195,7 +167,6 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
   fi
   ok "Validation passed"
 
-  # The agent may or may not commit on its own; capture any leftover changes.
   if [[ -n "$(git status --porcelain)" ]]; then
     git add -A
     git commit -m "fix: address review findings (iteration $iter)"
@@ -207,7 +178,6 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
     exit 1
   fi
 
-  # Reconcile once more in case the reviewer pushed during the fixer run.
   if ! git pull --rebase origin "$branch"; then
     git rebase --abort 2>/dev/null || true
     err "Could not rebase before pushing; resolve manually on PR #$pr_number"
@@ -217,9 +187,6 @@ for (( iter = 1; iter <= MAX_REVIEW_ITERS; iter++ )); do
   step "Pushing fixes for iteration $iter"
   git push
 
-  # In 'comments' mode the next iteration posts the trigger itself (with a fresh
-  # $since), so only re-trigger here for 'check' mode. A new push also re-runs
-  # the review workflow automatically.
   if [[ "$REVIEW_SOURCE" != "comments" && -n "$REVIEW_TRIGGER" ]]; then
     step "Re-triggering review: $REVIEW_TRIGGER"
     gh pr comment "$pr_number" \

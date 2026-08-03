@@ -7,12 +7,11 @@ export function isContextDocumentPath(path: string): boolean {
 }
 
 interface TreeFolder {
-  /** Folder attachment path — always with a trailing "/" ("" for the vault root). */
   path: string;
   name: string;
   folders: TreeFolder[];
   files: string[];
-  /** Supported files in this subtree, for the folder row counter. */
+
   totalFiles: number;
 }
 

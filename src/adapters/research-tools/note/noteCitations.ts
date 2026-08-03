@@ -4,29 +4,10 @@ import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 import { linkifyUrlCitations } from "@application/use-cases/research";
 
 export interface NoteCitationResult {
-  /** Content with citation IDs replaced by footnote markers and a reference list appended. */
   content: string;
-  /** Number of distinct citations that were linked. */
   count: number;
 }
 
-/**
- * Rewrites raw evidence-ID citation tokens (e.g. `[web:2ae0…]`) inside note content
- * into Obsidian footnote markers (`[^1]`) and appends matching footnote definitions
- * that link to the underlying source — a web URL (opens in the browser) or a vault
- * wikilink (opens the local document inside Obsidian).
- *
- * The model also cites web sources by their raw URL handle `[url:https://…]`. When
- * that URL matches a known web citation it collapses into the same footnote; when it
- * doesn't (or no citations are supplied at all) it is still turned into a plain
- * clickable markdown link so it never renders as inert `[url:…]` text.
- *
- * Only bracketed tokens whose inner text matches a known citation ID / URL are turned
- * into footnotes, so ordinary prose and markdown links are left untouched.
- *
- * @param startNumber First footnote number to assign. Use a value past any footnotes
- * already present in the target file to avoid collisions when appending/prepending.
- */
 export function applyNoteCitations(
   content: string,
   citations: readonly Citation[],

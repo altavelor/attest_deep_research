@@ -1,5 +1,5 @@
 import { ChatCitationRef } from "./citations/CitationPopover";
-import { stripRenderedCitationIds } from "./citations/citationText";
+import { countAnchors, splitCitationText } from "./citations/citationTextParts";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
 
 export function renderInlineCitationAnchors(
@@ -43,25 +43,19 @@ function replaceCitationTextNodes(
   }
 
   for (const textNode of textNodes) {
-    const text = textNode.nodeValue ?? "";
-    const parts: Array<string | HTMLElement> = [];
-    let lastIndex = 0;
-    for (const match of text.matchAll(/\[([^\]\n]{8,})\]/g)) {
-      const ref = refByChunkId.get(match[1]);
-      if (match.index === undefined) continue;
-      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-      if (ref) {
-        parts.push(createAnchor(ref));
-        replacementCount += 1;
-      }
-      lastIndex = match.index + match[0].length;
-    }
-    if (parts.length === 0) continue;
-    if (lastIndex < text.length) parts.push(stripRenderedCitationIds(text.slice(lastIndex)));
+    const parts = splitCitationText(textNode.nodeValue ?? "", (chunkId) =>
+      refByChunkId.has(chunkId),
+    );
+    if (parts === null) continue;
+    replacementCount += countAnchors(parts);
 
     const fragment = document.createDocumentFragment();
     for (const part of parts) {
-      fragment.append(part instanceof HTMLElement ? part : document.createTextNode(part));
+      fragment.append(
+        part.kind === "anchor"
+          ? createAnchor(refByChunkId.get(part.chunkId)!)
+          : document.createTextNode(part.value),
+      );
     }
     textNode.replaceWith(fragment);
   }

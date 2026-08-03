@@ -1,15 +1,8 @@
-// Near-duplicate chunk suppression (SPEC-corpus R8). Copies of the same document
-// across sources produce chunks with near-identical text that would otherwise
-// occupy several result slots — and, worse, read as multiple independent voices
-// when comparing/contradicting. Over the ranked candidate set we keep the
-// best-scored representative of each near-duplicate cluster and annotate it with
-// the sourcePaths it stands in for. Deterministic: word-shingle Jaccard, no LLM.
-
 import { RetrievedChunk, SourceReference } from "./../model/source";
 
 const SHINGLE_SIZE = 8;
 const JACCARD_THRESHOLD = 0.5;
-// Short chunks have too few 8-grams to compare; fall back to token-set overlap.
+
 const SHORT_TEXT_THRESHOLD = 0.9;
 const MAX_COMPARE_CHARS = 4_000;
 

@@ -1,9 +1,3 @@
-// Map-reduce fan-out over corpus documents (SPEC-corpus R5). For each selected
-// source it launches a sub-agent hard-scoped to that document, collects a
-// structured stance row, and merges nothing itself — the caller (map_sources
-// tool) owns evidence merging into the parent registry. One sub-agent failing
-// degrades to an error row rather than aborting the whole fan-out.
-
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
 import type { SubAgentPort, ResearchToolsetOptions } from "@application/research";
@@ -13,13 +7,13 @@ import { MapSourceRow, MapSourcesProgress, MapSourcesResult } from "./types";
 export interface MapSourcesDeps {
   runner: SubAgentPort;
   retriever: ResearchRetriever;
-  /** Parent turn's toolset context; each sub-agent gets a source-scoped, index-only copy. */
+
   toolContext: ResearchToolsetOptions;
-  /** Concurrent sub-agents (SPEC-corpus R5: ≤ 3–5). */
+
   maxParallel?: number;
-  /** Default fan-out width when the caller gives no explicit source list. */
+
   defaultMaxSources?: number;
-  /** Hard cap on fanned-out sources regardless of the request (cost guard). */
+
   sourceHardCap?: number;
 }
 
@@ -27,7 +21,7 @@ export interface MapSourcesInput {
   question: string;
   sourcePaths?: readonly string[];
   maxSources?: number;
-  /** Per-source sub-agent budget (rounds); tighter than the interactive default. */
+
   perSourceRounds?: number;
   signal?: AbortSignal;
   onProgress?: (event: MapSourcesProgress) => void;
@@ -177,8 +171,6 @@ function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-// Small counting semaphore over a FIFO queue — bounds concurrent sub-agents so a
-// wide fan-out does not launch dozens of model sessions at once.
 class Limiter {
   private active = 0;
   private readonly queue: (() => void)[] = [];

@@ -40,9 +40,9 @@ export interface ThinkingResearchRunnerOptions {
   signal?: AbortSignal;
   maxRounds?: number;
   maxResultChars?: number;
-  /** Cap on run_subagent calls executed concurrently within one round. */
+
   maxParallelSubAgents?: number;
-  /** Cap on other (read-only) tool calls executed concurrently within one round. */
+
   maxParallelToolCalls?: number;
   reasoning?: ModelRoundRequest["reasoning"];
   onDelta?(delta: ModelRoundDelta, round: number): void;
@@ -62,7 +62,7 @@ export interface ThinkingResearchRunnerOptions {
     resultSummary?: string,
     resultJson?: string,
   ): void;
-  /** Progress emitted from inside a tool (e.g. a run_subagent session's loop). */
+
   onToolEvent?(callId: string, event: ToolEvent): void;
 }
 
@@ -108,24 +108,14 @@ export interface ThinkingResearchFailure {
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
 }
 
-// maxRounds is a runaway backstop, not the active limiter; the model decides when
-// to stop (coding-loop style). Real control is maxResultChars + loop detection.
 const DEFAULT_MAX_ROUNDS = 30;
-// Parent tool-result budget. Headroom matters because a single run_subagent answer
-// (or several in parallel) lands here as one large tool result; too tight a budget
-// trips the fallback before the model can synthesize.
+
 export const DEFAULT_MAX_RESULT_CHARS = 80_000;
-// How many run_subagent calls within one round may execute concurrently. The rest
-// queue and run as a slot frees up (see ConcurrencyLimiter).
+
 const DEFAULT_MAX_PARALLEL_SUB_AGENTS = 3;
-// How many other (read-only) tool calls within one round may execute concurrently.
-// Sub-agents get their own (smaller) budget above since each spins a nested loop.
+
 const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 5;
 
-// Stub returned in place of a tool result once the loop enters synthesis mode (result
-// budget spent or the model is spinning), plus the nudge that asks it to answer from what
-// it already gathered. Both conditions mean "stop gathering and answer now" — not "fail and
-// hand off to the deterministic fallback", which throws away an otherwise-usable session.
 const SYNTHESIS_NUDGE =
   "Stop calling tools and write the final answer now from the evidence already gathered, " +
   "citing sources as instructed. If some sub-question is unverified, state that explicitly " +
