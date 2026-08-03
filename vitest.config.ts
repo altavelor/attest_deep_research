@@ -17,5 +17,13 @@ export default defineConfig({
     environment: "node",
     globals: true,
     include: ["tests/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      all: true,
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.d.ts"],
+      reporter: ["text", "html", "lcov", "json-summary"],
+      reportsDirectory: "coverage",
+    },
   },
 });
