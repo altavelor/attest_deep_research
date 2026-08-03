@@ -11,7 +11,6 @@ export interface MediaSourceOptions {
   documentCandidates?: (
     request: ToolDocumentImageQuery,
   ) => Promise<ImageCandidate[]> | ImageCandidate[];
-  /** Vault documents read or retrieved so far in this run. */
   readDocumentPaths?: () => readonly string[];
   available?: boolean;
 }

@@ -24,7 +24,6 @@ export interface DocumentImageManifestReader {
 export interface ToolDocumentImageQuery {
   query: string;
   signal?: AbortSignal;
-  /** Vault documents already read or retrieved in this run, newest last. */
   readPaths?: readonly string[];
 }
 
@@ -45,7 +44,6 @@ export interface DocumentImageResolver {
   resolve(
     documentPath: string,
     locator: string,
-    /** Fingerprint recorded with the artifact; a mismatch resolves to undefined. */
     contentHash?: string,
   ): Promise<ResolvedDocumentImage | undefined>;
 }

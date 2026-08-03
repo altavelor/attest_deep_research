@@ -34,6 +34,8 @@ export type { EligibleImageFormat, ImageUrlCheck } from "./imagePolicy";
 export { hasDecodableDimensions, readImageDimensions } from "./imageHeader";
 export type { ImageDimensions } from "./imageHeader";
 
+export { isVaultFileFingerprint, vaultFileFingerprint } from "./vaultFingerprint";
+
 export { imageQueryVariants } from "./imageQuery";
 export {
   queryTerms,
