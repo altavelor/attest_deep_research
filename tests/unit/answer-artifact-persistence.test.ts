@@ -79,6 +79,31 @@ describe("saved note export", () => {
     expect(note).toContain("Source: cited report.");
   });
 
+  it("neutralizes markdown delimiters in untrusted attribution", () => {
+    const hostile = formatResearchAnswerNote({
+      ...answer,
+      artifacts: [
+        {
+          type: "image-gallery",
+          id: "gallery_1",
+          images: [
+            {
+              id: "img_1",
+              fullUrl: "https://cdn.example.com/a.png",
+              alt: "Alt",
+              sourceUrl: "https://evil.example/p)![track](https://evil.example/pixel.png",
+              sourceLabel: "Title [with] brackets",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(hostile).not.toContain("![track](");
+    expect(hostile).toContain("Title \\[with\\] brackets");
+    expect(hostile).toContain("%29");
+  });
+
   it("keeps a text-only answer unchanged", () => {
     const plain = formatResearchAnswerNote({ ...answer, artifacts: undefined });
     expect(plain).toContain("## Citations");

@@ -94,15 +94,34 @@ function artifactSections(answer: ResearchAnswer): string[] {
   return sections;
 }
 
+/**
+ * Attribution comes from fetched pages and providers, so it is untrusted text.
+ * A label that cannot be escaped safely, or a destination that could terminate
+ * the link, degrades to plain text rather than emitting extra Markdown.
+ */
 function galleryImageLink(image: AnswerImage): string {
-  const label = escapeTableCell(image.sourceLabel);
-  return /^https?:\/\//i.test(image.sourceUrl)
-    ? `[${label}](${image.sourceUrl})`
-    : `[[${image.sourceUrl}]]`;
+  const label = escapeLinkText(image.sourceLabel);
+  if (/^https?:\/\//i.test(image.sourceUrl)) {
+    const destination = markdownLinkDestination(image.sourceUrl);
+    return destination ? `[${label}](${destination})` : label;
+  }
+  return /[[\]|]/.test(image.sourceUrl) ? label : `[[${image.sourceUrl}]]`;
+}
+
+function markdownLinkDestination(url: string): string | undefined {
+  if (/[\s<>]/.test(url)) return undefined;
+  return url.replace(/\(/g, "%28").replace(/\)/g, "%29");
+}
+
+function escapeLinkText(value: string): string {
+  return escapeTableCell(value).replace(/([[\]])/g, "\\$1");
 }
 
 function escapeTableCell(value: string): string {
-  return value.replace(/\|/g, "\\|");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/[\r\n]+/g, " ");
 }
 
 export function researchAnswerNotePath(answer: ResearchAnswer): string {
