@@ -172,3 +172,22 @@ mocked so no test reaches the network.
 | `apps/obsidian/ui/settings/SettingsCapabilityProber.ts` | 0.00%             | 36.88%           |
 | `apps/obsidian/ui/SettingsTab.ts`                       | 0.00%             | 84.21%           |
 | `src/apps` aggregate                                    | 20.95%            | 47.67%           |
+
+## Composer and research-controller behaviour (issue #18)
+
+`tests/unit/ui/chat-composer.behaviour.test.ts` and
+`tests/unit/ui/research-question-controller.behaviour.test.ts` execute the chat
+composer and the research question controller under happy-dom with fake timers,
+replacing source-text claims with assertions on rendered DOM state and on the
+order of the render callbacks a stream triggers. Statement coverage of the three
+files, measured with `npm run test:coverage`:
+
+| File                                                 | Before   | After         |
+| ---------------------------------------------------- | -------- | ------------- |
+| `apps/obsidian/ui/chat/ChatComposer.ts`              | 0/413 0% | 353/413 85.5% |
+| `apps/obsidian/ui/chat/ChatComposerController.ts`    | 0/224 0% | 186/224 83.0% |
+| `.../ui/chat/research/ResearchQuestionController.ts` | 0/482 0% | 353/482 73.2% |
+
+Measured alone against the 20.95% baseline these tests take `src/apps` to 28.71%
+statements. Together with the settings-prober and plugin-lifecycle tests above,
+`src/apps` now stands at 50.10% statements and 67.53% branches.
