@@ -60,6 +60,13 @@ exercised behaviour does.
 | -------------------- | ---------- | -------- | --------- | ----- |
 | `src/core/**`        | 90         | 83       | 90        | 90    |
 | `src/application/**` | 86         | 79       | 86        | 86    |
+| `src/adapters/**`    | 84         | 76       | 84        | 84    |
+
+`src/adapters/**` sits about three points below its measured 87.47% statements
+and 79.43% branches. Its branch floor of 76 is also at or below the 76.39%
+measured before the error-branch tests landed, so the threshold encodes the gain
+without depending on it. `src/apps` stays unthresholded until its executable
+tests land; a floor set at today's 20.95% would protect nothing.
 
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
@@ -81,9 +88,23 @@ once more paths execute):
 | `adapters/model-provider/chat/streaming/ollamaChatStream.ts` | 39/59 66.1%  | 71/80 88.8%   |
 | `.../chat/responses/OpenAiResponsesStreamParser.ts`          | 36/54 66.7%  | 93/93 100%    |
 
-Aggregates after this change: total 70.44% statements / 79.62% branches,
-`src/core` 94.27% / 87.61%, `src/adapters` 87.47% / 79.43%. The summary table and
-the `src/adapters` threshold are updated separately.
+## Current figures
+
+Measured on merged `main` after the error-branch tests and the pull-request
+coverage report landed (1350 tests). This table supersedes the baseline tables
+above, which are kept as the record of where the work started.
+
+| Scope             | Statements | Branches | Functions | Lines  |
+| ----------------- | ---------- | -------- | --------- | ------ |
+| total             | 70.44%     | 79.64%   | 84.81%    | 70.44% |
+| `src/core`        | 94.27%     | 87.69%   | 94.49%    | 94.27% |
+| `src/application` | 89.86%     | 82.62%   | 89.09%    | 89.86% |
+| `src/adapters`    | 87.47%     | 79.43%   | 87.25%    | 87.47% |
+| `src/apps`        | 20.95%     | 58.77%   | 57.03%    | 20.95% |
+| `src/shared`      | 95.40%     | 91.53%   | 100.00%   | 95.40% |
+
+`src/apps` is unchanged because its executable tests are still in flight; that
+figure is expected to move once they land, and this table is updated then.
 
 ## Coverage report in a pull request
 
