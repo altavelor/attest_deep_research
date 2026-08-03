@@ -7,7 +7,7 @@ on:
     types: [created]
 
 concurrency:
-  group: agent-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: agent-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event.comment.id || 'push' }}
   cancel-in-progress: true
 
 jobs:
