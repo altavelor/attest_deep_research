@@ -60,6 +60,13 @@ exercised behaviour does.
 | -------------------- | ---------- | -------- | --------- | ----- |
 | `src/core/**`        | 90         | 83       | 90        | 90    |
 | `src/application/**` | 86         | 79       | 86        | 86    |
+| `src/adapters/**`    | 84         | 76       | 84        | 84    |
+
+`src/adapters/**` sits about three points below its measured 87.47% statements
+and 79.43% branches. Its branch floor of 76 is also at or below the 76.39%
+measured before the error-branch tests landed, so the threshold encodes the gain
+without depending on it. `src/apps` stays unthresholded until its executable
+tests land; a floor set at today's 20.95% would protect nothing.
 
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
@@ -81,9 +88,23 @@ once more paths execute):
 | `adapters/model-provider/chat/streaming/ollamaChatStream.ts` | 39/59 66.1%  | 71/80 88.8%   |
 | `.../chat/responses/OpenAiResponsesStreamParser.ts`          | 36/54 66.7%  | 93/93 100%    |
 
-Aggregates after this change: total 70.44% statements / 79.62% branches,
-`src/core` 94.27% / 87.61%, `src/adapters` 87.47% / 79.43%. The summary table and
-the `src/adapters` threshold are updated separately.
+## Current figures
+
+Measured on merged `main` after the error-branch tests and the pull-request
+coverage report landed (1350 tests). This table supersedes the baseline tables
+above, which are kept as the record of where the work started.
+
+| Scope             | Statements | Branches | Functions | Lines  |
+| ----------------- | ---------- | -------- | --------- | ------ |
+| total             | 70.44%     | 79.64%   | 84.81%    | 70.44% |
+| `src/core`        | 94.27%     | 87.69%   | 94.49%    | 94.27% |
+| `src/application` | 89.86%     | 82.62%   | 89.09%    | 89.86% |
+| `src/adapters`    | 87.47%     | 79.43%   | 87.25%    | 87.47% |
+| `src/apps`        | 20.95%     | 58.77%   | 57.03%    | 20.95% |
+| `src/shared`      | 95.40%     | 91.53%   | 100.00%   | 95.40% |
+
+`src/apps` is unchanged because its executable tests are still in flight; that
+figure is expected to move once they land, and this table is updated then.
 
 ## Coverage report in a pull request
 
@@ -138,6 +159,20 @@ comment body as an artifact. A second job, `coverage-comment`, holds
 it never checks out the branch or runs repository code, so the write-scoped token
 is never exposed to code from the pull request.
 
+## Settings prober and plugin lifecycle (issue #18, `src/apps`)
+
+`tests/unit/ui/settings-prober.behaviour.test.ts` and
+`tests/unit/ui/plugin-lifecycle.behaviour.test.ts` execute the settings tab and
+the plugin entry point against the Obsidian stub, with the capability probes
+mocked so no test reaches the network.
+
+| File                                                    | Statements before | Statements after |
+| ------------------------------------------------------- | ----------------- | ---------------- |
+| `apps/obsidian/main.ts`                                 | 0.00%             | 47.16%           |
+| `apps/obsidian/ui/settings/SettingsCapabilityProber.ts` | 0.00%             | 36.88%           |
+| `apps/obsidian/ui/SettingsTab.ts`                       | 0.00%             | 84.21%           |
+| `src/apps` aggregate                                    | 20.95%            | 47.67%           |
+
 ## Composer and research-controller behaviour (issue #18)
 
 `tests/unit/ui/chat-composer.behaviour.test.ts` and
@@ -153,4 +188,6 @@ files, measured with `npm run test:coverage`:
 | `apps/obsidian/ui/chat/ChatComposerController.ts`    | 0/224 0% | 186/224 83.0% |
 | `.../ui/chat/research/ResearchQuestionController.ts` | 0/482 0% | 353/482 73.2% |
 
-`src/apps` statements rise from 20.95% to 28.71% (branches 58.77% to 61.16%).
+Measured alone against the 20.95% baseline these tests take `src/apps` to 28.71%
+statements. Together with the settings-prober and plugin-lifecycle tests above,
+`src/apps` now stands at 50.10% statements and 67.53% branches.
