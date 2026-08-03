@@ -137,3 +137,27 @@ comment body as an artifact. A second job, `coverage-comment`, holds
 `pull-requests: write` and does nothing but download that artifact and post it —
 it never checks out the branch or runs repository code, so the write-scoped token
 is never exposed to code from the pull request.
+
+## Chat view and retired static contracts (issue #18)
+
+`IxplorerChatView` is now opened through the stub `WorkspaceLeaf`, so panel
+selection under debug mode and transcript disposal on close and on redisplay are
+executed rather than described. The two remaining behavioural source-text
+assertions were replaced by executable tests: the fetch-target animation
+(advance under fake timers, `disposeChatTranscript` cancels the pending timer)
+and the index path picker (`scrollTop` after a selection-triggered rerender).
+`tests/arch/` now holds static policy only — CSS classes, removed controls,
+import boundaries, schema shape, and the comment policy; the executable
+tool-presentation catalog test moved to `tests/unit/`.
+
+`src/apps` measured with `npm run test:coverage` on the same commit, before and
+after these tests:
+
+| Scope      | Statements    | Branches      | Functions     | Lines         |
+| ---------- | ------------- | ------------- | ------------- | ------------- |
+| `src/apps` | 20.95 → 40.58 | 58.77 → 65.02 | 57.03 → 49.49 | 20.95 → 40.58 |
+
+The function percentage falls while the statement percentage doubles because V8
+only discovers the nested functions of a module once that module executes: the
+newly exercised chat, composer, and settings modules add far more functions to
+the denominator than the tests call directly.

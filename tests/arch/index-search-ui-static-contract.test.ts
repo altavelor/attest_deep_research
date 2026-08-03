@@ -1,25 +1,20 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-describe("index-search and debug-panel source contracts", () => {
-  it("keeps the tab and panel behind debug mode and removes indexing controls", () => {
-    const header = readFileSync(resolve("src/apps/obsidian/ui/chat/ChatHeader.ts"), "utf8");
-    const view = readFileSync(resolve("src/apps/obsidian/ui/chat/IxplorerChatView.ts"), "utf8");
+describe("index-search and debug-panel static policy", () => {
+  it("keeps removed indexing controls out of the index-search surface", () => {
     const controller = readFileSync(
       resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
       "utf8",
     );
     const panel = readFileSync(resolve("src/apps/obsidian/ui/index/IndexSearchPanel.ts"), "utf8");
 
-    expect(header).toContain("isDebugMode");
-    expect(view).toContain("this.services.isDebugMode()");
-    expect(view).toContain('this.activePanel = "chat"');
     expect(controller).not.toContain("renderIndexControl");
     expect(controller).not.toContain("IndexControl");
     expect(panel).not.toContain("indexControlEl");
   });
 
-  it("redisplays open chat views immediately after Debug mode changes", () => {
+  it("declares the debug-mode redisplay wiring", () => {
     const settingsTab = readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8");
     const plugin = readFileSync(resolve("src/apps/obsidian/main.ts"), "utf8");
     const view = readFileSync(resolve("src/apps/obsidian/ui/chat/IxplorerChatView.ts"), "utf8");
@@ -38,7 +33,7 @@ describe("index-search and debug-panel source contracts", () => {
     expect(composer).toContain("this.setFormRunning(this.options.isRunning());");
   });
 
-  it("preserves keyword fallback results and renders an accessible warning", () => {
+  it("declares the keyword-fallback identifiers and warning classes", () => {
     const controller = readFileSync(
       resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
       "utf8",
@@ -52,7 +47,7 @@ describe("index-search and debug-panel source contracts", () => {
     expect(controller).toContain("Index search degraded to keyword-only ranking");
   });
 
-  it("clears profile-specific semantic fallback warnings when the selected profile changes", () => {
+  it("declares the profile-scoped semantic warning identifiers", () => {
     const controller = readFileSync(
       resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
       "utf8",
@@ -66,7 +61,7 @@ describe("index-search and debug-panel source contracts", () => {
     expect(availabilityUpdater).toContain("this.semanticError = null;");
   });
 
-  it("uses the host-selected profile for the first panel preflight", () => {
+  it("declares the host-selected profile identifiers for the preflight", () => {
     const controller = readFileSync(
       resolve("src/apps/obsidian/ui/index/IndexSearchController.ts"),
       "utf8",
@@ -81,7 +76,7 @@ describe("index-search and debug-panel source contracts", () => {
     expect(renderPanel).toContain("isSearchBlocked: this.isSearchBlocked(selectedProfileId)");
   });
 
-  it("keeps source previews aligned with explicit web-search routing", () => {
+  it("declares the explicit web-search routing identifiers", () => {
     const strategy = readFileSync(
       resolve("src/application/use-cases/research/strategies/ThinkingResearchStrategy.ts"),
       "utf8",
