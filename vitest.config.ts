@@ -28,6 +28,7 @@ export default defineConfig({
         perFile: false,
         "src/core/**": { statements: 90, branches: 83, functions: 90, lines: 90 },
         "src/application/**": { statements: 86, branches: 79, functions: 86, lines: 86 },
+        "src/adapters/**": { statements: 84, branches: 76, functions: 84, lines: 84 },
       },
     },
   },
