@@ -149,7 +149,6 @@ export interface FileProcessorOptions {
   snapshots: Map<string, FileSnapshot>;
   progress: IndexingProgressState;
   logger?: IndexingLogger;
-  collectDocumentImages?: () => boolean;
   resolveLinkedImagePath?: LinkedPathResolver;
 }
 

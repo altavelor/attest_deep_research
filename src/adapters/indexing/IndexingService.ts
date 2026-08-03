@@ -87,7 +87,6 @@ export class IndexingService {
       snapshots: this.snapshots,
       progress: this.progress,
       logger: options.logger,
-      collectDocumentImages: () => this.collectingDocumentImages,
       ...(options.resolveLinkedImagePath
         ? { resolveLinkedImagePath: options.resolveLinkedImagePath }
         : {}),
@@ -147,9 +146,7 @@ export class IndexingService {
     await this.writer.loadPersistedSnapshots();
     this.progress.setTotalFiles(files.length);
     await this.writer.begin();
-    if (this.collectingDocumentImages) {
-      this.writer.beginImageManifest();
-    }
+    this.writer.beginImageManifest(this.collectingDocumentImages ? "replace" : "merge");
 
     const pendingChunks: ExtractedChunk[] = [];
     const pendingIndexedFiles: PendingIndexedFile[] = [];
@@ -163,7 +160,7 @@ export class IndexingService {
           chunks: pendingChunks,
           indexedFiles: pendingIndexedFiles,
         });
-        if (!this.isCompleteRun()) {
+        if (this.collectingDocumentImages && !this.isCompleteRun()) {
           this.writer.discardImageManifest();
         }
         this.progress.setPhase("writing");
@@ -213,7 +210,7 @@ export class IndexingService {
       const result = await this.processFileSafely(file);
       this.progress.markFileScanned(file.path);
       if (result.documentImages) {
-        this.writer.recordDocumentImages(result.documentImages);
+        this.writer.recordDocumentImages(file.path, result.documentImages);
       }
       this.updateCountersAndPending(file, result, pendingChunks, pendingIndexedFiles);
 
