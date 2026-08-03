@@ -151,6 +151,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreDomTimers();
   resetDom();
   vi.restoreAllMocks();
 });
@@ -245,7 +246,6 @@ describe("chat view transcript disposal", () => {
     await leaf.detach();
 
     expect(pendingTimerCount()).toBe(0);
-    restoreDomTimers();
   });
 
   it("releases the previous transcript timer on every redisplay", async () => {
@@ -258,6 +258,5 @@ describe("chat view transcript disposal", () => {
     expect(pendingTimerCount()).toBe(1);
 
     await leaf.detach();
-    restoreDomTimers();
   });
 });
