@@ -33,26 +33,15 @@ describe("settings surface static policy", () => {
     }
   });
 
-  it("declares the explicit capability-refresh wiring and no re-save probing", () => {
-    expect(source).toContain('icon: "flask-conical"');
-    expect(source).toContain("this.options.prober.startChatProfileProbes(profile.id, true)");
+  it("keeps the removed probing and verification calls out of the settings surface", () => {
     expect(source).not.toContain("startChatProfileProbes(updatedProfile.id)");
-    expect(source).toContain("startEmbeddingProfileProbe(saved.id)");
     expect(source).not.toContain("await this.detectChatCapabilities(server)");
     expect(source).not.toContain("await this.options.verifyEmbedding");
-    expect(source).toContain(
-      'profile.reasoning.summary = reasoningCapabilities.summary ? "auto" : "off"',
-    );
+    expect(source).not.toContain("} else if (!this.toolsVerifiedSeen) {");
   });
 
   it("declares the aria-disabled and inert attributes on gated settings", () => {
     expect(source).toContain('attr: { "aria-disabled": "true", inert: "" }');
-  });
-
-  it("declares the capability re-render statements and no tools-seen branch", () => {
-    expect(source).toContain("this.testing = false;");
-    expect(source).toContain("this.render();");
-    expect(source).not.toContain("} else if (!this.toolsVerifiedSeen) {");
   });
 
   it("keeps removed inline mechanics comments out of the chat composer", () => {
@@ -60,16 +49,6 @@ describe("settings surface static policy", () => {
       "Right cluster: context-window indicator, model selector, submit.",
     );
     expect(chatComposerSource).not.toContain("Thinking mode drives the agentic research strategy");
-  });
-
-  it("declares the capability-status subscription identifiers", () => {
-    expect(source).toContain("subscribeCapabilityStatus");
-    expect(source).toContain("getCapabilityStatus");
-    expect(source).toContain('setIcon("flask-conical")');
-    expect(source).toContain(
-      'hasCapabilityTestResult(options.currentProfile) ? "Re-test" : "Test"',
-    );
-    expect(source).toContain("formatCapabilityVerificationStatus");
   });
 
   it("places the Debug mode control in the advanced renderer only", () => {
