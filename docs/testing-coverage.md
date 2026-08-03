@@ -108,3 +108,12 @@ informational.
   failed comment never fails CI; read the report in the job summary instead.
 - If the base commit is not in the fetched history, the patch section is skipped
   rather than reported as fully covered.
+
+### Why the comment is published from a separate job
+
+The `build` job checks out and executes pull-request code, so it holds only
+`contents: read`. It writes the report to the job summary and uploads the
+comment body as an artifact. A second job, `coverage-comment`, holds
+`pull-requests: write` and does nothing but download that artifact and post it —
+it never checks out the branch or runs repository code, so the write-scoped token
+is never exposed to code from the pull request.
