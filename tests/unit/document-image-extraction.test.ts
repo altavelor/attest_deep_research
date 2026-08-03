@@ -306,6 +306,43 @@ describe("pdf image extraction", () => {
     expect(refs.map((ref) => ref.format)).toEqual(["png"]);
   });
 
+  it("rejects a flate raster that expands far beyond its declared size", () => {
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /ColorSpace /DeviceRGB /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(Buffer.alloc(64 * 64 * 3 * 40, 0x11)),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    expect(
+      extractDocumentImages({
+        path: "docs/bomb.pdf",
+        data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+      }),
+    ).toEqual([]);
+  });
+
+  it("rejects predictor parameters that disagree with the image dictionary", () => {
+    const rows = Buffer.concat(
+      Array.from({ length: 64 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(64 * 3, 1)])),
+    );
+    const pdf = Buffer.concat([
+      Buffer.from(
+        "%PDF-1.4\n2 0 obj\n<< /Subtype /Image /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /Columns 999 >> /ColorSpace /DeviceRGB /BitsPerComponent 8 /Width 64 /Height 64 >>\nstream\n",
+        "latin1",
+      ),
+      deflateSync(rows),
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    ]);
+    expect(
+      extractDocumentImages({
+        path: "docs/mismatch.pdf",
+        data: pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer,
+      }),
+    ).toEqual([]);
+  });
+
   it("skips rasters whose colour space it cannot reproduce", () => {
     const pdf = Buffer.concat([
       Buffer.from(

@@ -24,15 +24,20 @@ export function pdfRasterToPng(stream: Buffer, spec: PdfRasterSpec): Buffer | un
   if (spec.components !== 1 && spec.components !== 3) return undefined;
   if (spec.width <= 0 || spec.height <= 0) return undefined;
 
+  const rowBytes = spec.width * spec.components;
+  const predicted = spec.predictor >= 10;
+  if (predicted && !hasConsistentPredictor(spec)) return undefined;
+
   let samples: Buffer;
   try {
-    samples = inflateSync(stream);
+    samples = inflateSync(stream, {
+      maxOutputLength: spec.height * (rowBytes + (predicted ? 1 : 0)),
+    });
   } catch {
     return undefined;
   }
 
-  const rowBytes = spec.width * spec.components;
-  if (spec.predictor >= 10) {
+  if (predicted) {
     const undone = undoPngPredictor(samples, spec);
     if (!undone) return undefined;
     samples = undone;
@@ -42,6 +47,15 @@ export function pdfRasterToPng(stream: Buffer, spec: PdfRasterSpec): Buffer | un
   if (samples.length < rowBytes * spec.height) return undefined;
 
   return encodePng(samples, spec.width, spec.height, spec.components);
+}
+
+/**
+ * Predictor parameters come from an untrusted dictionary. They must describe
+ * the same raster as the image dictionary, or the row geometry used to bound
+ * the inflated output would not match what is actually decoded.
+ */
+function hasConsistentPredictor(spec: PdfRasterSpec): boolean {
+  return spec.predictorColumns === spec.width && spec.predictorColors === spec.components;
 }
 
 /** Reverses the per-row PNG filters PDF applies when `/Predictor >= 10`. */
