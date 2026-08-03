@@ -26,7 +26,19 @@ function jpegSegments(segments: number[][]): Uint8Array {
 }
 
 function jpegFrame(marker: number, width: number, height: number): number[] {
-  return [0xff, marker, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff];
+  const payload = [
+    0x08,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff,
+    0x01,
+    0x01,
+    0x11,
+    0x00,
+  ];
+  const length = payload.length + 2;
+  return [0xff, marker, length >> 8, length & 0xff, ...payload];
 }
 
 function webp(chunk: string, payload: number[]): Uint8Array {
@@ -99,6 +111,19 @@ describe("readImageDimensions rejects malformed headers", () => {
 
     expect(readImageDimensions(missingIhdr, "png")).toEqual({ width: 120, height: 80 });
     expect(readImageDimensions(wrongChunkLength, "png")).toEqual({ width: 120, height: 80 });
+  });
+
+  it("still trusts the size fields of a JPEG frame that declares more bytes than it carries", () => {
+    const frame = jpegFrame(0xc0, 200, 100);
+    frame[3] = 0x40;
+
+    expect(readImageDimensions(jpegSegments([frame]), "jpeg")).toEqual({ width: 200, height: 100 });
+  });
+
+  it("rejects a JPEG frame segment cut off before its dimension fields", () => {
+    const frame = jpegFrame(0xc0, 200, 100).slice(0, 6);
+
+    expect(readImageDimensions(jpegSegments([frame]), "jpeg")).toBeUndefined();
   });
 
   it("does not read a size out of a long buffer whose signature belongs to another format", () => {
