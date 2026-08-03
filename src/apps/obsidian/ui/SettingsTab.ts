@@ -1,7 +1,8 @@
-import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { App, PluginSettingTab, setIcon } from "obsidian";
 
 import type IxplorerPlugin from "@apps/obsidian/main";
 import { DiscoveredModel, normalizeSettingsState } from "@adapters/settings";
+import { AdvancedSettingsSection } from "./settings/AdvancedSettingsSection";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexProfilesSection } from "./settings/IndexProfilesSection";
 import { ModelProfilesSection } from "./settings/ModelProfilesSection";
@@ -101,17 +102,13 @@ export class IxplorerSettingTab extends PluginSettingTab {
   }
 
   private renderAdvancedSettings(containerEl: HTMLElement): void {
-    const details = containerEl.createEl("details", { cls: "ixplorer-settings-advanced" });
-    details.createEl("summary", { cls: "ixplorer-settings-advanced__summary", text: "Advanced" });
-    new Setting(details.createDiv({ cls: "ixplorer-settings-advanced__content" }))
-      .setName("Debug mode")
-      .setDesc("Log plugin request and response details. API keys are redacted.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
-          this.plugin.settings.debugMode = value;
-          await this.plugin.saveSettings();
-          this.plugin.refreshChatViews();
-        }),
-      );
+    new AdvancedSettingsSection({
+      isDebugMode: () => this.plugin.settings.debugMode,
+      setDebugMode: (value) => {
+        this.plugin.settings.debugMode = value;
+      },
+      saveSettings: () => this.plugin.saveSettings(),
+      refreshChatViews: () => this.plugin.refreshChatViews(),
+    }).render(containerEl);
   }
 }
