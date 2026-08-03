@@ -135,6 +135,10 @@ jobs:
               return;
             }
             const body = fs.readFileSync(path, "utf8");
+            if (!body.startsWith(marker) || body.length > 65536) {
+              core.warning("Coverage report artifact is not a coverage report; nothing to publish.");
+              return;
+            }
             try {
               const comments = await github.paginate(github.rest.issues.listComments, {
                 owner: context.repo.owner,
