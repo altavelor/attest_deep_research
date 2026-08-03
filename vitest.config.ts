@@ -10,7 +10,7 @@ export default defineConfig({
       "@apps": resolve("src/apps"),
       "@shared": resolve("src/shared"),
       "@manifest": resolve("manifest.json"),
-      obsidian: resolve("tests/stubs/obsidian.ts"),
+      obsidian: resolve("tests/stubs/obsidian/index.ts"),
     },
   },
   test: {
