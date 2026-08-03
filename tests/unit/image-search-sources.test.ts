@@ -87,6 +87,56 @@ function jsonResponse(body: unknown): Response {
   return { ok: true, status: 200, text: async () => JSON.stringify(body) } as Response;
 }
 
+function streamingResponse(chunks: string[]): Response {
+  let index = 0;
+  const encoder = new TextEncoder();
+  const reader = {
+    read: async () =>
+      index < chunks.length
+        ? { done: false, value: encoder.encode(chunks[index++]!) }
+        : { done: true, value: undefined },
+    cancel: async () => undefined,
+  };
+  return {
+    ok: true,
+    status: 200,
+    body: { getReader: () => reader },
+    text: async () => chunks.join(""),
+  } as unknown as Response;
+}
+
+describe("bounded image responses", () => {
+  it("abandons an oversized provider response instead of buffering it", async () => {
+    const oversized = ["x".repeat(600_000)];
+    const fetchMock = vi.fn().mockResolvedValue(streamingResponse(oversized));
+    const source = new WikimediaCommonsImageSource(
+      findWebSourceDescriptor(WIKIMEDIA_COMMONS_SOURCE_ID)!,
+      { fetch: fetchMock as typeof fetch },
+    );
+
+    await expect(source.searchImages("cats")).rejects.toMatchObject({
+      message: expect.stringContaining("oversized"),
+    });
+  });
+
+  it("reads a response that stays inside the limit", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamingResponse([
+          JSON.stringify(commonsBody).slice(0, 10),
+          JSON.stringify(commonsBody).slice(10),
+        ]),
+      );
+    const source = new WikimediaCommonsImageSource(
+      findWebSourceDescriptor(WIKIMEDIA_COMMONS_SOURCE_ID)!,
+      { fetch: fetchMock as typeof fetch },
+    );
+
+    await expect(source.searchImages("cats")).resolves.toHaveLength(1);
+  });
+});
+
 describe("Wikimedia Commons image source", () => {
   it("normalizes bitmap results and drops ineligible entries", () => {
     const candidates = parseCommonsPayload(commonsBody);
