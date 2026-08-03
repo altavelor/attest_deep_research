@@ -232,25 +232,45 @@ describe("chat composer input events", () => {
     expect(harness.submitButton().disabled).toBe(true);
   });
 
-  it("submits on Enter and inserts a newline on Shift+Enter", () => {
+  it("submits on Enter and leaves Shift+Enter to the textarea", () => {
     const onSubmit = vi.fn();
     const harness = createComposer({ onSubmit });
 
-    harness
-      .textarea()
-      .dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
-      );
-    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const enterEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    harness.textarea().dispatchEvent(enterEvent);
 
-    harness.textarea().dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
     expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    const shiftEnterEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    harness.textarea().dispatchEvent(shiftEnterEvent);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(shiftEnterEvent.defaultPrevented).toBe(false);
+  });
+
+  it("ignores Enter while an IME composition is active", () => {
+    const onSubmit = vi.fn();
+    const harness = createComposer({ onSubmit });
+
+    const composingEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(composingEvent, "isComposing", { value: true });
+    harness.textarea().dispatchEvent(composingEvent);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(composingEvent.defaultPrevented).toBe(false);
   });
 });
