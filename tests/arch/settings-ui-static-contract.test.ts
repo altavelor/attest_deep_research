@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "fs";
 import { resolve } from "path";
 
-describe("chat model settings surface", () => {
+describe("settings surface source contracts", () => {
   const settingsDir = resolve("src/apps/obsidian/ui/settings");
   const source = [
     readFileSync(resolve("src/apps/obsidian/ui/SettingsTab.ts"), "utf8"),

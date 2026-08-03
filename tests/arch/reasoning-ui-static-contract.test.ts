@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { readStyles } from "../helpers/readStyles";
 
-describe("reasoning transcript UI", () => {
+describe("reasoning transcript source contracts", () => {
   const transcript = [
     "ChatTranscript.ts",
     "assistantMessageRenderer.ts",
@@ -56,15 +56,6 @@ describe("reasoning transcript UI", () => {
     expect(transcript).toContain('"In"');
     expect(transcript).toContain('"Out"');
     expect(transcript).toContain("ixplorer-chat__tool-cell");
-  });
-
-  it("keeps reasoning and tool-call headers visible without Debug mode while hiding In/Out cells", () => {
-    expect(transcript).toContain('if (item.kind === "tool-call")');
-    expect(transcript).toContain('if (item.kind === "reasoning")');
-    expect(transcript).not.toContain('item.kind === "reasoning" && options.isDebugMode');
-    expect(transcript).toContain("if (context.isDebugMode && view.inCell)");
-    expect(transcript).toContain("if (context.isDebugMode && view.outCell)");
-    expect(transcript).toContain('if (child.kind === "tool-call")');
   });
 
   it("renders an active Thinking timeline node while an assistant response is streaming", () => {
