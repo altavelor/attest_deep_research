@@ -1,0 +1,121 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+
+import { App, ItemView, WorkspaceLeaf } from "../../stubs/obsidian";
+import type { Plugin as StubPlugin } from "../../stubs/obsidian";
+import type { App as ObsidianApp } from "obsidian";
+
+import IxplorerPlugin from "@apps/obsidian/main";
+import { IXPLORER_CHAT_VIEW_TYPE } from "@apps/obsidian/ui/chat/IxplorerChatView";
+import { createContainer, resetDom, restoreDomTimers } from "../../helpers/domHarness";
+
+const FOREIGN_VIEW_TYPE = "foreign-view";
+
+/** Non-chat view that re-renders on `redisplay`, so a broken leaf filter is observable. */
+class ForeignView extends ItemView {
+  getViewType(): string {
+    return FOREIGN_VIEW_TYPE;
+  }
+
+  redisplay(): void {
+    this.contentEl.empty();
+  }
+}
+
+function createPlugin(app: App): IxplorerPlugin {
+  return new IxplorerPlugin(app as unknown as ObsidianApp, {
+    id: "ixplorer",
+    name: "Ixplorer",
+    version: "0.0.0",
+    minAppVersion: "1.0.0",
+    author: "test",
+    description: "test",
+  });
+}
+
+function asStubPlugin(plugin: IxplorerPlugin): StubPlugin {
+  return plugin as unknown as StubPlugin;
+}
+
+function markerOf(view: { contentEl: HTMLElement }, name: string): HTMLElement {
+  return view.contentEl.createDiv({ cls: name });
+}
+
+async function openChatLeaf(app: App): Promise<WorkspaceLeaf> {
+  const leaf = app.workspace.createLeaf();
+  await leaf.setViewState({ type: IXPLORER_CHAT_VIEW_TYPE, active: true });
+  return leaf;
+}
+
+describe("Ixplorer plugin lifecycle", () => {
+  let vaultPath: string;
+  let app: App;
+  let plugin: IxplorerPlugin;
+
+  beforeEach(async () => {
+    createContainer();
+    vaultPath = await mkdtemp(join(tmpdir(), "ixplorer-plugin-"));
+    app = new App();
+    app.vault.useLocalPath(vaultPath);
+    plugin = createPlugin(app);
+    await plugin.onload();
+  });
+
+  afterEach(async () => {
+    plugin.unload();
+    restoreDomTimers();
+    resetDom();
+    await rm(vaultPath, { recursive: true, force: true });
+  });
+
+  it("redisplays only the open chat leaves", async () => {
+    const chatLeaf = await openChatLeaf(app);
+    const closedLeaf = await openChatLeaf(app);
+    const closedView = closedLeaf.view as unknown as { contentEl: HTMLElement };
+    app.workspace.registerViewFactory(FOREIGN_VIEW_TYPE, (leaf) => new ForeignView(leaf));
+    const foreignLeaf = app.workspace.createLeaf();
+    await foreignLeaf.setViewState({ type: FOREIGN_VIEW_TYPE, active: true });
+
+    await closedLeaf.detach();
+    const openView = chatLeaf.view as unknown as { contentEl: HTMLElement };
+    const foreignView = foreignLeaf.view as unknown as { contentEl: HTMLElement };
+    const openMarker = markerOf(openView, "open");
+    const closedMarker = markerOf(closedView, "closed");
+    const foreignMarker = markerOf(foreignView, "foreign");
+
+    plugin.refreshChatViews();
+
+    expect(openView.contentEl.contains(openMarker)).toBe(false);
+    expect(closedView.contentEl.contains(closedMarker)).toBe(true);
+    expect(foreignView.contentEl.contains(foreignMarker)).toBe(true);
+  });
+
+  it("keeps the chat view usable across repeated redisplays", async () => {
+    const leaf = await openChatLeaf(app);
+
+    plugin.refreshChatViews();
+    plugin.refreshChatViews();
+
+    const view = leaf.view as unknown as { contentEl: HTMLElement };
+    expect(view.contentEl.querySelectorAll(".ixplorer-chat").length).toBe(1);
+  });
+
+  it("releases the view type, command and settings tab registered on load", async () => {
+    expect(app.workspace.getViewFactory(IXPLORER_CHAT_VIEW_TYPE)).toBeDefined();
+    expect(asStubPlugin(plugin).commands.map((command) => command.id)).toContain(
+      "open-ixplorer-chat",
+    );
+    expect(asStubPlugin(plugin).settingTabs).toHaveLength(1);
+
+    plugin.unload();
+
+    expect(app.workspace.getViewFactory(IXPLORER_CHAT_VIEW_TYPE)).toBeUndefined();
+    expect(asStubPlugin(plugin).commands).toHaveLength(0);
+    expect(asStubPlugin(plugin).settingTabs).toHaveLength(0);
+    expect(asStubPlugin(plugin).registrationCount()).toBe(0);
+    await expect(openChatLeaf(app)).rejects.toThrow(/No view registered/);
+  });
+});
