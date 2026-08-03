@@ -158,3 +158,17 @@ comment body as an artifact. A second job, `coverage-comment`, holds
 `pull-requests: write` and does nothing but download that artifact and post it —
 it never checks out the branch or runs repository code, so the write-scoped token
 is never exposed to code from the pull request.
+
+## Settings prober and plugin lifecycle (issue #18, `src/apps`)
+
+`tests/unit/ui/settings-prober.behaviour.test.ts` and
+`tests/unit/ui/plugin-lifecycle.behaviour.test.ts` execute the settings tab and
+the plugin entry point against the Obsidian stub, with the capability probes
+mocked so no test reaches the network.
+
+| File                                                    | Statements before | Statements after |
+| ------------------------------------------------------- | ----------------- | ---------------- |
+| `apps/obsidian/main.ts`                                 | 0.00%             | 47.16%           |
+| `apps/obsidian/ui/settings/SettingsCapabilityProber.ts` | 0.00%             | 36.88%           |
+| `apps/obsidian/ui/SettingsTab.ts`                       | 0.00%             | 84.21%           |
+| `src/apps` aggregate                                    | 20.95%            | 47.67%           |
