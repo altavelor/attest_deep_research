@@ -137,8 +137,9 @@ describe("index search panel warnings", () => {
       if (!warningText(container)) throw new Error("No fallback warning yet.");
     });
 
-    refs.profile.value = "degraded";
-    refs.profile.dispatchEvent(new Event("change"));
+    const liveRefs = panelRefs(container);
+    liveRefs.profile.value = "degraded";
+    liveRefs.profile.dispatchEvent(new Event("change"));
 
     expect(warningText(container)).toBeNull();
   });
