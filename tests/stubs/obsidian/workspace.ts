@@ -19,19 +19,23 @@ export class WorkspaceLeaf {
   async setViewState(state: ViewState): Promise<void> {
     const factory = this.workspace.getViewFactory(state.type);
     if (!factory) throw new Error(`No view registered for type "${state.type}".`);
+    await this.closeCurrentView();
     this.view = factory(this);
     this.view.load();
     await this.view.onOpen();
   }
 
   async detach(): Promise<void> {
+    await this.closeCurrentView();
+    this.workspace.removeLeaf(this);
+  }
+
+  private async closeCurrentView(): Promise<void> {
     const view = this.view;
     this.view = null;
-    if (view) {
-      await view.onClose();
-      view.unload();
-    }
-    this.workspace.removeLeaf(this);
+    if (!view) return;
+    await view.onClose();
+    view.unload();
   }
 }
 

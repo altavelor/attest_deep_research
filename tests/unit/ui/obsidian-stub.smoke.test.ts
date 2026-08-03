@@ -137,6 +137,43 @@ describe("Workspace and WorkspaceLeaf stubs", () => {
     expect(clicks).toBe(0);
   });
 
+  it("releases the previous view when a leaf is given a new view state", async () => {
+    const app = new App();
+    const plugin = new SmokePlugin(app);
+    await plugin.onload();
+    const leaf = app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: VIEW_TYPE });
+    const replaced = leaf.view as SmokeView;
+    const button = container.createEl("button");
+    let clicks = 0;
+    replaced.registerDomEvent(button, "click", () => {
+      clicks += 1;
+    });
+
+    await leaf.setViewState({ type: VIEW_TYPE });
+    button.dispatchEvent(new Event("click"));
+
+    expect(leaf.view).not.toBe(replaced);
+    expect(replaced.closed).toBe(1);
+    expect(clicks).toBe(0);
+  });
+
+  it("keeps the attached view when the requested view type is unknown", async () => {
+    const app = new App();
+    const plugin = new SmokePlugin(app);
+    await plugin.onload();
+    const leaf = app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: VIEW_TYPE });
+    const view = leaf.view as SmokeView;
+
+    await expect(leaf.setViewState({ type: "unregistered" })).rejects.toThrow(
+      'No view registered for type "unregistered".',
+    );
+
+    expect(leaf.view).toBe(view);
+    expect(view.closed).toBe(0);
+  });
+
   it("closes the view and drops the leaf on detach", async () => {
     const app = new App();
     const plugin = new SmokePlugin(app);
