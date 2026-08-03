@@ -8,8 +8,8 @@ export interface ViewState {
 
 /**
  * Executable stand-in for a workspace leaf: it instantiates the view through the
- * factory the plugin registered, so `setViewState` and `detach` drive the real
- * view lifecycle instead of a mock object.
+ * factory the plugin registered and takes it through the full load/open and
+ * close/unload lifecycle, so a view that leaks a registration is detectable.
  */
 export class WorkspaceLeaf {
   view: View | null = null;
@@ -20,12 +20,17 @@ export class WorkspaceLeaf {
     const factory = this.workspace.getViewFactory(state.type);
     if (!factory) throw new Error(`No view registered for type "${state.type}".`);
     this.view = factory(this);
+    this.view.load();
     await this.view.onOpen();
   }
 
   async detach(): Promise<void> {
-    await this.view?.onClose();
+    const view = this.view;
     this.view = null;
+    if (view) {
+      await view.onClose();
+      view.unload();
+    }
     this.workspace.removeLeaf(this);
   }
 }
