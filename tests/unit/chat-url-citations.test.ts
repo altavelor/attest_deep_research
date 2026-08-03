@@ -91,6 +91,11 @@ describe("citation token splitting", () => {
     expect(parts).toEqual([]);
   });
 
+  it("keeps long bracketed prose that cannot be a citation handle", () => {
+    expect(splitCitationText("[Important note] Read this", hasRef)).toBeNull();
+    expect(splitCitationText("Text [see the appendix] follows", hasRef)).toBeNull();
+  });
+
   it("keeps short bracketed text that is not a citation handle", () => {
     expect(splitCitationText("see [note] here", hasRef)).toBeNull();
   });
