@@ -2,18 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { listSourceModules, reachableModules } from "../helpers/moduleGraph";
 
-const PLUGIN_ENTRY_POINT = "src/apps/obsidian/main.ts";
+const ENTRY_POINTS = ["src/apps/obsidian/main.ts"];
 
 const MODULES_REACHED_ONLY_BY_TESTS = ["src/apps/obsidian/pluginMetadata.ts"];
 
 describe("module reachability", () => {
   const modules = listSourceModules();
-  const curatedBarrels = modules.filter((module) => module.endsWith("/index.ts"));
-  const reachable = reachableModules([PLUGIN_ENTRY_POINT, ...curatedBarrels]);
+  const reachable = reachableModules(ENTRY_POINTS);
 
-  it("resolves the plugin entry point and its curated barrels", () => {
-    expect(modules).toContain(PLUGIN_ENTRY_POINT);
-    expect(curatedBarrels.length).toBeGreaterThan(5);
+  it("resolves every declared entry point", () => {
+    expect(ENTRY_POINTS.filter((entry) => !modules.includes(entry))).toEqual([]);
+    expect(ENTRY_POINTS.length).toBeLessThanOrEqual(3);
     expect(reachable.size).toBeGreaterThan(modules.length / 2);
   });
 
@@ -23,6 +22,13 @@ describe("module reachability", () => {
       .filter((module) => !MODULES_REACHED_ONLY_BY_TESTS.includes(module));
 
     expect(unreachable).toEqual([]);
+  });
+
+  it("keeps every curated barrel reachable from an entry point", () => {
+    const barrels = modules.filter((module) => module.endsWith("/index.ts"));
+
+    expect(barrels.length).toBeGreaterThan(5);
+    expect(barrels.filter((barrel) => !reachable.has(barrel))).toEqual([]);
   });
 
   it("keeps the allowlist honest", () => {
