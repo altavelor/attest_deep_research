@@ -22,13 +22,22 @@ import {
 
 const probeToolControlCapabilities = vi.fn<[unknown], Promise<ToolCapabilityProbeResult>>();
 const probeReasoningVisibility = vi.fn();
+const inFlightProbes = new Set<Promise<unknown>>();
+
+function trackProbe<T>(promise: Promise<T>): Promise<T> {
+  inFlightProbes.add(promise);
+  const forget = () => inFlightProbes.delete(promise);
+  void promise.then(forget, forget);
+  return promise;
+}
 
 vi.mock("@adapters/settings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@adapters/settings")>();
   return {
     ...actual,
-    probeToolControlCapabilities: (options: unknown) => probeToolControlCapabilities(options),
-    probeReasoningVisibility: (options: unknown) => probeReasoningVisibility(options),
+    probeToolControlCapabilities: (options: unknown) =>
+      trackProbe(probeToolControlCapabilities(options)),
+    probeReasoningVisibility: (options: unknown) => trackProbe(probeReasoningVisibility(options)),
   };
 });
 
@@ -130,21 +139,30 @@ function createHarness(): Harness {
   };
 }
 
+/** Awaits every launched probe and the follow-up handlers it schedules. */
 async function settle(): Promise<void> {
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  for (let i = 0; i < 50; i += 1) await Promise.resolve();
+}
+
+function expectNoProbeInFlight(): void {
+  expect(inFlightProbes.size).toBe(0);
 }
 
 describe("settings capability prober failure and race handling", () => {
   beforeEach(() => {
     installObsidianDomHelpers();
     useDomFakeTimers();
+    inFlightProbes.clear();
     probeToolControlCapabilities.mockReset();
     probeReasoningVisibility.mockReset();
-    probeReasoningVisibility.mockImplementation(() => new Promise(() => {}));
+    probeReasoningVisibility.mockRejectedValue(new Error("reasoning probe unavailable"));
     takeNotices();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await settle();
+    expectNoProbeInFlight();
+    expect(pendingTimerCount()).toBe(0);
     restoreDomTimers();
     resetDom();
     vi.restoreAllMocks();
@@ -162,9 +180,15 @@ describe("settings capability prober failure and race handling", () => {
     expect(harness.prober.statusFor(harness.settings.chatModelProfiles[0]).tools).toBe("failed");
     expect(harness.settings.chatModelProfiles[0].capabilities).toBeUndefined();
     expect(harness.savedCount()).toBe(0);
-    expect(takeNotices().map((notice) => notice.message)).toEqual([
+    expect(
+      takeNotices()
+        .map((notice) => notice.message)
+        .sort(),
+    ).toEqual([
+      "Capability detection failed for Chat.",
       "Tool capability detection failed for Chat.",
     ]);
+    expectNoProbeInFlight();
     harness.release();
   });
 
@@ -185,6 +209,7 @@ describe("settings capability prober failure and race handling", () => {
     expect(harness.prober.statusFor(harness.settings.chatModelProfiles[0]).tools).toBe(
       "not-tested",
     );
+    expectNoProbeInFlight();
     harness.release();
   });
 
@@ -198,6 +223,7 @@ describe("settings capability prober failure and race handling", () => {
     expect(harness.settings.chatModelProfiles[0].capabilities?.tools).toBe(true);
     expect(harness.savedCount()).toBe(1);
     expect(harness.prober.statusFor(harness.settings.chatModelProfiles[0]).tools).toBe("verified");
+    expectNoProbeInFlight();
     harness.release();
   });
 
@@ -215,10 +241,11 @@ describe("settings capability prober failure and race handling", () => {
 
     expect(observed).toEqual([]);
     expect(pendingTimerCount()).toBe(0);
+    expectNoProbeInFlight();
     harness.release();
   });
 
-  it("ignores probe requests for an unknown profile or a suspended server", () => {
+  it("ignores probe requests for an unknown profile or a suspended server", async () => {
     const harness = createHarness();
 
     harness.prober.startChatProfileProbes("missing");
@@ -226,6 +253,7 @@ describe("settings capability prober failure and race handling", () => {
     harness.prober.startChatProfileProbes("chat");
 
     expect(probeToolControlCapabilities).not.toHaveBeenCalled();
+    expectNoProbeInFlight();
     harness.release();
   });
 });
