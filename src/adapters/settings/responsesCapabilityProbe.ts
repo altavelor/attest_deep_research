@@ -33,10 +33,10 @@ export async function probeResponsesCapabilities(
   let defaultEffort: string | undefined;
   const candidateEfforts = efforts.length > 0 ? efforts : [...FALLBACK_REASONING_EFFORTS];
   for (const effort of candidateEfforts) {
+    if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
     const attempt = await runProbe(options, effort, false);
     lastFailureReason = attempt.failureReason ?? lastFailureReason;
-    if (options.signal?.aborted)
-      throw new DOMException("Responses capability probe cancelled.", "AbortError");
+    if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
     if (attempt.ok) {
       defaultEffort = effort;
       break;
@@ -47,12 +47,10 @@ export async function probeResponsesCapabilities(
   for (const effort of efforts) {
     if (verifiedEfforts.includes(effort)) continue;
     if ((await runProbe(options, effort, false)).ok) verifiedEfforts.push(effort);
-    if (options.signal?.aborted)
-      throw new DOMException("Responses capability probe cancelled.", "AbortError");
+    if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
   }
   const summary = (await runProbe(options, defaultEffort, true)).ok;
-  if (options.signal?.aborted)
-    throw new DOMException("Responses capability probe cancelled.", "AbortError");
+  if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
   return {
     source: "probe",
     responses: true,
@@ -203,6 +201,12 @@ function stableIdentityHash(value: string): string {
     second = Math.imul(second ^ code, 0x85ebca6b);
   }
   return `${(first >>> 0).toString(16).padStart(8, "0")}${(second >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+/** Builds the cancellation error, carrying the failure reason observed before the abort. */
+function probeCancelled(failureReason?: string): DOMException & { failureReason?: string } {
+  const error = new DOMException("Responses capability probe cancelled.", "AbortError");
+  return Object.assign(error, { failureReason });
 }
 
 function failed(
