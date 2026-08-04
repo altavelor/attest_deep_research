@@ -33,6 +33,7 @@ export async function probeResponsesCapabilities(
   let defaultEffort: string | undefined;
   const candidateEfforts = efforts.length > 0 ? efforts : [...FALLBACK_REASONING_EFFORTS];
   for (const effort of candidateEfforts) {
+    if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
     const attempt = await runProbe(options, effort, false);
     lastFailureReason = attempt.failureReason ?? lastFailureReason;
     if (options.signal?.aborted) throw probeCancelled(lastFailureReason);
