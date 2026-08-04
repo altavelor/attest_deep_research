@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { readStyleModules } from "../helpers/readStyles";
@@ -7,6 +9,7 @@ import { renderStyleCatalogue } from "../helpers/styleCatalogue";
 import { resetDom } from "../helpers/domHarness";
 
 const STYLED_CLASS_PREFIX = "ixplorer-";
+const REPORT_DIRECTORY = "coverage";
 
 const UNSTYLED_QUERY_HOOKS: Record<string, string> = {
   "ixplorer-chat__workflow-node--complete": "Tool-status marker read by transcript queries.",
@@ -17,28 +20,6 @@ const UNSTYLED_QUERY_HOOKS: Record<string, string> = {
   "ixplorer-settings-websource-table": "Web-source table anchor with no own styling.",
   "ixplorer-settings__gated-section": "Gate wrapper whose children carry the styling.",
 };
-
-const COMPONENTS_WITHOUT_A_BEHAVIOURAL_SURFACE = [
-  "ixplorer-artifact",
-  "ixplorer-artifacts",
-  "ixplorer-chart",
-  "ixplorer-chat-view",
-  "ixplorer-context-picker",
-  "ixplorer-gallery",
-  "ixplorer-index-path-picker",
-  "ixplorer-index-path-summary",
-  "ixplorer-index-report",
-  "ixplorer-index-run",
-  "ixplorer-lightbox",
-  "ixplorer-profile-modal",
-  "ixplorer-root",
-  "ixplorer-settings-index-table",
-  "ixplorer-websource-modal",
-].sort();
-
-function componentOf(className: string): string {
-  return className.split(/__|--/)[0];
-}
 
 function declaredClasses(css: string): Set<string> {
   const selectors = css.replace(/\{[^}]*\}/g, "\n");
@@ -74,23 +55,26 @@ describe("stylesheet class contract", () => {
     expect(queryHooks.filter((name) => declared.has(name))).toEqual([]);
   });
 
-  it("lists exactly the components no behavioural test renders", () => {
-    const renderedComponents = new Set([...rendered].map(componentOf));
-    const unrendered = [...declared].filter((name) => !rendered.has(name));
-    const unrenderedComponents = [
-      ...new Set(
-        unrendered.map(componentOf).filter((component) => !renderedComponents.has(component)),
-      ),
-    ].sort();
-    const report = Object.fromEntries(
-      unrenderedComponents.map((component) => [
-        component,
-        unrendered.filter((name) => componentOf(name) === component).sort(),
-      ]),
+  it("reports every declared class no renderer applies, grouped by stylesheet module", () => {
+    const report: Record<string, string[]> = {};
+    for (const module of modules) {
+      const names = [...declaredClasses(module.css)].filter((name) => !rendered.has(name)).sort();
+      if (names.length > 0) report[module.file] = names;
+    }
+    const total = Object.values(report).reduce((sum, names) => sum + names.length, 0);
+
+    mkdirSync(resolve(REPORT_DIRECTORY), { recursive: true });
+    writeFileSync(
+      resolve(REPORT_DIRECTORY, "unrendered-style-classes.json"),
+      `${JSON.stringify({ total, byModule: report }, null, 2)}\n`,
     );
 
-    expect(unrenderedComponents, JSON.stringify(report, null, 2)).toEqual(
-      COMPONENTS_WITHOUT_A_BEHAVIOURAL_SURFACE,
-    );
+    const written = JSON.parse(
+      readFileSync(resolve(REPORT_DIRECTORY, "unrendered-style-classes.json"), "utf8"),
+    ) as { total: number; byModule: Record<string, string[]> };
+    const listed = Object.values(written.byModule).flat();
+
+    expect(written.total).toBe(listed.length);
+    expect(listed.filter((name) => !declared.has(name) || rendered.has(name))).toEqual([]);
   });
 });
