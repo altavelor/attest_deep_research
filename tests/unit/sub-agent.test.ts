@@ -359,19 +359,22 @@ describe("SubAgentRunner cancellation and budgets", () => {
     });
 
     expect(result.answerText).toBe("");
-    expect(modelRound.requests).toHaveLength(2);
+    expect(modelRound.requests).toHaveLength(1);
     expect(logs.find((entry) => entry.type === "loop-complete")).toMatchObject({
       ok: false,
       reason: "cancelled",
+    });
+    expect(logs.map((entry) => entry.type)).not.toContain("synthesis-start");
+    expect(logs.find((entry) => entry.type === "session-complete")).toMatchObject({
+      usedSynthesisFallback: false,
     });
     expect(events.map((event) => event.type)).toEqual([
       SUB_AGENT_PHASE,
       SUB_AGENT_PHASE,
       SUB_AGENT_TOOL_START,
       SUB_AGENT_TOOL_END,
-      SUB_AGENT_PHASE,
     ]);
-    expect(events.at(-1)).toMatchObject({ message: "Synthesizing evidence…" });
+    expect(events.map((event) => event.message)).not.toContain("Synthesizing evidence…");
   });
 
   it("synthesizes from evidence after the round budget is exhausted", async () => {
