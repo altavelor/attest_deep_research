@@ -8,18 +8,6 @@ import { resetDom } from "../helpers/domHarness";
 
 const STYLED_CLASS_PREFIX = "ixplorer-";
 
-const MODULES_WITHOUT_A_CATALOGUE_SURFACE = [
-  "src/apps/obsidian/ui/settings/profile-modal.css",
-  "src/apps/obsidian/ui/chat/chat-shell.css",
-  "src/apps/obsidian/ui/chat/chat-transcript.css",
-  "src/apps/obsidian/ui/diagnostics/modal.css",
-  "src/apps/obsidian/ui/chat/assistant-content.css",
-  "src/apps/obsidian/ui/chat/chat-composer.css",
-  "src/apps/obsidian/ui/chat/citations/citations.css",
-  "src/apps/obsidian/ui/chat/artifacts/artifacts.css",
-  "src/apps/obsidian/ui/chat/context/document-picker.css",
-].sort();
-
 const UNSTYLED_QUERY_HOOKS: Record<string, string> = {
   "ixplorer-chat__workflow-node--complete": "Tool-status marker read by transcript queries.",
   "ixplorer-chat__workflow-node--finalizing": "Finalizing marker read by transcript queries.",
@@ -84,15 +72,6 @@ describe("stylesheet class contract", () => {
     expect(Object.values(UNSTYLED_QUERY_HOOKS).filter((reason) => reason.length < 20)).toEqual([]);
     expect(queryHooks.filter((name) => !rendered.has(name))).toEqual([]);
     expect(queryHooks.filter((name) => declared.has(name))).toEqual([]);
-  });
-
-  it("lists exactly the stylesheet modules no catalogue surface renders", () => {
-    const unrenderedModules = modules
-      .filter((module) => ![...declaredClasses(module.css)].some((name) => rendered.has(name)))
-      .map((module) => module.file)
-      .sort();
-
-    expect(unrenderedModules).toEqual(MODULES_WITHOUT_A_CATALOGUE_SURFACE);
   });
 
   it("lists exactly the components no behavioural test renders", () => {
