@@ -103,11 +103,11 @@ work started.
 
 | Scope             | Statements | Branches | Functions | Lines  |
 | ----------------- | ---------- | -------- | --------- | ------ |
-| total             | 82.19%     | 82.16%   | 76.49%    | 82.19% |
+| total             | 82.19%     | 82.17%   | 76.49%    | 82.19% |
 | `src/core`        | 95.68%     | 88.24%   | 95.96%    | 95.68% |
 | `src/application` | 90.31%     | 83.76%   | 90.00%    | 90.31% |
-| `src/adapters`    | 88.64%     | 81.83%   | 85.63%    | 88.64% |
-| `src/apps`        | 60.65%     | 75.73%   | 50.13%    | 60.65% |
+| `src/adapters`    | 88.64%     | 81.85%   | 85.63%    | 88.64% |
+| `src/apps`        | 60.65%     | 75.75%   | 50.13%    | 60.65% |
 | `src/shared`      | 95.40%     | 91.80%   | 100.00%   | 95.40% |
 
 ### After issue #18
@@ -141,7 +141,7 @@ Branch coverage of the files the issue named, before and after:
 
 | File                                        | Before | After  |
 | ------------------------------------------- | ------ | ------ |
-| `settings/responsesCapabilityProbe.ts`      | 41.7%  | 68.75% |
+| `settings/responsesCapabilityProbe.ts`      | 41.7%  | 70.14% |
 | `core/agent/AgentLoop.ts`                   | 65.1%  | 89.55% |
 | `research/sub-agent/SubAgentRunner.ts`      | 48.1%  | 73.17% |
 | `strategies/ThinkingResearchStrategy.ts`    | 65.0%  | 66.66% |
@@ -163,8 +163,8 @@ behaviour fails CI and an unrelated change does not:
 | -------------------- | ------------ | -------- | ------ |
 | `src/core/**`        | 86           | 88.24%   | 2.24   |
 | `src/application/**` | 82           | 83.76%   | 1.76   |
-| `src/adapters/**`    | 79           | 81.83%   | 2.83   |
-| `src/apps/**`        | 73           | 75.73%   | 2.73   |
+| `src/adapters/**`    | 79           | 81.85%   | 2.85   |
+| `src/apps/**`        | 73           | 75.75%   | 2.75   |
 
 `src/apps` statements are floored at 58 against a measured 60.65%, functions at
 48 against 50.00%. The function margin is deliberately the widest in relative
