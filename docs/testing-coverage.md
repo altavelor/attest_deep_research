@@ -103,11 +103,11 @@ work started.
 
 | Scope             | Statements | Branches | Functions | Lines  |
 | ----------------- | ---------- | -------- | --------- | ------ |
-| total             | 82.20%     | 82.17%   | 76.44%    | 82.20% |
+| total             | 82.20%     | 82.17%   | 76.48%    | 82.20% |
 | `src/core`        | 95.68%     | 88.24%   | 95.96%    | 95.68% |
 | `src/application` | 90.40%     | 83.82%   | 90.00%    | 90.40% |
 | `src/adapters`    | 88.63%     | 81.83%   | 85.62%    | 88.63% |
-| `src/apps`        | 60.65%     | 75.72%   | 50.00%    | 60.65% |
+| `src/apps`        | 60.65%     | 75.73%   | 50.13%    | 60.65% |
 | `src/shared`      | 95.40%     | 91.80%   | 100.00%   | 95.40% |
 
 ### After issue #18
@@ -164,7 +164,7 @@ behaviour fails CI and an unrelated change does not:
 | `src/core/**`        | 86           | 88.24%   | 2.24   |
 | `src/application/**` | 82           | 83.82%   | 1.82   |
 | `src/adapters/**`    | 79           | 81.83%   | 2.83   |
-| `src/apps/**`        | 73           | 75.72%   | 2.72   |
+| `src/apps/**`        | 73           | 75.73%   | 2.73   |
 
 `src/apps` statements are floored at 58 against a measured 60.65%, functions at
 48 against 50.00%. The function margin is deliberately the widest in relative
