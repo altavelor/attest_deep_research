@@ -30,7 +30,22 @@ const UNSTYLED_QUERY_HOOKS: Record<string, string> = {
   "ixplorer-settings__gated-section": "Gate wrapper whose children carry the styling.",
 };
 
-const MAX_DECLARED_CLASSES_WITHOUT_A_RENDERER = 204;
+const DECLARED_CLASSES_WITHOUT_A_RENDERER: Record<string, number> = {
+  "src/apps/obsidian/ui/chat/artifacts/artifacts.css": 33,
+  "src/apps/obsidian/ui/chat/assistant-content.css": 5,
+  "src/apps/obsidian/ui/chat/chat-composer.css": 24,
+  "src/apps/obsidian/ui/chat/chat-shell.css": 9,
+  "src/apps/obsidian/ui/chat/chat-transcript.css": 20,
+  "src/apps/obsidian/ui/chat/citations/citations.css": 11,
+  "src/apps/obsidian/ui/chat/context/document-picker.css": 11,
+  "src/apps/obsidian/ui/chat/history/saved-chats.css": 4,
+  "src/apps/obsidian/ui/chat/workflow.css": 21,
+  "src/apps/obsidian/ui/diagnostics/modal.css": 6,
+  "src/apps/obsidian/ui/index/index-search.css": 1,
+  "src/apps/obsidian/ui/settings/profile-modal.css": 10,
+  "src/apps/obsidian/ui/settings/settings.css": 51,
+  "src/apps/obsidian/ui/settings/web-sources.css": 6,
+};
 
 function declaredClasses(css: string): Set<string> {
   const selectors = css.replace(/\{[^}]*\}/g, "\n");
@@ -75,9 +90,19 @@ describe("stylesheet class contract", () => {
     expect(unrenderedModules).toEqual(MODULES_WITHOUT_A_CATALOGUE_SURFACE);
   });
 
-  it("shrinks the set of declared classes no renderer applies", () => {
-    const unrendered = [...declared].filter((name) => !rendered.has(name));
+  it("names every declared class no renderer applies, per stylesheet module", () => {
+    const unrendered: Record<string, string[]> = {};
+    for (const module of modules) {
+      const names = [...declaredClasses(module.css)].filter((name) => !rendered.has(name)).sort();
+      if (names.length > 0) unrendered[module.file] = names;
+    }
 
-    expect(unrendered.length).toBeLessThanOrEqual(MAX_DECLARED_CLASSES_WITHOUT_A_RENDERER);
+    const counts = Object.fromEntries(
+      Object.entries(unrendered).map(([file, names]) => [file, names.length]),
+    );
+
+    expect(counts, JSON.stringify(unrendered, null, 2)).toEqual(
+      DECLARED_CLASSES_WITHOUT_A_RENDERER,
+    );
   });
 });
