@@ -1,4 +1,5 @@
-import type { ChatMessage } from "@core/agent";
+import type { ChatMessage, ModelOutputItem } from "@core/agent";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import {
   mapAnthropicMessages,
   mapOllamaMessage,
@@ -166,5 +167,160 @@ describe("Anthropic message mapping", () => {
     const unknown = { role: "developer", content: "hidden" } as unknown as ChatMessage;
 
     expect(mapAnthropicMessages([unknown])).toEqual([{ role: "user", content: "hidden" }]);
+  });
+
+  it("keeps every tool result of a multi-part turn and reopens an assistant turn after it", () => {
+    const interleaved: ChatMessage[] = [
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          { id: "call-1", name: "a", arguments: {} },
+          { id: "call-2", name: "b", arguments: { x: 1 } },
+          { id: "call-3", name: "c", arguments: { y: [1, 2] } },
+        ],
+      },
+      { role: "tool", content: "r1", toolCallId: "call-1" },
+      { role: "tool", content: "r2", toolCallId: "call-2" },
+      { role: "tool", content: "r3", toolCallId: "call-3" },
+      { role: "assistant", content: "Done." },
+      { role: "user", content: "Thanks." },
+    ];
+
+    const mapped = mapAnthropicMessages(interleaved);
+
+    expect(mapped.map((message) => message.role)).toEqual([
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+    ]);
+    expect((mapped[1] as { content: unknown[] }).content).toHaveLength(3);
+    expect((mapped[0] as { content: unknown[] }).content).toHaveLength(3);
+    expect(mapped[2]).toEqual({ role: "assistant", content: "Done." });
+  });
+});
+
+describe("part types the mappers do not model", () => {
+  const emptyParts: ChatMessage[] = [
+    { role: "assistant", content: "" },
+    { role: "assistant", content: "", toolCalls: [] },
+    { role: "tool", content: "", toolCallId: "" },
+    { role: "user", content: "" },
+  ];
+
+  it("keeps empty parts addressable instead of dropping the turn", () => {
+    expect(emptyParts.map(mapOpenAiMessage)).toHaveLength(4);
+    expect(emptyParts.map(mapOllamaMessage)).toHaveLength(4);
+    expect(mapAnthropicMessages(emptyParts)).toHaveLength(4);
+
+    expect(mapAnthropicMessages([{ role: "assistant", content: "", toolCalls: [] }])).toEqual([
+      { role: "assistant", content: "" },
+    ]);
+  });
+
+  it("ignores unknown fields on a message rather than forwarding them to the provider", () => {
+    const withUnknownPart = {
+      role: "assistant",
+      content: "text",
+      reasoning: "hidden chain of thought",
+      parts: [{ type: "image", url: "https://example.org/a.png" }],
+      toolCalls: [{ id: "call-1", name: "noop", arguments: {} }],
+    } as unknown as ChatMessage;
+
+    for (const mapped of [
+      mapOpenAiMessage(withUnknownPart),
+      mapOllamaMessage(withUnknownPart),
+      ...mapAnthropicMessages([withUnknownPart]),
+    ]) {
+      const serialized = JSON.stringify(mapped);
+      expect(serialized).not.toContain("hidden chain of thought");
+      expect(serialized).not.toContain("example.org");
+      expect(serialized).toContain("noop");
+    }
+  });
+
+  it("passes an unknown tool-call argument shape through without reinterpreting it", () => {
+    const message: ChatMessage = {
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        { id: "call-1", name: "odd", arguments: { nested: { list: [1, null] }, flag: false } },
+      ],
+    };
+
+    const openAi = mapOpenAiMessage(message) as {
+      tool_calls: Array<{ function: { arguments: string } }>;
+    };
+    expect(JSON.parse(openAi.tool_calls[0]!.function.arguments)).toEqual(
+      message.toolCalls![0]!.arguments,
+    );
+
+    const ollama = mapOllamaMessage(message) as {
+      tool_calls: Array<{ function: { arguments: Record<string, unknown> } }>;
+    };
+    expect(ollama.tool_calls[0]!.function.arguments).toEqual(message.toolCalls![0]!.arguments);
+
+    const anthropic = mapAnthropicMessages([message])[0] as {
+      content: Array<{ input?: Record<string, unknown> }>;
+    };
+    expect(anthropic.content[0]!.input).toEqual(message.toolCalls![0]!.arguments);
+  });
+});
+
+describe("reasoning parts across the round trip", () => {
+  async function runRound(): Promise<ModelOutputItem[]> {
+    const chatModel = {
+      listModels: async () => ["model"],
+      async *streamChat() {
+        yield {
+          content: "",
+          isComplete: false,
+          events: [
+            { type: "reasoning-start" as const, segmentId: "r1", visibility: "summary" as const },
+            { type: "reasoning-delta" as const, segmentId: "r1", text: "Secret plan" },
+            { type: "reasoning-end" as const, segmentId: "r1" },
+          ],
+        };
+        yield {
+          content: "Checking sources.",
+          isComplete: true,
+          toolCalls: [{ id: "call-1", name: "search_index", arguments: { query: "x" } }],
+        };
+      },
+    };
+    const result = await new ChatCompletionsRoundAdapter(chatModel).runRound({
+      model: "model",
+      messages: [],
+    });
+    return result.items;
+  }
+
+  it("surfaces reasoning as a separate item that never reaches a provider request", async () => {
+    const items = await runRound();
+
+    expect(items.map((item) => item.type)).toEqual(["reasoningSummary", "text", "toolCall"]);
+
+    const assistant: ChatMessage = {
+      role: "assistant",
+      content: items
+        .filter((item) => item.type === "text")
+        .map((item) => item.text)
+        .join(""),
+      toolCalls: items.filter((item) => item.type === "toolCall").map((item) => item.call),
+    };
+
+    for (const mapped of [
+      mapOpenAiMessage(assistant),
+      mapOllamaMessage(assistant),
+      ...mapAnthropicMessages([assistant]),
+    ]) {
+      const serialized = JSON.stringify(mapped);
+      expect(serialized).not.toContain("Secret plan");
+      expect(serialized).not.toContain("reasoning");
+      expect(serialized).not.toContain("thinking");
+      expect(serialized).toContain("Checking sources.");
+      expect(serialized).toContain("search_index");
+    }
   });
 });

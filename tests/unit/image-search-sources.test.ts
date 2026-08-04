@@ -421,7 +421,7 @@ describe("untrusted image provider responses", () => {
     });
   }
 
-  it("reports a truncated body as malformed rather than parsing a partial payload", async () => {
+  it("reports a truncated Openverse body as malformed rather than parsing a partial payload", async () => {
     const truncated = JSON.stringify(openverseBody).slice(0, 120);
     const fetchMock = vi
       .fn()
@@ -429,6 +429,37 @@ describe("untrusted image provider responses", () => {
 
     await expect(
       openverseSource(fetchMock as unknown as typeof fetch).searchImages("mountains"),
+    ).rejects.toThrow(/malformed/);
+  });
+
+  it("reports a truncated Commons body as malformed rather than parsing a partial payload", async () => {
+    const serialized = JSON.stringify(commonsBody);
+
+    for (const truncated of [
+      serialized.slice(0, 120),
+      serialized.slice(0, serialized.length - 4),
+    ]) {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, text: async () => truncated } as Response);
+
+      await expect(
+        commonsSource(fetchMock as unknown as typeof fetch).searchImages("cats"),
+      ).rejects.toMatchObject({
+        code: "WEB_SEARCH_FAILED",
+        message: expect.stringContaining("malformed"),
+      });
+    }
+  });
+
+  it("reports a Commons stream that ends mid-payload as malformed", async () => {
+    const serialized = JSON.stringify(commonsBody);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(streamingResponse([serialized.slice(0, 40), serialized.slice(40, 90)]));
+
+    await expect(
+      commonsSource(fetchMock as unknown as typeof fetch).searchImages("cats"),
     ).rejects.toThrow(/malformed/);
   });
 
