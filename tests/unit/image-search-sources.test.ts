@@ -381,3 +381,119 @@ describe("image source registry", () => {
     expect(disabled).toEqual([]);
   });
 });
+
+describe("untrusted image provider responses", () => {
+  function errorResponse(status: number): Response {
+    return { ok: false, status, text: async () => "" } as Response;
+  }
+
+  function commonsSource(fetchMock: typeof fetch): WikimediaCommonsImageSource {
+    return new WikimediaCommonsImageSource(findWebSourceDescriptor(WIKIMEDIA_COMMONS_SOURCE_ID)!, {
+      fetch: fetchMock,
+    });
+  }
+
+  function openverseSource(fetchMock: typeof fetch): OpenverseImageSource {
+    return new OpenverseImageSource(
+      findWebSourceDescriptor(OPENVERSE_SOURCE_ID)!,
+      {},
+      { fetch: fetchMock },
+    );
+  }
+
+  for (const status of [429, 500, 503]) {
+    it(`reports HTTP ${status} as a failure instead of an empty result set`, async () => {
+      const commonsFetch = vi.fn().mockResolvedValue(errorResponse(status));
+      await expect(
+        commonsSource(commonsFetch as unknown as typeof fetch).searchImages("cats"),
+      ).rejects.toMatchObject({
+        code: "WEB_SEARCH_FAILED",
+        message: expect.stringContaining(String(status)),
+      });
+
+      const openverseFetch = vi.fn().mockResolvedValue(errorResponse(status));
+      await expect(
+        openverseSource(openverseFetch as unknown as typeof fetch).searchImages("cats"),
+      ).rejects.toMatchObject({
+        code: "WEB_SEARCH_FAILED",
+        message: expect.stringContaining(String(status)),
+      });
+    });
+  }
+
+  it("reports a truncated body as malformed rather than parsing a partial payload", async () => {
+    const truncated = JSON.stringify(openverseBody).slice(0, 120);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => truncated } as Response);
+
+    await expect(
+      openverseSource(fetchMock as unknown as typeof fetch).searchImages("mountains"),
+    ).rejects.toThrow(/malformed/);
+  });
+
+  it("yields no candidates for JSON of the wrong shape", () => {
+    expect(parseOpenversePayload(null)).toEqual([]);
+    expect(parseOpenversePayload("results")).toEqual([]);
+    expect(parseOpenversePayload({ results: "not-a-list" })).toEqual([]);
+    expect(parseOpenversePayload({ results: [42, null, "x"] })).toEqual([]);
+
+    expect(parseCommonsPayload(null)).toEqual([]);
+    expect(parseCommonsPayload([{ query: {} }])).toEqual([]);
+    expect(parseCommonsPayload({ query: { pages: { "0": {} } } })).toEqual([]);
+    expect(parseCommonsPayload({ query: { pages: [7] } })).toEqual([]);
+  });
+
+  it("yields no candidates for an empty result array", async () => {
+    expect(parseOpenversePayload({ results: [] })).toEqual([]);
+    expect(parseCommonsPayload({ query: { pages: [] } })).toEqual([]);
+
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results: [] }));
+    await expect(
+      openverseSource(fetchMock as unknown as typeof fetch).searchImages("mountains"),
+    ).resolves.toEqual([]);
+  });
+
+  it("drops Openverse results missing a required field", () => {
+    const complete = openverseBody.results[0]!;
+    for (const missing of ["id", "url", "foreign_landing_url"] as const) {
+      const entry: Record<string, unknown> = { ...complete };
+      delete entry[missing];
+      expect(parseOpenversePayload({ results: [entry] })).toEqual([]);
+    }
+
+    expect(
+      parseOpenversePayload({ results: [{ ...complete, url: "https://example.org/photo" }] }),
+    ).toEqual([]);
+    const wrongTypedSize = parseOpenversePayload({
+      results: [{ ...complete, width: "2000", height: null }],
+    });
+    expect(wrongTypedSize).toHaveLength(1);
+    expect(wrongTypedSize[0]).not.toHaveProperty("width");
+    expect(wrongTypedSize[0]).not.toHaveProperty("height");
+  });
+
+  it("drops Commons pages missing a required field", () => {
+    const page = commonsBody.query.pages[0]!;
+    const info = page.imageinfo[0]!;
+    for (const missing of ["url", "descriptionurl"] as const) {
+      const partial: Record<string, unknown> = { ...info };
+      delete partial[missing];
+      expect(
+        parseCommonsPayload({ query: { pages: [{ ...page, imageinfo: [partial] }] } }),
+      ).toEqual([]);
+    }
+
+    expect(
+      parseCommonsPayload({
+        query: { pages: [{ ...page, imageinfo: [{ ...info, mime: "text/html", url: "a/b" }] }] },
+      }),
+    ).toEqual([]);
+    const wrongTypedSize = parseCommonsPayload({
+      query: { pages: [{ ...page, imageinfo: [{ ...info, width: null, height: "800" }] }] },
+    });
+    expect(wrongTypedSize).toHaveLength(1);
+    expect(wrongTypedSize[0]).not.toHaveProperty("width");
+    expect(wrongTypedSize[0]).not.toHaveProperty("height");
+  });
+});
