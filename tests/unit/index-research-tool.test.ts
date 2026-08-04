@@ -1,6 +1,7 @@
 import { IndexResearchTool } from "@adapters/research-tools/index/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
+import { IxplorerError } from "@core/errors";
 import { ResearchRetriever } from "@application/contracts";
 import { markdownSource, retrieved } from "../helpers/factories";
 
@@ -79,6 +80,97 @@ describe("IndexResearchTool", () => {
         message: "Index search failed.",
         retryable: true,
       },
+    });
+  });
+
+  it("rejects an empty or blank query before reaching the retriever", async () => {
+    const retriever: ResearchRetriever = { search: vi.fn() };
+    const tool = new IndexResearchTool({ retriever, evidence: new ResearchEvidenceRegistry() });
+
+    for (const query of ["", "   ", "\n\t", 42, null, undefined]) {
+      await expect(
+        executeTool(tool, {
+          id: "call-empty-query",
+          name: "search_index",
+          arguments: { query },
+        }),
+      ).resolves.toMatchObject({ ok: false, error: { code: "missing-query" } });
+    }
+    expect(retriever.search).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed scoping arguments without calling the retriever", async () => {
+    const retriever: ResearchRetriever = { search: vi.fn() };
+    const tool = new IndexResearchTool({ retriever, evidence: new ResearchEvidenceRegistry() });
+
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ query: "q", sourcePath: 7 }, "invalid-source-path"],
+      [{ query: "q", sourcePath: "x".repeat(501) }, "invalid-source-path"],
+      [{ query: "q", language: 7 }, "invalid-language"],
+      [{ query: "q", language: "x".repeat(41) }, "invalid-language"],
+      [{ query: "q", diversify: "yes" }, "invalid-diversify"],
+      [{ query: "q", limit: 1.5 }, "invalid-limit"],
+      [{ query: "x".repeat(241) }, "query-too-long"],
+      [{ query: "q", unexpected: true }, "unknown-property"],
+    ];
+
+    for (const [args, code] of cases) {
+      await expect(
+        executeTool(tool, { id: "call-invalid", name: "search_index", arguments: args }),
+      ).resolves.toMatchObject({ ok: false, error: { code } });
+    }
+    expect(retriever.search).not.toHaveBeenCalled();
+  });
+
+  it("hides the failure detail when the selected index is missing", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockRejectedValue(
+        new IxplorerError({
+          code: "INDEX_UNAVAILABLE",
+          message: "No index at /Users/someone/vault/.ixplorer.",
+        }),
+      ),
+    };
+    const tool = new IndexResearchTool({ retriever, evidence: new ResearchEvidenceRegistry() });
+
+    const execution = await executeTool(tool, {
+      id: "call-missing-index",
+      name: "search_index",
+      arguments: { query: "research" },
+    });
+
+    expect(execution).toMatchObject({
+      ok: false,
+      error: { code: "index-search-failed", retryable: true },
+    });
+    expect(JSON.stringify(execution)).not.toContain("/Users/someone");
+  });
+
+  it("reports a degraded semantic search as a diagnostic rather than a failure", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({
+        chunks: [retrieved("chunk-a", markdownSource("Notes/A.md"), "First result")],
+        citations: [],
+        usedFallback: true,
+        semanticError: "embedding model unavailable",
+      }),
+    };
+    const tool = new IndexResearchTool({
+      retriever,
+      evidence: new ResearchEvidenceRegistry(),
+    });
+
+    await expect(
+      executeTool(tool, { id: "call-degraded", name: "search_index", arguments: { query: "q" } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        diagnostics: {
+          usedKeywordFallback: true,
+          semanticError: "embedding model unavailable",
+        },
+      },
+      diagnostic: { usedKeywordFallback: true, semanticError: "embedding model unavailable" },
     });
   });
 });
