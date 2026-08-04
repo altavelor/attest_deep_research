@@ -103,10 +103,10 @@ work started.
 
 | Scope             | Statements | Branches | Functions | Lines  |
 | ----------------- | ---------- | -------- | --------- | ------ |
-| total             | 82.20%     | 82.17%   | 76.48%    | 82.20% |
+| total             | 82.19%     | 82.16%   | 76.49%    | 82.19% |
 | `src/core`        | 95.68%     | 88.24%   | 95.96%    | 95.68% |
-| `src/application` | 90.40%     | 83.82%   | 90.00%    | 90.40% |
-| `src/adapters`    | 88.63%     | 81.83%   | 85.62%    | 88.63% |
+| `src/application` | 90.31%     | 83.76%   | 90.00%    | 90.31% |
+| `src/adapters`    | 88.64%     | 81.83%   | 85.63%    | 88.64% |
 | `src/apps`        | 60.65%     | 75.73%   | 50.13%    | 60.65% |
 | `src/shared`      | 95.40%     | 91.80%   | 100.00%   | 95.40% |
 
@@ -141,9 +141,9 @@ Branch coverage of the files the issue named, before and after:
 
 | File                                        | Before | After  |
 | ------------------------------------------- | ------ | ------ |
-| `settings/responsesCapabilityProbe.ts`      | 41.7%  | 68.25% |
+| `settings/responsesCapabilityProbe.ts`      | 41.7%  | 68.75% |
 | `core/agent/AgentLoop.ts`                   | 65.1%  | 89.55% |
-| `research/sub-agent/SubAgentRunner.ts`      | 48.1%  | 75.60% |
+| `research/sub-agent/SubAgentRunner.ts`      | 48.1%  | 73.17% |
 | `strategies/ThinkingResearchStrategy.ts`    | 65.0%  | 66.66% |
 | `research-tools/index/IndexResearchTool.ts` | 36.1%  | 66.0%  |
 | `web/images/OpenverseImageSource.ts`        | 51.6%  | 70.3%  |
@@ -162,7 +162,7 @@ behaviour fails CI and an unrelated change does not:
 | Glob                 | Branch floor | Measured | Margin |
 | -------------------- | ------------ | -------- | ------ |
 | `src/core/**`        | 86           | 88.24%   | 2.24   |
-| `src/application/**` | 82           | 83.82%   | 1.82   |
+| `src/application/**` | 82           | 83.76%   | 1.76   |
 | `src/adapters/**`    | 79           | 81.83%   | 2.83   |
 | `src/apps/**`        | 73           | 75.73%   | 2.73   |
 
