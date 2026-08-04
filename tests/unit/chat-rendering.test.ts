@@ -15,7 +15,6 @@ import {
 } from "@core/conversation";
 import {
   citationTarget,
-  formatIndexControlSummary,
   formatIndexingStatus,
   formatProgressPercent,
   messageDisplayContent,
@@ -104,38 +103,7 @@ describe("chat rendering helpers", () => {
     ).toBe("Paused · no completed index run");
   });
 
-  it("formats index control summary and progress values", () => {
-    expect(
-      formatIndexControlSummary({
-        status: "stale",
-        scannedFiles: 12,
-        totalFiles: 12,
-        progress: 1,
-        indexedFiles: 3,
-        skippedFiles: 9,
-        embeddedChunks: 42,
-        deferredFiles: 0,
-        failedFiles: 0,
-        indexSizeBytes: 42 * 1024,
-        lastIndexedAt: "2026-05-16T00:00:00.000Z",
-        isStale: true,
-      }),
-    ).toBe("Rebuild needed · 3 files · 42 KB · May 16, 2026");
-    expect(
-      formatIndexControlSummary({
-        status: "error",
-        scannedFiles: 1,
-        totalFiles: 2,
-        progress: 0.5,
-        indexedFiles: 0,
-        skippedFiles: 0,
-        embeddedChunks: 0,
-        deferredFiles: 0,
-        failedFiles: 0,
-        isStale: false,
-        errorMessage: "Embedding provider unavailable",
-      }),
-    ).toBe("Indexing failed · Embedding provider unavailable");
+  it("formats progress values", () => {
     expect(formatProgressPercent(0.425)).toBe("43%");
   });
 

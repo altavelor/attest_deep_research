@@ -54,7 +54,6 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   webSources: [],
-  showChatIndexControl: true,
   includeActiveFileContext: true,
   useLinkedNotes: true,
   includeBacklinks: true,

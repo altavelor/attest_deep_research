@@ -39,8 +39,7 @@
   }
 }
 
-.ixplorer-chat .is-hidden,
-.ixplorer-index-control.is-hidden {
+.ixplorer-chat .is-hidden {
   display: none;
 }
 
@@ -142,12 +141,6 @@
 .ixplorer-settings__text-input {
   min-width: min(16rem, 100%);
   flex: 1 1 16rem;
-}
-
-.ixplorer-model-dropdown .ixplorer-settings__text-input,
-.ixplorer-model-dropdown .ixplorer-chat__model-input {
-  width: 100%;
-  padding-inline-end: 2.5rem;
 }
 
 .ixplorer-settings__text-input::placeholder {
