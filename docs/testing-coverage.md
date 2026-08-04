@@ -51,23 +51,29 @@ After the behavioural UI tests landed (1227 tests):
 
 ## Thresholds
 
-Non-regression thresholds are enabled for the two inward layers only, aggregated
-per glob, never per file. Each value sits a few points below the measured
+Non-regression thresholds are enabled for every layer, aggregated per glob,
+never per file. Each value sits a few points below the measured
 baseline so unrelated refactors do not fail CI on rounding, while a real drop in
 exercised behaviour does.
 
 | Glob                 | Statements | Branches | Functions | Lines |
 | -------------------- | ---------- | -------- | --------- | ----- |
-| `src/core/**`        | 90         | 83       | 90        | 90    |
-| `src/application/**` | 86         | 79       | 86        | 86    |
-| `src/adapters/**`    | 84         | 76       | 84        | 84    |
+| `src/core/**`        | 90         | 86       | 90        | 90    |
+| `src/application/**` | 86         | 82       | 86        | 86    |
+| `src/adapters/**`    | 84         | 79       | 84        | 84    |
+| `src/apps/**`        | 58         | 73       | 48        | 58    |
 
-`src/adapters/**` sits about three points below its measured 87.47% statements
-and 79.43% branches. Its branch floor of 76 is also at or below the 76.39%
-measured before the error-branch tests landed, so the threshold encodes the gain
-without depending on it. `src/apps` stays unthresholded: issue #18 asks only for
-the `src/adapters` floor. Now that its executable tests have taken it to 56.90%
-statements, a floor for `src/apps` is worth adding as a follow-up.
+The branch floors were raised by issue #30 once the cancellation, untrusted-input,
+and UI failure-path tests landed; see Failure-path coverage below for the
+measured values each floor sits under. Statement, function, and line floors are
+unchanged for the three inward layers: that work targeted branches, and leaving
+the other floors where they were keeps the gate on the axis the tests moved.
+
+`src/apps` is thresholded for the first time. Its floors sit two to three points
+below measurement rather than the wider margin used inward, because `src/apps`
+moves in larger steps: exercising one more view adds both covered statements and
+undiscovered nested functions. The function floor of 48 is the loosest of the
+four for that reason.
 
 Branch coverage is the figure to watch: error paths, fallbacks, and cancellation
 branches are where an untested regression actually hides. Coverage proves code
@@ -91,9 +97,20 @@ once more paths execute):
 
 ## Current figures
 
-Measured on the merged tree once every issue #18 test suite had landed.
-This table supersedes the baseline tables above, which are kept as the record of
-where the work started.
+Measured on the merged tree once every issue #30 test suite had landed. This
+table supersedes every table above, which are kept as the record of where the
+work started.
+
+| Scope             | Statements | Branches | Functions | Lines  |
+| ----------------- | ---------- | -------- | --------- | ------ |
+| total             | 82.20%     | 82.17%   | 76.44%    | 82.20% |
+| `src/core`        | 95.68%     | 88.24%   | 95.96%    | 95.68% |
+| `src/application` | 90.40%     | 83.82%   | 90.00%    | 90.40% |
+| `src/adapters`    | 88.63%     | 81.83%   | 85.62%    | 88.63% |
+| `src/apps`        | 60.65%     | 75.72%   | 50.00%    | 60.65% |
+| `src/shared`      | 95.40%     | 91.80%   | 100.00%   | 95.40% |
+
+### After issue #18
 
 | Scope             | Statements | Branches | Functions | Lines  |
 | ----------------- | ---------- | -------- | --------- | ------ |
@@ -109,6 +126,56 @@ where the work started.
 module's nested functions once that module executes, so exercising the chat,
 composer, and settings modules added far more functions to the denominator than
 the tests call directly. Read the statement and branch columns for progress here.
+
+## Failure-path coverage (issue #30)
+
+Statement coverage had run ahead of branch coverage by 8 to 16 points, and the
+gap sat on exactly one kind of code: error handling, cancellation, and malformed
+external input. Four test suites closed it, and the source-text contracts that
+had stood in for behaviour were replaced by executable DOM tests — one of them
+was green only because an unfinished removal had left `IndexControl.ts`,
+`ModelDropdown.ts`, and the `showChatIndexControl` setting unreachable. Those
+were deleted; a settings file that still carries the field loads and ignores it.
+
+Branch coverage of the files the issue named, before and after:
+
+| File                                        | Before | After  |
+| ------------------------------------------- | ------ | ------ |
+| `settings/responsesCapabilityProbe.ts`      | 41.7%  | 68.25% |
+| `core/agent/AgentLoop.ts`                   | 65.1%  | 89.55% |
+| `research/sub-agent/SubAgentRunner.ts`      | 48.1%  | 75.60% |
+| `strategies/ThinkingResearchStrategy.ts`    | 65.0%  | 66.66% |
+| `research-tools/index/IndexResearchTool.ts` | 36.1%  | 66.0%  |
+| `web/images/OpenverseImageSource.ts`        | 51.6%  | 70.3%  |
+| `web/images/WikimediaCommonsImageSource.ts` | 62.5%  | 68.8%  |
+| `web/sources/serpSources.ts`                | 63.6%  | 100%   |
+| `web/sources/neuralSources.ts`              | 62.5%  | 100%   |
+| `indexing/store/FileVectorIndexFormat.ts`   | 67.2%  | 80.2%  |
+| `chat/providers/messageMappers.ts`          | 60.7%  | 97.2%  |
+
+### Why the thresholds sit where they do
+
+Each floor is set at the largest round value that stays under the measured
+figure with room for the rounding a refactor causes, so a real loss of exercised
+behaviour fails CI and an unrelated change does not:
+
+| Glob                 | Branch floor | Measured | Margin |
+| -------------------- | ------------ | -------- | ------ |
+| `src/core/**`        | 86           | 88.24%   | 2.24   |
+| `src/application/**` | 82           | 83.82%   | 1.82   |
+| `src/adapters/**`    | 79           | 81.83%   | 2.83   |
+| `src/apps/**`        | 73           | 75.72%   | 2.72   |
+
+`src/apps` statements are floored at 58 against a measured 60.65%, functions at
+48 against 50.00%. The function margin is deliberately the widest in relative
+terms: V8 discovers a module's nested functions only once that module executes,
+so a test that exercises one more view can lower the function percentage while
+raising every other column.
+
+The residual uncovered branches are not failure paths. What remains in the image
+sources is licence and attribution formatting; in `ThinkingResearchStrategy` it
+is optional dependencies — context assembler, note tools, document search,
+persistence, nested sub-agents — whose own paths are covered where they live.
 
 ## Coverage report in a pull request
 
