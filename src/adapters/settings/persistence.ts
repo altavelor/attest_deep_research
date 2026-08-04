@@ -13,8 +13,14 @@ export function readSettings(savedData: unknown): IxplorerSettings {
 }
 
 function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
-  const { forceEagerResearch: _ignoredLegacyForceEagerResearch, ...currentSettings } =
-    settings as IxplorerSettings & { forceEagerResearch?: unknown };
+  const {
+    forceEagerResearch: _ignoredLegacyForceEagerResearch,
+    showChatIndexControl: _ignoredLegacyShowChatIndexControl,
+    ...currentSettings
+  } = settings as IxplorerSettings & {
+    forceEagerResearch?: unknown;
+    showChatIndexControl?: unknown;
+  };
 
   return {
     ...currentSettings,
@@ -74,7 +80,6 @@ function isCurrentSettings(value: unknown): value is IxplorerSettings {
     Array.isArray(settings.indexProfiles) &&
     Array.isArray(settings.includeFolders) &&
     Array.isArray(settings.excludeGlobs) &&
-    typeof settings.showChatIndexControl === "boolean" &&
     typeof settings.includeActiveFileContext === "boolean" &&
     typeof settings.useLinkedNotes === "boolean" &&
     typeof settings.includeBacklinks === "boolean" &&

@@ -153,3 +153,41 @@ describe("index search panel warnings", () => {
     expect(searchIndex).not.toHaveBeenCalled();
   });
 });
+
+describe("index search panel accessibility roles", () => {
+  it("marks the warning region as an alert", () => {
+    const { controller } = createController({
+      getEmbedderWarning: () => "Embedder is missing.",
+    });
+
+    controller.render(container);
+
+    const warning = container.querySelector<HTMLElement>(".ixplorer-index-search__warning");
+    expect(warning?.getAttribute("role")).toBe("alert");
+    expect(warning?.textContent).toBe("Embedder is missing.");
+  });
+
+  it("marks the results container as a list and its results as list items", async () => {
+    const { controller } = createController();
+    controller.render(container);
+
+    const results = container.querySelector<HTMLElement>(".ixplorer-index-search__results");
+    expect(results?.getAttribute("role")).toBe("list");
+
+    const refs = panelRefs(container);
+    refs.query.value = "matched";
+    refs.submit();
+    await vi.waitFor(() => {
+      if (!container.querySelector(".ixplorer-index-search__result")) {
+        throw new Error("No result rendered yet.");
+      }
+    });
+
+    const items = Array.from(
+      container.querySelectorAll<HTMLElement>(".ixplorer-index-search__result"),
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.getAttribute("role")).toBe("listitem");
+    expect(items[0]?.parentElement?.getAttribute("role")).toBe("list");
+  });
+});

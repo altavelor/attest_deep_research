@@ -99,6 +99,25 @@ describe("Ixplorer settings", () => {
     expect(settings).not.toHaveProperty("forceEagerResearch");
   });
 
+  it("loads settings saved with the removed showChatIndexControl key and drops it", () => {
+    const savedWithRemovedKey = {
+      ...currentSettings(),
+      showChatIndexControl: true,
+    };
+
+    const settings = readSettings(savedWithRemovedKey);
+
+    expect(settings).toEqual(DEFAULT_SETTINGS);
+    expect(settings).not.toHaveProperty("showChatIndexControl");
+  });
+
+  it("loads settings saved without the removed showChatIndexControl key", () => {
+    const settings = readSettings(currentSettings({ debugMode: true }));
+
+    expect(settings.debugMode).toBe(true);
+    expect(settings).not.toHaveProperty("showChatIndexControl");
+  });
+
   it("defaults query expansion on for settings saved before it became toggleable", () => {
     const { expandSearchQuery: _omitted, ...withoutFlag } = currentSettings();
 

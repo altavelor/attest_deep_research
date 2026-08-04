@@ -1,5 +1,4 @@
 import { IndexingState } from "@adapters/indexing";
-import { formatIndexSize } from "@adapters/indexing";
 import { Citation } from "@core/model";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
@@ -33,24 +32,6 @@ export function formatIndexingStateLabel(state: IndexingState): string {
   }
 
   return state.status[0].toUpperCase() + state.status.slice(1);
-}
-
-export function formatIndexControlSummary(state?: IndexingState): string {
-  if (!state) {
-    return "Index status unavailable";
-  }
-
-  const lastRun = state.lastIndexedAt ? formatDate(state.lastIndexedAt) : "Never indexed";
-
-  if (state.status === "error") {
-    return state.errorMessage
-      ? `Indexing failed · ${state.errorMessage}`
-      : `Indexing failed · ${lastRun}`;
-  }
-
-  return `${formatIndexingStateLabel(state)} · ${state.indexedFiles} files · ${formatIndexSize(
-    state.indexSizeBytes ?? 0,
-  )} · ${lastRun}`;
 }
 
 export function formatProgressPercent(progress: number): string {

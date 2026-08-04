@@ -282,10 +282,6 @@
   content: "";
 }
 
-.ixplorer-chat__model-row .ixplorer-model-dropdown__menu {
-  width: 100%;
-}
-
 .ixplorer-chat__attachments {
   display: flex;
   min-width: 0;
