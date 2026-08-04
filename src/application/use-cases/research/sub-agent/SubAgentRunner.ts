@@ -143,7 +143,8 @@ export class SubAgentRunner implements SubAgentPort {
     });
 
     const snapshot = created.evidence.snapshot();
-    const usedSynthesisFallback = !answerText.trim() || looksLikeLeakedToolCall(answerText);
+    const usedSynthesisFallback =
+      !input.signal?.aborted && (!answerText.trim() || looksLikeLeakedToolCall(answerText));
     if (usedSynthesisFallback) {
       emit?.({ type: SUB_AGENT_PHASE, message: "Synthesizing evidence…" });
       answerText = await this.synthesizeFromEvidence(input, snapshot, log);
