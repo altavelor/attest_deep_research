@@ -98,7 +98,6 @@ export interface IxplorerSettings {
   includeFolders: string[];
   excludeGlobs: string[];
   webSources: WebSourceProfile[];
-  showChatIndexControl: boolean;
   includeActiveFileContext: boolean;
   useLinkedNotes: boolean;
   includeBacklinks: boolean;

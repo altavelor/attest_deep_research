@@ -35,6 +35,15 @@ module.exports = {
       to: { path: "^src/(adapters|apps)/" },
     },
     {
+      name: "workflow-renderer-standalone",
+      comment:
+        "Рендерер workflow не должен зависеть от ChatTranscript: он получает узкий WorkflowRenderContext, " +
+        "а не опции транскрипта (AGENTS.md, «Layer patterns»).",
+      severity: "error",
+      from: { path: "^src/apps/obsidian/ui/chat/(workflowRenderer\\.ts|workflow/)" },
+      to: { path: "^src/apps/obsidian/ui/chat/ChatTranscript\\.ts$" },
+    },
+    {
       name: "adapters-no-apps",
       comment: "adapters → apps запрещено (AGENTS.md §1).",
       severity: "error",
