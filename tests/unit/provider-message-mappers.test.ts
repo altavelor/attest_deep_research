@@ -1,0 +1,170 @@
+import type { ChatMessage } from "@core/agent";
+import {
+  mapAnthropicMessages,
+  mapOllamaMessage,
+  mapOpenAiMessage,
+} from "@adapters/model-provider/chat/providers/messageMappers";
+
+const conversation: ChatMessage[] = [
+  { role: "system", content: "You are a research agent." },
+  { role: "user", content: "Which notes mention tool loops?" },
+  {
+    role: "assistant",
+    content: "Searching the index.",
+    toolCalls: [
+      { id: "call-1", name: "search_index", arguments: { query: "tool loops", limit: 2 } },
+      { id: "call-2", name: "search_index", arguments: { query: "agent loop" } },
+    ],
+  },
+  { role: "tool", content: '{"results":[]}', toolCallId: "call-1" },
+  { role: "tool", content: '{"results":["a"]}', toolCallId: "call-2" },
+  { role: "assistant", content: "Nothing relevant." },
+];
+
+describe("OpenAI message mapping", () => {
+  it("round-trips tool calls with JSON-encoded arguments", () => {
+    const mapped = conversation.map(mapOpenAiMessage);
+    const assistant = mapped[2] as {
+      tool_calls: Array<{
+        id: string;
+        type: string;
+        function: { name: string; arguments: string };
+      }>;
+    };
+
+    expect(assistant.tool_calls.map((call) => call.id)).toEqual(["call-1", "call-2"]);
+    expect(assistant.tool_calls.every((call) => call.type === "function")).toBe(true);
+    expect(
+      assistant.tool_calls.map((call) => ({
+        id: call.id,
+        name: call.function.name,
+        arguments: JSON.parse(call.function.arguments) as unknown,
+      })),
+    ).toEqual(conversation[2]!.toolCalls);
+
+    expect(mapped[3]).toEqual({
+      role: "tool",
+      content: '{"results":[]}',
+      tool_call_id: "call-1",
+    });
+    expect(mapped[0]).toEqual({ role: "system", content: "You are a research agent." });
+  });
+
+  it("sends null content for a tool-only assistant turn and keeps an empty tool list plain", () => {
+    expect(
+      mapOpenAiMessage({
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "call-1", name: "noop", arguments: {} }],
+      }),
+    ).toMatchObject({ content: null });
+
+    expect(mapOpenAiMessage({ role: "assistant", content: "", toolCalls: [] })).toEqual({
+      role: "assistant",
+      content: "",
+    });
+  });
+
+  it("passes a tool result without a call id through without inventing one", () => {
+    expect(mapOpenAiMessage({ role: "tool", content: "{}" })).toEqual({
+      role: "tool",
+      content: "{}",
+      tool_call_id: undefined,
+    });
+  });
+});
+
+describe("Ollama message mapping", () => {
+  it("round-trips tool calls with structured arguments and no call id", () => {
+    const mapped = conversation.map(mapOllamaMessage);
+    const assistant = mapped[2] as {
+      content: string;
+      tool_calls: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
+    };
+
+    expect(assistant.content).toBe("Searching the index.");
+    expect(assistant.tool_calls.map((call) => call.function)).toEqual([
+      { name: "search_index", arguments: { query: "tool loops", limit: 2 } },
+      { name: "search_index", arguments: { query: "agent loop" } },
+    ]);
+    expect(mapped[4]).toEqual({
+      role: "tool",
+      content: '{"results":["a"]}',
+      tool_call_id: "call-2",
+    });
+  });
+
+  it("keeps empty assistant content as a string rather than null", () => {
+    expect(
+      mapOllamaMessage({
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "call-1", name: "noop", arguments: {} }],
+      }),
+    ).toMatchObject({ content: "" });
+  });
+});
+
+describe("Anthropic message mapping", () => {
+  it("round-trips tool calls as multi-part content and merges consecutive results", () => {
+    const mapped = mapAnthropicMessages(conversation);
+
+    expect(mapped.map((message) => message.role)).toEqual([
+      "user",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+
+    const assistant = mapped[2] as { content: Array<Record<string, unknown>> };
+    expect(assistant.content[0]).toEqual({ type: "text", text: "Searching the index." });
+    expect(assistant.content.slice(1)).toEqual([
+      {
+        type: "tool_use",
+        id: "call-1",
+        name: "search_index",
+        input: { query: "tool loops", limit: 2 },
+      },
+      { type: "tool_use", id: "call-2", name: "search_index", input: { query: "agent loop" } },
+    ]);
+
+    const results = mapped[3] as { content: Array<Record<string, unknown>> };
+    expect(results.content).toEqual([
+      { type: "tool_result", tool_use_id: "call-1", content: '{"results":[]}' },
+      { type: "tool_result", tool_use_id: "call-2", content: '{"results":["a"]}' },
+    ]);
+  });
+
+  it("omits the text part when a tool-calling turn carries no text", () => {
+    const [mapped] = mapAnthropicMessages([
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "call-1", name: "noop", arguments: {} }],
+      },
+    ]);
+    const content = (mapped as { content: Array<Record<string, unknown>> }).content;
+
+    expect(content).toEqual([{ type: "tool_use", id: "call-1", name: "noop", input: {} }]);
+  });
+
+  it("maps a trailing tool result and an empty conversation without losing turns", () => {
+    expect(mapAnthropicMessages([])).toEqual([]);
+
+    expect(mapAnthropicMessages([{ role: "tool", content: "late", toolCallId: "call-9" }])).toEqual(
+      [
+        {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "call-9", content: "late" }],
+        },
+      ],
+    );
+  });
+
+  it("treats an unknown role as a user turn instead of forwarding it verbatim", () => {
+    const unknown = { role: "developer", content: "hidden" } as unknown as ChatMessage;
+
+    expect(mapAnthropicMessages([unknown])).toEqual([{ role: "user", content: "hidden" }]);
+  });
+});
