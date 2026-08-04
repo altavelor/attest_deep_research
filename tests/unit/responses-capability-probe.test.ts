@@ -148,6 +148,30 @@ describe("Responses capability probe cancellation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("preserves the failure reason of the attempt that ran before the cancellation", async () => {
+    const controller = new AbortController();
+    const { fetchMock, state } = abortingFetch({
+      responses: [() => completionRound("1"), () => completionRound("2")],
+      abortAfterCall: 1,
+      controller,
+    });
+
+    const error = await probeResponsesCapabilities({
+      server: probeServer(),
+      model: "gpt-5",
+      efforts: ["medium", "low"],
+      fetch: fetchMock as unknown as typeof fetch,
+      signal: controller.signal,
+    }).then(
+      () => undefined,
+      (thrown: unknown) => thrown as DOMException & { failureReason?: string },
+    );
+
+    expect(error?.name).toBe("AbortError");
+    expect(error?.failureReason).toBe("Responses probe did not receive the required tool call.");
+    expect(state.networkCalls).toBe(1);
+  });
+
   it("keeps the earliest failure reason when a later attempt reports none", async () => {
     const responses = [
       () => completionRound("1"),
