@@ -91,6 +91,7 @@ describe("Responses capability probe cancellation", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(state.networkCalls).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("stops issuing requests when cancelled between two effort attempts", async () => {
@@ -117,6 +118,7 @@ describe("Responses capability probe cancellation", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(state.networkCalls).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("stops issuing requests when cancelled after the final summary attempt", async () => {
@@ -143,6 +145,7 @@ describe("Responses capability probe cancellation", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(state.networkCalls).toBe(4);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("keeps the earliest failure reason when a later attempt reports none", async () => {

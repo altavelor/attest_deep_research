@@ -131,11 +131,25 @@ describe("ThinkingResearchStrategy failure paths", () => {
     expect(modelRound.requests).toHaveLength(1);
   });
 
-  it("returns a failed outcome with an empty answer when synthesis fails", async () => {
-    const modelRound = scriptedRounds(() => ({ items: [], stopReason: "error" as const }));
+  it("returns a failed outcome with an empty answer when answer synthesis fails", async () => {
+    const modelRound = scriptedRounds((_request, index) =>
+      index === 1
+        ? {
+            items: [
+              {
+                type: "toolCall" as const,
+                call: { id: "1", name: "search_index", arguments: { query: "x" } },
+              },
+            ],
+            stopReason: "tool_calls" as const,
+          }
+        : { items: [], stopReason: "error" as const },
+    );
 
     const { events, outcome } = await drain(strategy(modelRound).execute(context()));
 
+    expect(modelRound.requests).toHaveLength(2);
+    expect(events.find((event) => event.type === "tool-call-end")).toMatchObject({ ok: true });
     expect(outcome).toMatchObject({
       kind: "failed",
       failure: { ok: false, reason: "provider-error" },
