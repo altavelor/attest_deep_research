@@ -104,6 +104,7 @@ export default class IxplorerPlugin extends Plugin {
       profile.indexedFileCount = state.indexedFiles + state.skippedFiles;
       profile.indexSizeBytes = state.indexSizeBytes;
       profile.updatedAt = new Date().toISOString();
+      this.warmCaches?.invalidateLanguageInventory();
       await this.saveSettings();
     },
   });
@@ -139,10 +140,10 @@ export default class IxplorerPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
-    const invalidateWarmCaches = () => this.warmCaches?.invalidate();
-    this.registerEvent(this.app.vault.on("create", invalidateWarmCaches));
-    this.registerEvent(this.app.vault.on("delete", invalidateWarmCaches));
-    this.registerEvent(this.app.vault.on("rename", invalidateWarmCaches));
+    const invalidateWarmPaths = () => this.warmCaches?.invalidatePaths();
+    this.registerEvent(this.app.vault.on("create", invalidateWarmPaths));
+    this.registerEvent(this.app.vault.on("delete", invalidateWarmPaths));
+    this.registerEvent(this.app.vault.on("rename", invalidateWarmPaths));
     const startupIndexProfile = getActiveIndexProfile(this.settings);
     if (startupIndexProfile.isSuspended !== true) {
       void this.indexing.refreshIndexSize(startupIndexProfile.id);

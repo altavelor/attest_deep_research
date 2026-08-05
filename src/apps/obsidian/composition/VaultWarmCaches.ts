@@ -50,8 +50,17 @@ export class VaultWarmCaches {
   }
 
   invalidate(): void {
-    this.paths.invalidate();
+    this.invalidatePaths();
+    this.invalidateLanguageInventory();
+  }
 
+  /** Vault files were added, removed or renamed. */
+  invalidatePaths(): void {
+    this.paths.invalidate();
+  }
+
+  /** The index was rebuilt, so its language mix may have changed. */
+  invalidateLanguageInventory(): void {
     for (const entry of this.languageInventories.values()) {
       entry.cache.invalidate();
     }

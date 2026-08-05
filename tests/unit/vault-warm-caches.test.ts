@@ -135,6 +135,33 @@ describe("VaultWarmCaches", () => {
     expect(calls).toBe(2);
   });
 
+  it("invalidates paths and the language inventory independently", async () => {
+    const files = countingFiles(["A.md"]);
+    let inventoryCalls = 0;
+    const store = {
+      async getLanguageInventory() {
+        inventoryCalls += 1;
+        return [] as LanguageInventoryItem[];
+      },
+    };
+    const caches = new VaultWarmCaches(files, { ttlMs: 10_000 });
+
+    await caches.contextFiles().listPaths();
+    await caches.languageInventory("profile-1", store).getLanguageInventory();
+
+    caches.invalidatePaths();
+    await caches.contextFiles().listPaths();
+    await caches.languageInventory("profile-1", store).getLanguageInventory();
+    expect(files.listCalls).toBe(2);
+    expect(inventoryCalls).toBe(1);
+
+    caches.invalidateLanguageInventory();
+    await caches.contextFiles().listPaths();
+    await caches.languageInventory("profile-1", store).getLanguageInventory();
+    expect(files.listCalls).toBe(2);
+    expect(inventoryCalls).toBe(2);
+  });
+
   it("drops cached data on dispose", async () => {
     const files = countingFiles(["A.md"]);
     const caches = new VaultWarmCaches(files, { ttlMs: 10_000 });

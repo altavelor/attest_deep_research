@@ -3,7 +3,7 @@ import { ContextDiagnostics, ResearchExecutionStrategy } from "@core/diagnostics
 import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { RetrievalResult } from "@application/contracts";
-import { AssembledContext } from "@application/use-cases/chat/ContextAssembler";
+import { AssembledContext } from "@application/use-cases/chat";
 import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
 import { ResearchBranch, ResearchBranchStream } from "../branchStreams";
 import { ResearchEvidenceResult } from "../WebResearchPipeline";
