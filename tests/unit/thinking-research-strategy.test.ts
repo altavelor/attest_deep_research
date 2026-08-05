@@ -13,6 +13,7 @@ import type {
   ToolCallingCapabilities,
 } from "@core/agent";
 import type { ResearchExecutionPolicy } from "@core/research";
+import { researchModeRetrievalParameters } from "@core/research";
 import { fixedNow } from "../helpers/factories";
 
 const CAPABILITIES: ToolCallingCapabilities = {
@@ -80,6 +81,7 @@ function context(
     },
     question: "What is X?",
     searchMode: "indexOnly",
+    retrieval: researchModeRetrievalParameters("thinking"),
     policy: POLICY,
   };
 }

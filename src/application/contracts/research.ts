@@ -95,6 +95,7 @@ export interface ResearchRetriever {
 export interface QueryVariantsRequest {
   query: string;
   languageInventory: LanguageInventoryItem[];
+  maxVariants?: number;
 }
 
 export interface QueryExpansion {
