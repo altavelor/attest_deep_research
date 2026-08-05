@@ -798,7 +798,6 @@ describe("ResearchService", () => {
         "Research/active.md": "Active text",
       }),
       extractors: [new MarkdownExtractor()],
-      retrieve: async () => [],
       generateId: stableId,
     });
     const service = new ResearchService({

@@ -137,7 +137,6 @@ export function createResearchService(
       files: contextFiles,
       extractors: contextExtractors,
       graph: new ObsidianGraphContextProvider(ctx.app.vault, ctx.app.metadataCache),
-      retrieve: async () => [],
       generateId: stableId,
     }),
     graphContext: {

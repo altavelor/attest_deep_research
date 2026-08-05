@@ -2,12 +2,10 @@ import { RetrievedChunk } from "@core/model";
 import { estimateTextTokens, ResearchChatHistoryMessage } from "@core/research";
 
 const DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE = 0.45;
-const DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE = 0.35;
 const FALLBACK_TOKENS_PER_EVIDENCE_ITEM = 500;
 
 export interface ContextBudget {
   explicitTokens: number;
-  retrievalTokens: number;
 }
 
 export function createContextBudget(input: {
@@ -18,7 +16,7 @@ export function createContextBudget(input: {
 }): ContextBudget {
   if (!input.contextLimitTokens) {
     const fallback = Math.max(1, input.evidenceLimit) * FALLBACK_TOKENS_PER_EVIDENCE_ITEM;
-    return { explicitTokens: fallback, retrievalTokens: fallback };
+    return { explicitTokens: fallback };
   }
   const historyTokens = estimateHistoryTokens(input.chatHistory ?? []);
   const available = Math.max(
@@ -27,7 +25,6 @@ export function createContextBudget(input: {
   );
   return {
     explicitTokens: Math.max(0, Math.floor(available * DEFAULT_EXPLICIT_CONTEXT_WINDOW_SHARE)),
-    retrievalTokens: Math.max(0, Math.floor(available * DEFAULT_RETRIEVAL_CONTEXT_WINDOW_SHARE)),
   };
 }
 

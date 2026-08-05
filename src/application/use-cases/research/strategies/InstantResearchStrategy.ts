@@ -53,7 +53,6 @@ export class InstantResearchStrategy implements ResearchStrategy {
             contextLimitTokens: this.deps.contextLimitTokens,
             reservedOutputTokens: totalReservedWithIndexTokens,
             evidenceLimit: this.deps.evidenceLimit,
-            skipRetrieval: searchMode === "none",
             explicitSourcesOnly: searchMode === "none",
             graph: this.deps.graphContext,
           });
