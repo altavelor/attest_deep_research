@@ -1,8 +1,10 @@
 import { ResearchStreamEvent } from "@application/contracts/research";
 
+export type ResearchBranchStatus = "pending" | "fulfilled" | "rejected";
+
 export interface ResearchBranch<R> {
   result: Promise<R>;
-  isSettled(): boolean;
+  status(): ResearchBranchStatus;
 
   /** Abandon the branch: closes the generator so its `finally` cleanup runs. */
   close(): void;
@@ -18,7 +20,7 @@ export class ResearchBranchStream {
   private wake?: () => void;
 
   run<R>(generator: AsyncGenerator<ResearchStreamEvent, R>): ResearchBranch<R> {
-    let settled = false;
+    let status: ResearchBranchStatus = "pending";
     const result = (async () => {
       let next = await generator.next();
       while (!next.done) {
@@ -27,20 +29,19 @@ export class ResearchBranchStream {
       }
       return next.value;
     })();
-    const track = <T>(value: T): T => {
-      settled = true;
+    const track = (next: ResearchBranchStatus) => () => {
+      status = next;
       this.push(undefined);
-      return value;
     };
 
-    result.then(track, track);
+    result.then(track("fulfilled"), track("rejected"));
     void result.catch(() => undefined);
 
     return {
       result,
-      isSettled: () => settled,
+      status: () => status,
       close: () => {
-        if (settled) {
+        if (status !== "pending") {
           return;
         }
         void Promise.resolve(generator.return(undefined as unknown as R)).catch(() => undefined);
@@ -55,7 +56,7 @@ export class ResearchBranchStream {
         yield event;
       }
 
-      if (branch.isSettled()) {
+      if (branch.status() !== "pending") {
         return await branch.result;
       }
 

@@ -1310,6 +1310,54 @@ describe("ResearchService", () => {
     expect(events.at(-1)).toMatchObject({ type: "complete" });
   });
 
+  it("survives a web branch that rejects before vault retrieval finishes", async () => {
+    const slowRetriever = {
+      search: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+          citations: [
+            citation("local-1", markdownSource("Research/local.md"), "Research/local.md"),
+          ],
+          usedFallback: false,
+        };
+      },
+    };
+    const immediatelyFailingWebSearch: SearchProvider = {
+      search: async () => {
+        throw new Error("web search unavailable");
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: slowRetriever,
+      searchProvider: immediatelyFailingWebSearch,
+      contextAssembler: new ContextAssembler({
+        files: new MemoryContextFiles({ "Research/attached.md": "Attached text" }),
+        extractors: [new MarkdownExtractor()],
+        generateId: stableId,
+      }),
+      chatModel: new FakeChatModel([
+        { content: "Local answer [local-1].", isComplete: false },
+        { content: "", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "How should I use local models?",
+        includeWebSearch: true,
+        contextPaths: ["Research/attached.md"],
+      }),
+    );
+
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
+  });
+
   it("does not fail the answer when an abandoned web branch rejects", async () => {
     const retriever = new FakeRetriever({
       chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],

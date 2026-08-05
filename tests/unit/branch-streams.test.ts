@@ -75,6 +75,19 @@ describe("ResearchBranchStream", () => {
     await expect(branch.result).resolves.toBe("done");
   });
 
+  it("reports a rejected branch as rejected rather than fulfilled", async () => {
+    const stream = new ResearchBranchStream();
+    const branch = stream.run(
+      (async function* (): AsyncGenerator<ResearchStreamEvent, string> {
+        throw new Error("branch failed");
+      })(),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(branch.status()).toBe("rejected");
+  });
+
   it("surfaces a branch failure to the consumer that awaits it", async () => {
     const stream = new ResearchBranchStream();
     const branch = stream.run(

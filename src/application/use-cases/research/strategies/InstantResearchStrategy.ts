@@ -114,7 +114,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
       graphEvidence: graphEvidenceForPlanner,
       retrievalEvidence: retrievalEvidenceForPlanner,
     });
-    const waitForWeb = (webRequired || webBranch.isSettled()) && request.signal?.aborted !== true;
+    const waitForWeb =
+      (webRequired || webBranch.status() === "fulfilled") && request.signal?.aborted !== true;
 
     if (!waitForWeb) {
       webAbort.abort();
