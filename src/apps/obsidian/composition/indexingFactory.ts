@@ -97,7 +97,7 @@ export function createRetrieverForProfile(
     embeddingModel: embedding.modelName,
     keyword: reader,
     chunkInventory: reader,
-    languageInventory: reader,
+    languageInventory: ctx.warmCaches.languageInventory(profile.id, reader),
     inventory: new FileVectorInventoryStore(indexStore),
     documentMetadata: createDocumentMetadataStoreForProfile(ctx, profile),
     documentSummaries: createDocumentSummaryStoreForProfile(ctx, profile),

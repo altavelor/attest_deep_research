@@ -9,7 +9,6 @@ import { stableId } from "@adapters/extractors";
 import { chatHistoryForPrompt, compactChatMessages } from "@application/use-cases/chat";
 import { GraphContextProvider } from "@core/research";
 import { Extractor } from "@application/ports";
-import { RetrievedChunk } from "@core/model";
 import { ExtractedChunk } from "@core/model";
 import { markdownSource } from "../helpers/factories";
 
@@ -396,24 +395,6 @@ function createAssembler(
       readFile: async (path) => files[path] ?? "",
       getModifiedTime: async () => 1,
       getSize: async (path) => sizes[path] ?? files[path]?.length ?? 0,
-    },
-    retrieve: async (_query, options) => {
-      const sourcePaths = options.sourcePaths ?? [];
-      return sourcePaths.map(
-        (path, index): RetrievedChunk => ({
-          id: `retrieved-${index}`,
-          source: {
-            id: `retrieved-${index}`,
-            kind: "markdown",
-            path,
-            title: path,
-            headingPath: [],
-          },
-          text: files[path] ?? "",
-          contentHash: `hash-${index}`,
-          score: 1 - index / 10,
-        }),
-      );
     },
   });
 }

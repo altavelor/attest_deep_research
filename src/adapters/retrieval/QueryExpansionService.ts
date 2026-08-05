@@ -17,6 +17,8 @@ export interface QueryExpansionServiceOptions {
 export interface BuildQueryVariantsOptions {
   query: string;
   languageInventory: LanguageInventoryItem[];
+  maxVariants?: number;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_MAX_LANGUAGES = 4;
@@ -49,6 +51,7 @@ export class QueryExpansionService {
   async buildVariants(options: BuildQueryVariantsOptions): Promise<RetrievalQueryVariant[]> {
     const query = options.query.trim();
     const targetLanguages = this.targetLanguages(query, options.languageInventory);
+    const maxVariants = positiveVariantLimit(options.maxVariants) ?? this.maxVariants;
 
     if (!query || targetLanguages.length === 0) {
       return [];
@@ -60,6 +63,7 @@ export class QueryExpansionService {
           model: this.chatModelName,
           temperature: 0,
           maxTokens: this.chatOptions?.maxTokens,
+          ...(options.signal ? { signal: options.signal } : {}),
           messages: [
             {
               role: "system",
@@ -68,14 +72,14 @@ export class QueryExpansionService {
             },
             {
               role: "user",
-              content: buildQueryExpansionPrompt(query, targetLanguages, this.maxVariants),
+              content: buildQueryExpansionPrompt(query, targetLanguages, maxVariants),
             },
           ],
         }),
         { maxLength: MAX_LLM_OUTPUT_LENGTH },
       );
 
-      return parseQueryVariants(response, this.maxVariants, (diagnostic) =>
+      return parseQueryVariants(response, maxVariants, (diagnostic) =>
         this.onDiagnostic?.({ source: "query-expansion", ...diagnostic }),
       );
     } catch {
@@ -94,6 +98,10 @@ export class QueryExpansionService {
 
     return targets.slice(0, this.maxLanguages);
   }
+}
+
+function positiveVariantLimit(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 export function buildQueryExpansionPrompt(

@@ -115,7 +115,8 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     const response = await this.http.request("/embeddings", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify({ model: request.model, input: request.input }),
+      ...(request.signal ? { signal: request.signal } : {}),
     });
     const body = await this.http.readJson(
       response,
@@ -139,7 +140,8 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     const response = await this.http.request("/embed", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify({ model: request.model, input: request.input }),
+      ...(request.signal ? { signal: request.signal } : {}),
     });
     const body = await this.http.readJson(
       response,

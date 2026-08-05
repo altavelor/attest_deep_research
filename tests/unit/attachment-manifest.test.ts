@@ -17,7 +17,6 @@ function createAssembler(files: Record<string, string>): ContextAssembler {
       getModifiedTime: async () => 1,
       getSize: async (path) => files[path]?.length ?? 0,
     },
-    retrieve: async () => [],
   });
 }
 

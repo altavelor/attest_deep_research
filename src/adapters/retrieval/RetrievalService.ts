@@ -21,7 +21,8 @@ import {
 } from "@application/ports";
 import { sharedReferences } from "@application/use-cases/enrichment";
 import { groupClaims } from "@application/use-cases/claims";
-import { RetrievalOptions } from "@core/retrieval";
+import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
+import { mapWithConcurrency } from "@shared";
 import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk, SourceReference } from "@core/model";
@@ -83,25 +84,34 @@ export class RetrievalService {
     }
 
     const candidateLimit = Math.max(options.limit, options.limit * 4);
-    const queryVariants = normalizedQueryVariants(query, options.queryVariants);
-    const semanticChunksByVariant: RetrievedChunk[] = [];
-    const keywordChunksByVariant: RetrievedChunk[] = [];
-    let semanticError: string | undefined;
-
-    for (const variant of queryVariants) {
-      const semantic = await this.searchSemantic(variant, candidateLimit);
-      semanticError = semanticError ?? semantic.error;
-      semanticChunksByVariant.push(...filterRetrievedChunks(semantic.chunks, scoped));
-      keywordChunksByVariant.push(
-        ...filterRetrievedChunks(
-          await this.searchKeywords(variant, { ...scoped, limit: candidateLimit }),
+    const originalQueries = normalizedQueries([query]);
+    const originalPass = this.searchQueries(originalQueries, candidateLimit, scoped);
+    const variantPass = resolveQueryVariants(options.queryVariants)
+      .then((variants) =>
+        this.searchQueries(
+          options.signal?.aborted === true
+            ? []
+            : normalizedQueries(variants.map((variant) => variant.query))
+                .filter((variant) => !originalQueries.includes(variant))
+                .slice(0, MAX_FUSED_QUERIES - originalQueries.length),
+          candidateLimit,
           scoped,
         ),
-      );
-    }
+      )
+      .catch((): QueryPassResult => ({ semanticChunks: [], keywordChunks: [] }));
+    const [original, variant] = await Promise.all([originalPass, variantPass]);
+    const semanticError = original.semanticError ?? variant.semanticError;
 
-    const semanticChunks = fuseRetrievedChunks(semanticChunksByVariant, [], candidateLimit);
-    const keywordChunks = fuseRetrievedChunks(keywordChunksByVariant, [], candidateLimit);
+    const semanticChunks = fuseRetrievedChunks(
+      [...original.semanticChunks, ...variant.semanticChunks],
+      [],
+      candidateLimit,
+    );
+    const keywordChunks = fuseRetrievedChunks(
+      [...original.keywordChunks, ...variant.keywordChunks],
+      [],
+      candidateLimit,
+    );
     const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
     const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
     const deduped = dedupeNearDuplicateChunks(ranked);
@@ -204,34 +214,79 @@ export class RetrievalService {
   }
 
   /**
+   * Run one retrieval pass over a group of queries: a single batched embedding
+   * call, then bounded-concurrency index and keyword lookups. Chunks are
+   * returned in query order so fusion stays independent of completion order.
+   */
+  private async searchQueries(
+    queries: string[],
+    candidateLimit: number,
+    scoped: RetrievalOptions,
+  ): Promise<QueryPassResult> {
+    if (queries.length === 0) {
+      return { semanticChunks: [], keywordChunks: [] };
+    }
+
+    const [semantic, keyword] = await Promise.all([
+      this.searchSemantic(queries, candidateLimit, scoped.signal),
+      mapWithConcurrency(queries, KEYWORD_SEARCH_CONCURRENCY, (query) =>
+        this.searchKeywords(query, { ...scoped, limit: candidateLimit }),
+      ),
+    ]);
+
+    return {
+      semanticChunks: semantic.chunksByQuery.flatMap((chunks) =>
+        filterRetrievedChunks(chunks, scoped),
+      ),
+      keywordChunks: keyword.flatMap((chunks) => filterRetrievedChunks(chunks, scoped)),
+      ...(semantic.error ? { semanticError: semantic.error } : {}),
+    };
+  }
+
+  /**
    * Semantic search never throws: retrieval degrades to keyword-only ranking.
    * The failure reason is returned (not swallowed) so callers can surface the
    * degradation — a silent catch here previously hid rebuild-required and
    * embedding-provider errors behind seemingly normal keyword results.
    */
   private async searchSemantic(
-    query: string,
+    queries: string[],
     limit: number,
-  ): Promise<{ chunks: RetrievedChunk[]; error?: string }> {
+    signal?: AbortSignal,
+  ): Promise<{ chunksByQuery: RetrievedChunk[][]; error?: string }> {
     try {
       const response = await this.embeddings.embed({
         model: this.embeddingModel,
-        input: [query],
+        input: queries,
+        ...(signal ? { signal } : {}),
       });
-      const embedding = response.embeddings[0];
+      const first = response.embeddings[0];
 
-      if (!embedding) {
-        return { chunks: [], error: "embedding provider returned no embedding" };
+      if (!first) {
+        return { chunksByQuery: [], error: "embedding provider returned no embedding" };
       }
 
       await this.indexStore.initialize({
         embeddingModel: this.embeddingModel,
-        embeddingDimensions: embedding.length,
+        embeddingDimensions: first.length,
       });
 
-      return { chunks: await this.indexStore.query(embedding, limit) };
+      const chunksByQuery = await mapWithConcurrency(
+        queries,
+        INDEX_QUERY_CONCURRENCY,
+        async (_query, index) => {
+          const embedding = response.embeddings[index];
+          return embedding ? this.indexStore.query(embedding, limit) : [];
+        },
+      );
+      const missing = response.embeddings.length < queries.length;
+
+      return {
+        chunksByQuery,
+        ...(missing ? { error: "embedding provider returned no embedding" } : {}),
+      };
     } catch (error) {
-      return { chunks: [], error: describeSemanticError(error) };
+      return { chunksByQuery: [], error: describeSemanticError(error) };
     }
   }
 
@@ -369,6 +424,15 @@ function escapeRegExp(value: string): string {
 }
 
 const LANGUAGE_SCOPE_LIMIT = 1000;
+const MAX_FUSED_QUERIES = 8;
+const KEYWORD_SEARCH_CONCURRENCY = 4;
+const INDEX_QUERY_CONCURRENCY = 4;
+
+interface QueryPassResult {
+  semanticChunks: RetrievedChunk[];
+  keywordChunks: RetrievedChunk[];
+  semanticError?: string;
+}
 
 function describeSemanticError(error: unknown): string {
   if (error instanceof Error) {
@@ -392,15 +456,21 @@ function oneChunkPerSource(chunks: RetrievedChunk[]): RetrievedChunk[] {
   return result;
 }
 
-function normalizedQueryVariants(
-  query: string,
-  variants: RetrievalOptions["queryVariants"],
-): string[] {
-  const normalized = [query, ...(variants?.map((variant) => variant.query) ?? [])]
-    .map((value) => value.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+function normalizedQueries(queries: string[]): string[] {
+  const normalized = queries.map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean);
 
-  return Array.from(new Set(normalized)).slice(0, 8);
+  return Array.from(new Set(normalized)).slice(0, MAX_FUSED_QUERIES);
+}
+
+/** Late or failed query expansion degrades to the original query alone. */
+async function resolveQueryVariants(
+  variants: RetrievalOptions["queryVariants"],
+): Promise<RetrievalQueryVariant[]> {
+  try {
+    return (await variants) ?? [];
+  } catch {
+    return [];
+  }
 }
 
 function fuseRetrievedChunks(

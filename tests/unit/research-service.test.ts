@@ -22,6 +22,7 @@ import {
 } from "../helpers/factories";
 import { collectAsync } from "../helpers/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+import type { SearchProvider, SearchProviderResult } from "@application/ports/web";
 import { ChatModelProvider } from "@core/agent";
 class MemoryContextFiles implements ContextFileProvider {
   constructor(private readonly files: Record<string, string>) {}
@@ -798,7 +799,6 @@ describe("ResearchService", () => {
         "Research/active.md": "Active text",
       }),
       extractors: [new MarkdownExtractor()],
-      retrieve: async () => [],
       generateId: stableId,
     });
     const service = new ResearchService({
@@ -1116,18 +1116,12 @@ describe("ResearchService", () => {
         },
       },
     ]);
-    expect(retriever.requests).toEqual([
-      {
-        query: "How should I use local models?",
-        options: { limit: 8, includeWebResults: false },
-      },
-    ]);
-    expect(webSearch.requests).toEqual([
-      {
-        query: "How should I use local models?",
-        options: { limit: 5, maxFetches: 3 },
-      },
-    ]);
+    expect(retriever.requests).toHaveLength(1);
+    expect(retriever.requests[0].query).toBe("How should I use local models?");
+    expect(retriever.requests[0].options).toMatchObject({ limit: 6, includeWebResults: false });
+    expect(webSearch.requests).toHaveLength(1);
+    expect(webSearch.requests[0].query).toBe("How should I use local models?");
+    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
     expect(chatModel.requests[0]).toMatchObject({
       model: "qwen",
       temperature: 0.2,
@@ -1247,7 +1241,7 @@ describe("ResearchService", () => {
       }),
     );
 
-    expect(retriever.requests[0].options.queryVariants).toEqual([
+    await expect(retriever.requests[0].options.queryVariants).resolves.toEqual([
       {
         query: "sorting algorithms advantages disadvantages",
         language: "en",
@@ -1265,6 +1259,263 @@ describe("ResearchService", () => {
         },
       },
     });
+  });
+
+  it("answers without waiting for the web branch when the plan does not need web evidence", async () => {
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    let webSearchStarted = false;
+    let abandonedWebSearchAborted = false;
+    const hangingWebSearch: SearchProvider = {
+      search: (_query, options) =>
+        new Promise<SearchProviderResult[]>(() => {
+          webSearchStarted = true;
+          options?.signal?.addEventListener("abort", () => {
+            abandonedWebSearchAborted = true;
+          });
+        }),
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever,
+      searchProvider: hangingWebSearch,
+      contextAssembler: new ContextAssembler({
+        files: new MemoryContextFiles({ "Research/attached.md": "Attached text" }),
+        extractors: [new MarkdownExtractor()],
+        generateId: stableId,
+      }),
+      chatModel: new FakeChatModel([
+        { content: "Local answer [local-1].", isComplete: false },
+        { content: "", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "How should I use local models?",
+        includeWebSearch: true,
+        contextPaths: ["Research/attached.md"],
+      }),
+    );
+
+    expect(webSearchStarted).toBe(true);
+    expect(abandonedWebSearchAborted).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
+  });
+
+  it("releases the web branch when vault retrieval fails", async () => {
+    const failingRetriever = {
+      search: async () => {
+        throw new Error("index unavailable");
+      },
+    };
+    let webAborted = false;
+    const hangingWebSearch: SearchProvider = {
+      search: (_query, options) =>
+        new Promise<SearchProviderResult[]>(() => {
+          options?.signal?.addEventListener("abort", () => {
+            webAborted = true;
+          });
+        }),
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: failingRetriever,
+      searchProvider: hangingWebSearch,
+      chatModel: new FakeChatModel(),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    await expect(
+      collectAsync(
+        service.answer({ question: "How should I use local models?", includeWebSearch: true }),
+      ),
+    ).rejects.toThrow("index unavailable");
+    expect(webAborted).toBe(true);
+  });
+
+  it("survives a web branch that rejects before vault retrieval finishes", async () => {
+    const slowRetriever = {
+      search: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+          citations: [
+            citation("local-1", markdownSource("Research/local.md"), "Research/local.md"),
+          ],
+          usedFallback: false,
+        };
+      },
+    };
+    const immediatelyFailingWebSearch: SearchProvider = {
+      search: async () => {
+        throw new Error("web search unavailable");
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: slowRetriever,
+      searchProvider: immediatelyFailingWebSearch,
+      contextAssembler: new ContextAssembler({
+        files: new MemoryContextFiles({ "Research/attached.md": "Attached text" }),
+        extractors: [new MarkdownExtractor()],
+        generateId: stableId,
+      }),
+      chatModel: new FakeChatModel([
+        { content: "Local answer [local-1].", isComplete: false },
+        { content: "", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "How should I use local models?",
+        includeWebSearch: true,
+        contextPaths: ["Research/attached.md"],
+      }),
+    );
+
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
+  });
+
+  it("does not fail the answer when an abandoned web branch rejects", async () => {
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    const failingWebSearch: SearchProvider = {
+      search: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        throw new Error("web search unavailable");
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever,
+      searchProvider: failingWebSearch,
+      contextAssembler: new ContextAssembler({
+        files: new MemoryContextFiles({ "Research/attached.md": "Attached text" }),
+        extractors: [new MarkdownExtractor()],
+        generateId: stableId,
+      }),
+      chatModel: new FakeChatModel([
+        { content: "Local answer [local-1].", isComplete: false },
+        { content: "", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "How should I use local models?",
+        includeWebSearch: true,
+        contextPaths: ["Research/attached.md"],
+      }),
+    );
+
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+
+  it("waits for the web branch when the question signals freshness", async () => {
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    const slowWebSearch: SearchProvider = {
+      search: async (query) => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return [
+          {
+            source: webSource("https://example.com/latest"),
+            extractedText: "Latest pricing article",
+            rank: 1,
+            query,
+          },
+        ];
+      },
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever,
+      searchProvider: slowWebSearch,
+      chatModel: new FakeChatModel([
+        { content: "Fresh answer [local-1].", isComplete: false },
+        { content: "", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({ question: "What is the latest pricing?", includeWebSearch: true }),
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: {
+        evidence: expect.arrayContaining([
+          expect.objectContaining({ id: "web:https://example.com/latest" }),
+        ]),
+      },
+    });
+  });
+
+  it("stops before synthesis when the turn is cancelled during retrieval", async () => {
+    const controller = new AbortController();
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    const chatModel = new FakeChatModel();
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever,
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const generator = service
+      .answer({
+        question: "How should I use local models?",
+        searchMode: "indexOnly",
+        signal: controller.signal,
+      })
+      [Symbol.asyncIterator]();
+    await generator.next();
+    controller.abort();
+    const events = [];
+    for (let step = await generator.next(); !step.done; step = await generator.next()) {
+      events.push(step.value);
+    }
+
+    expect(chatModel.requests).toEqual([]);
+    expect(events.map((event) => event.type)).not.toContain("complete");
   });
 
   it("skips local index retrieval when search mode is web only", async () => {
@@ -1302,9 +1553,9 @@ describe("ResearchService", () => {
     );
 
     expect(retriever.requests).toEqual([]);
-    expect(webSearch.requests).toEqual([
-      { query: "What changed recently?", options: { limit: 5, maxFetches: 3 } },
-    ]);
+    expect(webSearch.requests).toHaveLength(1);
+    expect(webSearch.requests[0].query).toBe("What changed recently?");
+    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
     expect(events.at(-1)).toEqual({
       type: "complete",
       answer: expect.objectContaining({
