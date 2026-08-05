@@ -66,7 +66,6 @@ export class IndexProfilesSection {
       this.syncPending(profile.id, indexing.status, indexing.activeOperation, enrichment.status);
       const pendingIndexAction = this.pendingIndexActions.get(profile.id);
       const pendingEnrichmentAction = this.pendingEnrichmentActions.get(profile.id);
-      const isDefault = this.plugin.settings.activeIndexProfileId === profile.id;
       const row = containerEl.createDiv({
         cls: "ixplorer-settings-profile-list__item ixplorer-settings-index-list__item",
       });
@@ -108,7 +107,6 @@ export class IndexProfilesSection {
         text: `${formatIndexSize(indexing.indexSizeBytes ?? profile.indexSizeBytes ?? 0)} · ${indexing.indexedFiles + indexing.skippedFiles || profile.indexedFileCount || 0} files`,
       });
       const status = resolveIndexStatusBadge({
-        isDefault,
         profile,
         indexing,
         enrichment,
@@ -124,7 +122,7 @@ export class IndexProfilesSection {
       this.renderActions(
         row.createDiv({ cls: "ixplorer-settings-profile-list__actions" }),
         profile,
-        { isDefault, busy, indexing, enrichment, pendingIndexAction, pendingEnrichmentAction },
+        { busy, indexing, enrichment, pendingIndexAction, pendingEnrichmentAction },
       );
     }
   }
@@ -133,7 +131,6 @@ export class IndexProfilesSection {
     actions: HTMLElement,
     profile: IndexProfile,
     state: {
-      isDefault: boolean;
       busy: string | undefined;
       indexing: ReturnType<IxplorerPlugin["indexing"]["getState"]>;
       enrichment: ReturnType<IxplorerPlugin["enrichment"]["getState"]>;
@@ -167,17 +164,6 @@ export class IndexProfilesSection {
         disabled: profile.isSuspended === true || busyElsewhere || pending,
         onClick: () => void this.openRunModal(profile),
       });
-    createIconButton(actions, {
-      icon: "star",
-      className: "ixplorer-settings__default-action",
-      label: state.isDefault ? "Default index" : "Set as default index",
-      disabled:
-        pending || state.isDefault || profile.isSuspended === true || !profile.lastIndexedAt,
-      onClick: async () => {
-        this.plugin.settings.activeIndexProfileId = profile.id;
-        await this.saveAndRedisplay();
-      },
-    });
     createIconButton(actions, {
       icon: "file-text",
       label: "Show index report",
@@ -237,8 +223,8 @@ export class IndexProfilesSection {
       defaultEmbeddingModelProfileId: settings.activeEmbeddingModelProfileId,
       onSave: async (profile) => {
         settings.indexProfiles.push(profile);
-        if (!settings.activeIndexProfileId || getActiveIndexProfile(settings).isSuspended)
-          settings.activeIndexProfileId = profile.id;
+        if (!settings.newChatDefaults.indexProfileId || getActiveIndexProfile(settings).isSuspended)
+          settings.newChatDefaults.indexProfileId = profile.id;
         await this.saveAndRedisplay();
       },
     }).open();
@@ -288,7 +274,7 @@ export class IndexProfilesSection {
       hasMetadata,
       embeddingModels: embeddings,
       chatModels: chats,
-      defaultChatModelProfileId: this.plugin.settings.activeChatModelProfileId,
+      defaultChatModelProfileId: this.plugin.settings.newChatDefaults.chatModelProfileId,
       onSubmit: (plan) => {
         if (plan.metadata && chats.length === 0) {
           new Notice("Create an active chat model profile before extracting metadata.");

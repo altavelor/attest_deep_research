@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -101,6 +101,15 @@ describe("Ixplorer plugin lifecycle", () => {
 
     const view = leaf.view as unknown as { contentEl: HTMLElement };
     expect(view.contentEl.querySelectorAll(".ixplorer-chat").length).toBe(1);
+  });
+
+  it("marks the resolved index profile stale when no default index is configured", () => {
+    const markStale = vi.spyOn(plugin.indexing, "markStale");
+    expect(plugin.settings.newChatDefaults.indexProfileId).toBe("");
+
+    plugin.markIndexStale();
+
+    expect(markStale).toHaveBeenCalledWith(plugin.settings.indexProfiles[0].id);
   });
 
   it("releases the view type, command and settings tab registered on load", async () => {

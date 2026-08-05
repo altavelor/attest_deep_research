@@ -1,4 +1,5 @@
 import { ResearchAnswer } from "@core/answer";
+import { ResearchMode, ResearchSearchMode } from "@core/research";
 import { SavedChatSettings } from "@core/chat/savedChat";
 import { parsePositiveInteger } from "@shared";
 import { ChatModelSelectOption, IndexProfileSelectOption } from "./ChatComposer";
@@ -8,6 +9,8 @@ export interface ChatSettingsServices {
   getDefaultChatModelProfileId(): string;
   getIndexProfiles(): IndexProfileSelectOption[];
   getDefaultIndexProfileId(): string;
+  getDefaultSearchMode(): ResearchSearchMode;
+  getDefaultResearchMode(): ResearchMode;
 }
 
 export function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
@@ -93,20 +96,28 @@ export function normalizeExtensionFilter(value: string): string | undefined {
 
 export function createDefaultChatSettings(services: ChatSettingsServices): SavedChatSettings {
   const indexProfiles = services.getIndexProfiles();
+  const chatModelProfiles = services.getChatModelProfiles();
+  const chatModelProfileId = resolveAvailableChatModelProfileId(
+    chatModelProfiles,
+    services.getDefaultChatModelProfileId(),
+    "",
+  );
+  const supportsAgentMode =
+    chatModelProfiles.find((profile) => profile.id === chatModelProfileId)?.supportsAgentMode ===
+    true;
   return {
-    chatModelProfileId: resolveAvailableChatModelProfileId(
-      services.getChatModelProfiles(),
-      services.getDefaultChatModelProfileId(),
-      "",
-    ),
+    chatModelProfileId,
     indexProfileId: resolveAvailableIndexProfileId(
       indexProfiles,
       services.getDefaultIndexProfileId(),
       indexProfiles.find((profile) => !profile.isSuspended)?.id ?? "",
     ),
-    searchMode: "indexOnly",
+    searchMode: services.getDefaultSearchMode(),
     contextMode: "include",
-    researchMode: "instant",
+    researchMode:
+      services.getDefaultResearchMode() === "thinking" && supportsAgentMode
+        ? "thinking"
+        : "instant",
   };
 }
 

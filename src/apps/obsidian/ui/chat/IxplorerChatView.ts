@@ -70,6 +70,8 @@ export interface IxplorerChatViewServices {
   getChatModelProfiles(): ChatModelSelectOption[];
   getDefaultChatModelProfileId(): string;
   getDefaultIndexProfileId(): string;
+  getDefaultSearchMode(): ResearchSearchMode;
+  getDefaultResearchMode(): ResearchMode;
   getIndexProfiles(): IndexProfileSelectOption[];
   getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
 
@@ -330,7 +332,7 @@ export class IxplorerChatView extends ItemView {
     this.lastAnswer = null;
     this.attachedContextPaths = [];
     this.currentChatSettings = createDefaultChatSettings(this.services);
-    this.currentResearchMode = "instant";
+    this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
     this.savedChatSession.clearCurrent();
     this.editingMessageIndex = null;
     this.closeHistoryPopover();

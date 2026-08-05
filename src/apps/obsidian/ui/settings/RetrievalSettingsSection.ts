@@ -24,7 +24,6 @@ export class RetrievalSettingsSection {
       "Retrieval",
       "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
     );
-    this.renderLocalContext(contentEl);
     this.renderGraphContext(contentEl);
     this.renderSearch(contentEl);
     this.renderWeb(contentEl);
@@ -41,19 +40,6 @@ export class RetrievalSettingsSection {
       cls: "ixplorer-settings__gated-content is-disabled",
       attr: { "aria-disabled": "true", inert: "" },
     });
-  }
-
-  private renderLocalContext(containerEl: HTMLElement): void {
-    renderSubcategoryHeading(containerEl, "Local context");
-    new Setting(containerEl)
-      .setName("Include active file as context")
-      .setDesc("Automatically include the currently open supported file as explicit chat context.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.options.settings.includeActiveFileContext).onChange(async (value) => {
-          this.options.settings.includeActiveFileContext = value;
-          await this.options.saveSettings();
-        }),
-      );
   }
 
   private renderGraphContext(containerEl: HTMLElement): void {

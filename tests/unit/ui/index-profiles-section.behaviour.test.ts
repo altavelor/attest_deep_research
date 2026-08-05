@@ -71,15 +71,11 @@ function rows(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(".ixplorer-settings-index-list__item"));
 }
 
-function starButton(row: HTMLElement): HTMLButtonElement {
-  return row.querySelector<HTMLButtonElement>(".ixplorer-settings__default-action")!;
-}
-
-function settingsWith(profiles: IndexProfile[], activeId: string): IxplorerSettings {
+function settingsWith(profiles: IndexProfile[], defaultIndexProfileId: string): IxplorerSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: profiles,
-    activeIndexProfileId: activeId,
+    newChatDefaults: { ...DEFAULT_SETTINGS.newChatDefaults, indexProfileId: defaultIndexProfileId },
     embeddingModelProfiles: [],
     chatModelProfiles: [],
     serverProfiles: [],
@@ -96,7 +92,7 @@ describe("index profiles section rendering", () => {
     document.body.innerHTML = "";
   });
 
-  it("marks no row as default when the active profile id refers to a missing profile", () => {
+  it("renders no default badge or default action for an indexed profile", () => {
     const { container, section } = render(
       settingsWith(
         [
@@ -114,12 +110,11 @@ describe("index profiles section rendering", () => {
     const [row] = rows(container);
     expect(rows(container)).toHaveLength(1);
     expect(row.querySelector(".ixplorer-settings-profile-list__status")).toBeNull();
-    expect(starButton(row).getAttribute("aria-label")).toBe("Set as default index");
-    expect(starButton(row).disabled).toBe(false);
+    expect(row.querySelector('button[aria-label="Set as default index"]')).toBeNull();
     section.dispose();
   });
 
-  it("renders a suspended profile with its reason and blocks the default and run actions", () => {
+  it("renders a suspended profile with its reason and blocks the run action", () => {
     const { container, section } = render(
       settingsWith(
         [
@@ -140,21 +135,19 @@ describe("index profiles section rendering", () => {
     const status = row.querySelector(".ixplorer-settings-profile-list__status");
     expect(status?.textContent).toBe("Suspended");
     expect(status?.getAttribute("title")).toBe("Select an embedding model profile.");
-    expect(starButton(row).disabled).toBe(true);
     expect(
       row.querySelector<HTMLButtonElement>('button[aria-label="Update index"]')?.disabled,
     ).toBe(true);
     section.dispose();
   });
 
-  it("keeps the default action disabled for a profile that was never indexed", () => {
+  it("offers the start action for a profile that was never indexed", () => {
     const { container, section } = render(
       settingsWith([indexProfile({ id: "a", name: "Alpha" })], "other"),
     );
 
     const [row] = rows(container);
     expect(row.querySelector('button[aria-label="Start indexing"]')).not.toBeNull();
-    expect(starButton(row).disabled).toBe(true);
     section.dispose();
   });
 
@@ -172,7 +165,7 @@ describe("index profiles section rendering", () => {
     section.dispose();
   });
 
-  it("marks exactly the active profile as the default index", () => {
+  it("never marks a profile as the default index", () => {
     const { container, section } = render(
       settingsWith(
         [
@@ -196,7 +189,7 @@ describe("index profiles section rendering", () => {
     const statuses = rows(container).map(
       (row) => row.querySelector(".ixplorer-settings-profile-list__status")?.textContent ?? null,
     );
-    expect(statuses).toEqual([null, "Default"]);
+    expect(statuses).toEqual([null, null]);
     section.dispose();
   });
 });

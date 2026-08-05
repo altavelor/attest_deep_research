@@ -7,6 +7,7 @@ export * from "./debugLogger";
 export * from "./defaults";
 export * from "./modelCapabilityCache";
 export * from "./modelContext";
+export * from "./newChatDefaults";
 export * from "./normalization";
 export * from "./parsers";
 export * from "./persistence";
