@@ -86,17 +86,19 @@ export class RetrievalService {
     const candidateLimit = Math.max(options.limit, options.limit * 4);
     const originalQueries = normalizedQueries([query]);
     const originalPass = this.searchQueries(originalQueries, candidateLimit, scoped);
-    const variantPass = resolveQueryVariants(options.queryVariants).then((variants) =>
-      this.searchQueries(
-        options.signal?.aborted === true
-          ? []
-          : normalizedQueries(variants.map((variant) => variant.query))
-              .filter((variant) => !originalQueries.includes(variant))
-              .slice(0, MAX_FUSED_QUERIES - originalQueries.length),
-        candidateLimit,
-        scoped,
-      ),
-    );
+    const variantPass = resolveQueryVariants(options.queryVariants)
+      .then((variants) =>
+        this.searchQueries(
+          options.signal?.aborted === true
+            ? []
+            : normalizedQueries(variants.map((variant) => variant.query))
+                .filter((variant) => !originalQueries.includes(variant))
+                .slice(0, MAX_FUSED_QUERIES - originalQueries.length),
+          candidateLimit,
+          scoped,
+        ),
+      )
+      .catch((): QueryPassResult => ({ semanticChunks: [], keywordChunks: [] }));
     const [original, variant] = await Promise.all([originalPass, variantPass]);
     const semanticError = original.semanticError ?? variant.semanticError;
 

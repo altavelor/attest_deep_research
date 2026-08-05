@@ -62,6 +62,60 @@ describe("ResearchBranchStream", () => {
     expect(cleanedUp).toBe(true);
   });
 
+  it("stops forwarding events from a branch after it is abandoned", async () => {
+    const stream = new ResearchBranchStream();
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const abandoned = stream.run(
+      (async function* (): AsyncGenerator<ResearchStreamEvent, string> {
+        yield { type: "status", message: "first" };
+        await gate;
+        yield { type: "status", message: "after-close" };
+        return "web-result";
+      })(),
+    );
+    const kept = stream.run(statusThen(["vault"], "vault-result"));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    abandoned.close();
+    release!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const events: ResearchStreamEvent[] = [];
+    const generator = stream.until(kept);
+    for (let step = await generator.next(); !step.done; step = await generator.next()) {
+      events.push(step.value);
+    }
+
+    expect(abandoned.status()).toBe("abandoned");
+    expect(events.map((event) => (event as { message: string }).message)).not.toContain(
+      "after-close",
+    );
+  });
+
+  it("refuses to consume an abandoned branch", async () => {
+    const stream = new ResearchBranchStream();
+    const branch = stream.run(
+      (async function* (): AsyncGenerator<ResearchStreamEvent, string> {
+        yield { type: "status", message: "web" };
+        await new Promise(() => {});
+        return "never";
+      })(),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    branch.close();
+
+    const generator = stream.until(branch);
+    await expect(
+      (async () => {
+        for (let step = await generator.next(); !step.done; step = await generator.next());
+      })(),
+    ).rejects.toThrow("abandoned");
+  });
+
   it("does not close a branch that already finished", async () => {
     const stream = new ResearchBranchStream();
     let cleanupCount = 0;

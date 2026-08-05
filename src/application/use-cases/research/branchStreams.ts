@@ -1,12 +1,16 @@
 import { ResearchStreamEvent } from "@application/contracts/research";
 
-export type ResearchBranchStatus = "pending" | "fulfilled" | "rejected";
+export type ResearchBranchStatus = "pending" | "fulfilled" | "rejected" | "abandoned";
 
 export interface ResearchBranch<R> {
   result: Promise<R>;
   status(): ResearchBranchStatus;
 
-  /** Abandon the branch: closes the generator so its `finally` cleanup runs. */
+  /**
+   * Abandon the branch: stops forwarding its events, marks it abandoned and
+   * closes the generator so its cleanup runs. A provider that never settles
+   * keeps its own promise pending, but no longer holds up or feeds the stream.
+   */
   close(): void;
 }
 
@@ -21,16 +25,23 @@ export class ResearchBranchStream {
 
   run<R>(generator: AsyncGenerator<ResearchStreamEvent, R>): ResearchBranch<R> {
     let status: ResearchBranchStatus = "pending";
+    let abandoned = false;
     const result = (async () => {
       let next = await generator.next();
       while (!next.done) {
+        if (abandoned) {
+          await generator.return(undefined as unknown as R);
+          break;
+        }
         this.push(next.value);
         next = await generator.next();
       }
-      return next.value;
+      return next.done ? next.value : (undefined as unknown as R);
     })();
-    const track = (next: ResearchBranchStatus) => () => {
-      status = next;
+    const track = (settled: ResearchBranchStatus) => () => {
+      if (status === "pending") {
+        status = settled;
+      }
       this.push(undefined);
     };
 
@@ -44,7 +55,10 @@ export class ResearchBranchStream {
         if (status !== "pending") {
           return;
         }
+        status = "abandoned";
+        abandoned = true;
         void Promise.resolve(generator.return(undefined as unknown as R)).catch(() => undefined);
+        this.push(undefined);
       },
     };
   }
@@ -54,6 +68,10 @@ export class ResearchBranchStream {
     for (;;) {
       for (const event of this.buffered.splice(0)) {
         yield event;
+      }
+
+      if (branch.status() === "abandoned") {
+        throw new Error("Research branch was abandoned.");
       }
 
       if (branch.status() !== "pending") {

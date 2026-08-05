@@ -535,6 +535,33 @@ describe("RetrievalService query variants", () => {
     expect(embeddings.signals).toEqual([controller.signal]);
   });
 
+  it("keeps the original-query result when a variant lookup fails", async () => {
+    const indexStore = Object.assign(
+      new FakeIndexStore([retrieved("from-original", markdownSource("a.md"), "a", 0.5)]),
+      {
+        searchKeywords: async (query: string) => {
+          if (query !== "original") {
+            throw new Error("keyword index unavailable");
+          }
+          return [];
+        },
+      },
+    );
+    const service = makeRetrievalService({
+      embeddings: new RecordingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("original", {
+      limit: 2,
+      includeWebResults: false,
+      queryVariants: [{ query: "variant" }],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["from-original"]);
+  });
+
   it("falls back to the original query when the variants promise rejects", async () => {
     const embeddings = new RecordingEmbeddingProvider();
     const service = makeRetrievalService({
