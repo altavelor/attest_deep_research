@@ -20,6 +20,8 @@ export interface WebSearchOptions {
   maxFetches?: number;
   timeoutMs?: number;
 
+  signal?: AbortSignal;
+
   intent?: WebQueryIntent;
 
   recency?: WebQueryRecency;
@@ -29,6 +31,7 @@ export interface WebSearchOptions {
 
 export interface WebPageFetchOptions {
   timeoutMs?: number;
+  signal?: AbortSignal;
   maxResponseBytes?: number;
   maxContentChars?: number;
   maxRedirects?: number;

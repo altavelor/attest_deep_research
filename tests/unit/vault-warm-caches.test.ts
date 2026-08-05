@@ -74,6 +74,31 @@ describe("CachedAsyncValue", () => {
     value.invalidate();
     await expect(value.get()).rejects.toThrow("load failed");
   });
+
+  it("does not cache a value loaded before an invalidation", async () => {
+    let release: ((value: number) => void) | undefined;
+    let loads = 0;
+    const value = new CachedAsyncValue(
+      () => {
+        loads += 1;
+        return new Promise<number>((resolve) => {
+          release = resolve;
+        });
+      },
+      { ttlMs: 10_000 },
+    );
+
+    const stale = value.get();
+    value.invalidate();
+    release!(1);
+    await expect(stale).resolves.toBe(1);
+
+    const fresh = value.get();
+    release!(2);
+
+    await expect(fresh).resolves.toBe(2);
+    expect(loads).toBe(2);
+  });
 });
 
 describe("VaultWarmCaches", () => {

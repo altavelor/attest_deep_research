@@ -16,6 +16,7 @@ export interface ResearchEvidenceResult {
 
 export interface WebSearchPipelineOptions {
   evidenceLimit?: number;
+  signal?: AbortSignal;
 }
 
 export interface WebResearchPipelineOptions {
@@ -52,7 +53,10 @@ export class WebResearchPipeline {
 
     yield { type: "status", message: "Searching web..." };
     const search = {
-      results: await this.searchProvider.search(question, NORMAL_WEB_SEARCH_OPTIONS),
+      results: await this.searchProvider.search(question, {
+        ...NORMAL_WEB_SEARCH_OPTIONS,
+        ...(options.signal ? { signal: options.signal } : {}),
+      }),
       requests: [{ query: question, ...NORMAL_WEB_SEARCH_OPTIONS }],
     };
     const results = search.results;

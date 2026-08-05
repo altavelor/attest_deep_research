@@ -13,6 +13,7 @@ export class CachedAsyncValue<T> {
   private readonly now: () => number;
   private cached?: { value: T; loadedAt: number };
   private inFlight?: Promise<T>;
+  private generation = 0;
 
   constructor(
     private readonly load: () => Promise<T>,
@@ -33,13 +34,18 @@ export class CachedAsyncValue<T> {
       return this.inFlight;
     }
 
-    const request = this.load()
+    const generation = this.generation;
+    const request: Promise<T> = this.load()
       .then((value) => {
-        this.cached = { value, loadedAt: this.now() };
+        if (generation === this.generation) {
+          this.cached = { value, loadedAt: this.now() };
+        }
         return value;
       })
       .finally(() => {
-        this.inFlight = undefined;
+        if (this.inFlight === request) {
+          this.inFlight = undefined;
+        }
       });
     this.inFlight = request;
 
@@ -51,7 +57,10 @@ export class CachedAsyncValue<T> {
     void this.get().catch(() => undefined);
   }
 
+  /** Drops the cached value and disowns any load started before this point. */
   invalidate(): void {
+    this.generation += 1;
     this.cached = undefined;
+    this.inFlight = undefined;
   }
 }

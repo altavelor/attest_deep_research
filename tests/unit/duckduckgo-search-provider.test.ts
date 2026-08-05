@@ -483,6 +483,31 @@ describe("DuckDuckGoSearchProvider result page throttling", () => {
     expect(results.every((result) => result.source.wasContentFetched)).toBe(true);
   });
 
+  it("accepts a result page whose content type carries parameters", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("https://html.duckduckgo.com/")) {
+        return htmlResponse(`
+          <html><body>
+            <div class="result"><a class="result__a" href="https://a.example.com/">A</a><a class="result__snippet">a</a></div>
+          </body></html>
+        `);
+      }
+      return new Response(
+        "<html><body><article><p>Readable paragraph with enough words.</p></article></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" }, status: 200 },
+      );
+    });
+    const provider = new DuckDuckGoSearchProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      minRequestIntervalMs: 0,
+    });
+
+    const results = await provider.search("local models", { limit: 1, maxFetches: 1 });
+
+    expect(results[0]!.source.wasContentFetched).toBe(true);
+    expect(results[0]!.extractedText).toContain("Readable paragraph");
+  });
+
   it("skips a result page that cannot be fetched", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith("https://html.duckduckgo.com/")) {

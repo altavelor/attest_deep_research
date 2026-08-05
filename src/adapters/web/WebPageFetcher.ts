@@ -20,14 +20,18 @@ export type RawPageResult =
   | { ok: false; result: WebPageFetchFailure };
 
 export interface WebPageFetcherOptions {
-  requestPage: (url: string, timeoutMs: number) => Promise<Response>;
+  requestPage: (url: string, timeoutMs: number, signal?: AbortSignal) => Promise<Response>;
   throttle: HostRequestThrottle;
   defaultTimeoutMs: number;
 }
 
 /** Safely retrieves one web page, including redirect validation and bounded response reading. */
 export class WebPageFetcher {
-  private readonly requestPage: (url: string, timeoutMs: number) => Promise<Response>;
+  private readonly requestPage: (
+    url: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ) => Promise<Response>;
   private readonly throttle: HostRequestThrottle;
   private readonly defaultTimeoutMs: number;
 
@@ -69,7 +73,7 @@ export class WebPageFetcher {
     for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
       let response: Response;
       try {
-        response = await this.requestPage(currentUrl, timeoutMs);
+        response = await this.requestPage(currentUrl, timeoutMs, options.signal);
       } catch (error) {
         if (isAbortError(error)) {
           return {

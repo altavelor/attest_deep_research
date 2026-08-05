@@ -84,9 +84,13 @@ export class InstantResearchStrategy implements ResearchStrategy {
             { evidenceLimit, maxVariants: ctx.retrieval.maxQueryVariants },
           ),
     );
+    const webAbort = new AbortController();
+    const abortWeb = () => webAbort.abort();
+    request.signal?.addEventListener("abort", abortWeb);
     const webBranch = branches.run(
       this.deps.webPipeline.search(question, searchMode !== "indexOnly" && searchMode !== "none", {
         evidenceLimit,
+        signal: webAbort.signal,
       }),
     );
     const retrieval = yield* branches.until(vaultBranch);
@@ -107,7 +111,13 @@ export class InstantResearchStrategy implements ResearchStrategy {
       retrievalEvidence: retrievalEvidenceForPlanner,
     });
     const waitForWeb = (webRequired || webBranch.isSettled()) && request.signal?.aborted !== true;
+
+    if (!waitForWeb) {
+      webAbort.abort();
+    }
+
     const webEvidence = waitForWeb ? yield* branches.until(webBranch) : emptyWebEvidence();
+    request.signal?.removeEventListener("abort", abortWeb);
 
     if (request.signal?.aborted === true) {
       return { kind: "cancelled" };

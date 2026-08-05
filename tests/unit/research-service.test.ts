@@ -1119,12 +1119,9 @@ describe("ResearchService", () => {
     expect(retriever.requests).toHaveLength(1);
     expect(retriever.requests[0].query).toBe("How should I use local models?");
     expect(retriever.requests[0].options).toMatchObject({ limit: 6, includeWebResults: false });
-    expect(webSearch.requests).toEqual([
-      {
-        query: "How should I use local models?",
-        options: { limit: 5, maxFetches: 3 },
-      },
-    ]);
+    expect(webSearch.requests).toHaveLength(1);
+    expect(webSearch.requests[0].query).toBe("How should I use local models?");
+    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
     expect(chatModel.requests[0]).toMatchObject({
       model: "qwen",
       temperature: 0.2,
@@ -1271,10 +1268,14 @@ describe("ResearchService", () => {
       usedFallback: false,
     });
     let webSearchStarted = false;
+    let abandonedWebSearchAborted = false;
     const hangingWebSearch: SearchProvider = {
-      search: () =>
+      search: (_query, options) =>
         new Promise<SearchProviderResult[]>(() => {
           webSearchStarted = true;
+          options?.signal?.addEventListener("abort", () => {
+            abandonedWebSearchAborted = true;
+          });
         }),
     };
     const service = new ResearchService({
@@ -1305,6 +1306,7 @@ describe("ResearchService", () => {
     );
 
     expect(webSearchStarted).toBe(true);
+    expect(abandonedWebSearchAborted).toBe(true);
     expect(events.at(-1)).toMatchObject({ type: "complete" });
   });
 
@@ -1469,9 +1471,9 @@ describe("ResearchService", () => {
     );
 
     expect(retriever.requests).toEqual([]);
-    expect(webSearch.requests).toEqual([
-      { query: "What changed recently?", options: { limit: 5, maxFetches: 3 } },
-    ]);
+    expect(webSearch.requests).toHaveLength(1);
+    expect(webSearch.requests[0].query).toBe("What changed recently?");
+    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
     expect(events.at(-1)).toEqual({
       type: "complete",
       answer: expect.objectContaining({
