@@ -102,6 +102,34 @@ describe("VaultResearchPipeline", () => {
     await expect(retriever.requests[0]!.options.queryVariants).resolves.toBeUndefined();
   });
 
+  it("passes the turn signal to the retriever and to query expansion", async () => {
+    const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, [
+      { language: "en", chunkCount: 3, sourceCount: 1 },
+    ]);
+    const controller = new AbortController();
+    let expansionSignal: AbortSignal | undefined;
+    const pipeline = new VaultResearchPipeline({
+      retriever,
+      queryExpansion: {
+        buildVariants: async (request) => {
+          expansionSignal = request.signal;
+          return [];
+        },
+      },
+      evidenceLimit: 4,
+    });
+
+    await collectAsync(
+      pipeline.search("question", undefined, ["Linked.md"], { signal: controller.signal }),
+    );
+
+    expect(expansionSignal).toBe(controller.signal);
+    expect(retriever.requests).toHaveLength(2);
+    for (const request of retriever.requests) {
+      expect(request.options.signal).toBe(controller.signal);
+    }
+  });
+
   it("searches boosted source paths in parallel with the primary search", async () => {
     const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, []);
     const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });

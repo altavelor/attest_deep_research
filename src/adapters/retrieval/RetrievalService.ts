@@ -88,9 +88,11 @@ export class RetrievalService {
     const originalPass = this.searchQueries(originalQueries, candidateLimit, scoped);
     const variantPass = resolveQueryVariants(options.queryVariants).then((variants) =>
       this.searchQueries(
-        normalizedQueries(variants.map((variant) => variant.query))
-          .filter((variant) => !originalQueries.includes(variant))
-          .slice(0, MAX_FUSED_QUERIES - originalQueries.length),
+        options.signal?.aborted === true
+          ? []
+          : normalizedQueries(variants.map((variant) => variant.query))
+              .filter((variant) => !originalQueries.includes(variant))
+              .slice(0, MAX_FUSED_QUERIES - originalQueries.length),
         candidateLimit,
         scoped,
       ),
@@ -224,7 +226,7 @@ export class RetrievalService {
     }
 
     const [semantic, keyword] = await Promise.all([
-      this.searchSemantic(queries, candidateLimit),
+      this.searchSemantic(queries, candidateLimit, scoped.signal),
       mapWithConcurrency(queries, KEYWORD_SEARCH_CONCURRENCY, (query) =>
         this.searchKeywords(query, { ...scoped, limit: candidateLimit }),
       ),
@@ -248,11 +250,13 @@ export class RetrievalService {
   private async searchSemantic(
     queries: string[],
     limit: number,
+    signal?: AbortSignal,
   ): Promise<{ chunksByQuery: RetrievedChunk[][]; error?: string }> {
     try {
       const response = await this.embeddings.embed({
         model: this.embeddingModel,
         input: queries,
+        ...(signal ? { signal } : {}),
       });
       const first = response.embeddings[0];
 

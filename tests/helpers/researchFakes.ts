@@ -11,6 +11,7 @@ export class FakeRetriever {
       includeWebResults: boolean;
       sourcePaths?: string[];
       queryVariants?: unknown;
+      signal?: AbortSignal;
     };
   }> = [];
 
@@ -26,6 +27,7 @@ export class FakeRetriever {
       includeWebResults: boolean;
       sourcePaths?: string[];
       queryVariants?: unknown;
+      signal?: AbortSignal;
     },
   ): Promise<RetrievalResult> {
     this.requests.push({ query, options });

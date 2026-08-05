@@ -114,6 +114,7 @@ export interface ChatModelProvider {
 export interface EmbeddingRequest {
   model: string;
   input: string[];
+  signal?: AbortSignal;
 }
 
 export interface EmbeddingResponse {

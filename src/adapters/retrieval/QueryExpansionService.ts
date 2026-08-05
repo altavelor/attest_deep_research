@@ -18,6 +18,7 @@ export interface BuildQueryVariantsOptions {
   query: string;
   languageInventory: LanguageInventoryItem[];
   maxVariants?: number;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_MAX_LANGUAGES = 4;
@@ -62,6 +63,7 @@ export class QueryExpansionService {
           model: this.chatModelName,
           temperature: 0,
           maxTokens: this.chatOptions?.maxTokens,
+          ...(options.signal ? { signal: options.signal } : {}),
           messages: [
             {
               role: "system",

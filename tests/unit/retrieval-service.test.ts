@@ -444,14 +444,16 @@ describe("RetrievalService", () => {
 describe("RetrievalService query variants", () => {
   class RecordingEmbeddingProvider implements EmbeddingProviderClient {
     calls: string[][] = [];
+    signals: Array<AbortSignal | undefined> = [];
 
     async listModels(): Promise<string[]> {
       return ["nomic"];
     }
 
-    async embed(request: { model: string; input: string[] }) {
+    async embed(request: { model: string; input: string[]; signal?: AbortSignal }) {
       const offset = this.calls.flat().length;
       this.calls.push([...request.input]);
+      this.signals.push(request.signal);
       return {
         model: "nomic",
         embeddings: request.input.map((_value, index) => [offset + index + 1, 0]),
@@ -508,6 +510,29 @@ describe("RetrievalService query variants", () => {
     });
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["from-original", "from-variant"]);
+  });
+
+  it("skips the variant pass and forwards the signal when the turn is aborted", async () => {
+    const embeddings = new RecordingEmbeddingProvider();
+    const controller = new AbortController();
+    const service = makeRetrievalService({
+      embeddings,
+      indexStore: new FakeIndexStore([]),
+      embeddingModel: "nomic",
+    });
+
+    await service.search("original", {
+      limit: 2,
+      includeWebResults: false,
+      signal: controller.signal,
+      queryVariants: Promise.resolve([{ query: "variant" }]).then((variants) => {
+        controller.abort();
+        return variants;
+      }),
+    });
+
+    expect(embeddings.calls).toEqual([["original"]]);
+    expect(embeddings.signals).toEqual([controller.signal]);
   });
 
   it("falls back to the original query when the variants promise rejects", async () => {

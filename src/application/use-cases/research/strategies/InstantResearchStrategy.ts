@@ -81,7 +81,11 @@ export class InstantResearchStrategy implements ResearchStrategy {
             question,
             assembled?.retrievalSourcePaths ?? request.contextPaths,
             assembled?.boostedSourcePaths,
-            { evidenceLimit, maxVariants: ctx.retrieval.maxQueryVariants },
+            {
+              evidenceLimit,
+              maxVariants: ctx.retrieval.maxQueryVariants,
+              ...(request.signal ? { signal: request.signal } : {}),
+            },
           ),
     );
     const webAbort = new AbortController();

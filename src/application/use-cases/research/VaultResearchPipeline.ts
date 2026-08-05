@@ -7,6 +7,7 @@ import { ResearchRetriever, ResearchStreamEvent } from "@application/contracts/r
 export interface VaultSearchOptions {
   evidenceLimit?: number;
   maxVariants?: number;
+  signal?: AbortSignal;
 }
 
 export interface VaultResearchPipelineOptions {
@@ -41,7 +42,7 @@ export class VaultResearchPipeline {
     const expansionEnabled = this.queryExpansion !== undefined && this.canReadLanguageInventory();
 
     yield { type: "status", message: "Reading vault context..." };
-    const queryVariants = this.buildQueryVariants(question, options.maxVariants);
+    const queryVariants = this.buildQueryVariants(question, options.maxVariants, options.signal);
 
     if (expansionEnabled) {
       yield { type: "status", message: "Expanding search queries..." };
@@ -51,6 +52,7 @@ export class VaultResearchPipeline {
       limit,
       includeWebResults: false,
       queryVariants,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(contextPaths ? { sourcePaths: contextPaths } : {}),
     });
     const hasBoostedPaths = boostedSourcePaths !== undefined && boostedSourcePaths.length > 0;
@@ -64,6 +66,7 @@ export class VaultResearchPipeline {
           limit,
           includeWebResults: false,
           queryVariants,
+          ...(options.signal ? { signal: options.signal } : {}),
           sourcePaths: boostedSourcePaths,
         })
       : undefined;
@@ -91,6 +94,7 @@ export class VaultResearchPipeline {
   private async buildQueryVariants(
     question: string,
     maxVariants: number | undefined,
+    signal: AbortSignal | undefined,
   ): Promise<RetrievalQueryVariant[] | undefined> {
     const queryExpansion = this.queryExpansion;
 
@@ -109,6 +113,7 @@ export class VaultResearchPipeline {
         query: question,
         languageInventory,
         ...(maxVariants !== undefined ? { maxVariants } : {}),
+        ...(signal ? { signal } : {}),
       });
 
       return variants.length > 0 ? variants : undefined;

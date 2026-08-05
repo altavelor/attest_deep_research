@@ -19,6 +19,8 @@ export interface RetrievalOptions {
    * once they arrive; a rejected promise degrades to the original query alone.
    */
   queryVariants?: RetrievalQueryVariant[] | Promise<RetrievalQueryVariant[] | undefined>;
+
+  signal?: AbortSignal;
 }
 
 export interface RetrievalQueryVariant {
