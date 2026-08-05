@@ -1310,6 +1310,40 @@ describe("ResearchService", () => {
     expect(events.at(-1)).toMatchObject({ type: "complete" });
   });
 
+  it("releases the web branch when vault retrieval fails", async () => {
+    const failingRetriever = {
+      search: async () => {
+        throw new Error("index unavailable");
+      },
+    };
+    let webAborted = false;
+    const hangingWebSearch: SearchProvider = {
+      search: (_query, options) =>
+        new Promise<SearchProviderResult[]>(() => {
+          options?.signal?.addEventListener("abort", () => {
+            webAborted = true;
+          });
+        }),
+    };
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever: failingRetriever,
+      searchProvider: hangingWebSearch,
+      chatModel: new FakeChatModel(),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    await expect(
+      collectAsync(
+        service.answer({ question: "How should I use local models?", includeWebSearch: true }),
+      ),
+    ).rejects.toThrow("index unavailable");
+    expect(webAborted).toBe(true);
+  });
+
   it("survives a web branch that rejects before vault retrieval finishes", async () => {
     const slowRetriever = {
       search: async () => {

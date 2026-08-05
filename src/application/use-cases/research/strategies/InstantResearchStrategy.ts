@@ -1,10 +1,11 @@
 import { formatCitation } from "@core/retrieval";
-import { ContextDiagnostics } from "@core/diagnostics";
+import { ContextDiagnostics, ResearchExecutionStrategy } from "@core/diagnostics";
 import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { RetrievalResult } from "@application/contracts";
+import { AssembledContext } from "@application/use-cases/chat/ContextAssembler";
 import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
-import { ResearchBranchStream } from "../branchStreams";
+import { ResearchBranch, ResearchBranchStream } from "../branchStreams";
 import { ResearchEvidenceResult } from "../WebResearchPipeline";
 import {
   ResearchExecutionContext,
@@ -30,6 +31,17 @@ import {
  * plan it under the token budget, then synthesize. Also serves as the fallback
  * when the thinking attempt fails outright. Terminal: it always completes.
  */
+interface InstantResearchRun {
+  assembled: AssembledContext | undefined;
+  branches: ResearchBranchStream;
+  vaultBranch: ResearchBranch<RetrievalResult>;
+  webBranch: ResearchBranch<ResearchEvidenceResult>;
+  webAbort: AbortController;
+  evidenceLimit: number;
+  executionStrategy: ResearchExecutionStrategy;
+  totalReservedWithIndexTokens: number;
+}
+
 export class InstantResearchStrategy implements ResearchStrategy {
   constructor(private readonly deps: ResearchStrategyDeps) {}
 
@@ -38,7 +50,6 @@ export class InstantResearchStrategy implements ResearchStrategy {
   ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const executionStrategy = ctx.executionStrategy ?? policy.strategy;
-    const failedThinkingAttempt = ctx.failedThinkingAttempt;
     const evidenceLimit = ctx.retrieval.evidenceLimit;
 
     const totalReservedTokens = this.deps.reservedOutputTokens ?? 0;
@@ -74,6 +85,9 @@ export class InstantResearchStrategy implements ResearchStrategy {
       yield { type: "context", diagnostics: assembled.diagnostics };
     }
     const branches = new ResearchBranchStream();
+    const webAbort = new AbortController();
+    const abortWeb = () => webAbort.abort();
+    request.signal?.addEventListener("abort", abortWeb);
     const vaultBranch = branches.run(
       searchMode === "webOnly" || searchMode === "none"
         ? emptyRetrievalBranch()
@@ -88,15 +102,45 @@ export class InstantResearchStrategy implements ResearchStrategy {
             },
           ),
     );
-    const webAbort = new AbortController();
-    const abortWeb = () => webAbort.abort();
-    request.signal?.addEventListener("abort", abortWeb);
     const webBranch = branches.run(
       this.deps.webPipeline.search(question, searchMode !== "indexOnly" && searchMode !== "none", {
         evidenceLimit,
         signal: webAbort.signal,
       }),
     );
+
+    try {
+      return yield* this.planAndSynthesize(ctx, {
+        assembled,
+        branches,
+        vaultBranch,
+        webBranch,
+        webAbort,
+        evidenceLimit,
+        executionStrategy,
+        totalReservedWithIndexTokens,
+      });
+    } finally {
+      request.signal?.removeEventListener("abort", abortWeb);
+      webAbort.abort();
+      webBranch.close();
+      vaultBranch.close();
+    }
+  }
+
+  /**
+   * Consume both branches, plan the evidence they produced and stream the
+   * answer. The caller owns branch cleanup, so every exit path — including a
+   * failed vault branch — releases the still-running branches.
+   */
+  private async *planAndSynthesize(
+    ctx: ResearchExecutionContext,
+    run: InstantResearchRun,
+  ): AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome> {
+    const { request, question, searchMode, policy, indexDescription } = ctx;
+    const { assembled, branches, vaultBranch, webBranch, webAbort, evidenceLimit } = run;
+    const { executionStrategy, totalReservedWithIndexTokens } = run;
+    const failedThinkingAttempt = ctx.failedThinkingAttempt;
     const retrieval = yield* branches.until(vaultBranch);
     const explicitEvidence = assembled?.explicitEvidence ?? [];
     const graphEvidenceForPlanner = graphEvidenceFromRetrieval(
@@ -123,7 +167,6 @@ export class InstantResearchStrategy implements ResearchStrategy {
     }
 
     const webEvidence = waitForWeb ? yield* branches.until(webBranch) : emptyWebEvidence();
-    request.signal?.removeEventListener("abort", abortWeb);
 
     if (request.signal?.aborted === true) {
       return { kind: "cancelled" };
