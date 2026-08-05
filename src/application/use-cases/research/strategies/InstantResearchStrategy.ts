@@ -30,14 +30,6 @@ import {
  * plan it under the token budget, then synthesize. Also serves as the fallback
  * when the thinking attempt fails outright. Terminal: it always completes.
  */
-async function* emptyRetrievalBranch(): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
-  return emptyRetrievalResult();
-}
-
-function emptyWebEvidence(): ResearchEvidenceResult {
-  return { chunks: [], citations: [] };
-}
-
 export class InstantResearchStrategy implements ResearchStrategy {
   constructor(private readonly deps: ResearchStrategyDeps) {}
 
@@ -115,9 +107,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
       retrievalEvidence: retrievalEvidenceForPlanner,
     });
     const webEvidence =
-      webRequired || webBranch.isSettled()
-        ? yield* branches.until(webBranch)
-        : emptyWebEvidence();
+      webRequired || webBranch.isSettled() ? yield* branches.until(webBranch) : emptyWebEvidence();
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
         createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
@@ -251,4 +241,12 @@ export class InstantResearchStrategy implements ResearchStrategy {
       };
     }
   }
+}
+
+async function* emptyRetrievalBranch(): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
+  return emptyRetrievalResult();
+}
+
+function emptyWebEvidence(): ResearchEvidenceResult {
+  return { chunks: [], citations: [] };
 }

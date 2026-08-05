@@ -128,3 +128,36 @@ describe("Ixplorer plugin lifecycle", () => {
     await expect(openChatLeaf(app)).rejects.toThrow(/No view registered/);
   });
 });
+
+describe("Ixplorer vault warm-up caches", () => {
+  let vaultPath: string;
+  let app: App;
+  let plugin: IxplorerPlugin;
+
+  beforeEach(async () => {
+    createContainer();
+    vaultPath = await mkdtemp(join(tmpdir(), "ixplorer-warm-"));
+    app = new App();
+    app.vault.useLocalPath(vaultPath);
+    plugin = createPlugin(app);
+    await plugin.onload();
+  });
+
+  afterEach(async () => {
+    restoreDomTimers();
+    resetDom();
+    await rm(vaultPath, { recursive: true, force: true });
+  });
+
+  it("releases its vault subscriptions when the plugin unloads", () => {
+    expect(app.vault.listenerCount("create")).toBe(1);
+    expect(app.vault.listenerCount("delete")).toBe(1);
+    expect(app.vault.listenerCount("rename")).toBe(1);
+
+    plugin.unload();
+
+    expect(app.vault.listenerCount("create")).toBe(0);
+    expect(app.vault.listenerCount("delete")).toBe(0);
+    expect(app.vault.listenerCount("rename")).toBe(0);
+  });
+});

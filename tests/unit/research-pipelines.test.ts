@@ -55,10 +55,9 @@ describe("VaultResearchPipeline", () => {
   });
 
   it("starts the original-query search without waiting for query expansion", async () => {
-    const retriever = new FakeRetriever(
-      { chunks: [], citations: [], usedFallback: false },
-      [{ language: "en", chunkCount: 3, sourceCount: 1 }],
-    );
+    const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, [
+      { language: "en", chunkCount: 3, sourceCount: 1 },
+    ]);
     let releaseExpansion: (() => void) | undefined;
     const expansionStarted = new Promise<void>((resolve) => {
       releaseExpansion = resolve;
@@ -84,10 +83,9 @@ describe("VaultResearchPipeline", () => {
   });
 
   it("keeps answering when query expansion fails", async () => {
-    const retriever = new FakeRetriever(
-      { chunks: [], citations: [], usedFallback: false },
-      [{ language: "en", chunkCount: 3, sourceCount: 1 }],
-    );
+    const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, [
+      { language: "en", chunkCount: 3, sourceCount: 1 },
+    ]);
     const pipeline = new VaultResearchPipeline({
       retriever,
       queryExpansion: {
@@ -105,10 +103,7 @@ describe("VaultResearchPipeline", () => {
   });
 
   it("searches boosted source paths in parallel with the primary search", async () => {
-    const retriever = new FakeRetriever(
-      { chunks: [], citations: [], usedFallback: false },
-      [],
-    );
+    const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, []);
     const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });
 
     const run = collectAsync(pipeline.search("question", undefined, ["Linked.md"]));

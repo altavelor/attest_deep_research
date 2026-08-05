@@ -83,7 +83,11 @@ export class EvidencePlanner {
    * worth the latency; a `local-first` plan uses web results only as filler.
    */
   requiresWebEvidence(input: WebEvidenceRequirementInput): boolean {
-    const webIntent = detectWebIntent(input.question, input.searchMode, this.useWebWhenFreshnessNeeded);
+    const webIntent = detectWebIntent(
+      input.question,
+      input.searchMode,
+      this.useWebWhenFreshnessNeeded,
+    );
     const policy = resolvePolicy(input.searchMode, webIntent.detected, isWeakLocalEvidence(input));
 
     return policy === "web-only" || policy === "freshness" || policy === "weak-local";

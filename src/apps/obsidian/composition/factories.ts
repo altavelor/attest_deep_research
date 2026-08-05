@@ -8,7 +8,6 @@ import { EnrichIndexSources } from "@application/use-cases/enrichment";
 import { ContextAssembler } from "@application/use-cases/chat";
 import { stableId } from "@adapters/extractors";
 import { DEFAULT_GRAPH_CONTEXT_LIMITS } from "@core/research";
-import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
 import { ObsidianGraphContextProvider } from "@adapters/obsidian/ObsidianGraphContextProvider";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
@@ -75,7 +74,7 @@ export function createResearchService(
   const chatProfile = requireChatModelProfile(settings, chatModelProfileId);
   const chatServer = requireServerProfile(settings, chatProfile.serverProfileId);
   const retriever = createRetrieverForProfile(ctx, indexProfile);
-  const contextFiles = new ObsidianContextFileProvider(ctx.app.vault);
+  const contextFiles = ctx.warmCaches.contextFiles();
   const contextExtractors = createContextExtractorsForProfile(ctx, indexProfile);
   const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
   const toolsEnabled = resolveEffectiveTools(chatProfile);

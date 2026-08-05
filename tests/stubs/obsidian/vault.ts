@@ -28,9 +28,37 @@ export class FileSystemAdapter {
  * `FileSystemAdapter` until `useLocalPath` opts in, so no test reaches the
  * filesystem by accident.
  */
+export interface VaultEventRef {
+  event: string;
+  handler: (...args: unknown[]) => void;
+  detach(): void;
+}
+
 export class Vault {
   adapter: unknown = {};
   private files: TFile[] = [];
+  private readonly listeners: VaultEventRef[] = [];
+
+  on(event: string, handler: (...args: unknown[]) => void): VaultEventRef {
+    const ref: VaultEventRef = { event, handler, detach: () => this.offref(ref) };
+    this.listeners.push(ref);
+    return ref;
+  }
+
+  offref(ref: VaultEventRef): void {
+    const index = this.listeners.indexOf(ref);
+    if (index >= 0) this.listeners.splice(index, 1);
+  }
+
+  emit(event: string, ...args: unknown[]): void {
+    for (const ref of [...this.listeners]) {
+      if (ref.event === event) ref.handler(...args);
+    }
+  }
+
+  listenerCount(event: string): number {
+    return this.listeners.filter((ref) => ref.event === event).length;
+  }
 
   setFiles(files: TFile[]): void {
     this.files = files;

@@ -21,6 +21,8 @@ import {
 import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
 import { WebSourceHealthTracker } from "@application/web";
+import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
+import { VaultWarmCaches } from "./composition/VaultWarmCaches";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import {
@@ -108,6 +110,8 @@ export default class IxplorerPlugin extends Plugin {
 
   readonly webSourceHealth = new WebSourceHealthTracker();
 
+  private warmCaches?: VaultWarmCaches;
+
   /** Opens the plugin's settings tab; used by in-chat notices that link to it. */
   openSettingsTab(): void {
     const setting = (
@@ -124,6 +128,7 @@ export default class IxplorerPlugin extends Plugin {
       logger: this.logger,
       pdfTextCache: this.pdfTextCache,
       webSourceHealth: this.webSourceHealth,
+      warmCaches: this.requireWarmCaches(),
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       getVaultLocalPath: (path) => this.getVaultLocalPath(path),
@@ -133,6 +138,11 @@ export default class IxplorerPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
+    const invalidateWarmCaches = () => this.warmCaches?.invalidate();
+    this.registerEvent(this.app.vault.on("create", invalidateWarmCaches));
+    this.registerEvent(this.app.vault.on("delete", invalidateWarmCaches));
+    this.registerEvent(this.app.vault.on("rename", invalidateWarmCaches));
     const startupIndexProfile = getActiveIndexProfile(this.settings);
     if (startupIndexProfile.isSuspended !== true) {
       void this.indexing.refreshIndexSize(startupIndexProfile.id);
@@ -208,7 +218,18 @@ export default class IxplorerPlugin extends Plugin {
     this.addSettingTab(new IxplorerSettingTab(this.app, this));
   }
 
-  onunload(): void {}
+  onunload(): void {
+    this.warmCaches?.dispose();
+    this.warmCaches = undefined;
+  }
+
+  /** Warm-up caches exist for the plugin's lifetime; factories run only after onload. */
+  private requireWarmCaches(): VaultWarmCaches {
+    if (!this.warmCaches) {
+      this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
+    }
+    return this.warmCaches;
+  }
 
   async loadSettings(): Promise<void> {
     this.settings = readSettings(await this.loadData());
@@ -306,6 +327,13 @@ export default class IxplorerPlugin extends Plugin {
       active: true,
     });
     await this.app.workspace.revealLeaf(leaf);
+    this.warmVaultCaches();
+  }
+
+  /** Pull question-independent inputs off the critical path of the first turn. */
+  private warmVaultCaches(): void {
+    const profile = getActiveIndexProfile(this.settings);
+    this.requireWarmCaches().warm(profile.id, createRetrieverForProfile(this.composition, profile));
   }
 
   refreshChatViews(): void {
