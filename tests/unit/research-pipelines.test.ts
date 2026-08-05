@@ -194,6 +194,29 @@ describe("WebResearchPipeline", () => {
 });
 
 describe("AnswerSynthesisService", () => {
+  it("appends the partial-results notice so the cacheable system prompt prefix is stable", async () => {
+    const chatModel = new FakeChatModel();
+    const service = new AnswerSynthesisService({
+      runToolLoop,
+      chatModel,
+      chatModelName: "qwen",
+      chatOptions: {},
+      now: fixedNow,
+    });
+    const request = { question: "Why?", evidence: [], citations: [], evidenceLimit: 8 };
+
+    await collectAsync(service.synthesize(request));
+    await collectAsync(
+      service.synthesize({ ...request, fallback: { reason: "tool-loop-exhausted" } }),
+    );
+
+    const [complete, partial] = chatModel.requests.map(
+      (chatRequest) => chatRequest.messages[0]!.content,
+    );
+    expect(partial!.startsWith(complete!)).toBe(true);
+    expect(partial).toContain("PARTIAL results");
+  });
+
   it("uses Responses rounds for instant synthesis without adding summaries to the final answer", async () => {
     const chatModel = new FakeChatModel([]);
     const service = new AnswerSynthesisService({
