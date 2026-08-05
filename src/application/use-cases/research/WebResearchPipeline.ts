@@ -14,6 +14,10 @@ export interface ResearchEvidenceResult {
   diagnostics?: WebContextDiagnostics;
 }
 
+export interface WebSearchPipelineOptions {
+  evidenceLimit?: number;
+}
+
 export interface WebResearchPipelineOptions {
   searchProvider?: SearchProvider;
   evidenceLimit: number;
@@ -36,10 +40,13 @@ export class WebResearchPipeline {
   async *search(
     question: string,
     includeWebSearch: boolean,
+    options: WebSearchPipelineOptions = {},
   ): AsyncGenerator<ResearchStreamEvent, ResearchEvidenceResult> {
     if (!includeWebSearch || !this.searchProvider) {
       return { chunks: [], citations: [] };
     }
+
+    const evidenceLimit = options.evidenceLimit ?? this.evidenceLimit;
 
     const queries = [question];
 
@@ -60,7 +67,7 @@ export class WebResearchPipeline {
 
     yield { type: "status", message: "Fetching sources..." };
     const rankedResults = rankWebResults(dedupeWebResults(results), question);
-    const selectedResults = rankedResults.slice(0, this.evidenceLimit);
+    const selectedResults = rankedResults.slice(0, evidenceLimit);
     const chunks = selectedResults.map((result) => webResultToChunk(result));
 
     return {
@@ -73,7 +80,7 @@ export class WebResearchPipeline {
         search.requests,
         results,
         rankedResults,
-        this.evidenceLimit,
+        evidenceLimit,
       ),
     };
   }

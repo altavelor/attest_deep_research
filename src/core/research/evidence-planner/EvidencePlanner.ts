@@ -29,6 +29,14 @@ export interface EvidencePlannerOptions {
   useWebWhenFreshnessNeeded?: boolean;
 }
 
+export interface WebEvidenceRequirementInput {
+  question: string;
+  searchMode: ResearchSearchMode;
+  explicitEvidence: RetrievedChunk[];
+  graphEvidence: RetrievedChunk[];
+  retrievalEvidence: RetrievedChunk[];
+}
+
 type EvidenceGroupName = "explicit" | "graph" | "retrieval" | "web";
 type PlannerPolicy = EvidencePlannerDiagnostics["budget"]["policy"];
 
@@ -67,6 +75,18 @@ export class EvidencePlanner {
 
   constructor(options: EvidencePlannerOptions = {}) {
     this.useWebWhenFreshnessNeeded = options.useWebWhenFreshnessNeeded ?? true;
+  }
+
+  /**
+   * Whether the planner would put web evidence ahead of local evidence for this
+   * turn. Callers use it to decide when waiting for a speculative web branch is
+   * worth the latency; a `local-first` plan uses web results only as filler.
+   */
+  requiresWebEvidence(input: WebEvidenceRequirementInput): boolean {
+    const webIntent = detectWebIntent(input.question, input.searchMode, this.useWebWhenFreshnessNeeded);
+    const policy = resolvePolicy(input.searchMode, webIntent.detected, isWeakLocalEvidence(input));
+
+    return policy === "web-only" || policy === "freshness" || policy === "weak-local";
   }
 
   plan(input: EvidencePlannerInput): EvidencePlannerOutput {
@@ -424,15 +444,20 @@ function evaluateLocalEvidence(
   }
 
   return {
-    weak:
-      input.explicitEvidence.length === 0 &&
-      (input.retrievalEvidence.length < 3 || input.graphEvidence.length === 0),
+    weak: isWeakLocalEvidence(input),
     explicitChunks: input.explicitEvidence.length,
     graphChunks: input.graphEvidence.length,
     retrievalChunks: input.retrievalEvidence.length,
     averageRetrievalScore,
     reasons,
   };
+}
+
+function isWeakLocalEvidence(input: WebEvidenceRequirementInput): boolean {
+  return (
+    input.explicitEvidence.length === 0 &&
+    (input.retrievalEvidence.length < 3 || input.graphEvidence.length === 0)
+  );
 }
 
 function resolvePolicy(

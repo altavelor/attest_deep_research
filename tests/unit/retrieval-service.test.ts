@@ -16,6 +16,7 @@ import {
 } from "../helpers/retrievalFakes";
 import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "@application/ports";
+import { RetrievedChunk } from "@core/model";
 
 function makeRetrievalService(options: {
   embeddings: EmbeddingProviderClient;
@@ -437,6 +438,93 @@ describe("RetrievalService", () => {
       expect.objectContaining({ language: "ru" }),
     );
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["ru"]);
+  });
+});
+
+describe("RetrievalService query variants", () => {
+  class RecordingEmbeddingProvider implements EmbeddingProviderClient {
+    calls: string[][] = [];
+
+    async listModels(): Promise<string[]> {
+      return ["nomic"];
+    }
+
+    async embed(request: { model: string; input: string[] }) {
+      const offset = this.calls.flat().length;
+      this.calls.push([...request.input]);
+      return {
+        model: "nomic",
+        embeddings: request.input.map((_value, index) => [offset + index + 1, 0]),
+      };
+    }
+  }
+
+  class DelayedIndexStore extends FakeIndexStore {
+    constructor(private readonly chunksByEmbedding: Map<number, RetrievedChunk[]>) {
+      super([]);
+    }
+
+    override async query(embedding: number[], _limit: number): Promise<RetrievedChunk[]> {
+      const key = embedding[0]!;
+      await new Promise((resolve) => setTimeout(resolve, (4 - key) * 5));
+      return this.chunksByEmbedding.get(key) ?? [];
+    }
+  }
+
+  it("embeds the original query and its variants in two batched calls", async () => {
+    const embeddings = new RecordingEmbeddingProvider();
+    const service = makeRetrievalService({
+      embeddings,
+      indexStore: new FakeIndexStore([]),
+      embeddingModel: "nomic",
+    });
+
+    await service.search("original", {
+      limit: 2,
+      includeWebResults: false,
+      queryVariants: [{ query: "variant one" }, { query: "variant two" }],
+    });
+
+    expect(embeddings.calls).toEqual([["original"], ["variant one", "variant two"]]);
+  });
+
+  it("fuses variant contributions in query order even when slower queries win the race", async () => {
+    const indexStore = new DelayedIndexStore(
+      new Map([
+        [1, [retrieved("from-original", markdownSource("a.md"), "a", 0.1)]],
+        [2, [retrieved("from-variant", markdownSource("b.md"), "b", 0.9)]],
+      ]),
+    );
+    const service = makeRetrievalService({
+      embeddings: new RecordingEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("original", {
+      limit: 2,
+      includeWebResults: false,
+      queryVariants: [{ query: "variant" }],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["from-original", "from-variant"]);
+  });
+
+  it("falls back to the original query when the variants promise rejects", async () => {
+    const embeddings = new RecordingEmbeddingProvider();
+    const service = makeRetrievalService({
+      embeddings,
+      indexStore: new FakeIndexStore([]),
+      embeddingModel: "nomic",
+    });
+
+    await service.search("original", {
+      limit: 2,
+      includeWebResults: false,
+      queryVariants: Promise.reject(new Error("expansion failed")),
+    });
+
+    expect(embeddings.calls).toEqual([["original"]]);
   });
 });
 

@@ -2,7 +2,10 @@ import { formatCitation } from "@core/retrieval";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { estimateTextTokens } from "@core/research";
 import { ResearchStreamEvent } from "@application/contracts/research";
+import { RetrievalResult } from "@application/contracts";
 import { ThinkingResearchFailure } from "../ThinkingResearchRunner";
+import { ResearchBranchStream } from "../branchStreams";
+import { ResearchEvidenceResult } from "../WebResearchPipeline";
 import {
   ResearchExecutionContext,
   ResearchStrategy,
@@ -27,6 +30,14 @@ import {
  * plan it under the token budget, then synthesize. Also serves as the fallback
  * when the thinking attempt fails outright. Terminal: it always completes.
  */
+async function* emptyRetrievalBranch(): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
+  return emptyRetrievalResult();
+}
+
+function emptyWebEvidence(): ResearchEvidenceResult {
+  return { chunks: [], citations: [] };
+}
+
 export class InstantResearchStrategy implements ResearchStrategy {
   constructor(private readonly deps: ResearchStrategyDeps) {}
 
@@ -36,6 +47,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
     const { request, question, searchMode, policy, indexDescription } = ctx;
     const executionStrategy = ctx.executionStrategy ?? policy.strategy;
     const failedThinkingAttempt = ctx.failedThinkingAttempt;
+    const evidenceLimit = ctx.retrieval.evidenceLimit;
 
     const totalReservedTokens = this.deps.reservedOutputTokens ?? 0;
     const totalReservedWithIndexTokens =
@@ -52,7 +64,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
             chatHistory: request.chatHistory,
             contextLimitTokens: this.deps.contextLimitTokens,
             reservedOutputTokens: totalReservedWithIndexTokens,
-            evidenceLimit: this.deps.evidenceLimit,
+            evidenceLimit,
             explicitSourcesOnly: searchMode === "none",
             graph: this.deps.graphContext,
           });
@@ -69,18 +81,43 @@ export class InstantResearchStrategy implements ResearchStrategy {
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
     }
-    const retrieval =
+    const branches = new ResearchBranchStream();
+    const vaultBranch = branches.run(
       searchMode === "webOnly" || searchMode === "none"
-        ? emptyRetrievalResult()
-        : yield* this.deps.vaultPipeline.search(
+        ? emptyRetrievalBranch()
+        : this.deps.vaultPipeline.search(
             question,
             assembled?.retrievalSourcePaths ?? request.contextPaths,
             assembled?.boostedSourcePaths,
-          );
-    const webEvidence = yield* this.deps.webPipeline.search(
-      question,
-      searchMode !== "indexOnly" && searchMode !== "none",
+            { evidenceLimit, maxVariants: ctx.retrieval.maxQueryVariants },
+          ),
     );
+    const webBranch = branches.run(
+      this.deps.webPipeline.search(question, searchMode !== "indexOnly" && searchMode !== "none", {
+        evidenceLimit,
+      }),
+    );
+    const retrieval = yield* branches.until(vaultBranch);
+    const explicitEvidence = assembled?.explicitEvidence ?? [];
+    const graphEvidenceForPlanner = graphEvidenceFromRetrieval(
+      retrieval.chunks,
+      assembled?.graphSourcePaths ?? [],
+    );
+    const retrievalEvidenceForPlanner = nonExplicitEvidence(
+      retrieval.chunks,
+      graphEvidenceForPlanner,
+    );
+    const webRequired = this.deps.evidencePlanner.requiresWebEvidence({
+      question,
+      searchMode,
+      explicitEvidence,
+      graphEvidence: graphEvidenceForPlanner,
+      retrievalEvidence: retrievalEvidenceForPlanner,
+    });
+    const webEvidence =
+      webRequired || webBranch.isSettled()
+        ? yield* branches.until(webBranch)
+        : emptyWebEvidence();
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
         createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),
@@ -96,25 +133,19 @@ export class InstantResearchStrategy implements ResearchStrategy {
     if (this.deps.getIndexStatus) {
       contextDiagnostics.index = this.deps.getIndexStatus();
     }
-    const rawGraphEvidence = graphEvidenceFromRetrieval(
-      retrieval.chunks,
-      assembled?.graphSourcePaths ?? [],
-    );
-    const rawRetrievalEvidence = nonExplicitEvidence(retrieval.chunks, rawGraphEvidence);
-
     const planned = this.deps.evidencePlanner.plan({
       question,
       chatHistory: request.chatHistory,
       contextLimitTokens: this.deps.contextLimitTokens,
       reservedOutputTokens: totalReservedWithIndexTokens,
-      evidenceLimit: this.deps.evidenceLimit,
+      evidenceLimit,
       searchMode,
-      explicitEvidence: assembled?.explicitEvidence ?? [],
-      graphEvidence: rawGraphEvidence,
-      retrievalEvidence: rawRetrievalEvidence,
+      explicitEvidence,
+      graphEvidence: graphEvidenceForPlanner,
+      retrievalEvidence: retrievalEvidenceForPlanner,
       webEvidence: webEvidence.chunks,
     });
-    const explicitCitations = (assembled?.explicitEvidence ?? []).map((chunk) => ({
+    const explicitCitations = explicitEvidence.map((chunk) => ({
       ...formatCitation(chunk.source),
       id: chunk.id,
     }));
@@ -152,7 +183,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
       webEvidence: planned.webEvidence,
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
-      evidenceLimit: this.deps.evidenceLimit,
+      evidenceLimit,
       toolsEnabled: policy.reason === "instant-selected" ? false : this.deps.toolsEnabled,
       retrievalDiagnostics: isRagDebugIntent(question)
         ? buildRagDiagnosticSnapshot(diagnostics)

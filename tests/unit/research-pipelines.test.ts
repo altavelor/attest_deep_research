@@ -38,23 +38,84 @@ describe("VaultResearchPipeline", () => {
       { type: "status", message: "Reading vault context..." },
       { type: "status", message: "Expanding search queries..." },
     ]);
-    expect(retriever.requests).toEqual([
+    expect(retriever.requests).toHaveLength(1);
+    expect(retriever.requests[0]!.query).toBe("локальный research assistant");
+    expect(retriever.requests[0]!.options).toMatchObject({
+      limit: 4,
+      includeWebResults: false,
+      sourcePaths: ["Notes/a.md"],
+    });
+    await expect(retriever.requests[0]!.options.queryVariants).resolves.toEqual([
       {
-        query: "локальный research assistant",
-        options: {
-          limit: 4,
-          includeWebResults: false,
-          queryVariants: [
-            {
-              query: "local first research assistant",
-              language: "en",
-              reason: "translated",
-            },
-          ],
-          sourcePaths: ["Notes/a.md"],
-        },
+        query: "local first research assistant",
+        language: "en",
+        reason: "translated",
       },
     ]);
+  });
+
+  it("starts the original-query search without waiting for query expansion", async () => {
+    const retriever = new FakeRetriever(
+      { chunks: [], citations: [], usedFallback: false },
+      [{ language: "en", chunkCount: 3, sourceCount: 1 }],
+    );
+    let releaseExpansion: (() => void) | undefined;
+    const expansionStarted = new Promise<void>((resolve) => {
+      releaseExpansion = resolve;
+    });
+    const pipeline = new VaultResearchPipeline({
+      retriever,
+      queryExpansion: {
+        buildVariants: async () => {
+          await expansionStarted;
+          return [{ query: "variant" }];
+        },
+      },
+      evidenceLimit: 4,
+    });
+
+    const run = collectAsync(pipeline.search("question", undefined));
+    await tick();
+
+    expect(retriever.requests).toHaveLength(1);
+
+    releaseExpansion!();
+    await run;
+  });
+
+  it("keeps answering when query expansion fails", async () => {
+    const retriever = new FakeRetriever(
+      { chunks: [], citations: [], usedFallback: false },
+      [{ language: "en", chunkCount: 3, sourceCount: 1 }],
+    );
+    const pipeline = new VaultResearchPipeline({
+      retriever,
+      queryExpansion: {
+        buildVariants: async () => {
+          throw new Error("expansion unavailable");
+        },
+      },
+      evidenceLimit: 4,
+    });
+
+    await collectAsync(pipeline.search("question", undefined));
+
+    expect(retriever.requests).toHaveLength(1);
+    await expect(retriever.requests[0]!.options.queryVariants).resolves.toBeUndefined();
+  });
+
+  it("searches boosted source paths in parallel with the primary search", async () => {
+    const retriever = new FakeRetriever(
+      { chunks: [], citations: [], usedFallback: false },
+      [],
+    );
+    const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });
+
+    const run = collectAsync(pipeline.search("question", undefined, ["Linked.md"]));
+    await tick();
+
+    expect(retriever.requests).toHaveLength(2);
+    await run;
   });
 });
 
@@ -272,3 +333,7 @@ describe("AnswerSynthesisService", () => {
     expect(persisted).toEqual([expect.objectContaining({ question: "How?" })]);
   });
 });
+
+function tick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
