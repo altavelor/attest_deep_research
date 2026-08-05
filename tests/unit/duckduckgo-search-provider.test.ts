@@ -444,3 +444,65 @@ describe("DuckDuckGoSearchProvider", () => {
 function fixedNow(): Date {
   return new Date("2026-05-16T00:00:00.000Z");
 }
+
+describe("DuckDuckGoSearchProvider result page throttling", () => {
+  it("does not serialize result pages behind the DuckDuckGo request interval", async () => {
+    const inFlight: string[] = [];
+    let peakConcurrentPages = 0;
+    let pending = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("https://html.duckduckgo.com/")) {
+        return htmlResponse(`
+          <html><body>
+            <div class="result"><a class="result__a" href="https://a.example.com/">A</a><a class="result__snippet">a</a></div>
+            <div class="result"><a class="result__a" href="https://b.example.com/">B</a><a class="result__snippet">b</a></div>
+            <div class="result"><a class="result__a" href="https://c.example.com/">C</a><a class="result__snippet">c</a></div>
+          </body></html>
+        `);
+      }
+      inFlight.push(url);
+      pending += 1;
+      peakConcurrentPages = Math.max(peakConcurrentPages, pending);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      pending -= 1;
+      return htmlResponse(
+        `<html><body><article><p>Paragraph for ${url} with enough words to extract.</p></article></body></html>`,
+      );
+    });
+
+    const provider = new DuckDuckGoSearchProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      minRequestIntervalMs: 1_000,
+    });
+
+    const results = await provider.search("local models", { limit: 3, maxFetches: 3 });
+
+    expect(results).toHaveLength(3);
+    expect(inFlight).toHaveLength(3);
+    expect(peakConcurrentPages).toBeGreaterThan(1);
+    expect(results.every((result) => result.source.wasContentFetched)).toBe(true);
+  });
+
+  it("skips a result page that cannot be fetched", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("https://html.duckduckgo.com/")) {
+        return htmlResponse(`
+          <html><body>
+            <div class="result"><a class="result__a" href="https://a.example.com/">A</a><a class="result__snippet">a</a></div>
+          </body></html>
+        `);
+      }
+      return htmlResponse("nope", { status: 500 });
+    });
+    const provider = new DuckDuckGoSearchProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      minRequestIntervalMs: 0,
+    });
+
+    const results = await provider.search("local models", { limit: 1, maxFetches: 1 });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.source.wasContentFetched).toBe(false);
+    expect(results[0]!.extractedText).toBeUndefined();
+  });
+});

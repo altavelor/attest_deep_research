@@ -270,25 +270,19 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     }
   }
 
+  /**
+   * Result pages go through the per-host throttle rather than the DuckDuckGo
+   * request gate, so they load in parallel instead of queueing behind the
+   * search interval. A failed page is skipped silently, as before.
+   */
   private async fetchResultText(url: string): Promise<string | undefined> {
-    let response: Response;
+    const raw = await this.pageFetcher.fetch(url, {}, isSearchResultContentType);
 
-    try {
-      response = await this.request(url);
-    } catch {
+    if (!raw.ok) {
       return undefined;
     }
 
-    if (!response.ok) {
-      return undefined;
-    }
-
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType && !contentType.toLowerCase().includes("text/html")) {
-      return undefined;
-    }
-
-    const text = extractReadableText(await response.text(), this.maxExtractedTextLength);
+    const text = extractReadableText(raw.rawText, this.maxExtractedTextLength);
     return text.length > 0 ? text : undefined;
   }
 
@@ -357,6 +351,10 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       clearTimeout(timeout);
     }
   }
+}
+
+function isSearchResultContentType(contentType: string): boolean {
+  return contentType === "" || contentType === "text/html";
 }
 
 function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
