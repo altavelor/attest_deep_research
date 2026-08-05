@@ -5,6 +5,7 @@ import {
   IxplorerSettings,
   cloneIndexProfile,
   createIndexProfile,
+  getActiveIndexProfile,
   normalizeSettingsState,
   readSettings,
 } from "@adapters/settings";
@@ -134,6 +135,17 @@ describe("new chat defaults", () => {
     normalizeSettingsState(settings);
 
     expect(settings.newChatDefaults.researchMode).toBe("thinking");
+  });
+
+  it("resolves the active index profile past a suspended default selection", () => {
+    const settings = baseSettings();
+    settings.indexProfiles = [
+      { ...settings.indexProfiles[0], id: "index-suspended", isSuspended: true },
+      { ...settings.indexProfiles[0], id: "index-b", isSuspended: false },
+    ];
+    settings.newChatDefaults.indexProfileId = "index-suspended";
+
+    expect(getActiveIndexProfile(settings).id).toBe("index-b");
   });
 
   it("keeps a non-indexed index profile selectable as the default index", () => {

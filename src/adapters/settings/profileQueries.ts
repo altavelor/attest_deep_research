@@ -12,8 +12,10 @@ const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile {
   return (
     settings.indexProfiles.find(
-      (profile) => profile.id === settings.newChatDefaults.indexProfileId,
+      (profile) =>
+        profile.id === settings.newChatDefaults.indexProfileId && isProfileActive(profile),
     ) ??
+    settings.indexProfiles.find(isProfileActive) ??
     settings.indexProfiles[0] ??
     cloneIndexProfile(DEFAULT_INDEX_PROFILE)
   );
