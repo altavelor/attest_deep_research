@@ -106,8 +106,13 @@ export class InstantResearchStrategy implements ResearchStrategy {
       graphEvidence: graphEvidenceForPlanner,
       retrievalEvidence: retrievalEvidenceForPlanner,
     });
-    const webEvidence =
-      webRequired || webBranch.isSettled() ? yield* branches.until(webBranch) : emptyWebEvidence();
+    const waitForWeb = (webRequired || webBranch.isSettled()) && request.signal?.aborted !== true;
+    const webEvidence = waitForWeb ? yield* branches.until(webBranch) : emptyWebEvidence();
+
+    if (request.signal?.aborted === true) {
+      return { kind: "cancelled" };
+    }
+
     const contextDiagnostics = withRetrievalDiagnostics(
       assembled?.diagnostics ??
         createEmptyContextDiagnostics(request.contextMode ?? "include", executionStrategy),

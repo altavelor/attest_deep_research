@@ -1398,6 +1398,42 @@ describe("ResearchService", () => {
     });
   });
 
+  it("stops before synthesis when the turn is cancelled during retrieval", async () => {
+    const controller = new AbortController();
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
+      citations: [citation("local-1", markdownSource("Research/local.md"), "Research/local.md")],
+      usedFallback: false,
+    });
+    const chatModel = new FakeChatModel();
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      retriever,
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const generator = service
+      .answer({
+        question: "How should I use local models?",
+        searchMode: "indexOnly",
+        signal: controller.signal,
+      })
+      [Symbol.asyncIterator]();
+    await generator.next();
+    controller.abort();
+    const events = [];
+    for (let step = await generator.next(); !step.done; step = await generator.next()) {
+      events.push(step.value);
+    }
+
+    expect(chatModel.requests).toEqual([]);
+    expect(events.map((event) => event.type)).not.toContain("complete");
+  });
+
   it("skips local index retrieval when search mode is web only", async () => {
     const retriever = new FakeRetriever({
       chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
