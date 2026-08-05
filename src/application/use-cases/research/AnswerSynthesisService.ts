@@ -92,8 +92,8 @@ export class AnswerSynthesisService {
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
     this.assertWithinContextWindow(input);
-    const fallbackPrefix = input.fallback
-      ? `IMPORTANT: The research process could not complete (${input.fallback.reason}).\nYou are synthesizing a best-effort answer from PARTIAL results.\nBegin your response with a clear notice that the answer may be incomplete.\nDo not pretend to have complete information.\n\n`
+    const fallbackNotice = input.fallback
+      ? `\n\nIMPORTANT: The research process could not complete (${input.fallback.reason}).\nYou are synthesizing a best-effort answer from PARTIAL results.\nBegin your response with a clear notice that the answer may be incomplete.\nDo not pretend to have complete information.`
       : "";
     const toolLoopEnabled = input.toolsEnabled === true && this.noteTools !== undefined;
     const systemPromptOptions = {
@@ -128,7 +128,7 @@ export class AnswerSynthesisService {
     const messages = [
       {
         role: "system" as const,
-        content: fallbackPrefix + buildResearchSystemPrompt(systemPromptOptions),
+        content: buildResearchSystemPrompt(systemPromptOptions) + fallbackNotice,
       },
       { role: "user" as const, content: prompt },
     ];

@@ -4,6 +4,12 @@ import { uniqueChunks } from "@core/model";
 import { RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchRetriever, ResearchStreamEvent } from "@application/contracts/research";
 
+export interface VaultSearchOptions {
+  evidenceLimit?: number;
+  maxVariants?: number;
+  signal?: AbortSignal;
+}
+
 export interface VaultResearchPipelineOptions {
   retriever: ResearchRetriever;
   queryExpansion?: QueryExpansion;
@@ -21,55 +27,99 @@ export class VaultResearchPipeline {
     this.evidenceLimit = options.evidenceLimit;
   }
 
+  /**
+   * Search the vault for a question. Query expansion runs alongside the search
+   * for the original query instead of gating it, and the linked-notes pass runs
+   * alongside the primary one; neither can delay or fail the primary search.
+   */
   async *search(
     question: string,
     contextPaths: string[] | undefined,
     boostedSourcePaths: string[] | undefined = undefined,
+    options: VaultSearchOptions = {},
   ): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
+    const limit = options.evidenceLimit ?? this.evidenceLimit;
+    const expansionEnabled = this.queryExpansion !== undefined && this.canReadLanguageInventory();
+
     yield { type: "status", message: "Reading vault context..." };
-    const queryVariants = yield* this.buildQueryVariants(question);
-    const primary = await this.retriever.search(question, {
-      limit: this.evidenceLimit,
+    const queryVariants = this.buildQueryVariants(question, options.maxVariants, options.signal);
+
+    if (expansionEnabled) {
+      yield { type: "status", message: "Expanding search queries..." };
+    }
+
+    const primary = this.retriever.search(question, {
+      limit,
       includeWebResults: false,
       queryVariants,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(contextPaths ? { sourcePaths: contextPaths } : {}),
     });
+    const hasBoostedPaths = boostedSourcePaths !== undefined && boostedSourcePaths.length > 0;
 
-    if (!boostedSourcePaths || boostedSourcePaths.length === 0) {
-      return { ...primary, queryVariants };
+    if (hasBoostedPaths) {
+      yield { type: "status", message: "Searching linked notes..." };
     }
 
-    yield { type: "status", message: "Searching linked notes..." };
-    const graph = await this.retriever.search(question, {
-      limit: this.evidenceLimit,
-      includeWebResults: false,
+    const graph = hasBoostedPaths
+      ? this.retriever.search(question, {
+          limit,
+          includeWebResults: false,
+          queryVariants,
+          ...(options.signal ? { signal: options.signal } : {}),
+          sourcePaths: boostedSourcePaths,
+        })
+      : undefined;
+    const [variants, primaryResult, graphResult] = await Promise.all([
       queryVariants,
-      sourcePaths: boostedSourcePaths,
-    });
+      primary,
+      graph,
+    ]);
 
-    return { ...mergeRetrievalResults(primary, graph, this.evidenceLimit), queryVariants };
+    if (!graphResult) {
+      return { ...primaryResult, queryVariants: variants };
+    }
+
+    return {
+      ...mergeRetrievalResults(primaryResult, graphResult, limit),
+      queryVariants: variants,
+    };
   }
 
-  private async *buildQueryVariants(
+  private canReadLanguageInventory(): boolean {
+    return typeof this.retriever.getLanguageInventory === "function";
+  }
+
+  /** Never rejects: a failed expansion degrades to searching the original query. */
+  private async buildQueryVariants(
     question: string,
-  ): AsyncGenerator<ResearchStreamEvent, RetrievalQueryVariant[] | undefined> {
-    if (!this.queryExpansion || !this.retriever.getLanguageInventory) {
+    maxVariants: number | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<RetrievalQueryVariant[] | undefined> {
+    const queryExpansion = this.queryExpansion;
+
+    if (!queryExpansion || !this.retriever.getLanguageInventory) {
       return undefined;
     }
 
-    const languageInventory = await this.retriever.getLanguageInventory();
+    try {
+      const languageInventory = await this.retriever.getLanguageInventory();
 
-    if (languageInventory.length === 0) {
+      if (languageInventory.length === 0) {
+        return undefined;
+      }
+
+      const variants = await queryExpansion.buildVariants({
+        query: question,
+        languageInventory,
+        ...(maxVariants !== undefined ? { maxVariants } : {}),
+        ...(signal ? { signal } : {}),
+      });
+
+      return variants.length > 0 ? variants : undefined;
+    } catch {
       return undefined;
     }
-
-    yield { type: "status", message: "Expanding search queries..." };
-    const variants = await this.queryExpansion.buildVariants({
-      query: question,
-      languageInventory,
-    });
-
-    return variants.length > 0 ? variants : undefined;
   }
 }
 

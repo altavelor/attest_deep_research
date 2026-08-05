@@ -91,7 +91,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       maxConcurrent: options.pageFetchConcurrency ?? DEFAULT_PAGE_FETCH_CONCURRENCY,
     });
     this.pageFetcher = new WebPageFetcher({
-      requestPage: (url, timeoutMs) => this.requestPage(url, timeoutMs),
+      requestPage: (url, timeoutMs, signal) => this.requestPage(url, timeoutMs, signal),
       throttle: pageThrottle,
       defaultTimeoutMs: this.timeoutMs,
     });
@@ -128,13 +128,13 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         DEFAULT_MAX_FETCHES,
         HARD_MAX_FETCHES,
       );
-      const searchHtml = await this.fetchSearchResults(trimmedQuery);
+      const searchHtml = await this.fetchSearchResults(trimmedQuery, options.signal);
       const results = parseDuckDuckGoResults(searchHtml).slice(0, limit);
 
       return Promise.all(
         results.map(async (result, index) => {
           const fetchedText =
-            index < maxFetches ? await this.fetchResultText(result.url) : undefined;
+            index < maxFetches ? await this.fetchResultText(result.url, options.signal) : undefined;
 
           return {
             source: {
@@ -245,12 +245,12 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     };
   }
 
-  private async fetchSearchResults(query: string): Promise<string> {
+  private async fetchSearchResults(query: string, signal?: AbortSignal): Promise<string> {
     const url = new URL(this.searchUrl);
     url.searchParams.set("q", query);
 
     for (let attempt = 0; ; attempt += 1) {
-      const response = await this.request(url.toString());
+      const response = await this.request(url.toString(), signal);
 
       if (response.ok) {
         return response.text();
@@ -270,32 +270,31 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     }
   }
 
-  private async fetchResultText(url: string): Promise<string | undefined> {
-    let response: Response;
+  /**
+   * Result pages go through the per-host throttle rather than the DuckDuckGo
+   * request gate, so they load in parallel instead of queueing behind the
+   * search interval. A failed page is skipped silently, as before.
+   */
+  private async fetchResultText(url: string, signal?: AbortSignal): Promise<string | undefined> {
+    let raw: Awaited<ReturnType<WebPageFetcher["fetch"]>>;
 
     try {
-      response = await this.request(url);
+      raw = await this.pageFetcher.fetch(url, signal ? { signal } : {}, isSearchResultContentType);
     } catch {
       return undefined;
     }
 
-    if (!response.ok) {
+    if (!raw.ok) {
       return undefined;
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType && !contentType.toLowerCase().includes("text/html")) {
-      return undefined;
-    }
-
-    const text = extractReadableText(await response.text(), this.maxExtractedTextLength);
+    const text = extractReadableText(raw.rawText, this.maxExtractedTextLength);
     return text.length > 0 ? text : undefined;
   }
 
-  private request(url: string): Promise<Response> {
+  private request(url: string, signal?: AbortSignal): Promise<Response> {
     return this.gate(async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      const abort = linkAbortSignal(this.timeoutMs, signal);
       const context = {
         url,
         method: "GET",
@@ -309,7 +308,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         const response = await this.fetchImpl.call(globalThis, url, {
           method: "GET",
           headers: context.headers,
-          signal: controller.signal,
+          signal: abort.signal,
         });
         this.logger?.logResponse({
           ...context,
@@ -321,18 +320,21 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         this.logger?.logError(error, context);
         throw error;
       } finally {
-        clearTimeout(timeout);
+        abort.release();
       }
     });
   }
 
-  private requestPage(url: string, timeoutMs: number): Promise<Response> {
-    return this.requestPageNow(url, timeoutMs);
+  private requestPage(url: string, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
+    return this.requestPageNow(url, timeoutMs, signal);
   }
 
-  private async requestPageNow(url: string, timeoutMs: number): Promise<Response> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  private async requestPageNow(
+    url: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const abort = linkAbortSignal(timeoutMs, signal);
     const context = {
       url,
       method: "GET",
@@ -345,7 +347,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         method: "GET",
         headers: context.headers,
         redirect: "manual",
-        signal: controller.signal,
+        signal: abort.signal,
       });
       this.logger?.logResponse({
         ...context,
@@ -354,9 +356,40 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       });
       return response;
     } finally {
-      clearTimeout(timeout);
+      abort.release();
     }
   }
+}
+
+/**
+ * Abort an outbound request when its timeout elapses or when the caller
+ * abandons the turn. `release` clears the timer and the caller subscription.
+ */
+function linkAbortSignal(
+  timeoutMs: number,
+  external: AbortSignal | undefined,
+): { signal: AbortSignal; release: () => void } {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timeout = setTimeout(abort, timeoutMs);
+
+  if (external?.aborted === true) {
+    abort();
+  } else {
+    external?.addEventListener("abort", abort);
+  }
+
+  return {
+    signal: controller.signal,
+    release: () => {
+      clearTimeout(timeout);
+      external?.removeEventListener("abort", abort);
+    },
+  };
+}
+
+function isSearchResultContentType(contentType: string): boolean {
+  return contentType === "" || contentType === "text/html";
 }
 
 function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {

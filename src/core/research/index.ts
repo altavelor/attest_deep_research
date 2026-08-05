@@ -3,6 +3,7 @@ export * from "./citationLabels";
 export * from "./attachments";
 export * from "./thinkingPrompts";
 export * from "./researchMode";
+export * from "./researchModeParameters";
 export * from "./ResearchExecutionPolicy";
 export * from "./GraphContext";
 export * from "./searchMode";

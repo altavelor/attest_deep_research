@@ -10,7 +10,7 @@ import {
   ToolCapabilityProbeAudit,
 } from "@core/diagnostics";
 import { EvidencePlanner } from "@core/research";
-import { ResearchExecutionPolicy } from "@core/research";
+import { ResearchExecutionPolicy, ResearchModeRetrievalParameters } from "@core/research";
 import { SearchProvider } from "@application/ports/web";
 import { VaultWriter } from "@application/ports/vault";
 import {
@@ -77,6 +77,7 @@ export interface ResearchExecutionContext {
   question: string;
   searchMode: ResearchSearchMode;
   policy: ResearchExecutionPolicy;
+  retrieval: ResearchModeRetrievalParameters;
   indexDescription?: IndexDescriptionPromptContext;
 
   executionStrategy?: ResearchExecutionStrategy;

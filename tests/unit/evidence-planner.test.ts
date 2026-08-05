@@ -165,3 +165,59 @@ describe("EvidencePlanner", () => {
     expect(output.diagnostics.dropped.webChunkIds).toEqual(["web-1"]);
   });
 });
+
+describe("EvidencePlanner.requiresWebEvidence", () => {
+  const strongLocal = {
+    explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+    graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+    retrievalEvidence: [
+      retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1"),
+      retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2"),
+      retrieved("retrieval-3", markdownSource("R3.md"), "Retrieval 3"),
+    ],
+  };
+
+  it("does not require web evidence for a local-first plan", () => {
+    expect(
+      new EvidencePlanner().requiresWebEvidence({
+        question: "Explain sorting",
+        searchMode: "indexAndWeb",
+        ...strongLocal,
+      }),
+    ).toBe(false);
+  });
+
+  it("requires web evidence when the question signals freshness", () => {
+    expect(
+      new EvidencePlanner().requiresWebEvidence({
+        question: "What is the latest pricing?",
+        searchMode: "indexAndWeb",
+        ...strongLocal,
+      }),
+    ).toBe(true);
+  });
+
+  it("requires web evidence when local evidence is weak", () => {
+    expect(
+      new EvidencePlanner().requiresWebEvidence({
+        question: "Explain sorting",
+        searchMode: "indexAndWeb",
+        explicitEvidence: [],
+        graphEvidence: [],
+        retrievalEvidence: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("never requires web evidence in index-only mode", () => {
+    expect(
+      new EvidencePlanner().requiresWebEvidence({
+        question: "What is the latest pricing?",
+        searchMode: "indexOnly",
+        explicitEvidence: [],
+        graphEvidence: [],
+        retrievalEvidence: [],
+      }),
+    ).toBe(false);
+  });
+});

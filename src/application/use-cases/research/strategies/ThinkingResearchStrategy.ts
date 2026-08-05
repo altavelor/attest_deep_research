@@ -89,7 +89,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
           contextLimitTokens: this.deps.contextLimitTokens,
           reservedOutputTokens: this.deps.reservedOutputTokens,
           evidenceLimit: this.deps.evidenceLimit,
-          skipRetrieval: true,
           largeAttachmentsAsReferences: this.deps.noteTools !== undefined,
           graph: {
             enabled: false,

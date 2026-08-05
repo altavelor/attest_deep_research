@@ -1,6 +1,5 @@
 import { ContextFileProvider } from "@application/ports";
 import { Extractor } from "@application/ports/indexing";
-import { RetrievalOptions } from "@core/retrieval";
 import {
   ContextDiagnosticSource,
   ContextDiagnostics,
@@ -21,12 +20,7 @@ import {
   AttachedFileManifestEntry,
   ResearchChatHistoryMessage,
 } from "@core/research";
-import {
-  createContextBudget,
-  estimateChunksTokens,
-  estimateHistoryTokens,
-  packChunksByBudget,
-} from "./contextBudget";
+import { createContextBudget, estimateChunksTokens, estimateHistoryTokens } from "./contextBudget";
 import { ExplicitContextSourceBuilder } from "./ExplicitContextSourceBuilder";
 import { ContextGraphDiscovery } from "./ContextGraphDiscovery";
 
@@ -34,10 +28,6 @@ export interface ContextAssemblerOptions {
   files: ContextFileProvider;
   extractors: Extractor[];
   graph?: GraphContextProvider;
-  retrieve(
-    query: string,
-    options: RetrievalOptions,
-  ): Promise<{ chunks: RetrievedChunk[]; queryVariants?: string[] } | RetrievedChunk[]>;
   generateId: GenerateId;
 }
 
@@ -52,7 +42,6 @@ export interface ContextAssembleRequest {
   contextLimitTokens?: number;
   reservedOutputTokens?: number;
   smallMarkdownCharLimit?: number;
-  skipRetrieval?: boolean;
   explicitSourcesOnly?: boolean;
 
   largeAttachmentsAsReferences?: boolean;
@@ -68,8 +57,6 @@ export interface ContextAssembleRequest {
 export interface AssembledContext {
   attachments: AttachedFileManifestEntry[];
   explicitEvidence: RetrievedChunk[];
-  retrievalEvidence: RetrievedChunk[];
-  evidence: RetrievedChunk[];
   retrievalSourcePaths?: string[];
   boostedSourcePaths?: string[];
   graphSourcePaths: string[];
@@ -85,7 +72,6 @@ export class ContextAssembler {
   private readonly files: ContextFileProvider;
   private readonly extractors: Extractor[];
   private readonly graph?: GraphContextProvider;
-  private readonly retrieve: ContextAssemblerOptions["retrieve"];
   private readonly generateId: GenerateId;
   private readonly explicitSourceBuilder: ExplicitContextSourceBuilder;
   private readonly graphDiscovery: ContextGraphDiscovery;
@@ -94,7 +80,6 @@ export class ContextAssembler {
     this.files = options.files;
     this.extractors = options.extractors;
     this.graph = options.graph;
-    this.retrieve = options.retrieve;
     this.generateId = options.generateId;
     this.explicitSourceBuilder = new ExplicitContextSourceBuilder(
       this.files,
@@ -190,30 +175,16 @@ export class ContextAssembler {
     );
     const boostedSourcePaths =
       request.contextMode === "filter" ? [] : uniquePaths(graph.sourcePaths);
-    const retrievalResult = request.skipRetrieval
-      ? []
-      : await this.retrieve(request.question, {
-          limit: request.evidenceLimit,
-          includeWebResults: false,
-          ...(retrievalSourcePaths.length > 0 ? { sourcePaths: retrievalSourcePaths } : {}),
-          ...(boostedSourcePaths.length > 0 ? { boostedSourcePaths } : {}),
-        });
-    const retrievalChunks = Array.isArray(retrievalResult)
-      ? retrievalResult
-      : retrievalResult.chunks;
-    const retrievalEvidence = packChunksByBudget(retrievalChunks, budget.retrievalTokens);
-    const droppedRetrieval = retrievalChunks.slice(retrievalEvidence.length);
-
     diagnostics.retrieval = {
-      queryVariants: Array.isArray(retrievalResult) ? [] : (retrievalResult.queryVariants ?? []),
-      includedChunkIds: retrievalEvidence.map((chunk) => chunk.id),
-      droppedChunkIds: droppedRetrieval.map((chunk) => chunk.id),
+      queryVariants: [],
+      includedChunkIds: [],
+      droppedChunkIds: [],
       filteredSourcePaths: retrievalSourcePaths,
     };
     diagnostics.budget = {
       limitTokens: request.contextLimitTokens,
       reservedOutputTokens: request.reservedOutputTokens,
-      usedTokens: explicitTokens + estimateChunksTokens(retrievalEvidence),
+      usedTokens: explicitTokens,
       groups: [
         {
           name: "history",
@@ -233,8 +204,8 @@ export class ContextAssembler {
         },
         {
           name: "retrieval",
-          usedTokens: estimateChunksTokens(retrievalEvidence),
-          droppedItems: droppedRetrieval.length,
+          usedTokens: 0,
+          droppedItems: 0,
         },
         {
           name: "reserved-output",
@@ -247,8 +218,6 @@ export class ContextAssembler {
     return {
       attachments,
       explicitEvidence,
-      retrievalEvidence,
-      evidence: [...explicitEvidence, ...retrievalEvidence],
       retrievalSourcePaths: retrievalSourcePaths.length > 0 ? retrievalSourcePaths : undefined,
       boostedSourcePaths: boostedSourcePaths.length > 0 ? boostedSourcePaths : undefined,
       graphSourcePaths: graph.sourcePaths,

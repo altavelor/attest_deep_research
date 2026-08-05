@@ -34,7 +34,7 @@ import {
 } from "@application/contracts/research";
 import { ConversationEngine } from "@application/contracts/conversationView";
 import { ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
-import { resolveResearchExecutionPolicy } from "@core/research";
+import { resolveResearchExecutionPolicy, researchModeRetrievalParameters } from "@core/research";
 import { ThinkingResearchFailure } from "./ThinkingResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";
@@ -213,8 +213,10 @@ export class ResearchService implements ConversationEngine {
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
     const question = request.question.trim();
     const searchMode = resolveSearchMode(request);
+    const mode = request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant");
+    const modeParameters = researchModeRetrievalParameters(mode);
     const policy = resolveResearchExecutionPolicy({
-      mode: request.forceSubAgent === true ? "thinking" : (request.mode ?? "instant"),
+      mode,
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
     });
@@ -230,6 +232,10 @@ export class ResearchService implements ConversationEngine {
       question,
       searchMode,
       policy,
+      retrieval: {
+        maxQueryVariants: modeParameters.maxQueryVariants,
+        evidenceLimit: Math.min(this.evidenceLimit, modeParameters.evidenceLimit),
+      },
       indexDescription,
     };
 

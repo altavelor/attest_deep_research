@@ -13,7 +13,14 @@ export interface RetrievalOptions {
   language?: string;
 
   diversify?: boolean;
-  queryVariants?: RetrievalQueryVariant[];
+  /**
+   * Additional queries fused with the original one. A pending promise lets the
+   * retriever start the original query immediately and fold late variants in
+   * once they arrive; a rejected promise degrades to the original query alone.
+   */
+  queryVariants?: RetrievalQueryVariant[] | Promise<RetrievalQueryVariant[] | undefined>;
+
+  signal?: AbortSignal;
 }
 
 export interface RetrievalQueryVariant {
