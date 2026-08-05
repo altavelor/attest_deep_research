@@ -56,7 +56,7 @@ function createSettings(): IxplorerSettings {
     embeddingModelProfiles: [],
     serverProfiles: [serverProfile()],
     chatModelProfiles: [chatProfile()],
-    activeChatModelProfileId: "chat",
+    newChatDefaults: { ...DEFAULT_SETTINGS.newChatDefaults, chatModelProfileId: "chat" },
   };
 }
 
@@ -98,11 +98,54 @@ describe("settings tab sections", () => {
   it("renders the retrieval, search, and web controls the tab owns", () => {
     const names = settingNames(renderTab());
 
-    expect(names).toContain("Include active file as context");
+    expect(names.filter((name) => name === "Include active file as context")).toHaveLength(1);
     expect(names).toContain("Use linked notes");
     expect(names).toContain("Expand search query");
     expect(names).toContain("Use web for freshness questions");
     expect(names).toContain("Debug mode");
+  });
+
+  it("renders every new chat default with its source options", () => {
+    const container = renderTab();
+    const names = settingNames(container);
+
+    expect(names).toContain("Default source");
+    expect(names).toContain("Default index");
+    expect(names).toContain("Default mode");
+    expect(names).toContain("Default model");
+    expect(names).toContain("Include active file as context");
+
+    const sourceOptions = Array.from(
+      container.querySelectorAll<HTMLSelectElement>("select"),
+    ).flatMap((select) =>
+      Array.from(select.options).some((option) => option.value === "indexAndWeb")
+        ? [Array.from(select.options).map((option) => option.textContent)]
+        : [],
+    );
+    expect(sourceOptions).toEqual([["None", "Index", "Web", "Index + Web"]]);
+  });
+
+  it("disables the thinking default for a model without a verified agent capability", () => {
+    const container = renderTab();
+    const modeSelect = Array.from(container.querySelectorAll<HTMLSelectElement>("select")).find(
+      (select) => Array.from(select.options).some((option) => option.value === "thinking"),
+    );
+
+    expect(modeSelect).toBeDefined();
+    expect(
+      Array.from(modeSelect!.options).find((option) => option.value === "thinking")?.disabled,
+    ).toBe(true);
+  });
+
+  it("offers no default model badge or action in the chat model table", () => {
+    const container = renderTab();
+
+    expect(container.querySelector('button[aria-label="Set as default model"]')).toBeNull();
+    expect(
+      Array.from(container.querySelectorAll(".ixplorer-settings-profile-list__status")).map(
+        (status) => status.textContent,
+      ),
+    ).not.toContain("Default");
   });
 
   it("renders the category headings in their declared order", () => {
@@ -111,7 +154,7 @@ describe("settings tab sections", () => {
       container.querySelectorAll(".ixplorer-settings__category-heading"),
     ).map((item) => item.firstElementChild?.textContent?.trim() ?? "");
 
-    expect(headings).toEqual(["Ixplorer", "Model profiles", "Retrieval"]);
+    expect(headings).toEqual(["Ixplorer", "Model profiles", "New chat defaults", "Retrieval"]);
   });
 
   it("renders the indexing section before the advanced section", () => {

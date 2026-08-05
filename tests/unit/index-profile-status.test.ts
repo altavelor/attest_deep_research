@@ -103,7 +103,6 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
-        isDefault: false,
         profile,
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "running", phase: "sections" }),
@@ -112,7 +111,6 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
-        isDefault: false,
         profile,
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -126,7 +124,6 @@ describe("index profile status in the Index column", () => {
   it("marks an index built before document-image metadata as needing a rebuild", () => {
     expect(
       resolveIndexStatusBadge({
-        isDefault: true,
         profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -135,7 +132,6 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
-        isDefault: true,
         profile: {
           lastIndexedAt: "2026-07-03T10:20:30.000Z",
           indexVersion: REQUIRED_INDEX_VERSION,
@@ -143,13 +139,12 @@ describe("index profile status in the Index column", () => {
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
       }),
-    ).toMatchObject({ kind: "is-default" });
+    ).toBeNull();
   });
 
   it("keeps error and suspended state above the rebuild notice", () => {
     expect(
       resolveIndexStatusBadge({
-        isDefault: false,
         profile: { isSuspended: true, suspendedReason: "Embedder missing" },
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -158,7 +153,6 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
-        isDefault: false,
         profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
         indexing: indexingState({ status: "error", errorMessage: "boom" }),
         enrichment: enrichmentState({ status: "done" }),

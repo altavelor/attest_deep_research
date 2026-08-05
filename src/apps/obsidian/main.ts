@@ -134,7 +134,7 @@ export default class IxplorerPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     if (getActiveIndexProfile(this.settings).isSuspended !== true) {
-      void this.indexing.refreshIndexSize(this.settings.activeIndexProfileId);
+      void this.indexing.refreshIndexSize(this.settings.newChatDefaults.indexProfileId);
     }
     this.registerView(
       IXPLORER_CHAT_VIEW_TYPE,
@@ -144,8 +144,8 @@ export default class IxplorerPlugin extends Plugin {
             createResearchService(this.composition, chatModelProfileId, indexProfileId),
           isWebSearchEnabled: () => this.settings.webSources.some((profile) => profile.enabled),
           getChatModel: () =>
-            resolveChatModelProfile(this.settings, this.settings.activeChatModelProfileId)?.name ??
-            "",
+            resolveChatModelProfile(this.settings, this.settings.newChatDefaults.chatModelProfileId)
+              ?.name ?? "",
           getAvailableChatModels: () =>
             this.settings.chatModelProfiles
               .filter((profile) => profile.isSuspended !== true)
@@ -159,8 +159,10 @@ export default class IxplorerPlugin extends Plugin {
               isSuspended: profile.isSuspended === true,
               supportsAgentMode: reasoningVerified(profile.reasoningCapabilities),
             })),
-          getDefaultChatModelProfileId: () => this.settings.activeChatModelProfileId,
-          getDefaultIndexProfileId: () => this.settings.activeIndexProfileId,
+          getDefaultChatModelProfileId: () => this.settings.newChatDefaults.chatModelProfileId,
+          getDefaultIndexProfileId: () => this.settings.newChatDefaults.indexProfileId,
+          getDefaultSearchMode: () => this.settings.newChatDefaults.searchMode,
+          getDefaultResearchMode: () => this.settings.newChatDefaults.researchMode,
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
               id: profile.id,
@@ -190,7 +192,8 @@ export default class IxplorerPlugin extends Plugin {
           },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           isDebugMode: () => this.settings.debugMode,
-          shouldIncludeActiveFileContext: () => this.settings.includeActiveFileContext,
+          shouldIncludeActiveFileContext: () =>
+            this.settings.newChatDefaults.includeActiveFileContext,
         }),
     );
     this.addCommand({
@@ -216,7 +219,7 @@ export default class IxplorerPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  markIndexStale(profileId = this.settings.activeIndexProfileId): void {
+  markIndexStale(profileId = this.settings.newChatDefaults.indexProfileId): void {
     this.indexing.markStale(profileId);
   }
 
@@ -329,7 +332,7 @@ export default class IxplorerPlugin extends Plugin {
     const retriever = createRetrieverForProfile(this.composition, indexProfile);
     const chatProfile = resolveChatModelProfile(
       this.settings,
-      this.settings.activeChatModelProfileId,
+      this.settings.newChatDefaults.chatModelProfileId,
     );
     const chatServer = chatProfile
       ? resolveServerProfile(this.settings, chatProfile.serverProfileId)

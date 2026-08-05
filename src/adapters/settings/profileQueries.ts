@@ -11,7 +11,9 @@ const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 
 export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile {
   return (
-    settings.indexProfiles.find((profile) => profile.id === settings.activeIndexProfileId) ??
+    settings.indexProfiles.find(
+      (profile) => profile.id === settings.newChatDefaults.indexProfileId,
+    ) ??
     settings.indexProfiles[0] ??
     cloneIndexProfile(DEFAULT_INDEX_PROFILE)
   );
@@ -47,7 +49,7 @@ export function updateActiveIndexProfile(
     settings.indexProfiles[index] = updatedProfile;
   } else {
     settings.indexProfiles = [updatedProfile];
-    settings.activeIndexProfileId = updatedProfile.id;
+    settings.newChatDefaults.indexProfileId = updatedProfile.id;
   }
 
   normalizeSettingsState(settings);
@@ -71,7 +73,8 @@ export function getActiveChatModelProfile(
   settings: IxplorerSettings,
 ): ChatModelProfile | undefined {
   return settings.chatModelProfiles.find(
-    (profile) => profile.id === settings.activeChatModelProfileId && !isProfileSuspended(profile),
+    (profile) =>
+      profile.id === settings.newChatDefaults.chatModelProfileId && !isProfileSuspended(profile),
   );
 }
 

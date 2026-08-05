@@ -1,15 +1,15 @@
 import { areCredentialsComplete, findWebSourceDescriptor } from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
-import { DEFAULT_DOWNLOAD_FOLDER, DEFAULT_INDEX_PROFILE_ID } from "./constants";
+import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
+import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";
 
 export function normalizeSettingsState(settings: IxplorerSettings): void {
   markInvalidProfilesSuspended(settings);
-  normalizeActiveChatModel(settings);
   normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
-  normalizeActiveIndexProfile(settings);
+  normalizeNewChatDefaults(settings);
   settings.downloadFolder =
     typeof settings.downloadFolder === "string" && settings.downloadFolder.trim()
       ? normalizeVaultFolder(settings.downloadFolder)
@@ -131,19 +131,6 @@ function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
   }
 }
 
-function normalizeActiveChatModel(settings: IxplorerSettings): void {
-  if (
-    settings.activeChatModelProfileId &&
-    settings.chatModelProfiles.some(
-      (profile) => profile.id === settings.activeChatModelProfileId && !isProfileSuspended(profile),
-    )
-  ) {
-    return;
-  }
-
-  settings.activeChatModelProfileId = settings.chatModelProfiles.find(isProfileActive)?.id ?? "";
-}
-
 function normalizeActiveEmbeddingModel(settings: IxplorerSettings): void {
   if (
     settings.activeEmbeddingModelProfileId &&
@@ -173,22 +160,6 @@ function normalizeIndexProfiles(settings: IxplorerSettings): void {
       unsuspend(profile);
     }
   }
-}
-
-function normalizeActiveIndexProfile(settings: IxplorerSettings): void {
-  const active = settings.indexProfiles.find(
-    (profile) => profile.id === settings.activeIndexProfileId,
-  );
-
-  if (active && isIndexProfileSelectable(active)) {
-    return;
-  }
-
-  settings.activeIndexProfileId =
-    settings.indexProfiles.find(isIndexProfileSelectable)?.id ??
-    settings.indexProfiles.find(isProfileActive)?.id ??
-    settings.indexProfiles[0]?.id ??
-    DEFAULT_INDEX_PROFILE_ID;
 }
 
 function suspend(

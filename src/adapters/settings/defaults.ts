@@ -13,6 +13,7 @@ import {
   DEFAULT_INDEX_PROFILE_ID,
   DEFAULT_PROFILE_TIMESTAMP,
 } from "./constants";
+import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";
 
@@ -46,15 +47,13 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   serverProfiles: [],
   chatModelProfiles: [],
   embeddingModelProfiles: [],
-  activeChatModelProfileId: "",
   activeEmbeddingModelProfileId: "",
   lanceDbFolder: DEFAULT_INDEX_FOLDER,
-  activeIndexProfileId: DEFAULT_INDEX_PROFILE_ID,
   indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
   includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   webSources: [],
-  includeActiveFileContext: true,
+  newChatDefaults: { ...DEFAULT_NEW_CHAT_DEFAULTS },
   useLinkedNotes: true,
   includeBacklinks: true,
   expandFilteredContextThroughLinks: false,
