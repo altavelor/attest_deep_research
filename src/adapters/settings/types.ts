@@ -86,19 +86,29 @@ export interface EmbeddingModelProfile {
   updatedAt: string;
 }
 
+export type NewChatSearchMode = "none" | "indexOnly" | "webOnly" | "indexAndWeb";
+
+export type NewChatResearchMode = "instant" | "thinking";
+
+export interface NewChatDefaults {
+  searchMode: NewChatSearchMode;
+  indexProfileId: string;
+  researchMode: NewChatResearchMode;
+  chatModelProfileId: string;
+  includeActiveFileContext: boolean;
+}
+
 export interface IxplorerSettings {
   serverProfiles: ServerProfile[];
   chatModelProfiles: ChatModelProfile[];
   embeddingModelProfiles: EmbeddingModelProfile[];
-  activeChatModelProfileId: string;
   activeEmbeddingModelProfileId: string;
   lanceDbFolder: string;
-  activeIndexProfileId: string;
   indexProfiles: IndexProfile[];
   includeFolders: string[];
   excludeGlobs: string[];
   webSources: WebSourceProfile[];
-  includeActiveFileContext: boolean;
+  newChatDefaults: NewChatDefaults;
   useLinkedNotes: boolean;
   includeBacklinks: boolean;
   expandFilteredContextThroughLinks: boolean;

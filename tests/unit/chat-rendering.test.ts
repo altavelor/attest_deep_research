@@ -21,6 +21,7 @@ import {
 } from "@apps/obsidian/ui/chat/conversationFormatting";
 import {
   chatModelProfileLabel as selectedChatModelProfileLabel,
+  createDefaultChatSettings,
   resolveChatSettings,
 } from "@apps/obsidian/ui/chat/chatViewHelpers";
 import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvidence";
@@ -33,12 +34,45 @@ import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
 
 describe("chat rendering helpers", () => {
+  it("creates a new chat from the configured new-chat defaults", () => {
+    const settings = createDefaultChatSettings({
+      getChatModelProfiles: () => [{ id: "model", name: "Model", supportsAgentMode: true }],
+      getDefaultChatModelProfileId: () => "model",
+      getIndexProfiles: () => [{ id: "index", name: "Index", isIndexed: true }],
+      getDefaultIndexProfileId: () => "index",
+      getDefaultSearchMode: () => "indexAndWeb",
+      getDefaultResearchMode: () => "thinking",
+    });
+
+    expect(settings).toMatchObject({
+      chatModelProfileId: "model",
+      indexProfileId: "index",
+      searchMode: "indexAndWeb",
+      researchMode: "thinking",
+    });
+  });
+
+  it("degrades a thinking default to instant for a model without agent mode", () => {
+    expect(
+      createDefaultChatSettings({
+        getChatModelProfiles: () => [{ id: "model", name: "Model" }],
+        getDefaultChatModelProfileId: () => "model",
+        getIndexProfiles: () => [],
+        getDefaultIndexProfileId: () => "",
+        getDefaultSearchMode: () => "none",
+        getDefaultResearchMode: () => "thinking",
+      }).researchMode,
+    ).toBe("instant");
+  });
+
   it("restores saved research mode and defaults legacy chats to Instant", () => {
     const services = {
       getChatModelProfiles: () => [{ id: "model", name: "Model" }],
       getDefaultChatModelProfileId: () => "model",
       getIndexProfiles: () => [{ id: "index", name: "Index", isIndexed: true }],
       getDefaultIndexProfileId: () => "index",
+      getDefaultSearchMode: () => "indexOnly" as const,
+      getDefaultResearchMode: () => "instant" as const,
     };
 
     expect(

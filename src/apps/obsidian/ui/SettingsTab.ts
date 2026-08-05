@@ -6,6 +6,7 @@ import { AdvancedSettingsSection } from "./settings/AdvancedSettingsSection";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexProfilesSection } from "./settings/IndexProfilesSection";
 import { ModelProfilesSection } from "./settings/ModelProfilesSection";
+import { NewChatDefaultsSection } from "./settings/NewChatDefaultsSection";
 import { RetrievalSettingsSection } from "./settings/RetrievalSettingsSection";
 import { renderCategoryHeading } from "./settings/shared";
 
@@ -51,6 +52,11 @@ export class IxplorerSettingTab extends PluginSettingTab {
       requestRedisplay: () => this.display(),
     }).render(this.containerEl);
     this.indexProfiles.render(this.gateHost(this.containerEl));
+    new NewChatDefaultsSection({
+      settings: this.plugin.settings,
+      saveSettings: () => this.plugin.saveSettings(),
+      requestRedisplay: () => this.display(),
+    }).render(this.gateHost(this.containerEl));
     new RetrievalSettingsSection({
       app: this.app,
       settings: this.plugin.settings,

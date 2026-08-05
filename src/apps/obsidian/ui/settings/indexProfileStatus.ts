@@ -9,7 +9,7 @@ export interface IndexColumnStatus {
 }
 
 export interface IndexStatusBadge {
-  kind: "is-default" | "is-suspended" | "is-reindex-required";
+  kind: "is-suspended" | "is-reindex-required";
   label: string;
   title: string;
 }
@@ -36,7 +36,6 @@ export function resolveIndexProfileColumnStatus(options: {
 }
 
 export function resolveIndexStatusBadge(options: {
-  isDefault: boolean;
   profile: {
     isSuspended?: boolean;
     suspendedReason?: string;
@@ -97,9 +96,7 @@ export function resolveIndexStatusBadge(options: {
     };
   }
 
-  return options.isDefault
-    ? { kind: "is-default", label: "Default", title: "Default index" }
-    : null;
+  return null;
 }
 
 export function resolveIndexColumnStatus(options: {

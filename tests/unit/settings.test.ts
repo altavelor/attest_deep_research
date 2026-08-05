@@ -28,7 +28,13 @@ describe("Ixplorer settings", () => {
     expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
-    expect(DEFAULT_SETTINGS.activeChatModelProfileId).toBe("");
+    expect(DEFAULT_SETTINGS.newChatDefaults).toEqual({
+      searchMode: "indexOnly",
+      indexProfileId: "",
+      researchMode: "instant",
+      chatModelProfileId: "",
+      includeActiveFileContext: true,
+    });
     expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
     expect(getActiveIndexProfile(DEFAULT_SETTINGS)).toMatchObject({
       id: "default",
@@ -69,7 +75,7 @@ describe("Ixplorer settings", () => {
             updatedAt: "2026-06-01T00:00:00.000Z",
           },
         ],
-        activeChatModelProfileId: "chat-a",
+        newChatDefaults: { ...DEFAULT_SETTINGS.newChatDefaults, chatModelProfileId: "chat-a" },
         debugMode: true,
       }),
     );
@@ -83,7 +89,7 @@ describe("Ixplorer settings", () => {
       isSuspended: true,
       suspendedReason: "Server profile is suspended.",
     });
-    expect(settings.activeChatModelProfileId).toBe("");
+    expect(settings.newChatDefaults.chatModelProfileId).toBe("");
     expect(settings.debugMode).toBe(true);
   });
 
@@ -222,7 +228,7 @@ describe("Ixplorer settings", () => {
             updatedAt: "2026-06-01T00:00:00.000Z",
           },
         ],
-        activeChatModelProfileId: "chat-a",
+        newChatDefaults: { ...DEFAULT_SETTINGS.newChatDefaults, chatModelProfileId: "chat-a" },
       }),
     );
 

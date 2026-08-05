@@ -93,10 +93,7 @@ export class ModelProfilesSection {
       renderProfileListItem(listEl, {
         name: profile.name,
         tags: capabilityTags(profile),
-        status:
-          settings.activeChatModelProfileId === profile.id && !profile.isSuspended
-            ? { kind: "is-default", label: "Default", title: "Default chat model" }
-            : statusForProfile(profile),
+        status: statusForProfile(profile),
         onEdit: () => this.openChatModal(profile),
         extraActions: [
           {
@@ -109,20 +106,6 @@ export class ModelProfilesSection {
               await this.options.prober.refreshMetadataCapabilities();
               this.options.prober.startChatProfileProbes(profile.id, true);
               new Notice(`Testing capabilities for ${profile.name}.`);
-            },
-          },
-          {
-            icon: "star",
-            className: "ixplorer-settings__default-action",
-            label:
-              settings.activeChatModelProfileId === profile.id
-                ? "Default model"
-                : "Set as default model",
-            disabled:
-              profile.isSuspended === true || settings.activeChatModelProfileId === profile.id,
-            onClick: async () => {
-              settings.activeChatModelProfileId = profile.id;
-              await this.saveAndRedisplay();
             },
           },
         ],
@@ -160,7 +143,8 @@ export class ModelProfilesSection {
             profile ? mergeChatProfileSettingsPreservingProbe(profile, saved) : saved,
             { updatedAt: new Date().toISOString() },
           );
-        if (settings.chatModelProfiles.length === 1) settings.activeChatModelProfileId = saved.id;
+        if (settings.chatModelProfiles.length === 1)
+          settings.newChatDefaults.chatModelProfileId = saved.id;
         await this.saveAndRedisplay();
       },
       onTest: async (saved) => this.options.prober.startChatProfileProbes(saved.id, true),
