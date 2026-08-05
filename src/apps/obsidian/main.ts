@@ -220,7 +220,7 @@ export default class IxplorerPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  markIndexStale(profileId = this.settings.newChatDefaults.indexProfileId): void {
+  markIndexStale(profileId = getActiveIndexProfile(this.settings).id): void {
     this.indexing.markStale(profileId);
   }
 
