@@ -276,11 +276,13 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
    * search interval. A failed page is skipped silently, as before.
    */
   private async fetchResultText(url: string, signal?: AbortSignal): Promise<string | undefined> {
-    const raw = await this.pageFetcher.fetch(
-      url,
-      signal ? { signal } : {},
-      isSearchResultContentType,
-    );
+    let raw: Awaited<ReturnType<WebPageFetcher["fetch"]>>;
+
+    try {
+      raw = await this.pageFetcher.fetch(url, signal ? { signal } : {}, isSearchResultContentType);
+    } catch {
+      return undefined;
+    }
 
     if (!raw.ok) {
       return undefined;
