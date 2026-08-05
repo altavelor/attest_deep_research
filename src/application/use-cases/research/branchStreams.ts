@@ -3,6 +3,9 @@ import { ResearchStreamEvent } from "@application/contracts/research";
 export interface ResearchBranch<R> {
   result: Promise<R>;
   isSettled(): boolean;
+
+  /** Abandon the branch: closes the generator so its `finally` cleanup runs. */
+  close(): void;
 }
 
 /**
@@ -33,7 +36,16 @@ export class ResearchBranchStream {
     result.then(track, track);
     void result.catch(() => undefined);
 
-    return { result, isSettled: () => settled };
+    return {
+      result,
+      isSettled: () => settled,
+      close: () => {
+        if (settled) {
+          return;
+        }
+        void Promise.resolve(generator.return(undefined as unknown as R)).catch(() => undefined);
+      },
+    };
   }
 
   /** Yield buffered events until `branch` settles, then surface its outcome. */

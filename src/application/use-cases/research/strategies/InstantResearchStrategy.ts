@@ -118,6 +118,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
 
     if (!waitForWeb) {
       webAbort.abort();
+      webBranch.close();
     }
 
     const webEvidence = waitForWeb ? yield* branches.until(webBranch) : emptyWebEvidence();
