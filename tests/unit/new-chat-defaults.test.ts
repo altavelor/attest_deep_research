@@ -52,6 +52,27 @@ describe("new chat defaults", () => {
     expect(settings.newChatDefaults.includeActiveFileContext).toBe(true);
   });
 
+  it("ignores the legacy keys when a partial new-chat defaults group is present", () => {
+    const settings = readSettings(
+      legacySettings({
+        activeChatModelProfileId: "chat-a",
+        activeIndexProfileId: "index-a",
+        includeActiveFileContext: false,
+        newChatDefaults: { searchMode: "none" },
+        chatModelProfiles: [],
+        indexProfiles: [],
+      }),
+    );
+
+    expect(settings.newChatDefaults).toEqual({
+      searchMode: "none",
+      indexProfileId: "",
+      researchMode: "instant",
+      chatModelProfileId: "",
+      includeActiveFileContext: true,
+    });
+  });
+
   it("falls back to the safe defaults for new or corrupted settings", () => {
     expect(readSettings(null).newChatDefaults).toEqual({
       searchMode: "indexOnly",

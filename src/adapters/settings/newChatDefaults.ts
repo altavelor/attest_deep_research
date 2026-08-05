@@ -30,15 +30,16 @@ export const DEFAULT_NEW_CHAT_DEFAULTS: NewChatDefaults = {
  */
 export function readNewChatDefaults(savedSettings: unknown): NewChatDefaults {
   const saved = asRecord(savedSettings);
+  const legacy = isRecord(saved.newChatDefaults) ? {} : saved;
   const group = asRecord(saved.newChatDefaults);
   return {
     searchMode: isSearchMode(group.searchMode) ? group.searchMode : "indexOnly",
-    indexProfileId: readProfileId(group.indexProfileId, saved.activeIndexProfileId),
+    indexProfileId: readProfileId(group.indexProfileId, legacy.activeIndexProfileId),
     researchMode: group.researchMode === "thinking" ? "thinking" : "instant",
-    chatModelProfileId: readProfileId(group.chatModelProfileId, saved.activeChatModelProfileId),
+    chatModelProfileId: readProfileId(group.chatModelProfileId, legacy.activeChatModelProfileId),
     includeActiveFileContext: readBoolean(
       group.includeActiveFileContext,
-      saved.includeActiveFileContext,
+      legacy.includeActiveFileContext,
     ),
   };
 }
@@ -105,5 +106,9 @@ function isSearchMode(value: unknown): value is NewChatSearchMode {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return isRecord(value) ? value : {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

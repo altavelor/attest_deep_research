@@ -133,8 +133,9 @@ export default class IxplorerPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    if (getActiveIndexProfile(this.settings).isSuspended !== true) {
-      void this.indexing.refreshIndexSize(this.settings.newChatDefaults.indexProfileId);
+    const startupIndexProfile = getActiveIndexProfile(this.settings);
+    if (startupIndexProfile.isSuspended !== true) {
+      void this.indexing.refreshIndexSize(startupIndexProfile.id);
     }
     this.registerView(
       IXPLORER_CHAT_VIEW_TYPE,
