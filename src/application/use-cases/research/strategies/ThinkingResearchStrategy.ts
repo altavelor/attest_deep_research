@@ -25,7 +25,7 @@ import {
 import {
   dedupeEvidence,
   mergeCitations,
-  resolveCitationTokens,
+  normalizeCitationTokens,
   webUrlEvidenceIndex,
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
@@ -257,16 +257,20 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       [...snapshot.citations],
     );
     const urlToEvidenceId = webUrlEvidenceIndex(evidence);
-    const { ids: citedIds, unresolvedUrls } = result.ok
-      ? resolveCitationTokens(result.answerText, urlToEvidenceId)
-      : { ids: new Set<string>(), unresolvedUrls: [] };
+    const {
+      text: answerText,
+      ids: citedIds,
+      webReferences,
+    } = result.ok
+      ? normalizeCitationTokens(result.answerText, urlToEvidenceId)
+      : { text: "", ids: new Set<string>(), webReferences: [] };
     const knownIds = new Set(evidence.map((chunk) => chunk.id));
-    const unknownCitationIds = [
-      ...[...citedIds].filter((id) => !knownIds.has(id)),
-      ...unresolvedUrls,
-    ];
+    const webReferenceIds = new Set(webReferences.map((reference) => reference.id));
+    const unknownCitationIds = [...citedIds].filter(
+      (id) => !knownIds.has(id) && !webReferenceIds.has(id),
+    );
     const unverifiedCitations = result.ok
-      ? verifyCitations(result.answerText, evidence, { urlToEvidenceId })
+      ? verifyCitations(answerText, evidence, { urlToEvidenceId })
       : [];
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
@@ -344,11 +348,12 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
     if (indexDescription) diagnostics.indexDescription = { ...indexDescription.diagnostics };
     const answer: ResearchAnswer = {
       question,
-      answer: result.ok ? result.answerText : "",
+      answer: answerText,
       citations,
       evidence,
+      ...(webReferences.length > 0 ? { webReferences } : {}),
       ...(request.includeContextDiagnostics === true ? { contextDiagnostics: diagnostics } : {}),
-      followUpQuestions: result.ok ? extractFollowUpQuestions(result.answerText) : [],
+      followUpQuestions: result.ok ? extractFollowUpQuestions(answerText) : [],
       ...(result.ok && created.artifacts.snapshot()
         ? { artifacts: created.artifacts.snapshot()! }
         : {}),

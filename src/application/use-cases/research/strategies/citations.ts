@@ -1,5 +1,7 @@
+import { AnswerWebReference, WEB_REFERENCE_ID_PREFIX } from "@core/answer";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
+import { CITATION_TOKEN_SOURCE, isCitationHandle } from "@core/research";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 export function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {
@@ -31,37 +33,69 @@ export function citationIdsFromText(text: string): Set<string> {
   );
 }
 
-export interface ResolvedCitationTokens {
+export interface NormalizedCitationTokens {
+  text: string;
   ids: Set<string>;
 
-  unresolvedUrls: string[];
+  webReferences: AnswerWebReference[];
+}
+
+const CITATION_TOKEN = /\[([^\]\n]{1,200})\]/g;
+
+/**
+ * Rewrite the answer's `[…]` citation tokens into a single handle form the
+ * renderer can anchor. Models cite web sources by `[url:https://…]`; a URL that
+ * maps to gathered evidence becomes that evidence id, one that does not becomes
+ * a stable web-reference handle. Handle-shaped tokens are kept as cited ids,
+ * ordinary bracketed prose is left untouched, and adjacent repeats of the same
+ * handle collapse into one.
+ */
+export function normalizeCitationTokens(
+  text: string,
+  urlToEvidenceId: ReadonlyMap<string, string>,
+): NormalizedCitationTokens {
+  const ids = new Set<string>();
+  const webReferenceIdByUrl = new Map<string, string>();
+
+  const rewritten = text.replace(CITATION_TOKEN, (whole, inner: string, offset: number) => {
+    const token = inner.trim();
+    if (text[offset + whole.length] === "(") return whole;
+    if (!token.startsWith("url:")) {
+      if (!isCitationHandle(token)) return whole;
+      ids.add(token);
+      return `[${token}]`;
+    }
+    const validated = validatePublicWebUrl(token.slice("url:".length).trim());
+    if (!validated.ok) return whole;
+    const evidenceId = urlToEvidenceId.get(validated.url);
+    if (evidenceId) {
+      ids.add(evidenceId);
+      return `[${evidenceId}]`;
+    }
+    const existing = webReferenceIdByUrl.get(validated.url);
+    if (existing) return `[${existing}]`;
+    const referenceId = `${WEB_REFERENCE_ID_PREFIX}${webReferenceIdByUrl.size + 1}`;
+    webReferenceIdByUrl.set(validated.url, referenceId);
+    return `[${referenceId}]`;
+  });
+
+  return {
+    text: collapseAdjacentTokens(rewritten),
+    ids,
+    webReferences: [...webReferenceIdByUrl].map(([url, id]) => ({ id, url })),
+  };
 }
 
 /**
- * Resolve the answer's `[…]` citation tokens against gathered evidence. Models
- * cite web sources by `[url:https://…]` — a human-readable, derivable handle —
- * rather than opaque evidence ids. Each URL token is canonicalized the same way
- * the registry canonicalizes results, then mapped to its evidence id.
+ * Collapses a run of the same handle repeated with only whitespace between the
+ * brackets, which is what a link and an evidence id for one source become once
+ * both are normalized to the same token.
  */
-export function resolveCitationTokens(
-  text: string,
-  urlToEvidenceId: ReadonlyMap<string, string>,
-): ResolvedCitationTokens {
-  const ids = new Set<string>();
-  const unresolvedUrls = new Set<string>();
-
-  for (const token of citationIdsFromText(text)) {
-    if (!token.startsWith("url:")) {
-      continue;
-    }
-    const validated = validatePublicWebUrl(token.slice("url:".length).trim());
-    if (!validated.ok) continue;
-    const evidenceId = urlToEvidenceId.get(validated.url);
-    if (evidenceId) ids.add(evidenceId);
-    else unresolvedUrls.add(validated.url);
-  }
-
-  return { ids, unresolvedUrls: [...unresolvedUrls] };
+function collapseAdjacentTokens(text: string): string {
+  return text.replace(
+    new RegExp(`(${CITATION_TOKEN_SOURCE})(?:[ \\t]*\\1)+`, "g"),
+    (_whole, first: string) => first,
+  );
 }
 
 /**
