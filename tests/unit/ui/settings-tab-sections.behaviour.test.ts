@@ -60,7 +60,7 @@ function createSettings(): IxplorerSettings {
   };
 }
 
-function renderTab(): HTMLElement {
+function createTab(): IxplorerSettingTab {
   const app = new App();
   const settings = createSettings();
   const plugin = new IxplorerPluginClass(app as unknown as ObsidianApp, {
@@ -74,7 +74,11 @@ function renderTab(): HTMLElement {
   plugin.settings = settings;
   const tab = new IxplorerSettingTab(app as unknown as ObsidianApp, plugin as IxplorerPlugin);
   tab.display();
-  return tab.containerEl;
+  return tab;
+}
+
+function renderTab(): HTMLElement {
+  return createTab().containerEl;
 }
 
 function settingNames(container: HTMLElement): string[] {
@@ -103,6 +107,23 @@ describe("settings tab sections", () => {
     expect(names).toContain("Expand search query");
     expect(names).toContain("Use web for freshness questions");
     expect(names).toContain("Debug mode");
+  });
+
+  it("keeps the scroll offset when a section asks for a redisplay", () => {
+    const tab = createTab();
+    const container = tab.containerEl;
+    const empty = container.empty.bind(container);
+    // A real browser clamps scrollTop to 0 once the emptied content collapses;
+    // happy-dom has no layout, so the redisplay must be told to do the same.
+    container.empty = () => {
+      empty();
+      container.scrollTop = 0;
+    };
+    container.scrollTop = 240;
+
+    tab.display();
+
+    expect(container.scrollTop).toBe(240);
   });
 
   it("renders every new chat default with its source options", () => {

@@ -556,3 +556,53 @@ describe("DuckDuckGoSearchProvider result page throttling", () => {
     expect(results[0]!.extractedText).toBeUndefined();
   });
 });
+
+describe("DuckDuckGoSearchProvider cancellation", () => {
+  function hangingFetch(): { fetch: typeof fetch; aborted: () => boolean } {
+    let sawAbort = false;
+    const impl = vi.fn((_url: unknown, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        if (init?.signal?.aborted === true) {
+          sawAbort = true;
+          reject(new DOMException("Aborted", "AbortError"));
+          return;
+        }
+        init?.signal?.addEventListener("abort", () => {
+          sawAbort = true;
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+    });
+    return { fetch: impl as unknown as typeof fetch, aborted: () => sawAbort };
+  }
+
+  it("aborts the outbound search request when the caller cancels mid-flight", async () => {
+    const controller = new AbortController();
+    const hanging = hangingFetch();
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      timeoutMs: 60_000,
+      fetch: hanging.fetch,
+    });
+
+    const pending = provider.search("local models", { signal: controller.signal });
+    controller.abort();
+
+    await expect(pending).rejects.toThrow();
+    expect(hanging.aborted()).toBe(true);
+  });
+
+  it("does not start a search whose signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const hanging = hangingFetch();
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      timeoutMs: 60_000,
+      fetch: hanging.fetch,
+    });
+
+    await expect(provider.search("local models", { signal: controller.signal })).rejects.toThrow();
+    expect(hanging.aborted()).toBe(true);
+  });
+});

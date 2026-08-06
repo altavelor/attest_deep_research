@@ -107,8 +107,8 @@ describe("createFetchFallbackProviders", () => {
 
   it("includes Jina and Zyte only when enabled with a key; Wayback always closes the chain", () => {
     const profiles: WebSourceProfile[] = [
-      { sourceId: "jina", enabled: true, credentials: { apiKey: "j" } },
-      { sourceId: "zyte", enabled: false, credentials: { apiKey: "z" } },
+      { sourceId: "jina", activation: "auto", credentials: { apiKey: "j" } },
+      { sourceId: "zyte", activation: "off", credentials: { apiKey: "z" } },
     ];
     const providers = createFetchFallbackProviders(profiles, pageFetcher);
     expect(providers.map((provider) => provider.id)).toEqual(["jina", "wayback"]);

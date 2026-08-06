@@ -12,6 +12,8 @@ import type { UrlStatusChecker } from "@application/contracts/research";
 import type { AgentLoopOptions, AgentLoopEvent, AgentLoopResult } from "@core/agent";
 import type { ToolManager } from "@application/tools/ToolManager";
 import type { ResearchSearchMode } from "@application/contracts/research";
+import type { ResearchModeWebParameters } from "@core/research";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 
 export interface ResearchToolAvailability {
   searchMode: ResearchSearchMode;
@@ -53,6 +55,10 @@ export interface ResearchToolsetOptions {
   urlStatusChecker?: UrlStatusChecker;
   indexSourcePaths?: readonly string[];
   searchProvider?: SearchProvider;
+
+  web?: ResearchModeWebParameters;
+
+  onWebSourceSelection?(diagnostics: WebSourceSelectionDiagnostics): void;
 
   subAgentRunner?: SubAgentPort;
 

@@ -2,11 +2,14 @@ import { WebSourceReference } from "@core/model";
 import type { ImageCandidate } from "@core/media";
 import { ToolError } from "@core/agent";
 import type {
+  WebSelectionMode,
   WebQueryIntent,
   WebQueryLanguage,
   WebQueryRecency,
+  WebSourceActivation,
   WebSourceDescriptor,
 } from "@core/web";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 
 export interface SearchProviderResult {
   source: WebSourceReference;
@@ -27,6 +30,16 @@ export interface WebSearchOptions {
   recency?: WebQueryRecency;
 
   language?: WebQueryLanguage;
+
+  mode?: WebSelectionMode;
+
+  perSourceLimit?: number;
+
+  deadlineMs?: number;
+
+  maxConcurrentSources?: number;
+
+  onSourceSelection?(diagnostics: WebSourceSelectionDiagnostics): void;
 }
 
 export interface WebPageFetchOptions {
@@ -103,6 +116,8 @@ export interface SearchProvider {
 
 export interface WebSearchSource extends SearchProvider {
   descriptor: WebSourceDescriptor;
+
+  activation: WebSourceActivation;
 }
 
 export interface WebSourceRegistry {

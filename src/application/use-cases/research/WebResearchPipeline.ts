@@ -6,6 +6,9 @@ import { RetrievedChunk } from "@core/model";
 import { tokenSetForSearch } from "@core/retrieval";
 import { normalizeInlineWhitespace } from "@shared";
 import { estimateTextTokens } from "@core/research";
+import type { ResearchModeWebParameters } from "@core/research";
+import type { WebSelectionMode } from "@core/web";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import { ResearchStreamEvent } from "@application/contracts/research";
 
 export interface ResearchEvidenceResult {
@@ -17,6 +20,10 @@ export interface ResearchEvidenceResult {
 export interface WebSearchPipelineOptions {
   evidenceLimit?: number;
   signal?: AbortSignal;
+
+  mode?: WebSelectionMode;
+
+  web?: ResearchModeWebParameters;
 }
 
 export interface WebResearchPipelineOptions {
@@ -24,10 +31,14 @@ export interface WebResearchPipelineOptions {
   evidenceLimit: number;
 }
 
-const NORMAL_WEB_SEARCH_OPTIONS: Required<Pick<WebSearchOptions, "limit" | "maxFetches">> = {
-  limit: 5,
-  maxFetches: 3,
+const DEFAULT_WEB_PARAMETERS: ResearchModeWebParameters = {
+  deadlineMs: 20_000,
+  perSourceLimit: 6,
+  mergedLimit: 20,
+  maxConcurrentSources: 6,
 };
+
+const MAX_FETCHES = 3;
 
 export class WebResearchPipeline {
   private readonly searchProvider?: SearchProvider;
@@ -48,16 +59,28 @@ export class WebResearchPipeline {
     }
 
     const evidenceLimit = options.evidenceLimit ?? this.evidenceLimit;
+    const web = options.web ?? DEFAULT_WEB_PARAMETERS;
+    const mode = options.mode ?? "instant";
 
     const queries = [question];
 
     yield { type: "status", message: "Searching web..." };
+    let sourceSelection: WebSourceSelectionDiagnostics | undefined;
+    const searchOptions: WebSearchOptions = {
+      mode,
+      limit: web.mergedLimit,
+      perSourceLimit: web.perSourceLimit,
+      deadlineMs: web.deadlineMs,
+      maxConcurrentSources: web.maxConcurrentSources,
+      maxFetches: MAX_FETCHES,
+      onSourceSelection: (diagnostics) => {
+        sourceSelection = diagnostics;
+      },
+      ...(options.signal ? { signal: options.signal } : {}),
+    };
     const search = {
-      results: await this.searchProvider.search(question, {
-        ...NORMAL_WEB_SEARCH_OPTIONS,
-        ...(options.signal ? { signal: options.signal } : {}),
-      }),
-      requests: [{ query: question, ...NORMAL_WEB_SEARCH_OPTIONS }],
+      results: await this.searchProvider.search(question, searchOptions),
+      requests: [{ query: question, limit: web.mergedLimit, maxFetches: MAX_FETCHES }],
     };
     const results = search.results;
 
@@ -65,7 +88,16 @@ export class WebResearchPipeline {
       return {
         chunks: [],
         citations: [],
-        diagnostics: createWebDiagnostics(question, "direct", queries, search.requests, [], []),
+        diagnostics: createWebDiagnostics(
+          question,
+          "direct",
+          queries,
+          search.requests,
+          [],
+          [],
+          0,
+          sourceSelection,
+        ),
       };
     }
 
@@ -85,6 +117,7 @@ export class WebResearchPipeline {
         results,
         rankedResults,
         evidenceLimit,
+        sourceSelection,
       ),
     };
   }
@@ -98,6 +131,7 @@ function createWebDiagnostics(
   rawResults: SearchProviderResult[],
   rankedResults: SearchProviderResult[],
   evidenceLimit = 0,
+  sourceSelection?: WebSourceSelectionDiagnostics,
 ): WebContextDiagnostics {
   const processingRanks = new Map(
     rankedResults.map((result, index) => [result, index + 1] as const),
@@ -140,6 +174,7 @@ function createWebDiagnostics(
       };
     }),
     finalPrompt: { includedChunkIds: [], usedTokens: 0 },
+    ...(sourceSelection ? { sourceSelection } : {}),
   };
 }
 

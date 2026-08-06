@@ -1,4 +1,4 @@
-import { areCredentialsComplete, WebSourceProfile } from "@core/web";
+import { areCredentialsComplete, isWebSourceActive, WebSourceProfile } from "@core/web";
 import { WebSearchSource, WebSourceRegistry } from "@application/ports";
 import {
   arxivDefinition,
@@ -63,12 +63,17 @@ export function createWebSearchSources(
 
   return WEB_SOURCE_DEFINITIONS.flatMap((definition) => {
     const profile = byId.get(definition.descriptor.id);
-    if (!profile?.enabled || !areCredentialsComplete(definition.descriptor, profile.credentials)) {
+    if (
+      !profile ||
+      !isWebSourceActive(profile) ||
+      !areCredentialsComplete(definition.descriptor, profile.credentials)
+    ) {
       return [];
     }
     return [
       new HttpWebSearchSource(definition, {
         ...runtime,
+        activation: profile.activation,
         credentials: profile.credentials,
       }),
     ];

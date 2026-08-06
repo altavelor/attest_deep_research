@@ -1,4 +1,6 @@
 import { Tool } from "@core/agent";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
+import type { ResearchModeWebParameters } from "@core/research";
 import { SearchProvider } from "@application/ports";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
@@ -14,6 +16,10 @@ export interface WebSourceOptions {
   evidence: EvidenceRegistry;
   artifacts?: AnswerArtifactRegistry;
   available?: boolean;
+
+  web?: ResearchModeWebParameters;
+
+  onSourceSelection?(diagnostics: WebSourceSelectionDiagnostics): void;
 }
 
 export class WebSource implements DataSource {
@@ -21,11 +27,15 @@ export class WebSource implements DataSource {
   private readonly provider: SearchProvider;
   private readonly evidence: EvidenceRegistry;
   private readonly artifacts?: AnswerArtifactRegistry;
+  private readonly web?: ResearchModeWebParameters;
+  private readonly onSourceSelection?: (diagnostics: WebSourceSelectionDiagnostics) => void;
 
   constructor(options: WebSourceOptions) {
     this.provider = options.provider;
     this.evidence = options.evidence;
     this.artifacts = options.artifacts;
+    this.web = options.web;
+    this.onSourceSelection = options.onSourceSelection;
     this.descriptor = {
       id: "web",
       kind: "web",
@@ -39,6 +49,8 @@ export class WebSource implements DataSource {
       provider: this.provider,
       evidence: this.evidence,
       ...(this.artifacts ? { artifacts: this.artifacts } : {}),
+      ...(this.web ? { web: this.web } : {}),
+      ...(this.onSourceSelection ? { onSourceSelection: this.onSourceSelection } : {}),
     };
     const tools: Tool[] = [new WebSearchResearchTool(deps)];
     if (this.provider.fetchPage) {

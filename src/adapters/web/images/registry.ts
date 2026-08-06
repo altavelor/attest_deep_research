@@ -1,5 +1,10 @@
 import { OPENVERSE_SOURCE_ID, WIKIMEDIA_COMMONS_SOURCE_ID } from "@core/web";
-import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
+import {
+  areCredentialsComplete,
+  findWebSourceDescriptor,
+  isWebSourceActive,
+  WebSourceProfile,
+} from "@core/web";
 import type { ImageSearchRegistry, ImageSearchSource } from "@application/ports";
 import { IMAGE_SOURCE_DEFINITIONS } from "./engineDefinitions";
 import { HttpImageSearchSource } from "./HttpImageSearchSource";
@@ -17,7 +22,7 @@ export function createImageSearchSources(
   const usable = (sourceId: string) => {
     const descriptor = findWebSourceDescriptor(sourceId);
     const profile = byId.get(sourceId);
-    if (!descriptor || !profile?.enabled) return undefined;
+    if (!descriptor || !profile || !isWebSourceActive(profile)) return undefined;
     return areCredentialsComplete(descriptor, profile.credentials)
       ? { descriptor, credentials: profile.credentials }
       : undefined;

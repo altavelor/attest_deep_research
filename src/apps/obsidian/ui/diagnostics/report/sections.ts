@@ -150,6 +150,9 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
       scoreStats,
     },
     web: d.web ?? null,
+    webSourceSelection: d.web?.sourceSelection ?? null,
+    webSourceSelections: d.webSourceSelections ?? null,
+    omittedWebSourceSelections: d.omittedWebSourceSelections ?? 0,
     evidencePlanner: d.evidencePlanner ?? null,
   };
 }

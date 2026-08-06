@@ -1127,7 +1127,13 @@ describe("ResearchService", () => {
     expect(retriever.requests[0].options).toMatchObject({ limit: 6, includeWebResults: false });
     expect(webSearch.requests).toHaveLength(1);
     expect(webSearch.requests[0].query).toBe("How should I use local models?");
-    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
+    expect(webSearch.requests[0].options).toMatchObject({
+      mode: "instant",
+      limit: 12,
+      perSourceLimit: 5,
+      deadlineMs: 6_000,
+      maxFetches: 3,
+    });
     expect(chatModel.requests[0]).toMatchObject({
       model: "qwen",
       temperature: 0.2,
@@ -1561,7 +1567,13 @@ describe("ResearchService", () => {
     expect(retriever.requests).toEqual([]);
     expect(webSearch.requests).toHaveLength(1);
     expect(webSearch.requests[0].query).toBe("What changed recently?");
-    expect(webSearch.requests[0].options).toMatchObject({ limit: 5, maxFetches: 3 });
+    expect(webSearch.requests[0].options).toMatchObject({
+      mode: "instant",
+      limit: 12,
+      perSourceLimit: 5,
+      deadlineMs: 6_000,
+      maxFetches: 3,
+    });
     expect(events.at(-1)).toEqual({
       type: "complete",
       answer: expect.objectContaining({

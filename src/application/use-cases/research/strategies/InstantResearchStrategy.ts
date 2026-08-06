@@ -107,6 +107,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
     const webBranch = branches.run(
       this.deps.webPipeline.search(question, searchMode !== "indexOnly" && searchMode !== "none", {
         evidenceLimit,
+        mode: "instant",
+        web: ctx.retrieval.web,
         signal: webAbort.signal,
       }),
     );

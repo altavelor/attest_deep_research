@@ -352,7 +352,7 @@ describe("HttpWebSearchSource", () => {
 describe("createWebSearchSources", () => {
   const profile = (overrides: Partial<WebSourceProfile>): WebSourceProfile => ({
     sourceId: "brave",
-    enabled: true,
+    activation: "auto",
     credentials: { apiKey: "k" },
     ...overrides,
   });
@@ -367,10 +367,10 @@ describe("createWebSearchSources", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("count=12");
   });
 
-  it("builds sources only for enabled, fully configured profiles", () => {
+  it("builds sources only for active, fully configured profiles", () => {
     const sources = createWebSearchSources([
       profile({}),
-      profile({ sourceId: "tavily", enabled: false }),
+      profile({ sourceId: "tavily", activation: "off" }),
       profile({ sourceId: "serper", credentials: {} }),
       profile({ sourceId: "wikipedia", credentials: {} }),
       profile({ sourceId: "unknown-source" }),
@@ -378,37 +378,49 @@ describe("createWebSearchSources", () => {
 
     expect(sources.map((source) => source.descriptor.id).sort()).toEqual(["brave", "wikipedia"]);
   });
+
+  it("carries each profile's activation onto the built source", () => {
+    const sources = createWebSearchSources([
+      profile({}),
+      profile({ sourceId: "wikipedia", activation: "always", credentials: {} }),
+    ]);
+
+    expect(sources.map((source) => [source.descriptor.id, source.activation])).toEqual([
+      ["brave", "auto"],
+      ["wikipedia", "always"],
+    ]);
+  });
 });
 
 describe("web source settings queries", () => {
-  it("returns a disabled blank profile for untouched sources and upserts in place", () => {
+  it("returns a switched-off blank profile for untouched sources and upserts in place", () => {
     const settings = { webSources: [] as WebSourceProfile[] };
 
     expect(getWebSourceProfile(settings, "brave")).toEqual({
       sourceId: "brave",
-      enabled: false,
+      activation: "off",
       credentials: {},
     });
 
     upsertWebSourceProfile(settings, {
       sourceId: "brave",
-      enabled: false,
+      activation: "off",
       credentials: { apiKey: "k" },
     });
     upsertWebSourceProfile(settings, {
       sourceId: "brave",
-      enabled: true,
+      activation: "always",
       credentials: { apiKey: "k2" },
     });
 
     expect(settings.webSources).toEqual([
-      { sourceId: "brave", enabled: true, credentials: { apiKey: "k2" } },
+      { sourceId: "brave", activation: "always", credentials: { apiKey: "k2" } },
     ]);
   });
 
   it("reports configured state from required credential completeness", () => {
     const settings = {
-      webSources: [{ sourceId: "brave", enabled: false, credentials: { apiKey: "k" } }],
+      webSources: [{ sourceId: "brave", activation: "off" as const, credentials: { apiKey: "k" } }],
     };
     expect(isWebSourceConfigured(settings, "brave")).toBe(true);
     expect(isWebSourceConfigured(settings, "tavily")).toBe(false);
@@ -438,7 +450,7 @@ describe("settings normalization for web sources", () => {
 
     const settings = readSettings(legacy);
     expect(settings.webSources).toEqual([
-      { sourceId: "duckduckgo", enabled: true, credentials: {} },
+      { sourceId: "duckduckgo", activation: "auto", credentials: {} },
     ]);
     expect("duckDuckGoEnabled" in settings).toBe(false);
     expect("duckDuckGoResultLimit" in settings).toBe(false);
@@ -448,17 +460,78 @@ describe("settings normalization for web sources", () => {
     const settings = readSettings({
       ...DEFAULT_SETTINGS,
       webSources: [
-        { sourceId: "gone-from-catalog", enabled: true, credentials: {} },
-        { sourceId: "brave", enabled: true, credentials: {} },
-        { sourceId: "brave", enabled: true, credentials: { apiKey: "k", junk: 5 } },
-        { sourceId: "arxiv", enabled: true, credentials: {} },
+        { sourceId: "gone-from-catalog", activation: "auto", credentials: {} },
+        { sourceId: "brave", activation: "auto", credentials: {} },
+        { sourceId: "brave", activation: "always", credentials: { apiKey: "k", junk: 5 } },
+        { sourceId: "arxiv", activation: "auto", credentials: {} },
       ],
     });
 
     expect(settings.webSources).toEqual([
-      { sourceId: "brave", enabled: false, credentials: {} },
-      { sourceId: "brave", enabled: true, credentials: { apiKey: "k" } },
-      { sourceId: "arxiv", enabled: true, credentials: {} },
+      { sourceId: "brave", activation: "off", credentials: {} },
+      { sourceId: "brave", activation: "always", credentials: { apiKey: "k" } },
+      { sourceId: "arxiv", activation: "auto", credentials: {} },
+    ]);
+  });
+
+  it("migrates the legacy enabled flag into an activation", () => {
+    const settings = readSettings({
+      ...DEFAULT_SETTINGS,
+      webSources: [
+        {
+          sourceId: "brave",
+          enabled: true,
+          credentials: { apiKey: "k" },
+          imageSearchEnabled: true,
+        },
+        { sourceId: "tavily", enabled: false, credentials: { apiKey: "t" } },
+        { sourceId: "arxiv", credentials: {} },
+      ],
+    });
+
+    expect(settings.webSources).toEqual([
+      {
+        sourceId: "brave",
+        activation: "auto",
+        credentials: { apiKey: "k" },
+        imageSearchEnabled: true,
+      },
+      { sourceId: "tavily", activation: "off", credentials: { apiKey: "t" } },
+      { sourceId: "arxiv", activation: "off", credentials: {} },
+    ]);
+    expect(settings.webSources.some((profile) => "enabled" in profile)).toBe(false);
+  });
+
+  it("survives malformed webSources entries instead of failing the whole load", () => {
+    const settings = readSettings({
+      ...DEFAULT_SETTINGS,
+      webSources: [
+        null,
+        "brave",
+        {},
+        { sourceId: "brave", enabled: true, credentials: { apiKey: "k" } },
+      ],
+    });
+
+    expect(settings.webSources).toEqual([
+      { sourceId: "brave", activation: "auto", credentials: { apiKey: "k" } },
+    ]);
+  });
+
+  it("keeps a stored activation and switches off sources with incomplete credentials", () => {
+    const settings = readSettings({
+      ...DEFAULT_SETTINGS,
+      webSources: [
+        { sourceId: "brave", activation: "always", enabled: false, credentials: { apiKey: "k" } },
+        { sourceId: "tavily", activation: "always", credentials: {} },
+        { sourceId: "serper", activation: "nonsense", credentials: { apiKey: "s" } },
+      ],
+    });
+
+    expect(settings.webSources).toEqual([
+      { sourceId: "brave", activation: "always", credentials: { apiKey: "k" } },
+      { sourceId: "tavily", activation: "off", credentials: {} },
+      { sourceId: "serper", activation: "off", credentials: { apiKey: "s" } },
     ]);
   });
 });

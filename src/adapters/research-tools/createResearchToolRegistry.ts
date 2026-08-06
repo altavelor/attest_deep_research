@@ -64,7 +64,17 @@ export function createResearchToolRegistry(
     availability.webProviderAvailable &&
     (availability.searchMode === "webOnly" || availability.searchMode === "indexAndWeb")
   ) {
-    sources.register(new WebSource({ provider: options.searchProvider, evidence, artifacts }));
+    sources.register(
+      new WebSource({
+        provider: options.searchProvider,
+        evidence,
+        artifacts,
+        ...(options.web ? { web: options.web } : {}),
+        ...(options.onWebSourceSelection
+          ? { onSourceSelection: options.onWebSourceSelection }
+          : {}),
+      }),
+    );
   }
 
   if (

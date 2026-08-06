@@ -4,6 +4,7 @@ import {
   ContextDiagnostics,
   RoundPromptDeltaDiagnostic,
   ToolCallDiagnostic,
+  WebSourceSelectionDiagnostics,
 } from "@core/diagnostics";
 
 export interface DiagnosticReportV3 {
@@ -122,6 +123,11 @@ export interface RequestSection {
     scoreStats: { min: number; max: number; avg: number; threshold: number | null } | null;
   } | null;
   web: ContextDiagnostics["web"] | null;
+  webSourceSelection: WebSourceSelectionDiagnostics | null;
+
+  webSourceSelections: WebSourceSelectionDiagnostics[] | null;
+
+  omittedWebSourceSelections: number;
   evidencePlanner: ContextDiagnostics["evidencePlanner"] | null;
 }
 
