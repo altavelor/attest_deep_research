@@ -1,7 +1,8 @@
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
 import { WebSearchResearchTool } from "@adapters/research-tools/web/WebSearchResearchTool";
-import { SearchProvider } from "@application/ports";
+import { SearchProvider, WebSearchOptions } from "@application/ports";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 
 describe("WebSearchResearchTool", () => {
   it("performs metadata-only search and collapses canonical duplicate URLs", async () => {
@@ -22,10 +23,10 @@ describe("WebSearchResearchTool", () => {
       arguments: { query: "  current   research  ", limit: 5 },
     });
 
-    expect(provider.search).toHaveBeenCalledWith("current research", {
-      limit: 5,
-      maxFetches: 0,
-    });
+    expect(provider.search).toHaveBeenCalledWith(
+      "current research",
+      expect.objectContaining({ mode: "thinking", limit: 5, maxFetches: 0 }),
+    );
     expect(execution).toMatchObject({
       ok: true,
       value: {
@@ -90,3 +91,99 @@ function webResult(url: string, title: string, snippet: string, rank: number) {
     query: "current research",
   };
 }
+
+describe("WebSearchResearchTool source-selection tracing", () => {
+  function tracingProvider(captured: WebSearchOptions[]): SearchProvider {
+    return {
+      search: async (_query, options) => {
+        captured.push(options ?? {});
+        options?.onSourceSelection?.({
+          mode: "thinking",
+          deadlineMs: options.deadlineMs ?? 0,
+          perSourceLimit: options.perSourceLimit ?? 0,
+          deadlineExceeded: false,
+          cancelled: false,
+          intent: "academic",
+          intentOrigin: "model",
+          sources: [
+            {
+              sourceId: "arxiv",
+              label: "arXiv",
+              activation: "auto",
+              outcome: "queried",
+              queryOrder: 1,
+              returnedResults: 1,
+            },
+          ],
+        });
+        return [];
+      },
+    };
+  }
+
+  it("passes the mode's web parameters to the provider", async () => {
+    const captured: WebSearchOptions[] = [];
+    const tool = new WebSearchResearchTool({
+      provider: tracingProvider(captured),
+      evidence: new ResearchEvidenceRegistry(),
+      web: {
+        deadlineMs: 12_000,
+        perSourceLimit: 4,
+        mergedLimit: 15,
+        maxConcurrentSources: 3,
+      },
+    });
+
+    await executeTool(tool, {
+      id: "call-web",
+      name: "search_web",
+      arguments: { query: "rag papers", limit: 5 },
+    });
+
+    expect(captured[0]).toMatchObject({
+      deadlineMs: 12_000,
+      perSourceLimit: 4,
+      maxConcurrentSources: 3,
+      limit: 5,
+    });
+  });
+
+  it("reports each search's source selection tagged with its query", async () => {
+    const seen: WebSourceSelectionDiagnostics[] = [];
+    const tool = new WebSearchResearchTool({
+      provider: tracingProvider([]),
+      evidence: new ResearchEvidenceRegistry(),
+      onSourceSelection: (selection) => seen.push(selection),
+    });
+
+    await executeTool(tool, {
+      id: "call-web",
+      name: "search_web",
+      arguments: { query: "rag papers", limit: 5 },
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      query: "rag papers",
+      intent: "academic",
+      intentOrigin: "model",
+    });
+    expect(seen[0].sources[0]).toMatchObject({ sourceId: "arxiv", outcome: "queried" });
+  });
+
+  it("omits the selection callback when no sink is wired", async () => {
+    const captured: WebSearchOptions[] = [];
+    const tool = new WebSearchResearchTool({
+      provider: tracingProvider(captured),
+      evidence: new ResearchEvidenceRegistry(),
+    });
+
+    await executeTool(tool, {
+      id: "call-web",
+      name: "search_web",
+      arguments: { query: "rag papers", limit: 5 },
+    });
+
+    expect(captured[0].onSourceSelection).toBeUndefined();
+  });
+});

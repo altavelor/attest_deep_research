@@ -8,13 +8,26 @@ export {
   areCredentialsComplete,
   IMAGE_SOURCE_IDS,
   isImageSourceId,
+  isWebSourceActivation,
+  isWebSourceActive,
   OPENVERSE_SOURCE_ID,
+  WEB_SOURCE_ACTIVATIONS,
   WIKIMEDIA_COMMONS_SOURCE_ID,
 } from "./webSources";
 
+export { selectWebSources } from "./sourceSelection";
+export type {
+  WebSelectionMode,
+  WebSourceCandidate,
+  WebSourceExclusion,
+  WebSourceExclusionReason,
+  WebSourceSelection,
+  WebSourceSelectionEntry,
+  WebSourceSelectionInput,
+} from "./sourceSelection";
+
 export {
   classifyWebQuery,
-  selectSourcesForIntent,
   mergeRankedResults,
   isWebQueryIntent,
   WEB_QUERY_INTENTS,
@@ -32,6 +45,7 @@ export {
 } from "./queryContext";
 export type { WebQueryRecency, WebQueryLanguage, SiteFilterExtraction } from "./queryContext";
 export type {
+  WebSourceActivation,
   WebSourceCategory,
   WebSourceCapabilities,
   WebSourceCredentialField,

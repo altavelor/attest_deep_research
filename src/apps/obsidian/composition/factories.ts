@@ -31,6 +31,8 @@ import {
 } from "./profileResolvers";
 import { createWebSearchProvider } from "./webSearchFactory";
 import { createDocumentImageCandidates, createImageSearchRegistry } from "./mediaFactory";
+import type { WebQueryIntentClassifier } from "@application/web";
+import { ModelWebQueryIntentClassifier } from "@application/web";
 import {
   createChatModelClient,
   createQueryExpansionService,
@@ -148,7 +150,13 @@ export function createResearchService(
     evidencePlanner: {
       useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
     },
-    searchProvider: createSearchProvider(ctx),
+    searchProvider: createSearchProvider(
+      ctx,
+      new ModelWebQueryIntentClassifier({
+        chatModel: createChatModelClient(ctx, chatServer, chatProfile),
+        model: chatProfile.modelName,
+      }),
+    ),
     ...(createImageSearchRegistry(ctx) ? { imageSearch: createImageSearchRegistry(ctx)! } : {}),
     documentImageCandidates: createDocumentImageCandidates(
       ctx,
@@ -222,10 +230,14 @@ export function createEnrichmentService(
   });
 }
 
-export function createSearchProvider(ctx: CompositionContext) {
+export function createSearchProvider(
+  ctx: CompositionContext,
+  intentClassifier?: WebQueryIntentClassifier,
+) {
   return createWebSearchProvider({
     settings: ctx.getSettings(),
     logger: ctx.logger,
     health: ctx.webSourceHealth,
+    ...(intentClassifier ? { intentClassifier } : {}),
   });
 }

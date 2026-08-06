@@ -2,7 +2,9 @@ import { App } from "obsidian";
 
 import {
   areCredentialsComplete,
+  isWebSourceActive,
   WEB_SOURCE_CATALOG,
+  WebSourceActivation,
   WebSourceCategory,
   WebSourceDescriptor,
 } from "@core/web";
@@ -34,6 +36,12 @@ const CATEGORY_LABELS: Record<WebSourceCategory, string> = {
   image: "Image search",
 };
 
+const ACTIVATION_LABELS: Record<WebSourceActivation, string> = {
+  off: "Off",
+  auto: "Auto — used when the planner picks it",
+  always: "Always — queried on every web search",
+};
+
 const ISSUE_LABELS: Record<WebSourceIssue["reason"], string> = {
   unauthorized: "Credentials rejected — check the API key",
   "rate-limited": "Rate limit exceeded — retries automatically later",
@@ -42,16 +50,17 @@ const ISSUE_LABELS: Record<WebSourceIssue["reason"], string> = {
 /**
  * "External sources" hub list. Rows are fixed by the catalog: sources are
  * configured and toggled, never added or deleted. Unconfigured sources show a
- * "Set up…" action; configured ones show a status lamp that toggles the source
- * (green — enabled, yellow — enabled with a runtime problem, grey — off).
+ * "Set up…" action; configured ones show a status lamp that cycles off → auto →
+ * always (grey — off, green — auto, ringed green — always, yellow — a runtime
+ * problem).
  */
 export class WebSourcesSection {
   constructor(private readonly ctx: WebSourcesSectionContext) {}
 
   render(containerEl: HTMLElement): void {
     const settings = this.ctx.getSettings();
-    const enabledTotal = WEB_SOURCE_CATALOG.filter(
-      (descriptor) => getWebSourceProfile(settings, descriptor.id).enabled,
+    const enabledTotal = WEB_SOURCE_CATALOG.filter((descriptor) =>
+      isWebSourceActive(getWebSourceProfile(settings, descriptor.id)),
     ).length;
 
     const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
@@ -82,8 +91,8 @@ export class WebSourcesSection {
       const descriptors = WEB_SOURCE_CATALOG.filter(
         (descriptor) => descriptor.category === category,
       );
-      const enabledCount = descriptors.filter(
-        (descriptor) => getWebSourceProfile(settings, descriptor.id).enabled,
+      const enabledCount = descriptors.filter((descriptor) =>
+        isWebSourceActive(getWebSourceProfile(settings, descriptor.id)),
       ).length;
       listEl.createDiv({
         cls: "ixplorer-settings-websource-list__category",
@@ -111,7 +120,7 @@ export class WebSourcesSection {
     });
 
     this.renderActionsCell(row, descriptor, configured);
-    this.renderLampCell(row, descriptor, profile.enabled, configured);
+    this.renderLampCell(row, descriptor, profile.activation, configured);
   }
 
   private renderActionsCell(
@@ -141,7 +150,7 @@ export class WebSourcesSection {
   private renderLampCell(
     row: HTMLElement,
     descriptor: WebSourceDescriptor,
-    enabled: boolean,
+    activation: WebSourceActivation,
     configured: boolean,
   ): void {
     const cell = row.createDiv({ cls: "ixplorer-settings-websource-list__state" });
@@ -150,22 +159,24 @@ export class WebSourcesSection {
       return;
     }
 
-    const issue = enabled ? this.ctx.getSourceIssue(descriptor.id) : undefined;
-    const state = !enabled ? "off" : issue ? "warning" : "on";
-    const title = !enabled
-      ? `Off — click to enable ${descriptor.label}`
-      : issue
-        ? `${ISSUE_LABELS[issue.reason]} — click to disable`
-        : `Enabled — click to disable ${descriptor.label}`;
+    const issue = activation === "off" ? undefined : this.ctx.getSourceIssue(descriptor.id);
+    const state = activation === "off" ? "off" : issue ? "warning" : "on";
+    const next = nextActivation(activation);
+    const title = issue
+      ? `${ISSUE_LABELS[issue.reason]} — click to switch to "${ACTIVATION_LABELS[next]}"`
+      : `${descriptor.label}: ${ACTIVATION_LABELS[activation]} — click to switch to "${ACTIVATION_LABELS[next]}"`;
 
     const lamp = cell.createEl("button", {
-      cls: `ixplorer-settings-websource-lamp is-${state}`,
+      cls: `ixplorer-settings-websource-lamp is-${state}${activation === "always" ? " is-always" : ""}`,
       attr: { type: "button", "aria-label": title, title },
     });
     lamp.addEventListener("click", async () => {
       const settings = this.ctx.getSettings();
       const profile = getWebSourceProfile(settings, descriptor.id);
-      upsertWebSourceProfile(settings, { ...profile, enabled: !profile.enabled });
+      upsertWebSourceProfile(settings, {
+        ...profile,
+        activation: nextActivation(profile.activation),
+      });
       await this.ctx.saveSettings();
       this.ctx.requestRedisplay();
     });
@@ -183,6 +194,12 @@ export class WebSourcesSection {
       },
     }).open();
   }
+}
+
+/** Lamp clicks cycle the three activations: off → auto → always → off. */
+function nextActivation(activation: WebSourceActivation): WebSourceActivation {
+  if (activation === "off") return "auto";
+  return activation === "auto" ? "always" : "off";
 }
 
 function categoriesInCatalogOrder(): WebSourceCategory[] {

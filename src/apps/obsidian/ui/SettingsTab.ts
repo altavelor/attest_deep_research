@@ -31,7 +31,13 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.indexProfiles = new IndexProfilesSection(this.app, this.plugin, () => this.display());
   }
 
+  /**
+   * Rebuilds the whole tab. Every section redisplays through here, so the
+   * scroll offset is captured and restored around the rebuild: without it a
+   * toggle deep in the list throws the user back to the top of the settings.
+   */
   display(): void {
+    const scrollTop = this.containerEl.scrollTop;
     this.unsubscribeCapabilityProbes?.();
     this.unsubscribeCapabilityProbes = this.prober.subscribeAll(() => {
       window.setTimeout(() => this.display(), 0);
@@ -66,6 +72,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
       requestRedisplay: () => this.display(),
     }).render(this.containerEl);
     this.renderAdvancedSettings(this.containerEl);
+    this.containerEl.scrollTop = scrollTop;
 
     if (!this.metadataRefreshStarted) {
       this.metadataRefreshStarted = true;

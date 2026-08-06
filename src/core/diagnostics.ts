@@ -146,6 +146,10 @@ export interface ContextDiagnostics {
   };
   evidencePlanner?: EvidencePlannerDiagnostics;
   web?: WebContextDiagnostics;
+
+  webSourceSelections?: WebSourceSelectionDiagnostics[];
+
+  omittedWebSourceSelections?: number;
   index?: ContextIndexDiagnostics;
   indexDescription?: IndexDescriptionPromptDiagnostics;
   tools: ToolCallDiagnostic[];
@@ -338,6 +342,59 @@ export interface WebContextDiagnostics {
     includedChunkIds: string[];
     usedTokens: number;
   };
+
+  sourceSelection?: WebSourceSelectionDiagnostics;
+}
+
+export type WebSourceOutcome =
+  | "queried"
+  | "excluded"
+  | "health-skipped"
+  | "deadline-exceeded"
+  | "cancelled"
+  | "failed";
+
+export interface WebSourceDiagnostic {
+  sourceId: string;
+  label: string;
+  activation: "off" | "auto" | "always";
+  outcome: WebSourceOutcome;
+
+  queryOrder?: number;
+
+  returnedResults?: number;
+
+  promptResults?: number;
+
+  reason?: string;
+
+  durationMs?: number;
+}
+
+export interface WebSourceSelectionDiagnostics {
+  mode: "instant" | "thinking";
+
+  deadlineMs: number;
+
+  perSourceLimit: number;
+
+  mergedLimit?: number;
+
+  deadlineExceeded: boolean;
+
+  cancelled: boolean;
+
+  query?: string;
+
+  intent?: string;
+
+  intentOrigin?: "explicit" | "model" | "heuristic";
+
+  intentReason?: string;
+
+  language?: string;
+
+  sources: WebSourceDiagnostic[];
 }
 
 export interface WebResultDiagnostic {

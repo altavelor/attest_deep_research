@@ -1,9 +1,13 @@
+import type { WebSourceDiagnostic, WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import {
   classifyWebQuery,
   detectQueryLanguage,
   inferQueryRecency,
   mergeRankedResults,
-  selectSourcesForIntent,
+  selectWebSources,
+  WebQueryIntent,
+  WebSelectionMode,
+  WebSourceExclusionReason,
 } from "@core/web";
 import {
   SearchProvider,
@@ -16,6 +20,7 @@ import {
   WebSearchSource,
   WebSourceRegistry,
 } from "@application/ports";
+import { WebQueryIntentClassifier, WebQueryIntentOrigin } from "./WebQueryIntentClassifier";
 import { WebSourceHealthTracker } from "./WebSourceHealthTracker";
 
 export interface WebQueryPlannerOptions {
@@ -23,7 +28,7 @@ export interface WebQueryPlannerOptions {
 
   fetchDelegate?: SearchProvider;
 
-  maxSources?: number;
+  intentClassifier?: WebQueryIntentClassifier;
 
   onSourceError?(sourceId: string, error: unknown): void;
 
@@ -33,7 +38,20 @@ export interface WebQueryPlannerOptions {
   now?: () => number;
 }
 
-const DEFAULT_MAX_SOURCES = 3;
+const DEFAULT_DEADLINE_MS = 20_000;
+const DEFAULT_PER_SOURCE_LIMIT = 6;
+const DEFAULT_MAX_CONCURRENT_SOURCES = 6;
+
+interface PlannedSource {
+  source: WebSearchSource;
+  diagnostic: WebSourceDiagnostic;
+}
+
+interface ResolvedIntent {
+  intent?: WebQueryIntent;
+  origin?: WebQueryIntentOrigin;
+  reason?: string;
+}
 
 export class WebQueryPlanner implements SearchProvider {
   private readonly health: WebSourceHealthTracker;
@@ -48,61 +66,309 @@ export class WebQueryPlanner implements SearchProvider {
   }
 
   async search(query: string, options: WebSearchOptions = {}): Promise<SearchProviderResult[]> {
-    const selected = this.selectSources(query, options);
-    if (selected.length === 0) return [];
-
+    const mode: WebSelectionMode = options.mode ?? "thinking";
     const language = options.language ?? detectQueryLanguage(query);
     const recency = options.recency ?? inferQueryRecency(query);
-    const searchOptions = {
-      ...options,
-      language,
-      ...(recency ? { recency } : {}),
+    const deadlineMs = options.deadlineMs ?? DEFAULT_DEADLINE_MS;
+    const perSourceLimit = options.perSourceLimit ?? options.limit ?? DEFAULT_PER_SOURCE_LIMIT;
+    const mergedLimit = options.limit ?? Number.POSITIVE_INFINITY;
+
+    const startedAt = this.nowMs();
+    const intent = await this.resolveIntent(query, mode, options, deadlineMs);
+    const plan = this.planSources({ mode, language }, intent.intent);
+    const remainingMs = Math.max(0, deadlineMs - (this.nowMs() - startedAt));
+
+    const report = (deadlineExceeded: boolean, cancelled: boolean): void => {
+      options.onSourceSelection?.(
+        buildSelectionDiagnostics({
+          mode,
+          deadlineMs,
+          perSourceLimit,
+          mergedLimit,
+          deadlineExceeded,
+          cancelled,
+          language,
+          intent,
+          diagnostics: plan.diagnostics,
+        }),
+      );
     };
 
-    const lists = await Promise.all(
-      selected.map(async (source) => {
-        try {
-          const results = await source.search(query, searchOptions);
-          this.health.reportSuccess(source.descriptor.id);
-          return results;
-        } catch (error) {
-          this.health.reportFailure(source.descriptor.id, error);
-          this.options.onSourceError?.(source.descriptor.id, error);
-          return [] as SearchProviderResult[];
-        }
-      }),
+    if (plan.planned.length === 0) {
+      report(false, options.signal?.aborted === true);
+      return [];
+    }
+
+    const searchOptions: WebSearchOptions = {
+      ...options,
+      language,
+      limit: perSourceLimit,
+      perSourceLimit,
+      ...(recency ? { recency } : {}),
+      ...(intent.intent ? { intent: intent.intent } : {}),
+    };
+
+    const { lists, deadlineExceeded, cancelled } = await this.collectWithDeadline(
+      plan.planned,
+      query,
+      searchOptions,
+      remainingMs,
+      options.signal,
+      options.maxConcurrentSources ?? DEFAULT_MAX_CONCURRENT_SOURCES,
     );
 
     const merged = mergeRankedResults(lists, (result) => result.source.url);
-    const limit = options.limit ?? merged.length;
-    return merged.slice(0, limit).map((result, index) => ({ ...result, rank: index + 1 }));
+    const limited = merged
+      .slice(0, mergedLimit)
+      .map((result, index) => ({ ...result, rank: index + 1 }));
+
+    countPromptResults(plan.planned, lists, limited);
+    report(deadlineExceeded, cancelled);
+
+    return limited;
   }
 
   searchSourceLabels(query: string, options: WebSearchOptions = {}): readonly string[] {
-    return this.selectSources(query, options).map((source) => source.descriptor.label);
+    const mode: WebSelectionMode = options.mode ?? "thinking";
+    const language = options.language ?? detectQueryLanguage(query);
+    const intent = options.intent ?? (mode === "instant" ? undefined : classifyWebQuery(query));
+    return this.planSources({ mode, language }, intent).planned.map(
+      (entry) => entry.source.descriptor.label,
+    );
   }
 
-  private selectSources(query: string, options: WebSearchOptions): WebSearchSource[] {
-    const language = options.language ?? detectQueryLanguage(query);
-    const sources = this.options.registry
-      .enabledSources()
-      .filter((source) => this.health.isAvailable(source.descriptor.id))
-      .filter(
-        (source) =>
-          source.descriptor.languages === undefined ||
-          source.descriptor.languages.includes(language),
-      );
-    if (sources.length === 0) return [];
+  /**
+   * Explicit intent wins; otherwise Thinking asks the classifier and Instant
+   * skips classification entirely, since its source pool does not depend on the
+   * intent. Classification may spend at most half the web deadline, so the other
+   * half is always left for actually querying the sources.
+   */
+  private async resolveIntent(
+    query: string,
+    mode: WebSelectionMode,
+    options: WebSearchOptions,
+    deadlineMs: number,
+  ): Promise<ResolvedIntent> {
+    if (options.intent) {
+      return { intent: options.intent, origin: "explicit" };
+    }
+    if (mode === "instant") {
+      return {};
+    }
+    const classifier = this.options.intentClassifier;
+    if (!classifier) {
+      return { intent: classifyWebQuery(query), origin: "heuristic", reason: "no-classifier" };
+    }
 
-    const intent = options.intent ?? classifyWebQuery(query);
+    const budgetMs = Math.floor(Math.max(0, deadlineMs) / 2);
+    if (budgetMs === 0) {
+      return { intent: classifyWebQuery(query), origin: "heuristic", reason: "web-deadline" };
+    }
+
+    const controller = new AbortController();
+    const abortOuter = (): void => controller.abort();
+    if (options.signal?.aborted === true) {
+      controller.abort();
+    } else {
+      options.signal?.addEventListener("abort", abortOuter, { once: true });
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expiry = new Promise<ResolvedIntent>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve({ intent: classifyWebQuery(query), origin: "heuristic", reason: "web-deadline" });
+      }, budgetMs);
+    });
+
+    const classified = classifier.classify(query, controller.signal).catch(() => ({
+      intent: classifyWebQuery(query),
+      origin: "heuristic" as const,
+      reason: "classifier-failed",
+    }));
+
+    try {
+      return await Promise.race([classified, expiry]);
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortOuter);
+      controller.abort();
+    }
+  }
+
+  private planSources(
+    context: { mode: WebSelectionMode; language: WebSearchOptions["language"] },
+    intent: WebQueryIntent | undefined,
+  ): { planned: PlannedSource[]; diagnostics: WebSourceDiagnostic[] } {
+    const sources = this.options.registry.enabledSources();
     const byId = new Map(sources.map((source) => [source.descriptor.id, source]));
-    return selectSourcesForIntent(
-      sources.map((source) => source.descriptor),
-      intent,
-      this.options.maxSources ?? DEFAULT_MAX_SOURCES,
-    )
-      .map((descriptor) => byId.get(descriptor.id))
-      .filter((source): source is WebSearchSource => source !== undefined);
+
+    const selection = selectWebSources(
+      sources.map((source) => ({ descriptor: source.descriptor, activation: source.activation })),
+      {
+        mode: context.mode,
+        ...(intent ? { intent } : {}),
+        ...(context.language ? { language: context.language } : {}),
+      },
+    );
+
+    const diagnostics: WebSourceDiagnostic[] = selection.excluded.map((exclusion) => ({
+      sourceId: exclusion.sourceId,
+      label: byId.get(exclusion.sourceId)?.descriptor.label ?? exclusion.sourceId,
+      activation: exclusion.activation,
+      outcome: "excluded" as const,
+      reason: exclusionReason(exclusion.reason, context.mode, intent),
+    }));
+
+    const planned: PlannedSource[] = [];
+
+    for (const candidate of selection.ordered) {
+      const source = byId.get(candidate.descriptor.id);
+      if (!source) {
+        continue;
+      }
+      const issue = this.health.getIssue(candidate.descriptor.id);
+      if (issue) {
+        diagnostics.push({
+          sourceId: candidate.descriptor.id,
+          label: candidate.descriptor.label,
+          activation: candidate.activation,
+          outcome: "health-skipped",
+          reason: issue.reason,
+        });
+        continue;
+      }
+      const diagnostic: WebSourceDiagnostic = {
+        sourceId: candidate.descriptor.id,
+        label: candidate.descriptor.label,
+        activation: candidate.activation,
+        outcome: "deadline-exceeded",
+        queryOrder: planned.length + 1,
+      };
+      planned.push({ source, diagnostic });
+      diagnostics.push(diagnostic);
+    }
+
+    return { planned, diagnostics };
+  }
+
+  /**
+   * Queries the planned sources with bounded concurrency until the deadline
+   * passes; latecomers are abandoned rather than awaited. Result lists keep the
+   * planned order, so the merge does not depend on who answered first.
+   */
+  private async collectWithDeadline(
+    planned: readonly PlannedSource[],
+    query: string,
+    searchOptions: WebSearchOptions,
+    deadlineMs: number,
+    signal: AbortSignal | undefined,
+    maxConcurrent: number,
+  ): Promise<{
+    lists: SearchProviderResult[][];
+    deadlineExceeded: boolean;
+    cancelled: boolean;
+  }> {
+    const lists: SearchProviderResult[][] = planned.map(() => []);
+    const controller = new AbortController();
+    let cancelledByCaller = signal?.aborted === true;
+    const abortOuter = (): void => {
+      cancelledByCaller = true;
+      controller.abort();
+    };
+    if (cancelledByCaller) {
+      controller.abort();
+    } else {
+      signal?.addEventListener("abort", abortOuter, { once: true });
+    }
+
+    let expired = deadlineMs <= 0;
+    if (expired) {
+      controller.abort();
+    }
+    let releaseDeadline: () => void = () => {};
+    const deadlineReached = new Promise<void>((resolve) => {
+      releaseDeadline = resolve;
+    });
+    const timer = setTimeout(
+      () => {
+        expired = true;
+        controller.abort();
+        releaseDeadline();
+      },
+      Math.max(0, deadlineMs),
+    );
+
+    let next = 0;
+    const startedAt = this.nowMs();
+
+    const worker = async (): Promise<void> => {
+      while (!expired && !controller.signal.aborted) {
+        const index = next++;
+        if (index >= planned.length) {
+          return;
+        }
+        const entry = planned[index];
+        const sourceStartedAt = this.nowMs();
+        try {
+          const results = await entry.source.search(query, {
+            ...searchOptions,
+            signal: controller.signal,
+          });
+          if (expired) {
+            return;
+          }
+          lists[index] = results;
+          entry.diagnostic.outcome = "queried";
+          entry.diagnostic.returnedResults = results.length;
+          entry.diagnostic.promptResults = 0;
+          entry.diagnostic.durationMs = this.nowMs() - sourceStartedAt;
+          this.health.reportSuccess(entry.source.descriptor.id);
+        } catch (error) {
+          this.health.reportFailure(entry.source.descriptor.id, error);
+          if (expired || controller.signal.aborted) {
+            return;
+          }
+          entry.diagnostic.outcome = "failed";
+          entry.diagnostic.reason = sourceErrorReason(error);
+          entry.diagnostic.durationMs = this.nowMs() - sourceStartedAt;
+          this.options.onSourceError?.(entry.source.descriptor.id, error);
+        }
+      }
+    };
+
+    const workerCount = Math.max(1, Math.min(maxConcurrent, planned.length));
+    const workers = Array.from({ length: workerCount }, () => worker());
+
+    try {
+      await Promise.race([Promise.all(workers), deadlineReached]);
+    } finally {
+      clearTimeout(timer);
+      releaseDeadline();
+      signal?.removeEventListener("abort", abortOuter);
+      controller.abort();
+    }
+
+    const cancelled = cancelledByCaller && !expired;
+    const elapsed = this.nowMs() - startedAt;
+    let deadlineExceeded = false;
+    for (const entry of planned) {
+      if (entry.diagnostic.outcome !== "deadline-exceeded") {
+        continue;
+      }
+      entry.diagnostic.durationMs = elapsed;
+      if (cancelled) {
+        entry.diagnostic.outcome = "cancelled";
+      } else {
+        deadlineExceeded = true;
+      }
+    }
+
+    return { lists, deadlineExceeded, cancelled };
+  }
+
+  private nowMs(): number {
+    return this.options.now?.() ?? Date.now();
   }
 
   async fetchPage(url: string, options?: WebPageFetchOptions): Promise<WebPageFetchResult> {
@@ -132,6 +398,69 @@ export class WebQueryPlanner implements SearchProvider {
   private requireFetchDelegate(): SearchProvider | undefined {
     return this.options.fetchDelegate;
   }
+}
+
+function countPromptResults(
+  planned: readonly PlannedSource[],
+  lists: readonly SearchProviderResult[][],
+  kept: readonly SearchProviderResult[],
+): void {
+  const keptUrls = new Set(kept.map((result) => result.source.url));
+  planned.forEach((entry, index) => {
+    if (entry.diagnostic.outcome !== "queried") {
+      return;
+    }
+    entry.diagnostic.promptResults = lists[index].filter((result) =>
+      keptUrls.has(result.source.url),
+    ).length;
+  });
+}
+
+function buildSelectionDiagnostics(input: {
+  mode: WebSelectionMode;
+  deadlineMs: number;
+  perSourceLimit: number;
+  mergedLimit: number;
+  deadlineExceeded: boolean;
+  cancelled: boolean;
+  language: string;
+  intent: ResolvedIntent;
+  diagnostics: WebSourceDiagnostic[];
+}): WebSourceSelectionDiagnostics {
+  return {
+    mode: input.mode,
+    deadlineMs: input.deadlineMs,
+    perSourceLimit: input.perSourceLimit,
+    ...(Number.isFinite(input.mergedLimit) ? { mergedLimit: input.mergedLimit } : {}),
+    deadlineExceeded: input.deadlineExceeded,
+    cancelled: input.cancelled,
+    language: input.language,
+    ...(input.intent.intent ? { intent: input.intent.intent } : {}),
+    ...(input.intent.origin ? { intentOrigin: input.intent.origin } : {}),
+    ...(input.intent.reason ? { intentReason: input.intent.reason } : {}),
+    sources: input.diagnostics,
+  };
+}
+
+function exclusionReason(
+  reason: WebSourceExclusionReason,
+  mode: WebSelectionMode,
+  intent: WebQueryIntent | undefined,
+): string {
+  if (reason === "instant-specialized") {
+    return `specialized source skipped in ${mode} mode`;
+  }
+  if (reason === "no-search-capability") {
+    return "source does not support search";
+  }
+  return intent ? `disabled (intent: ${intent})` : "disabled";
+}
+
+function sourceErrorReason(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "search-failed";
 }
 
 function fetchUnavailable(): {

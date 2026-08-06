@@ -5,15 +5,22 @@ import {
   DuckDuckGoSearchProvider,
 } from "@adapters/web";
 import type { SearchProvider, WebSearchSource } from "@application/ports";
-import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
+import {
+  FetchFallbackChain,
+  WebQueryIntentClassifier,
+  WebQueryPlanner,
+  WebSourceHealthTracker,
+} from "@application/web";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
-import { DUCKDUCKGO_DESCRIPTOR } from "@core/web";
+import { DUCKDUCKGO_DESCRIPTOR, isWebSourceActive } from "@core/web";
 import { IxplorerSettings } from "@adapters/settings";
 
 export interface WebSearchFactoryOptions {
   settings: IxplorerSettings;
   logger: PluginDebugLogger;
   health: WebSourceHealthTracker;
+
+  intentClassifier?: WebQueryIntentClassifier;
 }
 
 /** Creates the research web-search planner and its page-fetch fallback chain. */
@@ -30,8 +37,13 @@ export function createWebSearchProvider(
   const duckDuckGo = new DuckDuckGoSearchProvider(runtime);
   const hubSources = createWebSearchSources(options.settings.webSources, runtime);
   const pool: WebSearchSource[] = [
-    ...(duckDuckGoProfile?.enabled === true
-      ? [Object.assign(duckDuckGo, { descriptor: DUCKDUCKGO_DESCRIPTOR })]
+    ...(isWebSourceActive(duckDuckGoProfile)
+      ? [
+          Object.assign(duckDuckGo, {
+            descriptor: DUCKDUCKGO_DESCRIPTOR,
+            activation: duckDuckGoProfile?.activation ?? "auto",
+          }),
+        ]
       : []),
     ...hubSources,
   ];
@@ -50,6 +62,7 @@ export function createWebSearchProvider(
     registry: { enabledSources: () => pool },
     fetchDelegate,
     health: options.health,
+    ...(options.intentClassifier ? { intentClassifier: options.intentClassifier } : {}),
     onSourceError: (sourceId, error) =>
       options.logger.logError(error, { url: `source:${sourceId}` }),
   });

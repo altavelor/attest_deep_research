@@ -2,10 +2,12 @@ import {
   classifyWebQuery,
   DUCKDUCKGO_DESCRIPTOR,
   mergeRankedResults,
-  selectSourcesForIntent,
+  selectWebSources,
   WEB_SOURCE_CATALOG,
+  WebSourceActivation,
   findWebSourceDescriptor,
 } from "@core/web";
+import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import { IxplorerError } from "@core/errors";
 import { parseWebSearchInput } from "@application/research";
 import { SearchProviderResult, WebSearchSource } from "@application/ports";
@@ -27,12 +29,48 @@ function result(url: string, rank: number, query = "q"): SearchProviderResult {
   };
 }
 
-function fakeSource(id: string, results: SearchProviderResult[] | Error): WebSearchSource {
+function fakeSource(
+  id: string,
+  results: SearchProviderResult[] | Error,
+  activation: WebSourceActivation = "auto",
+): WebSearchSource {
   const descriptor = findWebSourceDescriptor(id) ?? DUCKDUCKGO_DESCRIPTOR;
   return {
     descriptor: { ...descriptor, id },
+    activation,
     search: () => (results instanceof Error ? Promise.reject(results) : Promise.resolve(results)),
   };
+}
+
+function slowSource(
+  id: string,
+  results: SearchProviderResult[],
+  delayMs: number,
+  activation: WebSourceActivation = "auto",
+  onAbort?: () => never,
+): WebSearchSource {
+  const descriptor = findWebSourceDescriptor(id) ?? DUCKDUCKGO_DESCRIPTOR;
+  return {
+    descriptor: { ...descriptor, id },
+    activation,
+    search: (_query, options) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(results), delayMs);
+        options?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          try {
+            onAbort?.();
+            reject(new Error("aborted"));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }),
+  };
+}
+
+function catalogCandidates(activation: WebSourceActivation = "auto") {
+  return WEB_SOURCE_CATALOG.map((descriptor) => ({ descriptor, activation }));
 }
 
 describe("classifyWebQuery", () => {
@@ -51,23 +89,74 @@ describe("classifyWebQuery", () => {
   });
 });
 
-describe("selectSourcesForIntent", () => {
-  it("prefers intent-matching sources and backfills with general ones", () => {
-    const selected = selectSourcesForIntent(WEB_SOURCE_CATALOG, "academic", 3);
-    expect(selected.map((descriptor) => descriptor.id)).toEqual([
-      "arxiv",
-      "semantic-scholar",
-      "openalex",
-    ]);
+describe("selectWebSources", () => {
+  it("queries only serp and neural sources in instant mode", () => {
+    const selection = selectWebSources(catalogCandidates(), { mode: "instant" });
+
+    expect(selection.ordered.every((c) => ["serp", "neural"].includes(c.descriptor.category))).toBe(
+      true,
+    );
+    expect(selection.ordered.some((c) => c.descriptor.id === "arxiv")).toBe(false);
+    expect(selection.excluded.find((e) => e.sourceId === "arxiv")?.reason).toBe(
+      "instant-specialized",
+    );
   });
 
-  it("falls back to general sources when nothing matches the intent", () => {
-    const onlyGeneral = WEB_SOURCE_CATALOG.filter((descriptor) =>
-      descriptor.strengths.includes("general"),
-    );
-    const selected = selectSourcesForIntent(onlyGeneral, "academic", 2);
-    expect(selected).toHaveLength(2);
-    expect(selected[0].strengths).toContain("general");
+  it("keeps an `always` source in instant mode regardless of its category", () => {
+    const candidates = WEB_SOURCE_CATALOG.map((descriptor) => ({
+      descriptor,
+      activation: descriptor.id === "arxiv" ? ("always" as const) : ("auto" as const),
+    }));
+    const selection = selectWebSources(candidates, { mode: "instant" });
+
+    expect(selection.ordered[0].descriptor.id).toBe("arxiv");
+    expect(selection.excluded.some((e) => e.sourceId === "arxiv")).toBe(false);
+  });
+
+  it("never drops a source for intent or language in thinking mode — only reorders", () => {
+    const all = catalogCandidates();
+    const academic = selectWebSources(all, { mode: "thinking", intent: "academic" });
+    const russian = selectWebSources(all, {
+      mode: "thinking",
+      intent: "academic",
+      language: "ru",
+    });
+
+    const searchable = all.filter((c) => c.descriptor.capabilities?.search !== false);
+    expect(academic.ordered).toHaveLength(searchable.length);
+    expect(russian.ordered).toHaveLength(searchable.length);
+    expect(academic.ordered[0].descriptor.category).toBe("academic");
+    expect(russian.ordered.some((c) => c.descriptor.id === "arxiv")).toBe(true);
+  });
+
+  it("reaches a source whose strengths match no intent table (exa)", () => {
+    const selection = selectWebSources(catalogCandidates(), { mode: "thinking", intent: "news" });
+    expect(selection.ordered.some((c) => c.descriptor.id === "exa")).toBe(true);
+  });
+
+  it("ranks an english-only source lower for a russian query but keeps it", () => {
+    const candidates = catalogCandidates();
+    const ru = selectWebSources(candidates, {
+      mode: "thinking",
+      intent: "general",
+      language: "ru",
+    });
+    const en = selectWebSources(candidates, {
+      mode: "thinking",
+      intent: "general",
+      language: "en",
+    });
+
+    const position = (selection: typeof ru, id: string) =>
+      selection.ordered.findIndex((c) => c.descriptor.id === id);
+    expect(position(ru, "arxiv")).toBeGreaterThan(position(en, "arxiv"));
+    expect(position(ru, "arxiv")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("excludes only switched-off sources", () => {
+    const selection = selectWebSources(catalogCandidates("off"), { mode: "thinking" });
+    expect(selection.ordered).toHaveLength(0);
+    expect(selection.excluded.every((e) => e.reason === "disabled")).toBe(true);
   });
 });
 
@@ -90,27 +179,257 @@ describe("mergeRankedResults", () => {
 });
 
 describe("WebQueryPlanner", () => {
-  it("routes academic queries to academic sources and merges with new ranks", async () => {
+  it("queries every enabled source in thinking mode and merges with new ranks", async () => {
     const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
     const scholar = fakeSource("semantic-scholar", [
       result("https://s2.dev/1", 1),
       result("https://arxiv.org/1", 2),
     ]);
-    const brave = fakeSource("brave", [result("https://brave-should-not-run.dev/", 1)]);
+    const brave = fakeSource("brave", [result("https://brave.dev/", 1)]);
     const braveSearch = vi.spyOn(brave, "search");
 
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [brave, arxiv, scholar] },
-      maxSources: 2,
     });
-    const results = await planner.search("arxiv paper on RAG");
+    const results = await planner.search("arxiv paper on RAG", { intent: "academic" });
 
-    expect(braveSearch).not.toHaveBeenCalled();
-    expect(results.map((item) => item.source.url)).toEqual([
+    expect(braveSearch).toHaveBeenCalled();
+    expect(results.map((item) => item.source.url).slice(0, 2)).toEqual([
       "https://arxiv.org/1",
       "https://s2.dev/1",
     ]);
-    expect(results.map((item) => item.rank)).toEqual([1, 2]);
+    expect(results.map((item) => item.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("skips specialized sources in instant mode but keeps `always` ones", async () => {
+    const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
+    const wikipedia = fakeSource("wikipedia", [result("https://wiki.dev/1", 1)], "always");
+    const brave = fakeSource("brave", [result("https://brave.dev/", 1)]);
+    const arxivSearch = vi.spyOn(arxiv, "search");
+    const wikiSearch = vi.spyOn(wikipedia, "search");
+    const braveSearch = vi.spyOn(brave, "search");
+
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [brave, arxiv, wikipedia] },
+    });
+    await planner.search("arxiv paper on retrieval augmentation", { mode: "instant" });
+
+    expect(arxivSearch).not.toHaveBeenCalled();
+    expect(wikiSearch).toHaveBeenCalled();
+    expect(braveSearch).toHaveBeenCalled();
+  });
+
+  it("does not classify the query in instant mode", async () => {
+    const classify = vi.fn();
+    const planner = new WebQueryPlanner({
+      registry: {
+        enabledSources: () => [fakeSource("brave", [result("https://brave.dev/", 1)])],
+      },
+      intentClassifier: { classify },
+    });
+
+    await planner.search("arxiv paper on RAG", { mode: "instant" });
+    expect(classify).not.toHaveBeenCalled();
+  });
+
+  it("uses the model classifier in thinking mode and degrades to the heuristic on failure", async () => {
+    const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
+    const brave = fakeSource("brave", [result("https://brave.dev/", 1)]);
+    const traces: WebSourceSelectionDiagnostics[] = [];
+
+    const modelPlanner = new WebQueryPlanner({
+      registry: { enabledSources: () => [brave, arxiv] },
+      intentClassifier: {
+        classify: async () => ({ intent: "academic" as const, origin: "model" as const }),
+      },
+    });
+    await modelPlanner.search("consciousness emergence", {
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(traces[0]).toMatchObject({ intent: "academic", intentOrigin: "model" });
+    expect(traces[0].sources[0].sourceId).toBe("arxiv");
+
+    const failingPlanner = new WebQueryPlanner({
+      registry: { enabledSources: () => [brave, arxiv] },
+      intentClassifier: {
+        classify: async (query) => ({
+          intent: classifyWebQuery(query),
+          origin: "heuristic" as const,
+          reason: "intent-classification-timeout",
+        }),
+      },
+    });
+    const fallbackTraces: WebSourceSelectionDiagnostics[] = [];
+    await failingPlanner.search("arxiv paper on RAG", {
+      onSourceSelection: (d) => fallbackTraces.push(d),
+    });
+
+    expect(fallbackTraces[0]).toMatchObject({
+      intent: "academic",
+      intentOrigin: "heuristic",
+      intentReason: "intent-classification-timeout",
+    });
+  });
+
+  it("returns what arrived before the deadline and marks the laggard", async () => {
+    const fast = fakeSource("brave", [result("https://fast.dev/", 1)]);
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const traces: WebSourceSelectionDiagnostics[] = [];
+
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [fast, slow] },
+    });
+    const results = await planner.search("query", {
+      deadlineMs: 25,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results.map((item) => item.source.url)).toEqual(["https://fast.dev/"]);
+    expect(traces[0].deadlineExceeded).toBe(true);
+    expect(traces[0].sources.find((s) => s.sourceId === "duckduckgo")?.outcome).toBe(
+      "deadline-exceeded",
+    );
+  });
+
+  it("aborts in-flight source searches when the caller cancels", async () => {
+    const controller = new AbortController();
+    let sawAbort = false;
+    const inFlight: WebSearchSource = {
+      descriptor: { ...DUCKDUCKGO_DESCRIPTOR },
+      activation: "auto",
+      search: (_query, options) =>
+        new Promise((_resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("never")), 10_000);
+          options?.signal?.addEventListener("abort", () => {
+            sawAbort = true;
+            clearTimeout(timer);
+            reject(new Error("aborted"));
+          });
+          setTimeout(() => controller.abort(), 5);
+        }),
+    };
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [inFlight] } });
+
+    const results = await planner.search("query", {
+      signal: controller.signal,
+      deadlineMs: 10_000,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(sawAbort).toBe(true);
+    expect(results).toEqual([]);
+    expect(traces[0].cancelled).toBe(true);
+    expect(traces[0].deadlineExceeded).toBe(false);
+  });
+
+  it("reports an already-cancelled caller signal as cancelled, not as a missed deadline", async () => {
+    const controller = new AbortController();
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [slow] } });
+
+    controller.abort();
+    const results = await planner.search("query", {
+      signal: controller.signal,
+      deadlineMs: 10_000,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results).toEqual([]);
+    expect(traces[0].cancelled).toBe(true);
+    expect(traces[0].deadlineExceeded).toBe(false);
+    expect(traces[0].sources[0].outcome).toBe("cancelled");
+  });
+
+  it("merges deterministically regardless of which source answers first", async () => {
+    const shared = result("https://shared.dev/", 2);
+    const build = (firstIsFast: boolean) => {
+      const a = slowSource("brave", [result("https://a.dev/", 1), shared], firstIsFast ? 1 : 30);
+      const b = slowSource(
+        "duckduckgo",
+        [result("https://b.dev/", 1), shared],
+        firstIsFast ? 30 : 1,
+      );
+      return new WebQueryPlanner({ registry: { enabledSources: () => [a, b] } });
+    };
+
+    const first = await build(true).search("query", { deadlineMs: 5_000 });
+    const second = await build(false).search("query", { deadlineMs: 5_000 });
+    const urls = (items: typeof first) => items.map((item) => item.source.url);
+
+    expect(urls(first)).toEqual(urls(second));
+    expect(urls(first)).toEqual(["https://shared.dev/", "https://a.dev/", "https://b.dev/"]);
+  });
+
+  it("separates the per-source limit from the post-merge limit", async () => {
+    const seen: Array<number | undefined> = [];
+    const source: WebSearchSource = {
+      descriptor: { ...DUCKDUCKGO_DESCRIPTOR },
+      activation: "auto",
+      search: (_query, options) => {
+        seen.push(options?.limit);
+        return Promise.resolve([
+          result("https://1.dev/", 1),
+          result("https://2.dev/", 2),
+          result("https://3.dev/", 3),
+        ]);
+      },
+    };
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [source] } });
+
+    const results = await planner.search("query", { limit: 2, perSourceLimit: 10 });
+    expect(seen).toEqual([10]);
+    expect(results).toHaveLength(2);
+  });
+
+  it("caps how many sources are queried at once", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const make = (id: string): WebSearchSource => ({
+      descriptor: { ...DUCKDUCKGO_DESCRIPTOR, id },
+      activation: "auto",
+      search: async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return [result(`https://${id}.dev/`, 1)];
+      },
+    });
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => ["a", "b", "c", "d", "e", "f"].map(make) },
+    });
+
+    await planner.search("query", { maxConcurrentSources: 2, deadlineMs: 5_000 });
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it("reports the fate of every source in the selection trace", async () => {
+    const unauthorized = new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: "Brave rejected the credentials.",
+      details: { sourceId: "brave", reason: "unauthorized" },
+    });
+    const brave = fakeSource("brave", unauthorized);
+    const ddg = fakeSource("duckduckgo", [result("https://ok.dev/", 1)]);
+    const off = fakeSource("serper", [result("https://off.dev/", 1)], "off");
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [brave, ddg, off] } });
+
+    await planner.search("first");
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    await planner.search("second", { onSourceSelection: (d) => traces.push(d) });
+
+    expect(traces[0]).toMatchObject({ cancelled: false, deadlineExceeded: false });
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("brave")).toMatchObject({ outcome: "health-skipped", reason: "unauthorized" });
+    expect(byId.get("serper")).toMatchObject({ outcome: "excluded" });
+    expect(byId.get("duckduckgo")).toMatchObject({
+      outcome: "queried",
+      returnedResults: 1,
+      promptResults: 1,
+    });
   });
 
   it("keeps results from healthy sources when one source fails", async () => {
@@ -146,15 +465,17 @@ describe("WebQueryPlanner", () => {
   });
 
   it("uses the caller-supplied intent instead of classifying", async () => {
+    const classify = vi.fn();
     const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
     const brave = fakeSource("brave", [result("https://brave.dev/1", 1)]);
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [brave, arxiv] },
-      maxSources: 1,
+      intentClassifier: { classify },
     });
 
     const results = await planner.search("consciousness emergence", { intent: "academic" });
-    expect(results.map((item) => item.source.url)).toEqual(["https://arxiv.org/1"]);
+    expect(classify).not.toHaveBeenCalled();
+    expect(results[0].source.url).toBe("https://arxiv.org/1");
   });
 
   it("auto-suspends a source on unauthorized and skips it in later searches", async () => {
@@ -220,6 +541,80 @@ describe("WebQueryPlanner", () => {
 
     health.reset("brave");
     expect(health.getIssue("brave")).toBeUndefined();
+  });
+
+  it("does not let a slow classifier outlive the web deadline", async () => {
+    const source = fakeSource("duckduckgo", [result("https://ok.dev/", 1)]);
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [source] },
+      intentClassifier: { classify: () => new Promise(() => {}) },
+    });
+
+    const startedAt = Date.now();
+    const results = await planner.search("arxiv paper on RAG", {
+      deadlineMs: 120,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(traces[0].intentOrigin).toBe("heuristic");
+    expect(traces[0].intentReason).toBe("web-deadline");
+    expect(traces[0].intent).toBe("academic");
+    expect(results.map((item) => item.source.url)).toEqual(["https://ok.dev/"]);
+  });
+
+  it("queries nothing when classification has already spent the whole deadline", async () => {
+    const instant = fakeSource("duckduckgo", [result("https://instant.dev/", 1)]);
+    const search = vi.spyOn(instant, "search");
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [instant] } });
+
+    const results = await planner.search("query", {
+      deadlineMs: 0,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(search).not.toHaveBeenCalled();
+    expect(results).toEqual([]);
+    expect(traces[0].deadlineExceeded).toBe(true);
+    expect(traces[0].sources[0].outcome).toBe("deadline-exceeded");
+  });
+
+  it("does not suspend a source that was only cut off by the deadline", async () => {
+    const health = new WebSourceHealthTracker();
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000, "auto", () => {
+      // What HttpWebSearchSource actually throws when its request is aborted.
+      throw new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: "DuckDuckGo timed out.",
+        details: { sourceId: "duckduckgo", reason: "timeout" },
+      });
+    });
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [slow] },
+      health,
+    });
+
+    await planner.search("query", { deadlineMs: 20 });
+
+    expect(health.getIssue("duckduckgo")).toBeUndefined();
+  });
+
+  it("does not suspend a source when the caller cancels the turn", async () => {
+    const controller = new AbortController();
+    const health = new WebSourceHealthTracker();
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [slow] },
+      health,
+    });
+
+    const pending = planner.search("query", { signal: controller.signal, deadlineMs: 10_000 });
+    controller.abort();
+    await pending;
+
+    expect(health.getIssue("duckduckgo")).toBeUndefined();
   });
 
   it("delegates page fetches and degrades gracefully without a delegate", async () => {
