@@ -143,6 +143,31 @@ describe("ModelWebQueryIntentClassifier", () => {
     await expect(pending).resolves.toMatchObject({ intent: "news", origin: "heuristic" });
   });
 
+  it("closes the abandoned stream so the provider can release it", async () => {
+    let returned = false;
+    const deaf: ChatModelProvider = {
+      listModels: async () => ["m"],
+      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => new Promise<IteratorResult<ChatResponseChunk>>(() => {}),
+          return: async () => {
+            returned = true;
+            return { done: true, value: undefined } as IteratorResult<ChatResponseChunk>;
+          },
+        }),
+      }),
+    };
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: deaf,
+      model: "m",
+      timeoutMs: 10,
+    });
+
+    await classifier.classify("arxiv paper on RAG");
+
+    expect(returned).toBe(true);
+  });
+
   it("degrades to the heuristic when the caller cancels", async () => {
     const controller = new AbortController();
     const classifier = new ModelWebQueryIntentClassifier({

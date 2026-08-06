@@ -1,4 +1,4 @@
-import { ChatModelProvider } from "@core/agent";
+import { ChatModelProvider, ChatResponseChunk } from "@core/agent";
 import { classifyWebQuery, isWebQueryIntent, WEB_QUERY_INTENTS, WebQueryIntent } from "@core/web";
 
 export type WebQueryIntentOrigin = "explicit" | "model" | "heuristic";
@@ -69,12 +69,14 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
   /**
    * Races the model against the deadline instead of trusting it to honour the
    * abort signal: a provider that ignores cancellation would otherwise stall the
-   * whole web phase. The abandoned stream is left to settle on its own.
+   * whole web phase. The losing stream is closed through its iterator so the
+   * provider still runs its own cleanup.
    */
   private async askModel(query: string, signal?: AbortSignal): Promise<WebQueryIntent> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abortOuter: (() => void) | undefined;
+    let stream: AsyncIterator<ChatResponseChunk> | undefined;
 
     const abandoned = new Promise<never>((_resolve, reject) => {
       const give = (reason: string): void => {
@@ -94,7 +96,9 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
     });
     abandoned.catch(() => undefined);
 
-    const streamed = this.streamIntent(query, controller.signal);
+    const streamed = this.streamIntent(query, controller.signal, (iterator) => {
+      stream = iterator;
+    });
     streamed.catch(() => undefined);
 
     try {
@@ -105,23 +109,37 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
         signal?.removeEventListener("abort", abortOuter);
       }
       controller.abort();
+      void Promise.resolve(stream?.return?.(undefined)).catch(() => undefined);
     }
   }
 
-  private async streamIntent(query: string, signal: AbortSignal): Promise<WebQueryIntent> {
+  private async streamIntent(
+    query: string,
+    signal: AbortSignal,
+    adopt: (iterator: AsyncIterator<ChatResponseChunk>) => void,
+  ): Promise<WebQueryIntent> {
+    const stream = this.options.chatModel
+      .streamChat({
+        model: this.options.model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: query },
+        ],
+        temperature: 0,
+        maxTokens: 32,
+        signal,
+      })
+      [Symbol.asyncIterator]();
+    adopt(stream);
+
     let content = "";
-    for await (const chunk of this.options.chatModel.streamChat({
-      model: this.options.model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: query },
-      ],
-      temperature: 0,
-      maxTokens: 32,
-      signal,
-    })) {
-      content += chunk.content;
-      if (chunk.isComplete) {
+    for (;;) {
+      const next = await stream.next();
+      if (next.done === true) {
+        break;
+      }
+      content += next.value.content;
+      if (next.value.isComplete) {
         break;
       }
     }
