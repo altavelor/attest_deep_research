@@ -74,7 +74,7 @@ export class WebQueryPlanner implements SearchProvider {
     const mergedLimit = options.limit ?? Number.POSITIVE_INFINITY;
 
     const startedAt = this.nowMs();
-    const intent = await this.resolveIntent(query, mode, options);
+    const intent = await this.resolveIntent(query, mode, options, deadlineMs);
     const plan = this.planSources({ mode, language }, intent.intent);
     const remainingMs = Math.max(0, deadlineMs - (this.nowMs() - startedAt));
 
@@ -138,14 +138,16 @@ export class WebQueryPlanner implements SearchProvider {
   }
 
   /**
-   * Explicit intent wins; otherwise Thinking asks the classifier (which degrades
-   * to the heuristic on its own) and Instant skips classification entirely, since
-   * its source pool does not depend on the intent.
+   * Explicit intent wins; otherwise Thinking asks the classifier and Instant
+   * skips classification entirely, since its source pool does not depend on the
+   * intent. Classification may spend at most half the web deadline, so the other
+   * half is always left for actually querying the sources.
    */
   private async resolveIntent(
     query: string,
     mode: WebSelectionMode,
     options: WebSearchOptions,
+    deadlineMs: number,
   ): Promise<ResolvedIntent> {
     if (options.intent) {
       return { intent: options.intent, origin: "explicit" };
@@ -153,10 +155,45 @@ export class WebQueryPlanner implements SearchProvider {
     if (mode === "instant") {
       return {};
     }
-    if (!this.options.intentClassifier) {
+    const classifier = this.options.intentClassifier;
+    if (!classifier) {
       return { intent: classifyWebQuery(query), origin: "heuristic", reason: "no-classifier" };
     }
-    return this.options.intentClassifier.classify(query, options.signal);
+
+    const budgetMs = Math.floor(Math.max(0, deadlineMs) / 2);
+    if (budgetMs === 0) {
+      return { intent: classifyWebQuery(query), origin: "heuristic", reason: "web-deadline" };
+    }
+
+    const controller = new AbortController();
+    const abortOuter = (): void => controller.abort();
+    if (options.signal?.aborted === true) {
+      controller.abort();
+    } else {
+      options.signal?.addEventListener("abort", abortOuter, { once: true });
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expiry = new Promise<ResolvedIntent>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve({ intent: classifyWebQuery(query), origin: "heuristic", reason: "web-deadline" });
+      }, budgetMs);
+    });
+
+    const classified = classifier.classify(query, controller.signal).catch(() => ({
+      intent: classifyWebQuery(query),
+      origin: "heuristic" as const,
+      reason: "classifier-failed",
+    }));
+
+    try {
+      return await Promise.race([classified, expiry]);
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortOuter);
+      controller.abort();
+    }
   }
 
   private planSources(

@@ -543,6 +543,27 @@ describe("WebQueryPlanner", () => {
     expect(health.getIssue("brave")).toBeUndefined();
   });
 
+  it("does not let a slow classifier outlive the web deadline", async () => {
+    const source = fakeSource("duckduckgo", [result("https://ok.dev/", 1)]);
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [source] },
+      intentClassifier: { classify: () => new Promise(() => {}) },
+    });
+
+    const startedAt = Date.now();
+    const results = await planner.search("arxiv paper on RAG", {
+      deadlineMs: 120,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(traces[0].intentOrigin).toBe("heuristic");
+    expect(traces[0].intentReason).toBe("web-deadline");
+    expect(traces[0].intent).toBe("academic");
+    expect(results.map((item) => item.source.url)).toEqual(["https://ok.dev/"]);
+  });
+
   it("queries nothing when classification has already spent the whole deadline", async () => {
     const instant = fakeSource("duckduckgo", [result("https://instant.dev/", 1)]);
     const search = vi.spyOn(instant, "search");
