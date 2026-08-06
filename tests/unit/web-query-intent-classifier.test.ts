@@ -44,6 +44,57 @@ describe("ModelWebQueryIntentClassifier", () => {
     });
   });
 
+  it("asks the model to answer without reasoning", async () => {
+    const seen: ChatRequest[] = [];
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: modelReturning('{"intent":"academic"}', (request) => seen.push(request)),
+      model: "m",
+    });
+
+    await classifier.classify("anything");
+
+    expect(seen[0].reasoningEnabled).toBe(false);
+  });
+
+  it("answers within the timeout because reasoning is off", async () => {
+    const thinker: ChatModelProvider = {
+      listModels: async () => ["m"],
+      streamChat: async function* (request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+        if (request.reasoningEnabled !== false) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        yield { content: '{"intent":"encyclopedic"}', isComplete: true };
+      },
+    };
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: thinker,
+      model: "m",
+      timeoutMs: 30,
+    });
+
+    await expect(classifier.classify("что такое нарзан")).resolves.toEqual({
+      intent: "encyclopedic",
+      origin: "model",
+    });
+  });
+
+  it("degrades to the heuristic when the provider rejects the reasoning field", async () => {
+    const strict: ChatModelProvider = {
+      listModels: async () => ["m"],
+      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new Error("Unrecognized request argument: reasoning")),
+        }),
+      }),
+    };
+    const classifier = new ModelWebQueryIntentClassifier({ chatModel: strict, model: "m" });
+
+    await expect(classifier.classify("latest release news")).resolves.toMatchObject({
+      intent: "news",
+      origin: "heuristic",
+    });
+  });
+
   it("accepts a bare intent word and rejects an unknown one", async () => {
     const bare = new ModelWebQueryIntentClassifier({
       chatModel: modelReturning("news"),
