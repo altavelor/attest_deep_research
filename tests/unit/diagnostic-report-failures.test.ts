@@ -187,6 +187,34 @@ describe("diagnostic report sections with missing optional data", () => {
     expect(model.toolCapabilities.provenance).toEqual({});
   });
 
+  it("reports the capability provenance recorded alongside the capabilities", () => {
+    const model = buildModelSection({
+      ...baseDiagnostics(),
+      capabilityProvenance: { calls: "probe" },
+    });
+
+    expect(model.toolCapabilities.provenance).toEqual({ calls: "probe" });
+  });
+
+  it("reports the capability provenance of chats saved with it inside the thinking section", () => {
+    const model = buildModelSection({
+      ...baseDiagnostics(),
+      thinking: {
+        policyReason: "thinking-eligible",
+        requiredTools: [],
+        satisfiedTools: [],
+        repairedTools: [],
+        rounds: 0,
+        totalCalls: 0,
+        duplicateCalls: 0,
+        duplicatedCost: false,
+        capabilityProvenance: { calls: "manual" },
+      },
+    });
+
+    expect(model.toolCapabilities.provenance).toEqual({ calls: "manual" });
+  });
+
   it("leaves index sections null and utilization null without a context limit", () => {
     const preflight = buildPreflightSection(baseDiagnostics());
 

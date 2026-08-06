@@ -173,7 +173,7 @@ describe("extractFollowUpQuestions", () => {
 });
 
 describe("ResearchService", () => {
-  it("records Instant diagnostics without activating the Thinking path", async () => {
+  it("records Instant diagnostics without a thinking section", async () => {
     const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
     const service = new ResearchService({
       toolsetFactory: createResearchToolRegistry,
@@ -182,6 +182,7 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
+      toolCapabilityProvenance: { calls: "probe" },
       now: fixedNow,
     });
 
@@ -194,15 +195,11 @@ describe("ResearchService", () => {
       }),
     );
 
-    expect(events.at(-1)).toMatchObject({
-      type: "complete",
-      answer: {
-        contextDiagnostics: {
-          executionStrategy: "instant",
-          thinking: { policyReason: "instant-selected" },
-        },
-      },
-    });
+    const completion = events.at(-1);
+    if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
+    expect(completion.answer.contextDiagnostics?.executionStrategy).toBe("instant");
+    expect(completion.answer.contextDiagnostics?.thinking).toBeUndefined();
+    expect(completion.answer.contextDiagnostics?.capabilityProvenance).toEqual({ calls: "probe" });
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
@@ -310,7 +307,16 @@ describe("ResearchService", () => {
     });
     expect(events.at(-1)).toMatchObject({
       type: "complete",
-      answer: { contextDiagnostics: { executionStrategy: "instant-fallback" } },
+      answer: {
+        contextDiagnostics: {
+          executionStrategy: "instant-fallback",
+          thinking: {
+            policyReason: "tool-calls-unavailable",
+            fallbackReason: "tool-calls-unavailable",
+            duplicatedCost: false,
+          },
+        },
+      },
     });
   });
 

@@ -12,8 +12,9 @@ import {
 export function buildModelSection(d: ContextDiagnostics): ModelSection {
   const thinking = d.thinking;
   const provenance: Record<string, string> = {};
-  if (thinking?.capabilityProvenance) {
-    Object.assign(provenance, thinking.capabilityProvenance);
+  const recordedProvenance = d.capabilityProvenance ?? thinking?.capabilityProvenance;
+  if (recordedProvenance) {
+    Object.assign(provenance, recordedProvenance);
   }
 
   return {
