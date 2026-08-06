@@ -1,5 +1,5 @@
 import { DiagnosticReportV3, Finding } from "@apps/obsidian/ui/diagnostics/report/types";
-import { summaryMetrics } from "../report/format";
+import { summaryMetrics, webSourceSelectionHtml, webSourceSelectionsHtml } from "../report/format";
 import {
   attr,
   badge,
@@ -198,7 +198,11 @@ function retrievalBody(report: DiagnosticReportV3): string {
 
 function webBody(report: DiagnosticReportV3): string {
   const web = report.request.web;
-  if (!web) return "";
+  const thinkingSelections = webSourceSelectionsHtml(
+    report.request.webSourceSelections,
+    report.request.omittedWebSourceSelections,
+  );
+  if (!web) return thinkingSelections;
   const included = web.results.filter((r) => r.status === "included").length;
   const dropped = web.results.filter((r) => r.status === "dropped").length;
   return (
@@ -208,7 +212,9 @@ function webBody(report: DiagnosticReportV3): string {
       ["Queries", web.queries.map((q) => `<code>${h(q)}</code>`).join(", ")],
       ["Results", `${h(included)} included / ${h(dropped)} dropped of ${h(web.results.length)}`],
       ["Prompt tokens", h(web.finalPrompt.usedTokens)],
-    ])
+    ]) +
+    webSourceSelectionHtml(report.request.webSourceSelection) +
+    thinkingSelections
   );
 }
 

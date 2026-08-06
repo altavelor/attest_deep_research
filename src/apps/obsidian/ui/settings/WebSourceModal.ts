@@ -1,6 +1,11 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 
-import { areCredentialsComplete, WebSourceDescriptor, WebSourceProfile } from "@core/web";
+import {
+  areCredentialsComplete,
+  isWebSourceActive,
+  WebSourceDescriptor,
+  WebSourceProfile,
+} from "@core/web";
 import { renderModalActions } from "./shared";
 
 export interface WebSourceModalOptions {
@@ -82,13 +87,14 @@ export class WebSourceModal extends Modal {
       Object.entries(this.credentials).filter(([, value]) => value.length > 0),
     );
     const configured = areCredentialsComplete(this.options.descriptor, credentials);
-    if (!configured && this.options.profile.enabled) {
+    const active = isWebSourceActive(this.options.profile);
+    if (!configured && active) {
       new Notice(`${this.options.descriptor.label} disabled: required credentials are missing.`);
     }
 
     await this.options.onSave({
       sourceId: this.options.descriptor.id,
-      enabled: this.options.profile.enabled && configured,
+      activation: configured ? this.options.profile.activation : "off",
       credentials,
       ...(this.options.descriptor.capabilities?.images === true && this.imageSearchEnabled
         ? { imageSearchEnabled: true }

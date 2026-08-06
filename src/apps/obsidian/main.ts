@@ -20,6 +20,7 @@ import {
 } from "@adapters/settings";
 import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
+import { isWebSourceActive } from "@core/web";
 import { WebSourceHealthTracker } from "@application/web";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
 import { VaultWarmCaches } from "./composition/VaultWarmCaches";
@@ -154,7 +155,8 @@ export default class IxplorerPlugin extends Plugin {
         new IxplorerChatView(leaf, {
           createResearchService: (chatModelProfileId, indexProfileId) =>
             createResearchService(this.composition, chatModelProfileId, indexProfileId),
-          isWebSearchEnabled: () => this.settings.webSources.some((profile) => profile.enabled),
+          isWebSearchEnabled: () =>
+            this.settings.webSources.some((profile) => isWebSourceActive(profile)),
           getChatModel: () =>
             resolveChatModelProfile(this.settings, this.settings.newChatDefaults.chatModelProfileId)
               ?.name ?? "",
