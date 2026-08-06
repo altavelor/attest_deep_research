@@ -151,9 +151,9 @@ function evaluate(
   if (intent) {
     topicalFit = topicalFitFor(descriptor.strengths, descriptor.category, intent);
     score += TOPIC_WEIGHT * topicalFit;
-    if (generalist) {
-      score += GENERALIST_BONUS;
-    }
+  }
+  if (generalist) {
+    score += GENERALIST_BONUS;
   }
 
   if (input.language && descriptor.languages !== undefined) {
