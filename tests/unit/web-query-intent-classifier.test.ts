@@ -99,6 +99,50 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(aborted).toBe(true);
   });
 
+  it("degrades to the heuristic even when the provider ignores the abort signal", async () => {
+    const deaf: ChatModelProvider = {
+      listModels: async () => ["m"],
+      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => new Promise<IteratorResult<ChatResponseChunk>>(() => {}),
+        }),
+      }),
+    };
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: deaf,
+      model: "m",
+      timeoutMs: 10,
+    });
+
+    await expect(classifier.classify("arxiv paper on RAG")).resolves.toEqual({
+      intent: "academic",
+      origin: "heuristic",
+      reason: "intent-classification-timeout",
+    });
+  });
+
+  it("stops waiting on a deaf provider when the caller cancels", async () => {
+    const controller = new AbortController();
+    const deaf: ChatModelProvider = {
+      listModels: async () => ["m"],
+      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => new Promise<IteratorResult<ChatResponseChunk>>(() => {}),
+        }),
+      }),
+    };
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: deaf,
+      model: "m",
+      timeoutMs: 60_000,
+    });
+
+    const pending = classifier.classify("latest release news", controller.signal);
+    controller.abort();
+
+    await expect(pending).resolves.toMatchObject({ intent: "news", origin: "heuristic" });
+  });
+
   it("degrades to the heuristic when the caller cancels", async () => {
     const controller = new AbortController();
     const classifier = new ModelWebQueryIntentClassifier({

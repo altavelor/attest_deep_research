@@ -537,6 +537,35 @@ describe("WebQueryPlanner", () => {
     expect(health.getIssue("brave")).toBeUndefined();
   });
 
+  it("does not suspend a source that was only cut off by the deadline", async () => {
+    const health = new WebSourceHealthTracker();
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [slow] },
+      health,
+    });
+
+    await planner.search("query", { deadlineMs: 20 });
+
+    expect(health.getIssue("duckduckgo")).toBeUndefined();
+  });
+
+  it("does not suspend a source when the caller cancels the turn", async () => {
+    const controller = new AbortController();
+    const health = new WebSourceHealthTracker();
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [slow] },
+      health,
+    });
+
+    const pending = planner.search("query", { signal: controller.signal, deadlineMs: 10_000 });
+    controller.abort();
+    await pending;
+
+    expect(health.getIssue("duckduckgo")).toBeUndefined();
+  });
+
   it("delegates page fetches and degrades gracefully without a delegate", async () => {
     const fetchPage = vi.fn().mockResolvedValue({ ok: true });
     const planner = new WebQueryPlanner({

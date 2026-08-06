@@ -66,44 +66,70 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
     }
   }
 
+  /**
+   * Races the model against the deadline instead of trusting it to honour the
+   * abort signal: a provider that ignores cancellation would otherwise stall the
+   * whole web phase. The abandoned stream is left to settle on its own.
+   */
   private async askModel(query: string, signal?: AbortSignal): Promise<WebQueryIntent> {
     const controller = new AbortController();
-    const abortOuter = () => controller.abort();
-    signal?.addEventListener("abort", abortOuter, { once: true });
-    const timer = setTimeout(
-      () => controller.abort(new Error("intent-classification-timeout")),
-      this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let abortOuter: (() => void) | undefined;
+
+    const abandoned = new Promise<never>((_resolve, reject) => {
+      const give = (reason: string): void => {
+        controller.abort();
+        reject(new Error(reason));
+      };
+      timer = setTimeout(
+        () => give("intent-classification-timeout"),
+        this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
+      abortOuter = () => give("aborted");
+      if (signal?.aborted === true) {
+        give("aborted");
+      } else {
+        signal?.addEventListener("abort", abortOuter, { once: true });
+      }
+    });
+    abandoned.catch(() => undefined);
+
+    const streamed = this.streamIntent(query, controller.signal);
+    streamed.catch(() => undefined);
 
     try {
-      if (signal?.aborted === true) {
-        throw new Error("aborted");
-      }
-      let content = "";
-      for await (const chunk of this.options.chatModel.streamChat({
-        model: this.options.model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: query },
-        ],
-        temperature: 0,
-        maxTokens: 32,
-        signal: controller.signal,
-      })) {
-        content += chunk.content;
-        if (chunk.isComplete) {
-          break;
-        }
-      }
-      const intent = parseIntent(content);
-      if (!intent) {
-        throw new Error("unparsable-intent");
-      }
-      return intent;
+      return await Promise.race([streamed, abandoned]);
     } finally {
       clearTimeout(timer);
-      signal?.removeEventListener("abort", abortOuter);
+      if (abortOuter) {
+        signal?.removeEventListener("abort", abortOuter);
+      }
+      controller.abort();
     }
+  }
+
+  private async streamIntent(query: string, signal: AbortSignal): Promise<WebQueryIntent> {
+    let content = "";
+    for await (const chunk of this.options.chatModel.streamChat({
+      model: this.options.model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: query },
+      ],
+      temperature: 0,
+      maxTokens: 32,
+      signal,
+    })) {
+      content += chunk.content;
+      if (chunk.isComplete) {
+        break;
+      }
+    }
+    const intent = parseIntent(content);
+    if (!intent) {
+      throw new Error("unparsable-intent");
+    }
+    return intent;
   }
 
   private readCache(key: string): WebQueryIntent | undefined {
