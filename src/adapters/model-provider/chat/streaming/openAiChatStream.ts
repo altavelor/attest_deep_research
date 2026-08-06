@@ -32,6 +32,7 @@ export async function* streamOpenAiCompatibleChat({
     ...(request.parallelToolCalls !== undefined
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
+    ...reasoningBody(request),
   } satisfies Record<string, unknown>;
 
   let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
@@ -156,6 +157,27 @@ export async function* streamOpenAiCompatibleChat({
     isComplete: true,
     events,
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
+  };
+}
+
+/**
+ * Mirrors the reasoning switch onto the two body dialects openai-compatible
+ * gateways understand: `reasoning` for OpenRouter-style routers and
+ * `chat_template_kwargs.enable_thinking` for vLLM-style hybrid models. Nothing is
+ * sent when the caller states no preference, so unaware providers see no new field.
+ */
+function reasoningBody(request: ChatRequest): Record<string, unknown> {
+  if (request.reasoningEnabled === undefined) {
+    return {};
+  }
+  return {
+    reasoning: {
+      enabled: request.reasoningEnabled,
+      ...(request.reasoningEnabled && request.reasoningEffort
+        ? { effort: request.reasoningEffort }
+        : {}),
+    },
+    chat_template_kwargs: { enable_thinking: request.reasoningEnabled },
   };
 }
 
