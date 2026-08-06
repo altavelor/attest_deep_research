@@ -302,6 +302,16 @@ describe("ContextAssembler", () => {
       path: "Linked.md",
       status: "included",
     });
+    expect(result.diagnostics.budget.groups.map((group) => group.name)).toEqual([
+      "history",
+      "explicit",
+      "graph",
+      "retrieval",
+      "reserved-output",
+    ]);
+    expect(result.diagnostics.budget.groups.find((group) => group.name === "graph")).toMatchObject({
+      droppedItems: result.diagnostics.graph.dropped.length,
+    });
   });
 
   it("keeps filter mode strict unless graph expansion is enabled", async () => {

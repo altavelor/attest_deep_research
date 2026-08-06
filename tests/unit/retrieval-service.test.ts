@@ -17,6 +17,41 @@ import {
 import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
+import { ContextDiagnostics } from "@core/diagnostics";
+import { withRetrievalDiagnostics } from "@application/use-cases/research/strategies/ResearchDiagnostics";
+
+function emptyDiagnostics(): ContextDiagnostics {
+  return {
+    contextMode: "include",
+    explicitSources: [],
+    mentionSources: [],
+    activeSources: [],
+    graph: {
+      enabled: false,
+      source: "none",
+      depth: 0,
+      rootPaths: [],
+      included: [],
+      dropped: [],
+      unresolved: [],
+      limits: {
+        maxForwardLinksPerRoot: 0,
+        maxEmbedsPerRoot: 0,
+        maxBacklinksPerRoot: 0,
+        maxGraphCandidatesTotal: 0,
+      },
+    },
+    retrieval: {
+      queryVariants: [],
+      includedChunkIds: [],
+      droppedChunkIds: [],
+      filteredSourcePaths: [],
+    },
+    budget: { usedTokens: 0, groups: [] },
+    tools: [],
+    warnings: [],
+  };
+}
 
 function makeRetrievalService(options: {
   embeddings: EmbeddingProviderClient;
@@ -560,6 +595,47 @@ describe("RetrievalService", () => {
     });
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["linked-1", "top"]);
+  });
+
+  it("reports boosted ranking through retrieval diagnostics", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore(boostRankingChunks()),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 3,
+      includeWebResults: false,
+      boostedSourcePaths: ["Linked/near.md"],
+    });
+    const diagnostics = withRetrievalDiagnostics(emptyDiagnostics(), result);
+
+    expect(diagnostics.retrieval.rankedChunks).toEqual([
+      {
+        id: "linked-near",
+        path: "Linked/near.md",
+        rank: 1,
+        score: result.chunks[0]!.score,
+        status: "included",
+      },
+      {
+        id: "top",
+        path: "Research/ai.md",
+        rank: 2,
+        score: result.chunks[1]!.score,
+        status: "included",
+      },
+      {
+        id: "filler-2",
+        path: "Docs/filler-2.md",
+        rank: 3,
+        score: result.chunks[2]!.score,
+        status: "included",
+      },
+    ]);
+    expect(diagnostics.retrieval.includedChunkIds).toEqual(["linked-near", "top", "filler-2"]);
+    expect(diagnostics.retrieval.droppedChunkIds).toEqual([]);
   });
 
   it("keeps ranking unchanged when no source paths are boosted", async () => {
