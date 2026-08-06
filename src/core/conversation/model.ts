@@ -1,6 +1,7 @@
 import { RetrievedChunk } from "@core/model/source";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
+import { ResearchMode } from "@core/research/researchMode";
 
 export interface ConversationCompactionSummary {
   userGoals: string[];
@@ -78,6 +79,7 @@ export type ChainItem =
 
 export interface AssistantResearchProgress {
   phase: "idle" | "streaming" | "complete" | "interrupted";
+  mode?: ResearchMode;
   disclosure: "auto" | "user-open" | "user-closed";
   view: "expanded" | "compact";
   reasoning: AssistantReasoningState;
