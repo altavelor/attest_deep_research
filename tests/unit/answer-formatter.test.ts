@@ -38,6 +38,18 @@ Use local models with citations [1].
     );
   });
 
+  it("numbers web references without evidence after the cited sources", () => {
+    const withWebReference: ResearchAnswer = {
+      ...answer(),
+      answer: "Local says X [local-1] and the web says Y [web-ref-1].",
+      webReferences: [{ id: "web-ref-1", url: "https://example.com/unseen" }],
+    };
+
+    const note = formatResearchAnswerNote(withWebReference);
+    expect(note).toContain("Local says X [1] and the web says Y [3].");
+    expect(note).toContain("3. [https://example.com/unseen](https://example.com/unseen)");
+  });
+
   it("creates a vault-safe note path from the question and timestamp", () => {
     expect(researchAnswerNotePath(answer())).toBe(
       "Ixplorer/2026-05-16-how-should-i-use-local-models.md",
