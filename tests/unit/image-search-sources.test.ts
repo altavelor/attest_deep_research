@@ -334,7 +334,7 @@ describe("search-engine image endpoints", () => {
 describe("image source registry", () => {
   const profile = (sourceId: string, enabled: boolean): WebSourceProfile => ({
     sourceId,
-    enabled,
+    activation: enabled ? "auto" : "off",
     credentials: {},
   });
 
@@ -362,21 +362,31 @@ describe("image source registry", () => {
 
   it("never enrols a general engine in image search without an explicit opt-in", () => {
     const textOnly = createImageSearchSources([
-      { sourceId: "brave", enabled: true, credentials: { apiKey: "k" } },
+      { sourceId: "brave", activation: "auto", credentials: { apiKey: "k" } },
     ]);
     expect(textOnly).toEqual([]);
   });
 
   it("uses a general engine once the user opted it into image search", () => {
     const optedIn = createImageSearchSources([
-      { sourceId: "brave", enabled: true, credentials: { apiKey: "k" }, imageSearchEnabled: true },
+      {
+        sourceId: "brave",
+        activation: "auto",
+        credentials: { apiKey: "k" },
+        imageSearchEnabled: true,
+      },
     ]);
     expect(optedIn.map((source) => source.descriptor.id)).toEqual(["brave"]);
   });
 
   it("ignores the image opt-in while the engine itself is disabled", () => {
     const disabled = createImageSearchSources([
-      { sourceId: "brave", enabled: false, credentials: { apiKey: "k" }, imageSearchEnabled: true },
+      {
+        sourceId: "brave",
+        activation: "off",
+        credentials: { apiKey: "k" },
+        imageSearchEnabled: true,
+      },
     ]);
     expect(disabled).toEqual([]);
   });

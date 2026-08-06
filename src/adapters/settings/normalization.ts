@@ -1,4 +1,9 @@
-import { areCredentialsComplete, findWebSourceDescriptor } from "@core/web";
+import {
+  areCredentialsComplete,
+  findWebSourceDescriptor,
+  isWebSourceActivation,
+  WebSourceActivation,
+} from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
@@ -17,6 +22,7 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
   settings.expandSearchQuery =
     typeof settings.expandSearchQuery === "boolean" ? settings.expandSearchQuery : true;
   migrateLegacyWebSettings(settings);
+  migrateWebSourceActivation(settings);
   normalizeWebSources(settings);
 }
 
@@ -36,11 +42,29 @@ function migrateLegacyWebSettings(settings: IxplorerSettings): void {
     legacy.duckDuckGoEnabled === true &&
     !settings.webSources.some((profile) => profile.sourceId === "duckduckgo")
   ) {
-    settings.webSources.push({ sourceId: "duckduckgo", enabled: true, credentials: {} });
+    settings.webSources.push({ sourceId: "duckduckgo", activation: "auto", credentials: {} });
   }
   delete legacy.duckDuckGoEnabled;
   delete legacy.duckDuckGoResultLimit;
   delete legacy.webSearchResultLimit;
+}
+
+/**
+ * Settings saved while a source was a plain on/off switch carry `enabled`. A
+ * stored `enabled: true` becomes the "auto" activation, everything else becomes
+ * "off"; an already valid `activation` is kept, so the pass is idempotent.
+ */
+function migrateWebSourceActivation(settings: IxplorerSettings): void {
+  for (const profile of settings.webSources) {
+    if (typeof profile !== "object" || profile === null) {
+      continue;
+    }
+    const legacy = profile as unknown as Record<string, unknown>;
+    if (!isWebSourceActivation(legacy.activation)) {
+      profile.activation = legacy.enabled === true ? "auto" : "off";
+    }
+    delete legacy.enabled;
+  }
 }
 
 /**
@@ -65,10 +89,14 @@ function normalizeWebSources(settings: IxplorerSettings): void {
           )
         : {};
     delete (entry as unknown as Record<string, unknown>).resultLimit;
+    const activation: WebSourceActivation =
+      isWebSourceActivation(entry.activation) && areCredentialsComplete(descriptor, credentials)
+        ? entry.activation
+        : "off";
     return [
       {
         sourceId: descriptor.id,
-        enabled: entry.enabled === true && areCredentialsComplete(descriptor, credentials),
+        activation,
         credentials,
         ...(descriptor.capabilities?.images === true && entry.imageSearchEnabled === true
           ? { imageSearchEnabled: true }

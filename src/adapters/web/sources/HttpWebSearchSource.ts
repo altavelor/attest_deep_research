@@ -5,11 +5,13 @@ import {
   recencyFloor,
   stripTemporalNoise,
 } from "@core/web";
+import type { WebSourceActivation } from "@core/web";
 import { SearchProviderResult, WebSearchOptions, WebSearchSource } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { sanitizeParsedResults, WebSourceDefinition, WebSourceQueryInput } from "./types";
 
 export interface HttpWebSearchSourceOptions {
+  activation?: WebSourceActivation;
   credentials?: Record<string, string>;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -33,6 +35,7 @@ const HARD_RESULT_LIMIT = 25;
 
 export class HttpWebSearchSource implements WebSearchSource {
   readonly descriptor;
+  readonly activation: WebSourceActivation;
 
   private readonly definition: WebSourceDefinition;
   private readonly credentials: Record<string, string>;
@@ -45,6 +48,7 @@ export class HttpWebSearchSource implements WebSearchSource {
   constructor(definition: WebSourceDefinition, options: HttpWebSearchSourceOptions = {}) {
     this.definition = definition;
     this.descriptor = definition.descriptor;
+    this.activation = options.activation ?? "auto";
     this.credentials = options.credentials ?? {};
     this.fetchImpl = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -87,7 +91,11 @@ export class HttpWebSearchSource implements WebSearchSource {
       ...(domains.length > 0 ? { domains } : {}),
     };
 
-    const body = await this.execute(this.definition.buildRequest(input), options.timeoutMs);
+    const body = await this.execute(
+      this.definition.buildRequest(input),
+      options.timeoutMs,
+      options.signal,
+    );
     let parsed;
     try {
       parsed = sanitizeParsedResults(this.definition.parseResponse(body, input));
@@ -115,6 +123,7 @@ export class HttpWebSearchSource implements WebSearchSource {
   private async execute(
     request: ReturnType<WebSourceDefinition["buildRequest"]>,
     timeoutOverrideMs: number | undefined,
+    signal: AbortSignal | undefined,
   ): Promise<string> {
     const controller = new AbortController();
     const timeoutMs =
@@ -122,6 +131,12 @@ export class HttpWebSearchSource implements WebSearchSource {
         ? timeoutOverrideMs
         : this.timeoutMs;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const abortFromCaller = (): void => controller.abort();
+    if (signal?.aborted === true) {
+      controller.abort();
+    } else {
+      signal?.addEventListener("abort", abortFromCaller, { once: true });
+    }
     const context = {
       url: request.url,
       method: request.method ?? "GET",
@@ -159,6 +174,7 @@ export class HttpWebSearchSource implements WebSearchSource {
       throw wrapped;
     } finally {
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortFromCaller);
     }
   }
 

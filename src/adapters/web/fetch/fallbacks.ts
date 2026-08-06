@@ -1,4 +1,9 @@
-import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
+import {
+  areCredentialsComplete,
+  findWebSourceDescriptor,
+  isWebSourceActive,
+  WebSourceProfile,
+} from "@core/web";
 import { PageFetchProvider, SearchProvider } from "@application/ports";
 import { FetchHttpRuntime } from "./fetchHttp";
 import { JinaReaderFetchProvider } from "./JinaReaderFetchProvider";
@@ -31,7 +36,7 @@ function enabledApiKey(
 ): string | undefined {
   const descriptor = findWebSourceDescriptor(sourceId);
   const profile = profiles.find((entry) => entry.sourceId === sourceId);
-  if (!descriptor || !profile?.enabled) {
+  if (!descriptor || !profile || !isWebSourceActive(profile)) {
     return undefined;
   }
   if (!areCredentialsComplete(descriptor, profile.credentials)) {

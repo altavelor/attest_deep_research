@@ -1,7 +1,7 @@
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
 import { IxplorerSettings } from "./types";
 
-/** Returns the stored profile or a disabled blank; never mutates settings. */
+/** Returns the stored profile or a switched-off blank; never mutates settings. */
 export function getWebSourceProfile(
   settings: Pick<IxplorerSettings, "webSources">,
   sourceId: string,
@@ -9,7 +9,7 @@ export function getWebSourceProfile(
   return (
     settings.webSources.find((profile) => profile.sourceId === sourceId) ?? {
       sourceId,
-      enabled: false,
+      activation: "off",
       credentials: {},
     }
   );
