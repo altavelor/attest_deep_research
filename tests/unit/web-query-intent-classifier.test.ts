@@ -78,23 +78,6 @@ describe("ModelWebQueryIntentClassifier", () => {
     });
   });
 
-  it("degrades to the heuristic when the provider rejects the reasoning field", async () => {
-    const strict: ChatModelProvider = {
-      listModels: async () => ["m"],
-      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => Promise.reject(new Error("Unrecognized request argument: reasoning")),
-        }),
-      }),
-    };
-    const classifier = new ModelWebQueryIntentClassifier({ chatModel: strict, model: "m" });
-
-    await expect(classifier.classify("latest release news")).resolves.toMatchObject({
-      intent: "news",
-      origin: "heuristic",
-    });
-  });
-
   it("accepts a bare intent word and rejects an unknown one", async () => {
     const bare = new ModelWebQueryIntentClassifier({
       chatModel: modelReturning("news"),

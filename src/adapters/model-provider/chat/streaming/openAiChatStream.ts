@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 
+import { isRecord } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { IxplorerError } from "@core/errors";
 import { mapOpenAiMessage } from "../providers/messageMappers";
@@ -21,7 +22,7 @@ export async function* streamOpenAiCompatibleChat({
   translateError,
   onReasoningObserved,
 }: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
-  const body = {
+  const baseBody = {
     model: request.model,
     messages: request.messages.map(mapOpenAiMessage),
     temperature: request.temperature,
@@ -32,17 +33,29 @@ export async function* streamOpenAiCompatibleChat({
     ...(request.parallelToolCalls !== undefined
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
-    ...reasoningBody(request),
   } satisfies Record<string, unknown>;
+  const reasoning = reasoningBody(request);
 
-  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  try {
-    stream = await openai.chat.completions.create(
+  const open = (
+    body: Record<string, unknown>,
+  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> =>
+    openai.chat.completions.create(
       body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
       { signal: request.signal },
     );
+
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  try {
+    stream = await open({ ...baseBody, ...reasoning });
   } catch (error) {
-    throw translateError(error);
+    if (Object.keys(reasoning).length === 0 || !rejectsUnknownField(error)) {
+      throw translateError(error);
+    }
+    try {
+      stream = await open(baseBody);
+    } catch {
+      throw translateError(error);
+    }
   }
 
   const toolCallBuilder = new ToolCallBuilder();
@@ -179,6 +192,16 @@ function reasoningBody(request: ChatRequest): Record<string, unknown> {
     },
     chat_template_kwargs: { enable_thinking: request.reasoningEnabled },
   };
+}
+
+/**
+ * True when the provider refused the request body itself, which is how a server
+ * with strict validation answers a field it does not know. Any other failure
+ * belongs to the caller and must not be retried.
+ */
+function rejectsUnknownField(error: unknown): boolean {
+  const status: unknown = isRecord(error) ? error.status : undefined;
+  return status === 400 || status === 422;
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {

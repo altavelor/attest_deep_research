@@ -195,6 +195,65 @@ describe("ChatModelClient", () => {
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
+  it("retries without the reasoning fields when the provider rejects them", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: "Unrecognized request argument supplied: reasoning" } },
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      chunks.push(chunk.content);
+    }
+
+    expect(chunks.join("")).toContain("news");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retried).not.toHaveProperty("reasoning");
+    expect(retried).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("reports the original failure when the retry without reasoning fields also fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: { message: "bad request" } }, { status: 400 }));
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(async () => {
+      for await (const _chunk of client.streamChat({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "classify" }],
+        reasoningEnabled: false,
+      })) {
+        void _chunk;
+      }
+    }).rejects.toBeInstanceOf(IxplorerError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("leaves the Chat Completions body free of reasoning fields when the caller states no preference", async () => {
     const fetchMock = vi
       .fn()
