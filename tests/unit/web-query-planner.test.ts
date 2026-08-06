@@ -102,6 +102,19 @@ describe("selectWebSources", () => {
     );
   });
 
+  it("does not narrow the instant pool when the caller supplies an intent", () => {
+    const withIntent = selectWebSources(catalogCandidates(), {
+      mode: "instant",
+      intent: "academic",
+    });
+    const withoutIntent = selectWebSources(catalogCandidates(), { mode: "instant" });
+
+    expect(withIntent.ordered.map((c) => c.descriptor.id)).toEqual(
+      withoutIntent.ordered.map((c) => c.descriptor.id),
+    );
+    expect(withIntent.excluded.every((e) => e.reason !== "intent-mismatch")).toBe(true);
+  });
+
   it("keeps an `always` source in instant mode regardless of its category", () => {
     const candidates = WEB_SOURCE_CATALOG.map((descriptor) => ({
       descriptor,
@@ -545,6 +558,31 @@ describe("WebQueryPlanner", () => {
     });
     expect(byId.get("arxiv")).not.toHaveProperty("queryOrder");
     expect(byId.get("wikipedia")).toMatchObject({ outcome: "queried", queryOrder: 1 });
+  });
+
+  it("falls back to the sources dropped for the intent when every qualified one is suspended", async () => {
+    const unauthorized = new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: "Wikipedia rejected the credentials.",
+      details: { sourceId: "wikipedia", reason: "unauthorized" },
+    });
+    const wikipedia = fakeSource("wikipedia", unauthorized);
+    const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv] },
+    });
+
+    await planner.search("что такое нарзан", { intent: "encyclopedic" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const results = await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results.map((item) => item.source.url)).toEqual(["https://arxiv.org/1"]);
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("wikipedia")).toMatchObject({ outcome: "health-skipped" });
+    expect(byId.get("arxiv")).toMatchObject({ outcome: "queried", queryOrder: 1 });
   });
 
   it("keeps results from healthy sources when one source fails", async () => {
