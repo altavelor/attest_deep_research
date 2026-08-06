@@ -1,5 +1,3 @@
-import { WebSourceDescriptor } from "./webSources";
-
 export const WEB_QUERY_INTENTS = ["academic", "code", "news", "encyclopedic", "general"] as const;
 
 export type WebQueryIntent = (typeof WEB_QUERY_INTENTS)[number];
@@ -52,34 +50,6 @@ export function classifyWebQuery(query: string): WebQueryIntent {
     }
   }
   return "general";
-}
-
-const INTENT_STRENGTHS: Record<WebQueryIntent, string[]> = {
-  academic: ["papers", "preprints", "citations-graph", "biomed", "metadata"],
-  code: ["code", "qa", "troubleshooting", "repositories", "tech-news"],
-  news: ["news", "fresh"],
-  encyclopedic: ["facts", "definitions", "overview"],
-  general: ["general"],
-};
-
-/**
- * Picks up to `maxSources` sources for the intent: first the ones whose
- * strengths match the intent, then general-purpose sources as backfill.
- * Order within each group follows the caller-supplied (catalog) order.
- */
-export function selectSourcesForIntent(
-  descriptors: readonly WebSourceDescriptor[],
-  intent: WebQueryIntent,
-  maxSources: number,
-): WebSourceDescriptor[] {
-  const wanted = new Set(INTENT_STRENGTHS[intent]);
-  const matching = descriptors.filter((descriptor) =>
-    descriptor.strengths.some((strength) => wanted.has(strength)),
-  );
-  const backfill = descriptors.filter(
-    (descriptor) => !matching.includes(descriptor) && descriptor.strengths.includes("general"),
-  );
-  return [...matching, ...backfill].slice(0, Math.max(1, maxSources));
 }
 
 const RRF_K = 60;

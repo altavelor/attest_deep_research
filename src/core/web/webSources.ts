@@ -43,12 +43,27 @@ export interface WebSourceDescriptor {
   languages?: readonly WebQueryLanguage[];
 }
 
+export const WEB_SOURCE_ACTIVATIONS = ["off", "auto", "always"] as const;
+
+export type WebSourceActivation = (typeof WEB_SOURCE_ACTIVATIONS)[number];
+
+export function isWebSourceActivation(value: unknown): value is WebSourceActivation {
+  return typeof value === "string" && (WEB_SOURCE_ACTIVATIONS as readonly string[]).includes(value);
+}
+
 export interface WebSourceProfile {
   sourceId: string;
-  enabled: boolean;
+  activation: WebSourceActivation;
   credentials: Record<string, string>;
 
   imageSearchEnabled?: boolean;
+}
+
+/** True when the user has not switched the source off. */
+export function isWebSourceActive(
+  profile: Pick<WebSourceProfile, "activation"> | undefined,
+): boolean {
+  return profile !== undefined && profile.activation !== "off";
 }
 
 const apiKey = (overrides: Partial<WebSourceCredentialField> = {}): WebSourceCredentialField => ({
