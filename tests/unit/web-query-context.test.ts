@@ -143,12 +143,12 @@ describe("planner language routing and recency inference", () => {
     return { descriptor, activation: "auto", search: vi.fn().mockResolvedValue(results) };
   }
 
-  it("still queries English-only sources for Cyrillic queries, only ranking them lower", async () => {
-    const hackernews = fakeSource("hackernews", []);
+  it("routes a Cyrillic query with its language and recency, ranking the generalist below the specialist", async () => {
+    const brave = fakeSource("brave", []);
     const newsapi = fakeSource("newsapi", []);
     const order: string[] = [];
     const planner = new WebQueryPlanner({
-      registry: { enabledSources: () => [hackernews, newsapi] },
+      registry: { enabledSources: () => [brave, newsapi] },
     });
 
     await planner.search("главные новости лондона за последние 24 часа", {
@@ -158,12 +158,25 @@ describe("planner language routing and recency inference", () => {
       },
     });
 
-    expect(hackernews.search).toHaveBeenCalled();
+    expect(brave.search).toHaveBeenCalled();
     expect(newsapi.search).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ language: "ru", recency: "day" }),
     );
-    expect(order.indexOf("newsapi")).toBeLessThan(order.indexOf("hackernews"));
+    expect(order.indexOf("newsapi")).toBeLessThan(order.indexOf("brave"));
+  });
+
+  it("drops a community source that carries no signal for a news query", async () => {
+    const hackernews = fakeSource("hackernews", []);
+    const newsapi = fakeSource("newsapi", []);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [hackernews, newsapi] },
+    });
+
+    await planner.search("главные новости лондона за последние 24 часа");
+
+    expect(hackernews.search).not.toHaveBeenCalled();
+    expect(newsapi.search).toHaveBeenCalled();
   });
 
   it("passes an explicit recency through to sources", async () => {

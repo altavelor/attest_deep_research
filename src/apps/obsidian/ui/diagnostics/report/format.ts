@@ -132,6 +132,7 @@ export function summaryMetrics(report: DiagnosticReportV3): SummaryMetric[] {
 const SOURCE_OUTCOME_VARIANT: Record<WebSourceOutcome, BadgeVariant> = {
   queried: "success",
   excluded: "neutral",
+  "intent-filtered": "neutral",
   "health-skipped": "warning",
   "deadline-exceeded": "warning",
   cancelled: "neutral",

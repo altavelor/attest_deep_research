@@ -216,7 +216,10 @@ export class WebQueryPlanner implements SearchProvider {
       sourceId: exclusion.sourceId,
       label: byId.get(exclusion.sourceId)?.descriptor.label ?? exclusion.sourceId,
       activation: exclusion.activation,
-      outcome: "excluded" as const,
+      outcome:
+        exclusion.reason === "intent-mismatch"
+          ? ("intent-filtered" as const)
+          : ("excluded" as const),
       reason: exclusionReason(exclusion.reason, context.mode, intent),
     }));
 
@@ -452,6 +455,9 @@ function exclusionReason(
   }
   if (reason === "no-search-capability") {
     return "source does not support search";
+  }
+  if (reason === "intent-mismatch") {
+    return intent ? `no signal for intent: ${intent}` : "no intent signal";
   }
   return intent ? `disabled (intent: ${intent})` : "disabled";
 }

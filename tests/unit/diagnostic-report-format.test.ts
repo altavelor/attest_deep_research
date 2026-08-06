@@ -164,8 +164,8 @@ describe("web source selection rendering", () => {
         sourceId: "hn",
         label: "Hacker News",
         activation: "auto",
-        outcome: "excluded",
-        reason: "intent mismatch",
+        outcome: "intent-filtered",
+        reason: "no signal for intent: news",
       },
       {
         sourceId: "arxiv",
@@ -195,7 +195,8 @@ describe("web source selection rendering", () => {
     expect(html).toContain("Tavily");
     expect(html).toContain("queried");
     expect(html).toContain("health-skipped");
-    expect(html).toContain("intent mismatch");
+    expect(html).toContain("intent-filtered");
+    expect(html).toContain("no signal for intent: news");
     expect(html).toContain("1.5 s");
     expect(html.indexOf("arXiv")).toBeLessThan(html.indexOf("Tavily"));
     expect(html.indexOf("Tavily")).toBeLessThan(html.indexOf("Hacker News"));
