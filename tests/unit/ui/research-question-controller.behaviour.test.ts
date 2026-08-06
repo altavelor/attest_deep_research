@@ -173,8 +173,48 @@ describe("ResearchQuestionController streaming order", () => {
       { call: "renderActiveMessage", content: "Partial", checkpoints: ["c1:finalizing"] },
       { call: "renderMessages", content: "", checkpoints: ["c1:finalizing"] },
     ]);
+    expect(harness.messages().at(-1)?.researchProgress?.chain).toContainEqual({
+      kind: "checkpoint",
+      id: "c1",
+      round: 1,
+      content: "Draft",
+      status: "complete",
+    });
     expect(harness.messages().at(-1)?.content).toBe("Final");
     expect(harness.lastAnswer()?.answer).toBe("Final");
+  });
+
+  it("shows a streaming round as the provisional body and demotes it when it is not final", async () => {
+    const gate = deferred();
+    const harness = createHarness(async function* events() {
+      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Looking around" };
+      await gate.promise;
+      yield { type: "checkpoint-complete", checkpointId: "c1", round: 1 };
+      yield { type: "checkpoint-delta", checkpointId: "c2", round: 2, content: "The answer" };
+      yield { type: "checkpoint-promote", checkpointId: "c2", round: 2 };
+      yield { type: "complete", answer: answerFor("The answer, cited") };
+    });
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    await advanceTime(100);
+    expect(harness.renderLog.at(-1)).toMatchObject({
+      call: "renderActiveMessage",
+      content: "Looking around",
+    });
+
+    gate.resolve();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    const bodies = harness.renderLog.slice(2).map((entry) => entry.content);
+    expect(bodies).toContain("Looking around");
+    expect(bodies).toContain("The answer");
+    expect(harness.messages().at(-1)?.content).toBe("The answer, cited");
+    expect(harness.messages().at(-1)?.researchProgress?.chain).toEqual([
+      { kind: "checkpoint", id: "c1", round: 1, content: "Looking around", status: "complete" },
+    ]);
   });
 
   it("drops the animation frame queued by a delta when the checkpoint is promoted", async () => {
@@ -195,7 +235,7 @@ describe("ResearchQuestionController streaming order", () => {
     expect(harness.renderLog.length).toBe(rendersBeforeFrames);
     expect(harness.renderLog.at(-1)).toEqual({
       call: "renderActiveMessage",
-      content: "Partial",
+      content: "DraftPartial",
       checkpoints: ["c1:finalizing"],
     });
 

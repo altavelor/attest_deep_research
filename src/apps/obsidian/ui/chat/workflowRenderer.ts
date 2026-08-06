@@ -100,6 +100,8 @@ function renderChainNodes(
         renderContext: context,
         uiState: state.uiState,
       });
+    } else if (item.kind === "checkpoint") {
+      renderSummaryNode(listEl, item.content, context);
     } else if (item.kind === "tool-call") {
       renderToolNode(
         listEl,

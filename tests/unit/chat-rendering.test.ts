@@ -1,5 +1,6 @@
 import {
   attachAnswerDetailsToLastAssistantMessage,
+  completeAssistantCheckpoint,
   nextAssistantCheckpoint,
   messageMarkdownContent,
   nextAssistantMessage,
@@ -231,7 +232,7 @@ describe("chat rendering helpers", () => {
     expect(withTool.at(-1)?.researchProgress?.mode).toBe("thinking");
   });
 
-  it("keeps a classified final answer out of the transcript until completion", () => {
+  it("streams a classified final answer into the transcript body", () => {
     const streaming = nextAssistantCheckpoint(
       startAssistantProgress([], "thinking"),
       "round-1",
@@ -241,12 +242,72 @@ describe("chat rendering helpers", () => {
     const finalizing = promoteAssistantCheckpoint(streaming, "round-1");
 
     expect(finalizing.at(-1)).toMatchObject({
-      content: "",
+      content: "Answer",
       researchProgress: {
         phase: "streaming",
         checkpoints: [{ id: "round-1", status: "finalizing", content: "Answer" }],
       },
     });
+  });
+
+  it("demotes a completed intermediate round from the body into a workflow node", () => {
+    const streaming = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "Narration",
+    );
+    const demoted = completeAssistantCheckpoint(streaming, "round-1");
+
+    expect(demoted.at(-1)?.content).toBe("");
+    expect(demoted.at(-1)?.researchProgress?.chain).toEqual([
+      { kind: "checkpoint", id: "round-1", round: 1, content: "Narration", status: "complete" },
+    ]);
+    expect(demoted.at(-1)?.researchProgress?.checkpoints).toEqual([
+      { id: "round-1", round: 1, content: "Narration", status: "complete" },
+    ]);
+  });
+
+  it("keeps the final round in the body after an intermediate round was demoted", () => {
+    const first = completeAssistantCheckpoint(
+      nextAssistantCheckpoint(startAssistantProgress([], "thinking"), "round-1", 1, "Narration"),
+      "round-1",
+    );
+    const second = promoteAssistantCheckpoint(
+      nextAssistantCheckpoint(first, "round-2", 2, "Answer"),
+      "round-2",
+    );
+
+    expect(second.at(-1)?.content).toBe("Answer");
+  });
+
+  it("leaves the body untouched when the demoted text is no longer in it", () => {
+    const streaming = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "Narration",
+    );
+    const rewritten = [
+      ...streaming.slice(0, -1),
+      { ...streaming.at(-1)!, content: "Rewritten body" },
+    ];
+    const demoted = completeAssistantCheckpoint(rewritten, "round-1");
+
+    expect(demoted.at(-1)?.content).toBe("Rewritten body");
+    expect(demoted.at(-1)?.researchProgress?.chain).toEqual([]);
+  });
+
+  it("keeps a streamed provisional body exactly once when the run is interrupted", () => {
+    const streaming = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "Answer so far",
+    );
+    const interrupted = interruptLastAssistantProgress(streaming);
+
+    expect(interrupted.at(-1)?.content).toBe("Answer so far");
   });
 
   it("preserves a classified final answer when the request is cancelled", () => {

@@ -212,6 +212,18 @@ describe("early workflow indicator per research mode", () => {
   });
 });
 
+describe("demoted checkpoint nodes", () => {
+  it("renders a chain checkpoint as a summary node", () => {
+    const message = streaming([
+      { kind: "checkpoint", id: "c1", round: 1, content: "Narration", status: "complete" },
+    ]);
+
+    expect(render(container, message)).toBe(true);
+    const node = container.querySelector<HTMLElement>(".ixplorer-chat__workflow-node--summary");
+    expect(node).not.toBeNull();
+  });
+});
+
 describe("fetch targets of a pending fetch", () => {
   it("puts the active modifier on a single fetch-target item inside the target list", async () => {
     render(container, streaming([searchCall, pendingFetch]));
