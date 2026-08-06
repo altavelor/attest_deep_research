@@ -386,6 +386,171 @@ describe("RetrievalService", () => {
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["a"]);
   });
 
+  it("ranks a boosted chunk ahead of the results it was retrieved behind", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore(boostRankingChunks()),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 8,
+      includeWebResults: false,
+      boostedSourcePaths: ["Linked/near.md", "Linked/far.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id).slice(0, 3)).toEqual([
+      "linked-near",
+      "top",
+      "filler-2",
+    ]);
+  });
+
+  it("lets a distant boosted chunk in only behind the stronger results", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore(boostRankingChunks()),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 8,
+      includeWebResults: false,
+      boostedSourcePaths: ["Linked/near.md", "Linked/far.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual([
+      "linked-near",
+      "top",
+      "filler-2",
+      "filler-3",
+      "filler-4",
+      "filler-5",
+      "filler-6",
+      "linked-far",
+    ]);
+  });
+
+  it("admits boosted source paths that an explicit source filter would exclude", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore([
+        retrieved("attached", markdownSource("Notes/main.md"), "attached note", 0.9),
+        retrieved("linked", markdownSource("Linked/near.md"), "linked note", 0.8),
+        retrieved("unrelated", markdownSource("Docs/other.md"), "unrelated", 0.7),
+      ]),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 8,
+      includeWebResults: false,
+      sourcePaths: ["Notes/main.md"],
+      boostedSourcePaths: ["Linked/near.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["linked", "attached"]);
+  });
+
+  it("keeps an empty source filter unfiltered when source paths are boosted", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore([
+        retrieved("unrelated", markdownSource("Docs/other.md"), "unrelated", 0.9),
+        retrieved("linked", markdownSource("Linked/near.md"), "linked note", 0.8),
+      ]),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 8,
+      includeWebResults: false,
+      sourcePaths: [],
+      boostedSourcePaths: ["Linked/near.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["linked", "unrelated"]);
+  });
+
+  it("ignores boosted source paths that match no candidate", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore(boostRankingChunks()),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 3,
+      includeWebResults: false,
+      boostedSourcePaths: ["Linked/absent.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["top", "linked-near", "filler-2"]);
+  });
+
+  it("does not boost web chunks that carry no source path", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("vault", markdownSource("Notes/main.md"), "vault match", 0.9),
+      retrieved("web", webSource("https://example.com/a"), "web match", 0.8),
+    ]);
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 5,
+      includeWebResults: true,
+      boostedSourcePaths: ["https://example.com/a"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["vault", "web"]);
+  });
+
+  it("diversifies boosted sources to one chunk each", async () => {
+    const indexStore = new FakeIndexStore([
+      retrieved("top", markdownSource("Notes/main.md"), "top match", 0.9),
+      retrieved("linked-1", markdownSource("Linked/near.md"), "linked one", 0.8),
+      retrieved("linked-2", markdownSource("Linked/near.md"), "linked two", 0.7),
+    ]);
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 5,
+      includeWebResults: false,
+      diversify: true,
+      boostedSourcePaths: ["Linked/near.md"],
+    });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["linked-1", "top"]);
+  });
+
+  it("keeps ranking unchanged when no source paths are boosted", async () => {
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore: new FakeIndexStore(boostRankingChunks()),
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", { limit: 8, includeWebResults: false });
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual([
+      "top",
+      "linked-near",
+      "filler-2",
+      "filler-3",
+      "filler-4",
+      "filler-5",
+      "filler-6",
+      "filler-7",
+    ]);
+  });
+
   it("diversifies to at most one chunk per source", async () => {
     const indexStore = new FakeIndexStore([
       retrieved("a1", markdownSource("Books/a.md"), "alpha one", 0.9),
@@ -618,3 +783,25 @@ describe("citations", () => {
     );
   });
 });
+
+/**
+ * Semantic candidates where a linked note sits just behind the top result and a
+ * second one sits far down the candidate pool.
+ */
+function boostRankingChunks(): RetrievedChunk[] {
+  const filler = Array.from({ length: 23 }, (_, index) =>
+    retrieved(
+      `filler-${index + 2}`,
+      markdownSource(`Docs/filler-${index + 2}.md`),
+      `filler ${index + 2}`,
+      0.5,
+    ),
+  );
+
+  return [
+    retrieved("top", markdownSource("Research/ai.md"), "top match", 0.9),
+    retrieved("linked-near", markdownSource("Linked/near.md"), "linked near", 0.8),
+    ...filler,
+    retrieved("linked-far", markdownSource("Linked/far.md"), "linked far", 0.1),
+  ];
+}
