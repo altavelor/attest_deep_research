@@ -106,14 +106,14 @@ function renderAssistantAnswer(
 }
 
 /**
- * The model cites web sources with the `[url:https://…]` handle. Left as-is it
- * renders as inert text, so it becomes a short clickable link before Markdown
- * rendering; unresolvable handles stay untouched.
+ * The model cites web sources with the `[url:https://…]` handle. While a run
+ * streams the handle has not been resolved yet, so it becomes a short clickable
+ * link to stay readable. A completed answer carries normalized handles that the
+ * citation anchors render instead, and is left untouched.
  */
 function answerMarkdown(message: ChatDisplayMessage): string {
-  return linkifyUrlCitations(messageMarkdownContent(message), {
-    label: shortUrlCitationLabel,
-  });
+  const content = messageMarkdownContent(message);
+  return message.answer ? content : linkifyUrlCitations(content, { label: shortUrlCitationLabel });
 }
 
 function renderAssistantAnswerHeader(
