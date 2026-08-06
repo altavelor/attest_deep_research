@@ -90,6 +90,15 @@ describe("normalizeCitationTokens", () => {
     expect(ids.size).toBe(0);
   });
 
+  it("still resolves a url handle used as a markdown link label", () => {
+    const { text, ids } = normalizeCitationTokens(
+      "See [url:https://openai.com/pricing](https://openai.com/pricing).",
+      urlToEvidenceId,
+    );
+    expect(text).toBe("See [web:hash-openai](https://openai.com/pricing).");
+    expect([...ids]).toEqual(["web:hash-openai"]);
+  });
+
   it("leaves malformed url tokens untouched", () => {
     const { text, ids, webReferences } = normalizeCitationTokens(
       "bad [url:not a url] token",

@@ -59,9 +59,8 @@ export function normalizeCitationTokens(
 
   const rewritten = text.replace(CITATION_TOKEN, (whole, inner: string, offset: number) => {
     const token = inner.trim();
-    if (text[offset + whole.length] === "(") return whole;
     if (!token.startsWith("url:")) {
-      if (!isCitationHandle(token)) return whole;
+      if (!isCitationHandle(token) || text[offset + whole.length] === "(") return whole;
       ids.add(token);
       return `[${token}]`;
     }
