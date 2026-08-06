@@ -1,11 +1,23 @@
+import { ResearchMode } from "@core/research/researchMode";
 import { AssistantResearchProgress, ChainItem, ChatDisplayMessage } from "./model";
 
-export function startAssistantProgress(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
+/**
+ * Create the placeholder assistant message for a run. The research mode is
+ * recorded on the progress so the transcript can tell an Instant run — which
+ * never produces reasoning or tool nodes — from an agentic one.
+ */
+export function startAssistantProgress(
+  messages: ChatDisplayMessage[],
+  mode: ResearchMode,
+): ChatDisplayMessage[] {
   const createdAt = new Date().toISOString();
   const assistant: ChatDisplayMessage = { role: "assistant", content: "", createdAt };
   return [
     ...messages,
-    { ...assistant, researchProgress: researchProgressFromMessage(assistant, createdAt) },
+    {
+      ...assistant,
+      researchProgress: { ...researchProgressFromMessage(assistant, createdAt), mode },
+    },
   ];
 }
 

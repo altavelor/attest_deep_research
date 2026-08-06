@@ -80,6 +80,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
       if (this.deps.toolCapabilityProbeAudit)
         assembled.diagnostics.probeAudit = this.deps.toolCapabilityProbeAudit;
       assembled.diagnostics.toolCapabilities = this.deps.toolCapabilities;
+      if (this.deps.toolCapabilityProvenance)
+        assembled.diagnostics.capabilityProvenance = this.deps.toolCapabilityProvenance;
     }
     if (assembled) {
       yield { type: "context", diagnostics: assembled.diagnostics };
@@ -182,6 +184,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
     contextDiagnostics.modelApiFormat = this.deps.apiFormat;
     contextDiagnostics.searchMode = searchMode;
     contextDiagnostics.toolCapabilities = this.deps.toolCapabilities;
+    if (this.deps.toolCapabilityProvenance)
+      contextDiagnostics.capabilityProvenance = this.deps.toolCapabilityProvenance;
     if (this.deps.toolCapabilityProbeAudit)
       contextDiagnostics.probeAudit = this.deps.toolCapabilityProbeAudit;
     if (this.deps.getIndexStatus) {
@@ -250,6 +254,11 @@ export class InstantResearchStrategy implements ResearchStrategy {
     return { kind: "completed" };
   }
 
+  /**
+   * Record the thinking section only when a thinking attempt actually happened
+   * or the mode was substituted by policy. A deliberately selected Instant run
+   * produces no thinking artifacts, so it leaves the section absent.
+   */
   private applyThinkingDiagnostics(
     diagnostics: ContextDiagnostics,
     policy: ResearchExecutionContext["policy"],
@@ -287,19 +296,6 @@ export class InstantResearchStrategy implements ResearchStrategy {
         totalCalls: 0,
         duplicateCalls: 0,
         fallbackReason: policy.reason,
-        duplicatedCost: false,
-        capabilityProvenance: this.deps.toolCapabilityProvenance,
-      };
-    } else {
-      diagnostics.thinking = {
-        policyReason: policy.reason,
-        requiredTools: [...policy.requiredTools],
-        bootstrapChoice: policy.bootstrapChoice,
-        satisfiedTools: [],
-        repairedTools: [],
-        rounds: 0,
-        totalCalls: 0,
-        duplicateCalls: 0,
         duplicatedCost: false,
         capabilityProvenance: this.deps.toolCapabilityProvenance,
       };

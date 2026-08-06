@@ -271,6 +271,8 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
     if (this.deps.toolCapabilityProbeAudit)
       diagnostics.probeAudit = this.deps.toolCapabilityProbeAudit;
     diagnostics.toolCapabilities = this.deps.toolCapabilities;
+    if (this.deps.toolCapabilityProvenance)
+      diagnostics.capabilityProvenance = this.deps.toolCapabilityProvenance;
     diagnostics.tools = result.diagnostics;
     const degradation = semanticDegradationWarning(
       result.diagnostics.map((tool) => ({

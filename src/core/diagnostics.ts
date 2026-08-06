@@ -124,6 +124,8 @@ export interface ContextDiagnostics {
   probeAudit?: ToolCapabilityProbeAudit;
 
   toolCapabilities?: ToolCallingCapabilities;
+
+  capabilityProvenance?: Record<string, string>;
   contextMode: ContextMode;
   explicitSources: ContextDiagnosticSource[];
   mentionSources: ContextDiagnosticSource[];

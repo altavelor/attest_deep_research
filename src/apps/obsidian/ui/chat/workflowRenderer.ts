@@ -39,11 +39,12 @@ export function renderWorkflowNodes(
   const checkpoints = progress?.checkpoints ?? [];
   const chain = progress?.chain ?? [];
   const hasChain = chain.length > 0;
+  const showsPendingIndicator = progress?.mode !== "instant";
   if (
     segments.length === 0 &&
     checkpoints.length === 0 &&
     !hasChain &&
-    progress?.phase !== "streaming"
+    !(progress?.phase === "streaming" && showsPendingIndicator)
   ) {
     return false;
   }
@@ -56,20 +57,17 @@ export function renderWorkflowNodes(
   );
   const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
 
+  const state: WorkflowState = {
+    isStreaming,
+    isFinalizing,
+    hasStreamingCheckpoint,
+    showsPendingIndicator,
+    uiState,
+  };
   if (hasChain) {
-    renderChainNodes(listEl, chain, context, {
-      isStreaming,
-      isFinalizing,
-      hasStreamingCheckpoint,
-      uiState,
-    });
+    renderChainNodes(listEl, chain, context, state);
   } else {
-    renderLegacyNodes(listEl, segments, checkpoints, context, {
-      isStreaming,
-      isFinalizing,
-      hasStreamingCheckpoint,
-      uiState,
-    });
+    renderLegacyNodes(listEl, segments, checkpoints, context, state);
   }
 
   if (listEl.childElementCount === 0) {
@@ -111,13 +109,15 @@ function renderChainNodes(
       );
     }
   }
-  renderWorkflowIndicator(
-    listEl,
-    state.isStreaming,
-    state.isFinalizing,
-    state.hasStreamingCheckpoint,
-    activeReasoningId,
-  );
+  if (state.showsPendingIndicator) {
+    renderWorkflowIndicator(
+      listEl,
+      state.isStreaming,
+      state.isFinalizing,
+      state.hasStreamingCheckpoint,
+      activeReasoningId,
+    );
+  }
 }
 
 function renderLegacyNodes(
@@ -141,17 +141,20 @@ function renderLegacyNodes(
   for (const checkpoint of checkpoints) {
     if (checkpoint.status !== "finalizing") renderSummaryNode(listEl, checkpoint.content, context);
   }
-  renderWorkflowIndicator(
-    listEl,
-    state.isStreaming,
-    state.isFinalizing,
-    state.hasStreamingCheckpoint,
-  );
+  if (state.showsPendingIndicator) {
+    renderWorkflowIndicator(
+      listEl,
+      state.isStreaming,
+      state.isFinalizing,
+      state.hasStreamingCheckpoint,
+    );
+  }
 }
 
 interface WorkflowState {
   isStreaming: boolean;
   isFinalizing: boolean;
   hasStreamingCheckpoint: boolean;
+  showsPendingIndicator: boolean;
   uiState?: WorkflowUiState;
 }
