@@ -137,10 +137,11 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
     if (!entry) {
       return undefined;
     }
+    this.cache.delete(key);
     if (entry.expiresAt <= this.now()) {
-      this.cache.delete(key);
       return undefined;
     }
+    this.cache.set(key, entry);
     return entry.intent;
   }
 

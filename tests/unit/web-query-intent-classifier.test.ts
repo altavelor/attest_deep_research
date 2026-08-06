@@ -181,6 +181,33 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(calls).toBe(2);
   });
 
+  it("keeps a recently used entry and evicts the least recently used one", async () => {
+    let calls = 0;
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: modelReturning('{"intent":"general"}', () => {
+        calls += 1;
+      }),
+      model: "m",
+      maxCacheEntries: 2,
+    });
+
+    await classifier.classify("one");
+    await classifier.classify("two");
+    expect(calls).toBe(2);
+
+    await classifier.classify("one");
+    expect(calls).toBe(2);
+
+    await classifier.classify("three");
+    expect(calls).toBe(3);
+
+    await classifier.classify("one");
+    expect(calls).toBe(3);
+
+    await classifier.classify("two");
+    expect(calls).toBe(4);
+  });
+
   it("evicts the oldest entry once the cache is full", async () => {
     let calls = 0;
     const classifier = new ModelWebQueryIntentClassifier({

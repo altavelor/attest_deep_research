@@ -47,6 +47,7 @@ function slowSource(
   results: SearchProviderResult[],
   delayMs: number,
   activation: WebSourceActivation = "auto",
+  onAbort?: () => never,
 ): WebSearchSource {
   const descriptor = findWebSourceDescriptor(id) ?? DUCKDUCKGO_DESCRIPTOR;
   return {
@@ -57,7 +58,12 @@ function slowSource(
         const timer = setTimeout(() => resolve(results), delayMs);
         options?.signal?.addEventListener("abort", () => {
           clearTimeout(timer);
-          reject(new Error("aborted"));
+          try {
+            onAbort?.();
+            reject(new Error("aborted"));
+          } catch (error) {
+            reject(error);
+          }
         });
       }),
   };
@@ -539,7 +545,14 @@ describe("WebQueryPlanner", () => {
 
   it("does not suspend a source that was only cut off by the deadline", async () => {
     const health = new WebSourceHealthTracker();
-    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000, "auto", () => {
+      // What HttpWebSearchSource actually throws when its request is aborted.
+      throw new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: "DuckDuckGo timed out.",
+        details: { sourceId: "duckduckgo", reason: "timeout" },
+      });
+    });
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [slow] },
       health,
