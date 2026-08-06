@@ -580,9 +580,65 @@ describe("WebQueryPlanner", () => {
     });
 
     expect(results.map((item) => item.source.url)).toEqual(["https://arxiv.org/1"]);
+    const reported = traces[0].sources.map((entry) => entry.sourceId);
+    expect(reported).toHaveLength(new Set(reported).size);
     const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
     expect(byId.get("wikipedia")).toMatchObject({ outcome: "health-skipped" });
     expect(byId.get("arxiv")).toMatchObject({ outcome: "queried", queryOrder: 1 });
+  });
+
+  it("queries the intent fallback by score rather than by registry order", async () => {
+    const unauthorized = new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: "Wikipedia rejected the credentials.",
+      details: { sourceId: "wikipedia", reason: "unauthorized" },
+    });
+    const wikipedia = fakeSource("wikipedia", unauthorized);
+    const arxiv = fakeSource("arxiv", []);
+    const newsapi = fakeSource("newsapi", []);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv, newsapi] },
+    });
+
+    await planner.search("что такое нарзан", { intent: "encyclopedic", language: "ru" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      language: "ru",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("newsapi")?.queryOrder).toBe(1);
+    expect(byId.get("arxiv")?.queryOrder).toBe(2);
+  });
+
+  it("reports every source when the intent fallback finds nothing healthy either", async () => {
+    const suspend = (sourceId: string) =>
+      new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: `${sourceId} rejected the credentials.`,
+        details: { sourceId, reason: "unauthorized" },
+      });
+    const wikipedia = fakeSource("wikipedia", suspend("wikipedia"));
+    const arxiv = fakeSource("arxiv", suspend("arxiv"));
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv] },
+    });
+
+    await planner.search("recent papers on nitrogen", { intent: "academic" });
+    await planner.search("что такое нарзан", { intent: "encyclopedic" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const results = await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results).toEqual([]);
+    expect(traces[0].sources.map((entry) => entry.outcome)).toEqual([
+      "health-skipped",
+      "health-skipped",
+    ]);
   });
 
   it("keeps results from healthy sources when one source fails", async () => {

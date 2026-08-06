@@ -105,6 +105,8 @@ export function selectWebSources(
     scored.push({ candidate, order, ...evaluate(candidate, input) });
   });
 
+  scored.sort((left, right) => right.score - left.score || left.order - right.order);
+
   const planned = scored.some((entry) => entry.qualifies)
     ? scored.filter((entry) => {
         if (entry.qualifies) {
@@ -118,8 +120,6 @@ export function selectWebSources(
         return false;
       })
     : scored;
-
-  planned.sort((left, right) => right.score - left.score || left.order - right.order);
 
   return { ordered: planned.map((entry) => entry.candidate), excluded };
 }
