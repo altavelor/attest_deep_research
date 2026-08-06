@@ -543,6 +543,23 @@ describe("WebQueryPlanner", () => {
     expect(health.getIssue("brave")).toBeUndefined();
   });
 
+  it("queries nothing when classification has already spent the whole deadline", async () => {
+    const instant = fakeSource("duckduckgo", [result("https://instant.dev/", 1)]);
+    const search = vi.spyOn(instant, "search");
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const planner = new WebQueryPlanner({ registry: { enabledSources: () => [instant] } });
+
+    const results = await planner.search("query", {
+      deadlineMs: 0,
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(search).not.toHaveBeenCalled();
+    expect(results).toEqual([]);
+    expect(traces[0].deadlineExceeded).toBe(true);
+    expect(traces[0].sources[0].outcome).toBe("deadline-exceeded");
+  });
+
   it("does not suspend a source that was only cut off by the deadline", async () => {
     const health = new WebSourceHealthTracker();
     const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000, "auto", () => {

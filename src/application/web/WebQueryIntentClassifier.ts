@@ -73,6 +73,9 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
    * provider still runs its own cleanup.
    */
   private async askModel(query: string, signal?: AbortSignal): Promise<WebQueryIntent> {
+    if (signal?.aborted === true) {
+      throw new Error("aborted");
+    }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abortOuter: (() => void) | undefined;

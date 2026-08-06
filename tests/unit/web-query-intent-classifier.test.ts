@@ -168,6 +168,23 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(returned).toBe(true);
   });
 
+  it("never reaches the model when the caller already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let calls = 0;
+    const classifier = new ModelWebQueryIntentClassifier({
+      chatModel: modelReturning('{"intent":"code"}', () => {
+        calls += 1;
+      }),
+      model: "m",
+    });
+
+    await expect(
+      classifier.classify("latest release news", controller.signal),
+    ).resolves.toMatchObject({ intent: "news", origin: "heuristic", reason: "aborted" });
+    expect(calls).toBe(0);
+  });
+
   it("degrades to the heuristic when the caller cancels", async () => {
     const controller = new AbortController();
     const classifier = new ModelWebQueryIntentClassifier({

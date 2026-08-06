@@ -245,16 +245,22 @@ export class WebQueryPlanner implements SearchProvider {
       signal?.addEventListener("abort", abortOuter, { once: true });
     }
 
-    let expired = false;
+    let expired = deadlineMs <= 0;
+    if (expired) {
+      controller.abort();
+    }
     let releaseDeadline: () => void = () => {};
     const deadlineReached = new Promise<void>((resolve) => {
       releaseDeadline = resolve;
     });
-    const timer = setTimeout(() => {
-      expired = true;
-      controller.abort();
-      releaseDeadline();
-    }, deadlineMs);
+    const timer = setTimeout(
+      () => {
+        expired = true;
+        controller.abort();
+        releaseDeadline();
+      },
+      Math.max(0, deadlineMs),
+    );
 
     let next = 0;
     const startedAt = this.nowMs();
