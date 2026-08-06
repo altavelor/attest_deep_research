@@ -124,21 +124,49 @@ describe("VaultResearchPipeline", () => {
     );
 
     expect(expansionSignal).toBe(controller.signal);
-    expect(retriever.requests).toHaveLength(2);
-    for (const request of retriever.requests) {
-      expect(request.options.signal).toBe(controller.signal);
-    }
+    expect(retriever.requests).toHaveLength(1);
+    expect(retriever.requests[0]!.options.signal).toBe(controller.signal);
   });
 
-  it("searches boosted source paths in parallel with the primary search", async () => {
+  it("passes boosted source paths to a single index search", async () => {
     const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, []);
     const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });
 
-    const run = collectAsync(pipeline.search("question", undefined, ["Linked.md"]));
-    await tick();
+    await collectAsync(pipeline.search("question", ["Notes/main.md"], ["Linked.md"]));
 
-    expect(retriever.requests).toHaveLength(2);
-    await run;
+    expect(retriever.requests).toHaveLength(1);
+    expect(retriever.requests[0]!.options).toMatchObject({
+      sourcePaths: ["Notes/main.md"],
+      boostedSourcePaths: ["Linked.md"],
+    });
+  });
+
+  it("omits boosted source paths when none were requested", async () => {
+    const retriever = new FakeRetriever({ chunks: [], citations: [], usedFallback: false }, []);
+    const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });
+
+    await collectAsync(pipeline.search("question", undefined, []));
+
+    expect(retriever.requests).toHaveLength(1);
+    expect(retriever.requests[0]!.options.boostedSourcePaths).toBeUndefined();
+  });
+
+  it("returns evidence and citations the retriever ranked for boosted source paths", async () => {
+    const retriever = new FakeRetriever((options) =>
+      options.boostedSourcePaths?.includes("Linked.md")
+        ? retrievalOf(["g1", "p1", "p2"], "Linked.md")
+        : retrievalOf(["p1", "p2", "p3", "p4"], "Notes/main.md"),
+    );
+    const pipeline = new VaultResearchPipeline({ retriever, evidenceLimit: 4 });
+
+    const generator = pipeline.search("question", undefined, ["Linked.md"]);
+    let step = await generator.next();
+    while (!step.done) {
+      step = await generator.next();
+    }
+
+    expect(step.value.chunks.map((chunk) => chunk.id)).toEqual(["g1", "p1", "p2"]);
+    expect(step.value.citations.map((entry) => entry.id)).toEqual(["g1", "p1", "p2"]);
   });
 });
 
@@ -382,4 +410,13 @@ describe("AnswerSynthesisService", () => {
 
 function tick(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function retrievalOf(ids: string[], path: string) {
+  const source = markdownSource(path);
+  return {
+    chunks: ids.map((id, index) => retrieved(id, source, id, 1 - index * 0.1)),
+    citations: ids.map((id) => citation(id, source)),
+    usedFallback: false,
+  };
 }

@@ -10,13 +10,16 @@ export class FakeRetriever {
       limit: number;
       includeWebResults: boolean;
       sourcePaths?: string[];
+      boostedSourcePaths?: string[];
       queryVariants?: unknown;
       signal?: AbortSignal;
     };
   }> = [];
 
   constructor(
-    private readonly result: RetrievalResult,
+    private readonly result:
+      | RetrievalResult
+      | ((options: { sourcePaths?: string[]; boostedSourcePaths?: string[] }) => RetrievalResult),
     private readonly languageInventory: LanguageInventoryItem[] = [],
   ) {}
 
@@ -26,12 +29,13 @@ export class FakeRetriever {
       limit: number;
       includeWebResults: boolean;
       sourcePaths?: string[];
+      boostedSourcePaths?: string[];
       queryVariants?: unknown;
       signal?: AbortSignal;
     },
   ): Promise<RetrievalResult> {
     this.requests.push({ query, options });
-    return this.result;
+    return typeof this.result === "function" ? this.result(options) : this.result;
   }
 
   async getLanguageInventory(): Promise<LanguageInventoryItem[]> {
