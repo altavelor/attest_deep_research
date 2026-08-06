@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { App, Component } from "obsidian";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App, Component, MarkdownRenderer } from "obsidian";
 
-import { renderAssistantMessageContent } from "@apps/obsidian/ui/chat/assistantMessageRenderer";
+import {
+  patchAssistantMessageContent,
+  renderAssistantMessageContent,
+} from "@apps/obsidian/ui/chat/assistantMessageRenderer";
 import type { ChatDisplayMessage } from "@core/conversation";
 import type { RetrievedChunk } from "@core/model";
 import { renderInlineCitationAnchors } from "@apps/obsidian/ui/chat/citationAnchorRenderer";
@@ -170,5 +173,55 @@ describe("web references without evidence", () => {
     expect(blocks[0].querySelector(".ixplorer-chat__citation-block-text")?.textContent).toContain(
       "GPT-4o costs",
     );
+  });
+});
+
+describe("answer status dot", () => {
+  // The stub renderer replaces the container's content, which would drop the
+  // header; Obsidian appends into it, so the spy reproduces that.
+  beforeEach(() => {
+    vi.spyOn(MarkdownRenderer, "render").mockImplementation(
+      async (_app, markdown: string, element: HTMLElement) => {
+        element.appendChild(document.createTextNode(markdown));
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function assistant(mode: "instant" | "thinking"): ChatDisplayMessage {
+    return {
+      ...message({ content: "The answer." }),
+      researchProgress: {
+        phase: "complete",
+        mode,
+        disclosure: "auto",
+        view: "expanded",
+        reasoning: { phase: "complete", segments: [] },
+        checkpoints: [],
+        chain:
+          mode === "instant" ? [] : [{ kind: "reasoning", segmentId: "s1", content: "Planning" }],
+      },
+    };
+  }
+
+  it("omits the timeline dot for an Instant run and keeps it for a Thinking run", () => {
+    renderAssistantMessageContent(container, assistant("instant"), renderOptions);
+    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).toBeNull();
+    expect(container.querySelector(".ixplorer-chat__workflow")).toBeNull();
+
+    const thinkingHost = createContainer();
+    renderAssistantMessageContent(thinkingHost, assistant("thinking"), renderOptions);
+    expect(thinkingHost.querySelector(".ixplorer-chat__answer-status-dot")).not.toBeNull();
+  });
+
+  it("omits the dot on the patched render path too", () => {
+    renderAssistantMessageContent(container, assistant("thinking"), renderOptions);
+    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).not.toBeNull();
+
+    expect(patchAssistantMessageContent(container, assistant("instant"), renderOptions)).toBe(true);
+    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).toBeNull();
   });
 });
