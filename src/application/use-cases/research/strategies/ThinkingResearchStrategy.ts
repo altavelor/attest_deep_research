@@ -1,6 +1,6 @@
 import { formatCitation } from "@core/retrieval";
 import { ResearchAnswer } from "@core/answer";
-import { ContextDiagnostics } from "@core/diagnostics";
+import { ContextDiagnostics, WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
 import { buildThinkingResearchMessages } from "@core/research";
@@ -29,6 +29,8 @@ import {
   webUrlEvidenceIndex,
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
+
+const MAX_TRACED_WEB_SEARCHES = 20;
 import {
   thinkingBudgets,
   createEmptyContextDiagnostics,
@@ -121,6 +123,8 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       } catch {}
     }
 
+    const webSourceSelections: WebSourceSelectionDiagnostics[] = [];
+    let omittedWebSourceSelections = 0;
     const created = this.deps.toolsetFactory({
       availability: {
         searchMode,
@@ -135,6 +139,14 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       urlStatusChecker: this.deps.urlStatusChecker,
       indexSourcePaths: request.contextPaths,
       searchProvider: this.deps.searchProvider,
+      web: ctx.retrieval.web,
+      onWebSourceSelection: (selection) => {
+        if (webSourceSelections.length < MAX_TRACED_WEB_SEARCHES) {
+          webSourceSelections.push(selection);
+        } else {
+          omittedWebSourceSelections += 1;
+        }
+      },
       ...(this.deps.imageSearch ? { imageSearch: this.deps.imageSearch } : {}),
       ...(this.deps.documentImageCandidates
         ? {
@@ -272,6 +284,12 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       diagnostics.probeAudit = this.deps.toolCapabilityProbeAudit;
     diagnostics.toolCapabilities = this.deps.toolCapabilities;
     diagnostics.tools = result.diagnostics;
+    if (webSourceSelections.length > 0) {
+      diagnostics.webSourceSelections = webSourceSelections;
+      if (omittedWebSourceSelections > 0) {
+        diagnostics.omittedWebSourceSelections = omittedWebSourceSelections;
+      }
+    }
     const degradation = semanticDegradationWarning(
       result.diagnostics.map((tool) => ({
         semanticError:

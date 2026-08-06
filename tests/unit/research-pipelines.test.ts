@@ -180,7 +180,7 @@ describe("WebResearchPipeline", () => {
       originalQuestion: "public research",
       queryStrategy: "direct",
       queries: ["public research"],
-      requests: [{ query: "public research", limit: 5, maxFetches: 3 }],
+      requests: [{ query: "public research", limit: 20, maxFetches: 3 }],
       finalPrompt: { includedChunkIds: [], usedTokens: 0 },
       results: [
         {

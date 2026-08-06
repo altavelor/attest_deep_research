@@ -15,6 +15,8 @@ import type {
 import type { ResearchExecutionPolicy } from "@core/research";
 import { researchModeRetrievalParameters } from "@core/research";
 import { fixedNow } from "../helpers/factories";
+import type { SearchProvider } from "@application/ports";
+import type { ContextDiagnostics } from "@core/diagnostics";
 
 const CAPABILITIES: ToolCallingCapabilities = {
   calls: true,
@@ -52,8 +54,12 @@ function scriptedRounds(
   };
 }
 
-function strategy(modelRound: ModelRoundProvider): ThinkingResearchStrategy {
+function strategy(
+  modelRound: ModelRoundProvider,
+  searchProvider?: SearchProvider,
+): ThinkingResearchStrategy {
   const deps = {
+    ...(searchProvider ? { searchProvider } : {}),
     chatModelName: "m",
     chatOptions: {},
     modelRound,
@@ -71,6 +77,7 @@ function strategy(modelRound: ModelRoundProvider): ThinkingResearchStrategy {
 function context(
   overrides: Partial<ResearchExecutionContext["request"]> = {},
 ): ResearchExecutionContext {
+  const searchMode = overrides.searchMode ?? "indexOnly";
   return {
     request: {
       question: "What is X?",
@@ -80,7 +87,7 @@ function context(
       ...overrides,
     },
     question: "What is X?",
-    searchMode: "indexOnly",
+    searchMode,
     retrieval: researchModeRetrievalParameters("thinking"),
     policy: POLICY,
   };
@@ -191,5 +198,123 @@ describe("ThinkingResearchStrategy failure paths", () => {
       answer: { answer: "No sources found.", citations: [], evidence: [] },
     });
     expect(events.find((event) => event.type === "tool-call-end")).toMatchObject({ ok: true });
+  });
+});
+
+describe("ThinkingResearchStrategy web source tracing", () => {
+  function tracingSearchProvider(): SearchProvider {
+    return {
+      search: async (query, options) => {
+        options?.onSourceSelection?.({
+          mode: "thinking",
+          deadlineMs: options.deadlineMs ?? 0,
+          perSourceLimit: options.perSourceLimit ?? 0,
+          deadlineExceeded: false,
+          cancelled: false,
+          intent: "academic",
+          intentOrigin: "model",
+          sources: [
+            {
+              sourceId: "arxiv",
+              label: "arXiv",
+              activation: "auto",
+              outcome: "queried",
+              queryOrder: 1,
+              returnedResults: 0,
+            },
+          ],
+        });
+        void query;
+        return [];
+      },
+    };
+  }
+
+  function searchWebRounds(queries: readonly string[]) {
+    return scriptedRounds((_request, index) => {
+      if (index === 1) {
+        return {
+          items: queries.map((query, position) => ({
+            type: "toolCall" as const,
+            call: {
+              id: `web-${position}`,
+              name: "search_web",
+              arguments: { query, limit: 5 },
+            },
+          })),
+          stopReason: "tool_calls" as const,
+        };
+      }
+      return { items: [{ type: "text" as const, text: "done" }], stopReason: "complete" as const };
+    });
+  }
+
+  async function runWithSearches(queries: readonly string[]): Promise<ContextDiagnostics> {
+    const { events } = await drain(
+      strategy(searchWebRounds(queries), tracingSearchProvider()).execute(
+        context({ searchMode: "indexAndWeb" }),
+      ),
+    );
+    const contextEvent = events.find((event) => event.type === "context");
+    expect(contextEvent).toBeDefined();
+    return (contextEvent as { diagnostics: ContextDiagnostics }).diagnostics;
+  }
+
+  it("records one selection block per search_web call, tagged with its query", async () => {
+    const diagnostics = await runWithSearches(["rag papers", "vector databases"]);
+
+    expect(diagnostics.webSourceSelections).toHaveLength(2);
+    expect(diagnostics.webSourceSelections?.map((entry) => entry.query)).toEqual([
+      "rag papers",
+      "vector databases",
+    ]);
+    expect(diagnostics.webSourceSelections?.[0]).toMatchObject({
+      intent: "academic",
+      intentOrigin: "model",
+    });
+  });
+
+  it("passes the thinking mode's web deadline down to the search tool", async () => {
+    const diagnostics = await runWithSearches(["rag papers"]);
+    const expected = researchModeRetrievalParameters("thinking").web;
+
+    expect(diagnostics.webSourceSelections?.[0]).toMatchObject({
+      deadlineMs: expected.deadlineMs,
+      perSourceLimit: expected.perSourceLimit,
+    });
+  });
+
+  it("does not carry selections between runs", async () => {
+    const first = await runWithSearches(["rag papers"]);
+    const second = await runWithSearches(["vector databases"]);
+
+    expect(first.webSourceSelections).toHaveLength(1);
+    expect(second.webSourceSelections).toHaveLength(1);
+    expect(second.webSourceSelections?.[0].query).toBe("vector databases");
+  });
+
+  it("caps the traced searches and reports how many were omitted", async () => {
+    const queries = Array.from({ length: 23 }, (_unused, index) => `query ${index}`);
+    const diagnostics = await runWithSearches(queries);
+
+    expect(diagnostics.webSourceSelections).toHaveLength(20);
+    expect(diagnostics.omittedWebSourceSelections).toBe(3);
+    expect(diagnostics.webSourceSelections?.at(-1)?.query).toBe("query 19");
+  });
+
+  it("omits the field entirely when the run performs no web search", async () => {
+    const { events } = await drain(
+      strategy(
+        scriptedRounds(() => ({
+          items: [{ type: "text" as const, text: "done" }],
+          stopReason: "complete" as const,
+        })),
+        tracingSearchProvider(),
+      ).execute(context({ searchMode: "indexAndWeb" })),
+    );
+    const contextEvent = events.find((event) => event.type === "context");
+    const diagnostics = (contextEvent as { diagnostics: ContextDiagnostics }).diagnostics;
+
+    expect(diagnostics.webSourceSelections).toBeUndefined();
   });
 });

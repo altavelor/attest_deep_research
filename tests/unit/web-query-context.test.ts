@@ -140,22 +140,30 @@ describe("planner language routing and recency inference", () => {
   function fakeSource(id: string, results: SearchProviderResult[]): WebSearchSource {
     const descriptor = findWebSourceDescriptor(id);
     if (!descriptor) throw new Error(`missing descriptor: ${id}`);
-    return { descriptor, search: vi.fn().mockResolvedValue(results) };
+    return { descriptor, activation: "auto", search: vi.fn().mockResolvedValue(results) };
   }
 
-  it("skips English-only sources for Cyrillic queries", async () => {
+  it("still queries English-only sources for Cyrillic queries, only ranking them lower", async () => {
     const hackernews = fakeSource("hackernews", []);
     const newsapi = fakeSource("newsapi", []);
+    const order: string[] = [];
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [hackernews, newsapi] },
     });
 
-    await planner.search("главные новости лондона за последние 24 часа");
-    expect(hackernews.search).not.toHaveBeenCalled();
+    await planner.search("главные новости лондона за последние 24 часа", {
+      maxConcurrentSources: 1,
+      onSourceSelection: (diagnostics) => {
+        order.push(...diagnostics.sources.map((entry) => entry.sourceId));
+      },
+    });
+
+    expect(hackernews.search).toHaveBeenCalled();
     expect(newsapi.search).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ language: "ru", recency: "day" }),
     );
+    expect(order.indexOf("newsapi")).toBeLessThan(order.indexOf("hackernews"));
   });
 
   it("passes an explicit recency through to sources", async () => {

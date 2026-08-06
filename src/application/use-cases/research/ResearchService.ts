@@ -235,6 +235,7 @@ export class ResearchService implements ConversationEngine {
       retrieval: {
         maxQueryVariants: modeParameters.maxQueryVariants,
         evidenceLimit: Math.min(this.evidenceLimit, modeParameters.evidenceLimit),
+        web: modeParameters.web,
       },
       indexDescription,
     };
