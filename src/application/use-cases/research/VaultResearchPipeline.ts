@@ -1,6 +1,5 @@
 import { RetrievalResult } from "@application/contracts";
 import { QueryExpansion } from "@application/contracts/research";
-import { uniqueChunks } from "@core/model";
 import { RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchRetriever, ResearchStreamEvent } from "@application/contracts/research";
 
@@ -29,8 +28,8 @@ export class VaultResearchPipeline {
 
   /**
    * Search the vault for a question. Query expansion runs alongside the search
-   * for the original query instead of gating it, and the linked-notes pass runs
-   * alongside the primary one; neither can delay or fail the primary search.
+   * for the original query instead of gating it, so it can neither delay nor
+   * fail that search. Linked notes are promoted by the retriever's ranking.
    */
   async *search(
     question: string,
@@ -48,42 +47,18 @@ export class VaultResearchPipeline {
       yield { type: "status", message: "Expanding search queries..." };
     }
 
-    const primary = this.retriever.search(question, {
+    const hasBoostedPaths = boostedSourcePaths !== undefined && boostedSourcePaths.length > 0;
+    const search = this.retriever.search(question, {
       limit,
       includeWebResults: false,
       queryVariants,
       ...(options.signal ? { signal: options.signal } : {}),
       ...(contextPaths ? { sourcePaths: contextPaths } : {}),
+      ...(hasBoostedPaths ? { boostedSourcePaths } : {}),
     });
-    const hasBoostedPaths = boostedSourcePaths !== undefined && boostedSourcePaths.length > 0;
+    const [variants, result] = await Promise.all([queryVariants, search]);
 
-    if (hasBoostedPaths) {
-      yield { type: "status", message: "Searching linked notes..." };
-    }
-
-    const graph = hasBoostedPaths
-      ? this.retriever.search(question, {
-          limit,
-          includeWebResults: false,
-          queryVariants,
-          ...(options.signal ? { signal: options.signal } : {}),
-          sourcePaths: boostedSourcePaths,
-        })
-      : undefined;
-    const [variants, primaryResult, graphResult] = await Promise.all([
-      queryVariants,
-      primary,
-      graph,
-    ]);
-
-    if (!graphResult) {
-      return { ...primaryResult, queryVariants: variants };
-    }
-
-    return {
-      ...mergeRetrievalResults(primaryResult, graphResult, limit),
-      queryVariants: variants,
-    };
+    return { ...result, queryVariants: variants };
   }
 
   private canReadLanguageInventory(): boolean {
@@ -121,43 +96,4 @@ export class VaultResearchPipeline {
       return undefined;
     }
   }
-}
-
-function mergeRetrievalResults(
-  primary: RetrievalResult,
-  graph: RetrievalResult,
-  limit: number,
-): RetrievalResult {
-  const graphLimit = Math.min(graph.chunks.length, Math.max(1, Math.ceil(limit * 0.25)));
-  const chunks = uniqueChunks([
-    ...graph.chunks.slice(0, graphLimit),
-    ...primary.chunks,
-    ...graph.chunks.slice(graphLimit),
-  ]).slice(0, limit);
-  const citationIds = new Set(chunks.map((chunk) => chunk.id));
-  const citations = uniqueCitations([...graph.citations, ...primary.citations]).filter((citation) =>
-    citationIds.has(citation.id),
-  );
-
-  return {
-    chunks,
-    citations,
-    usedFallback: primary.usedFallback && graph.usedFallback,
-  };
-}
-
-function uniqueCitations(citations: RetrievalResult["citations"]): RetrievalResult["citations"] {
-  const seen = new Set<string>();
-  const unique: RetrievalResult["citations"] = [];
-
-  for (const citation of citations) {
-    if (seen.has(citation.id)) {
-      continue;
-    }
-
-    seen.add(citation.id);
-    unique.push(citation);
-  }
-
-  return unique;
 }

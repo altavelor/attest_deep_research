@@ -78,12 +78,12 @@ export class RetrievalService {
   }
 
   async search(query: string, options: RetrievalOptions): Promise<RetrievalResult> {
-    const scoped = await this.resolveLanguageScope(options);
+    const scoped = await this.resolveLanguageScope(withBoostedPathsInScope(options));
     if (options.language && this.inventory && (scoped.sourcePaths?.length ?? 0) === 0) {
       return { chunks: [], citations: [], usedFallback: false };
     }
 
-    const candidateLimit = Math.max(options.limit, options.limit * 4);
+    const candidateLimit = Math.max(options.limit, options.limit * candidateOverFetch(scoped));
     const originalQueries = normalizedQueries([query]);
     const originalPass = this.searchQueries(originalQueries, candidateLimit, scoped);
     const variantPass = resolveQueryVariants(options.queryVariants)
@@ -112,7 +112,10 @@ export class RetrievalService {
       [],
       candidateLimit,
     );
-    const fused = fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit);
+    const fused = boostChunksFromSources(
+      fuseRetrievedChunks(semanticChunks, keywordChunks, candidateLimit),
+      scoped.boostedSourcePaths,
+    );
     const ranked = scoped.diversify ? oneChunkPerSource(fused) : fused;
     const deduped = dedupeNearDuplicateChunks(ranked);
     const chunks = deduped.slice(0, options.limit);
@@ -426,6 +429,9 @@ function escapeRegExp(value: string): string {
 const LANGUAGE_SCOPE_LIMIT = 1000;
 const MAX_FUSED_QUERIES = 8;
 const KEYWORD_SEARCH_CONCURRENCY = 4;
+const BOOSTED_SOURCE_WEIGHT = 0.2;
+const CANDIDATE_OVER_FETCH = 4;
+const BOOSTED_CANDIDATE_OVER_FETCH = 8;
 const INDEX_QUERY_CONCURRENCY = 4;
 
 interface QueryPassResult {
@@ -486,6 +492,59 @@ function fuseRetrievedChunks(
   return Array.from(scores.values())
     .sort((left, right) => right.score - left.score || right.chunk.score - left.chunk.score)
     .slice(0, limit)
+    .map(({ chunk, score }) => ({ ...chunk, score }));
+}
+
+/**
+ * Deepen the candidate pool while boosting, so that what surfaces is decided by the
+ * boost formula rather than by the over-fetch constant. At the default over-fetch a
+ * linked note ranked just past the pool is discarded before it can be boosted, even
+ * though its boosted score would have placed it in the results.
+ */
+function candidateOverFetch(options: RetrievalOptions): number {
+  return options.boostedSourcePaths?.length ? BOOSTED_CANDIDATE_OVER_FETCH : CANDIDATE_OVER_FETCH;
+}
+
+/**
+ * Widen an explicit `sourcePaths` filter to also admit the boosted paths. Without
+ * this a caller that scopes the search to attached files would filter out the very
+ * linked notes it asked to boost, leaving them unreachable rather than ranked lower.
+ */
+function withBoostedPathsInScope(options: RetrievalOptions): RetrievalOptions {
+  const { sourcePaths, boostedSourcePaths } = options;
+
+  if (!sourcePaths?.length || !boostedSourcePaths || boostedSourcePaths.length === 0) {
+    return options;
+  }
+
+  return { ...options, sourcePaths: Array.from(new Set([...sourcePaths, ...boostedSourcePaths])) };
+}
+
+/**
+ * Fold membership in `boostedSourcePaths` into ranking as one more reciprocal-rank
+ * signal over the already fused candidates. Linked notes retrieved near the head
+ * move ahead of it, while ones ranked far below stay below stronger results.
+ */
+function boostChunksFromSources(
+  chunks: RetrievedChunk[],
+  boostedSourcePaths: string[] | undefined,
+): RetrievedChunk[] {
+  if (!boostedSourcePaths || boostedSourcePaths.length === 0) {
+    return chunks;
+  }
+
+  const paths = new Set(boostedSourcePaths);
+  const boosted = chunks.filter((chunk) => "path" in chunk.source && paths.has(chunk.source.path));
+
+  if (boosted.length === 0) {
+    return chunks;
+  }
+
+  const scores = new Map(chunks.map((chunk) => [chunk.id, { chunk, score: chunk.score }]));
+  addRanked(scores, boosted, BOOSTED_SOURCE_WEIGHT);
+
+  return Array.from(scores.values())
+    .sort((left, right) => right.score - left.score)
     .map(({ chunk, score }) => ({ ...chunk, score }));
 }
 
