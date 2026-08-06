@@ -197,7 +197,7 @@ describe("chat rendering helpers", () => {
   });
 
   it("creates an empty streaming assistant message before the first model event", () => {
-    const messages = startAssistantProgress(nextUserMessage([], "Find a recipe"));
+    const messages = startAssistantProgress(nextUserMessage([], "Find a recipe"), "thinking");
 
     expect(messages).toHaveLength(2);
     expect(messages[1]).toMatchObject({
@@ -205,14 +205,39 @@ describe("chat rendering helpers", () => {
       content: "",
       researchProgress: {
         phase: "streaming",
+        mode: "thinking",
         reasoning: { phase: "streaming", segments: [] },
         chain: [],
       },
     });
   });
 
+  it("records the research mode the run started in on the progress", () => {
+    const instant = startAssistantProgress([], "instant");
+    const deep = startAssistantProgress([], "deep-research");
+
+    expect(instant.at(-1)?.researchProgress?.mode).toBe("instant");
+    expect(deep.at(-1)?.researchProgress?.mode).toBe("deep-research");
+  });
+
+  it("keeps the recorded mode while reasoning and tool events accumulate", () => {
+    const reasoned = nextAssistantReasoning(
+      startAssistantProgress([], "thinking"),
+      "segment-1",
+      "Planning",
+    );
+    const withTool = nextChainToolCallStart(reasoned, "search-1", "search_web", "Search the web");
+
+    expect(withTool.at(-1)?.researchProgress?.mode).toBe("thinking");
+  });
+
   it("keeps a classified final answer out of the transcript until completion", () => {
-    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const streaming = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "Answer",
+    );
     const finalizing = promoteAssistantCheckpoint(streaming, "round-1");
 
     expect(finalizing.at(-1)).toMatchObject({
@@ -225,7 +250,12 @@ describe("chat rendering helpers", () => {
   });
 
   it("preserves a classified final answer when the request is cancelled", () => {
-    const streaming = nextAssistantCheckpoint(startAssistantProgress([]), "round-1", 1, "Answer");
+    const streaming = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "Answer",
+    );
     const interrupted = interruptLastAssistantProgress(
       promoteAssistantCheckpoint(streaming, "round-1"),
     );
@@ -241,7 +271,7 @@ describe("chat rendering helpers", () => {
 
   it("keeps resolved fetch targets with the pending tool call", () => {
     const messages = nextChainToolCallStart(
-      startAssistantProgress([]),
+      startAssistantProgress([], "thinking"),
       "fetch-1",
       "fetch_web_page",
       "Fetching 2 pages",

@@ -243,6 +243,69 @@ describe("ResearchQuestionController streaming order", () => {
   });
 });
 
+describe("ResearchQuestionController research mode", () => {
+  it("records the selected mode on the progress it creates", async () => {
+    const harness = createHarness(
+      async function* events() {
+        yield { type: "complete", answer: answerFor("Done") };
+      },
+      { getResearchMode: () => "thinking" },
+    );
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(harness.requests[0]?.mode).toBe("thinking");
+    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("thinking");
+  });
+
+  it("marks an Instant run so the transcript can skip the workflow block", async () => {
+    const gate = deferred();
+    const harness = createHarness(async function* events() {
+      await gate.promise;
+      yield { type: "complete", answer: answerFor("Done") };
+    });
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+
+    expect(harness.messages().at(-1)?.researchProgress).toMatchObject({
+      phase: "streaming",
+      mode: "instant",
+    });
+
+    gate.resolve();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("instant");
+  });
+
+  it("uses Thinking mode for an explicit sub-agent directive", async () => {
+    const harness = createHarness(
+      async function* events() {
+        yield { type: "complete", answer: answerFor("Done") };
+      },
+      { getQuestionInput: () => "@run_subagent Compare the notes" },
+    );
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(harness.requests[0]).toMatchObject({
+      mode: "thinking",
+      forceSubAgent: true,
+      question: "Compare the notes",
+    });
+    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("thinking");
+  });
+});
+
 describe("ResearchQuestionController cancellation", () => {
   it("aborts the request and marks the answer interrupted mid-stream", async () => {
     const gate = deferred();

@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App, Component } from "obsidian";
 
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
+import {
+  finalizeLastAssistantReasoning,
+  nextChainToolCallStart,
+  startAssistantProgress,
+} from "@core/conversation";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
+import type { ResearchMode } from "@core/research";
 import {
   advanceTime,
   createContainer,
@@ -13,13 +19,18 @@ import {
   useDomFakeTimers,
 } from "../../helpers/domHarness";
 
-function streaming(chain: ChainItem[], finalizing = false): ChatDisplayMessage {
+function streaming(
+  chain: ChainItem[],
+  finalizing = false,
+  mode?: ResearchMode,
+): ChatDisplayMessage {
   return {
     role: "assistant",
     content: "",
     createdAt: "2026-01-01T00:00:00.000Z",
     researchProgress: {
       phase: "streaming",
+      ...(mode ? { mode } : {}),
       disclosure: "auto",
       view: "expanded",
       reasoning: { phase: "streaming", segments: [] },
@@ -29,6 +40,12 @@ function streaming(chain: ChainItem[], finalizing = false): ChatDisplayMessage {
       chain,
     },
   };
+}
+
+function lastMessage(messages: ChatDisplayMessage[]): ChatDisplayMessage {
+  const message = messages.at(-1);
+  if (!message) throw new Error("The reducer produced no assistant message.");
+  return message;
 }
 
 function render(host: HTMLElement, message: ChatDisplayMessage): boolean {
@@ -125,6 +142,73 @@ describe("workflow node dots", () => {
     const list = container.querySelector<HTMLElement>(".ixplorer-chat__workflow");
     expect(list?.parentElement).toBe(container);
     expect(list?.querySelector(".ixplorer-chat__workflow-node--tool")).not.toBeNull();
+  });
+});
+
+describe("early workflow indicator per research mode", () => {
+  function startedIn(mode: ResearchMode): ChatDisplayMessage {
+    return lastMessage(startAssistantProgress([], mode));
+  }
+
+  it("renders no workflow block while an Instant run streams", () => {
+    expect(render(container, startedIn("instant"))).toBe(false);
+
+    expect(container.querySelector(".ixplorer-chat__workflow")).toBeNull();
+    expect(container.textContent).not.toContain("Thinking…");
+  });
+
+  it("renders no workflow block once an Instant run completes", () => {
+    const completed = lastMessage(
+      finalizeLastAssistantReasoning(startAssistantProgress([], "instant")),
+    );
+
+    expect(completed.researchProgress?.phase).toBe("complete");
+    expect(render(container, completed)).toBe(false);
+    expect(container.textContent).not.toContain("Thinking…");
+  });
+
+  it("shows the Thinking indicator before the first event of a Thinking run", () => {
+    expect(render(container, startedIn("thinking"))).toBe(true);
+
+    expect(
+      container.querySelector(".ixplorer-chat__workflow-node--thinking-active"),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Thinking…");
+  });
+
+  it("shows the Thinking indicator before the first event of a Deep Research run", () => {
+    expect(render(container, startedIn("deep-research"))).toBe(true);
+    expect(container.textContent).toContain("Thinking…");
+  });
+
+  it("shows the Thinking indicator for chats saved before the mode was recorded", () => {
+    expect(render(container, streaming([]))).toBe(true);
+    expect(container.textContent).toContain("Thinking…");
+  });
+
+  it("keeps the Finalizing indicator of a Thinking run that produced chain nodes", () => {
+    expect(render(container, streaming([searchCall], true, "thinking"))).toBe(true);
+    expect(container.querySelector(".ixplorer-chat__workflow-node--finalizing")).not.toBeNull();
+  });
+
+  it("keeps the Finalizing indicator of a Thinking run without chain nodes", () => {
+    expect(render(container, streaming([], true, "thinking"))).toBe(true);
+    expect(container.querySelector(".ixplorer-chat__workflow-node--finalizing")).not.toBeNull();
+  });
+
+  it("keeps nodes and indicator when a Thinking run falls back to Instant", () => {
+    const fallback = lastMessage(
+      nextChainToolCallStart(
+        startAssistantProgress([], "thinking"),
+        "search",
+        "search_web",
+        "Search the web",
+      ),
+    );
+
+    expect(render(container, fallback)).toBe(true);
+    expect(container.querySelector(".ixplorer-chat__workflow-node--tool")).not.toBeNull();
+    expect(container.textContent).toContain("Thinking…");
   });
 });
 

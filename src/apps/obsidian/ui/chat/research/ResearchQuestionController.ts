@@ -197,7 +197,9 @@ export class ResearchQuestionController {
       this.options.clearContextPaths();
       await this.options.saveCurrentChat();
     }
-    this.options.setMessages(startAssistantProgress(this.options.getMessages()));
+    const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(question);
+    const mode: ResearchMode = forceSubAgent ? "thinking" : this.options.getResearchMode();
+    this.options.setMessages(startAssistantProgress(this.options.getMessages(), mode));
     this.options.setLastAnswer(null);
     this.options.renderMessages();
     this.options.renderAnswerDetails();
@@ -205,13 +207,12 @@ export class ResearchQuestionController {
 
     try {
       const service = this.options.createResearchService();
-      const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(question);
       let completed = false;
 
       for await (const event of service.answer({
         question: cleanedQuestion || question,
         forceSubAgent: forceSubAgent || undefined,
-        mode: forceSubAgent ? "thinking" : this.options.getResearchMode(),
+        mode,
         searchMode: this.options.getSearchMode(),
         contextMode: this.options.getContextMode(),
         contextPaths: contextPaths.length > 0 ? contextPaths : undefined,
