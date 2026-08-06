@@ -452,6 +452,38 @@ describe("RetrievalService", () => {
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["linked", "attached"]);
   });
 
+  it("keeps a boosted chunk ranked past the unboosted candidate pool", async () => {
+    const chunks = Array.from({ length: 40 }, (_, index) =>
+      retrieved(
+        `filler-${index}`,
+        markdownSource(`Docs/filler-${index}.md`),
+        `distinct filler text number ${index}`,
+        0.5,
+      ),
+    );
+    chunks[18] = retrieved(
+      "linked",
+      markdownSource("Linked/near.md"),
+      "distinct linked note text",
+      0.5,
+    );
+    const indexStore = new FakeIndexStore(chunks);
+    const service = makeRetrievalService({
+      embeddings: new FakeEmbeddingProvider([[1, 0]]),
+      indexStore,
+      embeddingModel: "nomic",
+    });
+
+    const result = await service.search("x", {
+      limit: 4,
+      includeWebResults: false,
+      boostedSourcePaths: ["Linked/near.md"],
+    });
+
+    expect(indexStore.queries).toEqual([{ embedding: [1, 0], limit: 32 }]);
+    expect(result.chunks.map((chunk) => chunk.id)).toContain("linked");
+  });
+
   it("keeps an empty source filter unfiltered when source paths are boosted", async () => {
     const service = makeRetrievalService({
       embeddings: new FakeEmbeddingProvider([[1, 0]]),

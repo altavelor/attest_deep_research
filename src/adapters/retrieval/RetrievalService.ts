@@ -83,7 +83,7 @@ export class RetrievalService {
       return { chunks: [], citations: [], usedFallback: false };
     }
 
-    const candidateLimit = Math.max(options.limit, options.limit * 4);
+    const candidateLimit = Math.max(options.limit, options.limit * candidateOverFetch(scoped));
     const originalQueries = normalizedQueries([query]);
     const originalPass = this.searchQueries(originalQueries, candidateLimit, scoped);
     const variantPass = resolveQueryVariants(options.queryVariants)
@@ -430,6 +430,8 @@ const LANGUAGE_SCOPE_LIMIT = 1000;
 const MAX_FUSED_QUERIES = 8;
 const KEYWORD_SEARCH_CONCURRENCY = 4;
 const BOOSTED_SOURCE_WEIGHT = 0.2;
+const CANDIDATE_OVER_FETCH = 4;
+const BOOSTED_CANDIDATE_OVER_FETCH = 8;
 const INDEX_QUERY_CONCURRENCY = 4;
 
 interface QueryPassResult {
@@ -491,6 +493,16 @@ function fuseRetrievedChunks(
     .sort((left, right) => right.score - left.score || right.chunk.score - left.chunk.score)
     .slice(0, limit)
     .map(({ chunk, score }) => ({ ...chunk, score }));
+}
+
+/**
+ * Deepen the candidate pool while boosting, so that what surfaces is decided by the
+ * boost formula rather than by the over-fetch constant. At the default over-fetch a
+ * linked note ranked just past the pool is discarded before it can be boosted, even
+ * though its boosted score would have placed it in the results.
+ */
+function candidateOverFetch(options: RetrievalOptions): number {
+  return options.boostedSourcePaths?.length ? BOOSTED_CANDIDATE_OVER_FETCH : CANDIDATE_OVER_FETCH;
 }
 
 /**
