@@ -65,20 +65,71 @@ export function nextAssistantCheckpoint(
       content: `${checkpoints[index].content}${delta}`,
       status: "streaming",
     };
-  else checkpoints.push({ id: checkpointId, round, content: delta, status: "streaming" });
+  else
+    checkpoints.push({
+      id: checkpointId,
+      round,
+      content: delta,
+      status: "streaming",
+      bodyOffset: assistant.content.length,
+    });
   return replaceLastAssistant(messages, existed, {
     ...assistant,
+    content: `${assistant.content}${delta}`,
     researchProgress: { ...progress, phase: "streaming", checkpoints },
   });
 }
 
+/**
+ * A round the model did not classify as final: its text was shown as the
+ * provisional answer body, so it moves into a workflow node and leaves the body
+ * for the round that follows. The round is located by the offset recorded when
+ * it started streaming, so repeated wording cannot displace the cut.
+ */
 export function completeAssistantCheckpoint(
   messages: ChatDisplayMessage[],
   checkpointId: string,
 ): ChatDisplayMessage[] {
-  return updateCheckpoints(messages, (checkpoint) =>
-    checkpoint.id === checkpointId ? { ...checkpoint, status: "complete" } : checkpoint,
-  );
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.researchProgress) return messages;
+  const checkpoint = last.researchProgress.checkpoints.find((item) => item.id === checkpointId);
+  if (!checkpoint) return messages;
+  const shownAt = checkpoint.bodyOffset ?? -1;
+  const shownLength = checkpoint.content.length;
+  const demoted =
+    shownLength > 0 &&
+    shownAt >= 0 &&
+    last.content.slice(shownAt, shownAt + shownLength) === checkpoint.content;
+  const shiftOffset = (offset: number | undefined): number | undefined =>
+    offset !== undefined && offset > shownAt ? offset - shownLength : offset;
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      content: demoted
+        ? last.content.slice(0, shownAt) + last.content.slice(shownAt + shownLength)
+        : last.content,
+      researchProgress: {
+        ...last.researchProgress,
+        checkpoints: last.researchProgress.checkpoints.map((item) => {
+          if (item.id === checkpointId) return { ...item, status: "complete" };
+          return demoted ? { ...item, bodyOffset: shiftOffset(item.bodyOffset) } : item;
+        }),
+        chain: demoted
+          ? [
+              ...last.researchProgress.chain,
+              {
+                kind: "checkpoint",
+                id: checkpoint.id,
+                round: checkpoint.round,
+                content: checkpoint.content,
+                status: "complete",
+              },
+            ]
+          : last.researchProgress.chain,
+      },
+    },
+  ];
 }
 export function promoteAssistantCheckpoint(
   messages: ChatDisplayMessage[],

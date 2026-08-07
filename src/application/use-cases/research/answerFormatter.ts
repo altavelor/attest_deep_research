@@ -1,11 +1,12 @@
 import { formatCitationLink } from "./citationLinks";
 import { linkifyUrlCitations } from "./urlCitations";
-import { ResearchAnswer } from "@core/answer";
+import { AnswerWebReference, ResearchAnswer } from "@core/answer";
 import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
 import { Citation } from "@core/model";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   const citations = dedupeCitationsBySource(answer.citations);
+  const webReferences = answer.webReferences ?? [];
   return [
     "# Ixplorer Research",
     "",
@@ -17,12 +18,12 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
     "",
     "## Answer",
     "",
-    renderAnswerBody(answer, citations),
+    renderAnswerBody(answer, citations, webReferences),
     "",
     ...artifactSections(answer),
     "## Citations",
     "",
-    citationsMarkdown(citations),
+    citationsMarkdown(citations, webReferences),
     "",
     "## Follow-up Questions",
     "",
@@ -31,7 +32,11 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   ].join("\n");
 }
 
-function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]): string {
+function renderAnswerBody(
+  answer: ResearchAnswer,
+  dedupedCitations: Citation[],
+  webReferences: readonly AnswerWebReference[],
+): string {
   const numberByKey = new Map(
     dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
   );
@@ -42,6 +47,9 @@ function renderAnswerBody(answer: ResearchAnswer, dedupedCitations: Citation[]):
       numberById.set(citation.id, number);
     }
   }
+  webReferences.forEach((reference, index) => {
+    numberById.set(reference.id, dedupedCitations.length + index + 1);
+  });
 
   const numbered = answer.answer.replace(/\[([^\]\n]{1,200})\]/g, (whole, inner: string) => {
     const number = numberById.get(inner.trim());
@@ -135,14 +143,27 @@ export function formatResearchAnswerAppendBlock(answer: ResearchAnswer): string 
   return `\n\n${formatResearchAnswerNote(answer)}`;
 }
 
-function citationsMarkdown(citations: Citation[]): string {
-  if (citations.length === 0) {
+function citationsMarkdown(
+  citations: Citation[],
+  webReferences: readonly AnswerWebReference[],
+): string {
+  const entries = [
+    ...citations.map((citation) => formatCitationLink(citation.source)),
+    ...webReferences.map((reference) => webReferenceLink(reference)),
+  ];
+  if (entries.length === 0) {
     return "No citations.";
   }
 
-  return citations
-    .map((citation, index) => `${index + 1}. ${formatCitationLink(citation.source)}`)
-    .join("\n");
+  return entries.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
+}
+
+/** Renders a cited page that produced no evidence; a URL that cannot be a safe
+ * link destination degrades to plain text. */
+function webReferenceLink(reference: AnswerWebReference): string {
+  const destination = markdownLinkDestination(reference.url);
+  const label = escapeLinkText(reference.url);
+  return destination ? `[${label}](${destination})` : label;
 }
 
 function dedupeCitationsBySource(citations: Citation[]): Citation[] {

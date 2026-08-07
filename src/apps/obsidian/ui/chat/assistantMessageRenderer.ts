@@ -37,7 +37,7 @@ export function renderAssistantMessageContent(
     renderFallbackBanner(contentEl, message.fallbackReason);
   }
   const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
-  renderAssistantAnswer(answerEl, message, options);
+  renderAssistantAnswer(answerEl, message, options, hasWorkflow);
 }
 
 export function patchAssistantMessageContent(
@@ -66,7 +66,7 @@ export function patchAssistantMessageContent(
   }
   disposeAnswerArtifacts(answerEl);
   answerEl.empty();
-  renderAssistantAnswer(answerEl, message, options);
+  renderAssistantAnswer(answerEl, message, options, hasWorkflow);
   return true;
 }
 
@@ -83,12 +83,13 @@ function renderAssistantAnswer(
   answerEl: HTMLElement,
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
+  hasWorkflow: boolean,
 ): void {
   const citationRefs = buildCitationRefs(citationEvidence(message));
   const versionTracker = renderVersionsByAnswer.get(answerEl) ?? new RenderVersionTracker();
   renderVersionsByAnswer.set(answerEl, versionTracker);
   const renderVersion = versionTracker.next();
-  renderAssistantAnswerHeader(answerEl, message, options);
+  renderAssistantAnswerHeader(answerEl, message, options, hasWorkflow);
   void MarkdownRenderer.render(
     options.app,
     answerMarkdown(message),
@@ -106,29 +107,36 @@ function renderAssistantAnswer(
 }
 
 /**
- * The model cites web sources with the `[url:https://…]` handle. Left as-is it
- * renders as inert text, so it becomes a short clickable link before Markdown
- * rendering; unresolvable handles stay untouched.
+ * The model cites web sources with the `[url:https://…]` handle. While a run
+ * streams the handle has not been resolved yet, so it becomes a short clickable
+ * link to stay readable. A completed answer carries normalized handles that the
+ * citation anchors render instead, and is left untouched.
  */
 function answerMarkdown(message: ChatDisplayMessage): string {
-  return linkifyUrlCitations(messageMarkdownContent(message), {
-    label: shortUrlCitationLabel,
-  });
+  const content = messageMarkdownContent(message);
+  return message.answer ? content : linkifyUrlCitations(content, { label: shortUrlCitationLabel });
 }
 
+/**
+ * The status dot terminates the workflow timeline, so it is rendered only for a
+ * message that has one; an Instant run shows no timeline and no dot.
+ */
 function renderAssistantAnswerHeader(
   answerEl: HTMLElement,
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
+  hasWorkflow: boolean,
 ): void {
   const hasFinalAnswerText = messageMarkdownContent(message).trim().length > 0;
   if (!hasFinalAnswerText && !shouldShowAnswerNoteActions(message)) return;
 
   const header = answerEl.createDiv({ cls: "ixplorer-chat__answer-header" });
-  header.createSpan({
-    cls: "ixplorer-chat__answer-status-dot",
-    attr: { "aria-hidden": "true" },
-  });
+  if (hasWorkflow) {
+    header.createSpan({
+      cls: "ixplorer-chat__answer-status-dot",
+      attr: { "aria-hidden": "true" },
+    });
+  }
   const actions = header.createDiv({ cls: "ixplorer-chat__answer-actions" });
   createMessageIconButton(actions, "copy", "Copy message", "ixplorer-chat__message-copy", () => {
     void copyToClipboard(messageDisplayContent(message));
