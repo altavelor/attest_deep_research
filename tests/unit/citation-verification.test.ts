@@ -28,6 +28,15 @@ describe("verifyCitations", () => {
     expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
   });
 
+  it("ignores a web-reference token that has no evidence to verify against", () => {
+    const evidence = [
+      chunk("e1", "The document discusses medieval agricultural crop rotation techniques."),
+    ];
+    const answer =
+      "Quarterly revenue grew by forty percent driven by strong cloud subscription sales [web-ref-1].";
+    expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
+  });
+
   it("flags a claim that does not lexically overlap the cited chunk", () => {
     const evidence = [
       chunk("e1", "The document discusses medieval agricultural crop rotation techniques."),

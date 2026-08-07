@@ -201,6 +201,104 @@ describe("ThinkingResearchStrategy failure paths", () => {
   });
 });
 
+describe("ThinkingResearchStrategy citation normalization", () => {
+  const webSource = {
+    id: "c1",
+    kind: "web" as const,
+    title: "Pricing",
+    url: "https://openai.com/pricing",
+    snippet: "",
+    retrievedAt: "2026-01-01T00:00:00.000Z",
+    wasContentFetched: true,
+  };
+
+  function webRetriever() {
+    const chunk = {
+      id: "c1",
+      text: "GPT-4o costs $2.50 per 1M input tokens.",
+      score: 1,
+      contentHash: "c1",
+      source: webSource,
+    };
+    return {
+      search: async () => ({
+        chunks: [chunk],
+        citations: [{ id: "c1", source: webSource }],
+        usedFallback: false,
+      }),
+    };
+  }
+
+  function answering(text: string): ModelRoundProvider & { requests: ModelRoundRequest[] } {
+    return scriptedRounds((_request, index) =>
+      index === 1
+        ? {
+            items: [
+              {
+                type: "toolCall" as const,
+                call: { id: "1", name: "search_index", arguments: { query: "x" } },
+              },
+            ],
+            stopReason: "tool_calls" as const,
+          }
+        : { items: [{ type: "text" as const, text }], stopReason: "complete" as const },
+    );
+  }
+
+  function strategyWithWebEvidence(modelRound: ModelRoundProvider): ThinkingResearchStrategy {
+    const deps = {
+      chatModelName: "m",
+      chatOptions: {},
+      modelRound,
+      modelRoundFactory: () => modelRound,
+      retriever: webRetriever(),
+      evidenceLimit: 5,
+      toolsetFactory: createResearchToolRegistry,
+      toolsEnabled: true,
+      toolCapabilities: CAPABILITIES,
+      now: fixedNow,
+    } as unknown as ResearchStrategyDeps;
+    return new ThinkingResearchStrategy(deps);
+  }
+
+  it("resolves a url handle to its evidence id and cites it", async () => {
+    const modelRound = answering("GPT-4o costs $2.50 [url:https://openai.com/pricing].");
+
+    const { events } = await drain(strategyWithWebEvidence(modelRound).execute(context()));
+
+    const complete = events.find((event) => event.type === "complete");
+    expect(complete).toMatchObject({
+      answer: {
+        answer: "GPT-4o costs $2.50 [c1].",
+        citations: [{ id: "c1" }],
+      },
+    });
+    expect((complete as { answer: { webReferences?: unknown } }).answer.webReferences).toBe(
+      undefined,
+    );
+  });
+
+  it("records a cited page without evidence as a web reference, not as evidence", async () => {
+    const modelRound = answering(
+      "Costs $2.50 [url:https://openai.com/pricing] but see [url:https://example.com/unseen].",
+    );
+
+    const { events } = await drain(strategyWithWebEvidence(modelRound).execute(context()));
+
+    const complete = events.find((event) => event.type === "complete");
+    expect(complete).toMatchObject({
+      answer: {
+        answer: "Costs $2.50 [c1] but see [web-ref-1].",
+        citations: [{ id: "c1" }],
+        webReferences: [{ id: "web-ref-1", url: "https://example.com/unseen" }],
+      },
+    });
+    if (complete?.type !== "complete") throw new Error("no completion");
+    expect(complete.answer.evidence?.map((chunk) => chunk.id)).toEqual(["c1"]);
+    expect(complete.answer.citations.map((citation) => citation.id)).toEqual(["c1"]);
+  });
+});
+
 describe("ThinkingResearchStrategy web source tracing", () => {
   function tracingSearchProvider(): SearchProvider {
     return {
