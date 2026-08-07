@@ -7,6 +7,8 @@ import {
   selectWebSources,
   WebQueryIntent,
   WebSelectionMode,
+  WebSourceCandidate,
+  WebSourceExclusion,
   WebSourceExclusionReason,
 } from "@core/web";
 import {
@@ -212,41 +214,75 @@ export class WebQueryPlanner implements SearchProvider {
       },
     );
 
-    const diagnostics: WebSourceDiagnostic[] = selection.excluded.map((exclusion) => ({
-      sourceId: exclusion.sourceId,
-      label: byId.get(exclusion.sourceId)?.descriptor.label ?? exclusion.sourceId,
-      activation: exclusion.activation,
-      outcome: "excluded" as const,
-      reason: exclusionReason(exclusion.reason, context.mode, intent),
-    }));
+    const diagnostics: WebSourceDiagnostic[] = [];
+    const filtered: WebSourceExclusion[] = [];
 
-    const planned: PlannedSource[] = [];
-
-    for (const candidate of selection.ordered) {
-      const source = byId.get(candidate.descriptor.id);
-      if (!source) {
+    for (const exclusion of selection.excluded) {
+      if (exclusion.reason === "intent-mismatch") {
+        filtered.push(exclusion);
         continue;
       }
-      const issue = this.health.getIssue(candidate.descriptor.id);
-      if (issue) {
-        diagnostics.push({
+      diagnostics.push({
+        sourceId: exclusion.sourceId,
+        label: byId.get(exclusion.sourceId)?.descriptor.label ?? exclusion.sourceId,
+        activation: exclusion.activation,
+        outcome: "excluded",
+        reason: exclusionReason(exclusion.reason, context.mode, intent),
+      });
+    }
+
+    const planned: PlannedSource[] = [];
+    const admit = (candidates: readonly WebSourceCandidate[]): void => {
+      for (const candidate of candidates) {
+        const source = byId.get(candidate.descriptor.id);
+        if (!source) {
+          continue;
+        }
+        const issue = this.health.getIssue(candidate.descriptor.id);
+        if (issue) {
+          diagnostics.push({
+            sourceId: candidate.descriptor.id,
+            label: candidate.descriptor.label,
+            activation: candidate.activation,
+            outcome: "health-skipped",
+            reason: issue.reason,
+          });
+          continue;
+        }
+        const diagnostic: WebSourceDiagnostic = {
           sourceId: candidate.descriptor.id,
           label: candidate.descriptor.label,
           activation: candidate.activation,
-          outcome: "health-skipped",
-          reason: issue.reason,
-        });
-        continue;
+          outcome: "deadline-exceeded",
+          queryOrder: planned.length + 1,
+        };
+        planned.push({ source, diagnostic });
+        diagnostics.push(diagnostic);
       }
-      const diagnostic: WebSourceDiagnostic = {
-        sourceId: candidate.descriptor.id,
-        label: candidate.descriptor.label,
-        activation: candidate.activation,
-        outcome: "deadline-exceeded",
-        queryOrder: planned.length + 1,
-      };
-      planned.push({ source, diagnostic });
-      diagnostics.push(diagnostic);
+    };
+
+    admit(selection.ordered);
+
+    if (planned.length === 0 && filtered.length > 0) {
+      admit(
+        filtered.flatMap((exclusion) => {
+          const source = byId.get(exclusion.sourceId);
+          return source
+            ? [{ descriptor: source.descriptor, activation: exclusion.activation }]
+            : [];
+        }),
+      );
+      return { planned, diagnostics };
+    }
+
+    for (const exclusion of filtered) {
+      diagnostics.push({
+        sourceId: exclusion.sourceId,
+        label: byId.get(exclusion.sourceId)?.descriptor.label ?? exclusion.sourceId,
+        activation: exclusion.activation,
+        outcome: "intent-filtered",
+        reason: exclusionReason(exclusion.reason, context.mode, intent),
+      });
     }
 
     return { planned, diagnostics };
@@ -452,6 +488,9 @@ function exclusionReason(
   }
   if (reason === "no-search-capability") {
     return "source does not support search";
+  }
+  if (reason === "intent-mismatch") {
+    return `no signal for intent: ${intent ?? "unknown"}`;
   }
   return intent ? `disabled (intent: ${intent})` : "disabled";
 }

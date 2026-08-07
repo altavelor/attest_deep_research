@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 
+import { isRecord } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { IxplorerError } from "@core/errors";
 import { mapOpenAiMessage } from "../providers/messageMappers";
@@ -21,7 +22,7 @@ export async function* streamOpenAiCompatibleChat({
   translateError,
   onReasoningObserved,
 }: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
-  const body = {
+  const baseBody = {
     model: request.model,
     messages: request.messages.map(mapOpenAiMessage),
     temperature: request.temperature,
@@ -33,15 +34,30 @@ export async function* streamOpenAiCompatibleChat({
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
+  const reasoning = reasoningBody(request);
 
-  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  try {
-    stream = await openai.chat.completions.create(
+  const open = (
+    body: Record<string, unknown>,
+  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> =>
+    openai.chat.completions.create(
       body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
       { signal: request.signal },
     );
-  } catch (error) {
-    throw translateError(error);
+
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  let attempt = reasoning;
+  let firstError: unknown;
+  for (;;) {
+    try {
+      stream = await open({ ...baseBody, ...attempt });
+      break;
+    } catch (error) {
+      firstError ??= error;
+      if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
+        throw translateError(firstError);
+      }
+      attempt = withoutRejectedFields(attempt, error);
+    }
   }
 
   const toolCallBuilder = new ToolCallBuilder();
@@ -157,6 +173,62 @@ export async function* streamOpenAiCompatibleChat({
     events,
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
   };
+}
+
+/**
+ * Mirrors the reasoning switch onto the two body dialects openai-compatible
+ * gateways understand: `reasoning` for OpenRouter-style routers and
+ * `chat_template_kwargs.enable_thinking` for vLLM-style hybrid models. Nothing is
+ * sent when the caller states no preference, so unaware providers see no new field.
+ */
+function reasoningBody(request: ChatRequest): Record<string, unknown> {
+  if (request.reasoningEnabled === undefined) {
+    return {};
+  }
+  return {
+    reasoning: {
+      enabled: request.reasoningEnabled,
+      ...(request.reasoningEnabled && request.reasoningEffort
+        ? { effort: request.reasoningEffort }
+        : {}),
+    },
+    chat_template_kwargs: { enable_thinking: request.reasoningEnabled },
+  };
+}
+
+/**
+ * True when the provider refused the request body itself, which is how a server
+ * with strict validation answers a field it does not know. Any other failure
+ * belongs to the caller and must not be retried.
+ */
+function rejectsUnknownField(error: unknown): boolean {
+  const status: unknown = isRecord(error) ? error.status : undefined;
+  return status === 400 || status === 422;
+}
+
+/**
+ * Drops only the dialects the provider named in its refusal, so a gateway that
+ * understands one of them still receives it on the retry. A refusal that names
+ * none of them costs the whole reasoning body, which is the previous behaviour
+ * and keeps the retry loop finite.
+ */
+function withoutRejectedFields(
+  fields: Record<string, unknown>,
+  error: unknown,
+): Record<string, unknown> {
+  const message = refusalText(error).toLowerCase();
+  const kept = Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !message.includes(key.toLowerCase())),
+  );
+  return Object.keys(kept).length === Object.keys(fields).length ? {} : kept;
+}
+
+function refusalText(error: unknown): string {
+  if (!isRecord(error)) {
+    return "";
+  }
+  const nested: unknown = isRecord(error.error) ? error.error.message : undefined;
+  return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {

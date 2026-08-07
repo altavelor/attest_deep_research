@@ -102,6 +102,19 @@ describe("selectWebSources", () => {
     );
   });
 
+  it("does not narrow the instant pool when the caller supplies an intent", () => {
+    const withIntent = selectWebSources(catalogCandidates(), {
+      mode: "instant",
+      intent: "academic",
+    });
+    const withoutIntent = selectWebSources(catalogCandidates(), { mode: "instant" });
+
+    expect(withIntent.ordered.map((c) => c.descriptor.id)).toEqual(
+      withoutIntent.ordered.map((c) => c.descriptor.id),
+    );
+    expect(withIntent.excluded.every((e) => e.reason !== "intent-mismatch")).toBe(true);
+  });
+
   it("keeps an `always` source in instant mode regardless of its category", () => {
     const candidates = WEB_SOURCE_CATALOG.map((descriptor) => ({
       descriptor,
@@ -113,44 +126,135 @@ describe("selectWebSources", () => {
     expect(selection.excluded.some((e) => e.sourceId === "arxiv")).toBe(false);
   });
 
-  it("never drops a source for intent or language in thinking mode — only reorders", () => {
+  it("drops the sources that carry no signal for the intent in thinking mode", () => {
     const all = catalogCandidates();
     const academic = selectWebSources(all, { mode: "thinking", intent: "academic" });
-    const russian = selectWebSources(all, {
-      mode: "thinking",
-      intent: "academic",
-      language: "ru",
-    });
 
-    const searchable = all.filter((c) => c.descriptor.capabilities?.search !== false);
-    expect(academic.ordered).toHaveLength(searchable.length);
-    expect(russian.ordered).toHaveLength(searchable.length);
+    const planned = academic.ordered.map((c) => c.descriptor.id);
+    expect(planned).toContain("arxiv");
+    expect(planned).toContain("duckduckgo");
+    expect(planned).not.toContain("wikipedia");
+    expect(planned).not.toContain("stackexchange");
+    expect(planned).not.toContain("newsapi");
     expect(academic.ordered[0].descriptor.category).toBe("academic");
-    expect(russian.ordered.some((c) => c.descriptor.id === "arxiv")).toBe(true);
+    expect(academic.excluded.find((e) => e.sourceId === "newsapi")?.reason).toBe("intent-mismatch");
   });
 
-  it("reaches a source whose strengths match no intent table (exa)", () => {
-    const selection = selectWebSources(catalogCandidates(), { mode: "thinking", intent: "news" });
-    expect(selection.ordered.some((c) => c.descriptor.id === "exa")).toBe(true);
+  it("keeps the encyclopedic pool down to the encyclopedia and the generalists", () => {
+    const selection = selectWebSources(catalogCandidates(), {
+      mode: "thinking",
+      intent: "encyclopedic",
+    });
+
+    expect(selection.ordered[0].descriptor.id).toBe("wikipedia");
+    expect(selection.ordered.map((c) => c.descriptor.id)).toEqual(
+      expect.not.arrayContaining(["arxiv", "semantic-scholar", "github", "newsapi"]),
+    );
+    expect(selection.ordered.every((c) => c.descriptor.category !== "academic")).toBe(true);
+  });
+
+  it("orders sources by how much of the intent their tags cover", () => {
+    const selection = selectWebSources(catalogCandidates(), { mode: "thinking", intent: "code" });
+
+    const position = (id: string) => selection.ordered.findIndex((c) => c.descriptor.id === id);
+    expect(position("stackexchange")).toBeGreaterThanOrEqual(0);
+    expect(position("stackexchange")).toBeLessThan(position("github"));
+    expect(position("github")).toBeLessThan(position("hackernews"));
+  });
+
+  it("does not add up a tag match and a category match for the same source", () => {
+    const github = WEB_SOURCE_CATALOG.find((d) => d.id === "github")!;
+    const selection = selectWebSources(
+      [
+        {
+          descriptor: { ...github, id: "narrow-community", strengths: ["code", "qa"] },
+          activation: "auto",
+        },
+        {
+          descriptor: {
+            ...github,
+            id: "broad-outsider",
+            category: "serp",
+            strengths: ["code", "qa", "troubleshooting", "repositories"],
+          },
+          activation: "auto",
+        },
+      ],
+      { mode: "thinking", intent: "code" },
+    );
+
+    expect(selection.ordered.map((c) => c.descriptor.id)).toEqual([
+      "broad-outsider",
+      "narrow-community",
+    ]);
+  });
+
+  it("treats a generalist the same way under general and under a specialized intent", () => {
+    const candidates = catalogCandidates();
+    const general = selectWebSources(candidates, { mode: "thinking", intent: "general" });
+    const academic = selectWebSources(candidates, { mode: "thinking", intent: "academic" });
+
+    for (const id of ["duckduckgo", "exa", "tavily"]) {
+      expect(general.ordered.some((c) => c.descriptor.id === id)).toBe(true);
+      expect(academic.ordered.some((c) => c.descriptor.id === id)).toBe(true);
+    }
+    const rank = (selection: typeof general, id: string) =>
+      selection.ordered.findIndex((c) => c.descriptor.id === id);
+    expect(rank(general, "exa")).toBeLessThan(rank(general, "jina"));
+    expect(rank(academic, "exa")).toBeLessThan(rank(academic, "jina"));
+  });
+
+  it("keeps wikipedia on a general query while dropping the specialists", () => {
+    const planned = selectWebSources(catalogCandidates(), {
+      mode: "thinking",
+      intent: "general",
+    }).ordered.map((c) => c.descriptor.id);
+
+    expect(planned).toContain("wikipedia");
+    expect(planned).toContain("duckduckgo");
+    expect(planned).not.toContain("newsapi");
+    expect(planned).not.toContain("arxiv");
+  });
+
+  it("plans every enabled source when no source qualifies for the intent", () => {
+    const academicOnly = WEB_SOURCE_CATALOG.filter((d) => d.category === "academic").map(
+      (descriptor) => ({ descriptor, activation: "auto" as const }),
+    );
+    const selection = selectWebSources(academicOnly, { mode: "thinking", intent: "news" });
+
+    expect(selection.ordered).toHaveLength(academicOnly.length);
+    expect(selection.excluded).toHaveLength(0);
+  });
+
+  it("does not filter by intent when the intent is unknown", () => {
+    const all = catalogCandidates();
+    const selection = selectWebSources(all, { mode: "thinking", language: "ru" });
+
+    const searchable = all.filter((c) => c.descriptor.capabilities?.search !== false);
+    expect(selection.ordered).toHaveLength(searchable.length);
+    expect(selection.excluded.every((e) => e.reason !== "intent-mismatch")).toBe(true);
+  });
+
+  it("keeps an `always` source that carries no signal for the intent", () => {
+    const candidates = WEB_SOURCE_CATALOG.map((descriptor) => ({
+      descriptor,
+      activation: descriptor.id === "arxiv" ? ("always" as const) : ("auto" as const),
+    }));
+    const selection = selectWebSources(candidates, { mode: "thinking", intent: "encyclopedic" });
+
+    expect(selection.ordered[0].descriptor.id).toBe("arxiv");
+    expect(selection.excluded.some((e) => e.sourceId === "arxiv")).toBe(false);
   });
 
   it("ranks an english-only source lower for a russian query but keeps it", () => {
     const candidates = catalogCandidates();
-    const ru = selectWebSources(candidates, {
-      mode: "thinking",
-      intent: "general",
-      language: "ru",
-    });
-    const en = selectWebSources(candidates, {
-      mode: "thinking",
-      intent: "general",
-      language: "en",
-    });
+    const ru = selectWebSources(candidates, { mode: "thinking", intent: "code", language: "ru" });
+    const en = selectWebSources(candidates, { mode: "thinking", intent: "code", language: "en" });
 
     const position = (selection: typeof ru, id: string) =>
       selection.ordered.findIndex((c) => c.descriptor.id === id);
-    expect(position(ru, "arxiv")).toBeGreaterThan(position(en, "arxiv"));
-    expect(position(ru, "arxiv")).toBeGreaterThanOrEqual(0);
+    expect(position(ru, "github")).toBeGreaterThan(position(en, "github"));
+    expect(position(ru, "github")).toBeGreaterThanOrEqual(0);
   });
 
   it("excludes only switched-off sources", () => {
@@ -430,6 +534,111 @@ describe("WebQueryPlanner", () => {
       returnedResults: 1,
       promptResults: 1,
     });
+  });
+
+  it("traces the sources dropped for the intent and does not query them", async () => {
+    const wikipedia = fakeSource("wikipedia", [result("https://wiki.dev/", 1)]);
+    const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
+    const arxivSearch = vi.spyOn(arxiv, "search");
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv] },
+    });
+
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(arxivSearch).not.toHaveBeenCalled();
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("arxiv")).toMatchObject({
+      outcome: "intent-filtered",
+      reason: "no signal for intent: encyclopedic",
+    });
+    expect(byId.get("arxiv")).not.toHaveProperty("queryOrder");
+    expect(byId.get("wikipedia")).toMatchObject({ outcome: "queried", queryOrder: 1 });
+  });
+
+  it("falls back to the sources dropped for the intent when every qualified one is suspended", async () => {
+    const unauthorized = new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: "Wikipedia rejected the credentials.",
+      details: { sourceId: "wikipedia", reason: "unauthorized" },
+    });
+    const wikipedia = fakeSource("wikipedia", unauthorized);
+    const arxiv = fakeSource("arxiv", [result("https://arxiv.org/1", 1)]);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv] },
+    });
+
+    await planner.search("что такое нарзан", { intent: "encyclopedic" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const results = await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results.map((item) => item.source.url)).toEqual(["https://arxiv.org/1"]);
+    const reported = traces[0].sources.map((entry) => entry.sourceId);
+    expect(reported).toHaveLength(new Set(reported).size);
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("wikipedia")).toMatchObject({ outcome: "health-skipped" });
+    expect(byId.get("arxiv")).toMatchObject({ outcome: "queried", queryOrder: 1 });
+  });
+
+  it("queries the intent fallback by score rather than by registry order", async () => {
+    const unauthorized = new IxplorerError({
+      code: "WEB_SEARCH_FAILED",
+      message: "Wikipedia rejected the credentials.",
+      details: { sourceId: "wikipedia", reason: "unauthorized" },
+    });
+    const wikipedia = fakeSource("wikipedia", unauthorized);
+    const arxiv = fakeSource("arxiv", []);
+    const newsapi = fakeSource("newsapi", []);
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv, newsapi] },
+    });
+
+    await planner.search("что такое нарзан", { intent: "encyclopedic", language: "ru" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      language: "ru",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    const byId = new Map(traces[0].sources.map((entry) => [entry.sourceId, entry]));
+    expect(byId.get("newsapi")?.queryOrder).toBe(1);
+    expect(byId.get("arxiv")?.queryOrder).toBe(2);
+  });
+
+  it("reports every source when the intent fallback finds nothing healthy either", async () => {
+    const suspend = (sourceId: string) =>
+      new IxplorerError({
+        code: "WEB_SEARCH_FAILED",
+        message: `${sourceId} rejected the credentials.`,
+        details: { sourceId, reason: "unauthorized" },
+      });
+    const wikipedia = fakeSource("wikipedia", suspend("wikipedia"));
+    const arxiv = fakeSource("arxiv", suspend("arxiv"));
+    const planner = new WebQueryPlanner({
+      registry: { enabledSources: () => [wikipedia, arxiv] },
+    });
+
+    await planner.search("recent papers on nitrogen", { intent: "academic" });
+    await planner.search("что такое нарзан", { intent: "encyclopedic" });
+    const traces: WebSourceSelectionDiagnostics[] = [];
+    const results = await planner.search("что такое нарзан", {
+      intent: "encyclopedic",
+      onSourceSelection: (d) => traces.push(d),
+    });
+
+    expect(results).toEqual([]);
+    expect(traces[0].sources.map((entry) => entry.outcome)).toEqual([
+      "health-skipped",
+      "health-skipped",
+    ]);
   });
 
   it("keeps results from healthy sources when one source fails", async () => {
