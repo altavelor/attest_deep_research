@@ -75,6 +75,21 @@ describe("normalizeCitationTokens", () => {
     expect([...ids]).toEqual([]);
   });
 
+  it("drops a destination whose url contains nested parentheses", () => {
+    const wiki = "https://en.wikipedia.org/wiki/Mercury_(planet)";
+    const index = new Map<string, string>([[wiki, "web:hash-mercury"]]);
+    const { text } = normalizeCitationTokens(`See [url:${wiki}](${wiki}).`, index);
+    expect(text).toBe("See [web:hash-mercury].");
+  });
+
+  it("keeps parenthesised prose that follows a token", () => {
+    const { text } = normalizeCitationTokens(
+      "Claim [web:hash-gemini](see the appendix) holds.",
+      urlToEvidenceId,
+    );
+    expect(text).toBe("Claim [web:hash-gemini](see the appendix) holds.");
+  });
+
   it("keeps ordinary bracketed prose out of the citations", () => {
     const { text, ids } = normalizeCitationTokens("note [Important note] and [ok]", new Map());
     expect(text).toBe("note [Important note] and [ok]");

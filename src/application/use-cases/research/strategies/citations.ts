@@ -40,7 +40,7 @@ export interface NormalizedCitationTokens {
   webReferences: AnswerWebReference[];
 }
 
-const CITATION_TOKEN = /\[([^\]\n]{1,200})\](\([^()\s]*\))?/g;
+const CITATION_TOKEN = /\[([^\]\n]{1,200})\]/g;
 
 /**
  * Rewrite the answer's `[…]` citation tokens into a single handle form the
@@ -58,35 +58,71 @@ export function normalizeCitationTokens(
   const ids = new Set<string>();
   const webReferenceIdByUrl = new Map<string, string>();
 
-  const rewritten = text.replace(
-    CITATION_TOKEN,
-    (whole, inner: string, destination: string | undefined) => {
-      const token = inner.trim();
-      if (!token.startsWith("url:")) {
-        if (!isCitationHandle(token) || destination !== undefined) return whole;
-        ids.add(token);
-        return `[${token}]`;
-      }
+  const resolveUrlToken = (url: string): string => {
+    const evidenceId = urlToEvidenceId.get(url);
+    if (evidenceId) {
+      ids.add(evidenceId);
+      return evidenceId;
+    }
+    const existing = webReferenceIdByUrl.get(url);
+    if (existing) return existing;
+    const referenceId = `${WEB_REFERENCE_ID_PREFIX}${webReferenceIdByUrl.size + 1}`;
+    webReferenceIdByUrl.set(url, referenceId);
+    return referenceId;
+  };
+
+  let rewritten = "";
+  let copiedUpTo = 0;
+  for (const match of text.matchAll(CITATION_TOKEN)) {
+    const start = match.index;
+    if (start === undefined || start < copiedUpTo) continue;
+    const token = match[1].trim();
+    const destinationLength = markdownDestinationLength(text, start + match[0].length);
+    let replacement: string;
+    if (token.startsWith("url:")) {
       const validated = validatePublicWebUrl(token.slice("url:".length).trim());
-      if (!validated.ok) return whole;
-      const evidenceId = urlToEvidenceId.get(validated.url);
-      if (evidenceId) {
-        ids.add(evidenceId);
-        return `[${evidenceId}]`;
-      }
-      const existing = webReferenceIdByUrl.get(validated.url);
-      if (existing) return `[${existing}]`;
-      const referenceId = `${WEB_REFERENCE_ID_PREFIX}${webReferenceIdByUrl.size + 1}`;
-      webReferenceIdByUrl.set(validated.url, referenceId);
-      return `[${referenceId}]`;
-    },
-  );
+      if (!validated.ok) continue;
+      replacement = `[${resolveUrlToken(validated.url)}]`;
+    } else {
+      if (!isCitationHandle(token) || destinationLength > 0) continue;
+      ids.add(token);
+      replacement = `[${token}]`;
+    }
+    rewritten += text.slice(copiedUpTo, start) + replacement;
+    copiedUpTo = start + match[0].length + destinationLength;
+  }
+  rewritten += text.slice(copiedUpTo);
 
   return {
     text: collapseAdjacentTokens(rewritten),
     ids,
     webReferences: [...webReferenceIdByUrl].map(([url, id]) => ({ id, url })),
   };
+}
+
+/**
+ * Length of the markdown link destination starting at `index`, or 0 when there
+ * is none. Parentheses nest, as in a Wikipedia disambiguator, and a backslash
+ * escapes the character after it; whitespace ends a destination, so ordinary
+ * parenthesised prose after a token is never consumed.
+ */
+function markdownDestinationLength(text: string, index: number): number {
+  if (text[index] !== "(") return 0;
+  let depth = 0;
+  for (let cursor = index; cursor < text.length; cursor += 1) {
+    const character = text[cursor];
+    if (character === "\\") {
+      cursor += 1;
+      continue;
+    }
+    if (/\s/.test(character)) return 0;
+    if (character === "(") depth += 1;
+    else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) return cursor - index + 1;
+    }
+  }
+  return 0;
 }
 
 /**
