@@ -45,16 +45,18 @@ export async function* streamOpenAiCompatibleChat({
     );
 
   let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  try {
-    stream = await open({ ...baseBody, ...reasoning });
-  } catch (error) {
-    if (Object.keys(reasoning).length === 0 || !rejectsUnknownField(error)) {
-      throw translateError(error);
-    }
+  let attempt = reasoning;
+  let firstError: unknown;
+  for (;;) {
     try {
-      stream = await open(baseBody);
-    } catch {
-      throw translateError(error);
+      stream = await open({ ...baseBody, ...attempt });
+      break;
+    } catch (error) {
+      firstError ??= error;
+      if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
+        throw translateError(firstError);
+      }
+      attempt = withoutRejectedFields(attempt, error);
     }
   }
 
@@ -202,6 +204,31 @@ function reasoningBody(request: ChatRequest): Record<string, unknown> {
 function rejectsUnknownField(error: unknown): boolean {
   const status: unknown = isRecord(error) ? error.status : undefined;
   return status === 400 || status === 422;
+}
+
+/**
+ * Drops only the dialects the provider named in its refusal, so a gateway that
+ * understands one of them still receives it on the retry. A refusal that names
+ * none of them costs the whole reasoning body, which is the previous behaviour
+ * and keeps the retry loop finite.
+ */
+function withoutRejectedFields(
+  fields: Record<string, unknown>,
+  error: unknown,
+): Record<string, unknown> {
+  const message = refusalText(error).toLowerCase();
+  const kept = Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !message.includes(key.toLowerCase())),
+  );
+  return Object.keys(kept).length === Object.keys(fields).length ? {} : kept;
+}
+
+function refusalText(error: unknown): string {
+  if (!isRecord(error)) {
+    return "";
+  }
+  const nested: unknown = isRecord(error.error) ? error.error.message : undefined;
+  return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {

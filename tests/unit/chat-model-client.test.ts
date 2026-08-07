@@ -195,12 +195,12 @@ describe("ChatModelClient", () => {
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
-  it("retries without the reasoning fields when the provider rejects them", async () => {
+  it("keeps the reasoning dialect the provider did not reject", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         jsonResponse(
-          { error: { message: "Unrecognized request argument supplied: reasoning" } },
+          { error: { message: "Unrecognized request argument supplied: chat_template_kwargs" } },
           { status: 400 },
         ),
       )
@@ -228,8 +228,80 @@ describe("ChatModelClient", () => {
     expect(chunks.join("")).toContain("news");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retried.reasoning).toEqual({ enabled: false });
+    expect(retried).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("retries without any reasoning dialect when the refusal names none of them", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unsupported parameter" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      expect(chunk).toBeDefined();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
     expect(retried).not.toHaveProperty("reasoning");
     expect(retried).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("gives up one dialect at a time when the provider rejects both", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: "unknown field: chat_template_kwargs" } },
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unknown field: reasoning" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      expect(chunk).toBeDefined();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)));
+    expect(bodies[1].reasoning).toEqual({ enabled: false });
+    expect(bodies[1]).not.toHaveProperty("chat_template_kwargs");
+    expect(bodies[2]).not.toHaveProperty("reasoning");
+    expect(bodies[2]).not.toHaveProperty("chat_template_kwargs");
   });
 
   it("reports the original failure when the retry without reasoning fields also fails", async () => {
