@@ -40,15 +40,16 @@ export interface NormalizedCitationTokens {
   webReferences: AnswerWebReference[];
 }
 
-const CITATION_TOKEN = /\[([^\]\n]{1,200})\]/g;
+const CITATION_TOKEN = /\[([^\]\n]{1,200})\](\([^()\s]*\))?/g;
 
 /**
  * Rewrite the answer's `[…]` citation tokens into a single handle form the
  * renderer can anchor. Models cite web sources by `[url:https://…]`; a URL that
  * maps to gathered evidence becomes that evidence id, one that does not becomes
- * a stable web-reference handle. Handle-shaped tokens are kept as cited ids,
- * ordinary bracketed prose is left untouched, and adjacent repeats of the same
- * handle collapse into one.
+ * a stable web-reference handle. A url token written as a markdown link loses
+ * its destination too, so no link survives the rewrite. Handle-shaped tokens are
+ * kept as cited ids, ordinary bracketed prose and genuine markdown links are
+ * left untouched, and adjacent repeats of the same handle collapse into one.
  */
 export function normalizeCitationTokens(
   text: string,
@@ -57,26 +58,29 @@ export function normalizeCitationTokens(
   const ids = new Set<string>();
   const webReferenceIdByUrl = new Map<string, string>();
 
-  const rewritten = text.replace(CITATION_TOKEN, (whole, inner: string, offset: number) => {
-    const token = inner.trim();
-    if (!token.startsWith("url:")) {
-      if (!isCitationHandle(token) || text[offset + whole.length] === "(") return whole;
-      ids.add(token);
-      return `[${token}]`;
-    }
-    const validated = validatePublicWebUrl(token.slice("url:".length).trim());
-    if (!validated.ok) return whole;
-    const evidenceId = urlToEvidenceId.get(validated.url);
-    if (evidenceId) {
-      ids.add(evidenceId);
-      return `[${evidenceId}]`;
-    }
-    const existing = webReferenceIdByUrl.get(validated.url);
-    if (existing) return `[${existing}]`;
-    const referenceId = `${WEB_REFERENCE_ID_PREFIX}${webReferenceIdByUrl.size + 1}`;
-    webReferenceIdByUrl.set(validated.url, referenceId);
-    return `[${referenceId}]`;
-  });
+  const rewritten = text.replace(
+    CITATION_TOKEN,
+    (whole, inner: string, destination: string | undefined) => {
+      const token = inner.trim();
+      if (!token.startsWith("url:")) {
+        if (!isCitationHandle(token) || destination !== undefined) return whole;
+        ids.add(token);
+        return `[${token}]`;
+      }
+      const validated = validatePublicWebUrl(token.slice("url:".length).trim());
+      if (!validated.ok) return whole;
+      const evidenceId = urlToEvidenceId.get(validated.url);
+      if (evidenceId) {
+        ids.add(evidenceId);
+        return `[${evidenceId}]`;
+      }
+      const existing = webReferenceIdByUrl.get(validated.url);
+      if (existing) return `[${existing}]`;
+      const referenceId = `${WEB_REFERENCE_ID_PREFIX}${webReferenceIdByUrl.size + 1}`;
+      webReferenceIdByUrl.set(validated.url, referenceId);
+      return `[${referenceId}]`;
+    },
+  );
 
   return {
     text: collapseAdjacentTokens(rewritten),

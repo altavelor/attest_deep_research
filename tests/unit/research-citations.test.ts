@@ -90,13 +90,23 @@ describe("normalizeCitationTokens", () => {
     expect(ids.size).toBe(0);
   });
 
-  it("still resolves a url handle used as a markdown link label", () => {
+  it("drops the markdown destination of a url handle written as a link", () => {
     const { text, ids } = normalizeCitationTokens(
       "See [url:https://openai.com/pricing](https://openai.com/pricing).",
       urlToEvidenceId,
     );
-    expect(text).toBe("See [web:hash-openai](https://openai.com/pricing).");
+    expect(text).toBe("See [web:hash-openai].");
     expect([...ids]).toEqual(["web:hash-openai"]);
+  });
+
+  it("leaves no link behind for a cited page without evidence written as a link", () => {
+    const { text, webReferences } = normalizeCitationTokens(
+      "See [url:https://example.com/unseen](https://example.com/unseen).",
+      urlToEvidenceId,
+    );
+    expect(text).toBe("See [web-ref-1].");
+    expect(text).not.toContain("https://example.com/unseen)");
+    expect(webReferences).toEqual([{ id: "web-ref-1", url: "https://example.com/unseen" }]);
   });
 
   it("leaves malformed url tokens untouched", () => {
