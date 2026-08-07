@@ -49,6 +49,8 @@ export interface ResearchProgressCheckpoint {
   round: number;
   content: string;
   status: "streaming" | "finalizing" | "complete" | "superseded" | "interrupted";
+
+  bodyOffset?: number;
 }
 
 export type ChainItem =

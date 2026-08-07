@@ -263,7 +263,7 @@ describe("chat rendering helpers", () => {
     expect(demoted.at(-1)?.researchProgress?.chain).toEqual([
       { kind: "checkpoint", id: "round-1", round: 1, content: "Narration", status: "complete" },
     ]);
-    expect(demoted.at(-1)?.researchProgress?.checkpoints).toEqual([
+    expect(demoted.at(-1)?.researchProgress?.checkpoints).toMatchObject([
       { id: "round-1", round: 1, content: "Narration", status: "complete" },
     ]);
   });
@@ -279,6 +279,26 @@ describe("chat rendering helpers", () => {
     );
 
     expect(second.at(-1)?.content).toBe("Answer");
+  });
+
+  it("demotes the round that streamed, not a later repeat of its wording", () => {
+    const first = nextAssistantCheckpoint(
+      startAssistantProgress([], "thinking"),
+      "round-1",
+      1,
+      "A",
+    );
+    const second = nextAssistantCheckpoint(first, "round-2", 2, "xA");
+    const demoted = completeAssistantCheckpoint(second, "round-1");
+
+    expect(demoted.at(-1)?.content).toBe("xA");
+    expect(demoted.at(-1)?.researchProgress?.chain).toEqual([
+      { kind: "checkpoint", id: "round-1", round: 1, content: "A", status: "complete" },
+    ]);
+
+    const promoted = promoteAssistantCheckpoint(demoted, "round-2");
+    expect(promoted.at(-1)?.content).toBe("xA");
+    expect(completeAssistantCheckpoint(promoted, "round-2").at(-1)?.content).toBe("");
   });
 
   it("leaves the body untouched when the demoted text is no longer in it", () => {
