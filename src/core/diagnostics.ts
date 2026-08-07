@@ -349,6 +349,7 @@ export interface WebContextDiagnostics {
 export type WebSourceOutcome =
   | "queried"
   | "excluded"
+  | "intent-filtered"
   | "health-skipped"
   | "deadline-exceeded"
   | "cancelled"

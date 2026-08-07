@@ -130,6 +130,7 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
         ],
         temperature: 0,
         maxTokens: 32,
+        reasoningEnabled: false,
         signal,
       })
       [Symbol.asyncIterator]();

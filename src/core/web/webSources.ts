@@ -148,7 +148,7 @@ export const WEB_SOURCE_CATALOG: readonly WebSourceDescriptor[] = [
     id: "exa",
     label: "Exa",
     category: "neural",
-    strengths: ["semantic", "similarity"],
+    strengths: ["general", "semantic", "similarity"],
     credentials: [apiKey()],
     homepage: "https://exa.ai/",
     freeTierNote: "~1,000 searches/month free",

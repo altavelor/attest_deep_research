@@ -165,6 +165,186 @@ describe("ChatModelClient", () => {
     );
   });
 
+  it("turns reasoning off in the Chat Completions body when the caller disables it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"{\\"intent\\":\\"news\\"}"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of client.streamChat({
+      model: "qwen3",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      chunks.push(chunk.content);
+    }
+    expect(chunks.join("")).toContain('"intent":"news"');
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.reasoning).toEqual({ enabled: false });
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
+
+  it("keeps the reasoning dialect the provider did not reject", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: "Unrecognized request argument supplied: chat_template_kwargs" } },
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      chunks.push(chunk.content);
+    }
+
+    expect(chunks.join("")).toContain("news");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retried.reasoning).toEqual({ enabled: false });
+    expect(retried).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("retries without any reasoning dialect when the refusal names none of them", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unsupported parameter" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      expect(chunk).toBeDefined();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retried).not.toHaveProperty("reasoning");
+    expect(retried).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("gives up one dialect at a time when the provider rejects both", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: "unknown field: chat_template_kwargs" } },
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unknown field: reasoning" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"news"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      expect(chunk).toBeDefined();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)));
+    expect(bodies[1].reasoning).toEqual({ enabled: false });
+    expect(bodies[1]).not.toHaveProperty("chat_template_kwargs");
+    expect(bodies[2]).not.toHaveProperty("reasoning");
+    expect(bodies[2]).not.toHaveProperty("chat_template_kwargs");
+  });
+
+  it("reports the original failure when the retry without reasoning fields also fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: { message: "bad request" } }, { status: 400 }));
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(async () => {
+      for await (const _chunk of client.streamChat({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "classify" }],
+        reasoningEnabled: false,
+      })) {
+        void _chunk;
+      }
+    }).rejects.toBeInstanceOf(IxplorerError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves the Chat Completions body free of reasoning fields when the caller states no preference", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse(['data: {"choices":[{"delta":{}}]}\n\n', "data: [DONE]\n\n"]),
+      );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await collectStream(client);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body).not.toHaveProperty("reasoning");
+    expect(body).not.toHaveProperty("chat_template_kwargs");
+  });
+
   it("normalizes structured Chat Completions reasoning separately from answer text", async () => {
     const fetchMock = vi
       .fn()
