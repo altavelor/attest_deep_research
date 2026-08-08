@@ -217,6 +217,24 @@ Reports can be viewed in readable or raw JSON format and downloaded to disk.
 
 Use [docs/manual-test-checklist.md](docs/manual-test-checklist.md) before a development release. It covers settings, model connectivity, indexing, retrieval, web search, saving answers, and clearing the local index.
 
+## Release Checks
+
+Before tagging a release, build the plugin and run the release check:
+
+```bash
+npm run build
+npm run release:check
+```
+
+The check verifies that `manifest.json`, `package.json`, and `versions.json` agree on one version,
+that `manifest.json` declares an id and versions Obsidian accepts, that the repository contains
+`README.md`, `LICENSE`, `CHANGELOG.md`, `SECURITY.md`, `manifest.json`, and `versions.json`, that
+`dist/` contains `main.js`, `manifest.json`, and `styles.css` and no logs, source maps, or
+`node_modules`, and that no known API-key pattern appears in the published files.
+
+Vulnerabilities are reported privately; see [SECURITY.md](SECURITY.md). Released changes are listed
+in [CHANGELOG.md](CHANGELOG.md).
+
 ## GitHub Task Automation
 
 Issue-driven tasks are implemented, published, and reviewed through a set of

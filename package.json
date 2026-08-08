@@ -9,6 +9,7 @@
     "styles": "node scripts/build-styles.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "test": "vitest run",
+    "release:check": "node scripts/release-check.mjs",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "typecheck:core": "tsc -p tsconfig.core.json",
