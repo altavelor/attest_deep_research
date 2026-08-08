@@ -1,3 +1,7 @@
+# The review model is resolved at run time, in order of precedence:
+#   1. `--config.model=<model>` in a `/review` comment from an owner, member or collaborator;
+#   2. the repository variables AI_REVIEW_MODEL, AI_REVIEW_FALLBACK_MODELS, AI_REVIEW_MAX_TOKENS;
+#   3. the defaults in the "Resolve review model" step.
 name: PR-Agent Code Review
 
 on:
@@ -39,15 +43,59 @@ jobs:
             echo "enabled=true" >>"$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve review model
+        id: model
+        if: steps.guard.outputs.enabled == 'true'
+        shell: bash
+        env:
+          DEFAULT_MODEL: openrouter/openai/gpt-5.6-luna
+          DEFAULT_FALLBACK_MODELS: '["openrouter/anthropic/claude-sonnet-5"]'
+          DEFAULT_MAX_TOKENS: "128000"
+          VAR_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+          VAR_FALLBACK_MODELS: ${{ vars.AI_REVIEW_FALLBACK_MODELS }}
+          VAR_MAX_TOKENS: ${{ vars.AI_REVIEW_MAX_TOKENS }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          set -euo pipefail
+
+          model="${VAR_MODEL:-$DEFAULT_MODEL}"
+          fallback_models="${VAR_FALLBACK_MODELS:-$DEFAULT_FALLBACK_MODELS}"
+          max_tokens="${VAR_MAX_TOKENS:-$DEFAULT_MAX_TOKENS}"
+
+          case "$COMMENT_ASSOCIATION" in
+            OWNER | MEMBER | COLLABORATOR)
+              requested="$(printf '%s' "$COMMENT_BODY" \
+                | grep -oE -- '--config\.model=[^[:space:]"]+' \
+                | head -n 1 \
+                | cut -d= -f2- || true)"
+              if [[ -n "$requested" ]]; then
+                if [[ "$requested" =~ ^[A-Za-z0-9._/:-]+$ ]]; then
+                  model="$requested"
+                  fallback_models="[]"
+                  echo "::notice::Review model overridden from the comment: $model"
+                else
+                  echo "::warning::Ignoring malformed --config.model value; using $model."
+                fi
+              fi
+              ;;
+            *) ;;
+          esac
+
+          echo "model=$model" >>"$GITHUB_OUTPUT"
+          echo "fallback_models=$fallback_models" >>"$GITHUB_OUTPUT"
+          echo "max_tokens=$max_tokens" >>"$GITHUB_OUTPUT"
+          echo "Review model: $model (fallbacks: $fallback_models)"
+
       - name: Run review
         if: steps.guard.outputs.enabled == 'true'
         uses: docker://pragent/pr-agent:0.41.0-github_action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           openrouter__key: ${{ secrets.OPENROUTER_API_KEY }}
-          config.model: "openrouter/openai/gpt-5.6-luna"
-          config.fallback_models: '["openrouter/anthropic/claude-sonnet-5"]'
-          config.custom_model_max_tokens: "128000"
+          config.model: ${{ steps.model.outputs.model }}
+          config.fallback_models: ${{ steps.model.outputs.fallback_models }}
+          config.custom_model_max_tokens: ${{ steps.model.outputs.max_tokens }}
           config.publish_output_progress: "false"
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
