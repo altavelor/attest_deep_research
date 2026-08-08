@@ -1,5 +1,9 @@
+# The job runs only for pull requests opened from a branch of this repository by an owner,
+# member or collaborator, and only for slash commands written by an owner, member or
+# collaborator. Fork pull requests and comments from anyone else never start a review.
+#
 # The review model is resolved at run time, in order of precedence:
-#   1. `--config.model=<model>` in a `/review` comment from an owner, member or collaborator;
+#   1. `--config.model=<model>` in a `/review` comment (the job condition restricts who may comment);
 #   2. the repository variables AI_REVIEW_MODEL, AI_REVIEW_FALLBACK_MODELS, AI_REVIEW_MAX_TOKENS;
 #   3. the defaults in the "Resolve review model" step.
 name: PR-Agent Code Review
@@ -18,9 +22,15 @@ jobs:
   review:
     if: |
       github.event.sender.type != 'Bot' &&
-      (github.event_name == 'pull_request' ||
-       (github.event.issue.pull_request != null &&
-        startsWith(github.event.comment.body, '/')))
+      ((github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+                 github.event.pull_request.author_association)) ||
+       (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        startsWith(github.event.comment.body, '/') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+                 github.event.comment.author_association)))
 
     runs-on: ubuntu-latest
 
@@ -55,7 +65,6 @@ jobs:
           VAR_FALLBACK_MODELS: ${{ vars.AI_REVIEW_FALLBACK_MODELS }}
           VAR_MAX_TOKENS: ${{ vars.AI_REVIEW_MAX_TOKENS }}
           COMMENT_BODY: ${{ github.event.comment.body }}
-          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           set -euo pipefail
 
@@ -63,24 +72,20 @@ jobs:
           fallback_models="${VAR_FALLBACK_MODELS:-$DEFAULT_FALLBACK_MODELS}"
           max_tokens="${VAR_MAX_TOKENS:-$DEFAULT_MAX_TOKENS}"
 
-          case "$COMMENT_ASSOCIATION" in
-            OWNER | MEMBER | COLLABORATOR)
-              requested="$(printf '%s' "$COMMENT_BODY" \
-                | grep -oE -- '--config\.model=[^[:space:]"]+' \
-                | head -n 1 \
-                | cut -d= -f2- || true)"
-              if [[ -n "$requested" ]]; then
-                if [[ "$requested" =~ ^[A-Za-z0-9._/:-]+$ ]]; then
-                  model="$requested"
-                  fallback_models="[]"
-                  echo "::notice::Review model overridden from the comment: $model"
-                else
-                  echo "::warning::Ignoring malformed --config.model value; using $model."
-                fi
-              fi
-              ;;
-            *) ;;
-          esac
+          requested="$(printf '%s' "$COMMENT_BODY" \
+            | grep -oE -- '--config\.model=[^[:space:]"]+' \
+            | head -n 1 \
+            | cut -d= -f2- || true)"
+
+          if [[ -n "$requested" ]]; then
+            if [[ "$requested" =~ ^[A-Za-z0-9._/:-]+$ ]]; then
+              model="$requested"
+              fallback_models="[]"
+              echo "::notice::Review model overridden from the comment: $model"
+            else
+              echo "::warning::Ignoring malformed --config.model value; using $model."
+            fi
+          fi
 
           echo "model=$model" >>"$GITHUB_OUTPUT"
           echo "fallback_models=$fallback_models" >>"$GITHUB_OUTPUT"
