@@ -45,38 +45,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validate versions.json
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require("node:fs");
-
-          const manifest = JSON.parse(
-            fs.readFileSync("manifest.json", "utf8")
-          );
-
-          const versions = JSON.parse(
-            fs.readFileSync("versions.json", "utf8")
-          );
-
-          const minAppVersion = versions[manifest.version];
-
-          if (!minAppVersion) {
-            throw new Error(
-              `versions.json does not contain version ${manifest.version}`
-            );
-          }
-
-          if (minAppVersion !== manifest.minAppVersion) {
-            throw new Error(
-              `versions.json contains ${minAppVersion}, but manifest.json ` +
-              `contains ${manifest.minAppVersion}`
-            );
-          }
-
-          console.log("versions.json is valid");
-          NODE
-
       - name: Install dependencies
         run: npm ci
 
@@ -89,15 +57,12 @@ jobs:
           npm test
           npm run build
 
+      - name: Run release check
+        run: npm run release:check
+
       - name: Prepare release files
         shell: bash
         run: |
-
-
-          test -f dist/main.js
-          test -f dist/manifest.json
-          test -f dist/styles.css
-
           cd dist
           zip "../${{ github.event.repository.name }}-${GITHUB_REF_NAME}.zip" \
             main.js manifest.json styles.css
