@@ -88,25 +88,6 @@ export function computeFindings(sections: ReportSections): FindingsSection {
     }
   }
 
-  if (request.retrieval?.scoreStats) {
-    const { avg, threshold } = request.retrieval.scoreStats;
-    if (threshold !== null && avg < threshold) {
-      findings.push({
-        severity: "warning",
-        code: "low-retrieval-scores",
-        title: "Average retrieval score is below threshold",
-        detail: `Mean score ${avg.toFixed(3)} is below the threshold ${threshold.toFixed(3)}. The retrieved chunks may not be relevant. Consider expanding the index or rephrasing the query.`,
-        affectedSection: "request",
-        evidence: {
-          avg,
-          threshold,
-          min: request.retrieval.scoreStats.min,
-          max: request.retrieval.scoreStats.max,
-        },
-      });
-    }
-  }
-
   if (
     preflight.index &&
     preflight.index.indexedFiles === 0 &&

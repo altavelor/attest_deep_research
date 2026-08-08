@@ -120,7 +120,7 @@ export interface RequestSection {
     }>;
     includedChunkIds: string[];
     droppedChunkIds: string[];
-    scoreStats: { min: number; max: number; avg: number; threshold: number | null } | null;
+    scoreStats: { min: number; max: number; avg: number } | null;
   } | null;
   web: ContextDiagnostics["web"] | null;
   webSourceSelection: WebSourceSelectionDiagnostics | null;
