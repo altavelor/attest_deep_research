@@ -122,8 +122,7 @@ export function buildRequestSection(d: ContextDiagnostics): RequestSection {
     const min = Math.min(...scores);
     const max = Math.max(...scores);
     const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-    const threshold = null;
-    scoreStats = { min, max, avg, threshold };
+    scoreStats = { min, max, avg };
   }
 
   return {
