@@ -7,4 +7,5 @@ coverage/
 dist/
 .vscode/
 .claude/
+.codex/
 tasks/

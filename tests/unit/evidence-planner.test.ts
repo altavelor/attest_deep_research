@@ -231,7 +231,7 @@ describe("EvidencePlanner.requiresWebEvidence", () => {
     expect(localEvidenceQuality.averageRetrievalScore).toBeCloseTo(0.0207, 4);
   });
 
-  it("still reports structural evidence gaps", () => {
+  it("still detects weak local evidence structurally, whatever the score scale", () => {
     const planner = new EvidencePlanner();
     const output = planner.plan({
       question: "How does the project work?",
@@ -243,11 +243,32 @@ describe("EvidencePlanner.requiresWebEvidence", () => {
       webEvidence: [],
     });
 
-    expect(output.diagnostics.localEvidenceQuality.reasons).toEqual([
+    const { localEvidenceQuality } = output.diagnostics;
+    expect(localEvidenceQuality.weak).toBe(true);
+    expect(localEvidenceQuality.reasons).toEqual([
       "no-explicit-evidence",
       "no-graph-evidence",
       "few-retrieval-chunks",
     ]);
+  });
+
+  it("detects weak local evidence even when fused scores are high", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "How does the project work?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [],
+      graphEvidence: [],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1", 0.99),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2", 0.98),
+      ],
+      webEvidence: [],
+    });
+
+    expect(output.diagnostics.localEvidenceQuality.weak).toBe(true);
+    expect(output.diagnostics.budget.policy).toBe("weak-local");
   });
 
   it("never requires web evidence in index-only mode", () => {
