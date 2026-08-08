@@ -209,6 +209,68 @@ describe("EvidencePlanner.requiresWebEvidence", () => {
     ).toBe(true);
   });
 
+  it("does not flag retrieval quality from reciprocal-rank scores", () => {
+    const planner = new EvidencePlanner();
+    const rrfScored = [
+      retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1", 0.0295),
+      retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2", 0.0164),
+      retrieved("retrieval-3", markdownSource("R3.md"), "Retrieval 3", 0.0161),
+    ];
+    const output = planner.plan({
+      question: "How does the project work?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [retrieved("explicit-1", markdownSource("A.md"), "Explicit")],
+      graphEvidence: [retrieved("graph-1", markdownSource("Graph.md"), "Graph")],
+      retrievalEvidence: rrfScored,
+      webEvidence: [],
+    });
+
+    const { localEvidenceQuality } = output.diagnostics;
+    expect(localEvidenceQuality.reasons).toEqual([]);
+    expect(localEvidenceQuality.averageRetrievalScore).toBeCloseTo(0.0207, 4);
+  });
+
+  it("still detects weak local evidence structurally, whatever the score scale", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "How does the project work?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [],
+      graphEvidence: [],
+      retrievalEvidence: [retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1", 0.9)],
+      webEvidence: [],
+    });
+
+    const { localEvidenceQuality } = output.diagnostics;
+    expect(localEvidenceQuality.weak).toBe(true);
+    expect(localEvidenceQuality.reasons).toEqual([
+      "no-explicit-evidence",
+      "no-graph-evidence",
+      "few-retrieval-chunks",
+    ]);
+  });
+
+  it("detects weak local evidence even when fused scores are high", () => {
+    const planner = new EvidencePlanner();
+    const output = planner.plan({
+      question: "How does the project work?",
+      searchMode: "indexAndWeb",
+      evidenceLimit: 5,
+      explicitEvidence: [],
+      graphEvidence: [],
+      retrievalEvidence: [
+        retrieved("retrieval-1", markdownSource("R1.md"), "Retrieval 1", 0.99),
+        retrieved("retrieval-2", markdownSource("R2.md"), "Retrieval 2", 0.98),
+      ],
+      webEvidence: [],
+    });
+
+    expect(output.diagnostics.localEvidenceQuality.weak).toBe(true);
+    expect(output.diagnostics.budget.policy).toBe("weak-local");
+  });
+
   it("never requires web evidence in index-only mode", () => {
     expect(
       new EvidencePlanner().requiresWebEvidence({

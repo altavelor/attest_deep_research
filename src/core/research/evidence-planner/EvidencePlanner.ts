@@ -43,7 +43,6 @@ type PlannerPolicy = EvidencePlannerDiagnostics["budget"]["policy"];
 const DEFAULT_WEB_SHARE = 0.2;
 const FRESHNESS_WEB_SHARE = 0.4;
 const WEAK_LOCAL_WEB_SHARE = 0.5;
-const AVERAGE_SCORE_WEAK_THRESHOLD = 0.25;
 const FALLBACK_TOKENS_PER_EVIDENCE_ITEM = 500;
 
 const FRESHNESS_TERMS = [
@@ -424,6 +423,11 @@ function detectWebIntent(
     : { detected: false, reason: "none", matchedTerms: [] };
 }
 
+/**
+ * Describe the local evidence for diagnostics. `averageRetrievalScore` is reported
+ * as-is and never thresholded: retrieval fuses its inputs with reciprocal rank, so
+ * the score is ordinal and its magnitude says nothing about relevance.
+ */
 function evaluateLocalEvidence(
   input: EvidencePlannerInput,
 ): EvidencePlannerDiagnostics["localEvidenceQuality"] {
@@ -443,10 +447,6 @@ function evaluateLocalEvidence(
   if (input.retrievalEvidence.length < 3) {
     reasons.push("few-retrieval-chunks");
   }
-  if (averageRetrievalScore !== undefined && averageRetrievalScore < AVERAGE_SCORE_WEAK_THRESHOLD) {
-    reasons.push("low-retrieval-score");
-  }
-
   return {
     weak: isWeakLocalEvidence(input),
     explicitChunks: input.explicitEvidence.length,
