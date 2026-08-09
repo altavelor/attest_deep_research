@@ -78,6 +78,20 @@ describe("release check version metadata", () => {
     expect(badVersion[0]).toContain("not a valid semantic version");
     expect(badId).toContain('manifest.json id must not contain "obsidian"');
   });
+
+  it("reports valid JSON values with an invalid metadata shape", () => {
+    expect(
+      checkVersionMetadata({
+        manifest: null as unknown as Record<string, unknown>,
+        packageJson: [] as unknown as Record<string, unknown>,
+        versions: "0.1.0" as unknown as Record<string, string>,
+      }),
+    ).toEqual([
+      "manifest.json must contain a JSON object",
+      "package.json must contain a JSON object",
+      "versions.json must contain a JSON object",
+    ]);
+  });
 });
 
 describe("release check release directory entries", () => {
