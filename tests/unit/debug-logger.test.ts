@@ -219,7 +219,8 @@ describe("PluginDebugLogger", () => {
     logger.logError(
       new IxplorerError({
         code: "MODEL_PROVIDER_UNAVAILABLE",
-        message: "Provider rejected authorization=Bearer secret-token",
+        message:
+          "Provider rejected authorization=Bearer secret-token at https://url-user:url-password@provider.example/v1/chat?api_key=secret-key",
         details: { apiKey: "secret-key", nested: { authorization: "Bearer secret-token" } },
       }),
       {
@@ -236,6 +237,7 @@ describe("PluginDebugLogger", () => {
     expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("header-secret");
     expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("request-secret");
     expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("url-password");
+    expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("url-user");
     expect(error.mock.calls[0][1]).toMatchObject({
       context: {
         url: "https://provider.example/v1/chat?api_key=[redacted]&client_secret=[redacted]",

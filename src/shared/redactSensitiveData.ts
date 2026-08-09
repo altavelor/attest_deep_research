@@ -27,7 +27,7 @@ function redactValue(value: unknown): unknown {
 }
 
 function redactSensitiveString(value: string): string {
-  const redactedUrl = redactUrlQuerySecrets(value);
+  const redactedUrl = value.replace(/https?:\/\/[^\s,;]+/gi, redactUrlQuerySecrets);
   return redactedUrl
     .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [redacted]")
     .replace(SENSITIVE_ASSIGNMENT, "$1=[redacted]");
