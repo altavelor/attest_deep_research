@@ -945,4 +945,74 @@ describe("FetchFallbackChain", () => {
       error: { code: "web-fetch-no-snapshot" },
     });
   });
+
+  it("uses a fallback when the primary provider cannot fetch pages", async () => {
+    const fallbackFetch = vi.fn().mockResolvedValue(okPage("fallback"));
+    const chain = new FetchFallbackChain({
+      primary: { search: async () => [] },
+      fallbacks: [{ id: "jina", fetchPage: fallbackFetch }],
+    });
+
+    await expect(chain.fetchPage("https://a.dev/")).resolves.toMatchObject({
+      ok: true,
+      content: "fallback",
+    });
+    expect(fallbackFetch).toHaveBeenCalledWith("https://a.dev/", undefined);
+  });
+
+  it("reports an unavailable fetch when neither primary nor fallback can fetch pages", async () => {
+    const chain = new FetchFallbackChain({ primary: { search: async () => [] }, fallbacks: [] });
+
+    await expect(chain.fetchPage("https://a.dev/")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-unavailable", retryable: false },
+    });
+  });
+
+  it("forwards metadata and document requests to the primary provider", async () => {
+    const fetchMetadata = vi.fn().mockResolvedValue({
+      ok: true,
+      url: "https://a.dev/",
+      finalUrl: "https://a.dev/",
+      metadata: { title: "A page" },
+    });
+    const fetchDocument = vi.fn().mockResolvedValue({
+      ok: true,
+      url: "https://a.dev/file.pdf",
+      finalUrl: "https://a.dev/file.pdf",
+      data: new Uint8Array([1]),
+      contentType: "application/pdf",
+      bytes: 1,
+      redirects: [],
+    });
+    const chain = new FetchFallbackChain({
+      primary: { search: async () => [], fetchMetadata, fetchDocument },
+      fallbacks: [],
+    });
+    const options = { timeoutMs: 250 };
+
+    await expect(chain.fetchMetadata("https://a.dev/", options)).resolves.toMatchObject({
+      ok: true,
+      metadata: { title: "A page" },
+    });
+    await expect(chain.fetchDocument("https://a.dev/file.pdf", options)).resolves.toMatchObject({
+      ok: true,
+      contentType: "application/pdf",
+    });
+    expect(fetchMetadata).toHaveBeenCalledWith("https://a.dev/", options);
+    expect(fetchDocument).toHaveBeenCalledWith("https://a.dev/file.pdf", options);
+  });
+
+  it("returns the same unavailable error for unsupported metadata and document requests", async () => {
+    const chain = new FetchFallbackChain({ primary: { search: async () => [] }, fallbacks: [] });
+
+    await expect(chain.fetchMetadata("https://a.dev/")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-unavailable", retryable: false },
+    });
+    await expect(chain.fetchDocument("https://a.dev/file.pdf")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "web-fetch-unavailable", retryable: false },
+    });
+  });
 });

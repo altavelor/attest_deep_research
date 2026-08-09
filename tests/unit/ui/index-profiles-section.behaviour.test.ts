@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { App } from "obsidian";
 import type { IndexProfile } from "@adapters/indexing";
@@ -192,6 +192,55 @@ describe("index profiles section rendering", () => {
       (row) => row.querySelector(".ixplorer-settings-profile-list__status")?.textContent ?? null,
     );
     expect(statuses).toEqual([null, null]);
+    section.dispose();
+  });
+
+  it("wires pause, resume, and metadata-stop actions to the active profile", () => {
+    const settings = settingsWith([indexProfile({ id: "a", name: "Alpha" })], "a");
+    const pause = vi.fn();
+    const resume = vi.fn(async () => {});
+    const cancel = vi.fn();
+    const plugin = createPlugin(settings);
+    const mutablePlugin = plugin as unknown as { indexing: unknown; enrichment: unknown };
+    let mode: "indexing" | "paused" | "enrichment" = "indexing";
+    mutablePlugin.indexing = {
+      getBusyProfileId: () => "a",
+      getState: () => ({
+        ...indexingState(),
+        status: mode === "paused" ? "paused" : mode === "indexing" ? "indexing" : "idle",
+      }),
+      subscribeAll: () => () => {},
+      pause,
+      resume,
+    } as never;
+    mutablePlugin.enrichment = {
+      getState: () => ({
+        ...enrichmentState(),
+        status: mode === "enrichment" ? "running" : "idle",
+      }),
+      isRunning: () => mode === "enrichment",
+      subscribeAll: () => () => {},
+      cancel,
+    } as never;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const section = new IndexProfilesSection({} as App, plugin, () => {});
+
+    section.render(container);
+    container.querySelector<HTMLButtonElement>('button[aria-label="Pause indexing"]')!.click();
+    expect(pause).toHaveBeenCalledWith("a");
+
+    mode = "paused";
+    section.render(container);
+    container.querySelector<HTMLButtonElement>('button[aria-label="Continue indexing"]')!.click();
+    expect(resume).toHaveBeenCalledWith("a");
+
+    mode = "enrichment";
+    section.render(container);
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Stop metadata extraction"]')!
+      .click();
+    expect(cancel).toHaveBeenCalledWith("a");
     section.dispose();
   });
 });

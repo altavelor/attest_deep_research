@@ -1,6 +1,7 @@
 import {
   capabilityCacheKey,
   CapabilityRefreshCoordinator,
+  readModelCapabilityCache,
   reasoningEffortCandidates,
   recordObservedReasoningFormat,
 } from "@adapters/settings";
@@ -50,5 +51,71 @@ describe("model capability cache", () => {
         reasoning: { responseFormats: [], defaultEffort: "minimal", visibleOutput: "unknown" },
       }),
     ).toEqual(["minimal"]);
+  });
+
+  it("deduplicates advertised efforts and ignores empty values", () => {
+    expect(
+      reasoningEffortCandidates({
+        reasoning: {
+          responseFormats: [],
+          efforts: ["low", "", "low", "high"],
+          defaultEffort: "minimal",
+          visibleOutput: "unknown",
+        },
+      }),
+    ).toEqual(["low", "high"]);
+  });
+
+  it("keeps only valid persisted snapshots and normalizes legacy capability fields", () => {
+    const cache = readModelCapabilityCache({
+      valid: {
+        protocols: { chatCompletions: "supported", responses: "invalid" },
+        reasoning: {
+          responseFormats: ["inline-tags", "thinking", "thinking", "unsupported"],
+          visibleOutput: "unsupported",
+          efforts: ["low", "", "low"],
+          defaultEffort: "medium",
+        },
+        tools: "supported",
+        continuation: "unsupported",
+        summary: "invalid",
+        source: "probe",
+        checkedAt: "2026-08-01T00:00:00.000Z",
+        expiresAt: "2026-09-01T00:00:00.000Z",
+      },
+      invalidSource: { protocols: {}, reasoning: {}, source: "other" },
+      invalidShape: [],
+    });
+
+    expect(cache).toEqual({
+      valid: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: {
+          responseFormats: ["inline_tags", "thinking"],
+          visibleOutput: "unsupported",
+          efforts: ["low"],
+          defaultEffort: "medium",
+        },
+        tools: "supported",
+        continuation: "unsupported",
+        summary: "unknown",
+        source: "probe",
+        checkedAt: "2026-08-01T00:00:00.000Z",
+        expiresAt: "2026-09-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    });
+    expect(readModelCapabilityCache(null)).toEqual({});
+  });
+
+  it("records observations for the Responses endpoint and ignores unknown formats", () => {
+    const responsesIdentity = { ...identity, protocol: "responses" as const };
+
+    expect(recordObservedReasoningFormat({}, responsesIdentity, "unknown", "now")).toEqual({});
+    const cache = recordObservedReasoningFormat({}, responsesIdentity, "responses_text", "now");
+    expect(cache[capabilityCacheKey(responsesIdentity)]?.protocols).toEqual({
+      chatCompletions: "unknown",
+      responses: "supported",
+    });
   });
 });
