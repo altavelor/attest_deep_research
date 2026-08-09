@@ -41,6 +41,9 @@ function redactUrlQuerySecrets(value: string): string {
     return value;
   }
 
+  url.username = "";
+  url.password = "";
+
   for (const [key] of Array.from(url.searchParams)) {
     if (SENSITIVE_KEY.test(key)) {
       url.searchParams.set(key, "[redacted]");

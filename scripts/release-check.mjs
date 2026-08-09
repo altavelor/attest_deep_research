@@ -16,7 +16,6 @@ const REQUIRED_REPOSITORY_FILES = [
 const FORBIDDEN_RELEASE_ENTRIES = ["node_modules", ".git", ".env"];
 const FORBIDDEN_RELEASE_EXTENSIONS = [".log", ".map", ".env"];
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
-const MAX_SCANNED_BYTES = 4 * 1024 * 1024;
 
 const SECRET_PATTERNS = [
   { name: "Anthropic API key", pattern: /sk-ant-[A-Za-z0-9_-]{16,}/ },
@@ -131,7 +130,7 @@ function listFilesRecursively(directory, root = directory) {
   return files;
 }
 
-function checkReleaseDirectory(rootDir) {
+export function checkReleaseDirectory(rootDir) {
   const releaseDir = resolve(rootDir, RELEASE_DIR);
   let entries;
   try {
@@ -149,7 +148,6 @@ function checkReleaseDirectory(rootDir) {
 
   for (const file of listFilesRecursively(releaseDir)) {
     const absolute = join(releaseDir, file);
-    if (statSync(absolute).size > MAX_SCANNED_BYTES) continue;
     for (const secret of findSecrets(readFileSync(absolute, "utf8"))) {
       problems.push(`${RELEASE_DIR}/${file} contains what looks like a ${secret}`);
     }

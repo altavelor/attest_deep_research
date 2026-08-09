@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 interface ReleaseCheckModule {
@@ -8,6 +10,7 @@ interface ReleaseCheckModule {
     versions: Record<string, string>;
   }): string[];
   checkReleaseEntries(entries: string[]): string[];
+  checkReleaseDirectory(rootDir: string): string[];
   findSecrets(text: string): string[];
   parseJsonFile(
     path: string,
@@ -17,7 +20,13 @@ interface ReleaseCheckModule {
 
 const specifier = pathToFileURL(resolve("scripts/release-check.mjs")).href;
 const releaseCheck = (await import(/* @vite-ignore */ specifier)) as ReleaseCheckModule;
-const { checkVersionMetadata, checkReleaseEntries, findSecrets, parseJsonFile } = releaseCheck;
+const {
+  checkVersionMetadata,
+  checkReleaseEntries,
+  checkReleaseDirectory,
+  findSecrets,
+  parseJsonFile,
+} = releaseCheck;
 
 const validManifest = {
   id: "ixplorer",
@@ -136,6 +145,26 @@ describe("release check secret scan", () => {
 
   it("does not flag ordinary built output", () => {
     expect(findSecrets('const apiKey=settings.apiKey??"";export{apiKey};')).toEqual([]);
+  });
+
+  it("scans release assets larger than four MiB", () => {
+    const root = mkdtempSync(join(tmpdir(), "ixplorer-release-check-"));
+    const releaseDir = join(root, "dist");
+    mkdirSync(releaseDir);
+    writeFileSync(join(releaseDir, "manifest.json"), "{}");
+    writeFileSync(join(releaseDir, "styles.css"), "");
+    writeFileSync(
+      join(releaseDir, "main.js"),
+      `${" ".repeat(4 * 1024 * 1024)}sk-ant-${"a".repeat(24)}`,
+    );
+
+    try {
+      expect(checkReleaseDirectory(root)).toContain(
+        "dist/main.js contains what looks like a Anthropic API key",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
