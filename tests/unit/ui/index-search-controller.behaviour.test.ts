@@ -28,7 +28,7 @@ const chunk: RetrievedChunk = retrieved(
 );
 
 function createController(overrides: Partial<IndexSearchControllerContext> = {}) {
-  const searchIndex = vi.fn<[unknown], Promise<IndexSearchResult>>(async () => ({
+  const searchIndex = vi.fn<(input: unknown) => Promise<IndexSearchResult>>(async () => ({
     chunks: [chunk],
   }));
   const ctx: IndexSearchControllerContext = {
