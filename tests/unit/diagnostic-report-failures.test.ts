@@ -98,6 +98,20 @@ function failingDiagnostics(): ContextDiagnostics {
 }
 
 describe("diagnostic findings for a failing run", () => {
+  it("redacts secrets carried by diagnostics from external failures", () => {
+    const report = buildDiagnosticReportV3(
+      baseDiagnostics({
+        warnings: ["Provider rejected api_key=secret-key and Authorization: Bearer secret-token"],
+      }),
+    );
+
+    expect(JSON.stringify(report)).not.toContain("secret-key");
+    expect(JSON.stringify(report)).not.toContain("secret-token");
+    expect(report.preflight.warnings).toEqual([
+      "Provider rejected api_key=[redacted] and Authorization=[redacted]",
+    ]);
+  });
+
   it("reports every failure branch and orders errors before warnings and info", () => {
     const report = buildDiagnosticReportV3(failingDiagnostics());
     const codes = report.findings.findings.map((finding) => finding.code);

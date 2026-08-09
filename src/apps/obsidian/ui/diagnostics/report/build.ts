@@ -9,6 +9,7 @@ import {
 } from "./sections";
 import { computeFindings } from "./findings";
 import { DiagnosticReportV3 } from "./types";
+import { redactSensitiveData } from "@shared";
 
 export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): DiagnosticReportV3 {
   const model = buildModelSection(diagnostics);
@@ -19,7 +20,7 @@ export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): Diagno
   const stats = buildStatsSection(diagnostics);
   const findings = computeFindings({ model, preflight, request, reasoning, answer });
 
-  return {
+  return redactSensitiveData({
     schemaVersion: 3,
     question: diagnostics.question ?? "",
     findings,
@@ -29,5 +30,5 @@ export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): Diagno
     reasoning,
     answer,
     stats,
-  };
+  });
 }

@@ -1,6 +1,6 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
 import { ResearchRetriever } from "@application/contracts";
-import { SearchProvider } from "@application/ports";
+import { SearchProvider, VaultWriter } from "@application/ports";
 
 describe("createResearchToolRegistry", () => {
   it("creates only explicitly permitted tools and a fresh answer-scoped registry", () => {
@@ -62,6 +62,49 @@ describe("createResearchToolRegistry", () => {
     });
 
     expect(created.tools.definitions()).toEqual([]);
+  });
+
+  it("does not expose document downloads until note mutation access is explicitly enabled", () => {
+    const searchProvider: SearchProvider = {
+      search: vi.fn().mockResolvedValue([]),
+      fetchDocument: vi.fn(),
+    };
+    const vaultWriter: VaultWriter = {
+      exists: vi.fn(),
+      createFile: vi.fn(),
+      createBinaryFile: vi.fn(),
+      modifyFile: vi.fn(),
+      appendFile: vi.fn(),
+      readFile: vi.fn(),
+      trashFile: vi.fn(),
+      ensureFolder: vi.fn(),
+    };
+    const availability = {
+      searchMode: "webOnly" as const,
+      noteAccess: false,
+      activeFileAccess: false,
+      noteMutationAccess: false,
+      retrieverAvailable: false,
+      webProviderAvailable: true,
+    };
+
+    const withoutPermission = createResearchToolRegistry({
+      searchProvider,
+      vaultWriter,
+      availability,
+    });
+    const withPermission = createResearchToolRegistry({
+      searchProvider,
+      vaultWriter,
+      availability: { ...availability, noteMutationAccess: true },
+    });
+
+    expect(withoutPermission.tools.definitions().map((tool) => tool.function.name)).not.toContain(
+      "download_document",
+    );
+    expect(withPermission.tools.definitions().map((tool) => tool.function.name)).toContain(
+      "download_document",
+    );
   });
 
   it("exposes URL inventory tools in index-only mode when index dependencies exist", () => {

@@ -6,6 +6,7 @@ import type {
   IndexingPerformanceLogEvent,
 } from "@adapters/indexing/IndexingService";
 import type { IxplorerSettings } from "./types";
+import { redactSensitiveData } from "@shared";
 
 export interface RequestLogContext {
   url: string;
@@ -59,8 +60,8 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
     }
 
     this.console.debug("[Ixplorer] Request", {
-      ...(redactLogValue(context) as RequestLogContext),
-      settings: redactLogValue(settings),
+      ...(redactSensitiveData(context) as RequestLogContext),
+      settings: redactSensitiveData(settings),
     });
   }
 
@@ -72,8 +73,8 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
     }
 
     this.console.debug("[Ixplorer] Response", {
-      ...(redactLogValue(context) as ResponseLogContext),
-      settings: redactLogValue(settings),
+      ...(redactSensitiveData(context) as ResponseLogContext),
+      settings: redactSensitiveData(settings),
     });
   }
 
@@ -87,9 +88,9 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
     }
 
     this.console.error("[Ixplorer] Error", {
-      context,
-      error: serializeError(error),
-      settings: redactLogValue(this.getSettings()),
+      context: redactSensitiveData(context),
+      error: redactSensitiveData(serializeError(error)),
+      settings: redactSensitiveData(this.getSettings()),
     });
   }
 
@@ -98,7 +99,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Probe result", redactLogValue(context));
+    this.console.debug("[Ixplorer] Probe result", redactSensitiveData(context));
   }
 
   logConfiguration(stage: string, settings: IxplorerSettings): void {
@@ -108,7 +109,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
 
     this.console.debug("[Ixplorer] Configuration", {
       stage,
-      settings: redactLogValue(settings),
+      settings: redactSensitiveData(settings),
     });
   }
 
@@ -121,7 +122,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
 
     this.console.debug("[Ixplorer] Indexing file", {
       ...event,
-      settings: redactLogValue(settings),
+      settings: redactSensitiveData(settings),
     });
   }
 
@@ -130,7 +131,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug(`[Ixplorer] SubAgent ${event.type}`, redactLogValue(event));
+    this.console.debug(`[Ixplorer] SubAgent ${event.type}`, redactSensitiveData(event));
   }
 
   logIndexingPerformance(event: IndexingPerformanceLogEvent): void {
@@ -142,7 +143,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
 
     this.console.debug("[Ixplorer] Indexing performance", {
       ...event,
-      settings: redactLogValue(settings),
+      settings: redactSensitiveData(settings),
     });
   }
 }
@@ -169,27 +170,4 @@ function serializeError(error: unknown): unknown {
 
 function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
-}
-
-function redactLogValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(redactLogValue);
-  }
-
-  if (!isObject(value)) {
-    return value;
-  }
-
-  const redacted: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    const normalizedKey = key.toLowerCase();
-    redacted[key] =
-      normalizedKey === "apikey" ||
-      normalizedKey === "api_key" ||
-      normalizedKey === "authorization" ||
-      normalizedKey.includes("api-key")
-        ? "[redacted]"
-        : redactLogValue(item);
-  }
-  return redacted;
 }
