@@ -34,6 +34,11 @@ const SECRET_PATTERNS = [
  */
 export function checkVersionMetadata({ manifest, packageJson, versions }) {
   const problems = [];
+  if (!isJsonObject(manifest)) problems.push("manifest.json must contain a JSON object");
+  if (!isJsonObject(packageJson)) problems.push("package.json must contain a JSON object");
+  if (!isJsonObject(versions)) problems.push("versions.json must contain a JSON object");
+  if (problems.length > 0) return problems;
+
   const version = manifest.version;
 
   if (typeof version !== "string" || !SEMVER.test(version)) {
@@ -64,6 +69,10 @@ export function checkVersionMetadata({ manifest, packageJson, versions }) {
   }
 
   return problems;
+}
+
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
