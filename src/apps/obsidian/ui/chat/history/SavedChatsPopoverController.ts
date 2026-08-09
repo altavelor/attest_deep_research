@@ -1,4 +1,5 @@
 import { SavedChatSummary } from "@core/chat/savedChat";
+import type { Translate } from "@adapters/i18n";
 import { positionSavedChatsPopover, renderSavedChatsPopoverContent } from "./SavedChatsPanel";
 import { SavedChatListTab } from "./savedChatListState";
 
@@ -6,6 +7,7 @@ export interface SavedChatsPopoverControllerOptions {
   hostEl: HTMLElement;
   getSavedChats(): SavedChatSummary[];
   getCurrentChatId(): string | null;
+  t: Translate;
   onOpenChat(id: string): void;
   onRenameChat(id: string, title: string): void;
   onToggleFavorite(id: string): void;
@@ -49,6 +51,7 @@ export class SavedChatsPopoverController {
       currentChatId: this.options.getCurrentChatId(),
       searchQuery: this.searchQuery,
       activeTab: this.activeTab,
+      t: this.options.t,
       onSearchQueryChange: (query) => {
         this.searchQuery = query;
       },

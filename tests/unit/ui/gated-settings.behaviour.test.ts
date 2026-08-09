@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "obsidian";
 
 import { DEFAULT_SETTINGS } from "@adapters/settings";
+import { createTranslator } from "@adapters/i18n";
 import { WebSourceHealthTracker } from "@application/web";
 import { RetrievalSettingsSection } from "@apps/obsidian/ui/settings/RetrievalSettingsSection";
 import { createContainer, resetDom } from "../../helpers/domHarness";
@@ -11,6 +12,7 @@ import { createContainer, resetDom } from "../../helpers/domHarness";
 function render(host: HTMLElement, hasActiveChatModel: boolean): void {
   new RetrievalSettingsSection({
     app: new App(),
+    t: createTranslator("en").t,
     settings: structuredClone(DEFAULT_SETTINGS),
     webSourceHealth: new WebSourceHealthTracker(),
     hasActiveChatModel,

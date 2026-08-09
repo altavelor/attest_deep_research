@@ -2,6 +2,8 @@ import { App, Modal, Setting, ToggleComponent, setIcon } from "obsidian";
 
 import { IndexProfile } from "@adapters/indexing";
 import { ChatModelProfile, EmbeddingModelProfile } from "@adapters/settings";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 
 export interface IndexRunPlan {
   mode: "start" | "update" | "rebuild";
@@ -10,6 +12,8 @@ export interface IndexRunPlan {
 }
 
 export interface IndexRunModalOptions {
+  t: Translate;
+  getDirection?(): TextDirection;
   profile: IndexProfile;
 
   hasMetadata: boolean;
@@ -54,13 +58,15 @@ export class IndexRunModal extends Modal {
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     const { contentEl } = this;
+    const { t } = this.options;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
     contentEl.createEl("h2", {
       text: this.indexExists()
-        ? `Update “${this.options.profile.name}”`
-        : `Index “${this.options.profile.name}”`,
+        ? t("settings.indexRun.updateTitle", { profile: this.options.profile.name })
+        : t("settings.indexRun.indexTitle", { profile: this.options.profile.name }),
     });
 
     this.renderEmbeddingSection(contentEl);
@@ -87,10 +93,11 @@ export class IndexRunModal extends Modal {
   }
 
   private renderEmbeddingSection(containerEl: HTMLElement): void {
+    const { t } = this.options;
     const section = containerEl.createDiv({ cls: "ixplorer-index-run__section" });
     new Setting(section)
-      .setName("Index content (embedding model)")
-      .setDesc("Extract, chunk, and embed vault files into the index.")
+      .setName(t("settings.indexRun.embedding.name"))
+      .setDesc(t("settings.indexRun.embedding.desc"))
       .addToggle((toggle) =>
         toggle.setValue(this.embeddingEnabled).onChange((value) => {
           this.embeddingEnabled = value;
@@ -100,23 +107,32 @@ export class IndexRunModal extends Modal {
           this.refresh();
         }),
       );
-    new Setting(section).setName("Embedding model").addDropdown((dropdown) => {
-      for (const profile of this.options.embeddingModels) {
-        dropdown.addOption(profile.id, `${profile.name} (${profile.modelName})`);
-      }
-      dropdown.setValue(this.embeddingModelProfileId).onChange((value) => {
-        this.embeddingModelProfileId = value;
-        this.refresh();
+    new Setting(section)
+      .setName(t("settings.indexRun.embeddingModel.name"))
+      .addDropdown((dropdown) => {
+        for (const profile of this.options.embeddingModels) {
+          dropdown.addOption(
+            profile.id,
+            t("settings.indexRun.modelOption", {
+              name: profile.name,
+              model: profile.modelName,
+            }),
+          );
+        }
+        dropdown.setValue(this.embeddingModelProfileId).onChange((value) => {
+          this.embeddingModelProfileId = value;
+          this.refresh();
+        });
       });
-    });
   }
 
   private renderAdvancedSection(containerEl: HTMLElement): void {
+    const { t } = this.options;
     const details = containerEl.createEl("details", { cls: "ixplorer-index-run__advanced" });
     details.open = this.metadataEnabled;
     details.createEl("summary", {
       cls: "ixplorer-index-run__advanced-summary",
-      text: "Advanced",
+      text: t("common.advanced"),
     });
     const content = details.createDiv({ cls: "ixplorer-index-run__advanced-content" });
 
@@ -125,21 +141,18 @@ export class IndexRunModal extends Modal {
       warning.createSpan({ cls: "ixplorer-index-run__token-warning-icon" }),
       "alert-triangle",
     );
-    warning.createSpan({
-      text: "Metadata extraction can take a long time and consume a large number of tokens.",
-    });
+    warning.createSpan({ text: t("settings.indexRun.tokenWarning") });
 
     this.renderMetadataSection(content);
   }
 
   private renderMetadataSection(containerEl: HTMLElement): void {
+    const { t } = this.options;
     const section = containerEl.createDiv({ cls: "ixplorer-index-run__section" });
     this.metadataSectionEl = section;
     new Setting(section)
-      .setName("Extract metadata & summaries (chat model)")
-      .setDesc(
-        "Extract title, authors, year, abstract, and references, and generate section and document summaries for every document. Unchanged documents are skipped.",
-      )
+      .setName(t("settings.indexRun.metadata.name"))
+      .setDesc(t("settings.indexRun.metadata.desc"))
       .addToggle((toggle) => {
         toggle.setValue(this.metadataEnabled).onChange((value) => {
           this.metadataEnabled = value;
@@ -147,18 +160,26 @@ export class IndexRunModal extends Modal {
         });
         this.metadataToggle = toggle;
       });
-    new Setting(section).setName("Metadata model").addDropdown((dropdown) => {
-      for (const profile of this.options.chatModels) {
-        dropdown.addOption(profile.id, `${profile.name} (${profile.modelName})`);
-      }
-      dropdown.setValue(this.chatModelProfileId).onChange((value) => {
-        this.chatModelProfileId = value;
+    new Setting(section)
+      .setName(t("settings.indexRun.metadataModel.name"))
+      .addDropdown((dropdown) => {
+        for (const profile of this.options.chatModels) {
+          dropdown.addOption(
+            profile.id,
+            t("settings.indexRun.modelOption", {
+              name: profile.name,
+              model: profile.modelName,
+            }),
+          );
+        }
+        dropdown.setValue(this.chatModelProfileId).onChange((value) => {
+          this.chatModelProfileId = value;
+        });
       });
-    });
     if (this.options.hasMetadata) {
       new Setting(section)
-        .setName("Re-extract unchanged documents")
-        .setDesc("Ignore stored metadata and run extraction for every document again.")
+        .setName(t("settings.indexRun.reextract.name"))
+        .setDesc(t("settings.indexRun.reextract.desc"))
         .addToggle((toggle) =>
           toggle.setValue(this.metadataForce).onChange((value) => {
             this.metadataForce = value;
@@ -180,9 +201,7 @@ export class IndexRunModal extends Modal {
     if (this.warningEl) {
       this.warningEl.empty();
       if (this.embeddingModelChanged()) {
-        this.warningEl.setText(
-          "Changing the embedding model requires a full re-index: running this will rebuild the index (and its metadata) from scratch.",
-        );
+        this.warningEl.setText(this.options.t("settings.indexRun.embeddingChangedWarning"));
       }
     }
 
@@ -193,6 +212,7 @@ export class IndexRunModal extends Modal {
     if (!this.footerEl) {
       return;
     }
+    const { t } = this.options;
     this.footerEl.empty();
     const actions = new Setting(this.footerEl)
       .setClass("ixplorer-profile-modal__actions")
@@ -202,7 +222,7 @@ export class IndexRunModal extends Modal {
       actions.addButton((button) => {
         button
           .setCta()
-          .setButtonText("Start")
+          .setButtonText(t("settings.indexRun.start"))
           .setDisabled(!this.embeddingEnabled)
           .onClick(() => this.submit("start"));
       });
@@ -211,14 +231,14 @@ export class IndexRunModal extends Modal {
 
     actions.addButton((button) => {
       button
-        .setButtonText("Rebuild")
+        .setButtonText(t("settings.indexRun.rebuild"))
         .setDisabled(!this.embeddingEnabled)
         .onClick(() => this.submit("rebuild"));
     });
     actions.addButton((button) => {
       button
         .setCta()
-        .setButtonText("Update")
+        .setButtonText(t("settings.indexRun.update"))
         .setDisabled(!this.embeddingEnabled && !this.metadataEnabled)
         .onClick(() => this.submit("update"));
     });

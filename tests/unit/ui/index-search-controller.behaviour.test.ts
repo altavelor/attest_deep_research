@@ -7,10 +7,13 @@ import {
   type IndexSearchControllerContext,
   type IndexSearchResult,
 } from "@apps/obsidian/ui/index/IndexSearchController";
+import { createTranslator } from "@adapters/i18n";
 import type { IndexProfileSelectOption } from "@apps/obsidian/ui/chat/ChatComposer";
 import type { RetrievedChunk } from "@core/model";
 import { createContainer, resetDom } from "../../helpers/domHarness";
 import { markdownSource, retrieved } from "../../helpers/factories";
+
+const t = createTranslator("en").t;
 
 const profiles: IndexProfileSelectOption[] = [
   { id: "ready", name: "Ready", isIndexed: true },
@@ -34,6 +37,7 @@ function createController(overrides: Partial<IndexSearchControllerContext> = {})
     getEmbedderWarning: () => undefined,
     searchIndex,
     onOpenChunk: () => {},
+    t,
     ...overrides,
   };
   return { controller: new IndexSearchController(ctx), searchIndex };

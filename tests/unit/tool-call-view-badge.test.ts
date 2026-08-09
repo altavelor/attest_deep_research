@@ -1,8 +1,12 @@
+import { createTranslator } from "@adapters/i18n";
 import { describeToolCall } from "@apps/obsidian/ui/chat/toolCallView";
+
+const t = createTranslator("en").t;
 
 describe("describeToolCall search_index badge", () => {
   it("shows a keyword-only badge when semantic search degraded", () => {
     const view = describeToolCall({
+      t,
       name: "search_index",
       label: "search_index",
       status: "complete",
@@ -28,6 +32,7 @@ describe("describeToolCall search_index badge", () => {
 
   it("omits the badge when retrieval is healthy", () => {
     const view = describeToolCall({
+      t,
       name: "search_index",
       label: "search_index",
       status: "complete",

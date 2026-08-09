@@ -8,14 +8,18 @@ import {
   WebSourceCategory,
   WebSourceDescriptor,
 } from "@core/web";
-import { IxplorerSettings, WEB_SOURCES_DESCRIPTION } from "@adapters/settings";
+import { IxplorerSettings } from "@adapters/settings";
 import { getWebSourceProfile, upsertWebSourceProfile } from "@adapters/settings";
 import type { WebSourceIssue } from "@application/web";
+import type { MessageKey, Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { createIconButton } from "./shared";
 import { WebSourceModal } from "./WebSourceModal";
 
 export interface WebSourcesSectionContext {
   app: App;
+  t: Translate;
+  getDirection?(): TextDirection;
   getSettings(): IxplorerSettings;
   saveSettings(): Promise<void>;
   requestRedisplay(): void;
@@ -25,26 +29,26 @@ export interface WebSourcesSectionContext {
   resetSourceIssue(sourceId: string): void;
 }
 
-const CATEGORY_LABELS: Record<WebSourceCategory, string> = {
-  serp: "General web search",
-  neural: "AI search",
-  academic: "Academic",
-  encyclopedia: "Encyclopedia",
-  community: "Developer & community",
-  news: "News",
-  fetch: "Page fetch fallback",
-  image: "Image search",
+const CATEGORY_MESSAGE_KEYS: Record<WebSourceCategory, MessageKey> = {
+  serp: "settings.webSources.category.serp",
+  neural: "settings.webSources.category.neural",
+  academic: "settings.webSources.category.academic",
+  encyclopedia: "settings.webSources.category.encyclopedia",
+  community: "settings.webSources.category.community",
+  news: "settings.webSources.category.news",
+  fetch: "settings.webSources.category.fetch",
+  image: "settings.webSources.category.image",
 };
 
-const ACTIVATION_LABELS: Record<WebSourceActivation, string> = {
-  off: "Off",
-  auto: "Auto — used when the planner picks it",
-  always: "Always — queried on every web search",
+const ACTIVATION_MESSAGE_KEYS: Record<WebSourceActivation, MessageKey> = {
+  off: "settings.webSources.activation.off",
+  auto: "settings.webSources.activation.auto",
+  always: "settings.webSources.activation.always",
 };
 
-const ISSUE_LABELS: Record<WebSourceIssue["reason"], string> = {
-  unauthorized: "Credentials rejected — check the API key",
-  "rate-limited": "Rate limit exceeded — retries automatically later",
+const ISSUE_MESSAGE_KEYS: Record<WebSourceIssue["reason"], MessageKey> = {
+  unauthorized: "settings.webSources.issue.unauthorized",
+  "rate-limited": "settings.webSources.issue.rateLimited",
 };
 
 /**
@@ -58,6 +62,7 @@ export class WebSourcesSection {
   constructor(private readonly ctx: WebSourcesSectionContext) {}
 
   render(containerEl: HTMLElement): void {
+    const { t } = this.ctx;
     const settings = this.ctx.getSettings();
     const enabledTotal = WEB_SOURCE_CATALOG.filter((descriptor) =>
       isWebSourceActive(getWebSourceProfile(settings, descriptor.id)),
@@ -65,14 +70,17 @@ export class WebSourcesSection {
 
     const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
     const header = section.createDiv({ cls: "ixplorer-settings-profile-section__header" });
-    header.createEl("h3", { text: "External sources" });
+    header.createEl("h3", { text: t("settings.webSources.heading") });
     header.createSpan({
       cls: "ixplorer-settings-websource-section__count",
-      text: `${enabledTotal} of ${WEB_SOURCE_CATALOG.length} enabled`,
+      text: t("settings.webSources.count", {
+        enabled: enabledTotal,
+        total: WEB_SOURCE_CATALOG.length,
+      }),
     });
     section.createEl("p", {
       cls: "ixplorer-settings-websource-section__desc",
-      text: WEB_SOURCES_DESCRIPTION,
+      text: t("settings.webSources.desc"),
     });
 
     const table = section.createDiv({
@@ -82,9 +90,9 @@ export class WebSourcesSection {
       cls: "ixplorer-settings-profile-table__header ixplorer-settings-websource-table__header",
       attr: { role: "row" },
     });
-    tableHeader.createSpan({ text: "Source" });
-    tableHeader.createSpan({ text: "Actions" });
-    tableHeader.createSpan({ text: "State" });
+    tableHeader.createSpan({ text: t("settings.webSources.column.source") });
+    tableHeader.createSpan({ text: t("settings.webSources.column.actions") });
+    tableHeader.createSpan({ text: t("settings.webSources.column.state") });
     const listEl = table.createDiv({ cls: "ixplorer-settings-profile-list" });
 
     for (const category of categoriesInCatalogOrder()) {
@@ -96,7 +104,11 @@ export class WebSourcesSection {
       ).length;
       listEl.createDiv({
         cls: "ixplorer-settings-websource-list__category",
-        text: `${CATEGORY_LABELS[category]} · ${enabledCount}/${descriptors.length}`,
+        text: t("settings.webSources.categoryCount", {
+          category: t(CATEGORY_MESSAGE_KEYS[category]),
+          enabled: enabledCount,
+          total: descriptors.length,
+        }),
       });
       for (const descriptor of descriptors) {
         this.renderSourceRow(listEl, descriptor);
@@ -116,7 +128,7 @@ export class WebSourcesSection {
     nameEl.createDiv({ text: descriptor.label });
     nameEl.createDiv({
       cls: "ixplorer-settings-index-list__meta",
-      text: rowMeta(descriptor, configured),
+      text: rowMeta(this.ctx.t, descriptor, configured),
     });
 
     this.renderActionsCell(row, descriptor, configured);
@@ -128,13 +140,17 @@ export class WebSourcesSection {
     descriptor: WebSourceDescriptor,
     configured: boolean,
   ): void {
+    const { t } = this.ctx;
     const actions = row.createDiv({ cls: "ixplorer-settings-websource-list__actions" });
 
     if (!configured) {
       const setup = actions.createEl("button", {
         cls: "ixplorer-settings-websource-setup",
-        text: "Set up…",
-        attr: { type: "button", "aria-label": `Set up ${descriptor.label}` },
+        text: t("settings.webSources.setUp"),
+        attr: {
+          type: "button",
+          "aria-label": t("settings.webSources.setUpAria", { source: descriptor.label }),
+        },
       });
       setup.addEventListener("click", () => this.openConfigModal(descriptor));
       return;
@@ -142,7 +158,7 @@ export class WebSourcesSection {
 
     createIconButton(actions, {
       icon: "pencil",
-      label: `Configure ${descriptor.label}`,
+      label: t("settings.webSources.configure", { source: descriptor.label }),
       onClick: () => this.openConfigModal(descriptor),
     });
   }
@@ -153,6 +169,7 @@ export class WebSourcesSection {
     activation: WebSourceActivation,
     configured: boolean,
   ): void {
+    const { t } = this.ctx;
     const cell = row.createDiv({ cls: "ixplorer-settings-websource-list__state" });
     if (!configured) {
       cell.createSpan({ cls: "ixplorer-settings-websource-lamp is-unavailable" });
@@ -163,8 +180,15 @@ export class WebSourcesSection {
     const state = activation === "off" ? "off" : issue ? "warning" : "on";
     const next = nextActivation(activation);
     const title = issue
-      ? `${ISSUE_LABELS[issue.reason]} — click to switch to "${ACTIVATION_LABELS[next]}"`
-      : `${descriptor.label}: ${ACTIVATION_LABELS[activation]} — click to switch to "${ACTIVATION_LABELS[next]}"`;
+      ? t("settings.webSources.lampIssueTitle", {
+          issue: t(ISSUE_MESSAGE_KEYS[issue.reason]),
+          next: t(ACTIVATION_MESSAGE_KEYS[next]),
+        })
+      : t("settings.webSources.lampTitle", {
+          source: descriptor.label,
+          current: t(ACTIVATION_MESSAGE_KEYS[activation]),
+          next: t(ACTIVATION_MESSAGE_KEYS[next]),
+        });
 
     const lamp = cell.createEl("button", {
       cls: `ixplorer-settings-websource-lamp is-${state}${activation === "always" ? " is-always" : ""}`,
@@ -184,6 +208,8 @@ export class WebSourcesSection {
 
   private openConfigModal(descriptor: WebSourceDescriptor): void {
     new WebSourceModal(this.ctx.app, {
+      t: this.ctx.t,
+      getDirection: this.ctx.getDirection,
       descriptor,
       profile: getWebSourceProfile(this.ctx.getSettings(), descriptor.id),
       onSave: async (updated) => {
@@ -212,13 +238,17 @@ function categoriesInCatalogOrder(): WebSourceCategory[] {
   return seen;
 }
 
-function rowMeta(descriptor: WebSourceDescriptor, configured: boolean): string {
+function rowMeta(t: Translate, descriptor: WebSourceDescriptor, configured: boolean): string {
   const parts = [descriptor.freeTierNote];
   const required = descriptor.credentials.filter((field) => field.optional !== true);
   if (!configured && required.length > 0) {
-    parts.push(`${required.map((field) => field.label).join(", ")} required`);
+    parts.push(
+      t("settings.webSources.meta.required", {
+        fields: required.map((field) => field.label).join(", "),
+      }),
+    );
   } else if (descriptor.credentials.length > 0 && configured) {
-    parts.push("configured");
+    parts.push(t("settings.webSources.meta.configured"));
   }
   return parts.join(" · ");
 }

@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "obsidian";
 
+import { createTranslator } from "@adapters/i18n";
 import { ImageLightboxModal } from "@apps/obsidian/ui/chat/artifacts/ImageLightboxModal";
 import type { AnswerImage } from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
@@ -28,11 +29,14 @@ const documentImages: DocumentImageResolver = {
   }),
 };
 
+const t = createTranslator("en").t;
+
 let tracker: ObjectUrlTracker;
 
 function openLightbox(images: AnswerImage[], startIndex = 0, returnFocusTo?: HTMLElement) {
   const modal = new ImageLightboxModal(new App(), {
     app: new App(),
+    t,
     documentImages,
     images,
     startIndex,

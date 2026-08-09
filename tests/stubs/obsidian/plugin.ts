@@ -61,6 +61,11 @@ export class Plugin extends Component {
     return command;
   }
 
+  removeCommand(commandId: string): void {
+    const index = this.commands.findIndex((command) => command.id === commandId);
+    if (index >= 0) this.commands.splice(index, 1);
+  }
+
   addSettingTab(tab: PluginSettingTab): void {
     this.settingTabs.push(tab);
     this.register(() => {

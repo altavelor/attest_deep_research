@@ -4,8 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 import { TFile, TFolder } from "../../stubs/obsidian";
 
+import { createTranslator } from "@adapters/i18n";
 import { IndexPathPickerModal } from "@apps/obsidian/ui/settings/IndexPathPickerModal";
+import { formatReportTimestamp } from "@apps/obsidian/ui/settings/indexPath";
 import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 class NamedFile extends TFile {
   constructor(
@@ -52,6 +56,16 @@ function vaultApp(): App {
   } as unknown as App;
 }
 
+it("formats report timestamps in the selected interface locale", () => {
+  const timestamp = "2026-05-16T10:20:00.000Z";
+  const expected = new Intl.DateTimeFormat("ru", {
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(new Date(timestamp));
+
+  expect(formatReportTimestamp(timestamp, "ru")).toBe(expected);
+});
+
 /**
  * Emulates the browser behaviour the picker compensates for: a scroll container
  * loses its offset the moment its content is removed, so a rerender that does
@@ -77,7 +91,7 @@ function resetScrollWhenEmptied(element: HTMLElement): void {
 }
 
 function openPicker(onSubmit = vi.fn()) {
-  const modal = new IndexPathPickerModal(vaultApp(), { selectedPaths: [], onSubmit });
+  const modal = new IndexPathPickerModal(vaultApp(), { t, selectedPaths: [], onSubmit });
   modal.open();
   const treeEl = modal.contentEl.querySelector<HTMLElement>(".ixplorer-index-path-picker");
   if (!treeEl) throw new Error("The picker did not render its tree.");

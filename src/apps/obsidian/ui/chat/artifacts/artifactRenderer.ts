@@ -2,11 +2,15 @@ import { App } from "obsidian";
 
 import { sanitizeAnswerArtifacts, type AnswerArtifact } from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { renderChartArtifact } from "./chartRenderer";
 import { disposeGalleryArtifacts, renderImageGalleryArtifact } from "./imageGalleryRenderer";
 
 export interface ArtifactRenderOptions {
   app: App;
+  t: Translate;
+  getDirection?(): TextDirection;
   documentImages?: DocumentImageResolver;
 }
 
@@ -23,7 +27,7 @@ export function renderAnswerArtifacts(
     if (artifact.type === "image-gallery") {
       renderImageGalleryArtifact(listEl, artifact, options);
     } else {
-      renderChartArtifact(listEl, artifact);
+      renderChartArtifact(listEl, artifact, options.t);
     }
   }
   return true;

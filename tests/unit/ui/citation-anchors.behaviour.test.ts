@@ -16,7 +16,10 @@ import {
 } from "@apps/obsidian/ui/chat/citations/CitationPopover";
 import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvidence";
 import type { ChatTranscriptOptions } from "@apps/obsidian/ui/chat/ChatTranscript";
+import { createTranslator } from "@adapters/i18n";
 import { createContainer, resetDom } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 const EVIDENCE_ID = "web-hash-openai";
 
@@ -57,6 +60,7 @@ function message(overrides: Partial<ChatDisplayMessage> = {}): ChatDisplayMessag
 }
 
 const transcriptOptions = {
+  t,
   onOpenCitationPopover: () => {},
   onScheduleCitationPopoverClose: () => {},
   onScrollCitationBlockIntoView: () => {},
@@ -160,6 +164,7 @@ describe("web references without evidence", () => {
 
   it("renders its source card as a bare link, without an excerpt or a copy button", () => {
     renderCitationBlocks(container, buildCitationRefs(citationEvidence(withWebReference)), {
+      t,
       onOpenChunk: () => {},
       onHighlight: () => {},
     });

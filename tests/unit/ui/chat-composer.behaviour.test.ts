@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createTranslator } from "@adapters/i18n";
 import { ChatComposerController } from "@apps/obsidian/ui/chat/ChatComposerController";
 import type { ChatComposerControllerOptions } from "@apps/obsidian/ui/chat/ChatComposerController";
 import type { ContextWindowUsage } from "@apps/obsidian/ui/chat/contextWindowUsage";
@@ -22,6 +23,8 @@ interface ComposerHarness {
   attachButton(): HTMLButtonElement;
   contextIndicator(): HTMLElement;
 }
+
+const t = createTranslator("en").t;
 
 let container: HTMLElement;
 
@@ -46,6 +49,7 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     isRunning: () => state.running,
     getContextWindowUsage: () => state.contextWindowUsage,
     getSearchUnavailableMessage: () => state.searchUnavailableMessage,
+    t,
     onSubmit: () => {},
     onStop: () => {},
     onOpenContextPicker: () => {},

@@ -1,8 +1,12 @@
+import type { Translate } from "@adapters/i18n";
 import { createIconButton, ProfileStatus } from "./shared";
 
+export type ProfileListTag = "Agent" | "Tools" | "Instant";
+
 export interface ProfileListItemOptions {
+  t: Translate;
   name: string;
-  tags?: Array<"Agent" | "Tools" | "Instant">;
+  tags?: ProfileListTag[];
   status: ProfileStatus | null;
   canDelete: boolean;
   deleteTooltip: string;
@@ -19,6 +23,7 @@ export interface ProfileListItemOptions {
 }
 
 export function renderProfileList(
+  t: Translate,
   containerEl: HTMLElement,
   title: string,
   onAdd: () => void,
@@ -28,7 +33,7 @@ export function renderProfileList(
   header.createEl("h3", { text: title });
   createIconButton(header, {
     icon: "plus",
-    label: `Add ${title.toLowerCase()}`,
+    label: t("settings.profileList.addAction", { title: title.toLowerCase() }),
     onClick: onAdd,
   });
 
@@ -37,9 +42,9 @@ export function renderProfileList(
     cls: "ixplorer-settings-profile-table__header",
     attr: { role: "row" },
   });
-  tableHeader.createSpan({ text: "Profile" });
-  tableHeader.createSpan({ text: "Status" });
-  tableHeader.createSpan({ text: "Actions" });
+  tableHeader.createSpan({ text: t("settings.profileList.column.profile") });
+  tableHeader.createSpan({ text: t("settings.profileList.column.status") });
+  tableHeader.createSpan({ text: t("settings.profileList.column.actions") });
   return table.createDiv({ cls: "ixplorer-settings-profile-list" });
 }
 
@@ -47,6 +52,7 @@ export function renderProfileListItem(
   containerEl: HTMLElement,
   options: ProfileListItemOptions,
 ): void {
+  const { t } = options;
   const row = containerEl.createDiv({ cls: "ixplorer-settings-profile-list__item" });
   row.createDiv({ cls: "ixplorer-settings-profile-list__name", text: options.name });
   const statusCell = row.createDiv({ cls: "ixplorer-settings-profile-list__status-cell" });
@@ -60,7 +66,7 @@ export function renderProfileListItem(
   for (const tag of options.tags ?? []) {
     statusCell.createSpan({
       cls: `ixplorer-settings-profile-list__status ixplorer-settings-profile-list__tag--${tag.toLowerCase()}`,
-      text: tag,
+      text: profileListTagLabel(t, tag),
     });
   }
   const actions = row.createDiv({ cls: "ixplorer-settings-profile-list__actions" });
@@ -87,7 +93,7 @@ export function renderProfileListItem(
   }
   createIconButton(actions.createSpan({ cls: "ixplorer-settings-profile-list__action-slot" }), {
     icon: "pencil",
-    label: "Edit profile",
+    label: t("settings.profileList.editAction"),
     onClick: options.onEdit,
   });
   createIconButton(actions.createSpan({ cls: "ixplorer-settings-profile-list__action-slot" }), {
@@ -96,4 +102,15 @@ export function renderProfileListItem(
     disabled: !options.canDelete,
     onClick: () => void options.onDelete(),
   });
+}
+
+function profileListTagLabel(t: Translate, tag: ProfileListTag): string {
+  switch (tag) {
+    case "Agent":
+      return t("settings.profileList.tag.agent");
+    case "Tools":
+      return t("settings.profileList.tag.tools");
+    default:
+      return t("settings.profileList.tag.instant");
+  }
 }

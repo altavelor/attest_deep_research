@@ -7,6 +7,7 @@ import {
 import { ResearchService } from "@application/use-cases/research";
 import { toUserMessage } from "@core/errors";
 import { ChatDisplayMessage } from "@core/conversation";
+import type { Translate } from "@adapters/i18n";
 import { Notice } from "obsidian";
 
 export interface ChatHistoryCompactorOptions {
@@ -18,6 +19,7 @@ export interface ChatHistoryCompactorOptions {
   saveCurrentChat(): Promise<void>;
   setProgressStatus(message: string | null): void;
   renderMessages(): void;
+  t: Translate;
 }
 
 /** Coordinates context-driven chat-history compaction and its user-visible status. */
@@ -44,22 +46,22 @@ export class ChatHistoryCompactor {
     const compactable = compactableMessages(messages);
 
     if (compactable.length === 0) {
-      const message = "There is not enough older chat history to compact.";
+      const message = this.options.t("chat.compact.nothingToCompact");
       this.options.setProgressStatus(message);
       new Notice(message);
       return false;
     }
 
     const status = options.automatic
-      ? "Automatically compacting context to preserve evidence budget..."
-      : "Compacting chat history...";
+      ? this.options.t("chat.compact.automaticStatus")
+      : this.options.t("chat.compact.manualStatus");
     this.options.setProgressStatus(status);
     if (options.automatic) {
       this.options.setMessages([
         ...messages,
         {
           role: "assistant",
-          content: "Automatically compacting context to preserve evidence budget.",
+          content: this.options.t("chat.compact.automaticMessage"),
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -86,7 +88,7 @@ export class ChatHistoryCompactor {
       this.options.setMessages(result.messages);
       await this.options.saveCurrentChat();
       this.options.renderMessages();
-      const done = `Compacted ${result.compactedCount} older message(s).`;
+      const done = this.options.t("chat.compact.done", { count: result.compactedCount });
       this.options.setProgressStatus(done);
       new Notice(done);
       return true;

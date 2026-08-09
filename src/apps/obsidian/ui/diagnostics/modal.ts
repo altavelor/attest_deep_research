@@ -1,6 +1,8 @@
 import { App, Modal, setIcon } from "obsidian";
 
 import { ContextDiagnostics } from "@core/diagnostics";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { copyToClipboard } from "../shared/clipboard";
 import { buildDiagnosticReportV3 } from "./report/build";
 import { renderDiagnosticHtmlDocument } from "./html/document";
@@ -10,11 +12,15 @@ import { renderReadableDiagnosticReport } from "./readable";
 export class DiagnosticReportModalController {
   private modal: DiagnosticReportModal | null = null;
 
-  constructor(private readonly app: App) {}
+  constructor(
+    private readonly app: App,
+    private readonly t: Translate,
+    private readonly getDirection?: () => TextDirection,
+  ) {}
 
   open(diagnostics: ContextDiagnostics): void {
     this.close();
-    this.modal = new DiagnosticReportModal(this.app, diagnostics);
+    this.modal = new DiagnosticReportModal(this.app, diagnostics, this.t, this.getDirection);
     this.modal.open();
   }
 
@@ -28,11 +34,14 @@ class DiagnosticReportModal extends Modal {
   constructor(
     app: App,
     private readonly diagnostics: ContextDiagnostics,
+    private readonly t: Translate,
+    private readonly getDirection?: () => TextDirection,
   ) {
     super(app);
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.getDirection?.() ?? "ltr");
     const report = buildDiagnosticReportV3(this.diagnostics);
     const rawJson = JSON.stringify(report, null, 2);
     this.modalEl.addClass("ixplorer-chat__diagnostic-modal");
@@ -63,7 +72,7 @@ class DiagnosticReportModal extends Modal {
     });
     setIcon(copyButton, "copy");
     copyButton.addEventListener("click", () => {
-      void copyToClipboard(rawJson);
+      void copyToClipboard(rawJson, this.t);
     });
     const downloadButton = toolbar.createEl("button", {
       attr: {

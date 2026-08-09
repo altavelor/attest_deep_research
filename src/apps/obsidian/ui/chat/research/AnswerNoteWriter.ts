@@ -6,15 +6,19 @@ import {
   researchAnswerNotePath,
 } from "@application/use-cases/research";
 import { ResearchAnswer } from "@core/answer";
+import type { Translate } from "@adapters/i18n";
 
 export class AnswerNoteWriter {
-  constructor(private readonly app: App) {}
+  constructor(
+    private readonly app: App,
+    private readonly t: Translate,
+  ) {}
 
   async saveAnswerToNewNote(answer: ResearchAnswer): Promise<void> {
     const path = await this.nextAvailableNotePath(researchAnswerNotePath(answer));
     await this.ensureFolder(path);
     await this.app.vault.create(path, formatResearchAnswerNote(answer));
-    new Notice("Saved Ixplorer answer to a new note.");
+    new Notice(this.t("chat.answerNote.saved"));
     await this.app.workspace.openLinkText(path, "", false);
   }
 
@@ -22,12 +26,12 @@ export class AnswerNoteWriter {
     const activeFile = this.app.workspace.getActiveFile();
 
     if (!activeFile) {
-      new Notice("Open a note before appending an Ixplorer answer.");
+      new Notice(this.t("chat.answerNote.openNoteFirst"));
       return;
     }
 
     await this.app.vault.append(activeFile, formatResearchAnswerAppendBlock(answer));
-    new Notice("Appended Ixplorer answer to the active note.");
+    new Notice(this.t("chat.answerNote.appended"));
   }
 
   private async ensureFolder(path: string): Promise<void> {
