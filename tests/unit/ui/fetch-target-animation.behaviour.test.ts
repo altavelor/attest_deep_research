@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App, Component } from "obsidian";
 
 import { disposeChatTranscript } from "@apps/obsidian/ui/chat/ChatTranscript";
+import { createTranslator } from "@adapters/i18n";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import {
@@ -14,6 +15,8 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 const searchResults: ChainItem = {
   kind: "tool-call",
@@ -65,6 +68,7 @@ function renderTranscript(host: HTMLElement): void {
     app: new App(),
     markdownContext: new Component(),
     isDebugMode: false,
+    t,
     onOpenToolOutput: () => {},
   });
 }
@@ -119,6 +123,7 @@ describe("fetch-target animation in a pending web fetch", () => {
       app: new App(),
       markdownContext: new Component(),
       isDebugMode: false,
+      t,
       onOpenToolOutput: () => {},
     });
 

@@ -4,6 +4,7 @@ import { SavedChatSettings } from "@core/chat/savedChat";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { ResearchMode } from "@core/research";
 import type { ContextMode } from "@core/diagnostics";
+import type { Translate } from "@adapters/i18n";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 import { createMentionAutocomplete } from "./mentionAutocompleteController";
 import { createMenuDropdown, DropdownItem, showDropdownMenu } from "./chatDropdown";
@@ -57,6 +58,7 @@ export interface ChatComposerOptions {
   availableIndexes: IndexProfileSelectOption[];
   contextFilePaths: string[];
   researchMode: ResearchMode;
+  t: Translate;
   onSubmit(): void;
   onStop(): void;
   onQuestionInput?(): void;
@@ -68,27 +70,34 @@ export interface ChatComposerOptions {
   onUpdateResearchMode(mode: ResearchMode): void;
 }
 
-const SEARCH_MODE_ITEMS: DropdownItem[] = [
-  { id: "none", name: "None" },
-  { id: "indexOnly", name: "Index" },
-  { id: "indexAndWeb", name: "Index + Web" },
-  { id: "webOnly", name: "Web" },
-];
+function searchModeItems(t: Translate): DropdownItem[] {
+  return [
+    { id: "none", name: t("chat.composer.sources.none") },
+    { id: "indexOnly", name: t("chat.composer.sources.index") },
+    { id: "indexAndWeb", name: t("chat.composer.sources.indexAndWeb") },
+    { id: "webOnly", name: t("chat.composer.sources.web") },
+  ];
+}
 
-const CONTEXT_MODE_ITEMS: DropdownItem[] = [
-  { id: "include", name: "Include" },
-  { id: "filter", name: "Filter" },
-];
+function contextModeItems(t: Translate): DropdownItem[] {
+  return [
+    { id: "include", name: t("chat.composer.contextMode.include") },
+    { id: "filter", name: t("chat.composer.contextMode.filter") },
+  ];
+}
 
-const RESEARCH_MODE_ITEMS: DropdownItem[] = [
-  { id: "instant", name: "Instant" },
-  { id: "thinking", name: "Thinking" },
-];
+function researchModeItems(t: Translate): DropdownItem[] {
+  return [
+    { id: "instant", name: t("chat.composer.researchMode.instant") },
+    { id: "thinking", name: t("chat.composer.researchMode.thinking") },
+  ];
+}
 
 export function renderChatComposer(
   containerEl: HTMLElement,
   options: ChatComposerOptions,
 ): ChatComposerRefs {
+  const { t } = options;
   const formEl = containerEl.createEl("form", { cls: "ixplorer-chat__form" });
   formEl.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -109,9 +118,9 @@ export function renderChatComposer(
     options.settings.contextMode === "filter" ? "filter" : "include";
   const contextModeDropdown = createMenuDropdown(attachmentsRowEl, {
     cls: "ixplorer-chat__dropdown--context-mode",
-    ariaLabel: "Attached context mode",
-    placeholder: "Include",
-    items: CONTEXT_MODE_ITEMS,
+    ariaLabel: t("chat.composer.contextMode.aria"),
+    placeholder: t("chat.composer.contextMode.include"),
+    items: contextModeItems(t),
     initialId: currentContextMode,
     onSelect: (id) => {
       currentContextMode = id === "filter" ? "filter" : "include";
@@ -124,8 +133,8 @@ export function renderChatComposer(
     cls: "ixplorer-chat__input",
     attr: {
       rows: "1",
-      placeholder: "Ask across your vault",
-      "aria-label": "Research question",
+      placeholder: t("chat.composer.placeholder"),
+      "aria-label": t("chat.composer.question.aria"),
     },
   });
   const resizeQuestionInput = createTextareaAutoGrow(textareaEl);
@@ -156,8 +165,8 @@ export function renderChatComposer(
     cls: "ixplorer-chat__icon-button",
     attr: {
       type: "button",
-      "aria-label": "Attach context documents",
-      title: "Attach context documents",
+      "aria-label": t("chat.composer.attach"),
+      title: t("chat.composer.attach"),
     },
   });
   setIcon(attachButton, "plus");
@@ -169,9 +178,9 @@ export function renderChatComposer(
   const sourcesEl = modelRow.createDiv({ cls: "ixplorer-chat__sources" });
   const sourcesModeDropdown = createMenuDropdown(sourcesEl, {
     cls: "ixplorer-chat__dropdown--sources",
-    ariaLabel: "Search sources",
-    placeholder: "Sources",
-    items: SEARCH_MODE_ITEMS,
+    ariaLabel: t("chat.composer.sources.aria"),
+    placeholder: t("chat.composer.sources.placeholder"),
+    items: searchModeItems(t),
     initialId: currentSearchMode,
     onSelect: (id) => {
       currentSearchMode = getResearchSearchMode(id);
@@ -187,7 +196,7 @@ export function renderChatComposer(
 
   const indexButton = sourcesEl.createEl("button", {
     cls: "ixplorer-chat__sources-index",
-    attr: { type: "button", "aria-label": "Choose index" },
+    attr: { type: "button", "aria-label": t("chat.composer.index.aria") },
   });
   setIcon(indexButton, "chevron-down");
   indexButton.addEventListener("click", () => {
@@ -222,9 +231,9 @@ export function renderChatComposer(
   const researchModeDropdown = createMenuDropdown(modelRow, {
     cls: "ixplorer-chat__dropdown--research-mode",
     menuCls: "ixplorer-chat__research-menu",
-    ariaLabel: "Research mode",
-    placeholder: "Instant",
-    items: RESEARCH_MODE_ITEMS,
+    ariaLabel: t("chat.composer.researchMode.aria"),
+    placeholder: t("chat.composer.researchMode.instant"),
+    items: researchModeItems(t),
     initialId: currentResearchMode,
     onSelect: (id) => {
       currentResearchMode = id === "thinking" ? "thinking" : "instant";
@@ -236,16 +245,16 @@ export function renderChatComposer(
     cls: "ixplorer-chat__context-indicator",
     attr: {
       role: "status",
-      "aria-label": "Unknown model context window size",
-      title: "Unknown model context window size",
+      "aria-label": t("chat.status.contextWindow.unknown"),
+      title: t("chat.status.contextWindow.unknown"),
     },
   });
 
   let currentModel = options.settings.chatModelProfileId;
   const modelDropdown = createMenuDropdown(modelRow, {
     cls: "ixplorer-chat__dropdown--model",
-    ariaLabel: "Model",
-    placeholder: "Model",
+    ariaLabel: t("chat.composer.model.aria"),
+    placeholder: t("chat.composer.model.placeholder"),
     items: options.availableModels
       .filter((model) => !model.isSuspended)
       .map((model) => ({ id: model.id, name: model.name })),
@@ -263,7 +272,7 @@ export function renderChatComposer(
       true;
     researchModeDropdown.setItemDisabled(
       "thinking",
-      supportsAgent ? undefined : THINKING_BLOCKED_REASON,
+      supportsAgent ? undefined : t("chat.composer.researchMode.thinkingBlocked"),
     );
     if (!supportsAgent && currentResearchMode === "thinking") {
       currentResearchMode = "instant";
@@ -328,9 +337,6 @@ export function renderChatComposer(
   };
 }
 
-const THINKING_BLOCKED_REASON =
-  "The selected model does not support Agent mode. Run the capability test in settings or pick an Agent-capable model.";
-
 function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
   let minTextareaHeight = 0;
 
@@ -374,6 +380,7 @@ export function renderAttachedContext(
   containerEl: HTMLElement,
   paths: string[],
   onRemove: (path: string) => void,
+  t: Translate,
 ): void {
   containerEl.empty();
 
@@ -386,11 +393,12 @@ export function renderAttachedContext(
       isFolder ? "folder" : "file-text",
     );
     chip.createSpan({ cls: "ixplorer-chat__attachment-name", text: attachmentDisplayName(path) });
+    const removeLabel = t("chat.composer.attachment.remove", { path });
     const removeButton = chip.createEl("button", {
       attr: {
         type: "button",
-        "aria-label": `Remove ${path}`,
-        title: `Remove ${path}`,
+        "aria-label": removeLabel,
+        title: removeLabel,
       },
     });
     setIcon(removeButton, "x");

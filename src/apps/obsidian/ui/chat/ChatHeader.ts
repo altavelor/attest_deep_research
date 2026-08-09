@@ -1,10 +1,13 @@
 import { setIcon } from "obsidian";
 
+import type { Translate } from "@adapters/i18n";
+
 export type IxplorerPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
   activePanel: IxplorerPanel;
   isDebugMode: boolean;
+  t: Translate;
   onPanelChange(panel: IxplorerPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
   onNewChat(): void;
@@ -16,8 +19,8 @@ export function renderPanelTabs(containerEl: HTMLElement, options: ChatHeaderOpt
   }
 
   const tabs = containerEl.createDiv({ cls: "ixplorer-chat__tabs", attr: { role: "tablist" } });
-  createPanelTab(tabs, "chat", "Chat", options);
-  createPanelTab(tabs, "indexSearch", "Index search", options);
+  createPanelTab(tabs, "chat", options.t("chat.tab.chat"), options);
+  createPanelTab(tabs, "indexSearch", options.t("chat.tab.indexSearch"), options);
 }
 
 export function renderChatWindowActions(
@@ -27,13 +30,13 @@ export function renderChatWindowActions(
   const actions = containerEl.createDiv({ cls: "ixplorer-chat__window-actions" });
   const historyButton = createHeaderIconButton(actions, {
     icon: "history",
-    label: "Chats history",
+    label: options.t("chat.action.history"),
     disabled: false,
     onClick: () => options.onOpenHistory(historyButton),
   });
   createHeaderIconButton(actions, {
     icon: "message-square-plus",
-    label: "New chat",
+    label: options.t("chat.action.newChat"),
     disabled: false,
     onClick: options.onNewChat,
   });

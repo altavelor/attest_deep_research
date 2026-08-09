@@ -13,6 +13,7 @@ import type { ContextMode } from "@core/diagnostics";
 import { toUserMessage } from "@core/errors";
 import { ResearchAnswer } from "@core/answer";
 import { ChatDisplayMessage } from "@core/conversation";
+import type { Translate } from "@adapters/i18n";
 import {
   attachAnswerDetailsToLastAssistantMessage,
   completeAssistantCheckpoint,
@@ -64,6 +65,7 @@ export interface ResearchQuestionControllerOptions {
   renderMessages(): void;
   renderActiveMessage(): void;
   renderAnswerDetails(): void;
+  t: Translate;
 }
 
 export class ResearchQuestionController {
@@ -468,7 +470,7 @@ export class ResearchQuestionController {
       return false;
     }
 
-    const message = "The current chat is too long for the selected model context window.";
+    const message = this.options.t("chat.research.contextTooLong");
     this.options.setProgressStatus(message);
     new Notice(message);
     return true;

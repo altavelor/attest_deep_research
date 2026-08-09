@@ -2,6 +2,7 @@ import { Notice } from "obsidian";
 
 import { RetrievedChunk } from "@core/model";
 import { toUserMessage } from "@core/errors";
+import type { Translate } from "@adapters/i18n";
 import { IndexProfileSelectOption } from "@apps/obsidian/ui/chat/ChatComposer";
 import {
   IndexSearchPanelRefs,
@@ -33,6 +34,7 @@ export interface IndexSearchControllerContext {
   getEmbedderWarning(indexProfileId: string): string | undefined;
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
   onOpenChunk(chunk: RetrievedChunk): void;
+  t: Translate;
 }
 
 /**
@@ -68,6 +70,7 @@ export class IndexSearchController {
       warning: this.warning(selectedProfileId),
       isSearchBlocked: this.isSearchBlocked(selectedProfileId),
       isSearching: this.isSearching,
+      t: this.ctx.t,
       onSubmit: () => void this.submitSearch(),
       onProfileChange: () => this.updateSearchAvailability(),
       onOpenResult: (chunk) => this.ctx.onOpenChunk(chunk),
@@ -86,6 +89,7 @@ export class IndexSearchController {
       error: this.error,
       warning: this.warning(),
       isSearching: this.isSearching,
+      t: this.ctx.t,
       onOpenResult: (chunk) => this.ctx.onOpenChunk(chunk),
     });
   }
@@ -154,9 +158,7 @@ export class IndexSearchController {
     if (preflightWarning) {
       return preflightWarning;
     }
-    return this.semanticError
-      ? "Index search degraded to keyword-only ranking because embedding retrieval is unavailable."
-      : null;
+    return this.semanticError ? this.ctx.t("indexSearch.degraded") : null;
   }
 
   private selectedProfileId(): string {

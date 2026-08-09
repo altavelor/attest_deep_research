@@ -17,7 +17,7 @@ export function renderInlineCitationAnchors(
     button.className = "ixplorer-chat__citation-anchor";
     button.type = "button";
     button.textContent = `[${ref.number}]`;
-    button.setAttr("aria-label", `Open source ${ref.number}`);
+    button.setAttr("aria-label", options.t("chat.citation.openSource", { number: ref.number }));
     button.dataset.citationKey = ref.key;
     button.addEventListener("mouseenter", () => options.onOpenCitationPopover(button, ref));
     button.addEventListener("mouseleave", () => options.onScheduleCitationPopoverClose(ref.key));

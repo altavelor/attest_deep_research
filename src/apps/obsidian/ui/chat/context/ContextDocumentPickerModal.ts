@@ -1,5 +1,7 @@
 import { Modal, setIcon, TFile } from "obsidian";
 import { isSupportedContextDocumentPath } from "@shared";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { isFolderAttachmentPath } from "./attachmentPaths";
 
 export function isContextDocumentPath(path: string): boolean {
@@ -32,6 +34,8 @@ export class ContextDocumentPickerModal extends Modal {
     private readonly options: {
       files: TFile[];
       selectedPaths: string[];
+      t: Translate;
+      getDirection?(): TextDirection;
       onSubmit: (paths: string[]) => void;
     },
   ) {
@@ -46,7 +50,9 @@ export class ContextDocumentPickerModal extends Modal {
   }
 
   onOpen(): void {
-    this.titleEl.setText("Attach context documents");
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
+    const t = this.options.t;
+    this.titleEl.setText(t("chat.contextPicker.title"));
     this.contentEl.empty();
     this.contentEl.addClass("ixplorer-context-picker");
 
@@ -54,8 +60,8 @@ export class ContextDocumentPickerModal extends Modal {
       cls: "ixplorer-context-picker__search",
       attr: {
         type: "search",
-        placeholder: "Filter documents",
-        "aria-label": "Filter documents",
+        placeholder: t("chat.contextPicker.filter"),
+        "aria-label": t("chat.contextPicker.filter"),
       },
     });
     search.addEventListener("input", () => {
@@ -67,11 +73,14 @@ export class ContextDocumentPickerModal extends Modal {
     this.renderList();
 
     const actions = this.contentEl.createDiv({ cls: "ixplorer-context-picker__actions" });
-    const cancel = actions.createEl("button", { text: "Cancel", attr: { type: "button" } });
+    const cancel = actions.createEl("button", {
+      text: t("common.cancel"),
+      attr: { type: "button" },
+    });
     cancel.addEventListener("click", () => this.close());
     const apply = actions.createEl("button", {
       cls: "mod-cta",
-      text: "Attach",
+      text: t("chat.contextPicker.attach"),
       attr: { type: "button" },
     });
     apply.addEventListener("click", () => {
@@ -113,7 +122,9 @@ export class ContextDocumentPickerModal extends Modal {
         cls: "ixplorer-context-picker__toggle",
         attr: {
           type: "button",
-          "aria-label": expanded ? `Collapse ${child.name}` : `Expand ${child.name}`,
+          "aria-label": expanded
+            ? this.options.t("chat.contextPicker.collapse", { name: child.name })
+            : this.options.t("chat.contextPicker.expand", { name: child.name }),
         },
       });
       setIcon(toggle, expanded ? "chevron-down" : "chevron-right");

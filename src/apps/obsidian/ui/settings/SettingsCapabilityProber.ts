@@ -168,7 +168,14 @@ export class SettingsCapabilityProber {
         await this.plugin.saveSettings();
         this.requestRedisplay();
       })
-      .catch(() => new Notice(`Capability detection failed for ${savedProfile.name}.`));
+      .catch(
+        () =>
+          new Notice(
+            this.plugin.translate("settings.prober.capabilityDetectionFailed", {
+              profile: savedProfile.name,
+            }),
+          ),
+      );
   }
 
   startChatProfileProbes(profileId: string, force = false): void {
@@ -330,13 +337,26 @@ export class SettingsCapabilityProber {
       },
       onToolsError: () => {
         this.publishState(target.profileId, { tools: "failed" });
-        new Notice(`Tool capability detection failed for ${savedProfile.name}.`);
+        new Notice(
+          this.plugin.translate("settings.prober.toolCapabilityDetectionFailed", {
+            profile: savedProfile.name,
+          }),
+        );
       },
       onResponsesError: () => {
         this.publishState(target.profileId, { agent: "failed" });
-        new Notice(`Agent mode capability detection failed for ${savedProfile.name}.`);
+        new Notice(
+          this.plugin.translate("settings.prober.agentCapabilityDetectionFailed", {
+            profile: savedProfile.name,
+          }),
+        );
       },
-      onReasoningError: () => new Notice(`Capability detection failed for ${savedProfile.name}.`),
+      onReasoningError: () =>
+        new Notice(
+          this.plugin.translate("settings.prober.capabilityDetectionFailed", {
+            profile: savedProfile.name,
+          }),
+        ),
     });
   }
 

@@ -1,4 +1,5 @@
 import { humanizeToolName, toolIntent } from "@core/agent";
+import type { Translate } from "@adapters/i18n";
 import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
 export type ToolCell =
@@ -28,6 +29,8 @@ export interface ToolCallViewInput {
   fetchTargets?: string[];
 
   searchSources?: string[];
+
+  t: Translate;
 }
 
 export function describeToolCall(input: ToolCallViewInput): ToolCallView {
@@ -77,7 +80,7 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
         fetchTargets,
         inCell: argsCell(args),
         outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
-        ...(name === "search_index" ? { badge: keywordFallbackBadge(resultJson) } : {}),
+        ...(name === "search_index" ? { badge: keywordFallbackBadge(input.t, resultJson) } : {}),
       };
   }
 }
@@ -86,7 +89,10 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
  * Surfaces degraded index search (semantic path failed, keyword-only ranking)
  * as a warning chip, so silent quality loss is visible outside the raw report.
  */
-function keywordFallbackBadge(resultJson?: string): { text: string; tooltip?: string } | undefined {
+function keywordFallbackBadge(
+  t: Translate,
+  resultJson?: string,
+): { text: string; tooltip?: string } | undefined {
   if (!resultJson) return undefined;
   try {
     const parsed = JSON.parse(resultJson) as {
@@ -95,10 +101,10 @@ function keywordFallbackBadge(resultJson?: string): { text: string; tooltip?: st
     const diagnostics = parsed.diagnostics;
     if (!diagnostics?.usedKeywordFallback && !diagnostics?.semanticError) return undefined;
     return {
-      text: "keyword-only",
+      text: t("chat.toolCall.badge.keywordOnly"),
       tooltip: diagnostics.semanticError
-        ? `Semantic (embedding) search failed: ${diagnostics.semanticError}`
-        : "Semantic search returned nothing; results ranked by keywords only.",
+        ? t("chat.toolCall.badge.semanticFailed", { error: diagnostics.semanticError })
+        : t("chat.toolCall.badge.semanticEmpty"),
     };
   } catch {
     return undefined;

@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App, Component } from "obsidian";
 
+import { createTranslator } from "@adapters/i18n";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
 import {
   finalizeLastAssistantReasoning,
@@ -18,6 +19,8 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 function streaming(
   chain: ChainItem[],
@@ -53,6 +56,7 @@ function render(host: HTMLElement, message: ChatDisplayMessage): boolean {
     app: new App(),
     markdownContext: new Component(),
     isDebugMode: false,
+    t,
     onOpenToolOutput: () => {},
   });
 }

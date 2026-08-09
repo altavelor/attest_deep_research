@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "./defaults";
 import { readNewChatDefaults } from "./newChatDefaults";
 import { normalizeSettingsState } from "./normalization";
+import { readUiLanguage } from "./uiLanguage";
 import { IxplorerSettings } from "./types";
 
 export function readSettings(savedData: unknown): IxplorerSettings {
@@ -32,6 +33,7 @@ function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
   return {
     ...currentSettings,
     newChatDefaults: readNewChatDefaults(settings),
+    uiLanguage: readUiLanguage(settings),
     serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
     chatModelProfiles: settings.chatModelProfiles.map((profile) => ({
       ...profile,

@@ -1,4 +1,5 @@
 import { chartDataTable, formatNumber, type ChartArtifact, type ChartSeries } from "@core/media";
+import type { Translate } from "@adapters/i18n";
 import {
   buildChartScale,
   CHART_VIEWPORT,
@@ -12,7 +13,11 @@ import {
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_AXIS_LABELS = 12;
 
-export function renderChartArtifact(containerEl: HTMLElement, chart: ChartArtifact): void {
+export function renderChartArtifact(
+  containerEl: HTMLElement,
+  chart: ChartArtifact,
+  t: Translate,
+): void {
   const figure = containerEl.createEl("figure", { cls: "ixplorer-artifact ixplorer-chart" });
   figure.createEl("figcaption", { cls: "ixplorer-artifact__title", text: chart.title });
 
@@ -20,7 +25,7 @@ export function renderChartArtifact(containerEl: HTMLElement, chart: ChartArtifa
   svg.setAttribute("viewBox", `0 0 ${CHART_VIEWPORT.width} ${CHART_VIEWPORT.height}`);
   svg.setAttribute("role", "img");
   svg.setAttribute("class", "ixplorer-chart__svg");
-  svg.setAttribute("aria-label", chartAriaLabel(chart));
+  svg.setAttribute("aria-label", chartAriaLabel(chart, t));
   figure.appendChild(svg);
 
   if (chart.chartType === "pie") {
@@ -36,13 +41,16 @@ export function renderChartArtifact(containerEl: HTMLElement, chart: ChartArtifa
   }
 
   const details = figure.createEl("details", { cls: "ixplorer-chart__data" });
-  details.createEl("summary", { text: "Chart data" });
+  details.createEl("summary", { text: t("chat.artifact.chart.data") });
   renderDataTable(details, chart);
 }
 
-function chartAriaLabel(chart: ChartArtifact): string {
-  const seriesNames = chart.series.map((series) => series.name).join(", ");
-  return `${chart.chartType} chart: ${chart.title}. Series: ${seriesNames}. The full data table follows the chart.`;
+function chartAriaLabel(chart: ChartArtifact, t: Translate): string {
+  return t("chat.artifact.chart.aria", {
+    type: chart.chartType,
+    title: chart.title,
+    series: chart.series.map((series) => series.name).join(", "),
+  });
 }
 
 function renderCartesian(svg: SVGSVGElement, chart: ChartArtifact): void {

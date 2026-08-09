@@ -4,6 +4,7 @@ import { shouldShowAnswerNoteActions } from "@core/conversation";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
 import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
+import type { Translate } from "@adapters/i18n";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import { buildCitationRefs } from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
@@ -34,7 +35,7 @@ export function renderAssistantMessageContent(
   );
   contentEl.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
   if (message.isFallback) {
-    renderFallbackBanner(contentEl, message.fallbackReason);
+    renderFallbackBanner(contentEl, options.t, message.fallbackReason);
   }
   const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
   renderAssistantAnswer(answerEl, message, options, hasWorkflow);
@@ -62,7 +63,7 @@ export function patchAssistantMessageContent(
   contentEl?.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
   messageEl.querySelector<HTMLElement>(".ixplorer-chat__fallback-notice")?.remove();
   if (message.isFallback && answerEl.parentElement) {
-    renderFallbackBanner(answerEl.parentElement, message.fallbackReason);
+    renderFallbackBanner(answerEl.parentElement, options.t, message.fallbackReason);
   }
   disposeAnswerArtifacts(answerEl);
   answerEl.empty();
@@ -75,6 +76,7 @@ function createWorkflowRenderContext(options: ChatTranscriptOptions): WorkflowRe
     app: options.app,
     markdownContext: options.markdownContext,
     isDebugMode: options.isDebugMode,
+    t: options.t,
     onOpenToolOutput: options.onOpenToolOutput,
   };
 }
@@ -101,6 +103,8 @@ function renderAssistantAnswer(
     renderInlineCitationAnchors(answerEl, citationRefs, options);
     renderAnswerArtifacts(answerEl, message.answer?.artifacts, {
       app: options.app,
+      t: options.t,
+      getDirection: options.getDirection,
       ...(options.documentImages ? { documentImages: options.documentImages } : {}),
     });
   });
@@ -138,21 +142,27 @@ function renderAssistantAnswerHeader(
     });
   }
   const actions = header.createDiv({ cls: "ixplorer-chat__answer-actions" });
-  createMessageIconButton(actions, "copy", "Copy message", "ixplorer-chat__message-copy", () => {
-    void copyToClipboard(messageDisplayContent(message));
-  });
+  createMessageIconButton(
+    actions,
+    "copy",
+    options.t("chat.message.copy"),
+    "ixplorer-chat__message-copy",
+    () => {
+      void copyToClipboard(messageDisplayContent(message), options.t);
+    },
+  );
   if (shouldShowAnswerNoteActions(message)) {
     createMessageIconButton(
       actions,
       "file-plus-2",
-      "Save answer to new note",
+      options.t("chat.answer.saveToNewNote"),
       "ixplorer-chat__message-save-answer",
       () => options.onSaveAnswerToNewNote(message.answer!),
     );
     createMessageIconButton(
       actions,
       "file-input",
-      "Append answer to active note",
+      options.t("chat.answer.appendToActiveNote"),
       "ixplorer-chat__message-append-answer",
       () => options.onAppendAnswerToActiveNote(message.answer!),
     );
@@ -178,22 +188,22 @@ function createMessageIconButton(
   return button;
 }
 
-function renderFallbackBanner(containerEl: HTMLElement, reason?: string): void {
+function renderFallbackBanner(containerEl: HTMLElement, t: Translate, reason?: string): void {
   const reasonLabel: Record<string, string> = {
-    "loop-detected": "Research stopped: detected repetitive tool calls.",
-    "model-round-limit-exceeded": "Research stopped: maximum rounds exceeded.",
-    "tool-call-limit-exceeded": "Research stopped: too many tool calls.",
-    "tool-result-budget-exceeded": "Research stopped: result size limit exceeded.",
-    "context-limit-exceeded": "Research stopped: context window limit reached.",
+    "loop-detected": t("chat.fallback.loopDetected"),
+    "model-round-limit-exceeded": t("chat.fallback.modelRoundLimitExceeded"),
+    "tool-call-limit-exceeded": t("chat.fallback.toolCallLimitExceeded"),
+    "tool-result-budget-exceeded": t("chat.fallback.toolResultBudgetExceeded"),
+    "context-limit-exceeded": t("chat.fallback.contextLimitExceeded"),
   };
   const bannerEl = containerEl.createDiv({ cls: "ixplorer-chat__fallback-notice" });
   const iconEl = bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-icon" });
   setIcon(iconEl, "alert-triangle");
   const text = reason
-    ? (reasonLabel[reason] ?? `Research stopped (${reason}).`)
-    : "Research could not complete.";
+    ? (reasonLabel[reason] ?? t("chat.fallback.other", { reason }))
+    : t("chat.fallback.incomplete");
   bannerEl.createSpan({
     cls: "ixplorer-chat__fallback-notice-text",
-    text: `${text} The answer below is based on partial results.`,
+    text: t("chat.fallback.partial", { reason: text }),
   });
 }

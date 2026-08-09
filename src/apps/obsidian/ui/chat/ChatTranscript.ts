@@ -5,6 +5,10 @@ import { ChainItem, ChatDisplayMessage, shouldShowDiagnosticAction } from "@core
 import { ContextDiagnostics } from "@core/diagnostics";
 import type { DocumentImageResolver } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
+import type { Translate } from "@adapters/i18n";
+import { DEFAULT_LOCALE } from "@core/i18n";
+import type { LocaleCode } from "@core/i18n";
+import type { TextDirection } from "@core/i18n";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import {
   patchAssistantMessageContent,
@@ -27,6 +31,9 @@ export interface ChatTranscriptOptions {
   editingMessageIndex: number | null;
   assistantLabel: string;
   isDebugMode: boolean;
+  t: Translate;
+  locale?: LocaleCode;
+  getDirection?(): TextDirection;
   renderEmptyState(containerEl: HTMLElement): void;
   onEditQuestion(index: number): void;
   onSubmitEditedQuestion(index: number, value: string): void;
@@ -82,7 +89,7 @@ function renderMessage(
   } else if (message.role === "assistant") {
     renderAssistantMessageContent(contentEl, message, options);
   } else {
-    renderUserMessageContent(contentEl, message);
+    renderUserMessageContent(contentEl, message, options.t);
   }
   renderMessageCitationBlocks(messageEl, message, options);
 }
@@ -97,11 +104,13 @@ function renderMessageHeader(
   header.createSpan({
     cls: "ixplorer-chat__message-label",
     text:
-      message.role === "user" ? "You" : message.modelName || options.assistantLabel || "Assistant",
+      message.role === "user"
+        ? options.t("chat.message.you")
+        : message.modelName || options.assistantLabel || options.t("chat.message.assistant"),
   });
   header.createSpan({
     cls: "ixplorer-chat__message-time",
-    text: formatMessageTime(message.createdAt),
+    text: formatMessageTime(message.createdAt, options.locale ?? DEFAULT_LOCALE),
   });
   renderHeaderActions(header, message, index, options);
 }
@@ -114,17 +123,22 @@ function renderMessageCitationBlocks(
   const sourceEvidence = message.role === "assistant" ? citationEvidence(message) : [];
   if (sourceEvidence.length === 0) return;
   renderCitationBlocks(messageEl, buildCitationRefs(sourceEvidence), {
+    t: options.t,
     onOpenChunk: options.onOpenChunk,
     onHighlight: options.onHighlightCitation,
   });
 }
 
-function renderUserMessageContent(containerEl: HTMLElement, message: ChatDisplayMessage): void {
+function renderUserMessageContent(
+  containerEl: HTMLElement,
+  message: ChatDisplayMessage,
+  t: Translate,
+): void {
   const contextPaths = message.contextPaths ?? [];
   if (contextPaths.length > 0) {
     const contextEl = containerEl.createDiv({
       cls: "ixplorer-chat__message-context",
-      attr: { role: "list", "aria-label": "Context documents" },
+      attr: { role: "list", "aria-label": t("chat.message.contextDocuments.aria") },
     });
     for (const path of contextPaths) {
       const itemEl = contextEl.createDiv({
@@ -167,17 +181,17 @@ function renderHeaderActions(
     createMessageIconButton(
       ensureActions(),
       "pencil",
-      "Edit question",
+      options.t("chat.message.edit"),
       "ixplorer-chat__message-edit",
       () => options.onEditQuestion(index),
     );
     createMessageIconButton(
       ensureActions(),
       "copy",
-      "Copy message",
+      options.t("chat.message.copy"),
       "ixplorer-chat__message-copy",
       () => {
-        void copyToClipboard(messageDisplayContent(message));
+        void copyToClipboard(messageDisplayContent(message), options.t);
       },
     );
   }
@@ -185,7 +199,7 @@ function renderHeaderActions(
     createMessageIconButton(
       ensureActions(),
       "bug",
-      "Open diagnostic report",
+      options.t("chat.message.diagnostic"),
       "ixplorer-chat__message-diagnostic",
       () => options.onOpenDiagnosticReport(message.contextDiagnostics!),
     );
@@ -260,10 +274,11 @@ export function renderFollowUps(
   containerEl: HTMLElement,
   followUps: string[],
   onSelect: (question: string) => void,
+  t: Translate,
 ): void {
   containerEl.empty();
   if (followUps.length === 0) return;
-  containerEl.createEl("h3", { text: "Follow-ups" });
+  containerEl.createEl("h3", { text: t("chat.followUps.title") });
   const list = containerEl.createDiv({ cls: "ixplorer-chat__followup-list" });
   for (const question of followUps) {
     const button = list.createEl("button", {
@@ -283,7 +298,7 @@ function renderQuestionEditor(
 ): void {
   const textarea = containerEl.createEl("textarea", {
     cls: "ixplorer-chat__message-editor",
-    attr: { rows: "2", "aria-label": "Edit question" },
+    attr: { rows: "2", "aria-label": options.t("chat.message.edit") },
   });
   textarea.value = message.content;
   textarea.focus();
@@ -300,9 +315,9 @@ function renderQuestionEditor(
   });
 }
 
-function formatMessageTime(value: string): string {
+function formatMessageTime(value: string, locale: LocaleCode): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    : date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }

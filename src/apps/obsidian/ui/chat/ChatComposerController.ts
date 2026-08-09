@@ -4,6 +4,7 @@ import type { ResearchSearchMode } from "@application/use-cases/research";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ContextMode } from "@core/diagnostics";
 import type { ResearchMode } from "@core/research";
+import type { Translate } from "@adapters/i18n";
 import {
   ChatComposerRefs,
   ChatModelSelectOption,
@@ -24,6 +25,7 @@ export interface ChatComposerControllerOptions {
   isRunning(): boolean;
   getContextWindowUsage(): ContextWindowUsage | null;
   getSearchUnavailableMessage(): string | null;
+  t: Translate;
   onSubmit(): void;
   onStop(): void;
   onOpenContextPicker(): void;
@@ -49,6 +51,7 @@ export class ChatComposerController {
       availableIndexes: this.options.getAvailableIndexes(),
       contextFilePaths: this.options.getContextFilePaths(),
       researchMode: this.options.getResearchMode(),
+      t: this.options.t,
       onSubmit: this.options.onSubmit,
       onStop: this.options.onStop,
       onQuestionInput: () => this.updateSubmitAvailability(),
@@ -155,6 +158,7 @@ export class ChatComposerController {
       refs.attachedContextEl,
       this.options.getAttachedContextPaths(),
       this.options.onRemoveContextPath,
+      this.options.t,
     );
     refs.controls.setAttachmentsPresent(this.options.getAttachedContextPaths().length > 0);
   }
@@ -168,7 +172,7 @@ export class ChatComposerController {
     this.updateContextWindowIndicator();
 
     if (this.options.isRunning()) {
-      this.setSubmitButtonAvailability("Stop the current answer", false, "stop");
+      this.setSubmitButtonAvailability(this.options.t("chat.composer.submit.stop"), false, "stop");
       return;
     }
 
@@ -178,7 +182,7 @@ export class ChatComposerController {
       return;
     }
 
-    this.setSubmitButtonAvailability("Ask", false, "ask");
+    this.setSubmitButtonAvailability(this.options.t("chat.composer.submit.ask"), false, "ask");
   }
 
   private updateContextWindowIndicator(): void {
@@ -189,13 +193,14 @@ export class ChatComposerController {
 
     const usage = this.options.getContextWindowUsage();
     if (!usage) {
+      const unknown = this.options.t("chat.status.contextWindow.unknown");
       contextIndicatorEl.style.setProperty("--ixplorer-context-used", "0%");
-      contextIndicatorEl.setAttr("title", "Unknown model context window size");
-      contextIndicatorEl.setAttr("aria-label", "Unknown model context window size");
+      contextIndicatorEl.setAttr("title", unknown);
+      contextIndicatorEl.setAttr("aria-label", unknown);
       return;
     }
 
-    const status = contextWindowStatus(usage.estimatedTokens, usage.limitTokens);
+    const status = contextWindowStatus(usage.estimatedTokens, usage.limitTokens, this.options.t);
     contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${status.usedPercent}%`);
     contextIndicatorEl.toggleClass("is-warning", status.isWarning);
     contextIndicatorEl.setAttr("title", status.title);
@@ -217,7 +222,11 @@ export class ChatComposerController {
     refs.submitButtonEl.setAttr("title", message);
     refs.submitButtonEl.setAttr(
       "aria-label",
-      mode === "stop" ? message : disabled ? `Ask unavailable: ${message}` : message,
+      mode === "stop"
+        ? message
+        : disabled
+          ? this.options.t("chat.composer.submit.unavailable", { message })
+          : message,
     );
     refs.submitButtonTooltipEl.setAttr("title", message);
   }

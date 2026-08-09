@@ -72,9 +72,9 @@ export function createResearchService(
   indexProfileId?: string,
 ): ResearchService {
   const settings = ctx.getSettings();
-  const indexProfile = resolveIndexProfileForUse(settings, indexProfileId);
-  const chatProfile = requireChatModelProfile(settings, chatModelProfileId);
-  const chatServer = requireServerProfile(settings, chatProfile.serverProfileId);
+  const indexProfile = resolveIndexProfileForUse(settings, ctx.translator.t, indexProfileId);
+  const chatProfile = requireChatModelProfile(settings, ctx.translator.t, chatModelProfileId);
+  const chatServer = requireServerProfile(settings, ctx.translator.t, chatProfile.serverProfileId);
   const retriever = createRetrieverForProfile(ctx, indexProfile);
   const contextFiles = ctx.warmCaches.contextFiles();
   const contextExtractors = createContextExtractorsForProfile(ctx, indexProfile);
@@ -205,9 +205,9 @@ export function createEnrichmentService(
   chatModelProfileId?: string,
 ): EnrichIndexSources {
   const settings = ctx.getSettings();
-  const indexProfile = requireIndexProfile(settings, indexProfileId);
-  const chatProfile = requireChatModelProfile(settings, chatModelProfileId);
-  const server = requireServerProfile(settings, chatProfile.serverProfileId);
+  const indexProfile = requireIndexProfile(settings, ctx.translator.t, indexProfileId);
+  const chatProfile = requireChatModelProfile(settings, ctx.translator.t, chatModelProfileId);
+  const server = requireServerProfile(settings, ctx.translator.t, chatProfile.serverProfileId);
 
   const provider = createChatModelClient(ctx, server, chatProfile);
   return new EnrichIndexSources({

@@ -36,9 +36,10 @@ export function createIndexingService(
   onProgress: (state: IndexingState) => void,
 ): IndexingService {
   const settings = ctx.getSettings();
-  const indexProfile = requireIndexProfile(settings, profileId);
+  const indexProfile = requireIndexProfile(settings, ctx.translator.t, profileId);
   const embeddingProfile = requireEmbeddingModelProfile(
     settings,
+    ctx.translator.t,
     indexProfile.embeddingModelProfileId,
   );
   return new IndexingService({
@@ -60,7 +61,7 @@ export function createEmbeddingClientForProfile(
   ctx: CompositionContext,
   profile: EmbeddingModelProfile,
 ): EmbeddingClient {
-  const server = requireServerProfile(ctx.getSettings(), profile.serverProfileId);
+  const server = requireServerProfile(ctx.getSettings(), ctx.translator.t, profile.serverProfileId);
   return new EmbeddingClient({
     apiFormat: server.apiFormat,
     baseUrl: server.baseUrl,
@@ -87,6 +88,7 @@ export function createRetrieverForProfile(
 ): RetrievalService {
   const embedding = requireEmbeddingModelProfile(
     ctx.getSettings(),
+    ctx.translator.t,
     profile.embeddingModelProfileId,
   );
   const indexStore = createVectorIndexStoreForProfile(ctx, profile);

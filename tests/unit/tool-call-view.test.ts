@@ -1,8 +1,12 @@
+import { createTranslator } from "@adapters/i18n";
 import { describeToolCall } from "@apps/obsidian/ui/chat/toolCallView";
+
+const t = createTranslator("en").t;
 
 describe("describeToolCall inline arguments", () => {
   it("renders call arguments on a single line", () => {
     const view = describeToolCall({
+      t,
       name: "search_index",
       label: "search_index",
       status: "complete",
@@ -19,6 +23,7 @@ describe("describeToolCall inline arguments", () => {
 describe("describeToolCall detailed intent", () => {
   it("includes search scope (prefix and limit) in the vault search intent", () => {
     const view = describeToolCall({
+      t,
       name: "search_index",
       label: "search_index",
       status: "complete",
@@ -30,6 +35,7 @@ describe("describeToolCall detailed intent", () => {
 
   it("hides fetched page hosts after the web fetch completes", () => {
     const view = describeToolCall({
+      t,
       name: "fetch_web_page",
       label: "fetch_web_page",
       status: "complete",
@@ -52,6 +58,7 @@ describe("describeToolCall detailed intent", () => {
 
   it("lists requested page hosts while a web fetch is pending", () => {
     const view = describeToolCall({
+      t,
       name: "fetch_web_page",
       label: "Fetching 3 pages",
       status: "pending",
@@ -65,6 +72,7 @@ describe("describeToolCall detailed intent", () => {
 
   it("names the search provider used for a web query", () => {
     const view = describeToolCall({
+      t,
       name: "search_web",
       label: "search_web",
       status: "pending",
@@ -77,6 +85,7 @@ describe("describeToolCall detailed intent", () => {
 
   it("reports created-note size in the intent", () => {
     const view = describeToolCall({
+      t,
       name: "create_note",
       label: "create_note",
       status: "complete",

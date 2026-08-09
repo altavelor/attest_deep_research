@@ -1,0 +1,103 @@
+import type { EnSettingsMessages } from "../en/settings";
+
+export const settings: EnSettingsMessages = {
+  "settings.language.heading": "语言",
+  "settings.language.name": "界面语言",
+  "settings.language.desc": "Ixplorer 界面的语言。无需重启 Obsidian 即可生效。",
+  "settings.language.auto": "自动（跟随 Obsidian）",
+
+  "settings.tab.heading": "Ixplorer",
+  "settings.tab.quickStart.title": "快速开始",
+  "settings.tab.quickStart.steps": "1. 添加服务器 → 2. 添加聊天模型 → 3.（可选）添加索引",
+  "settings.tab.gateHint": "请先添加聊天模型配置",
+
+  "settings.advanced.debugMode.name": "调试模式",
+  "settings.advanced.debugMode.desc": "记录插件请求与响应详情。API 密钥会被隐去。",
+
+  "settings.retrieval.heading": "检索",
+  "settings.retrieval.desc": "控制 Ixplorer 回答前如何查找本地、图谱、索引、文档和网络证据。",
+  "settings.retrieval.graph.heading": "Obsidian 图谱",
+  "settings.retrieval.useLinkedNotes.name": "使用关联笔记",
+  "settings.retrieval.useLinkedNotes.desc":
+    "检索前从 @提及、当前文件和已包含的附件中发现关联笔记。",
+  "settings.retrieval.includeBacklinks.name": "包含反向链接",
+  "settings.retrieval.includeBacklinks.desc":
+    "将一跳反向链接作为图谱候选。反向链接笔记不再继续展开。",
+  "settings.retrieval.expandFilteredContextThroughLinks.name": "通过链接扩展已过滤文件",
+  "settings.retrieval.expandFilteredContextThroughLinks.desc":
+    "当附加文件处于过滤模式时，同时搜索其图谱中的关联邻居。",
+  "settings.retrieval.graphDepth.name": "图谱深度",
+  "settings.retrieval.graphDepth.desc":
+    "深度 1 跟随直接链接、嵌入和反向链接。深度 2 仅用于高级调试。",
+  "settings.retrieval.search.heading": "搜索",
+  "settings.retrieval.expandSearchQuery.name": "扩展搜索查询",
+  "settings.retrieval.expandSearchQuery.desc":
+    "检索前生成跨语言查询变体，以便找到用其他语言撰写的笔记。每次搜索会额外调用一次聊天模型。",
+  "settings.retrieval.web.heading": "网络",
+  "settings.retrieval.useWebWhenFreshnessNeeded.name": "时效性问题使用网络",
+  "settings.retrieval.useWebWhenFreshnessNeeded.desc":
+    "当问题涉及当前、最新、价格或发布信息时，为网络证据分配更多预算。",
+
+  "settings.newChatDefaults.heading": "新聊天默认设置",
+  "settings.newChatDefaults.desc": "每个新聊天的初始配置。已保存的聊天保留各自的设置。",
+  "settings.newChatDefaults.source.name": "默认来源",
+  "settings.newChatDefaults.source.desc": "新聊天启动时使用的证据来源。",
+  "settings.newChatDefaults.source.none": "无",
+  "settings.newChatDefaults.source.indexOnly": "索引",
+  "settings.newChatDefaults.source.webOnly": "网络",
+  "settings.newChatDefaults.source.indexAndWeb": "索引 + 网络",
+  "settings.newChatDefaults.index.name": "默认索引",
+  "settings.newChatDefaults.index.desc": "新聊天启动时使用的索引配置，在来源包含索引时生效。",
+  "settings.newChatDefaults.index.empty": "没有可用的索引配置",
+  "settings.newChatDefaults.mode.name": "默认模式",
+  "settings.newChatDefaults.mode.desc": "新聊天启动时使用的研究模式。",
+  "settings.newChatDefaults.mode.descBlocked": "新聊天启动时使用的研究模式。{hint}",
+  "settings.newChatDefaults.mode.thinkingUnavailable":
+    "深度思考需要已验证 Agent 能力的聊天模型。请测试该模型的能力后启用。",
+  "settings.newChatDefaults.mode.instant": "即时",
+  "settings.newChatDefaults.mode.thinking": "深度思考",
+  "settings.newChatDefaults.model.name": "默认模型",
+  "settings.newChatDefaults.model.desc": "新聊天启动时使用的聊天模型配置。",
+  "settings.newChatDefaults.model.empty": "没有可用的聊天模型配置",
+  "settings.newChatDefaults.activeFile.name": "将当前文件作为上下文",
+  "settings.newChatDefaults.activeFile.desc": "自动将当前打开的受支持文件作为聊天的显式上下文。",
+
+  "settings.webSources.heading": "外部来源",
+  "settings.webSources.desc":
+    "在已启用的来源中进行由用户发起的外部网络搜索。Ixplorer 仅发送所输入的问题，绝不发送检索到的仓库内容。",
+  "settings.webSources.count": "已启用 {enabled}/{total}",
+  "settings.webSources.column.source": "来源",
+  "settings.webSources.column.actions": "操作",
+  "settings.webSources.column.state": "状态",
+  "settings.webSources.categoryCount": "{category} · {enabled}/{total}",
+  "settings.webSources.category.serp": "通用网络搜索",
+  "settings.webSources.category.neural": "AI 搜索",
+  "settings.webSources.category.academic": "学术",
+  "settings.webSources.category.encyclopedia": "百科",
+  "settings.webSources.category.community": "开发者与社区",
+  "settings.webSources.category.news": "新闻",
+  "settings.webSources.category.fetch": "网页抓取兜底",
+  "settings.webSources.category.image": "图片搜索",
+  "settings.webSources.activation.off": "关闭",
+  "settings.webSources.activation.auto": "自动 — 由规划器选中时使用",
+  "settings.webSources.activation.always": "始终 — 每次网络搜索都查询",
+  "settings.webSources.issue.unauthorized": "凭据被拒绝 — 请检查 API 密钥",
+  "settings.webSources.issue.rateLimited": "已超出速率限制 — 稍后自动重试",
+  "settings.webSources.setUp": "配置…",
+  "settings.webSources.setUpAria": "配置 {source}",
+  "settings.webSources.configure": "配置 {source}",
+  "settings.webSources.lampIssueTitle": "{issue} — 点击切换为“{next}”",
+  "settings.webSources.lampTitle": "{source}：{current} — 点击切换为“{next}”",
+  "settings.webSources.meta.required": "需要 {fields}",
+  "settings.webSources.meta.configured": "已配置",
+
+  "settings.webSourceModal.title": "配置 {source}",
+  "settings.webSourceModal.info": "{note}。",
+  "settings.webSourceModal.providerDocs": "服务商文档",
+  "settings.webSourceModal.field.optional": "可选。",
+  "settings.webSourceModal.field.required": "启用该来源所必需。",
+  "settings.webSourceModal.imageSearch.name": "用于图片搜索",
+  "settings.webSourceModal.imageSearch.desc":
+    "默认关闭。开启后，search_images 可调用该引擎的图片接口，其消耗与文本搜索共用同一配额。",
+  "settings.webSourceModal.disabledNotice": "{source} 已禁用：缺少必需的凭据。",
+};

@@ -2,12 +2,16 @@ import { App } from "obsidian";
 
 import type { AnswerImage, ImageGalleryArtifact } from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { attributionText } from "./imageAttribution";
 import { ImageLightboxModal, renderSourceLink, renderUnavailable } from "./ImageLightboxModal";
 import { resolveAnswerImageSource } from "./imageSourceResolver";
 
 export interface GalleryRenderOptions {
   app: App;
+  t: Translate;
+  getDirection?(): TextDirection;
   documentImages?: DocumentImageResolver;
 }
 
@@ -20,7 +24,7 @@ export function renderImageGalleryArtifact(
 ): void {
   const section = containerEl.createEl("figure", {
     cls: "ixplorer-artifact ixplorer-gallery",
-    attr: { role: "group", "aria-label": gallery.title ?? "Images for this answer" },
+    attr: { role: "group", "aria-label": gallery.title ?? options.t("chat.artifact.gallery.aria") },
   });
   if (gallery.title) {
     section.createEl("figcaption", { cls: "ixplorer-artifact__title", text: gallery.title });
@@ -58,11 +62,18 @@ function renderCard(
   const card = grid.createDiv({ cls: "ixplorer-gallery__card" });
   const trigger = card.createEl("button", {
     cls: "ixplorer-gallery__trigger",
-    attr: { type: "button", "aria-label": `Open image: ${image.alt || image.sourceLabel}` },
+    attr: {
+      type: "button",
+      "aria-label": options.t("chat.artifact.image.open.aria", {
+        name: image.alt || image.sourceLabel,
+      }),
+    },
   });
   trigger.addEventListener("click", () => {
     new ImageLightboxModal(options.app, {
       app: options.app,
+      t: options.t,
+      getDirection: options.getDirection,
       ...(options.documentImages ? { documentImages: options.documentImages } : {}),
       images: gallery.images,
       startIndex: index,
@@ -72,8 +83,11 @@ function renderCard(
 
   const meta = card.createDiv({ cls: "ixplorer-gallery__meta" });
   meta.createDiv({ cls: "ixplorer-gallery__alt", text: image.alt || image.sourceLabel });
-  meta.createDiv({ cls: "ixplorer-artifact__attribution", text: attributionText(image) });
-  renderSourceLink(meta, image);
+  meta.createDiv({
+    cls: "ixplorer-artifact__attribution",
+    text: attributionText(image, options.t),
+  });
+  renderSourceLink(meta, image, options.t);
 
   void resolveAnswerImageSource(image, options, true).then((resolved) => {
     if (!trigger.isConnected) {
@@ -82,7 +96,7 @@ function renderCard(
     }
     if (!resolved) {
       trigger.disabled = true;
-      renderUnavailable(trigger, image);
+      renderUnavailable(trigger, image, options.t);
       return;
     }
     if (resolved.revoke) revokers.push(resolved.revoke);
@@ -93,7 +107,7 @@ function renderCard(
     img.addEventListener("error", () => {
       img.remove();
       trigger.disabled = true;
-      renderUnavailable(trigger, image);
+      renderUnavailable(trigger, image, options.t);
     });
   });
 }

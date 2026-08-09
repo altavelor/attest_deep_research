@@ -1,6 +1,9 @@
 import { Setting } from "obsidian";
 
+import type { Translate } from "@adapters/i18n";
+
 export interface AdvancedSettingsSectionOptions {
+  t: Translate;
   isDebugMode(): boolean;
   setDebugMode(value: boolean): void;
   saveSettings(): Promise<void>;
@@ -16,11 +19,15 @@ export class AdvancedSettingsSection {
   constructor(private readonly options: AdvancedSettingsSectionOptions) {}
 
   render(containerEl: HTMLElement): void {
+    const { t } = this.options;
     const details = containerEl.createEl("details", { cls: "ixplorer-settings-advanced" });
-    details.createEl("summary", { cls: "ixplorer-settings-advanced__summary", text: "Advanced" });
+    details.createEl("summary", {
+      cls: "ixplorer-settings-advanced__summary",
+      text: t("common.advanced"),
+    });
     new Setting(details.createDiv({ cls: "ixplorer-settings-advanced__content" }))
-      .setName("Debug mode")
-      .setDesc("Log plugin request and response details. API keys are redacted.")
+      .setName(t("settings.advanced.debugMode.name"))
+      .setDesc(t("settings.advanced.debugMode.desc"))
       .addToggle((toggle) =>
         toggle.setValue(this.options.isDebugMode()).onChange(async (value) => {
           this.options.setDebugMode(value);

@@ -1,4 +1,6 @@
 import { normalizeVaultPath, vaultPathMatchesGlob } from "@shared";
+import { DEFAULT_LOCALE } from "@core/i18n";
+import type { LocaleCode } from "@core/i18n";
 
 export function normalizePickerPath(path: string): string {
   return normalizeVaultPath(path).replace(/\/+$/, "");
@@ -29,7 +31,9 @@ export function isHiddenOrIgnoredPath(path: string, ignoredGlobs: string[]): boo
   return ignoredGlobs.some((glob) => vaultPathMatchesGlob(normalized, glob));
 }
 
-export function formatReportTimestamp(value: string): string {
+export function formatReportTimestamp(value: string, locale: LocaleCode = DEFAULT_LOCALE): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "medium" }).format(date);
 }

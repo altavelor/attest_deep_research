@@ -6,11 +6,15 @@ import {
 } from "@apps/obsidian/ui/settings/indexProfileStatus";
 import type { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
 import { REQUIRED_INDEX_VERSION } from "@adapters/indexing";
+import { createTranslator } from "@adapters/i18n";
+
+const t = createTranslator("en").t;
 
 describe("index profile status in the Index column", () => {
   it("uses short labels for active indexing states and keeps detail in the tooltip", () => {
     expect(
       resolveIndexColumnStatus({
+        t,
         state: indexingState({
           status: "indexing",
           progress: 0.42,
@@ -28,6 +32,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexColumnStatus({
+        t,
         state: indexingState({
           status: "paused",
           chunksEmbedded: 8,
@@ -44,6 +49,7 @@ describe("index profile status in the Index column", () => {
   it("shows a finished badge with final indexing statistics in the tooltip", () => {
     expect(
       resolveIndexColumnStatus({
+        t,
         state: indexingState({
           status: "idle",
           phase: "complete",
@@ -68,6 +74,7 @@ describe("index profile status in the Index column", () => {
   it("prioritizes active enrichment over a completed indexing badge", () => {
     expect(
       resolveIndexProfileColumnStatus({
+        t,
         indexing: indexingState({
           status: "idle",
           phase: "complete",
@@ -103,6 +110,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
+        t,
         profile,
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "running", phase: "sections" }),
@@ -111,6 +119,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
+        t,
         profile,
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -124,6 +133,7 @@ describe("index profile status in the Index column", () => {
   it("marks an index built before document-image metadata as needing a rebuild", () => {
     expect(
       resolveIndexStatusBadge({
+        t,
         profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -132,6 +142,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
+        t,
         profile: {
           lastIndexedAt: "2026-07-03T10:20:30.000Z",
           indexVersion: REQUIRED_INDEX_VERSION,
@@ -145,6 +156,7 @@ describe("index profile status in the Index column", () => {
   it("keeps error and suspended state above the rebuild notice", () => {
     expect(
       resolveIndexStatusBadge({
+        t,
         profile: { isSuspended: true, suspendedReason: "Embedder missing" },
         indexing: indexingState(),
         enrichment: enrichmentState({ status: "done" }),
@@ -153,6 +165,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveIndexStatusBadge({
+        t,
         profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z" },
         indexing: indexingState({ status: "error", errorMessage: "boom" }),
         enrichment: enrichmentState({ status: "done" }),
@@ -163,6 +176,7 @@ describe("index profile status in the Index column", () => {
   it("shows pending pause and metadata stop actions until the underlying run settles", () => {
     expect(
       resolveIndexColumnStatus({
+        t,
         state: indexingState({
           status: "paused",
           activeOperation: "indexing",
@@ -181,6 +195,7 @@ describe("index profile status in the Index column", () => {
 
     expect(
       resolveEnrichmentColumnStatus({
+        t,
         state: enrichmentState({
           status: "running",
           processed: 3,
