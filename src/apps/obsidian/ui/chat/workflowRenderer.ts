@@ -1,6 +1,7 @@
 import { App, Component } from "obsidian";
 
 import { ChainItem, ChatDisplayMessage } from "@core/conversation";
+import type { Translate } from "@adapters/i18n";
 import { fetchTargetsByResultId, fetchTargetsFor } from "./workflow/fetchTargetResolver";
 import {
   renderSummaryNode,
@@ -13,6 +14,7 @@ export interface WorkflowRenderContext {
   app: App;
   markdownContext: Component;
   isDebugMode: boolean;
+  t: Translate;
   onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
 }
 
@@ -117,6 +119,7 @@ function renderChainNodes(
       state.isStreaming,
       state.isFinalizing,
       state.hasStreamingCheckpoint,
+      context.t,
       activeReasoningId,
     );
   }
@@ -149,6 +152,7 @@ function renderLegacyNodes(
       state.isStreaming,
       state.isFinalizing,
       state.hasStreamingCheckpoint,
+      context.t,
     );
   }
 }

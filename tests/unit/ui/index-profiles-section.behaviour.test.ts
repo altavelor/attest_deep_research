@@ -6,6 +6,7 @@ import type { IndexProfile } from "@adapters/indexing";
 import { DEFAULT_INDEX_PROFILE, DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
 import type { IxplorerSettings } from "@adapters/settings";
 import type IxplorerPlugin from "@apps/obsidian/main";
+import { createTranslator } from "@adapters/i18n";
 import { IndexProfilesSection } from "@apps/obsidian/ui/settings/IndexProfilesSection";
 import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
 
@@ -42,6 +43,7 @@ function enrichmentState() {
 function createPlugin(settings: IxplorerSettings): IxplorerPlugin {
   return {
     settings,
+    translate: createTranslator("en").t,
     indexing: {
       getBusyProfileId: () => undefined,
       getState: () => indexingState(),

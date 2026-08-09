@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
+import { createTranslator } from "@adapters/i18n";
 import { readStyles } from "../helpers/readStyles";
 import {
   buildChartScale,
@@ -17,6 +18,7 @@ import {
 import type { AnswerImage, ChartArtifact } from "@core/media";
 
 const styles = readStyles();
+const t = createTranslator("en").t;
 
 const barChart: ChartArtifact = {
   type: "chart",
@@ -116,29 +118,35 @@ describe("image attribution", () => {
 
   it("never describes a plain page reference as licensed content", () => {
     expect(isPageReference(base)).toBe(true);
-    expect(attributionText(base)).toBe("Referenced from Example page");
-    expect(attributionText(base)).not.toMatch(/licen[cs]e/i);
+    expect(attributionText(base, t)).toBe("Referenced from Example page");
+    expect(attributionText(base, t)).not.toMatch(/licen[cs]e/i);
   });
 
   it("shows provider licence metadata when the provider supplied it", () => {
     expect(
-      attributionText({
-        ...base,
-        sourceLabel: "Wikimedia Commons · Jane",
-        licenceName: "CC BY-SA 4.0",
-        licensed: true,
-      }),
+      attributionText(
+        {
+          ...base,
+          sourceLabel: "Wikimedia Commons · Jane",
+          licenceName: "CC BY-SA 4.0",
+          licensed: true,
+        },
+        t,
+      ),
     ).toBe("Wikimedia Commons · Jane · CC BY-SA 4.0");
   });
 
   it("attributes vault images to their document", () => {
     expect(
-      attributionText({
-        ...base,
-        fullUrl: undefined,
-        vaultSource: { documentPath: "docs/a.pdf", locator: "page:1:0" },
-        sourceLabel: "a.pdf",
-      }),
+      attributionText(
+        {
+          ...base,
+          fullUrl: undefined,
+          vaultSource: { documentPath: "docs/a.pdf", locator: "page:1:0" },
+          sourceLabel: "a.pdf",
+        },
+        t,
+      ),
     ).toBe("From a.pdf");
   });
 });

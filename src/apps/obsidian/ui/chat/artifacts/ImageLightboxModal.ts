@@ -1,12 +1,16 @@
 import { App, Modal, setIcon } from "obsidian";
 
 import type { AnswerImage } from "@core/media";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { attributionText, isPageReference } from "./imageAttribution";
 import { resolveAnswerImageSource, type ImageSourceResolverOptions } from "./imageSourceResolver";
 
 export interface ImageLightboxOptions extends ImageSourceResolverOptions {
   images: AnswerImage[];
   startIndex: number;
+  t: Translate;
+  getDirection?(): TextDirection;
 
   returnFocusTo?: HTMLElement;
 }
@@ -28,6 +32,7 @@ export class ImageLightboxModal extends Modal {
 
   onOpen(): void {
     this.closed = false;
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     this.modalEl.addClass("ixplorer-lightbox");
     this.scope.register([], "ArrowRight", () => {
       this.step(1);
@@ -85,10 +90,10 @@ export class ImageLightboxModal extends Modal {
       });
       img.addEventListener("error", () => {
         img.remove();
-        renderUnavailable(stage, image);
+        renderUnavailable(stage, image, this.options.t);
       });
     } else {
-      renderUnavailable(stage, image);
+      renderUnavailable(stage, image, this.options.t);
     }
 
     if (this.options.images.length > 1) {
@@ -99,46 +104,60 @@ export class ImageLightboxModal extends Modal {
     if (image.caption) {
       footer.createDiv({ cls: "ixplorer-artifact__caption", text: image.caption });
     }
-    footer.createDiv({ cls: "ixplorer-artifact__attribution", text: attributionText(image) });
-    renderSourceLink(footer, image);
+    footer.createDiv({
+      cls: "ixplorer-artifact__attribution",
+      text: attributionText(image, this.options.t),
+    });
+    renderSourceLink(footer, image, this.options.t);
     footer.createDiv({
       cls: "ixplorer-lightbox__position",
-      text: `${this.index + 1} of ${this.options.images.length}`,
+      text: this.options.t("chat.artifact.image.position", {
+        index: this.index + 1,
+        total: this.options.images.length,
+      }),
     });
   }
 
   private renderNavigation(stage: HTMLElement): void {
     const previous = stage.createEl("button", {
       cls: "ixplorer-lightbox__nav is-previous",
-      attr: { type: "button", "aria-label": "Previous image" },
+      attr: { type: "button", "aria-label": this.options.t("chat.artifact.image.previous") },
     });
     setIcon(previous, "chevron-left");
     previous.addEventListener("click", () => this.step(-1));
 
     const next = stage.createEl("button", {
       cls: "ixplorer-lightbox__nav is-next",
-      attr: { type: "button", "aria-label": "Next image" },
+      attr: { type: "button", "aria-label": this.options.t("chat.artifact.image.next") },
     });
     setIcon(next, "chevron-right");
     next.addEventListener("click", () => this.step(1));
   }
 }
 
-export function renderUnavailable(containerEl: HTMLElement, image: AnswerImage): void {
+export function renderUnavailable(
+  containerEl: HTMLElement,
+  image: AnswerImage,
+  t: Translate,
+): void {
   const fallback = containerEl.createDiv({ cls: "ixplorer-artifact__unavailable" });
   const icon = fallback.createSpan({ attr: { "aria-hidden": "true" } });
   setIcon(icon, "image-off");
   fallback.createSpan({
-    text: image.vaultSource ? "Image unavailable" : "Image could not be loaded",
+    text: image.vaultSource
+      ? t("chat.artifact.image.unavailable")
+      : t("chat.artifact.image.loadFailed"),
   });
 }
 
-export function renderSourceLink(containerEl: HTMLElement, image: AnswerImage): void {
-  const label = isPageReference(image) ? "Open source" : "Open source page";
+export function renderSourceLink(containerEl: HTMLElement, image: AnswerImage, t: Translate): void {
+  const label = isPageReference(image)
+    ? t("chat.artifact.image.openSource")
+    : t("chat.artifact.image.openSourcePage");
   if (image.vaultSource && !/^https?:/i.test(image.sourceUrl)) {
     containerEl.createEl("a", {
       cls: "ixplorer-artifact__source internal-link",
-      text: `Open ${image.sourceLabel}`,
+      text: t("chat.artifact.image.openVaultSource", { name: image.sourceLabel }),
       attr: { href: image.sourceUrl, "data-href": image.sourceUrl },
     });
     return;

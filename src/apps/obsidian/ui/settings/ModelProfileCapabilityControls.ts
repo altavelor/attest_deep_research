@@ -1,17 +1,18 @@
 import {
   CapabilityVerificationState,
   ChatModelProfile,
-  formatCapabilityVerificationStatus,
   formatEffortLabel,
   reasoningVerified,
   toolsVerified,
-  verificationBlockReason,
 } from "@adapters/settings";
 import { Setting } from "obsidian";
+import type { Translate } from "@adapters/i18n";
+import { formatCapabilityStatus } from "./capabilityStatusText";
 
 type ReasoningCapabilities = ChatModelProfile["reasoningCapabilities"];
 
 export interface ModelProfileCapabilityControlsOptions {
+  t: Translate;
   containerEl: HTMLElement;
   currentProfile: ChatModelProfile | undefined;
   savedProfileId: string | undefined;
@@ -33,18 +34,19 @@ export interface ModelProfileCapabilityControlsOptions {
 export function renderModelProfileCapabilityControls(
   options: ModelProfileCapabilityControlsOptions,
 ): void {
-  const capabilityStatus = formatCapabilityStatus(
-    options.savedProfileId,
-    options.getCapabilityStatus,
-    options.currentProfile,
-  );
-  const capabilityHeading = new Setting(options.containerEl).setName("Capabilities").setHeading();
+  const { t } = options;
+  const capabilityStatus = resolveCapabilityStatus(options);
+  const capabilityHeading = new Setting(options.containerEl)
+    .setName(t("settings.capabilityControls.heading"))
+    .setHeading();
   capabilityHeading.settingEl.addClass("ixplorer-profile-modal__capabilities-heading");
   capabilityHeading.setDesc(capabilityStatus).addButton((button) =>
     button
       .setIcon("flask-conical")
       .setTooltip(
-        `${hasCapabilityTestResult(options.currentProfile) ? "Re-test" : "Test"} capabilities — ${capabilityStatus}`,
+        hasCapabilityTestResult(options.currentProfile)
+          ? t("settings.capabilityControls.retestTooltip", { status: capabilityStatus })
+          : t("settings.capabilityControls.testTooltip", { status: capabilityStatus }),
       )
       .onClick(options.onCapabilityTest),
   );
@@ -53,6 +55,7 @@ export function renderModelProfileCapabilityControls(
 }
 
 function renderReasoningControls(options: ModelProfileCapabilityControlsOptions): void {
+  const { t } = options;
   const verified = reasoningVerified(options.reasoningCapabilities);
   let reasoningMode = options.reasoningMode;
   if (!verified) {
@@ -63,13 +66,10 @@ function renderReasoningControls(options: ModelProfileCapabilityControlsOptions)
   options.onReasoningModeChange(reasoningMode);
   options.onAgentVerifiedSeenChange(verified);
 
-  const reason = verificationBlockReason(
-    verified,
-    options.reasoningCapabilities?.source === "probe",
-  );
+  const reason = blockReason(t, verified, options.reasoningCapabilities?.source === "probe");
   const agenticSetting = new Setting(options.containerEl)
-    .setName("Agentic mode")
-    .setDesc("Enable verified agent mode support.")
+    .setName(t("settings.capabilityControls.agentic.name"))
+    .setDesc(t("settings.capabilityControls.agentic.desc"))
     .addToggle((toggle) => {
       toggle.setValue(reasoningMode === "on");
       toggle.setDisabled(!verified);
@@ -86,13 +86,13 @@ function renderReasoningControls(options: ModelProfileCapabilityControlsOptions)
   const effortReason = !verified
     ? reason
     : reasoningMode === "off"
-      ? "Enable agentic mode to choose a reasoning effort."
+      ? t("settings.capabilityControls.effort.enableAgentic")
       : undefined;
   const effortSetting = new Setting(options.containerEl)
-    .setName("Reasoning effort")
-    .setDesc("Auto uses the provider default or a verified value.")
+    .setName(t("settings.capabilityControls.effort.name"))
+    .setDesc(t("settings.capabilityControls.effort.desc"))
     .addDropdown((dropdown) => {
-      dropdown.addOption("", "Auto");
+      dropdown.addOption("", t("settings.capabilityControls.effort.auto"));
       for (const effort of effortValues) dropdown.addOption(effort, formatEffortLabel(effort));
       dropdown.setValue(options.reasoningEffort).onChange(options.onReasoningEffortChange);
       dropdown.setDisabled(effortDisabled);
@@ -103,20 +103,19 @@ function renderReasoningControls(options: ModelProfileCapabilityControlsOptions)
 export function renderModelProfileToolsControl(
   options: ModelProfileCapabilityControlsOptions,
 ): void {
+  const { t } = options;
   const verified = options.currentProfile ? toolsVerified(options.currentProfile) : false;
   if (!verified) {
     options.onToolsEnabledChange(false);
   }
-  const reason = verificationBlockReason(
+  const reason = blockReason(
+    t,
     verified,
     Boolean(options.currentProfile?.capabilities?.toolCalling?.probe),
   );
   const toolsSetting = new Setting(options.containerEl)
-    .setName("Tools")
-    .setDesc(
-      "Let this model call note tools — read, search, and (with edit access) modify vault notes. " +
-        "Index and web research tools in Thinking mode are governed separately.",
-    )
+    .setName(t("settings.capabilityControls.tools.name"))
+    .setDesc(t("settings.capabilityControls.tools.desc"))
     .addToggle((toggle) => {
       toggle.setValue(options.toolsEnabled);
       toggle.setDisabled(!verified);
@@ -125,28 +124,31 @@ export function renderModelProfileToolsControl(
   applyDisabledState(toolsSetting, !verified, reason);
 }
 
-function formatCapabilityStatus(
-  savedProfileId: string | undefined,
-  getCapabilityStatus: ((profileId: string) => CapabilityVerificationState) | undefined,
-  profile: ChatModelProfile | undefined,
-): string {
-  const status = savedProfileId ? getCapabilityStatus?.(savedProfileId) : undefined;
-  if (status) return formatCapabilityVerificationStatus(status);
+function blockReason(t: Translate, verified: boolean, tested: boolean): string | undefined {
+  if (verified) return undefined;
+  return tested
+    ? t("settings.capabilityControls.notVerified")
+    : t("settings.capabilityControls.notTested");
+}
 
-  const tools = profile?.capabilities?.toolCalling?.probe;
-  const agent = profile?.reasoningCapabilities;
-  const toolStatus = !tools
-    ? "tools support: Not tested"
-    : tools.calls
-      ? "tools support: Verified"
-      : "tools support: Not verified";
-  const agentStatus =
-    !agent || agent.source !== "probe"
-      ? "agent mode support: Not tested"
-      : agent.responses
-        ? "agent mode support: Verified"
-        : "agent mode support: Not verified";
-  return `${toolStatus} · ${agentStatus}`;
+function resolveCapabilityStatus(options: ModelProfileCapabilityControlsOptions): string {
+  const { t } = options;
+  const status = options.savedProfileId
+    ? options.getCapabilityStatus?.(options.savedProfileId)
+    : undefined;
+  if (status) return formatCapabilityStatus(t, status);
+
+  const tools = options.currentProfile?.capabilities?.toolCalling?.probe;
+  const agent = options.currentProfile?.reasoningCapabilities;
+  return formatCapabilityStatus(t, {
+    tools: !tools ? "not-tested" : tools.calls ? "verified" : "not-verified",
+    agent:
+      !agent || agent.source !== "probe"
+        ? "not-tested"
+        : agent.responses
+          ? "verified"
+          : "not-verified",
+  });
 }
 
 function hasCapabilityTestResult(profile: ChatModelProfile | undefined): boolean {

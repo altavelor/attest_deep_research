@@ -1,0 +1,186 @@
+import type { EnSettingsIndexingMessages } from "../en/settingsIndexing";
+
+export const settingsIndexing: EnSettingsIndexingMessages = {
+  "settings.indexing.heading": "Индексирование",
+  "settings.indexProfiles.title": "Профили индекса",
+  "settings.indexProfiles.addAction": "Добавить профиль индекса",
+  "settings.indexProfiles.column.index": "Индекс",
+  "settings.indexProfiles.column.size": "Размер",
+  "settings.indexProfiles.column.status": "Статус",
+  "settings.indexProfiles.column.actions": "Действия",
+  "settings.indexProfiles.mode.wholeVault": "Всё хранилище",
+  "settings.indexProfiles.mode.selected": "Выбранное",
+  "settings.indexProfiles.meta": "{mode} · путей: {paths}",
+  "settings.indexProfiles.size": "{size} · файлов: {files}",
+  "settings.indexProfiles.action.continueIndexing": "Продолжить индексирование",
+  "settings.indexProfiles.action.pauseIndexing": "Приостановить индексирование",
+  "settings.indexProfiles.action.stopMetadata": "Остановить извлечение метаданных",
+  "settings.indexProfiles.action.updateIndex": "Обновить индекс",
+  "settings.indexProfiles.action.startIndexing": "Начать индексирование",
+  "settings.indexProfiles.action.showReport": "Показать отчёт индекса",
+  "settings.indexProfiles.action.edit": "Изменить профиль индекса",
+  "settings.indexProfiles.action.delete": "Удалить профиль индекса",
+  "settings.indexProfiles.notice.maxProfiles": "Можно создать не более {max} профилей индекса.",
+  "settings.indexProfiles.notice.embeddingRequired":
+    "Создайте активную модель эмбеддингов, прежде чем добавлять индекс.",
+  "settings.indexProfiles.notice.embeddingRequiredForRun":
+    "Создайте активную модель эмбеддингов перед индексированием.",
+  "settings.indexProfiles.notice.chatRequiredForMetadata":
+    "Создайте активный профиль чат-модели, прежде чем извлекать метаданные.",
+  "settings.indexProfiles.notice.reportFailed": "Не удалось загрузить отчёт индекса.",
+
+  "settings.enrichment.running": "Обогащение{scope}{file}{phase}",
+  "settings.enrichment.scope": " {processed}/{total}",
+  "settings.enrichment.file": " · {file}",
+  "settings.enrichment.phase.metadata": " · извлечение метаданных",
+  "settings.enrichment.phase.sectionsWithCount": " · изложение раздела {index}/{count}",
+  "settings.enrichment.phase.sections": " · изложение разделов",
+  "settings.enrichment.phase.document": " · подготовка изложения документа",
+  "settings.enrichment.phase.claimsWithCount": " · извлечение утверждений {index}/{count}",
+  "settings.enrichment.phase.claims": " · извлечение утверждений",
+  "settings.enrichment.phase.listingSources": " · перечисление источников",
+  "settings.enrichment.done":
+    "Метаданные: извлечено {extracted}, актуальных {skipped}{failed} (источников: {total})",
+  "settings.enrichment.doneFailed": ", с ошибкой {failed}",
+  "settings.enrichment.error": "Не удалось обогатить метаданные: {message}",
+  "settings.enrichment.unknownError": "неизвестная ошибка",
+
+  "settings.indexStatus.error.label": "Ошибка",
+  "settings.indexStatus.error.title": "Индексирование не удалось",
+  "settings.indexStatus.stale.label": "Устаревший индекс",
+  "settings.indexStatus.stale.title":
+    "Профиль индекса изменился — выполните «Обновить», чтобы освежить индекс.",
+  "settings.indexStatus.staleMetadata.label": "Устаревшие метаданные",
+  "settings.indexStatus.staleMetadata.title":
+    "Индекс изменился после последнего извлечения метаданных — выполните «Обновить» с включённым разделом метаданных.",
+  "settings.indexStatus.reindexRequired.label": "Требуется переиндексация",
+  "settings.indexStatus.reindexRequired.title":
+    "Этот индекс собран до появления метаданных изображений документов — пересоберите его полностью, чтобы включить поиск изображений по индексу. Текстовый поиск продолжает работать.",
+  "settings.indexStatus.pausing.label": "Приостановка",
+  "settings.indexStatus.pausing.tooltip": "Приостановка{detail}",
+  "settings.indexStatus.indexing.label": "Индексирование",
+  "settings.indexStatus.indexing.tooltip": "Индексирование{detail}",
+  "settings.indexStatus.paused.label": "Приостановлено",
+  "settings.indexStatus.paused.tooltip": "Приостановлено{detail}",
+  "settings.indexStatus.finished.label": "Завершено",
+  "settings.indexStatus.finished.tooltip":
+    "Завершено\nФайлы: {scanned} · {counters}\nФрагментов с эмбеддингами: {chunks}",
+  "settings.indexStatus.finished.scanned": "просмотрено {scanned}/{total}",
+  "settings.indexStatus.finished.scanComplete": "просмотр завершён",
+  "settings.indexStatus.finished.indexed": "проиндексировано {count}",
+  "settings.indexStatus.finished.skipped": "пропущено {count}",
+  "settings.indexStatus.finished.deferred": "отложено {count}",
+  "settings.indexStatus.finished.failed": "с ошибкой {count}",
+  "settings.indexStatus.stopping.label": "Остановка",
+  "settings.indexStatus.stopping.tooltip": "Остановка извлечения метаданных{detail}",
+  "settings.indexStatus.enriching.label": "Обогащение",
+  "settings.indexStatus.enriching.tooltip": "Обогащение метаданных{detail}",
+  "settings.indexStatus.progress.chunks": " · фрагментов {embedded}/{total}{file}",
+  "settings.indexStatus.progress.files": " · {percent}% · файлов {scanned}/{total}{file}",
+  "settings.indexStatus.progress.file": " · {file}",
+  "settings.indexStatus.enrichmentDetail": "{scope}{file}{phase}",
+  "settings.indexStatus.enrichmentScope": " · {processed}/{total}",
+  "settings.indexStatus.enrichmentPhase.metadata": "\nизвлечение метаданных",
+  "settings.indexStatus.enrichmentPhase.sectionsWithCount": "\nизложение раздела {index}/{count}",
+  "settings.indexStatus.enrichmentPhase.sections": "\nизложение разделов",
+  "settings.indexStatus.enrichmentPhase.document": "\nподготовка изложения документа",
+  "settings.indexStatus.enrichmentPhase.listingSources": "\nперечисление источников",
+
+  "settings.indexProfileModal.editTitle": "Изменить профиль индекса",
+  "settings.indexProfileModal.addTitle": "Добавить профиль индекса",
+  "settings.indexProfileModal.name.name": "Имя",
+  "settings.indexProfileModal.name.desc":
+    "Уникальное имя индекса, которое показывается в настройках, чате и списках поиска. Не более {max} символов.",
+  "settings.indexProfileModal.mode.name": "Режим",
+  "settings.indexProfileModal.mode.desc":
+    "«Всё хранилище» индексирует все поддерживаемые видимые файлы, кроме исключённых путей; «Выбранное» — только указанные пути.",
+  "settings.indexProfileModal.mode.wholeVault": "Всё хранилище",
+  "settings.indexProfileModal.mode.selected": "Выбранное",
+  "settings.indexProfileModal.included.name": "Включено",
+  "settings.indexProfileModal.included.desc":
+    "Файлы и папки, которые нужно включить в этот индекс.",
+  "settings.indexProfileModal.excluded.name": "Исключено",
+  "settings.indexProfileModal.excluded.desc":
+    "Файлы и папки, которые нужно исключить из этого индекса по всему хранилищу.",
+  "settings.indexProfileModal.embeddingModel.name": "Модель эмбеддингов",
+  "settings.indexProfileModal.embeddingModel.desc":
+    "Модель эмбеддингов, создающая векторы для этого индекса.",
+  "settings.indexProfileModal.embeddingModel.placeholder": "Выберите модель эмбеддингов",
+  "settings.indexProfileModal.chunkSize.name": "Размер фрагмента",
+  "settings.indexProfileModal.chunkSize.desc":
+    "Максимальный размер текстового фрагмента для файлов, кроме PDF.",
+  "settings.indexProfileModal.chunkOverlap.name": "Перекрытие фрагментов",
+  "settings.indexProfileModal.chunkOverlap.desc":
+    "Количество символов, общих для соседних фрагментов в файлах, кроме PDF.",
+  "settings.indexProfileModal.embeddingBatchSize.name": "Размер пакета эмбеддингов",
+  "settings.indexProfileModal.embeddingBatchSize.desc":
+    "Количество фрагментов, отправляемых в одном запросе эмбеддингов.",
+  "settings.indexProfileModal.pdfChunkSize.name": "Размер фрагмента PDF",
+  "settings.indexProfileModal.pdfChunkSize.desc":
+    "Максимальный размер текстового фрагмента для файлов PDF.",
+  "settings.indexProfileModal.pdfChunkOverlap.name": "Перекрытие фрагментов PDF",
+  "settings.indexProfileModal.pdfChunkOverlap.desc":
+    "Количество символов, общих для соседних фрагментов PDF.",
+  "settings.indexProfileModal.choose": "Выбрать",
+  "settings.indexProfileModal.noPaths": "Пути не выбраны",
+  "settings.indexProfileModal.error.name":
+    "Укажите уникальное имя до 60 символов из букв, цифр, пробелов и символов _, -, ., (, ), [, ].",
+  "settings.indexProfileModal.error.embeddingModel": "Выберите модель эмбеддингов.",
+  "settings.indexProfileModal.error.includedPath": "Выберите хотя бы один включённый путь.",
+  "settings.indexProfileModal.error.numbers":
+    "Числовые настройки индекса должны быть корректными целыми числами.",
+  "settings.indexProfileModal.notice.rebuild":
+    "Настройки индекса изменились. Пересоберите этот индекс, чтобы применить новую конфигурацию.",
+
+  "settings.indexPathPicker.title": "Выбор файлов и папок",
+  "settings.indexPathPicker.search.name": "Поиск",
+  "settings.indexPathPicker.search.placeholder": "Фильтр файлов и папок",
+  "settings.indexPathPicker.empty": "Подходящих путей нет",
+  "settings.indexPathPicker.toggle": "Переключить {path}",
+  "settings.indexPathPicker.vaultRoot": "корень хранилища",
+  "settings.indexPathPicker.select": "Выбрать {path}",
+
+  "settings.indexRun.updateTitle": "Обновление “{profile}”",
+  "settings.indexRun.indexTitle": "Индексирование “{profile}”",
+  "settings.indexRun.embedding.name": "Индексировать содержимое (модель эмбеддингов)",
+  "settings.indexRun.embedding.desc":
+    "Извлечь файлы хранилища, разбить на фрагменты и добавить их эмбеддинги в индекс.",
+  "settings.indexRun.embeddingModel.name": "Модель эмбеддингов",
+  "settings.indexRun.modelOption": "{name} ({model})",
+  "settings.indexRun.tokenWarning":
+    "Извлечение метаданных может занять много времени и израсходовать большое количество токенов.",
+  "settings.indexRun.metadata.name": "Извлечь метаданные и краткие изложения (чат-модель)",
+  "settings.indexRun.metadata.desc":
+    "Извлечь заголовок, авторов, год, аннотацию и ссылки, а также подготовить краткие изложения разделов и документа для каждого документа. Неизменённые документы пропускаются.",
+  "settings.indexRun.metadataModel.name": "Модель для метаданных",
+  "settings.indexRun.reextract.name": "Извлечь заново неизменённые документы",
+  "settings.indexRun.reextract.desc":
+    "Игнорировать сохранённые метаданные и выполнить извлечение для каждого документа заново.",
+  "settings.indexRun.embeddingChangedWarning":
+    "Смена модели эмбеддингов требует полной переиндексации: запуск пересоберёт индекс (и его метаданные) с нуля.",
+  "settings.indexRun.start": "Начать",
+  "settings.indexRun.rebuild": "Пересобрать",
+  "settings.indexRun.update": "Обновить",
+
+  "settings.indexReport.title": "Отчёт: {profile}",
+  "settings.indexReport.indexedFiles": "проиндексировано файлов: {count}",
+  "settings.indexReport.failedFiles": "файлов с ошибкой: {count}",
+  "settings.indexReport.chunks": "фрагментов: {count}",
+  "settings.indexReport.enriched": "обогащено: {count}",
+  "settings.indexReport.empty": "Отчёт об индексировании пока недоступен.",
+  "settings.indexReport.failed": "Ошибка",
+  "settings.indexReport.indexingFailed": "Индексирование не удалось.",
+  "settings.indexReport.metadataSection": "Метаданные индекса",
+  "settings.indexReport.extractionModel": "Модель извлечения: {models}",
+  "settings.indexReport.lastExtracted": "Последнее извлечение: {timestamp}",
+  "settings.indexReport.referencesCollected": "Собрано ссылок: {count}",
+  "settings.indexReport.sharedReferences": "Общие ссылки (цитируются несколькими документами):",
+  "settings.indexReport.sharedReference": "{count}× — {reference}",
+  "settings.indexReport.citedBy": "Цитируется в: {sources}",
+  "settings.indexReport.authors": "Авторы: {authors}",
+  "settings.indexReport.references": "Ссылки ({count}):",
+  "settings.indexReport.summary": "Краткое изложение · разделов: {count}",
+  "settings.indexReport.section": "{heading}: {summary}",
+  "settings.indexReport.metadataFallbackTitle": "Метаданные",
+  "settings.indexReport.refs": "ссылок: {count}",
+};

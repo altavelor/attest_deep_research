@@ -5,5 +5,6 @@ export * from "./documentSummaries";
 export * from "./images";
 export * from "./indexing";
 export * from "./retrieval";
+export * from "./translation";
 export * from "./vault";
 export * from "./web";

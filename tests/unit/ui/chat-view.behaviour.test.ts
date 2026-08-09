@@ -9,6 +9,7 @@ import {
   IxplorerChatView,
   type IxplorerChatViewServices,
 } from "@apps/obsidian/ui/chat/IxplorerChatView";
+import { createTranslator } from "@adapters/i18n";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import type { SavedChat, SavedChatSummary } from "@core/chat/savedChat";
 import {
@@ -103,6 +104,7 @@ function createServices(overrides: Partial<IxplorerChatViewServices> = {}) {
     renameSavedChat: async () => {},
     setSavedChatFavorite: async () => {},
     deleteSavedChat: async () => {},
+    getTranslator: () => createTranslator("en"),
     isDebugMode: () => true,
     shouldIncludeActiveFileContext: () => false,
     ...overrides,

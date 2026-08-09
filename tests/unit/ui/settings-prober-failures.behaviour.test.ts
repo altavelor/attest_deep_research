@@ -9,6 +9,7 @@ import type {
   ToolCapabilityProbeResult,
 } from "@adapters/settings";
 import { PluginDebugLogger } from "@adapters/settings";
+import { createTranslator } from "@adapters/i18n";
 import { SettingsCapabilityProber } from "@apps/obsidian/ui/settings/SettingsCapabilityProber";
 import type IxplorerPlugin from "@apps/obsidian/main";
 import { takeNotices } from "../../stubs/obsidian";
@@ -117,6 +118,7 @@ function createHarness(): Harness {
   let redisplays = 0;
   const plugin = {
     settings,
+    translate: createTranslator("en").t,
     logger: new PluginDebugLogger({ getSettings: () => settings }),
     saveSettings: async () => {
       saved += 1;
