@@ -53,8 +53,7 @@ Supported chat formats are `openai-compatible`, `anthropic`, and `ollama`. Reaso
 chat-completions or the OpenAI responses protocol, subject to the model capability probe.
 
 The vault-local, file-backed index stores embeddings, chunk metadata, keyword postings, source
-snapshots, and vectors. A migration from an earlier LanceDB development build requires an index
-rebuild.
+snapshots, and vectors. Rebuild an index after an incompatible index-format update.
 
 ## Research tools and diagnostics
 
