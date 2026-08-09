@@ -8,6 +8,8 @@ import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapter
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
 import { CapabilityVerificationState, reasoningVerified } from "@adapters/settings";
 import { parsePositiveInteger } from "@shared";
+import type { MessageKey, Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { optionalNumber, renderModalActions } from "./shared";
 import {
   ModelProfileCapabilityControlsOptions,
@@ -17,7 +19,20 @@ import {
 
 type ModelProfile = ChatModelProfile | EmbeddingModelProfile;
 
+const TITLE_MESSAGE_KEYS: Record<"edit" | "add", Record<"chat" | "embedding", MessageKey>> = {
+  edit: {
+    chat: "settings.modelProfileModal.editTitle.chat",
+    embedding: "settings.modelProfileModal.editTitle.embedding",
+  },
+  add: {
+    chat: "settings.modelProfileModal.addTitle.chat",
+    embedding: "settings.modelProfileModal.addTitle.embedding",
+  },
+};
+
 export interface ModelProfileModalOptions<TProfile extends ModelProfile> {
+  t: Translate;
+  getDirection?(): TextDirection;
   kind: "chat" | "embedding";
   profile?: TProfile;
   servers: ServerProfile[];
@@ -96,6 +111,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     this.render();
     this.unsubscribeCapabilityStatus =
       this.options.subscribeCapabilityStatus?.(() => this.render()) ?? null;
@@ -112,19 +128,16 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       this.reasoningCapabilities = currentProfile.reasoningCapabilities;
     }
     const { contentEl } = this;
+    const { t } = this.options;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
     contentEl.createEl("h2", {
-      text: this.options.profile
-        ? `Edit ${this.options.kind} model profile`
-        : `Add ${this.options.kind} model profile`,
+      text: t(TITLE_MESSAGE_KEYS[this.options.profile ? "edit" : "add"][this.options.kind]),
     });
 
     new Setting(contentEl)
-      .setName("Name")
-      .setDesc(
-        `Human-readable name shown in settings and chat controls. Max ${MAX_PROFILE_NAME_LENGTH} characters.`,
-      )
+      .setName(t("settings.modelProfileModal.name.name"))
+      .setDesc(t("settings.modelProfileModal.name.desc", { max: MAX_PROFILE_NAME_LENGTH }))
       .addText((text) => {
         text.inputEl.maxLength = MAX_PROFILE_NAME_LENGTH;
         text.setValue(this.name).onChange((value) => {
@@ -133,8 +146,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       });
 
     new Setting(contentEl)
-      .setName("Server")
-      .setDesc("Provider endpoint used to call this model.")
+      .setName(t("settings.modelProfileModal.server.name"))
+      .setDesc(t("settings.modelProfileModal.server.desc"))
       .addDropdown((dropdown) => {
         for (const server of this.options.servers.filter(
           (profile) => profile.isSuspended !== true,
@@ -156,12 +169,12 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       });
 
     new Setting(contentEl)
-      .setName("Model")
-      .setDesc("Model name fetched from the selected server profile.")
+      .setName(t("settings.modelProfileModal.model.name"))
+      .setDesc(t("settings.modelProfileModal.model.desc"))
       .addText((text) => {
         this.modelInputEl = text.inputEl;
         text
-          .setPlaceholder("Fetch models, then type to filter")
+          .setPlaceholder(t("settings.modelProfileModal.model.placeholder"))
           .setValue(this.modelName)
           .onChange((value) => {
             const nextModelName = value.trim();
@@ -187,10 +200,10 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         this.refreshModelControl();
       })
       .addButton((button) =>
-        button.setButtonText("Fetch").onClick(async () => {
+        button.setButtonText(t("settings.modelProfileModal.model.fetch")).onClick(async () => {
           const server = this.selectedServer();
           if (!server) {
-            new Notice("Select a server profile first.");
+            new Notice(t("settings.modelProfileModal.error.selectServer"));
             return;
           }
           await this.options.fetchModels(server);
@@ -201,31 +214,27 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     if (this.options.kind === "chat") {
       this.renderCapabilityControls(contentEl);
       const advanced = contentEl.createEl("details", { cls: "ixplorer-profile-modal__advanced" });
-      advanced.createEl("summary", { text: "Advanced" });
+      advanced.createEl("summary", { text: t("common.advanced") });
       const advancedContent = advanced.createDiv();
       new Setting(advancedContent)
-        .setName("Temperature")
-        .setDesc("Optional. Controls response randomness; blank uses the provider or app default.")
+        .setName(t("settings.modelProfileModal.temperature.name"))
+        .setDesc(t("settings.modelProfileModal.temperature.desc"))
         .addText((text) =>
           text.setValue(this.temperature).onChange((value) => {
             this.temperature = value.trim();
           }),
         );
       new Setting(advancedContent)
-        .setName("Max tokens")
-        .setDesc(
-          "Optional. Limits response length; blank uses provider/model default or 4096 for Anthropic.",
-        )
+        .setName(t("settings.modelProfileModal.maxTokens.name"))
+        .setDesc(t("settings.modelProfileModal.maxTokens.desc"))
         .addText((text) =>
           text.setValue(this.maxTokens).onChange((value) => {
             this.maxTokens = value.trim();
           }),
         );
       new Setting(advancedContent)
-        .setName("Context size")
-        .setDesc(
-          "Optional token limit. Filled from model metadata when available and used to enforce the chat context window.",
-        )
+        .setName(t("settings.modelProfileModal.contextSize.name"))
+        .setDesc(t("settings.modelProfileModal.contextSize.desc"))
         .addText((text) => {
           this.contextLengthInputEl = text.inputEl;
           text.setValue(this.contextLength).onChange((value) => {
@@ -236,6 +245,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     }
 
     renderModalActions(contentEl, {
+      t,
       onCancel: () => this.close(),
       onSave: () => void this.save(),
     });
@@ -289,7 +299,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     if (models.length === 0) {
       this.modelMenuEl.createDiv({
         cls: "ixplorer-profile-modal__model-empty",
-        text: "No matching models",
+        text: this.options.t("settings.modelProfileModal.model.empty"),
       });
       this.modelMenuEl.removeClass("is-hidden");
       return;
@@ -381,29 +391,30 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   }
 
   private async save(): Promise<void> {
+    const { t } = this.options;
     if (!this.name || !this.serverProfileId || !this.modelName) {
       this.testing = false;
-      new Notice("Fill all required fields.");
+      new Notice(t("settings.profileModal.error.requiredFields"));
       return;
     }
 
     if (!isValidProfileName(this.name)) {
       this.testing = false;
-      new Notice(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters.`);
+      new Notice(t("settings.profileModal.error.nameLength", { max: MAX_PROFILE_NAME_LENGTH }));
       return;
     }
 
     const existingProfileId = this.savedProfileId ?? this.options.profile?.id;
     if (hasDuplicateProfileName(this.options.profiles, this.name, existingProfileId)) {
       this.testing = false;
-      new Notice("Name must be unique.");
+      new Notice(t("settings.profileModal.error.nameUnique"));
       return;
     }
 
     const server = this.selectedServer();
     if (!server || server.isSuspended) {
       this.testing = false;
-      new Notice("Select an active server profile.");
+      new Notice(t("settings.modelProfileModal.error.activeServer"));
       return;
     }
 
@@ -412,7 +423,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     );
     if (!model && !this.options.profile) {
       this.testing = false;
-      new Notice("Fetch models before creating a model profile.");
+      new Notice(t("settings.modelProfileModal.error.fetchModels"));
       return;
     }
 
@@ -424,12 +435,12 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         !allowedEfforts.includes(this.reasoningEffort)
       ) {
         this.testing = false;
-        new Notice("Reasoning effort must be provider-default or capability-verified.");
+        new Notice(t("settings.modelProfileModal.error.reasoningEffort"));
         return;
       }
       if (this.reasoningSummary === "auto" && this.reasoningCapabilities?.summary === false) {
         this.testing = false;
-        new Notice("Reasoning summaries were not verified for this profile.");
+        new Notice(t("settings.modelProfileModal.error.reasoningSummary"));
         return;
       }
     }
@@ -510,6 +521,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     containerEl: HTMLElement,
   ): ModelProfileCapabilityControlsOptions {
     return {
+      t: this.options.t,
       containerEl,
       currentProfile: this.currentProfile() as ChatModelProfile | undefined,
       savedProfileId: this.savedProfileId,

@@ -5,6 +5,7 @@ import type { App as ObsidianApp } from "obsidian";
 
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import type { IxplorerSettings } from "@adapters/settings";
+import { createTranslator } from "@adapters/i18n";
 import type { WebSourceActivation } from "@core/web";
 import { WebSourcesSection } from "@apps/obsidian/ui/settings/WebSourcesSection";
 import { WebSourceModal } from "@apps/obsidian/ui/settings/WebSourceModal";
@@ -16,6 +17,8 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 function settingsWith(activation: WebSourceActivation): IxplorerSettings {
   return {
@@ -29,6 +32,7 @@ function render(settings: IxplorerSettings) {
   const requestRedisplay = vi.fn();
   const section = new WebSourcesSection({
     app: new App() as unknown as ObsidianApp,
+    t,
     getSettings: () => settings,
     saveSettings,
     requestRedisplay,
@@ -138,6 +142,7 @@ describe("WebSourceModal activation gating", () => {
     expect(descriptor).toBeDefined();
     const saved: WebSourceProfile[] = [];
     const modal = new WebSourceModal(new App() as unknown as ObsidianApp, {
+      t,
       descriptor: descriptor!,
       profile,
       onSave: async (next) => {

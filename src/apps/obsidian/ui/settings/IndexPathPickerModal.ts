@@ -1,9 +1,13 @@
 import { App, Modal, Setting, TAbstractFile, TFile, TFolder, setIcon } from "obsidian";
 
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { isHiddenOrIgnoredPath, isSupportedIndexFile, normalizePickerPath } from "./indexPath";
 import { renderModalActions } from "./shared";
 
 export interface IndexPathPickerModalOptions {
+  t: Translate;
+  getDirection?(): TextDirection;
   selectedPaths: string[];
   onSubmit(paths: string[]): void;
 }
@@ -22,13 +26,15 @@ export class IndexPathPickerModal extends Modal {
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     const { contentEl } = this;
+    const { t } = this.options;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
-    contentEl.createEl("h2", { text: "Choose files and folders" });
+    contentEl.createEl("h2", { text: t("settings.indexPathPicker.title") });
 
-    new Setting(contentEl).setName("Search").addSearch((search) =>
-      search.setPlaceholder("Filter files and folders").onChange((value) => {
+    new Setting(contentEl).setName(t("settings.indexPathPicker.search.name")).addSearch((search) =>
+      search.setPlaceholder(t("settings.indexPathPicker.search.placeholder")).onChange((value) => {
         this.query = value.trim().toLocaleLowerCase();
         this.renderTree();
       }),
@@ -38,6 +44,7 @@ export class IndexPathPickerModal extends Modal {
     this.renderTree();
 
     renderModalActions(contentEl, {
+      t,
       onCancel: () => this.close(),
       onSave: () => {
         this.options.onSubmit(Array.from(this.selectedPaths).sort());
@@ -80,7 +87,7 @@ export class IndexPathPickerModal extends Modal {
     if (matches.length === 0) {
       containerEl.createDiv({
         cls: "ixplorer-profile-modal__model-empty",
-        text: "No matching paths",
+        text: this.options.t("settings.indexPathPicker.empty"),
       });
       return;
     }
@@ -105,6 +112,7 @@ export class IndexPathPickerModal extends Modal {
   }
 
   private renderPathRow(containerEl: HTMLElement, file: TAbstractFile, depth: number): void {
+    const { t } = this.options;
     const path = normalizePickerPath(file.path);
     const row = containerEl.createDiv({
       cls: "ixplorer-index-path-picker__row",
@@ -114,7 +122,12 @@ export class IndexPathPickerModal extends Modal {
     if (file instanceof TFolder) {
       const expandButton = row.createEl("button", {
         cls: "clickable-icon ixplorer-index-path-picker__expand",
-        attr: { type: "button", "aria-label": `Toggle ${file.path || "vault root"}` },
+        attr: {
+          type: "button",
+          "aria-label": t("settings.indexPathPicker.toggle", {
+            path: file.path || t("settings.indexPathPicker.vaultRoot"),
+          }),
+        },
       });
       setIcon(expandButton, this.expandedFolders.has(path) ? "chevron-down" : "chevron-right");
       expandButton.addEventListener("click", () => {
@@ -132,7 +145,7 @@ export class IndexPathPickerModal extends Modal {
     const checkbox = row.createEl("input", {
       attr: {
         type: "checkbox",
-        "aria-label": `Select ${file.path}`,
+        "aria-label": t("settings.indexPathPicker.select", { path: file.path }),
       },
     });
     checkbox.checked = this.isSelected(file);

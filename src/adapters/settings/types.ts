@@ -1,4 +1,5 @@
 import { ApiFormat } from "@core/agent";
+import type { LocalePreference } from "@core/i18n";
 import type { WebSourceProfile } from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { ToolCapabilitySettings } from "./toolCapabilities";
@@ -109,6 +110,7 @@ export interface IxplorerSettings {
   excludeGlobs: string[];
   webSources: WebSourceProfile[];
   newChatDefaults: NewChatDefaults;
+  uiLanguage: LocalePreference;
   useLinkedNotes: boolean;
   includeBacklinks: boolean;
   expandFilteredContextThroughLinks: boolean;

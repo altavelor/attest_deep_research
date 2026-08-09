@@ -1,5 +1,7 @@
 import { App, Notice, TFile } from "obsidian";
 
+import type { Translate } from "@adapters/i18n";
+
 export interface ToolOutputDetail {
   name: string;
   intent: string;
@@ -20,7 +22,10 @@ export interface ToolOutputDetail {
 export class ToolOutputViewer {
   private static readonly NOTE_PATH = "Ixplorer/tool-output.md";
 
-  constructor(private readonly app: App) {}
+  constructor(
+    private readonly app: App,
+    private readonly t: Translate,
+  ) {}
 
   async open(detail: ToolOutputDetail): Promise<void> {
     const content = formatToolOutputNote(detail);
@@ -40,7 +45,7 @@ export class ToolOutputViewer {
     try {
       return await this.app.vault.create(path, content);
     } catch (error) {
-      new Notice(`Could not open tool output: ${String(error)}`);
+      new Notice(this.t("chat.toolOutput.openFailed", { error: String(error) }));
       return undefined;
     }
   }

@@ -5,9 +5,13 @@ import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { normalizeUrl } from "@adapters/settings";
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
 import { ServerProfile } from "@adapters/settings";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { renderModalActions } from "./shared";
 
 export interface ServerProfileModalOptions {
+  t: Translate;
+  getDirection?(): TextDirection;
   profile?: ServerProfile;
   profiles: ServerProfile[];
   onSave(profile: ServerProfile): Promise<void>;
@@ -27,18 +31,20 @@ export class ServerProfileModal extends Modal {
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     const { contentEl } = this;
+    const { t } = this.options;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
     contentEl.createEl("h2", {
-      text: this.options.profile ? "Edit server profile" : "Add server profile",
+      text: this.options.profile
+        ? t("settings.serverModal.editTitle")
+        : t("settings.serverModal.addTitle"),
     });
 
     new Setting(contentEl)
-      .setName("Name")
-      .setDesc(
-        `Human-readable name shown in settings and model selectors. Max ${MAX_PROFILE_NAME_LENGTH} characters.`,
-      )
+      .setName(t("settings.serverModal.name.name"))
+      .setDesc(t("settings.serverModal.name.desc", { max: MAX_PROFILE_NAME_LENGTH }))
       .addText((text) => {
         text.inputEl.maxLength = MAX_PROFILE_NAME_LENGTH;
         text.setValue(this.name).onChange((value) => {
@@ -47,13 +53,13 @@ export class ServerProfileModal extends Modal {
       });
 
     new Setting(contentEl)
-      .setName("API format")
-      .setDesc("Request and response format used by this provider.")
+      .setName(t("settings.serverModal.apiFormat.name"))
+      .setDesc(t("settings.serverModal.apiFormat.desc"))
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("openai-compatible", "OpenAI-compatible")
-          .addOption("ollama", "Ollama")
-          .addOption("anthropic", "Anthropic")
+          .addOption("openai-compatible", t("settings.serverModal.apiFormat.openaiCompatible"))
+          .addOption("ollama", t("settings.serverModal.apiFormat.ollama"))
+          .addOption("anthropic", t("settings.serverModal.apiFormat.anthropic"))
           .setValue(this.apiFormat)
           .onChange((value) => {
             this.apiFormat = value as ApiFormat;
@@ -61,8 +67,8 @@ export class ServerProfileModal extends Modal {
       );
 
     new Setting(contentEl)
-      .setName("Base URL")
-      .setDesc("Provider endpoint URL, for example an OpenRouter, Ollama, or Anthropic API base.")
+      .setName(t("settings.serverModal.baseUrl.name"))
+      .setDesc(t("settings.serverModal.baseUrl.desc"))
       .addText((text) =>
         text.setValue(this.baseUrl).onChange((value) => {
           this.baseUrl = value.trim();
@@ -70,8 +76,8 @@ export class ServerProfileModal extends Modal {
       );
 
     new Setting(contentEl)
-      .setName("API key")
-      .setDesc("Optional. Used as a bearer token for providers that require authentication.")
+      .setName(t("settings.serverModal.apiKey.name"))
+      .setDesc(t("settings.serverModal.apiKey.desc"))
       .addText((text) => {
         text.inputEl.type = "password";
         text.setValue(this.apiKey).onChange((value) => {
@@ -80,6 +86,7 @@ export class ServerProfileModal extends Modal {
       });
 
     renderModalActions(contentEl, {
+      t,
       onCancel: () => this.close(),
       onSave: () => void this.save(),
     });
@@ -90,18 +97,19 @@ export class ServerProfileModal extends Modal {
   }
 
   private async save(): Promise<void> {
+    const { t } = this.options;
     if (!this.name || !this.baseUrl) {
-      new Notice("Fill all required fields.");
+      new Notice(t("settings.profileModal.error.requiredFields"));
       return;
     }
 
     if (!isValidProfileName(this.name)) {
-      new Notice(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters.`);
+      new Notice(t("settings.profileModal.error.nameLength", { max: MAX_PROFILE_NAME_LENGTH }));
       return;
     }
 
     if (hasDuplicateProfileName(this.options.profiles, this.name, this.options.profile?.id)) {
-      new Notice("Name must be unique.");
+      new Notice(t("settings.profileModal.error.nameUnique"));
       return;
     }
 

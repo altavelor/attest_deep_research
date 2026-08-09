@@ -1,11 +1,15 @@
 import { IxplorerSettings } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 import { App, Setting, setIcon } from "obsidian";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { WebSourcesSection } from "./WebSourcesSection";
 import { renderCategoryHeading, renderSubcategoryHeading } from "./shared";
 
 export interface RetrievalSettingsSectionOptions {
   app: App;
+  t: Translate;
+  getDirection?(): TextDirection;
   settings: IxplorerSettings;
   webSourceHealth: WebSourceHealthTracker;
   hasActiveChatModel: boolean;
@@ -18,12 +22,9 @@ export class RetrievalSettingsSection {
   constructor(private readonly options: RetrievalSettingsSectionOptions) {}
 
   render(containerEl: HTMLElement): void {
+    const { t } = this.options;
     const contentEl = this.gateHost(containerEl);
-    renderCategoryHeading(
-      contentEl,
-      "Retrieval",
-      "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
-    );
+    renderCategoryHeading(contentEl, t("settings.retrieval.heading"), t("settings.retrieval.desc"));
     this.renderGraphContext(contentEl);
     this.renderSearch(contentEl);
     this.renderWeb(contentEl);
@@ -35,7 +36,7 @@ export class RetrievalSettingsSection {
     const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
     const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
     setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
-    hint.createSpan({ text: "Add a chat model profile first" });
+    hint.createSpan({ text: this.options.t("settings.tab.gateHint") });
     return section.createDiv({
       cls: "ixplorer-settings__gated-content is-disabled",
       attr: { "aria-disabled": "true", inert: "" },
@@ -43,30 +44,29 @@ export class RetrievalSettingsSection {
   }
 
   private renderGraphContext(containerEl: HTMLElement): void {
-    renderSubcategoryHeading(containerEl, "Obsidian graph");
+    const { t } = this.options;
+    renderSubcategoryHeading(containerEl, t("settings.retrieval.graph.heading"));
     this.addToggle(
       containerEl,
-      "Use linked notes",
-      "Discover linked notes from @mentions, active files, and included attachments before retrieval.",
+      t("settings.retrieval.useLinkedNotes.name"),
+      t("settings.retrieval.useLinkedNotes.desc"),
       "useLinkedNotes",
     );
     this.addToggle(
       containerEl,
-      "Include backlinks",
-      "Use one-hop backlinks as graph candidates. Backlink notes are not traversed further.",
+      t("settings.retrieval.includeBacklinks.name"),
+      t("settings.retrieval.includeBacklinks.desc"),
       "includeBacklinks",
     );
     this.addToggle(
       containerEl,
-      "Expand filtered files through links",
-      "When attached files are in Filter mode, also search their linked graph neighbors.",
+      t("settings.retrieval.expandFilteredContextThroughLinks.name"),
+      t("settings.retrieval.expandFilteredContextThroughLinks.desc"),
       "expandFilteredContextThroughLinks",
     );
     new Setting(containerEl)
-      .setName("Graph depth")
-      .setDesc(
-        "Depth 1 follows direct links, embeds, and backlinks. Depth 2 is reserved for advanced debugging.",
-      )
+      .setName(t("settings.retrieval.graphDepth.name"))
+      .setDesc(t("settings.retrieval.graphDepth.desc"))
       .addDropdown((dropdown) =>
         dropdown
           .addOption("1", "1")
@@ -80,25 +80,29 @@ export class RetrievalSettingsSection {
   }
 
   private renderSearch(containerEl: HTMLElement): void {
-    renderSubcategoryHeading(containerEl, "Search");
+    const { t } = this.options;
+    renderSubcategoryHeading(containerEl, t("settings.retrieval.search.heading"));
     this.addToggle(
       containerEl,
-      "Expand search query",
-      "Generate cross-language query variants before retrieval so notes written in other languages are found. Uses an extra chat-model call per search.",
+      t("settings.retrieval.expandSearchQuery.name"),
+      t("settings.retrieval.expandSearchQuery.desc"),
       "expandSearchQuery",
     );
   }
 
   private renderWeb(containerEl: HTMLElement): void {
-    renderSubcategoryHeading(containerEl, "Web");
+    const { t } = this.options;
+    renderSubcategoryHeading(containerEl, t("settings.retrieval.web.heading"));
     this.addToggle(
       containerEl,
-      "Use web for freshness questions",
-      "Give web evidence more budget when a question asks for current, latest, price, or release information.",
+      t("settings.retrieval.useWebWhenFreshnessNeeded.name"),
+      t("settings.retrieval.useWebWhenFreshnessNeeded.desc"),
       "useWebWhenFreshnessNeeded",
     );
     new WebSourcesSection({
       app: this.options.app,
+      t: this.options.t,
+      getDirection: this.options.getDirection,
       getSettings: () => this.options.settings,
       saveSettings: () => this.options.saveSettings(),
       requestRedisplay: () => this.options.requestRedisplay(),

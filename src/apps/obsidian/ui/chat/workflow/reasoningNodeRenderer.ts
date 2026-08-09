@@ -1,5 +1,6 @@
 import { MarkdownRenderer, setIcon } from "obsidian";
 
+import type { Translate } from "@adapters/i18n";
 import type { WorkflowRenderContext, WorkflowUiState } from "../workflowRenderer";
 
 const LONG_THINKING_CHARS = 280;
@@ -24,7 +25,10 @@ export function renderThinkingNode(
     details.open = uiState?.openThinking.has(id) ?? false;
     const summary = details.createEl("summary", { cls: "ixplorer-chat__thinking-summary" });
     setIcon(summary.createSpan({ cls: "ixplorer-chat__thinking-caret" }), "chevron-right");
-    summary.createSpan({ cls: "ixplorer-chat__thinking-summary-label", text: "Thinking" });
+    summary.createSpan({
+      cls: "ixplorer-chat__thinking-summary-label",
+      text: renderContext.t("chat.workflow.thinking"),
+    });
     void MarkdownRenderer.render(
       renderContext.app,
       content,
@@ -34,7 +38,12 @@ export function renderThinkingNode(
     );
     return;
   }
-  if (active) body.createDiv({ cls: "ixplorer-chat__workflow-heading", text: "Thinking…" });
+  if (active) {
+    body.createDiv({
+      cls: "ixplorer-chat__workflow-heading",
+      text: renderContext.t("chat.workflow.thinkingActive"),
+    });
+  }
   void MarkdownRenderer.render(
     renderContext.app,
     content,
@@ -69,11 +78,12 @@ export function renderWorkflowIndicator(
   isStreaming: boolean,
   isFinalizing: boolean,
   hasStreamingCheckpoint: boolean,
+  t: Translate,
   activeReasoningId?: string,
 ): void {
-  if (isFinalizing) renderActiveThinkingNode(listEl, "Finalizing…");
+  if (isFinalizing) renderActiveThinkingNode(listEl, "finalizing", t);
   else if (isStreaming && !hasStreamingCheckpoint && !activeReasoningId) {
-    renderActiveThinkingNode(listEl, "Thinking…");
+    renderActiveThinkingNode(listEl, "thinking", t);
   }
 }
 
@@ -81,13 +91,20 @@ function isLongThinking(content: string): boolean {
   return content.length > LONG_THINKING_CHARS || content.split("\n").length > 4;
 }
 
-function renderActiveThinkingNode(listEl: HTMLElement, label: "Thinking…" | "Finalizing…"): void {
-  const isFinalizing = label === "Finalizing…";
+function renderActiveThinkingNode(
+  listEl: HTMLElement,
+  phase: "thinking" | "finalizing",
+  t: Translate,
+): void {
+  const isFinalizing = phase === "finalizing";
   const node = listEl.createDiv({
     cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active${isFinalizing ? " ixplorer-chat__workflow-node--finalizing" : ""}`,
   });
   node.createSpan({
     cls: `ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--${isFinalizing ? "finalizing" : "thinking"}`,
   });
-  node.createDiv({ cls: "ixplorer-chat__workflow-heading", text: label });
+  node.createDiv({
+    cls: "ixplorer-chat__workflow-heading",
+    text: isFinalizing ? t("chat.workflow.finalizing") : t("chat.workflow.thinkingActive"),
+  });
 }

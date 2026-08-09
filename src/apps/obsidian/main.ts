@@ -20,6 +20,10 @@ import {
 } from "@adapters/settings";
 import { IxplorerSettings } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
+import { DEFAULT_LOCALE, resolveLocale } from "@core/i18n";
+import { createTranslator } from "@adapters/i18n";
+import type { Translate, UiTranslator } from "@adapters/i18n";
+import { readObsidianLanguage } from "@adapters/obsidian/ObsidianLanguageProbe";
 import { isWebSourceActive } from "@core/web";
 import { WebSourceHealthTracker } from "@application/web";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
@@ -52,6 +56,10 @@ export default class IxplorerPlugin extends Plugin {
   settings: IxplorerSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
+  private translator: UiTranslator = createTranslator(DEFAULT_LOCALE);
+
+  /** Late-bound translator lookup so captured references never go stale. */
+  readonly translate: Translate = (key, params) => this.translator.t(key, params);
 
   readonly enrichment = new EnrichmentProfileController({
     createService: (profileId, chatModelProfileId) =>
@@ -80,7 +88,9 @@ export default class IxplorerPlugin extends Plugin {
       createIndexingService(this.composition, profileId, onProgress),
     measureIndexSize: (profileId) =>
       measureFolderSize(
-        this.getVaultLocalPath(requireIndexProfile(this.settings, profileId).indexFolder),
+        this.getVaultLocalPath(
+          requireIndexProfile(this.settings, this.translate, profileId).indexFolder,
+        ),
       ),
     onError: (error) => new Notice(toUserMessage(error)),
     onComplete: async (profileId, state) => {
@@ -128,6 +138,7 @@ export default class IxplorerPlugin extends Plugin {
     return {
       app: this.app,
       logger: this.logger,
+      translator: this.translator,
       pdfTextCache: this.pdfTextCache,
       webSourceHealth: this.webSourceHealth,
       warmCaches: this.requireWarmCaches(),
@@ -186,7 +197,7 @@ export default class IxplorerPlugin extends Plugin {
               ...(profile.indexVersion !== undefined ? { indexVersion: profile.indexVersion } : {}),
             })),
           getIndexSearchEmbedderWarning: (indexProfileId) =>
-            indexSearchEmbedderWarning(this.settings, indexProfileId),
+            indexSearchEmbedderWarning(this.settings, this.translate, indexProfileId),
           openIndexSettings: () => this.openSettingsTab(),
           resolveDocumentImage: (documentPath, locator, contentHash) =>
             createDocumentImageResolver(this.composition).resolve(
@@ -205,19 +216,13 @@ export default class IxplorerPlugin extends Plugin {
             await this.createChatStore().setChatFavorite(id, isFavorite);
           },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
+          getTranslator: () => this.translator,
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () =>
             this.settings.newChatDefaults.includeActiveFileContext,
         }),
     );
-    this.addCommand({
-      id: "open-ixplorer-chat",
-      name: "Open Ixplorer chat",
-      icon: "bot-message-square",
-      callback: () => {
-        void this.activateChatView();
-      },
-    });
+    this.registerCommands();
     this.addSettingTab(new IxplorerSettingTab(this.app, this));
   }
 
@@ -236,7 +241,39 @@ export default class IxplorerPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = readSettings(await this.loadData());
+    this.rebindTranslator();
     this.logger.logConfiguration("initial-load", this.settings);
+  }
+
+  /**
+   * Applies a changed interface language: rebinds the translator and renames
+   * the registered command without leaving the old registration behind.
+   */
+  applyUiLanguage(): void {
+    this.rebindTranslator();
+    this.removeCommand("open-ixplorer-chat");
+    this.registerCommands();
+  }
+
+  getTranslator(): UiTranslator {
+    return this.translator;
+  }
+
+  private rebindTranslator(): void {
+    this.translator = createTranslator(
+      resolveLocale(this.settings.uiLanguage, readObsidianLanguage()),
+    );
+  }
+
+  private registerCommands(): void {
+    this.addCommand({
+      id: "open-ixplorer-chat",
+      name: this.translate("command.openChat"),
+      icon: "bot-message-square",
+      callback: () => {
+        void this.activateChatView();
+      },
+    });
   }
 
   async saveSettings(): Promise<void> {
@@ -251,21 +288,21 @@ export default class IxplorerPlugin extends Plugin {
   async loadIndexReport(profileId: string): Promise<IndexSourceReportItem[]> {
     return createVectorIndexStoreForProfile(
       this.composition,
-      requireIndexProfile(this.settings, profileId),
+      requireIndexProfile(this.settings, this.translate, profileId),
     ).loadSourceReport();
   }
 
   async loadIndexMetadata(profileId: string): Promise<SourceDocumentMetadata[]> {
     return createDocumentMetadataStoreForProfile(
       this.composition,
-      requireIndexProfile(this.settings, profileId),
+      requireIndexProfile(this.settings, this.translate, profileId),
     ).list();
   }
 
   async loadIndexSummaries(profileId: string): Promise<SourceDocumentSummaries[]> {
     return createDocumentSummaryStoreForProfile(
       this.composition,
-      requireIndexProfile(this.settings, profileId),
+      requireIndexProfile(this.settings, this.translate, profileId),
     ).list();
   }
 
@@ -296,7 +333,7 @@ export default class IxplorerPlugin extends Plugin {
    * sidecars (store.clear removes the whole folder).
    */
   async runIndexPlan(profileId: string, plan: IndexRunPlan): Promise<void> {
-    const profile = requireIndexProfile(this.settings, profileId);
+    const profile = requireIndexProfile(this.settings, this.translate, profileId);
 
     if (plan.embedding) {
       if (plan.embedding.embeddingModelProfileId !== profile.embeddingModelProfileId) {
@@ -360,7 +397,11 @@ export default class IxplorerPlugin extends Plugin {
     minScore?: number;
     extension?: string;
   }) {
-    const indexProfile = resolveIndexProfileForUse(this.settings, options.profileId);
+    const indexProfile = resolveIndexProfileForUse(
+      this.settings,
+      this.translate,
+      options.profileId,
+    );
     const retriever = createRetrieverForProfile(this.composition, indexProfile);
     const chatProfile = resolveChatModelProfile(
       this.settings,

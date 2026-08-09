@@ -30,9 +30,14 @@ import {
   filterSavedChatsByTab,
   shouldScrollSavedChatsList,
 } from "@apps/obsidian/ui/chat/history/savedChatListState";
+import { createTranslator } from "@adapters/i18n";
+import { formatCitationForChunk } from "@apps/obsidian/ui/chat/citations/citationFormatting";
+import { formatIndexSearchCitation } from "@apps/obsidian/ui/index/IndexSearchPanel";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { SourceReference } from "@core/model";
+
+const t = createTranslator("en").t;
 
 describe("chat rendering helpers", () => {
   it("creates a new chat from the configured new-chat defaults", () => {
@@ -108,34 +113,64 @@ describe("chat rendering helpers", () => {
 
   it("formats indexing status for the chat pane toolbar", () => {
     expect(
-      formatIndexingStatus({
-        status: "idle",
-        scannedFiles: 12,
-        totalFiles: 12,
-        progress: 1,
-        indexedFiles: 3,
-        skippedFiles: 9,
-        embeddedChunks: 42,
-        deferredFiles: 0,
-        failedFiles: 0,
-        lastIndexedAt: "2026-05-16T00:00:00.000Z",
-        isStale: false,
-      }),
+      formatIndexingStatus(
+        {
+          status: "idle",
+          scannedFiles: 12,
+          totalFiles: 12,
+          progress: 1,
+          indexedFiles: 3,
+          skippedFiles: 9,
+          embeddedChunks: 42,
+          deferredFiles: 0,
+          failedFiles: 0,
+          lastIndexedAt: "2026-05-16T00:00:00.000Z",
+          isStale: false,
+        },
+        t,
+      ),
     ).toBe("Idle · 3 indexed · 42 chunks · last run May 16, 2026");
     expect(
-      formatIndexingStatus({
-        status: "paused",
-        scannedFiles: 0,
-        totalFiles: 0,
-        progress: 0,
-        indexedFiles: 0,
-        skippedFiles: 0,
-        embeddedChunks: 0,
-        deferredFiles: 0,
-        failedFiles: 0,
-        isStale: false,
-      }),
+      formatIndexingStatus(
+        {
+          status: "paused",
+          scannedFiles: 0,
+          totalFiles: 0,
+          progress: 0,
+          indexedFiles: 0,
+          skippedFiles: 0,
+          embeddedChunks: 0,
+          deferredFiles: 0,
+          failedFiles: 0,
+          isStale: false,
+        },
+        t,
+      ),
     ).toBe("Paused · no completed index run");
+  });
+
+  it("formats indexing dates in the selected interface locale", () => {
+    const ru = createTranslator("ru");
+    const state = {
+      status: "idle" as const,
+      scannedFiles: 12,
+      totalFiles: 12,
+      progress: 1,
+      indexedFiles: 3,
+      skippedFiles: 9,
+      embeddedChunks: 42,
+      deferredFiles: 0,
+      failedFiles: 0,
+      lastIndexedAt: "2026-05-16T00:00:00.000Z",
+      isStale: false,
+    };
+    const date = new Intl.DateTimeFormat("ru", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(state.lastIndexedAt));
+
+    expect(formatIndexingStatus(state, ru.t, ru.locale)).toContain(date);
   });
 
   it("formats progress values", () => {
@@ -155,6 +190,20 @@ describe("chat rendering helpers", () => {
       kind: "web",
       target: "https://example.com/local",
     });
+  });
+
+  it("localizes PDF page labels in chat and index citations", () => {
+    const chunk = {
+      id: "pdf-1",
+      source: pdfSource("Papers/model.pdf", 3),
+      text: "",
+      contentHash: "pdf-1",
+      score: 1,
+    };
+    const ru = createTranslator("ru").t;
+
+    expect(formatCitationForChunk(chunk, ru).label).toBe("Papers/model.pdf, стр. 3");
+    expect(formatIndexSearchCitation(chunk, ru)).toBe("Papers/model.pdf, стр. 3");
   });
 
   it("limits the source list to evidence the finalized answer actually cites", () => {

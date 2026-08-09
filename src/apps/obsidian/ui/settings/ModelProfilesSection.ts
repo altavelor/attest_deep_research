@@ -3,10 +3,12 @@ import {
   capabilityTags,
   canDeleteEmbeddingModelProfile,
   canDeleteServerProfile,
-  formatCapabilityVerificationStatus,
   mergeChatProfileSettingsPreservingProbe,
 } from "@adapters/settings";
 import { App, Notice } from "obsidian";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
+import { formatCapabilityStatus } from "./capabilityStatusText";
 import { ModelProfileModal } from "./ModelProfileModal";
 import { renderProfileList, renderProfileListItem } from "./ProfileListRenderer";
 import { ServerProfileModal } from "./ServerProfileModal";
@@ -16,6 +18,8 @@ import type { IxplorerSettings } from "@adapters/settings";
 
 export interface ModelProfilesSectionOptions {
   app: App;
+  t: Translate;
+  getDirection?(): TextDirection;
   settings: IxplorerSettings;
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   prober: SettingsCapabilityProber;
@@ -28,20 +32,19 @@ export class ModelProfilesSection {
   constructor(private readonly options: ModelProfilesSectionOptions) {}
 
   render(containerEl: HTMLElement): void {
-    renderCategoryHeading(
-      containerEl,
-      "Model profiles",
-      "Configure provider endpoints and the chat or embedding models that use them.",
-    );
+    const { t } = this.options;
+    renderCategoryHeading(containerEl, t("settings.models.heading"), t("settings.models.desc"));
     this.renderServers(containerEl);
     this.renderChatModels(containerEl);
     this.renderEmbeddingModels(containerEl);
   }
 
   private renderServers(containerEl: HTMLElement): void {
-    const { settings } = this.options;
-    const listEl = renderProfileList(containerEl, "Server profiles", () => {
+    const { settings, t } = this.options;
+    const listEl = renderProfileList(t, containerEl, t("settings.models.server.title"), () => {
       new ServerProfileModal(this.options.app, {
+        t,
+        getDirection: this.options.getDirection,
         profiles: settings.serverProfiles,
         onSave: async (profile) => {
           settings.serverProfiles.push(profile);
@@ -52,10 +55,13 @@ export class ModelProfilesSection {
     for (const profile of settings.serverProfiles) {
       const canDelete = canDeleteServerProfile(settings, profile.id);
       renderProfileListItem(listEl, {
+        t,
         name: profile.name,
-        status: statusForProfile(profile),
+        status: statusForProfile(t, profile),
         onEdit: () =>
           new ServerProfileModal(this.options.app, {
+            t,
+            getDirection: this.options.getDirection,
             profile,
             profiles: settings.serverProfiles,
             onSave: async (updated) => {
@@ -66,11 +72,11 @@ export class ModelProfilesSection {
           }).open(),
         canDelete,
         deleteTooltip: canDelete
-          ? "Delete server profile"
-          : "Delete dependent model profiles first",
+          ? t("settings.models.server.deleteTooltip")
+          : t("settings.models.server.deleteBlockedTooltip"),
         onDelete: async () => {
           if (!canDeleteServerProfile(settings, profile.id)) {
-            new Notice("Delete dependent model profiles first.");
+            new Notice(t("settings.models.server.deleteBlockedNotice"));
             return;
           }
           settings.serverProfiles = settings.serverProfiles.filter(
@@ -83,34 +89,35 @@ export class ModelProfilesSection {
   }
 
   private renderChatModels(containerEl: HTMLElement): void {
-    const { settings } = this.options;
-    const listEl = renderProfileList(containerEl, "Chat model profiles", () =>
+    const { settings, t } = this.options;
+    const listEl = renderProfileList(t, containerEl, t("settings.models.chat.title"), () =>
       this.openChatModal(),
     );
     for (const profile of settings.chatModelProfiles) {
       const capability = this.options.prober.statusFor(profile);
       const isTesting = capability.tools === "testing" || capability.agent === "testing";
       renderProfileListItem(listEl, {
+        t,
         name: profile.name,
         tags: capabilityTags(profile),
-        status: statusForProfile(profile),
+        status: statusForProfile(t, profile),
         onEdit: () => this.openChatModal(profile),
         extraActions: [
           {
             icon: "flask-conical",
             className: `ixplorer-settings__test-capabilities-action${isTesting ? " is-testing" : ""}`,
             label: isTesting
-              ? "Testing capabilities…"
-              : formatCapabilityVerificationStatus(capability),
+              ? t("settings.models.chat.testingLabel")
+              : formatCapabilityStatus(t, capability),
             onClick: async () => {
               await this.options.prober.refreshMetadataCapabilities();
               this.options.prober.startChatProfileProbes(profile.id, true);
-              new Notice(`Testing capabilities for ${profile.name}.`);
+              new Notice(t("settings.models.chat.testingNotice", { profile: profile.name }));
             },
           },
         ],
         canDelete: true,
-        deleteTooltip: "Delete chat model profile",
+        deleteTooltip: t("settings.models.chat.deleteTooltip"),
         onDelete: async () => {
           settings.chatModelProfiles = settings.chatModelProfiles.filter(
             (candidate) => candidate.id !== profile.id,
@@ -124,6 +131,8 @@ export class ModelProfilesSection {
   private openChatModal(profile?: IxplorerSettings["chatModelProfiles"][number]): void {
     const { settings } = this.options;
     new ModelProfileModal(this.options.app, {
+      t: this.options.t,
+      getDirection: this.options.getDirection,
       kind: "chat",
       profile,
       servers: settings.serverProfiles,
@@ -158,18 +167,23 @@ export class ModelProfilesSection {
   }
 
   private renderEmbeddingModels(containerEl: HTMLElement): void {
-    const { settings } = this.options;
-    const listEl = renderProfileList(containerEl, "Embedding model profiles", () =>
+    const { settings, t } = this.options;
+    const listEl = renderProfileList(t, containerEl, t("settings.models.embedding.title"), () =>
       this.openEmbeddingModal(),
     );
     for (const profile of settings.embeddingModelProfiles) {
       const canDelete = canDeleteEmbeddingModelProfile(settings, profile.id);
       renderProfileListItem(listEl, {
+        t,
         name: profile.name,
         status:
           settings.activeEmbeddingModelProfileId === profile.id && !profile.isSuspended
-            ? { kind: "is-default", label: "Default", title: "Default embedding model" }
-            : statusForProfile(profile),
+            ? {
+                kind: "is-default",
+                label: t("settings.models.embedding.defaultBadge"),
+                title: t("settings.models.embedding.defaultBadgeTitle"),
+              }
+            : statusForProfile(t, profile),
         onEdit: () => this.openEmbeddingModal(profile),
         extraActions: [
           {
@@ -177,8 +191,8 @@ export class ModelProfilesSection {
             className: "ixplorer-settings__default-action",
             label:
               settings.activeEmbeddingModelProfileId === profile.id
-                ? "Default model"
-                : "Set as default model",
+                ? t("settings.models.embedding.defaultAction")
+                : t("settings.models.embedding.setDefaultAction"),
             disabled:
               profile.isSuspended === true || settings.activeEmbeddingModelProfileId === profile.id,
             onClick: async () => {
@@ -189,11 +203,11 @@ export class ModelProfilesSection {
         ],
         canDelete,
         deleteTooltip: canDelete
-          ? "Delete embedding model profile"
-          : "This embedding model is used by an index profile",
+          ? t("settings.models.embedding.deleteTooltip")
+          : t("settings.models.embedding.deleteBlockedTooltip"),
         onDelete: async () => {
           if (!canDeleteEmbeddingModelProfile(settings, profile.id)) {
-            new Notice("This embedding model is used by an index profile.");
+            new Notice(t("settings.models.embedding.deleteBlockedNotice"));
             return;
           }
           settings.embeddingModelProfiles = settings.embeddingModelProfiles.filter(
@@ -208,6 +222,8 @@ export class ModelProfilesSection {
   private openEmbeddingModal(profile?: IxplorerSettings["embeddingModelProfiles"][number]): void {
     const { settings } = this.options;
     new ModelProfileModal(this.options.app, {
+      t: this.options.t,
+      getDirection: this.options.getDirection,
       kind: "embedding",
       profile,
       servers: settings.serverProfiles,

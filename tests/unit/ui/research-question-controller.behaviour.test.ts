@@ -8,12 +8,15 @@ import type { ResearchService, ResearchStreamEvent } from "@application/use-case
 import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
 import type { ChatDisplayMessage } from "@core/conversation";
+import { createTranslator } from "@adapters/i18n";
 import {
   advanceTime,
   flushAnimationFrames,
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 interface RenderLogEntry {
   call: "renderMessages" | "renderActiveMessage" | "renderAnswerDetails";
@@ -115,6 +118,7 @@ function createHarness(
     renderMessages: () => snapshot("renderMessages"),
     renderActiveMessage: () => snapshot("renderActiveMessage"),
     renderAnswerDetails: () => snapshot("renderAnswerDetails"),
+    t,
     ...overrides,
   };
 

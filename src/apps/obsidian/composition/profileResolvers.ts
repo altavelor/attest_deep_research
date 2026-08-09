@@ -1,4 +1,5 @@
 import { IndexProfile } from "@adapters/indexing";
+import type { Translate } from "@adapters/i18n";
 import {
   ChatModelProfile,
   EmbeddingModelProfile,
@@ -14,36 +15,43 @@ import {
 
 export function requireChatModelProfile(
   settings: IxplorerSettings,
+  translate: Translate,
   profileId?: string,
 ): ChatModelProfile {
   const profile = resolveChatModelProfile(settings, profileId);
   if (!profile) {
-    throw new Error("Select a chat model profile before asking a question.");
+    throw new Error(translate("profile.error.chatModelMissing"));
   }
   return profile;
 }
 
 export function requireEmbeddingModelProfile(
   settings: IxplorerSettings,
+  translate: Translate,
   profileId?: string,
 ): EmbeddingModelProfile {
   const profile = resolveEmbeddingModelProfile(settings, profileId);
   if (!profile) {
-    throw new Error("Select an embedding model profile before using this index.");
+    throw new Error(translate("profile.error.embeddingModelMissing"));
   }
   return profile;
 }
 
-export function requireServerProfile(settings: IxplorerSettings, profileId: string): ServerProfile {
+export function requireServerProfile(
+  settings: IxplorerSettings,
+  translate: Translate,
+  profileId: string,
+): ServerProfile {
   const profile = resolveServerProfile(settings, profileId);
   if (!profile) {
-    throw new Error("The selected server profile is unavailable.");
+    throw new Error(translate("profile.error.serverUnavailable"));
   }
   return profile;
 }
 
 export function resolveIndexProfileForUse(
   settings: IxplorerSettings,
+  translate: Translate,
   profileId?: string,
 ): IndexProfile {
   const requested = profileId
@@ -64,45 +72,50 @@ export function resolveIndexProfileForUse(
     (profile) => profile.isSuspended !== true && Boolean(profile.lastIndexedAt),
   );
   if (!requested && !firstIndexed) {
-    throw new Error("Index this profile before using it in chat or search.");
+    throw new Error(translate("profile.error.indexNotBuilt"));
   }
 
   return requested ?? firstIndexed!;
 }
 
-export function requireIndexProfile(settings: IxplorerSettings, profileId: string): IndexProfile {
+export function requireIndexProfile(
+  settings: IxplorerSettings,
+  translate: Translate,
+  profileId: string,
+): IndexProfile {
   const profile = settings.indexProfiles.find((candidate) => candidate.id === profileId);
   if (!profile || profile.isSuspended) {
-    throw new Error("The selected index profile is unavailable.");
+    throw new Error(translate("profile.error.indexUnavailable"));
   }
   return profile;
 }
 
 export function indexSearchEmbedderWarning(
   settings: IxplorerSettings,
+  translate: Translate,
   indexProfileId: string,
 ): string | undefined {
   const indexProfile = settings.indexProfiles.find((profile) => profile.id === indexProfileId);
   if (!indexProfile) {
-    return "Select an indexed profile in Ixplorer settings before searching.";
+    return translate("profile.warning.indexNotSelected");
   }
 
   const embeddingProfile = settings.embeddingModelProfiles.find(
     (profile) => profile.id === indexProfile.embeddingModelProfileId,
   );
   if (!embeddingProfile) {
-    return "The selected index's embedding model profile is unavailable. Update it in Ixplorer settings.";
+    return translate("profile.warning.embeddingProfileUnavailable");
   }
   if (embeddingProfile.isSuspended) {
-    return "The selected index's embedding model profile is suspended. Update it in Ixplorer settings.";
+    return translate("profile.warning.embeddingProfileSuspended");
   }
   if (embeddingProfile.capabilities?.embeddings === false) {
-    return "The selected index's embedding model cannot create embeddings. Update it in Ixplorer settings.";
+    return translate("profile.warning.embeddingNotSupported");
   }
 
   const serverProfile = resolveServerProfile(settings, embeddingProfile.serverProfileId);
   if (!serverProfile || serverProfile.isSuspended) {
-    return "The selected index's embedding server is unavailable. Update it in Ixplorer settings.";
+    return translate("profile.warning.embeddingServerUnavailable");
   }
 
   return undefined;

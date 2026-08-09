@@ -103,6 +103,16 @@ describe("Ixplorer plugin lifecycle", () => {
     expect(view.contentEl.querySelectorAll(".ixplorer-chat").length).toBe(1);
   });
 
+  it("replaces the chat command when the interface language changes", () => {
+    plugin.settings.uiLanguage = "ru";
+
+    plugin.applyUiLanguage();
+
+    expect(asStubPlugin(plugin).commands).toEqual([
+      expect.objectContaining({ id: "open-ixplorer-chat", name: "Открыть чат Ixplorer" }),
+    ]);
+  });
+
   it("marks the resolved index profile stale when no default index is configured", () => {
     const markStale = vi.spyOn(plugin.indexing, "markStale");
     expect(plugin.settings.newChatDefaults.indexProfileId).toBe("");

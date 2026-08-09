@@ -1,7 +1,8 @@
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
+import type { Translate } from "@adapters/i18n";
 
-export function formatCitationForChunk(chunk: RetrievedChunk): Citation {
+export function formatCitationForChunk(chunk: RetrievedChunk, t: Translate): Citation {
   switch (chunk.source.kind) {
     case "markdown":
       return {
@@ -14,7 +15,7 @@ export function formatCitationForChunk(chunk: RetrievedChunk): Citation {
     case "pdf":
       return {
         id: chunk.id,
-        label: `${chunk.source.path} p. ${chunk.source.pageNumber}`,
+        label: `${chunk.source.path}, ${t("common.pdfPage", { page: chunk.source.pageNumber })}`,
         source: chunk.source,
       };
     case "document":

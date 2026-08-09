@@ -1,6 +1,7 @@
 import { Setting, setIcon } from "obsidian";
 
 import { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
+import type { Translate } from "@adapters/i18n";
 
 export interface ProfileStatus {
   kind: "is-default" | "is-suspended";
@@ -29,65 +30,93 @@ export function renderSubcategoryHeading(containerEl: HTMLElement, name: string)
     .settingEl.addClass("ixplorer-settings__subcategory-heading");
 }
 
-export function statusForProfile(profile: {
-  isSuspended?: boolean;
-  suspendedReason?: string;
-}): ProfileStatus | null {
+export function statusForProfile(
+  t: Translate,
+  profile: {
+    isSuspended?: boolean;
+    suspendedReason?: string;
+  },
+): ProfileStatus | null {
   if (profile.isSuspended) {
     return {
       kind: "is-suspended",
-      label: "Suspended",
-      title: profile.suspendedReason ?? "Suspended",
+      label: t("settings.status.suspended"),
+      title: profile.suspendedReason ?? t("settings.status.suspended"),
     };
   }
 
   return null;
 }
 
-export function formatIndexRowProgress(state: IndexingState): string {
+export function formatIndexRowProgress(t: Translate, state: IndexingState): string {
   if (state.chunksTotal !== undefined && state.chunksTotal > 0) {
-    return ` · ${state.chunksEmbedded ?? 0}/${state.chunksTotal} chunks`;
+    return t("settings.indexStatus.progress.chunks", {
+      embedded: state.chunksEmbedded ?? 0,
+      total: state.chunksTotal,
+      file: "",
+    });
   }
 
-  return ` · ${Math.round(state.progress * 100)}% · ${state.scannedFiles}/${state.totalFiles} files`;
+  return t("settings.indexStatus.progress.files", {
+    percent: Math.round(state.progress * 100),
+    scanned: state.scannedFiles,
+    total: state.totalFiles,
+    file: "",
+  });
 }
 
-export function formatEnrichmentStatus(state: EnrichmentProfileState): string {
+export function formatEnrichmentStatus(t: Translate, state: EnrichmentProfileState): string {
   switch (state.status) {
-    case "running": {
-      const scope = state.total > 0 ? ` ${state.processed}/${state.total}` : "";
-      const file = state.currentSourcePath ? ` · ${baseName(state.currentSourcePath)}` : "";
-      return `Enriching${scope}${file}${enrichmentPhaseLabel(state)}`;
-    }
+    case "running":
+      return t("settings.enrichment.running", {
+        scope:
+          state.total > 0
+            ? t("settings.enrichment.scope", { processed: state.processed, total: state.total })
+            : "",
+        file: state.currentSourcePath
+          ? t("settings.enrichment.file", { file: baseName(state.currentSourcePath) })
+          : "",
+        phase: enrichmentPhaseLabel(t, state),
+      });
     case "done":
-      return (
-        `Metadata: ${state.extracted} extracted, ${state.skipped} up to date` +
-        (state.failed > 0 ? `, ${state.failed} failed` : "") +
-        ` (${state.total} sources)`
-      );
+      return t("settings.enrichment.done", {
+        extracted: state.extracted,
+        skipped: state.skipped,
+        failed:
+          state.failed > 0 ? t("settings.enrichment.doneFailed", { failed: state.failed }) : "",
+        total: state.total,
+      });
     case "error":
-      return `Metadata enrichment failed: ${state.errorMessage ?? "unknown error"}`;
+      return t("settings.enrichment.error", {
+        message: state.errorMessage ?? t("settings.enrichment.unknownError"),
+      });
     default:
       return "";
   }
 }
 
-function enrichmentPhaseLabel(state: EnrichmentProfileState): string {
+function enrichmentPhaseLabel(t: Translate, state: EnrichmentProfileState): string {
   switch (state.phase) {
     case "metadata":
-      return " · extracting metadata";
+      return t("settings.enrichment.phase.metadata");
     case "sections":
       return state.sectionCount
-        ? ` · summarizing section ${state.sectionIndex ?? 0}/${state.sectionCount}`
-        : " · summarizing sections";
+        ? t("settings.enrichment.phase.sectionsWithCount", {
+            index: state.sectionIndex ?? 0,
+            count: state.sectionCount,
+          })
+        : t("settings.enrichment.phase.sections");
     case "document":
-      return " · writing document summary";
+      return t("settings.enrichment.phase.document");
     case "claims":
       return state.sectionCount
-        ? ` · extracting claims ${state.sectionIndex ?? 0}/${state.sectionCount}`
-        : " · extracting claims";
+        ? t("settings.enrichment.phase.claimsWithCount", {
+            index: state.sectionIndex ?? 0,
+            count: state.sectionCount,
+          })
+        : t("settings.enrichment.phase.claims");
     default:
-      return state.total === 0 ? " · listing sources" : "";
+      return state.total === 0 ? t("settings.enrichment.phase.listingSources") : "";
   }
 }
 
@@ -97,15 +126,17 @@ function baseName(path: string): string {
 
 export function renderModalActions(
   containerEl: HTMLElement,
-  actions: { onCancel(): void; onSave(): void; saveLabel?: string },
+  actions: { t: Translate; onCancel(): void; onSave(): void; saveLabel?: string },
 ): void {
   new Setting(containerEl)
     .setClass("ixplorer-profile-modal__actions")
-    .addButton((button) => button.setButtonText("Cancel").onClick(actions.onCancel))
+    .addButton((button) =>
+      button.setButtonText(actions.t("common.cancel")).onClick(actions.onCancel),
+    )
     .addButton((button) =>
       button
         .setCta()
-        .setButtonText(actions.saveLabel ?? "Save")
+        .setButtonText(actions.saveLabel ?? actions.t("common.save"))
         .onClick(actions.onSave),
     );
 }
