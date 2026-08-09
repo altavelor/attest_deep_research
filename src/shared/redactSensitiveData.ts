@@ -1,4 +1,7 @@
-const SENSITIVE_KEY = /^(api[_-]?key|access[_-]?token|token|secret|password|authorization)$/i;
+const SENSITIVE_KEY =
+  /(^|[_-])(api[_-]?key|access[_-]?token|token|secret|password|authorization)($|[_-])/i;
+const SENSITIVE_ASSIGNMENT =
+  /\b((?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization))\s*[:=]\s*(?:Bearer\s+)?([^\s,;&]+)/gi;
 
 /** Remove credential values from values that may be written to logs or diagnostics. */
 export function redactSensitiveData<T>(value: T): T {
@@ -27,10 +30,7 @@ function redactSensitiveString(value: string): string {
   const redactedUrl = redactUrlQuerySecrets(value);
   return redactedUrl
     .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [redacted]")
-    .replace(
-      /\b(authorization|api[_ -]?key|access[_ -]?token|token|secret|password)\s*[:=]\s*(?:Bearer\s+)?([^\s,;]+)/gi,
-      "$1=[redacted]",
-    );
+    .replace(SENSITIVE_ASSIGNMENT, "$1=[redacted]");
 }
 
 function redactUrlQuerySecrets(value: string): string {
@@ -41,7 +41,7 @@ function redactUrlQuerySecrets(value: string): string {
     return value;
   }
 
-  for (const [key] of url.searchParams) {
+  for (const [key] of Array.from(url.searchParams)) {
     if (SENSITIVE_KEY.test(key)) {
       url.searchParams.set(key, "[redacted]");
     }

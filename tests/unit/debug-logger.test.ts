@@ -223,20 +223,23 @@ describe("PluginDebugLogger", () => {
         details: { apiKey: "secret-key", nested: { authorization: "Bearer secret-token" } },
       }),
       {
-        url: "https://provider.example/v1/chat?api_key=secret-key",
+        url: "https://provider.example/v1/chat?api_key=secret-key&client_secret=oauth-secret",
         method: "POST",
-        headers: { Authorization: "Bearer secret-token" },
-        requestBody: { api_key: "secret-key" },
+        headers: { Authorization: "Bearer secret-token", "x-api-key": "header-secret" },
+        requestBody: { api_key: "secret-key", api_secret: "request-secret" },
       },
     );
 
     expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("secret-key");
     expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("secret-token");
+    expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("oauth-secret");
+    expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("header-secret");
+    expect(JSON.stringify(error.mock.calls[0][1])).not.toContain("request-secret");
     expect(error.mock.calls[0][1]).toMatchObject({
       context: {
-        url: "https://provider.example/v1/chat?api_key=[redacted]",
-        headers: { Authorization: "[redacted]" },
-        requestBody: { api_key: "[redacted]" },
+        url: "https://provider.example/v1/chat?api_key=[redacted]&client_secret=[redacted]",
+        headers: { Authorization: "[redacted]", "x-api-key": "[redacted]" },
+        requestBody: { api_key: "[redacted]", api_secret: "[redacted]" },
       },
       error: {
         details: { apiKey: "[redacted]", nested: { authorization: "[redacted]" } },
