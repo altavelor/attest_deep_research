@@ -6,6 +6,7 @@ import {
   compactChatMessages,
   fallbackCompactionSummary,
   shouldCompactForContext,
+  summarizeCompactionWithModel,
 } from "@application/use-cases/chat";
 import { markdownSource, retrieved, webSource } from "../helpers/factories";
 import { ChatDisplayMessage } from "@core/conversation";
@@ -124,6 +125,55 @@ describe("ChatCompaction", () => {
         reservedOutputTokens: 10,
       }),
     ).toBe(true);
+  });
+
+  it("does not compact short histories or histories without a context limit", () => {
+    const messages = buildCompactionMessages("Old", "Recent").slice(1);
+
+    expect(compactChatMessages(messages, { summary: fallbackCompactionSummary(messages) })).toEqual(
+      {
+        changed: false,
+        compactedCount: 0,
+        messages,
+      },
+    );
+    expect(shouldCompactForContext({ question: "Next?", messages })).toBe(false);
+  });
+
+  it("retries an invalid model summary and retains referenced sources from fallback history", async () => {
+    let calls = 0;
+    const chatModel = {
+      async *streamChat() {
+        calls += 1;
+        yield {
+          content:
+            calls === 1
+              ? "This is not JSON"
+              : 'prefix {"userGoals":["  Goal  ",3],"decisions":["Decision"],"unresolvedQuestions":[],"citedSourcesAlreadyUsed":["New source"]} suffix',
+          isComplete: true,
+        };
+      },
+    };
+
+    const summary = await summarizeCompactionWithModel({
+      chatModel: chatModel as never,
+      model: "test-model",
+      messages: [user("Read Notes/Plan.md")],
+      existingSummary: {
+        userGoals: ["Earlier goal"],
+        decisions: [],
+        unresolvedQuestions: [],
+        citedSourcesAlreadyUsed: ["Notes/Existing.md"],
+      },
+    });
+
+    expect(calls).toBe(2);
+    expect(summary).toEqual({
+      userGoals: ["Goal"],
+      decisions: ["Decision"],
+      unresolvedQuestions: [],
+      citedSourcesAlreadyUsed: ["New source", "Notes/Existing.md", "Notes/Plan.md"],
+    });
   });
 
   it("includes assistant reasoning trace and tool results in prompt history", () => {

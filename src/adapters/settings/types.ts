@@ -104,7 +104,6 @@ export interface IxplorerSettings {
   chatModelProfiles: ChatModelProfile[];
   embeddingModelProfiles: EmbeddingModelProfile[];
   activeEmbeddingModelProfileId: string;
-  lanceDbFolder: string;
   indexProfiles: IndexProfile[];
   includeFolders: string[];
   excludeGlobs: string[];

@@ -163,4 +163,24 @@ describe("index path picker scroll position", () => {
 
     expect(onSubmit).toHaveBeenCalledWith(["note-2.md", "note-5.md"]);
   });
+
+  it("expands a folder selection into its remaining files when one child is deselected", () => {
+    const { treeEl, modal, onSubmit } = openPicker();
+
+    checkboxFor(treeEl, "notes").click();
+    treeEl.querySelector<HTMLButtonElement>('button[aria-label="Toggle notes"]')!.click();
+    const removed = checkboxFor(treeEl, "notes/nested-2.md");
+    expect(removed.checked).toBe(true);
+    removed.checked = false;
+    removed.dispatchEvent(new Event("change"));
+    modal.contentEl.querySelector<HTMLButtonElement>("button.mod-cta")!.click();
+
+    expect(onSubmit).toHaveBeenCalledWith([
+      "notes/nested-0.md",
+      "notes/nested-1.md",
+      "notes/nested-3.md",
+      "notes/nested-4.md",
+      "notes/nested-5.md",
+    ]);
+  });
 });

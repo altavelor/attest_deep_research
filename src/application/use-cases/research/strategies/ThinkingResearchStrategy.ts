@@ -250,7 +250,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       }).run();
     }
     const snapshot = created.evidence.snapshot();
-    const explicitEvidence = assembled?.explicitEvidence ?? [];
+    const explicitEvidence = [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence];
     const evidence = dedupeEvidence([...explicitEvidence, ...snapshot.evidence]);
     const availableCitations = mergeCitations(
       explicitEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),

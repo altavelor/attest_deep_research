@@ -353,6 +353,22 @@ describe("FileChatStore", () => {
       }),
     ).rejects.toThrow("Unsafe chat id");
   });
+
+  it("skips malformed files and makes delete plus missing mutations idempotent", async () => {
+    const store = new FileChatStore({ folder });
+    await writeFile(join(folder, "broken.json"), "{not json", "utf8");
+    await writeFile(
+      join(folder, "not-a-chat.json"),
+      JSON.stringify({ title: "wrong shape" }),
+      "utf8",
+    );
+    await writeFile(join(folder, "notes.txt"), "not a chat", "utf8");
+
+    await expect(store.listChats()).resolves.toEqual([]);
+    await expect(store.renameChat("missing", "Renamed")).resolves.toBeNull();
+    await expect(store.setChatFavorite("missing", true)).resolves.toBeNull();
+    await expect(store.deleteChat("missing")).resolves.toBeUndefined();
+  });
 });
 
 describe("inferChatTitle", () => {

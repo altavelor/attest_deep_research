@@ -9,8 +9,12 @@ import {
   validateImageUrl,
   isSafeVaultImagePath,
   hasDisplayableDimensions,
+  imageFormatFromMimeType,
+  imageFormatFromPath,
+  isPublicHttpsUrl,
   ARTIFACT_LIMITS,
   imageQueryVariants,
+  mimeTypeForFormat,
   type AnswerArtifact,
   type ChartArtifact,
   type ImageCandidate,
@@ -190,6 +194,22 @@ describe("answer artifact contracts", () => {
 });
 
 describe("image url and path policy", () => {
+  it("normalizes declared image formats without trusting unsupported values", () => {
+    expect(imageFormatFromMimeType(" IMAGE/JPG; charset=binary ")).toBe("jpeg");
+    expect(imageFormatFromMimeType("image/svg+xml")).toBeUndefined();
+    expect(imageFormatFromMimeType(undefined)).toBeUndefined();
+    expect(imageFormatFromPath("Photos/Cover.JFIF?download=1#top")).toBe("jpeg");
+    expect(imageFormatFromPath("Photos/no-extension")).toBeUndefined();
+    expect(imageFormatFromPath(undefined)).toBeUndefined();
+    expect(mimeTypeForFormat("webp")).toBe("image/webp");
+  });
+
+  it("exposes a boolean public-URL guard for untrusted optional values", () => {
+    expect(isPublicHttpsUrl("https://cdn.example.com/photo.png#fragment")).toBe(true);
+    expect(isPublicHttpsUrl("https://127.0.0.1/photo.png")).toBe(false);
+    expect(isPublicHttpsUrl({ url: "https://cdn.example.com/photo.png" })).toBe(false);
+  });
+
   it.each([
     ["http://example.com/a.png", "insecure-protocol"],
     ["data:image/png;base64,AAAA", "blocked-protocol"],
@@ -197,6 +217,12 @@ describe("image url and path policy", () => {
     ["https://user:pass@example.com/a.png", "credentials-not-allowed"],
     ["https://localhost/a.png", "local-hostname"],
     ["https://192.168.0.5/a.png", "non-public-address"],
+    ["https://0.1.2.3/a.png", "non-public-address"],
+    ["https://10.1.2.3/a.png", "non-public-address"],
+    ["https://127.1.2.3/a.png", "non-public-address"],
+    ["https://169.254.1.3/a.png", "non-public-address"],
+    ["https://172.16.1.3/a.png", "non-public-address"],
+    ["https://224.1.2.3/a.png", "non-public-address"],
     ["https://[::1]/a.png", "non-public-address"],
     ["https://[::]/a.png", "non-public-address"],
     ["https://[fe80::1]/a.png", "non-public-address"],
@@ -217,6 +243,15 @@ describe("image url and path policy", () => {
   it("accepts a public ipv6 image host", () => {
     expect(validateImageUrl("https://[2606:4700::1]/a.png").ok).toBe(true);
     expect(validateImageUrl("https://[::ffff:93.184.216.34]/a.png").ok).toBe(true);
+  });
+
+  it("accepts public IPv4 and rejects mapped private IPv4 addresses", () => {
+    expect(validateImageUrl("https://93.184.216.34/a.png").ok).toBe(true);
+    expect(validateImageUrl("https://172.32.1.3/a.png").ok).toBe(true);
+    expect(validateImageUrl("https://[::ffff:10.0.0.1]/a.png")).toMatchObject({
+      ok: false,
+      reason: "non-public-address",
+    });
   });
 
   it("accepts a public https image url and strips the fragment", () => {
@@ -424,6 +459,53 @@ describe("chart validation", () => {
     const result = validateChartInput(input as Record<string, unknown>);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.code).toBe(code);
+  });
+
+  it.each([
+    [
+      {
+        title: "t",
+        chartType: "bar",
+        series: [
+          { name: "same", points: [{ x: "Q1", y: 1 }] },
+          { name: "same", points: [{ x: "Q1", y: 2 }] },
+        ],
+      },
+      "duplicate-series",
+    ],
+    [
+      { title: "t", chartType: "bar", series: [{ name: "", points: [{ x: "Q1", y: 1 }] }] },
+      "invalid-series-name",
+    ],
+    [
+      { title: "t", chartType: "bar", series: [{ name: "A", points: [{ x: {}, y: 1 }] }] },
+      "invalid-point",
+    ],
+    [
+      { title: "t", chartType: "pie", series: [{ name: "A", points: [{ x: "bad", y: -1 }] }] },
+      "invalid-pie",
+    ],
+  ])("rejects malformed series data (%#)", (input, code) => {
+    const result = validateChartInput(input as Record<string, unknown>);
+    expect(result).toMatchObject({ ok: false, code });
+  });
+
+  it("normalizes optional labels and escapes table cells for accessible export", () => {
+    const result = validateChartInput({
+      title: "  Revenue\n report  ",
+      chartType: "line",
+      xLabel: "  Period ",
+      caption: "  Values | are estimates ",
+      series: [{ name: "A | B", points: [{ x: "Q|1", y: 1.234567 }] }],
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { title: "Revenue report", xLabel: "Period", caption: "Values | are estimates" },
+    });
+    if (!result.ok) return;
+
+    expect(chartDataTable({ ...result.value, id: "chart" })).toContain("| Period | A \\| B |");
+    expect(chartDataTable({ ...result.value, id: "chart" })).toContain("| Q\\|1 | 1.2346 |");
   });
 
   it("renders an equivalent data table", () => {

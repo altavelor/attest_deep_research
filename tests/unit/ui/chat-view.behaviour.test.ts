@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, View, WorkspaceLeaf } from "../../stubs/obsidian";
+import { App, View, WorkspaceLeaf, takeNotices } from "../../stubs/obsidian";
 import type { WorkspaceLeaf as ObsidianWorkspaceLeaf } from "obsidian";
 
 import {
@@ -261,6 +261,103 @@ describe("chat view transcript disposal", () => {
 
     expect(pendingTimerCount()).toBe(1);
 
+    await leaf.detach();
+  });
+});
+
+describe("saved chats from the chat view", () => {
+  it("loads a saved conversation selected from the empty-chat history", async () => {
+    const loadSavedChat = vi.fn(async () => savedChat);
+    const { view, leaf } = await openView({ loadSavedChat });
+
+    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+
+    await vi.waitFor(() => {
+      expect(loadSavedChat).toHaveBeenCalledWith(savedChat.id);
+      expect(view.contentEl.querySelector(".ixplorer-chat__message-text")?.textContent).toBe(
+        "Find sources",
+      );
+    });
+    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).toBeNull();
+    await leaf.detach();
+  });
+
+  it("notifies the reader and refreshes the history when a listed chat was removed", async () => {
+    const loadSavedChat = vi.fn(async () => null);
+    const listSavedChats = vi.fn(async () => [summary]);
+    const { view, leaf } = await openView({ loadSavedChat, listSavedChats });
+
+    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+
+    await vi.waitFor(() => expect(loadSavedChat).toHaveBeenCalledWith(summary.id));
+    expect(takeNotices().map((notice) => notice.message)).toEqual(["Saved chat was not found."]);
+    expect(listSavedChats).toHaveBeenCalledTimes(2);
+    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).not.toBeNull();
+    await leaf.detach();
+  });
+
+  it("updates saved chats through the history popover", async () => {
+    const setSavedChatFavorite = vi.fn(async () => {});
+    const renameSavedChat = vi.fn(async () => {});
+    const deleteSavedChat = vi.fn(async () => {});
+    const { view, leaf } = await openView({
+      setSavedChatFavorite,
+      renameSavedChat,
+      deleteSavedChat,
+    });
+
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__icon-button")[0]?.click();
+    await vi.waitFor(() => {
+      expect(view.contentEl.querySelector(".ixplorer-chat__history-popover")).not.toBeNull();
+    });
+
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action")[0]?.click();
+    await vi.waitFor(() => expect(setSavedChatFavorite).toHaveBeenCalledWith(summary.id, true));
+
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action")[1]?.click();
+    const titleInput = view.contentEl.querySelector<HTMLInputElement>(
+      ".ixplorer-chat__saved-title-input",
+    );
+    titleInput!.value = "Renamed research";
+    titleInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.waitFor(() => {
+      expect(renameSavedChat).toHaveBeenCalledWith(summary.id, "Renamed research");
+    });
+
+    view.contentEl
+      .querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action--delete")[0]
+      ?.click();
+    await vi.waitFor(() => expect(deleteSavedChat).toHaveBeenCalledWith(summary.id));
+    await vi.waitFor(() => {
+      expect(takeNotices().map((notice) => notice.message)).toContain("Chat deleted.");
+    });
+    await leaf.detach();
+  });
+
+  it("saves the current conversation before starting a clean chat", async () => {
+    const saveChat = vi.fn(async (input) => ({
+      ...savedChat,
+      ...input,
+      id: input.id ?? "new-chat",
+      createdAt: input.createdAt ?? savedChat.createdAt,
+    }));
+    const { view, leaf } = await openView({ saveChat });
+
+    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+    await vi.waitFor(() => {
+      expect(view.contentEl.querySelector(".ixplorer-chat__message-text")?.textContent).toBe(
+        "Find sources",
+      );
+    });
+
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__icon-button")[1]?.click();
+    await vi.waitFor(() => {
+      expect(saveChat).toHaveBeenCalledWith(
+        expect.objectContaining({ id: savedChat.id, createdAt: savedChat.createdAt }),
+      );
+      expect(view.contentEl.querySelector(".ixplorer-chat__message")).toBeNull();
+    });
+    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).not.toBeNull();
     await leaf.detach();
   });
 });

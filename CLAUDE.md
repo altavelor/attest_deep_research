@@ -1,16 +1,15 @@
-# Ixplorer — инструкции для Claude Code
+# Ixplorer — Claude Code instructions
 
-Архитектурные правила проекта (обязательные, общие для всех агентов) описаны в
-[AGENTS.md](AGENTS.md). Следуй им при любом расширении или рефакторинге кода.
+The project architecture rules (mandatory and shared by all agents) are documented
+in [AGENTS.md](AGENTS.md). Follow them for every code extension or refactor.
 
 @AGENTS.md
 
-## Комментарии в коде
+## Code comments
 
-Комментарии разрешены только как краткое JSDoc-описание функции или класса,
-расположенное непосредственно перед описываемым элементом. Такое описание
-должно содержать не более трёх предложений и 120 слов.
-Не упоминай себя в коммитах
+Comments are permitted only as a short JSDoc description of a function or class,
+placed immediately before the described element. The description must contain no
+more than three sentences and 120 words. Do not mention yourself in commits.
 
-Не добавляй комментарии к полям, константам, секциям, очевидным операциям или
-историческим причинам: вырази смысл через имена и структуру кода.
+Do not add comments to fields, constants, sections, obvious operations, or
+historical rationale: express the intent through names and code structure.

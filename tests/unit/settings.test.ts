@@ -22,9 +22,7 @@ import { IxplorerSettings } from "@adapters/settings";
 describe("Ixplorer settings", () => {
   it("uses local-first safe defaults when saved data is absent or not current", () => {
     expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
-    expect(
-      readSettings({ lanceDbFolder: ".ixplorer/old-index", includeFolders: ["Notes"] }),
-    ).toEqual(DEFAULT_SETTINGS);
+    expect(readSettings({ includeFolders: ["Notes"] })).toEqual(DEFAULT_SETTINGS);
     expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
@@ -35,7 +33,6 @@ describe("Ixplorer settings", () => {
       chatModelProfileId: "",
       includeActiveFileContext: true,
     });
-    expect(DEFAULT_SETTINGS.lanceDbFolder).toBe(".ixplorer/index");
     expect(getActiveIndexProfile(DEFAULT_SETTINGS)).toMatchObject({
       id: "default",
       indexFolder: ".ixplorer/index",
@@ -122,6 +119,16 @@ describe("Ixplorer settings", () => {
 
     expect(settings.debugMode).toBe(true);
     expect(settings).not.toHaveProperty("showChatIndexControl");
+  });
+
+  it("preserves current settings while dropping an unknown legacy setting", () => {
+    const settings = readSettings({
+      ...currentSettings({ debugMode: true }),
+      legacyIndexFolder: ".ixplorer/legacy-index",
+    });
+
+    expect(settings.debugMode).toBe(true);
+    expect(settings).not.toHaveProperty("legacyIndexFolder");
   });
 
   it("defaults query expansion on for settings saved before it became toggleable", () => {
