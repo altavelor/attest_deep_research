@@ -1,121 +1,122 @@
 # Ixplorer
 
-Ixplorer — local-first research assistant для Obsidian Desktop. Он ищет по выбранной части vault,
-формирует ответы с цитатами и при необходимости использует настроенный web search.
+Ixplorer is a local-first research assistant for Obsidian Desktop. It searches a selected part of
+your vault, produces answers with citations, and can use configured web search when needed.
 
-Техническая документация для разработки, сборки и выпуска находится в
+Technical documentation for development, builds, and releases is available in the
 [Technical reference](docs/technical-reference.md).
 
-## Перед началом
+## Before you begin
 
-- Ixplorer работает в Obsidian Desktop. Мобильные приложения пока не поддерживаются.
-- Для чата нужен локальный или облачный LLM provider.
-- Для поиска по vault нужна embedding model.
-- Облачные provider'ы требуют ваш API key; локальные Ollama и LM Studio могут работать без него.
+- Ixplorer runs in Obsidian Desktop. Mobile applications are not yet supported.
+- Chat requires a local or cloud LLM provider.
+- Vault search requires an embedding model.
+- Cloud providers require your API key; local Ollama and LM Studio can work without one.
 
-## Установка
+## Installation
 
-Установите Ixplorer через **Settings → Community plugins** в Obsidian, когда плагин доступен в
-каталоге. Затем включите его и откройте **Settings → Ixplorer**.
+Install Ixplorer through **Settings → Community plugins** in Obsidian when the plugin is available
+in the catalog. Then enable it and open **Settings → Ixplorer**.
 
-## Быстрый старт
+## Quick start
 
-1. Создайте **Server profile** для chat и embeddings provider.
-2. Создайте **Chat model profile** и выберите server profile и модель.
-3. Создайте **Embedding model profile**.
-4. Создайте или выберите **Index profile**, укажите папки vault для индексации и embedding model.
-5. Запустите индексацию и дождитесь статуса completed.
-6. Откройте Ixplorer chat, выберите index profile и задайте вопрос.
+1. Create a **Server profile** for your chat and embeddings provider.
+2. Create a **Chat model profile** and select its server profile and model.
+3. Create an **Embedding model profile**.
+4. Create or select an **Index profile**, specify the vault folders to index, and choose the
+   embedding model.
+5. Start indexing and wait for the completed status.
+6. Open Ixplorer chat, select the index profile, and ask a question.
 
-Если один из шагов недоступен, откройте соответствующий раздел Settings: Ixplorer показывает
-статус модели и index profile.
+If a step is unavailable, open the corresponding Settings section. Ixplorer displays the status of
+each model and index profile.
 
-## Настройка provider'ов
+## Configuring providers
 
 ### Ollama
 
-1. Запустите Ollama и загрузите chat и embedding models.
-2. В Server profile выберите формат `ollama` и укажите адрес Ollama.
-3. Создайте chat profile и embedding profile на этом server profile.
+1. Start Ollama and download chat and embedding models.
+2. In the Server profile, select the `ollama` format and enter the Ollama address.
+3. Create chat and embedding profiles using that server profile.
 
-### LM Studio и другие OpenAI-compatible provider'ы
+### LM Studio and other OpenAI-compatible providers
 
-1. Запустите совместимый сервер и загрузите chat model.
-2. В Server profile выберите формат `openai-compatible`.
-3. Укажите URL и API key, если provider его требует.
-4. Выберите model ID, который сообщает сервер.
+1. Start a compatible server and load a chat model.
+2. In the Server profile, select the `openai-compatible` format.
+3. Enter the URL and API key if the provider requires one.
+4. Select the model ID reported by the server.
 
-### Anthropic и другие облачные provider'ы
+### Anthropic and other cloud providers
 
-1. Создайте Server profile с соответствующим API format и endpoint.
-2. Введите API key только в поле настроек Ixplorer.
-3. Создайте отдельные chat и embedding profiles, если provider использует разные модели.
+1. Create a Server profile with the appropriate API format and endpoint.
+2. Enter the API key only in the Ixplorer settings field.
+3. Create separate chat and embedding profiles if the provider uses different models.
 
-Проверьте подключение кнопкой проверки в настройках профиля до первой индексации.
+Use the test button in the profile settings to check the connection before the first indexing run.
 
-## Индексация vault
+## Indexing your vault
 
-Index profile определяет, какие заметки Ixplorer может использовать как локальные источники.
+An Index profile determines which notes Ixplorer can use as local sources.
 
-- Выберите нужные папки; `/` означает весь vault.
-- Исключите служебные или приватные каталоги через glob patterns.
-- Запустите manual index для первого построения.
-- Используйте incremental refresh после изменений заметок; rebuild пересоздаёт локальный index.
-- Индексацию можно остановить и затем запустить снова.
+- Choose the desired folders; `/` means the entire vault.
+- Exclude system or private folders with glob patterns.
+- Run a manual index for the first build.
+- Use incremental refresh after note changes; rebuild recreates the local index.
+- You can stop indexing and start it again later.
 
-Ixplorer поддерживает Markdown, TXT, PDF, EPUB, FB2 и DOCX. Для сканированных PDF без текстового
-слоя OCR пока недоступен.
+Ixplorer supports Markdown, TXT, PDF, EPUB, FB2, and DOCX. OCR is not yet available for scanned
+PDFs without a text layer.
 
-## Режимы исследования
+## Research modes
 
 ### Instant
 
-Быстрый режим для локального retrieval и моделей без tool calling или reasoning. Выберите его,
-когда нужен предсказуемый короткий ответ либо модель не прошла capability check.
+A fast mode for local retrieval and models without tool calling or reasoning. Choose it when you
+need a predictable short answer or when the model has not passed the capability check.
 
 ### Thinking
 
-Многошаговый режим для совместимых моделей. Он может искать дополнительные источники и показывает
-ход работы в chat. Если модель не поддерживает нужные capabilities, Ixplorer сообщает причину и
-переходит в Instant.
+A multi-step mode for compatible models. It can search for additional sources and displays its
+progress in chat. If the model does not support the required capabilities, Ixplorer explains why
+and falls back to Instant.
 
-Deep Research — будущий отдельный режим, не входящий в текущий стабильный пользовательский flow.
+Deep Research is a future standalone mode and is not part of the current stable user flow.
 
-## Работа с ответами
+## Working with answers
 
-- Задайте вопрос в chat и при необходимости выберите index-only, index-and-web или web-only scope.
-- Открывайте citations, чтобы перейти к заметке, заголовку, PDF page или canonical web URL.
-- Unknown и unverified citations отображаются как предупреждения.
-- Сохраняйте ответ в новую заметку или добавляйте его к active note. Существующий файл не
-  перезаписывается без явного действия.
+- Ask a question in chat and, if needed, choose the index-only, index-and-web, or web-only scope.
+- Open citations to go to the note, heading, PDF page, or canonical web URL.
+- Unknown and unverified citations appear as warnings.
+- Save an answer as a new note or append it to the active note. An existing file is not overwritten
+  without an explicit action.
 
-## Web search и приватность
+## Web search and privacy
 
-Web search выключен по умолчанию. При включении внешний search provider получает только введённый
-вопрос; retrieved vault content и embeddings ему не передаются. Chat и embedding provider получают
-только данные, нужные для выбранного пользователем запроса.
+Web search is disabled by default. When enabled, the external search provider receives only the
+entered question; retrieved vault content and embeddings are not sent to it. Chat and embedding
+providers receive only the data needed for the user-selected request.
 
-Note mutations выключены по умолчанию. Включайте их только для доверенной модели и vault.
+Note mutations are disabled by default. Enable them only for a model and vault you trust.
 
-## Diagnostics и устранение неполадок
+## Diagnostics and troubleshooting
 
-Diagnostic report в toolbar помогает при проблемах с provider, index или research flow. Перед
-отправкой отчёта убедитесь, что он не содержит приватных заметок, и никогда не прикладывайте API key.
+The diagnostic report in the toolbar helps with provider, index, or research-flow problems. Before
+sending a report, make sure it contains no private notes, and never attach an API key.
 
-| Проблема                | Что сделать                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Chat model недоступна   | Проверьте URL, API key и model ID; затем запустите проверку подключения.      |
-| Index пуст              | Выберите embedding profile, проверьте включённые папки и запустите index run. |
-| Thinking недоступен     | Перепроверьте capabilities модели или выберите Instant.                       |
-| Web request не удался   | Отключите web search для vault-only ответа или проверьте настройки источника. |
-| Citation не открывается | Убедитесь, что исходный файл не был удалён или перемещён.                     |
+| Problem                | What to do                                                             |
+| ---------------------- | ---------------------------------------------------------------------- |
+| Chat model unavailable | Check the URL, API key, and model ID, then run the connection test.    |
+| Empty index            | Choose an embedding profile, check included folders, and run indexing. |
+| Thinking unavailable   | Recheck model capabilities or choose Instant.                          |
+| Web request failed     | Disable web search for a vault-only answer or check source settings.   |
+| Citation does not open | Make sure the source file has not been deleted or moved.               |
 
-Сообщайте об уязвимостях по [Security policy](SECURITY.md), а о воспроизводимых ошибках — через
-GitHub Issues с diagnostic report без секретов и приватного содержимого.
+Report vulnerabilities under the [Security policy](SECURITY.md), and reproducible bugs through
+GitHub Issues with a diagnostic report that excludes secrets and private content.
 
-## Ограничения
+## Limitations
 
-- Только Obsidian Desktop.
-- Нет OCR для сканированных PDF и анализа изображений/графиков.
-- Web search использует только настроенные источники и может быть полностью выключен.
-- Deep Research, очереди с возобновлением и отдельный report exporter пока не доступны.
+- Obsidian Desktop only.
+- No OCR for scanned PDFs or analysis of images and charts.
+- Web search uses only configured sources and can be disabled completely.
+- Deep Research, resumable queues, and a standalone report exporter are not yet available.

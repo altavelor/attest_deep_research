@@ -1,100 +1,98 @@
 # Best Practices — Ixplorer
 
-Свод правил, обязательных для кода этого репозитория. Источник истины —
-[AGENTS.md](AGENTS.md); этот файл содержит его проверяемую при ревью часть.
+These rules are mandatory for code in this repository. [AGENTS.md](AGENTS.md) is
+the source of truth; this file contains the portion that is verifiable in review.
 
-## Архитектурные слои
+## Architectural layers
 
-Зависимости направлены строго внутрь: `apps -> adapters -> application -> core`.
+Dependencies point strictly inward: `apps -> adapters -> application -> core`.
 
-| Слой        | Каталог            | Может импортировать         |
+| Layer       | Directory          | May import                  |
 | ----------- | ------------------ | --------------------------- |
 | core        | `src/core/`        | core                        |
 | application | `src/application/` | core, application           |
 | adapters    | `src/adapters/`    | core, application, adapters |
-| apps        | `src/apps/`        | любой слой                  |
+| apps        | `src/apps/`        | any layer                   |
 
-- `src/core/` содержит платформенно-нейтральные типы и чистую логику без I/O.
-  Node, DOM и Obsidian API здесь запрещены; вместо них вводится порт.
-  Допустимы только языковые и веб-стандарты из `types/web-standard-globals.d.ts`.
-- HTTP, файловая система, база данных и Obsidian API живут только в `adapters`
-  или `apps`.
-- Новая бизнес-логика размещается в `core` (чистая) или `application`
-  (оркестрация), но не в адаптерах и не в UI.
-- Application-код обращается к внешнему сервису через порт из
-  `src/application/ports/` или контракт из `src/application/contracts/`.
-  Use case не конструирует и не импортирует свой адаптер.
+- `src/core/` contains platform-neutral types and pure logic with no I/O. Node,
+  DOM, and Obsidian APIs are forbidden here; introduce a port instead. Only
+  language and web standards declared in `types/web-standard-globals.d.ts` are
+  permitted.
+- HTTP, the file system, databases, and the Obsidian API belong only in
+  `adapters` or `apps`.
+- Put new business logic in `core` (pure) or `application` (orchestration), not
+  in adapters or UI.
+- Application code accesses an external service through a port in
+  `src/application/ports/` or a contract in `src/application/contracts/`. A use
+  case must not construct or import its adapter.
 
-## Модули и импорты
+## Modules and imports
 
-- Один модуль — одна связная ответственность. Файл, приближающийся к 400
-  строкам, следует разделить, а не наращивать.
-- Модуль ограниченного контекста публикует API через курируемый `index.ts`.
-  Потребители импортируют алиас слоя (например, `@adapters/research-tools`),
-  а не внутренние глубокие пути. Внутренние файлы не импортируют свой барель.
-- Межмодульные и межслойные импорты — только через алиасы `@core/*`,
-  `@application/*`, `@adapters/*`, `@apps/*`, `@shared/*`. Для соседних файлов
-  внутри модуля используются относительные импорты.
-- Алиасы синхронизированы в `tsconfig.json`, `esbuild.config.mjs` и
+- One module has one coherent responsibility. Split a file that approaches 400
+  lines instead of extending it.
+- A bounded-context module exposes its API through a curated `index.ts`.
+  Consumers import the layer alias (for example, `@adapters/research-tools`),
+  not internal deep paths. Internal files do not import their own barrel.
+- Use only `@core/*`, `@application/*`, `@adapters/*`, `@apps/*`, and
+  `@shared/*` aliases for cross-module and cross-layer imports. Use relative
+  imports for sibling files within a module.
+- Keep aliases synchronized in `tsconfig.json`, `esbuild.config.mjs`, and
   `vitest.config.ts`.
-- Циклы импортов во время выполнения запрещены. Типовые циклы разрываются
-  выносом общего типа в низкоуровневый листовой модуль.
-- Чистые свободные функции выносятся из крупных классов в соседние
-  сфокусированные модули-хелперы.
+- Runtime import cycles are forbidden. Break type cycles by extracting the
+  shared type into a low-level leaf module.
+- Extract pure free functions from large classes into focused neighbouring helper
+  modules.
 
-## Паттерны слоёв
+## Layer patterns
 
-- Альтернативные пути выполнения моделируются отдельными стратегиями за общим
-  интерфейсом. Координатор выбирает стратегию и управляет переходами, а не
-  разрастается в реализацию с ветвлениями.
-- Граф внедрения зависимостей строится в фабриках
-  `src/apps/obsidian/composition/` за `CompositionContext`. `main.ts` отвечает
-  только за жизненный цикл и тонкую проводку; фабрики получают контекст, а не
-  обращаются к экземпляру плагина.
-- UI-классы занимаются рендерингом и подпиской на события. Зондирование,
-  обнаружение возможностей, поиск и сетевые вызовы выносятся в сервисы или
-  контроллеры с узким контекстом. Контроллер владеет своим локальным состоянием
-  и ссылками на DOM; разделяемое изменяемое состояние остаётся во view.
-  Связь с view — через явные колбэки вроде `requestRedisplay()`, а не через
-  ссылку на сам view.
-- Крупный код рендеринга или построения разделяется на секции, примитивы, стили
-  и типы; входной файл остаётся тонким оркестратором и поверхностью реэкспорта.
+- Model alternative execution paths as separate strategies behind a shared
+  interface. The coordinator selects a strategy and manages transitions; it
+  does not grow into a branch-heavy implementation.
+- Build the dependency-injection graph in factories under
+  `src/apps/obsidian/composition/` behind `CompositionContext`. `main.ts` owns
+  lifecycle and thin wiring only; factories receive context rather than reaching
+  into the plugin instance.
+- UI classes render and subscribe to events. Move probing, capability discovery,
+  searches, and network calls into services or controllers with narrow context.
+  A controller owns its local state and DOM references; shared mutable state
+  remains in the view. Communicate with the view through explicit callbacks such
+  as `requestRedisplay()`, not a reference to the view itself.
+- Split large rendering or builder code into sections, primitives, styles, and
+  types; keep the entry file a thin orchestrator and re-export surface.
 
-## Надёжность
+## Reliability
 
-- Обратная совместимость сохраняется, если задача явно не разрешает её нарушить.
-- Отказы и некорректный внешний ввод обрабатываются явно.
-- Внешние данные считаются недоверенными.
-- Ресурсы, подписки, слушатели, таймеры и временные файлы освобождаются.
-- Асинхронная работа поддерживает отмену и таймауты; гонки недопустимы.
-- Пути в хранилище нормализуются и проверяются на выход за пределы каталога.
-- Обрабатываются переименование и удаление файлов, некорректные сетевые ответы,
-  миграция настроек с сохранением данных, совместимость с Obsidian Mobile.
-- Новые зависимости добавляются только при явном обосновании в рамках задачи.
+- Preserve backward compatibility unless the task explicitly permits a break.
+- Handle failures and invalid external input explicitly.
+- Treat external data as untrusted.
+- Clean up resources, subscriptions, listeners, timers, and temporary files.
+- Async work supports cancellation and timeouts; races are not permitted.
+- Normalize storage paths and check that they do not escape their directory.
+- Handle file renames and deletions, malformed network responses, settings
+  migration with data preservation, and Obsidian Mobile compatibility.
+- Add dependencies only with a clear task-specific justification.
 
-## Комментарии
+## Comments
 
-Допустим только краткий JSDoc непосредственно перед функцией или классом:
-не более трёх предложений и 120 слов. Комментарии к полям, константам, секциям,
-очевидным операциям и историческим причинам запрещены — смысл выражается
-именами и структурой кода.
+Only a short JSDoc directly before a function or class is permitted: no more
+than three sentences and 120 words. Comments on fields, constants, sections,
+obvious operations, and historical rationale are forbidden—express the intent
+through names and structure.
 
-## Тесты
+## Tests
 
-- Тесты живут в `tests/` и используют Vitest.
-- Каждое изменённое поведение сопровождается тестом, каждое исправление бага —
-  регрессионным тестом.
-- Тесты детерминированные и поведенческие; приватные детали реализации и
-  снапшоты вместо явных утверждений не используются. Сетевые вызовы мокируются.
-- Перед рефакторингом, меняющим поток выполнения, добавляются характеризующие
-  тесты на наблюдаемое поведение — порядок событий стриминга, пути отката.
-- Чистые переносы кода, разбиение файлов и вынос барелей не требуют новых
-  характеризующих тестов, но обязаны сохранить существующее покрытие.
+- Tests live in `tests/` and use Vitest.
+- Every changed behavior has a test; every bug fix has a regression test.
+- Tests are deterministic and behavioral; do not use private implementation
+  details or snapshots in place of explicit assertions. Mock network calls.
+- Before a refactor that changes execution flow, add characterization tests for
+  observable behavior such as streaming-event order and fallback paths.
+- Pure code moves, file splits, and barrel extraction do not require new
+  characterization tests, but must preserve existing coverage.
 
-## Коммиты
+## Commits
 
-Атомарные Conventional Commits с префиксами `feat:`, `fix:`, `refactor:`,
-`test:`, `docs:`, `chore:`. Один коммит — одно логическое изменение. В коммит
-не попадают несвязанные правки, сгенерированные файлы, секреты, токены, файлы
-окружения, персональные пути и локальная конфигурация. Сгенерированные файлы
-не редактируются вручную.
+Use atomic Conventional Commits with `feat:`, `fix:`, `refactor:`, `test:`,
+`docs:`, or `chore:` prefixes. One commit contains one logical change. Do not
+commit unrelated changes, generated files, secrets, tokens, environment files,
+personal paths, or local configuration. Never edit generated files manually.
