@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
-import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
+import { DEFAULT_SETTINGS, cloneIndexProfile, fetchAvailableModels } from "@adapters/settings";
 import type { ChatModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
 import { PluginDebugLogger } from "@adapters/settings";
+import * as settingsApi from "@adapters/settings";
 import { SettingsCapabilityProber } from "@apps/obsidian/ui/settings/SettingsCapabilityProber";
 import { IxplorerSettingTab } from "@apps/obsidian/ui/SettingsTab";
 import IxplorerPluginClass from "@apps/obsidian/main";
@@ -148,5 +149,86 @@ describe("settings capability prober subscriptions", () => {
     prober.startChatProfileProbes("chat");
 
     expect(pendingTimerCount()).toBe(0);
+  });
+
+  it("caches discovered metadata only for active servers and persists it once", async () => {
+    const settings = createSettings();
+    settings.serverProfiles.push({ ...serverProfile(), id: "suspended", isSuspended: true });
+    let saves = 0;
+    const models = new Map();
+    const prober = new SettingsCapabilityProber({
+      plugin: {
+        ...createProberHost(settings),
+        saveSettings: async () => {
+          saves += 1;
+        },
+      } as IxplorerPlugin,
+      fetchedModelsByServerId: models,
+      requestRedisplay: () => {},
+    });
+    const snapshot = {
+      reasoning: { visibleOutput: "unknown", responseFormats: [] },
+      source: "metadata",
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-02-01T00:00:00.000Z",
+    };
+    vi.mocked(fetchAvailableModels).mockResolvedValueOnce({
+      models: [
+        {
+          id: "discovered",
+          name: "Discovered",
+          capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+          capabilitySnapshot: snapshot as never,
+        },
+      ],
+      ok: true,
+      message: "ok",
+    });
+
+    await prober.refreshMetadataCapabilities();
+
+    expect(models.get("server")).toEqual([
+      expect.objectContaining({ id: "discovered", capabilitySnapshot: snapshot }),
+    ]);
+    expect(models.has("suspended")).toBe(false);
+    expect(Object.values(settings.modelCapabilityCache)).toHaveLength(2);
+    expect(saves).toBe(1);
+  });
+
+  it("restores an embedding profile after its capability probe succeeds", async () => {
+    const settings = createSettings();
+    settings.embeddingModelProfiles = [
+      {
+        id: "embedding",
+        name: "Embedding",
+        serverProfileId: "server",
+        modelName: "embed-model",
+        isSuspended: true,
+        suspendedReason: "Embedding capability could not be verified.",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      } as never,
+    ];
+    let saves = 0;
+    const prober = new SettingsCapabilityProber({
+      plugin: {
+        ...createProberHost(settings),
+        saveSettings: async () => {
+          saves += 1;
+        },
+      } as IxplorerPlugin,
+      fetchedModelsByServerId: new Map(),
+      requestRedisplay: () => {},
+    });
+    vi.spyOn(settingsApi, "verifyEmbeddingCapability").mockResolvedValueOnce(true);
+
+    prober.startEmbeddingProfileProbe("embedding");
+    await vi.waitFor(() => expect(saves).toBe(1));
+
+    expect(settings.embeddingModelProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+      capabilities: { embeddings: true, detectionSource: "probe" },
+    });
   });
 });

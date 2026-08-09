@@ -9,6 +9,7 @@ import {
   renderInternals,
   renderNav,
 } from "@apps/obsidian/ui/diagnostics/html/sections";
+import { renderRunTrace } from "@apps/obsidian/ui/diagnostics/html/trace";
 import { DiagnosticReportV3 } from "@apps/obsidian/ui/diagnostics/report/types";
 import { ContextDiagnostics } from "@core/diagnostics";
 
@@ -184,5 +185,189 @@ describe("diagnostic html rendering of a failing report", () => {
     expect(
       renderInternals(buildDiagnosticReportV3(diagnostics({ executionStrategy: "instant" }))),
     ).toBe("");
+  });
+
+  it("renders a rich trace with stream, probe audit, web results, and answer delivery", () => {
+    const report = failingReport();
+    const mutable = report as unknown as {
+      model: Record<string, unknown>;
+      request: Record<string, unknown>;
+      reasoning: Record<string, unknown>;
+      answer: Record<string, unknown>;
+    };
+    mutable.model.toolCapabilities = {
+      calls: true,
+      choiceRequired: true,
+      choiceSpecific: false,
+      parallelCalls: true,
+      provenance: { calls: "probe" },
+      probe: {
+        ranAt: "2026-08-01T00:00:00.000Z",
+        modelName: "model",
+        apiFormat: "openai-compatible",
+        results: { required: ["search_index"], specific: [], auto: ["search_index"] },
+        rawCapabilities: {
+          calls: false,
+          choiceRequired: true,
+          choiceSpecific: false,
+          parallelCalls: true,
+        },
+      },
+    };
+    mutable.request.web = {
+      queryStrategy: "freshness",
+      queries: ["latest retrieval research"],
+      results: [{ status: "included" }, { status: "dropped" }],
+      finalPrompt: { usedTokens: 42 },
+    };
+    mutable.reasoning.stream = {
+      protocol: "responses",
+      protocolSource: "probe",
+      observedDialects: ["reasoning"],
+      frameCount: 10,
+      malformedFrameCount: 1,
+      reasoningDeltaCount: 2,
+      textDeltaCount: 3,
+      toolDeltaCount: 1,
+      terminalEventObserved: false,
+      firstByteMs: 120,
+      warnings: ["stream warning"],
+    };
+    mutable.reasoning.attempts = [
+      {
+        attempt: 1,
+        protocol: "responses",
+        status: "failed",
+        outputEmitted: true,
+        errorCode: "timeout",
+      },
+    ];
+    mutable.answer.projection = {
+      reasoningSegments: 2,
+      checkpointsCreated: 1,
+      finalAnswersCommitted: 1,
+      bufferedTextChars: 20,
+    };
+    mutable.answer.delivery = {
+      projectorEventsReceived: 4,
+      uiPatchesApplied: 3,
+      markdownRenders: 2,
+      coalescedUpdates: 1,
+      persistenceStatus: "saved",
+    };
+    mutable.answer.unverifiedCitations = ["citation-1"];
+
+    const input = parse(renderInput(report));
+    const internals = parse(renderInternals(report));
+
+    expect(input.textContent).toContain("Web search (preflight)");
+    expect(input.textContent).toContain("1 included / 1 dropped of 2");
+    expect(input.textContent).toContain("Probe overridden by manual settings.");
+    expect(internals.textContent).toContain("responses (probe)");
+    expect(internals.textContent).toContain("stream warning");
+    expect(internals.textContent).toContain("timeout");
+    expect(internals.textContent).toContain("Persistence");
+    expect(internals.textContent).toContain("citation-1");
+  });
+
+  it("renders actionable round details for continuation, empty search, and failed tool calls", () => {
+    const report = failingReport();
+    (report.reasoning as unknown as Record<string, unknown>).thinkingLoop = {
+      rounds: [
+        {
+          round: 2,
+          phase: "repair",
+          toolCalls: [
+            {
+              name: "search_web",
+              arguments: { query: "x".repeat(200) },
+              status: "success",
+              resultPreview: JSON.stringify({ results: [] }),
+              resultBytes: 1250,
+            },
+            { name: "fetch_web_page", arguments: {}, status: "failed", reason: "timeout" },
+          ],
+          reasoningSegments: [{ text: "Need another source" }],
+          hadTextOutput: true,
+          classification: "final",
+          promptDelta: {
+            viaContinuation: true,
+            toolChoice: "auto",
+            messages: [
+              {
+                role: "tool",
+                chars: 40,
+                toolCallId: "call-1",
+                toolCallNames: ["search_web"],
+                truncatedChars: 5,
+                content: "result",
+              },
+            ],
+          },
+        },
+      ],
+      stopReasons: ["completed"],
+    };
+
+    const trace = parse(renderRunTrace(report));
+    expect(trace.querySelector(".trace-round")?.hasAttribute("open")).toBe(true);
+    expect(trace.textContent).toContain("continuation");
+    expect(trace.textContent).toContain("timeout");
+    expect(trace.textContent).toContain("text output → final");
+    expect(trace.querySelector(".trace-call.is-empty")).not.toBeNull();
+    expect(trace.querySelector(".trace-call.is-failed")).not.toBeNull();
+    expect(trace.querySelector(".trace-call-args")?.textContent).toContain("…");
+  });
+
+  it("renders context budget groups and source statuses for an operator to inspect", () => {
+    const report = failingReport();
+    const mutable = report as unknown as {
+      preflight: { context: Record<string, unknown> };
+    };
+    mutable.preflight.context = {
+      budget: {
+        usedTokens: 900,
+        limitTokens: 1000,
+        utilizationPct: 90,
+        groups: [
+          {
+            name: "Explicit",
+            usedTokens: 500,
+            allocatedTokens: 600,
+            includedItems: 1,
+            droppedItems: 0,
+          },
+          { name: "Retrieved", usedTokens: 400, droppedItems: 2 },
+        ],
+      },
+      sources: [
+        {
+          path: `Notes/${"very-long-folder/".repeat(5)}source.md`,
+          role: "explicit",
+          status: "included",
+          includedTokens: 500,
+        },
+        { path: "Notes/missing.md", role: "retrieved", status: "failed" },
+        { path: "Notes/ignored.md", role: "graph", status: "dropped" },
+      ],
+    };
+
+    const input = parse(renderInput(report));
+    expect(input.textContent).toContain("900 / 1000 tokens (90%)");
+    expect(input.textContent).toContain("Explicit");
+    expect(input.textContent).toContain("Retrieved");
+    expect(input.querySelectorAll(".badge-success")).not.toHaveLength(0);
+    expect(input.querySelectorAll(".badge-danger")).not.toHaveLength(0);
+    expect(input.querySelectorAll(".badge-neutral")).not.toHaveLength(0);
+    expect(input.textContent).toContain("…");
+  });
+
+  it("uses safe header fallbacks when a run has no question, model, or identifiers", () => {
+    const report = buildDiagnosticReportV3(diagnostics({ executionStrategy: "instant" }));
+    const header = parse(renderHeader(report));
+
+    expect(header.querySelector(".question-text")?.textContent).toBe("(no question recorded)");
+    expect(header.querySelector(".header-badges")?.textContent).toContain("unknown");
+    expect(header.querySelector(".meta")).toBeNull();
   });
 });

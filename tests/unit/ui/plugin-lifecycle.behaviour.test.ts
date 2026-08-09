@@ -122,6 +122,71 @@ describe("Ixplorer plugin lifecycle", () => {
     expect(markStale).toHaveBeenCalledWith(plugin.settings.indexProfiles[0].id);
   });
 
+  it("opens the existing chat leaf when the chat command is activated again", async () => {
+    const chatLeaf = await openChatLeaf(app);
+
+    await plugin.activateChatView();
+
+    expect(app.workspace.revealedLeaves).toEqual([chatLeaf]);
+    expect(app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)).toEqual([chatLeaf]);
+  });
+
+  it("creates and reveals a chat leaf when no chat is open", async () => {
+    await plugin.activateChatView();
+
+    const [chatLeaf] = app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE);
+    expect(chatLeaf?.view?.getViewType()).toBe(IXPLORER_CHAT_VIEW_TYPE);
+    expect(app.workspace.revealedLeaves).toEqual([chatLeaf]);
+  });
+
+  it("opens a chat and warms index data when its embedding profile is configured", async () => {
+    plugin.settings.serverProfiles = [
+      {
+        id: "server",
+        name: "Server",
+        apiFormat: "openai-compatible",
+        baseUrl: "http://localhost:1234/v1",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    plugin.settings.embeddingModelProfiles = [
+      {
+        id: "embedding",
+        name: "Embedding",
+        serverProfileId: "server",
+        modelName: "embed-model",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    plugin.settings.indexProfiles[0] = {
+      ...plugin.settings.indexProfiles[0],
+      embeddingModelProfileId: "embedding",
+      isSuspended: false,
+      suspendedReason: undefined,
+    };
+
+    await plugin.activateChatView();
+
+    expect(app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)).toHaveLength(1);
+    expect(app.workspace.revealedLeaves).toHaveLength(1);
+  });
+
+  it("opens the plugin settings tab when a chat notice requests it", () => {
+    const open = vi.fn();
+    const openTabById = vi.fn();
+    (app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting = {
+      open,
+      openTabById,
+    };
+
+    plugin.openSettingsTab();
+
+    expect(open).toHaveBeenCalledOnce();
+    expect(openTabById).toHaveBeenCalledWith("ixplorer");
+  });
+
   it("releases the view type, command and settings tab registered on load", async () => {
     expect(app.workspace.getViewFactory(IXPLORER_CHAT_VIEW_TYPE)).toBeDefined();
     expect(asStubPlugin(plugin).commands.map((command) => command.id)).toContain(

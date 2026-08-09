@@ -211,4 +211,80 @@ describe("core runAgentLoop", () => {
     expect(round).toBe(2);
     expect(dispose).toHaveBeenCalledTimes(1);
   });
+
+  it("passes tool output into a continuation round and preserves streamed reasoning diagnostics", async () => {
+    const dispose = vi.fn();
+    const requests: import("@core/agent").ModelRoundRequest[] = [];
+    const continuation = { provider: "openai-compatible" as const, dispose };
+    const modelRound: ModelRoundProvider = {
+      async listModels() {
+        return [];
+      },
+      async runRound(request) {
+        requests.push(request);
+        if (requests.length === 1) {
+          request.onDelta?.({ type: "reasoningSummary", text: "Plan", segmentId: "plan" });
+          return {
+            items: [{ type: "toolCall", call: { id: "1", name: "search", arguments: {} } }],
+            stopReason: "tool_calls",
+            continuation,
+            reasoningItemCount: 1,
+            usage: { inputTokens: 10, outputTokens: 2, reasoningTokens: 3 },
+          };
+        }
+        return {
+          items: [{ type: "text", text: "Answer" }],
+          stopReason: "complete",
+          continuation,
+          usage: { inputTokens: 4, outputTokens: 5, reasoningTokens: 0 },
+        };
+      },
+    };
+
+    const events: unknown[] = [];
+    const result = await runAgentLoop({
+      modelRound,
+      model: "m",
+      messages: [],
+      tools: [],
+      executeTool: async () => ({ ok: true, result: "tool result" }),
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(requests[1]).toMatchObject({
+      continuation,
+      toolOutputs: [{ callId: "1", output: "tool result" }],
+    });
+    expect(result).toMatchObject({
+      answerText: "Answer",
+      reasoningSummaries: ["Plan"],
+      reasoningItemCount: 1,
+      continuationRounds: 2,
+      usage: { inputTokens: 14, outputTokens: 7, reasoningTokens: 3 },
+    });
+    expect(events).toContainEqual({
+      type: "reasoning",
+      segmentId: "round-1-plan",
+      content: "Plan",
+    });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits a checkpoint for a non-streamed final answer", async () => {
+    const events: unknown[] = [];
+
+    await runAgentLoop({
+      modelRound: provider([{ items: [{ type: "text", text: "Final" }], stopReason: "complete" }]),
+      model: "m",
+      messages: [],
+      tools: [],
+      executeTool: async () => ({ ok: true, result: "{}" }),
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(events).toEqual([
+      { type: "checkpoint-delta", checkpointId: "round-1", round: 1, content: "Final" },
+      { type: "checkpoint-promote", checkpointId: "round-1", round: 1 },
+    ]);
+  });
 });

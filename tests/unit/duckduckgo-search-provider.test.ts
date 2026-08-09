@@ -439,6 +439,47 @@ describe("DuckDuckGoSearchProvider", () => {
       code: "WEB_SEARCH_FAILED",
     });
   });
+
+  it("returns empty metadata for plain-text pages without trying to parse HTML", async () => {
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response("Plain report", { headers: { "content-type": "text/plain" } }),
+        ),
+    });
+
+    await expect(provider.fetchMetadata("https://example.com/report.txt")).resolves.toEqual({
+      ok: true,
+      url: "https://example.com/report.txt",
+      finalUrl: "https://example.com/report.txt",
+      metadata: {},
+    });
+  });
+
+  it("returns document bytes and preserves a safe content disposition", async () => {
+    const provider = new DuckDuckGoSearchProvider({
+      minRequestIntervalMs: 0,
+      fetch: vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "content-type": "application/pdf",
+            "content-disposition": 'attachment; filename="paper.pdf"',
+          },
+        }),
+      ),
+    });
+
+    await expect(provider.fetchDocument("https://example.com/paper.pdf")).resolves.toMatchObject({
+      ok: true,
+      url: "https://example.com/paper.pdf",
+      contentType: "application/pdf",
+      contentDisposition: 'attachment; filename="paper.pdf"',
+      bytes: 3,
+      data: new Uint8Array([1, 2, 3]),
+    });
+  });
 });
 
 function fixedNow(): Date {

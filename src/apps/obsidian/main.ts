@@ -16,6 +16,7 @@ import { readSettings } from "@adapters/settings";
 import {
   getActiveIndexProfile,
   resolveChatModelProfile,
+  resolveEmbeddingModelProfile,
   resolveServerProfile,
 } from "@adapters/settings";
 import { IxplorerSettings } from "@adapters/settings";
@@ -373,7 +374,19 @@ export default class IxplorerPlugin extends Plugin {
   /** Pull question-independent inputs off the critical path of the first turn. */
   private warmVaultCaches(): void {
     const profile = getActiveIndexProfile(this.settings);
-    this.requireWarmCaches().warm(profile.id, createRetrieverForProfile(this.composition, profile));
+    const embeddingProfile = resolveEmbeddingModelProfile(
+      this.settings,
+      profile.embeddingModelProfileId,
+    );
+    const embeddingServer = embeddingProfile
+      ? resolveServerProfile(this.settings, embeddingProfile.serverProfileId)
+      : undefined;
+    const warmCaches = this.requireWarmCaches();
+    warmCaches.warm();
+    if (profile.isSuspended === true || !embeddingProfile || !embeddingServer) {
+      return;
+    }
+    warmCaches.warm(profile.id, createRetrieverForProfile(this.composition, profile));
   }
 
   refreshChatViews(): void {

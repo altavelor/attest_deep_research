@@ -1,4 +1,7 @@
-import { ThinkingResearchStrategy } from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
+import {
+  resolveThinkingMaxResultChars,
+  ThinkingResearchStrategy,
+} from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
 import type {
   ResearchExecutionContext,
   ResearchStrategyDeps,
@@ -57,6 +60,7 @@ function scriptedRounds(
 function strategy(
   modelRound: ModelRoundProvider,
   searchProvider?: SearchProvider,
+  overrides: Partial<ResearchStrategyDeps> = {},
 ): ThinkingResearchStrategy {
   const deps = {
     ...(searchProvider ? { searchProvider } : {}),
@@ -70,6 +74,7 @@ function strategy(
     toolsEnabled: true,
     toolCapabilities: CAPABILITIES,
     now: fixedNow,
+    ...overrides,
   } as unknown as ResearchStrategyDeps;
   return new ThinkingResearchStrategy(deps);
 }
@@ -106,6 +111,13 @@ async function drain(
 }
 
 describe("ThinkingResearchStrategy failure paths", () => {
+  it("keeps a safe minimum output budget while respecting bounded context capacity", () => {
+    expect(resolveThinkingMaxResultChars({ usedTokens: 0 })).toBe(80_000);
+    expect(resolveThinkingMaxResultChars({ contextLimitTokens: 10, usedTokens: 20 })).toBe(80_000);
+    expect(resolveThinkingMaxResultChars({ contextLimitTokens: 2_000_000, usedTokens: 0 })).toBe(
+      1_000_000,
+    );
+  });
   it("returns a cancelled outcome and no answer when the run is aborted mid-stream", async () => {
     const controller = new AbortController();
     const modelRound = scriptedRounds((request, index) => {
@@ -172,6 +184,28 @@ describe("ThinkingResearchStrategy failure paths", () => {
     });
   });
 
+  it("falls back without calling the model when the thinking prompt exceeds the context limit", async () => {
+    const modelRound = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "must not run" }],
+      stopReason: "complete" as const,
+    }));
+
+    const { events, outcome } = await drain(
+      strategy(modelRound, undefined, { contextLimitTokens: 1 }).execute(context()),
+    );
+
+    expect(modelRound.requests).toHaveLength(0);
+    expect(events.some((event) => event.type === "complete")).toBe(false);
+    expect(outcome).toMatchObject({
+      kind: "failed",
+      failure: { ok: false, reason: "context-limit-exceeded" },
+      diagnostics: {
+        executionStrategy: "instant-fallback",
+        thinking: { fallbackReason: "context-limit-exceeded" },
+      },
+    });
+  });
+
   it("completes with an empty citation set when retrieval returns nothing", async () => {
     const modelRound = scriptedRounds((_request, index) =>
       index === 1
@@ -198,6 +232,74 @@ describe("ThinkingResearchStrategy failure paths", () => {
       answer: { answer: "No sources found.", citations: [], evidence: [] },
     });
     expect(events.find((event) => event.type === "tool-call-end")).toMatchObject({ ok: true });
+  });
+
+  it("records unknown citation ids in diagnostics without presenting them as verified evidence", async () => {
+    const modelRound = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "The source says this [missing-source]." }],
+      stopReason: "complete" as const,
+    }));
+
+    const { events, outcome } = await drain(strategy(modelRound).execute(context()));
+
+    expect(outcome).toEqual({ kind: "completed" });
+    expect(events.find((event) => event.type === "complete")).toMatchObject({
+      answer: {
+        answer: "The source says this [missing-source].",
+        citations: [],
+        contextDiagnostics: {
+          thinking: { unknownCitationIds: ["missing-source"] },
+        },
+      },
+    });
+  });
+
+  it("adds active-note evidence before the model runs and exposes a cited note in the answer", async () => {
+    const modelRound = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "The active note is relevant [active-1]." }],
+      stopReason: "complete" as const,
+    }));
+    const noteTools = {
+      execute: vi.fn(async () => ({
+        ok: true,
+        result: JSON.stringify({
+          chunks: [
+            {
+              id: "active-1",
+              text: "A relevant note.",
+              evidenceSource: {
+                id: "active-source",
+                kind: "markdown",
+                title: "Active note",
+                path: "Notes/Active.md",
+                headingPath: [],
+              },
+            },
+          ],
+        }),
+      })),
+      mutationEnabled: () => false,
+      setCitationProvider: vi.fn(),
+    };
+
+    const { events, outcome } = await drain(
+      strategy(modelRound, undefined, { noteTools: noteTools as never }).execute(
+        context({ includeActiveFile: true, activeFilePath: "Notes/Active.md" }),
+      ),
+    );
+
+    expect(noteTools.execute).toHaveBeenCalledWith({
+      id: "active-note-prefetch",
+      name: "get_active_note",
+      arguments: {},
+    });
+    expect(outcome).toEqual({ kind: "completed" });
+    expect(events.find((event) => event.type === "complete")).toMatchObject({
+      answer: {
+        evidence: [{ id: "active-1" }],
+        citations: [{ id: "active-1" }],
+      },
+    });
   });
 });
 
@@ -382,6 +484,43 @@ describe("ThinkingResearchStrategy web source tracing", () => {
     });
   });
 
+  it("reports the planned source labels on each web-search tool call", async () => {
+    const provider = {
+      ...tracingSearchProvider(),
+      searchSourceLabels: vi.fn(() => ["arXiv", "Crossref"]),
+    };
+    const { events } = await drain(
+      strategy(
+        scriptedRounds((_request, index) =>
+          index === 1
+            ? {
+                items: [
+                  {
+                    type: "toolCall" as const,
+                    call: {
+                      id: "web-labels",
+                      name: "search_web",
+                      arguments: { query: "rag papers", category: "academic", recency: "month" },
+                    },
+                  },
+                ],
+                stopReason: "tool_calls" as const,
+              }
+            : { items: [{ type: "text" as const, text: "done" }], stopReason: "complete" as const },
+        ),
+        provider,
+      ).execute(context({ searchMode: "indexAndWeb" })),
+    );
+
+    expect(events.find((event) => event.type === "tool-call-start")).toMatchObject({
+      searchSources: ["arXiv", "Crossref"],
+    });
+    expect(provider.searchSourceLabels).toHaveBeenCalledWith("rag papers", {
+      intent: "academic",
+      recency: "month",
+    });
+  });
+
   it("does not carry selections between runs", async () => {
     const first = await runWithSearches(["rag papers"]);
     const second = await runWithSearches(["vector databases"]);
@@ -414,5 +553,42 @@ describe("ThinkingResearchStrategy web source tracing", () => {
     const diagnostics = (contextEvent as { diagnostics: ContextDiagnostics }).diagnostics;
 
     expect(diagnostics.webSourceSelections).toBeUndefined();
+  });
+});
+
+describe("ThinkingResearchStrategy media tool availability", () => {
+  it("offers image search when an enabled external image source is configured", async () => {
+    const rounds = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "done" }],
+      stopReason: "complete" as const,
+    }));
+    const imageSearch = {
+      enabledImageSources: () => [
+        { descriptor: { id: "commons", label: "Commons" }, searchImages: async () => [] },
+      ],
+    };
+
+    await drain(
+      strategy(rounds, undefined, { imageSearch: imageSearch as never }).execute(context()),
+    );
+
+    expect(rounds.requests[0]?.tools?.map((tool) => tool.function.name)).toContain("search_images");
+  });
+
+  it("offers image search for indexed document images without enabling a web image source", async () => {
+    const rounds = scriptedRounds(() => ({
+      items: [{ type: "text" as const, text: "done" }],
+      stopReason: "complete" as const,
+    }));
+    const documentImageCandidates = vi.fn(async () => []);
+
+    await drain(
+      strategy(rounds, undefined, {
+        documentImageCandidates,
+      }).execute(context({ contextPaths: ["Notes/diagram.md"] })),
+    );
+
+    expect(rounds.requests[0]?.tools?.map((tool) => tool.function.name)).toContain("search_images");
+    expect(documentImageCandidates).not.toHaveBeenCalled();
   });
 });

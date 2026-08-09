@@ -1,6 +1,10 @@
 import {
   FindInIndexTool,
+  FindClaimsTool,
+  ListIndexSourcesTool,
   ListIndexChunksTool,
+  ReadIndexSectionTool,
+  SearchIndexByMetadataTool,
 } from "@adapters/research-tools/index/IndexInventoryTools";
 import { ResearchRetriever } from "@application/contracts";
 import { executeTool } from "@core/agent";
@@ -80,5 +84,73 @@ describe("IndexInventoryTools", () => {
 
     expect(result).toMatchObject({ ok: true, value: { count: 42 } });
     expect((result as { value: Record<string, unknown> }).value).not.toHaveProperty("items");
+  });
+
+  it("reports unavailable inventory capabilities instead of invoking them", async () => {
+    const retriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+    } as ResearchRetriever;
+
+    await expect(
+      executeTool(new ListIndexSourcesTool(retriever), {
+        id: "call-unsupported",
+        name: "list_index_sources",
+        arguments: {},
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: "index-inventory-unsupported" } });
+  });
+
+  it("keeps a missing section distinguishable from an empty one", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+      readIndexSection: vi.fn().mockResolvedValue(null),
+    };
+
+    await expect(
+      executeTool(new ReadIndexSectionTool(retriever), {
+        id: "call-section",
+        name: "read_index_section",
+        arguments: { chunkId: "chunk-missing", maxChars: 500 },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { section: null, diagnostics: { resultCount: 0, limit: 500 } },
+    });
+  });
+
+  it("passes metadata filters through and returns their count without exposing page items", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+      searchIndexByMetadata: vi.fn().mockResolvedValue({ items: [{ sourcePath: "Papers/a.pdf" }] }),
+    };
+
+    const result = await executeTool(new SearchIndexByMetadataTool(retriever), {
+      id: "call-metadata",
+      name: "search_index_by_metadata",
+      arguments: { sourceKind: "pdf", extension: "pdf", countOnly: true, limit: 5 },
+    });
+
+    expect(retriever.searchIndexByMetadata).toHaveBeenCalledWith({
+      sourceKind: "pdf",
+      extension: "pdf",
+      countOnly: true,
+      limit: 5,
+    });
+    expect(result).toMatchObject({ ok: true, value: { count: 1 } });
+  });
+
+  it("omits empty claim filters while retaining the bounded result limit", async () => {
+    const retriever: ResearchRetriever = {
+      search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
+      findClaims: vi.fn().mockResolvedValue([]),
+    };
+
+    await executeTool(new FindClaimsTool(retriever), {
+      id: "call-claims",
+      name: "find_claims",
+      arguments: { subject: "  ", topic: "methods", limit: 500 },
+    });
+
+    expect(retriever.findClaims).toHaveBeenCalledWith({ topic: "methods", limit: 100 });
   });
 });
