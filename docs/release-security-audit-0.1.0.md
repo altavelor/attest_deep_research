@@ -1,17 +1,17 @@
 # Security audit: 0.1.0 release
 
-**Date:** 2026-08-10
+**Date:** 2026-08-10<br>
 **Scope:** local index, model and web-provider traffic, downloaded documents, note mutations,
 diagnostics, release assets, and npm dependencies.
 
 ## Data boundaries
 
-| Boundary                              | Enforced policy                                                                                                                                  | Evidence                                                                        |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| Vault to web search                   | Only the user-entered question is sent. Retrieved chunks, vault paths, and embeddings are excluded.                                              | `tests/unit/privacy.test.ts`                                                    |
-| Model and embedding providers         | Requests go only to the endpoint configured by the user. Local endpoints remain supported for Ollama and LM Studio.                              | Settings copy and provider configuration                                        |
-| Untrusted web/document URLs           | Public HTTP(S) URLs only; credentials, localhost, private/reserved IPv4 and IPv6 literals, and unsafe redirect targets are rejected.             | `tests/unit/web-url-policy.test.ts`, `tests/unit/download-tools.test.ts`        |
-| Note mutations and document downloads | Tools are absent without the explicit mutation permission; downloads additionally require per-action user confirmation before a vault write.     | `tests/unit/research-tool-factory.test.ts`, `tests/unit/download-tools.test.ts` |
+| Boundary                              | Enforced policy                                                                                                                                            | Evidence                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Vault to web search                   | Only the user-entered question is sent. Retrieved chunks, vault paths, and embeddings are excluded.                                                        | `tests/unit/privacy.test.ts`                                                       |
+| Model and embedding providers         | Requests go only to the endpoint configured by the user. Local endpoints remain supported for Ollama and LM Studio.                                        | Settings copy and provider configuration                                           |
+| Untrusted web/document URLs           | Public HTTP(S) URLs only; credentials, localhost, private/reserved IPv4 and IPv6 literals, and unsafe redirect targets are rejected.                       | `tests/unit/web-url-policy.test.ts`, `tests/unit/download-tools.test.ts`           |
+| Note mutations and document downloads | Tools are absent without the explicit mutation permission; downloads additionally require per-action user confirmation before a vault write.               | `tests/unit/research-tool-factory.test.ts`, `tests/unit/download-tools.test.ts`    |
 | Logs and diagnostics                  | API-key fields, authorization headers, sensitive URL query parameters, request bodies, and structured error details are redacted before logging or export. | `tests/unit/debug-logger.test.ts`, `tests/unit/diagnostic-report-failures.test.ts` |
 
 ## Audit findings and disposition
