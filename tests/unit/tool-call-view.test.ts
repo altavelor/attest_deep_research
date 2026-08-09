@@ -94,4 +94,105 @@ describe("describeToolCall detailed intent", () => {
 
     expect(view.intent).toBe("Creating the note “New” (5 chars)");
   });
+
+  it("shows failed calls with their arguments and a compact error payload", () => {
+    const view = describeToolCall({
+      t,
+      name: "search_web",
+      label: "Search web",
+      status: "failed",
+      args: { query: "latest release" },
+      resultJson: '{\n  "error": "timeout"\n}',
+    });
+
+    expect(view).toMatchObject({
+      intent: "Searching the web for “latest release”",
+      inCell: { kind: "code", text: '{"query":"latest release"}' },
+      outCell: { kind: "code", text: '{"error":"timeout"}' },
+    });
+  });
+
+  it("renders a diff only when an update actually changes a note", () => {
+    const changed = describeToolCall({
+      t,
+      name: "update_note",
+      label: "Update note",
+      status: "complete",
+      resultJson: JSON.stringify({ before: "First\nOld", after: "First\nNew" }),
+    });
+    const unchanged = describeToolCall({
+      t,
+      name: "update_note",
+      label: "Update note",
+      status: "complete",
+      resultJson: JSON.stringify({ before: "Same", after: "Same" }),
+    });
+
+    expect(changed.outCell).toMatchObject({ kind: "diff" });
+    expect(unchanged.outCell).toBeUndefined();
+  });
+
+  it("warns visibly when index search falls back to keyword ranking", () => {
+    const view = describeToolCall({
+      t,
+      name: "search_index",
+      label: "Search index",
+      status: "complete",
+      resultJson: JSON.stringify({
+        diagnostics: { usedKeywordFallback: true, semanticError: "Embedding endpoint failed" },
+      }),
+    });
+
+    expect(view.badge).toMatchObject({ text: "keyword-only" });
+    expect(view.badge?.tooltip).toContain("Embedding endpoint failed");
+  });
+
+  it("derives pending fetch hosts from a partial result when explicit targets are unavailable", () => {
+    const view = describeToolCall({
+      t,
+      name: "fetch_web_page",
+      label: "Fetch pages",
+      status: "pending",
+      resultJson: JSON.stringify({
+        value: {
+          pages: [
+            { ok: true, finalUrl: "https://docs.example.com/a" },
+            { ok: true, url: "not-a-url" },
+            { ok: false, url: "https://ignored.example.com" },
+          ],
+        },
+      }),
+    });
+
+    expect(view.fetchTargets).toEqual(["docs.example.com", "not-a-url"]);
+  });
+
+  it("keeps note reads concise while previewing created text and humanizing unknown tools", () => {
+    expect(
+      describeToolCall({
+        t,
+        name: "read_note",
+        label: "Read note",
+        status: "complete",
+        args: { path: "Notes/Plan.md" },
+      }).intent,
+    ).toContain("Plan");
+    expect(
+      describeToolCall({
+        t,
+        name: "create_note",
+        label: "Create note",
+        status: "complete",
+        args: { content: "Draft" },
+      }),
+    ).toMatchObject({ outCell: { kind: "text", text: "Draft" } });
+    expect(
+      describeToolCall({
+        t,
+        name: "custom_tool_name",
+        label: "custom_tool_name",
+        status: "complete",
+      }).intent,
+    ).toBe("Custom tool name");
+  });
 });

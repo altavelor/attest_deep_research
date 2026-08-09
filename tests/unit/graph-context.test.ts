@@ -51,4 +51,19 @@ describe("GraphContext markdown fallback", () => {
     expect(resolveMarkdownLinkTarget("Duplicate", "Root.md", paths, aliases)).toBeUndefined();
     expect(resolveMarkdownLinkTarget("Roadmap", "Root.md", paths, aliases)).toBeUndefined();
   });
+
+  it("normalizes encoded, anchored, absolute, and case-insensitive vault links", () => {
+    const paths = ["Projects/Meeting Notes.md", "Archive/Plan.md"];
+    const encoded = parseMarkdownGraphLinks("[notes](Meeting%20Notes.md#agenda)");
+
+    expect(resolveMarkdownLinkTarget(encoded.links[0]!, "Projects/Root.md", paths)).toBe(
+      "Projects/Meeting Notes.md",
+    );
+    expect(resolveMarkdownLinkTarget("/archive/plan.md", "Projects/Root.md", paths)).toBe(
+      "Archive/Plan.md",
+    );
+    expect(resolveMarkdownLinkTarget("../Archive/Plan", "Projects/Root.md", paths)).toBe(
+      "Archive/Plan.md",
+    );
+  });
 });

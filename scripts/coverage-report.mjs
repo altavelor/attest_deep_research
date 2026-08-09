@@ -57,7 +57,7 @@ function formatPercent(value) {
 
 /**
  * Aggregates line and branch totals for every reported scope plus the overall
- * total, mirroring the scope table in docs/testing-coverage.md.
+ * total.
  */
 export function summarizeScopes(records) {
   const rows = [];

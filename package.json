@@ -9,12 +9,13 @@
     "styles": "node scripts/build-styles.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "test": "vitest run",
+    "release:check": "node scripts/release-check.mjs",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "typecheck:core": "tsc -p tsconfig.core.json",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --check .",
-    "check": "npm run typecheck && npm run typecheck:core && npm run test && npm run depcruise && npm run format && npm run build"
+    "check": "npm run typecheck && npm run typecheck:core && npm run test:coverage && npm run depcruise && npm run format && npm run build"
   },
   "keywords": [
     "obsidian",
@@ -26,16 +27,16 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.12.12",
-    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "builtin-modules": "^3.3.0",
     "dependency-cruiser": "^17.4.3",
-    "esbuild": "^0.21.5",
+    "esbuild": "^0.28.2",
     "happy-dom": "^20.11.1",
     "obsidian": "^1.5.12",
     "prettier": "^3.3.2",
     "tslib": "^2.6.3",
     "typescript": "^5.4.5",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",

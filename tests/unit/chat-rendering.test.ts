@@ -16,8 +16,11 @@ import {
 } from "@core/conversation";
 import {
   citationTarget,
+  formatIndexingProgressLabel,
+  formatIndexingStateLabel,
   formatIndexingStatus,
   formatProgressPercent,
+  indexingProgressValue,
   messageDisplayContent,
 } from "@apps/obsidian/ui/chat/conversationFormatting";
 import {
@@ -175,6 +178,94 @@ describe("chat rendering helpers", () => {
 
   it("formats progress values", () => {
     expect(formatProgressPercent(0.425)).toBe("43%");
+    expect(formatProgressPercent(-1)).toBe("0%");
+    expect(formatProgressPercent(2)).toBe("100%");
+  });
+
+  it("explains unavailable, failed, and stale indexing states", () => {
+    const emptyState = {
+      status: "error" as const,
+      scannedFiles: 0,
+      totalFiles: 0,
+      progress: 0,
+      indexedFiles: 0,
+      skippedFiles: 0,
+      embeddedChunks: 0,
+      deferredFiles: 0,
+      failedFiles: 1,
+      isStale: false,
+    };
+
+    expect(formatIndexingStatus(undefined, t)).toBe("Index status unavailable");
+    expect(formatIndexingStateLabel(emptyState, t)).toBe("Indexing failed");
+    expect(formatIndexingStateLabel({ ...emptyState, status: "stale", isStale: false }, t)).toBe(
+      "Rebuild needed",
+    );
+    expect(formatIndexingStateLabel({ ...emptyState, status: "idle", isStale: true }, t)).toBe(
+      "Rebuild needed",
+    );
+  });
+
+  it("derives indexing progress from current bytes or embedding chunks", () => {
+    const base = {
+      status: "indexing" as const,
+      scannedFiles: 2,
+      totalFiles: 8,
+      progress: 0.25,
+      indexedFiles: 0,
+      skippedFiles: 0,
+      embeddedChunks: 0,
+      deferredFiles: 0,
+      failedFiles: 0,
+      isStale: false,
+    };
+
+    expect(
+      indexingProgressValue({ ...base, phase: "embedding", chunksTotal: 20, chunksEmbedded: 5 }),
+    ).toBe(0.25);
+    expect(
+      indexingProgressValue({ ...base, phase: "extracting", bytesTotal: 100, bytesProcessed: 40 }),
+    ).toBe(0.4);
+    expect(
+      indexingProgressValue({ ...base, phase: "chunking", bytesTotal: 100, bytesProcessed: 40 }),
+    ).toBe(0.25);
+    expect(
+      indexingProgressValue({ ...base, phase: "embedding", chunksTotal: 0, chunksEmbedded: 5 }),
+    ).toBe(0.25);
+  });
+
+  it("renders detailed embedding and file indexing progress", () => {
+    const base = {
+      status: "indexing" as const,
+      scannedFiles: 2,
+      totalFiles: 8,
+      progress: 0.25,
+      indexedFiles: 0,
+      skippedFiles: 0,
+      embeddedChunks: 0,
+      deferredFiles: 0,
+      failedFiles: 0,
+      isStale: false,
+    };
+    const longPath = `Folder/${"nested/".repeat(12)}document.md`;
+
+    expect(
+      formatIndexingProgressLabel(
+        {
+          ...base,
+          phase: "embedding",
+          chunksTotal: 20,
+          chunksEmbedded: 5,
+          embeddingBatchesTotal: 4,
+          embeddingBatchesCompleted: 1,
+          currentFile: longPath,
+        },
+        t,
+      ),
+    ).toBe(`Embedding · 5 of 20 chunks · 1 of 4 batches · ...${longPath.slice(-61)}`);
+    expect(
+      formatIndexingProgressLabel({ ...base, phase: "checking", currentFile: "note.md" }, t),
+    ).toBe("Checking changes · 2 of 8 files · note.md");
   });
 
   it("maps citations to clickable Obsidian or web targets", () => {
@@ -204,6 +295,40 @@ describe("chat rendering helpers", () => {
 
     expect(formatCitationForChunk(chunk, ru).label).toBe("Papers/model.pdf, стр. 3");
     expect(formatIndexSearchCitation(chunk, ru)).toBe("Papers/model.pdf, стр. 3");
+  });
+
+  it("formats every source type into a readable citation label", () => {
+    const markdown = {
+      id: "m",
+      source: markdownSource("Notes/Plan.md"),
+      text: "",
+      contentHash: "m",
+      score: 1,
+    };
+    const document = {
+      id: "d",
+      source: {
+        id: "d-source",
+        kind: "document" as const,
+        title: "Report",
+        path: "Papers/report.docx",
+        format: "docx" as const,
+      },
+      text: "",
+      contentHash: "d",
+      score: 1,
+    };
+    const web = {
+      id: "w",
+      source: webSource("https://example.com/article"),
+      text: "",
+      contentHash: "w",
+      score: 1,
+    };
+
+    expect(formatCitationForChunk(markdown, t)).toMatchObject({ label: "Notes/Plan.md" });
+    expect(formatCitationForChunk(document, t)).toMatchObject({ label: "Papers/report.docx" });
+    expect(formatCitationForChunk(web, t)).toMatchObject({ label: "https://example.com/article" });
   });
 
   it("limits the source list to evidence the finalized answer actually cites", () => {

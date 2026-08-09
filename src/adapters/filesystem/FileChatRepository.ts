@@ -159,6 +159,10 @@ export class FileChatRepository implements ChatRepository {
         return null;
       }
 
+      if (error instanceof SyntaxError) {
+        return null;
+      }
+
       throw error;
     }
   }

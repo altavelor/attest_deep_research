@@ -14,8 +14,6 @@ export type {
   PdfParsedDocument,
 } from "./PdfExtractor";
 
-export { SimplePdfTextParser } from "./pdfSimpleParser";
-
 export {
   headingPathAt,
   headingsFromTypography,

@@ -21,8 +21,9 @@ import {
   useDomFakeTimers,
 } from "../../helpers/domHarness";
 
-const probeToolControlCapabilities = vi.fn<[unknown], Promise<ToolCapabilityProbeResult>>();
-const probeReasoningVisibility = vi.fn();
+const probeToolControlCapabilities =
+  vi.fn<(options: unknown) => Promise<ToolCapabilityProbeResult>>();
+const probeReasoningVisibility = vi.fn<(options: unknown) => Promise<unknown>>();
 const inFlightProbes = new Set<Promise<unknown>>();
 
 function trackProbe<T>(promise: Promise<T>): Promise<T> {
