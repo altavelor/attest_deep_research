@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 
 import { RetrievedChunk } from "@core/model";
+import type { Translate } from "@adapters/i18n";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import { formatIndexSearchCitation } from "@apps/obsidian/ui/index/IndexSearchPanel";
 import { isLinkOnlyChunk } from "./citationEvidence";
@@ -14,17 +15,20 @@ export interface ChatCitationRef {
 
 export interface CitationPopoverControllerOptions {
   hostEl: HTMLElement;
+  t: Translate;
   onOpenChunk(chunk: RetrievedChunk): void;
 }
 
 export class CitationPopoverController {
   private readonly hostEl: HTMLElement;
+  private readonly t: Translate;
   private readonly onOpenChunk: (chunk: RetrievedChunk) => void;
   private popoverEl: HTMLElement | null = null;
   private closeTimer: number | null = null;
 
   constructor(options: CitationPopoverControllerOptions) {
     this.hostEl = options.hostEl;
+    this.t = options.t;
     this.onOpenChunk = options.onOpenChunk;
   }
 
@@ -46,7 +50,7 @@ export class CitationPopoverController {
       this.setHighlight(ref.key, true);
     });
     popover.addEventListener("focusout", () => this.scheduleClose(ref.key));
-    renderCitationPopoverContent(popover, ref, (chunk) => this.onOpenChunk(chunk));
+    renderCitationPopoverContent(popover, ref, (chunk) => this.onOpenChunk(chunk), this.t);
     this.popoverEl = popover;
     this.position(anchorEl, popover);
   }
@@ -143,6 +147,7 @@ export function renderCitationBlocks(
   containerEl: HTMLElement,
   refs: ChatCitationRef[],
   options: {
+    t: Translate;
     onOpenChunk(chunk: RetrievedChunk): void;
     onHighlight(key: string, highlighted: boolean): void;
   },
@@ -153,7 +158,7 @@ export function renderCitationBlocks(
   details.open = refs.length <= 3;
   details.createEl("summary", {
     cls: "ixplorer-chat__citation-summary",
-    text: `Sources used (${refs.length})`,
+    text: options.t("chat.citation.sourcesUsed", { count: refs.length }),
   });
 
   for (const ref of refs) {
@@ -176,10 +181,7 @@ export function renderCitationBlocks(
     block.addEventListener("mouseleave", () => options.onHighlight(ref.key, false));
     block.addEventListener("focus", () => options.onHighlight(ref.key, true));
     block.addEventListener("blur", () => options.onHighlight(ref.key, false));
-    renderCitationCard(block, ref, (chunk) => options.onOpenChunk(chunk), {
-      cardClass: "",
-      linkRole: false,
-    });
+    renderCitationCard(block, ref, options.t);
   }
 }
 
@@ -187,6 +189,7 @@ function renderCitationPopoverContent(
   containerEl: HTMLElement,
   ref: ChatCitationRef,
   onOpenChunk: (chunk: RetrievedChunk) => void,
+  t: Translate,
 ): void {
   const block = containerEl.createDiv({
     cls: "ixplorer-chat__citation-popover-card",
@@ -203,20 +206,15 @@ function renderCitationPopoverContent(
     event.preventDefault();
     onOpenChunk(ref.chunk);
   });
-  renderCitationCard(block, ref, onOpenChunk, { cardClass: "", linkRole: true });
+  renderCitationCard(block, ref, t);
 }
 
-function renderCitationCard(
-  block: HTMLElement,
-  ref: ChatCitationRef,
-  _onOpenChunk: (chunk: RetrievedChunk) => void,
-  _options: { cardClass: string; linkRole: boolean },
-): void {
+function renderCitationCard(block: HTMLElement, ref: ChatCitationRef, t: Translate): void {
   const header = block.createDiv({ cls: "ixplorer-chat__citation-block-header" });
   header.createSpan({ cls: "ixplorer-chat__citation-number", text: String(ref.number) });
   header.createSpan({
     cls: "ixplorer-chat__citation-block-source",
-    text: formatIndexSearchCitation(ref.chunk),
+    text: formatIndexSearchCitation(ref.chunk, t),
   });
   if (isLinkOnlyChunk(ref.chunk)) return;
 
@@ -224,14 +222,14 @@ function renderCitationCard(
     cls: "ixplorer-chat__citation-copy",
     attr: {
       type: "button",
-      "aria-label": "Copy citation text",
-      title: "Copy citation text",
+      "aria-label": t("chat.citation.copy"),
+      title: t("chat.citation.copy"),
     },
   });
   setIcon(copyButton, "copy");
   copyButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    void copyToClipboard(ref.chunk.text);
+    void copyToClipboard(ref.chunk.text, t);
   });
   block.createDiv({
     cls: "ixplorer-chat__citation-block-text",

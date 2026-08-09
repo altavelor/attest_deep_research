@@ -6,9 +6,13 @@ import {
   WebSourceDescriptor,
   WebSourceProfile,
 } from "@core/web";
+import type { Translate } from "@adapters/i18n";
+import type { TextDirection } from "@core/i18n";
 import { renderModalActions } from "./shared";
 
 export interface WebSourceModalOptions {
+  t: Translate;
+  getDirection?(): TextDirection;
   descriptor: WebSourceDescriptor;
   profile: WebSourceProfile;
   onSave(profile: WebSourceProfile): Promise<void>;
@@ -28,16 +32,19 @@ export class WebSourceModal extends Modal {
   }
 
   onOpen(): void {
+    this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
     const { contentEl } = this;
-    const { descriptor } = this.options;
+    const { descriptor, t } = this.options;
     contentEl.empty();
     contentEl.addClass("ixplorer-profile-modal");
-    contentEl.createEl("h2", { text: `Configure ${descriptor.label}` });
+    contentEl.createEl("h2", {
+      text: t("settings.webSourceModal.title", { source: descriptor.label }),
+    });
 
     const info = contentEl.createEl("p", { cls: "ixplorer-websource-modal__info" });
-    info.appendText(`${descriptor.freeTierNote}. `);
+    info.appendText(t("settings.webSourceModal.info", { note: descriptor.freeTierNote }));
     info.createEl("a", {
-      text: "Provider documentation",
+      text: t("settings.webSourceModal.providerDocs"),
       href: descriptor.homepage,
       attr: { target: "_blank", rel: "noopener" },
     });
@@ -45,7 +52,11 @@ export class WebSourceModal extends Modal {
     for (const field of descriptor.credentials) {
       new Setting(contentEl)
         .setName(field.label)
-        .setDesc(field.optional ? "Optional." : "Required to enable this source.")
+        .setDesc(
+          field.optional
+            ? t("settings.webSourceModal.field.optional")
+            : t("settings.webSourceModal.field.required"),
+        )
         .addText((text) => {
           if (field.secret) {
             text.inputEl.type = "password";
@@ -61,10 +72,8 @@ export class WebSourceModal extends Modal {
 
     if (descriptor.capabilities?.images === true) {
       new Setting(contentEl)
-        .setName("Use for image search")
-        .setDesc(
-          "Off by default. When on, search_images may query this engine's image endpoint, which spends the same quota as text search.",
-        )
+        .setName(t("settings.webSourceModal.imageSearch.name"))
+        .setDesc(t("settings.webSourceModal.imageSearch.desc"))
         .addToggle((toggle) => {
           toggle.setValue(this.imageSearchEnabled).onChange((value) => {
             this.imageSearchEnabled = value;
@@ -73,6 +82,7 @@ export class WebSourceModal extends Modal {
     }
 
     renderModalActions(contentEl, {
+      t,
       onCancel: () => this.close(),
       onSave: () => void this.save(),
     });
@@ -89,7 +99,11 @@ export class WebSourceModal extends Modal {
     const configured = areCredentialsComplete(this.options.descriptor, credentials);
     const active = isWebSourceActive(this.options.profile);
     if (!configured && active) {
-      new Notice(`${this.options.descriptor.label} disabled: required credentials are missing.`);
+      new Notice(
+        this.options.t("settings.webSourceModal.disabledNotice", {
+          source: this.options.descriptor.label,
+        }),
+      );
     }
 
     await this.options.onSave({

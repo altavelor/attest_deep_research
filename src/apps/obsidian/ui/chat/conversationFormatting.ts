@@ -1,34 +1,48 @@
 import { IndexingState } from "@adapters/indexing";
+import { DEFAULT_LOCALE } from "@core/i18n";
+import type { LocaleCode } from "@core/i18n";
 import { Citation } from "@core/model";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
 import { citationTarget as citationTargetString } from "@application/use-cases/research";
+import type { Translate } from "@adapters/i18n";
 import { stripRenderedCitationIds } from "./citations/citationText";
 
 export type CitationTarget = { kind: "obsidian"; target: string } | { kind: "web"; target: string };
 
-export function formatIndexingStatus(state?: IndexingState): string {
+export function formatIndexingStatus(
+  state: IndexingState | undefined,
+  t: Translate,
+  locale: LocaleCode = DEFAULT_LOCALE,
+): string {
   if (!state) {
-    return "Index status unavailable";
+    return t("chat.indexing.statusUnavailable");
   }
 
-  const status = formatIndexingStateLabel(state);
-  const lastRun = state.lastIndexedAt ? formatDate(state.lastIndexedAt) : "no completed index run";
+  const status = formatIndexingStateLabel(state, t);
+  const lastRun = state.lastIndexedAt
+    ? formatDate(state.lastIndexedAt, locale)
+    : t("chat.indexing.noCompletedRun");
 
   if (state.indexedFiles === 0 && state.embeddedChunks === 0) {
-    return `${status} · ${lastRun}`;
+    return t("chat.indexing.summary", { status, lastRun });
   }
 
-  return `${status} · ${state.indexedFiles} indexed · ${state.embeddedChunks} chunks · last run ${lastRun}`;
+  return t("chat.indexing.summaryDetailed", {
+    status,
+    lastRun,
+    indexed: state.indexedFiles,
+    chunks: state.embeddedChunks,
+  });
 }
 
-export function formatIndexingStateLabel(state: IndexingState): string {
+export function formatIndexingStateLabel(state: IndexingState, t: Translate): string {
   if (state.status === "error") {
-    return "Indexing failed";
+    return t("chat.indexing.failed");
   }
 
   if (state.isStale || state.status === "stale") {
-    return "Rebuild needed";
+    return t("chat.indexing.rebuildNeeded");
   }
 
   return state.status[0].toUpperCase() + state.status.slice(1);
@@ -59,20 +73,34 @@ export function indexingProgressValue(state: IndexingState): number {
   return state.progress;
 }
 
-export function formatIndexingProgressLabel(state: IndexingState): string {
+export function formatIndexingProgressLabel(state: IndexingState, t: Translate): string {
   if (state.phase === "embedding" && isPositiveCount(state.chunksTotal)) {
-    const chunks = `${state.chunksEmbedded ?? 0} of ${state.chunksTotal} chunks`;
+    const chunks = t("chat.indexing.progress.chunks", {
+      embedded: state.chunksEmbedded ?? 0,
+      total: state.chunksTotal,
+    });
     const batches =
       state.embeddingBatchesTotal && state.embeddingBatchesCompleted !== undefined
-        ? ` · ${state.embeddingBatchesCompleted} of ${state.embeddingBatchesTotal} batches`
+        ? ` · ${t("chat.indexing.progress.batches", {
+            completed: state.embeddingBatchesCompleted,
+            total: state.embeddingBatchesTotal,
+          })}`
         : "";
 
-    return `${formatPhase(state.phase)} · ${chunks}${batches}${formatCurrentFile(state)}`;
+    return t("chat.indexing.progress.embedding", {
+      phase: formatPhase(state.phase, t),
+      chunks,
+      batches,
+      currentFile: formatCurrentFile(state),
+    });
   }
 
-  return `${formatPhase(state.phase)} · ${state.scannedFiles} of ${
-    state.totalFiles
-  } files${formatCurrentFile(state)}`;
+  return t("chat.indexing.progress.files", {
+    phase: formatPhase(state.phase, t),
+    scanned: state.scannedFiles,
+    total: state.totalFiles,
+    currentFile: formatCurrentFile(state),
+  });
 }
 
 export function citationTarget(citation: Citation): CitationTarget {
@@ -88,38 +116,38 @@ export function messageDisplayContent(message: ChatDisplayMessage): string {
   return stripRenderedCitationIds(messageMarkdownContent(message)).trim();
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string, locale: LocaleCode): string {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
 }
 
-function formatPhase(phase: IndexingState["phase"]): string {
+function formatPhase(phase: IndexingState["phase"], t: Translate): string {
   switch (phase) {
     case "scanning":
-      return "Scanning";
+      return t("chat.indexing.phase.scanning");
     case "checking":
-      return "Checking changes";
+      return t("chat.indexing.phase.checking");
     case "extracting":
-      return "Extracting";
+      return t("chat.indexing.phase.extracting");
     case "chunking":
-      return "Chunking";
+      return t("chat.indexing.phase.chunking");
     case "embedding":
-      return "Embedding";
+      return t("chat.indexing.phase.embedding");
     case "writing":
-      return "Writing index";
+      return t("chat.indexing.phase.writing");
     case "complete":
-      return "Complete";
+      return t("chat.indexing.phase.complete");
     default:
-      return "Indexing";
+      return t("chat.indexing.phase.indexing");
   }
 }
 

@@ -1,5 +1,6 @@
 import type { EnrichmentProfileState, IndexingState } from "@adapters/indexing";
 import { requiresIndexRebuildForImages } from "@adapters/indexing";
+import type { Translate } from "@adapters/i18n";
 
 export interface IndexColumnStatus {
   kind: "is-indexing" | "is-paused" | "is-pausing" | "is-finished" | "is-enriching" | "is-stopping";
@@ -18,6 +19,7 @@ export type IndexPendingAction = "pausing";
 export type EnrichmentPendingAction = "stopping";
 
 export function resolveIndexProfileColumnStatus(options: {
+  t: Translate;
   indexing: IndexingState;
   enrichment: EnrichmentProfileState;
   pendingIndexAction?: IndexPendingAction;
@@ -25,10 +27,12 @@ export function resolveIndexProfileColumnStatus(options: {
 }): IndexColumnStatus | null {
   return (
     resolveEnrichmentColumnStatus({
+      t: options.t,
       state: options.enrichment,
       pendingAction: options.pendingEnrichmentAction,
     }) ??
     resolveIndexColumnStatus({
+      t: options.t,
       state: options.indexing,
       pendingAction: options.pendingIndexAction,
     })
@@ -36,6 +40,7 @@ export function resolveIndexProfileColumnStatus(options: {
 }
 
 export function resolveIndexStatusBadge(options: {
+  t: Translate;
   profile: {
     isSuspended?: boolean;
     suspendedReason?: string;
@@ -47,28 +52,28 @@ export function resolveIndexStatusBadge(options: {
   enrichment: Pick<EnrichmentProfileState, "status">;
   pendingEnrichmentAction?: EnrichmentPendingAction;
 }): IndexStatusBadge | null {
-  const { profile, indexing, enrichment, pendingEnrichmentAction } = options;
+  const { t, profile, indexing, enrichment, pendingEnrichmentAction } = options;
   if (profile.isSuspended) {
     return {
       kind: "is-suspended",
-      label: "Suspended",
-      title: profile.suspendedReason ?? "Suspended",
+      label: t("settings.status.suspended"),
+      title: profile.suspendedReason ?? t("settings.status.suspended"),
     };
   }
 
   if (indexing.status === "error") {
     return {
       kind: "is-suspended",
-      label: "Error",
-      title: indexing.errorMessage ?? "Indexing failed",
+      label: t("settings.indexStatus.error.label"),
+      title: indexing.errorMessage ?? t("settings.indexStatus.error.title"),
     };
   }
 
   if (indexing.isStale || indexing.status === "stale") {
     return {
       kind: "is-suspended",
-      label: "Stale index",
-      title: "The index profile changed — run Update to refresh the index.",
+      label: t("settings.indexStatus.stale.label"),
+      title: t("settings.indexStatus.stale.title"),
     };
   }
 
@@ -81,18 +86,16 @@ export function resolveIndexStatusBadge(options: {
   if (metadataStale && !metadataUpdating) {
     return {
       kind: "is-suspended",
-      label: "Stale metadata",
-      title:
-        "The index changed after the last metadata extraction — run Update with the metadata section enabled.",
+      label: t("settings.indexStatus.staleMetadata.label"),
+      title: t("settings.indexStatus.staleMetadata.title"),
     };
   }
 
   if (requiresIndexRebuildForImages(profile)) {
     return {
       kind: "is-reindex-required",
-      label: "Reindex required",
-      title:
-        "This index was built before document-image metadata existed — run a full rebuild to enable index-based image discovery. Text search keeps working.",
+      label: t("settings.indexStatus.reindexRequired.label"),
+      title: t("settings.indexStatus.reindexRequired.title"),
     };
   }
 
@@ -100,15 +103,18 @@ export function resolveIndexStatusBadge(options: {
 }
 
 export function resolveIndexColumnStatus(options: {
+  t: Translate;
   state: IndexingState;
   pendingAction?: IndexPendingAction;
 }): IndexColumnStatus | null {
-  const { state, pendingAction } = options;
+  const { t, state, pendingAction } = options;
   if (pendingAction === "pausing") {
     return {
       kind: "is-pausing",
-      label: "Pausing",
-      tooltip: `Pausing${formatIndexProgressDetail(state)}`,
+      label: t("settings.indexStatus.pausing.label"),
+      tooltip: t("settings.indexStatus.pausing.tooltip", {
+        detail: formatIndexProgressDetail(t, state),
+      }),
       animated: true,
     };
   }
@@ -116,8 +122,10 @@ export function resolveIndexColumnStatus(options: {
   if (state.status === "indexing") {
     return {
       kind: "is-indexing",
-      label: "Indexing",
-      tooltip: `Indexing${formatIndexProgressDetail(state)}`,
+      label: t("settings.indexStatus.indexing.label"),
+      tooltip: t("settings.indexStatus.indexing.tooltip", {
+        detail: formatIndexProgressDetail(t, state),
+      }),
       animated: true,
     };
   }
@@ -125,16 +133,18 @@ export function resolveIndexColumnStatus(options: {
   if (state.status === "paused") {
     return {
       kind: "is-paused",
-      label: "Paused",
-      tooltip: `Paused${formatIndexProgressDetail(state)}`,
+      label: t("settings.indexStatus.paused.label"),
+      tooltip: t("settings.indexStatus.paused.tooltip", {
+        detail: formatIndexProgressDetail(t, state),
+      }),
     };
   }
 
   if (state.phase === "complete" && state.lastIndexedAt) {
     return {
       kind: "is-finished",
-      label: "Finished",
-      tooltip: formatFinishedIndexTooltip(state),
+      label: t("settings.indexStatus.finished.label"),
+      tooltip: formatFinishedIndexTooltip(t, state),
     };
   }
 
@@ -142,15 +152,18 @@ export function resolveIndexColumnStatus(options: {
 }
 
 export function resolveEnrichmentColumnStatus(options: {
+  t: Translate;
   state: EnrichmentProfileState;
   pendingAction?: EnrichmentPendingAction;
 }): IndexColumnStatus | null {
-  const { state, pendingAction } = options;
+  const { t, state, pendingAction } = options;
   if (pendingAction === "stopping") {
     return {
       kind: "is-stopping",
-      label: "Stopping",
-      tooltip: `Stopping metadata extraction${formatEnrichmentProgressDetail(state)}`,
+      label: t("settings.indexStatus.stopping.label"),
+      tooltip: t("settings.indexStatus.stopping.tooltip", {
+        detail: formatEnrichmentProgressDetail(t, state),
+      }),
       animated: true,
     };
   }
@@ -158,8 +171,10 @@ export function resolveEnrichmentColumnStatus(options: {
   if (state.status === "running") {
     return {
       kind: "is-enriching",
-      label: "Enriching",
-      tooltip: `Enriching metadata${formatEnrichmentProgressDetail(state)}`,
+      label: t("settings.indexStatus.enriching.label"),
+      tooltip: t("settings.indexStatus.enriching.tooltip", {
+        detail: formatEnrichmentProgressDetail(t, state),
+      }),
       animated: true,
     };
   }
@@ -167,45 +182,78 @@ export function resolveEnrichmentColumnStatus(options: {
   return null;
 }
 
-function formatIndexProgressDetail(state: IndexingState): string {
-  const file = state.currentFile ? ` · ${baseName(state.currentFile)}` : "";
+function formatIndexProgressDetail(t: Translate, state: IndexingState): string {
+  const file = state.currentFile
+    ? t("settings.indexStatus.progress.file", { file: baseName(state.currentFile) })
+    : "";
   if (state.chunksTotal !== undefined && state.chunksTotal > 0) {
-    return ` · ${state.chunksEmbedded ?? 0}/${state.chunksTotal} chunks${file}`;
+    return t("settings.indexStatus.progress.chunks", {
+      embedded: state.chunksEmbedded ?? 0,
+      total: state.chunksTotal,
+      file,
+    });
   }
 
-  return ` · ${Math.round(state.progress * 100)}% · ${state.scannedFiles}/${state.totalFiles} files${file}`;
+  return t("settings.indexStatus.progress.files", {
+    percent: Math.round(state.progress * 100),
+    scanned: state.scannedFiles,
+    total: state.totalFiles,
+    file,
+  });
 }
 
-function formatFinishedIndexTooltip(state: IndexingState): string {
+function formatFinishedIndexTooltip(t: Translate, state: IndexingState): string {
   const scanned =
-    state.totalFiles > 0 ? `${state.scannedFiles}/${state.totalFiles} scanned` : "scan complete";
-  const parts = [
-    `${state.indexedFiles} indexed`,
-    `${state.skippedFiles} skipped`,
-    `${state.deferredFiles} deferred`,
-    `${state.failedFiles} failed`,
+    state.totalFiles > 0
+      ? t("settings.indexStatus.finished.scanned", {
+          scanned: state.scannedFiles,
+          total: state.totalFiles,
+        })
+      : t("settings.indexStatus.finished.scanComplete");
+  const counters = [
+    t("settings.indexStatus.finished.indexed", { count: state.indexedFiles }),
+    t("settings.indexStatus.finished.skipped", { count: state.skippedFiles }),
+    t("settings.indexStatus.finished.deferred", { count: state.deferredFiles }),
+    t("settings.indexStatus.finished.failed", { count: state.failedFiles }),
   ];
-  return `Finished\nFiles: ${scanned} · ${parts.join(" · ")}\nChunks embedded: ${state.embeddedChunks}`;
+  return t("settings.indexStatus.finished.tooltip", {
+    scanned,
+    counters: counters.join(" · "),
+    chunks: state.embeddedChunks,
+  });
 }
 
-function formatEnrichmentProgressDetail(state: EnrichmentProfileState): string {
-  const scope = state.total > 0 ? ` · ${state.processed}/${state.total}` : "";
-  const file = state.currentSourcePath ? ` · ${baseName(state.currentSourcePath)}` : "";
-  return `${scope}${file}${enrichmentPhaseLabel(state)}`;
+function formatEnrichmentProgressDetail(t: Translate, state: EnrichmentProfileState): string {
+  return t("settings.indexStatus.enrichmentDetail", {
+    scope:
+      state.total > 0
+        ? t("settings.indexStatus.enrichmentScope", {
+            processed: state.processed,
+            total: state.total,
+          })
+        : "",
+    file: state.currentSourcePath
+      ? t("settings.indexStatus.progress.file", { file: baseName(state.currentSourcePath) })
+      : "",
+    phase: enrichmentPhaseLabel(t, state),
+  });
 }
 
-function enrichmentPhaseLabel(state: EnrichmentProfileState): string {
+function enrichmentPhaseLabel(t: Translate, state: EnrichmentProfileState): string {
   switch (state.phase) {
     case "metadata":
-      return "\nextracting metadata";
+      return t("settings.indexStatus.enrichmentPhase.metadata");
     case "sections":
       return state.sectionCount
-        ? `\nsummarizing section ${state.sectionIndex ?? 0}/${state.sectionCount}`
-        : "\nsummarizing sections";
+        ? t("settings.indexStatus.enrichmentPhase.sectionsWithCount", {
+            index: state.sectionIndex ?? 0,
+            count: state.sectionCount,
+          })
+        : t("settings.indexStatus.enrichmentPhase.sections");
     case "document":
-      return "\nwriting document summary";
+      return t("settings.indexStatus.enrichmentPhase.document");
     default:
-      return state.total === 0 ? "\nlisting sources" : "";
+      return state.total === 0 ? t("settings.indexStatus.enrichmentPhase.listingSources") : "";
   }
 }
 

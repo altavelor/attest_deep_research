@@ -48,6 +48,7 @@ import {
   stripContextDiagnostics,
 } from "./chatViewHelpers";
 import type { DocumentImageResolver } from "@application/ports";
+import type { Translate, UiTranslator } from "@adapters/i18n";
 import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
@@ -85,12 +86,16 @@ export interface IxplorerChatViewServices {
   renameSavedChat(id: string, title: string): Promise<void>;
   setSavedChatFavorite(id: string, isFavorite: boolean): Promise<void>;
   deleteSavedChat(id: string): Promise<void>;
+  getTranslator(): UiTranslator;
   isDebugMode(): boolean;
   shouldIncludeActiveFileContext(): boolean;
 }
 
 export class IxplorerChatView extends ItemView {
   private readonly services: IxplorerChatViewServices;
+
+  /** Late-bound lookup so a language change applies on the next render. */
+  private readonly t: Translate = (key, params) => this.services.getTranslator().t(key, params);
   private readonly citationPopover: CitationPopoverController;
   private readonly diagnosticModal: DiagnosticReportModalController;
   private readonly answerNoteWriter: AnswerNoteWriter;
@@ -118,11 +123,16 @@ export class IxplorerChatView extends ItemView {
     this.services = services;
     this.citationPopover = new CitationPopoverController({
       hostEl: this.contentEl,
+      t: this.t,
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
     });
-    this.diagnosticModal = new DiagnosticReportModalController(this.app);
-    this.answerNoteWriter = new AnswerNoteWriter(this.app);
-    this.toolOutputViewer = new ToolOutputViewer(this.app);
+    this.diagnosticModal = new DiagnosticReportModalController(
+      this.app,
+      this.t,
+      () => this.services.getTranslator().direction,
+    );
+    this.answerNoteWriter = new AnswerNoteWriter(this.app, this.t);
+    this.toolOutputViewer = new ToolOutputViewer(this.app, this.t);
     this.savedChatSession = new SavedChatSessionController({
       listSavedChats: () => this.services.listSavedChats(),
       loadSavedChat: (id) => this.services.loadSavedChat(id),
@@ -136,6 +146,7 @@ export class IxplorerChatView extends ItemView {
       hostEl: this.contentEl,
       getSavedChats: () => this.savedChatSession.savedChats,
       getCurrentChatId: () => this.savedChatSession.currentChatId,
+      t: this.t,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onRenameChat: (id, title) => void this.renameSavedChat(id, title),
       onToggleFavorite: (id) => void this.toggleSavedChatFavorite(id),
@@ -157,6 +168,7 @@ export class IxplorerChatView extends ItemView {
       isRunning: () => this.isRunning,
       getContextWindowUsage: () => this.getContextWindowUsage(),
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
+      t: this.t,
       onSubmit: () => void this.researchController.submitQuestion(),
       onStop: () => {
         this.researchController.stopRunningQuestion();
@@ -220,6 +232,7 @@ export class IxplorerChatView extends ItemView {
       renderMessages: () => this.renderMessages(),
       renderActiveMessage: () => this.scheduleActiveMessageRender(),
       renderAnswerDetails: () => this.renderAnswerDetails(),
+      t: this.t,
     });
     this.indexSearch = new IndexSearchController({
       getIndexProfiles: () => this.services.getIndexProfiles(),
@@ -228,6 +241,7 @@ export class IxplorerChatView extends ItemView {
         this.services.getIndexSearchEmbedderWarning(indexProfileId),
       searchIndex: (options) => this.services.searchIndex(options),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
+      t: this.t,
     });
     this.currentChatSettings = createDefaultChatSettings(this.services);
   }
@@ -274,6 +288,7 @@ export class IxplorerChatView extends ItemView {
     }
     this.contentEl.empty();
     this.contentEl.addClass("ixplorer-chat-view");
+    this.contentEl.setAttr("dir", this.services.getTranslator().direction);
     if (!this.services.isDebugMode()) {
       this.activePanel = "chat";
     }
@@ -313,6 +328,7 @@ export class IxplorerChatView extends ItemView {
     return {
       activePanel: this.activePanel,
       isDebugMode: this.services.isDebugMode(),
+      t: this.t,
       onPanelChange: (panel) => {
         this.activePanel = this.services.isDebugMode() ? panel : "chat";
         this.render();
@@ -348,6 +364,8 @@ export class IxplorerChatView extends ItemView {
     new ContextDocumentPickerModal(this.app, {
       files,
       selectedPaths: this.attachedContextPaths,
+      t: this.t,
+      getDirection: () => this.services.getTranslator().direction,
       onSubmit: (paths) => {
         this.attachedContextPaths = paths;
         this.composer.renderAttachedContext();
@@ -389,8 +407,11 @@ export class IxplorerChatView extends ItemView {
       markdownContext: this,
       messages: this.messages,
       editingMessageIndex: this.editingMessageIndex,
-      assistantLabel: this.getCurrentChatModelLabel() || "Assistant",
+      assistantLabel: this.getCurrentChatModelLabel() || this.t("chat.message.assistant"),
       isDebugMode: this.services.isDebugMode(),
+      t: this.t,
+      locale: this.services.getTranslator().locale,
+      getDirection: () => this.services.getTranslator().direction,
       renderEmptyState: (containerEl) => this.renderEmptyChatState(containerEl),
       onEditQuestion: (index) => {
         this.editingMessageIndex = index >= 0 ? index : null;
@@ -421,6 +442,7 @@ export class IxplorerChatView extends ItemView {
   private renderEmptyChatState(containerEl: HTMLElement): void {
     renderSavedChatsEmptyState(containerEl, {
       savedChats: this.savedChatSession.savedChats,
+      t: this.t,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onViewAll: (anchorEl) => void this.toggleHistoryPopover(anchorEl),
       onRenameChat: (id, title) => this.renameSavedChat(id, title),
@@ -434,9 +456,14 @@ export class IxplorerChatView extends ItemView {
       return;
     }
 
-    renderChatFollowUps(this.followUpsEl, followUps, (question) => {
-      this.composer.setQuestionInput(question);
-    });
+    renderChatFollowUps(
+      this.followUpsEl,
+      followUps,
+      (question) => {
+        this.composer.setQuestionInput(question);
+      },
+      this.t,
+    );
   }
 
   private async toggleHistoryPopover(anchorEl: HTMLElement): Promise<void> {
@@ -459,7 +486,7 @@ export class IxplorerChatView extends ItemView {
     } else {
       this.render();
     }
-    new Notice("Chat deleted.");
+    new Notice(this.t("chat.notice.chatDeleted"));
   }
 
   private async toggleSavedChatFavorite(id: string): Promise<void> {
@@ -484,7 +511,7 @@ export class IxplorerChatView extends ItemView {
     const chat = await this.savedChatSession.load(id);
 
     if (!chat) {
-      new Notice("Saved chat was not found.");
+      new Notice(this.t("chat.notice.savedChatNotFound"));
       await this.savedChatSession.refresh();
       this.render();
       return;
@@ -560,12 +587,12 @@ export class IxplorerChatView extends ItemView {
     const profile = this.services
       .getIndexProfiles()
       .find((candidate) => candidate.id === indexProfileId);
-    const message = profile?.isIndexed ? legacyIndexImageNotice(profile) : null;
+    const message = profile?.isIndexed ? legacyIndexImageNotice(profile, this.t) : null;
     if (!message) return;
 
     const notice = new Notice(`${message}\n`, 12_000);
     const action = notice.messageEl.createEl("a", {
-      text: "Open index settings",
+      text: this.t("chat.notice.openIndexSettings"),
       href: "#",
       cls: "ixplorer-chat__notice-action",
     });
@@ -601,12 +628,15 @@ export class IxplorerChatView extends ItemView {
   }
 
   private getSearchUnavailableMessage(): string | null {
-    return searchUnavailableMessage({
-      chatModelProfileId: this.currentChatSettings.chatModelProfileId,
-      indexProfileId: this.currentChatSettings.indexProfileId,
-      searchMode: this.getSearchMode(),
-      isWebSearchEnabled: this.services.isWebSearchEnabled(),
-    });
+    return searchUnavailableMessage(
+      {
+        chatModelProfileId: this.currentChatSettings.chatModelProfileId,
+        indexProfileId: this.currentChatSettings.indexProfileId,
+        searchMode: this.getSearchMode(),
+        isWebSearchEnabled: this.services.isWebSearchEnabled(),
+      },
+      this.t,
+    );
   }
 
   private getContextWindowUsage(): { estimatedTokens: number; limitTokens: number } | null {
@@ -652,7 +682,7 @@ export class IxplorerChatView extends ItemView {
 
   private async openRetrievedChunk(chunk: RetrievedChunk): Promise<void> {
     await this.openCitation({
-      ...formatCitationForChunk(chunk),
+      ...formatCitationForChunk(chunk, this.t),
       id: chunk.id,
     });
   }
@@ -664,6 +694,7 @@ export class IxplorerChatView extends ItemView {
       status: item.status,
       args: item.args,
       resultJson: item.resultJson,
+      t: this.t,
     });
     await this.toolOutputViewer.open({
       name: item.name,

@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, Component } from "obsidian";
 
 import { AdvancedSettingsSection } from "@apps/obsidian/ui/settings/AdvancedSettingsSection";
+import { createTranslator } from "@adapters/i18n";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createContainer, resetDom } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 
 function assistantWithToolCall(): ChatDisplayMessage {
   return {
@@ -39,6 +42,7 @@ function renderWorkflow(host: HTMLElement, isDebugMode: boolean): boolean {
     app: new App(),
     markdownContext: new Component(),
     isDebugMode,
+    t,
     onOpenToolOutput: () => {},
   });
 }
@@ -90,6 +94,7 @@ describe("debug-mode gating of the workflow transcript", () => {
       app: new App(),
       markdownContext: new Component(),
       isDebugMode: true,
+      t,
       onOpenToolOutput,
     });
 
@@ -107,6 +112,7 @@ describe("debug-mode toggle in advanced settings", () => {
     const saveSettings = vi.fn(async () => {});
     const refreshChatViews = vi.fn();
     new AdvancedSettingsSection({
+      t,
       isDebugMode: () => state.debugMode,
       setDebugMode: (value) => {
         state.debugMode = value;

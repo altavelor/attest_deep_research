@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 
 import { RetrievedChunk } from "@core/model";
+import type { Translate } from "@adapters/i18n";
 
 export interface IndexSearchPanelRefs {
   profileEl: HTMLSelectElement;
@@ -20,6 +21,7 @@ export interface IndexSearchPanelOptions {
   warning: string | null;
   isSearchBlocked: boolean;
   isSearching: boolean;
+  t: Translate;
   onSubmit(): void;
   onProfileChange?(): void;
   onOpenResult(chunk: RetrievedChunk): void;
@@ -29,6 +31,7 @@ export function renderIndexSearchPanel(
   containerEl: HTMLElement,
   options: IndexSearchPanelOptions,
 ): IndexSearchPanelRefs {
+  const { t } = options;
   containerEl.empty();
 
   const form = containerEl.createEl("form", { cls: "ixplorer-index-search__form" });
@@ -39,7 +42,7 @@ export function renderIndexSearchPanel(
 
   const profileEl = form.createEl("select", {
     cls: "ixplorer-index-search__profile",
-    attr: { "aria-label": "Index profile" },
+    attr: { "aria-label": t("indexSearch.profile.aria") },
   });
   for (const profile of options.profiles) {
     const option = profileEl.createEl("option", {
@@ -63,14 +66,14 @@ export function renderIndexSearchPanel(
 
   const filters = form.createDiv({ cls: "ixplorer-index-search__filters" });
   const topKEl = createLabeledInput(filters, {
-    label: "Top K",
+    label: t("indexSearch.topK"),
     value: "5",
     type: "number",
     min: "1",
     max: "50",
   });
   const minScoreEl = createLabeledInput(filters, {
-    label: "Min score",
+    label: t("indexSearch.minScore"),
     value: "0.3",
     type: "number",
     min: "0",
@@ -78,10 +81,10 @@ export function renderIndexSearchPanel(
     step: "0.05",
   });
   const extensionEl = createLabeledInput(filters, {
-    label: "Ext",
+    label: t("indexSearch.extension"),
     value: "",
     type: "text",
-    placeholder: "pdf, md",
+    placeholder: t("indexSearch.extension.placeholder"),
   });
 
   const queryRow = form.createDiv({ cls: "ixplorer-index-search__query-row" });
@@ -89,8 +92,8 @@ export function renderIndexSearchPanel(
     cls: "ixplorer-index-search__query",
     attr: {
       rows: "2",
-      placeholder: "Enter search query...",
-      "aria-label": "Index search query",
+      placeholder: t("indexSearch.query.placeholder"),
+      "aria-label": t("indexSearch.query.aria"),
     },
   });
   queryEl.addEventListener("keydown", (event) => {
@@ -105,8 +108,8 @@ export function renderIndexSearchPanel(
     cls: "ixplorer-index-search__button",
     attr: {
       type: "submit",
-      "aria-label": "Search index",
-      title: "Search index",
+      "aria-label": t("indexSearch.run"),
+      title: t("indexSearch.run"),
     },
   });
   setIcon(buttonEl, "search");
@@ -133,7 +136,7 @@ export function renderIndexSearchResults(
   containerEl: HTMLElement,
   options: Pick<
     IndexSearchPanelOptions,
-    "results" | "error" | "warning" | "isSearching" | "onOpenResult"
+    "results" | "error" | "warning" | "isSearching" | "onOpenResult" | "t"
   >,
 ): void {
   containerEl.empty();
@@ -157,7 +160,7 @@ export function renderIndexSearchResults(
   if (options.isSearching) {
     containerEl.createDiv({
       cls: "ixplorer-index-search__empty",
-      text: "Searching index...",
+      text: options.t("indexSearch.searching"),
     });
     return;
   }
@@ -165,7 +168,7 @@ export function renderIndexSearchResults(
   if (options.results.length === 0) {
     containerEl.createDiv({
       cls: "ixplorer-index-search__empty",
-      text: "No results yet.",
+      text: options.t("indexSearch.empty"),
     });
     return;
   }
@@ -176,7 +179,7 @@ export function renderIndexSearchResults(
       attr: { role: "listitem" },
     });
     const header = item.createDiv({ cls: "ixplorer-index-search__result-header" });
-    const citation = formatIndexSearchCitation(chunk);
+    const citation = formatIndexSearchCitation(chunk, options.t);
     const openButton = header.createEl("button", {
       cls: "ixplorer-index-search__result-title",
       text: citation,
@@ -224,14 +227,14 @@ function createLabeledInput(
   return input;
 }
 
-export function formatIndexSearchCitation(chunk: RetrievedChunk): string {
+export function formatIndexSearchCitation(chunk: RetrievedChunk, t: Translate): string {
   switch (chunk.source.kind) {
     case "markdown":
       return chunk.source.headingPath.length
         ? `${chunk.source.path} > ${chunk.source.headingPath.join(" > ")}`
         : chunk.source.path;
     case "pdf":
-      return `${chunk.source.path} p. ${chunk.source.pageNumber}`;
+      return `${chunk.source.path}, ${t("common.pdfPage", { page: chunk.source.pageNumber })}`;
     case "document":
       return chunk.source.path;
     case "web":

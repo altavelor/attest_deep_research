@@ -10,7 +10,10 @@ import {
   requiresIndexRebuildForImages,
   serializeImageManifest,
 } from "@adapters/indexing";
+import { createTranslator } from "@adapters/i18n";
 import { legacyIndexImageNotice } from "@apps/obsidian/ui/chat/chatViewStatus";
+
+const t = createTranslator("en").t;
 
 const entry = {
   documentPath: "docs/report.docx",
@@ -79,8 +82,8 @@ describe("index version migration state", () => {
   });
 
   it("warns in chat for a legacy profile only", () => {
-    expect(legacyIndexImageNotice({})).toContain("full rebuild");
-    expect(legacyIndexImageNotice({ indexVersion: REQUIRED_INDEX_VERSION })).toBeNull();
-    expect(legacyIndexImageNotice(undefined)).toBeNull();
+    expect(legacyIndexImageNotice({}, t)).toContain("full rebuild");
+    expect(legacyIndexImageNotice({ indexVersion: REQUIRED_INDEX_VERSION }, t)).toBeNull();
+    expect(legacyIndexImageNotice(undefined, t)).toBeNull();
   });
 });

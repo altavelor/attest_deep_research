@@ -5,6 +5,7 @@ import { DiscoveredModel, normalizeSettingsState } from "@adapters/settings";
 import { AdvancedSettingsSection } from "./settings/AdvancedSettingsSection";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
 import { IndexProfilesSection } from "./settings/IndexProfilesSection";
+import { LanguageSettingsSection } from "./settings/LanguageSettingsSection";
 import { ModelProfilesSection } from "./settings/ModelProfilesSection";
 import { NewChatDefaultsSection } from "./settings/NewChatDefaultsSection";
 import { RetrievalSettingsSection } from "./settings/RetrievalSettingsSection";
@@ -46,11 +47,14 @@ export class IxplorerSettingTab extends PluginSettingTab {
     normalizeSettingsState(this.plugin.settings);
     this.containerEl.empty();
     this.containerEl.addClass("ixplorer-settings");
+    this.containerEl.setAttr("dir", this.plugin.getTranslator().direction);
 
-    renderCategoryHeading(this.containerEl, "Ixplorer");
+    renderCategoryHeading(this.containerEl, this.plugin.translate("settings.tab.heading"));
     this.renderQuickStart(this.containerEl);
     new ModelProfilesSection({
       app: this.app,
+      t: this.plugin.translate,
+      getDirection: () => this.plugin.getTranslator().direction,
       settings: this.plugin.settings,
       fetchedModelsByServerId: this.fetchedModelsByServerId,
       prober: this.prober,
@@ -59,18 +63,22 @@ export class IxplorerSettingTab extends PluginSettingTab {
     }).render(this.containerEl);
     this.indexProfiles.render(this.gateHost(this.containerEl));
     new NewChatDefaultsSection({
+      t: this.plugin.translate,
       settings: this.plugin.settings,
       saveSettings: () => this.plugin.saveSettings(),
       requestRedisplay: () => this.display(),
     }).render(this.gateHost(this.containerEl));
     new RetrievalSettingsSection({
       app: this.app,
+      t: this.plugin.translate,
+      getDirection: () => this.plugin.getTranslator().direction,
       settings: this.plugin.settings,
       webSourceHealth: this.plugin.webSourceHealth,
       hasActiveChatModel: this.hasActiveChatModel(),
       saveSettings: () => this.plugin.saveSettings(),
       requestRedisplay: () => this.display(),
     }).render(this.containerEl);
+    this.renderLanguageSettings(this.containerEl);
     this.renderAdvancedSettings(this.containerEl);
     this.containerEl.scrollTop = scrollTop;
 
@@ -95,10 +103,13 @@ export class IxplorerSettingTab extends PluginSettingTab {
     const banner = containerEl.createDiv({ cls: "ixplorer-settings__quickstart" });
     setIcon(banner.createSpan({ cls: "ixplorer-settings__quickstart-icon" }), "rocket");
     const body = banner.createDiv({ cls: "ixplorer-settings__quickstart-body" });
-    body.createDiv({ cls: "ixplorer-settings__quickstart-title", text: "Quick start" });
+    body.createDiv({
+      cls: "ixplorer-settings__quickstart-title",
+      text: this.plugin.translate("settings.tab.quickStart.title"),
+    });
     body.createDiv({
       cls: "ixplorer-settings__quickstart-steps",
-      text: "1. Add a server → 2. Add a chat model → 3. (optional) Add an index",
+      text: this.plugin.translate("settings.tab.quickStart.steps"),
     });
   }
 
@@ -107,15 +118,30 @@ export class IxplorerSettingTab extends PluginSettingTab {
     const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
     const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
     setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
-    hint.createSpan({ text: "Add a chat model profile first" });
+    hint.createSpan({ text: this.plugin.translate("settings.tab.gateHint") });
     return section.createDiv({
       cls: "ixplorer-settings__gated-content is-disabled",
       attr: { "aria-disabled": "true", inert: "" },
     });
   }
 
+  private renderLanguageSettings(containerEl: HTMLElement): void {
+    new LanguageSettingsSection({
+      t: this.plugin.translate,
+      getLanguage: () => this.plugin.settings.uiLanguage,
+      setLanguage: (value) => {
+        this.plugin.settings.uiLanguage = value;
+      },
+      saveSettings: () => this.plugin.saveSettings(),
+      applyLanguage: () => this.plugin.applyUiLanguage(),
+      requestRedisplay: () => this.display(),
+      refreshChatViews: () => this.plugin.refreshChatViews(),
+    }).render(containerEl);
+  }
+
   private renderAdvancedSettings(containerEl: HTMLElement): void {
     new AdvancedSettingsSection({
+      t: this.plugin.translate,
       isDebugMode: () => this.plugin.settings.debugMode,
       setDebugMode: (value) => {
         this.plugin.settings.debugMode = value;

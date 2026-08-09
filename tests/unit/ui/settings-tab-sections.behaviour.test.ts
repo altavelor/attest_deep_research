@@ -175,7 +175,13 @@ describe("settings tab sections", () => {
       container.querySelectorAll(".ixplorer-settings__category-heading"),
     ).map((item) => item.firstElementChild?.textContent?.trim() ?? "");
 
-    expect(headings).toEqual(["Ixplorer", "Model profiles", "New chat defaults", "Retrieval"]);
+    expect(headings).toEqual([
+      "Ixplorer",
+      "Model profiles",
+      "New chat defaults",
+      "Retrieval",
+      "Language",
+    ]);
   });
 
   it("renders the indexing section before the advanced section", () => {

@@ -2,6 +2,7 @@ import { MarkdownRenderer } from "obsidian";
 
 import { toolTitle } from "@core/agent";
 import { ChainItem } from "@core/conversation";
+import type { Translate } from "@adapters/i18n";
 import { animateFetchTargets } from "../fetchTargetAnimator";
 import { describeToolCall, ToolCell } from "../toolCallView";
 import type { WorkflowRenderContext } from "../workflowRenderer";
@@ -20,6 +21,7 @@ export function renderToolNode(
     resultJson: item.resultJson,
     fetchTargets,
     searchSources: item.searchSources,
+    t: context.t,
   });
   const node = listEl.createDiv({
     cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--tool ixplorer-chat__workflow-node--${item.status}`,
@@ -34,7 +36,13 @@ export function renderToolNode(
   });
   if (view.intent) {
     if (view.fetchTargets.length > 0) {
-      renderFetchTargets(head, view.intent, view.fetchTargets, item.status === "pending");
+      renderFetchTargets(
+        head,
+        view.intent,
+        view.fetchTargets,
+        item.status === "pending",
+        context.t,
+      );
     } else {
       head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
     }
@@ -52,16 +60,30 @@ export function renderToolNode(
     });
   }
   if (context.isDebugMode && view.inCell) {
-    renderToolCell(body, `${item.id}:in`, "In", view.inCell, context, {
-      variant: "in",
-      onOpen: () => context.onOpenToolOutput(item),
-    });
+    renderToolCell(
+      body,
+      `${item.id}:in`,
+      context.t("chat.workflow.tool.in"),
+      view.inCell,
+      context,
+      {
+        variant: "in",
+        onOpen: () => context.onOpenToolOutput(item),
+      },
+    );
   }
   if (context.isDebugMode && view.outCell) {
-    renderToolCell(body, `${item.id}:out`, "Out", view.outCell, context, {
-      variant: "out",
-      onOpen: () => context.onOpenToolOutput(item),
-    });
+    renderToolCell(
+      body,
+      `${item.id}:out`,
+      context.t("chat.workflow.tool.out"),
+      view.outCell,
+      context,
+      {
+        variant: "out",
+        onOpen: () => context.onOpenToolOutput(item),
+      },
+    );
   }
   if (item.children && item.children.length > 0) {
     const nested = body.createDiv({
@@ -78,6 +100,7 @@ function renderFetchTargets(
   intent: string,
   targets: string[],
   animate: boolean,
+  t: Translate,
 ): void {
   head.createSpan({
     cls: "ixplorer-chat__tool-intent ixplorer-chat__tool-intent--fetch",
@@ -85,7 +108,7 @@ function renderFetchTargets(
   });
   const targetList = head.createSpan({
     cls: "ixplorer-chat__tool-fetch-targets",
-    attr: { "aria-label": `Fetching: ${targets.join(", ")}` },
+    attr: { "aria-label": t("chat.workflow.tool.fetching.aria", { targets: targets.join(", ") }) },
   });
   const targetElements = targets.map((target) =>
     targetList.createSpan({
@@ -112,7 +135,10 @@ function renderToolCell(
   });
   const header = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-header" });
   header.createSpan({ cls: "ixplorer-chat__tool-cell-label", text: label });
-  header.createSpan({ cls: "ixplorer-chat__tool-cell-open-hint", text: "Open full output" });
+  header.createSpan({
+    cls: "ixplorer-chat__tool-cell-open-hint",
+    text: context.t("chat.workflow.tool.openFullOutput"),
+  });
   renderToolCellBody(wrap.createDiv({ cls: "ixplorer-chat__tool-cell-body" }), cell, context);
   wrap.addEventListener("click", () => {
     if (!hasTextSelectionWithin(wrap)) cellOptions.onOpen();

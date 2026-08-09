@@ -1,5 +1,6 @@
 import { App, Component } from "obsidian";
 
+import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
@@ -46,6 +47,8 @@ const pendingFetch: ChainItem = {
 
 const chunk: RetrievedChunk = retrieved("c1", markdownSource("notes/found.md"), "matched", 0.9);
 
+const t = createTranslator("en").t;
+
 function workflowMessage(chain: ChainItem[], finalizing: boolean): ChatDisplayMessage {
   return {
     role: "assistant",
@@ -70,6 +73,7 @@ function renderWorkflowSurfaces(host: HTMLElement): void {
     app: new App(),
     markdownContext: new Component(),
     isDebugMode: true,
+    t,
     onOpenToolOutput: () => {},
   };
   renderWorkflowNodes(
@@ -98,6 +102,7 @@ function renderIndexSearchSurfaces(host: HTMLElement): void {
     warning: "Embedder is missing.",
     isSearchBlocked: true,
     isSearching: false,
+    t,
     onSubmit: () => {},
     onOpenResult: () => {},
   });
@@ -106,6 +111,7 @@ function renderIndexSearchSurfaces(host: HTMLElement): void {
     error: "Search failed.",
     warning: null,
     isSearching: false,
+    t,
     onOpenResult: () => {},
   });
 }
@@ -129,6 +135,7 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
   ];
   renderSavedChatsEmptyState(host.createDiv(), {
     savedChats,
+    t,
     onOpenChat: () => {},
     onViewAll: () => {},
     onToggleFavorite: () => {},
@@ -141,6 +148,7 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
       currentChatId: "a",
       searchQuery: "",
       activeTab,
+      t,
       onSearchQueryChange: () => {},
       onTabChange: () => {},
       onOpenChat: () => {},
@@ -155,6 +163,7 @@ function renderSettingsSurfaces(host: HTMLElement): void {
   for (const hasActiveChatModel of [false, true]) {
     new RetrievalSettingsSection({
       app: new App(),
+      t,
       settings: structuredClone(DEFAULT_SETTINGS),
       webSourceHealth: new WebSourceHealthTracker(),
       hasActiveChatModel,
@@ -163,6 +172,7 @@ function renderSettingsSurfaces(host: HTMLElement): void {
     }).render(host.createDiv());
   }
   new AdvancedSettingsSection({
+    t,
     isDebugMode: () => true,
     setDebugMode: () => {},
     saveSettings: async () => {},

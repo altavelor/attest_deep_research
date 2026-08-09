@@ -1,4 +1,5 @@
 import { indexSearchEmbedderWarning } from "@apps/obsidian/composition/profileResolvers";
+import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
 import type { EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
 
@@ -34,6 +35,8 @@ function serverProfile(): ServerProfile {
   };
 }
 
+const translate = createTranslator("en").t;
+
 describe("index-search debug panel", () => {
   it("blocks search with a safe warning when the selected index has no usable embedder", () => {
     const settings = createSettings({
@@ -48,7 +51,7 @@ describe("index-search debug panel", () => {
       ],
     });
 
-    expect(indexSearchEmbedderWarning(settings, "index")).toBe(
+    expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
       "The selected index's embedding model profile is unavailable. Update it in Ixplorer settings.",
     );
   });
@@ -71,7 +74,7 @@ describe("index-search debug panel", () => {
       ],
     });
 
-    expect(indexSearchEmbedderWarning(settings, "index")).toBe(
+    expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
       "The selected index's embedding model cannot create embeddings. Update it in Ixplorer settings.",
     );
   });
@@ -90,7 +93,7 @@ describe("index-search debug panel", () => {
       ],
     });
 
-    expect(indexSearchEmbedderWarning(settings, "index")).toBe(
+    expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
       "The selected index's embedding model profile is suspended. Update it in Ixplorer settings.",
     );
   });
@@ -113,6 +116,6 @@ describe("index-search debug panel", () => {
       ],
     });
 
-    expect(indexSearchEmbedderWarning(settings, "index")).toBeUndefined();
+    expect(indexSearchEmbedderWarning(settings, translate, "index")).toBeUndefined();
   });
 });

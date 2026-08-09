@@ -9,7 +9,10 @@ import {
 } from "@apps/obsidian/ui/chat/artifacts/artifactRenderer";
 import type { AnswerArtifact } from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
+import { createTranslator } from "@adapters/i18n";
 import { createContainer, resetDom } from "../../helpers/domHarness";
+
+const t = createTranslator("en").t;
 import { trackObjectUrls, type ObjectUrlTracker } from "../../helpers/objectUrls";
 
 const documentImages: DocumentImageResolver = {
@@ -72,7 +75,7 @@ describe("saved answer artifacts with untrusted content", () => {
           },
         ]),
       ],
-      { app: vaultApp({}) },
+      { app: vaultApp({}), t },
     );
 
     expect(rendered).toBe(false);
@@ -92,7 +95,7 @@ describe("saved answer artifacts with untrusted content", () => {
         { ...gallery([escaping]), id: "bad" },
         { ...gallery([embeddedImage]), id: "good", title: "Valid" },
       ],
-      { app: vaultApp({}) },
+      { app: vaultApp({}), t },
     );
 
     expect(rendered).toBe(true);
@@ -115,7 +118,7 @@ describe("saved answer artifacts with untrusted content", () => {
           },
         ]),
       ],
-      { app: vaultApp({}) },
+      { app: vaultApp({}), t },
     );
 
     await settle();
@@ -138,9 +141,7 @@ describe("saved answer artifacts with untrusted content", () => {
           { ...embeddedImage, vaultSource: { ...embeddedImage.vaultSource, locator: "file" } },
         ]),
       ],
-      {
-        app: vaultApp({}),
-      },
+      { app: vaultApp({}), t },
     );
     await settle();
 
@@ -161,7 +162,7 @@ describe("saved answer artifacts with untrusted content", () => {
           { ...embeddedImage, vaultSource: { ...embeddedImage.vaultSource, locator: "file" } },
         ]),
       ],
-      { app: vaultApp({ "notes/report.md": file }) },
+      { app: vaultApp({ "notes/report.md": file }), t },
     );
     await settle();
 
@@ -175,10 +176,7 @@ describe("answer artifact disposal", () => {
     renderAnswerArtifacts(
       container,
       [gallery([embeddedImage, { ...embeddedImage, id: "second" }])],
-      {
-        app: vaultApp({}),
-        documentImages,
-      },
+      { app: vaultApp({}), t, documentImages },
     );
     await settle();
 
@@ -193,6 +191,7 @@ describe("answer artifact disposal", () => {
   it("revokes an object URL resolved after the gallery was detached", async () => {
     renderAnswerArtifacts(container, [gallery([embeddedImage])], {
       app: vaultApp({}),
+      t,
       documentImages,
     });
     container.innerHTML = "";

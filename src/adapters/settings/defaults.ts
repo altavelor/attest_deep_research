@@ -14,6 +14,7 @@ import {
   DEFAULT_PROFILE_TIMESTAMP,
 } from "./constants";
 import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
+import { DEFAULT_UI_LANGUAGE } from "./uiLanguage";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { IxplorerSettings } from "./types";
 
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
   webSources: [],
   newChatDefaults: { ...DEFAULT_NEW_CHAT_DEFAULTS },
+  uiLanguage: DEFAULT_UI_LANGUAGE,
   useLinkedNotes: true,
   includeBacklinks: true,
   expandFilteredContextThroughLinks: false,
