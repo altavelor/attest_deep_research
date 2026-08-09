@@ -6,32 +6,17 @@ import { IxplorerSettings } from "./types";
 
 export function readSettings(savedData: unknown): IxplorerSettings {
   if (!isCurrentSettings(savedData)) {
-    return cloneSettings(DEFAULT_SETTINGS);
+    return dropUnknownSettings(DEFAULT_SETTINGS);
   }
 
   const settings = cloneSettings(savedData);
   normalizeSettingsState(settings);
-  return settings;
+  return dropUnknownSettings(settings);
 }
 
 function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
-  const {
-    forceEagerResearch: _ignoredLegacyForceEagerResearch,
-    showChatIndexControl: _ignoredLegacyShowChatIndexControl,
-    activeChatModelProfileId: _ignoredLegacyActiveChatModelProfileId,
-    activeIndexProfileId: _ignoredLegacyActiveIndexProfileId,
-    includeActiveFileContext: _ignoredLegacyIncludeActiveFileContext,
-    ...currentSettings
-  } = settings as IxplorerSettings & {
-    forceEagerResearch?: unknown;
-    showChatIndexControl?: unknown;
-    activeChatModelProfileId?: unknown;
-    activeIndexProfileId?: unknown;
-    includeActiveFileContext?: unknown;
-  };
-
   return {
-    ...currentSettings,
+    ...settings,
     newChatDefaults: readNewChatDefaults(settings),
     uiLanguage: readUiLanguage(settings),
     serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
@@ -73,6 +58,59 @@ function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
   };
 }
 
+function dropUnknownSettings(settings: IxplorerSettings): IxplorerSettings {
+  return {
+    serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
+    chatModelProfiles: settings.chatModelProfiles.map((profile) => ({
+      ...profile,
+      reasoning: { ...profile.reasoning },
+      reasoningCapabilities: profile.reasoningCapabilities
+        ? {
+            ...profile.reasoningCapabilities,
+            efforts: [...profile.reasoningCapabilities.efforts],
+          }
+        : undefined,
+      capabilities: profile.capabilities
+        ? {
+            ...profile.capabilities,
+            toolCalling: profile.capabilities.toolCalling
+              ? {
+                  ...profile.capabilities.toolCalling,
+                  formatDefault: { ...profile.capabilities.toolCalling.formatDefault },
+                  probe: profile.capabilities.toolCalling.probe
+                    ? { ...profile.capabilities.toolCalling.probe }
+                    : undefined,
+                }
+              : undefined,
+            reasoningObservation: profile.capabilities.reasoningObservation
+              ? {
+                  ...profile.capabilities.reasoningObservation,
+                  dialects: [...profile.capabilities.reasoningObservation.dialects],
+                }
+              : undefined,
+          }
+        : undefined,
+    })),
+    embeddingModelProfiles: settings.embeddingModelProfiles.map((profile) => ({ ...profile })),
+    indexProfiles: settings.indexProfiles.map(cloneIndexProfile),
+    activeEmbeddingModelProfileId: settings.activeEmbeddingModelProfileId,
+    includeFolders: [...settings.includeFolders],
+    excludeGlobs: [...settings.excludeGlobs],
+    webSources: settings.webSources.map((profile) => ({ ...profile })),
+    newChatDefaults: readNewChatDefaults(settings),
+    uiLanguage: readUiLanguage(settings),
+    useLinkedNotes: settings.useLinkedNotes,
+    includeBacklinks: settings.includeBacklinks,
+    expandFilteredContextThroughLinks: settings.expandFilteredContextThroughLinks,
+    graphContextDepth: settings.graphContextDepth,
+    useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
+    expandSearchQuery: settings.expandSearchQuery,
+    downloadFolder: settings.downloadFolder,
+    debugMode: settings.debugMode,
+    modelCapabilityCache: { ...settings.modelCapabilityCache },
+  };
+}
+
 function isCurrentSettings(value: unknown): value is IxplorerSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -84,7 +122,6 @@ function isCurrentSettings(value: unknown): value is IxplorerSettings {
     Array.isArray(settings.chatModelProfiles) &&
     Array.isArray(settings.embeddingModelProfiles) &&
     typeof settings.activeEmbeddingModelProfileId === "string" &&
-    typeof settings.lanceDbFolder === "string" &&
     Array.isArray(settings.indexProfiles) &&
     Array.isArray(settings.includeFolders) &&
     Array.isArray(settings.excludeGlobs) &&

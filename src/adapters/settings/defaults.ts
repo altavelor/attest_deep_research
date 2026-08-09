@@ -49,7 +49,6 @@ export const DEFAULT_SETTINGS: IxplorerSettings = {
   chatModelProfiles: [],
   embeddingModelProfiles: [],
   activeEmbeddingModelProfileId: "",
-  lanceDbFolder: DEFAULT_INDEX_FOLDER,
   indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
   includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
