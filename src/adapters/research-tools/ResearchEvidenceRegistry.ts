@@ -1,5 +1,3 @@
-import { randomUUID } from "crypto";
-
 import { stableId } from "@adapters/extractors/common";
 import { formatCitation } from "@core/retrieval";
 import { Citation } from "@core/model";
@@ -37,7 +35,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
   private readonly handlesByUrl = new Map<string, WebHandleEntry>();
 
   constructor(options: ResearchEvidenceRegistryOptions = {}) {
-    this.createHandle = options.createHandle ?? (() => `result_${randomUUID()}`);
+    this.createHandle = options.createHandle ?? (() => `result_${crypto.randomUUID()}`);
     this.now = options.now ?? (() => new Date());
     this.maxWebResults = options.maxWebResults ?? DEFAULT_MAX_WEB_RESULTS;
   }

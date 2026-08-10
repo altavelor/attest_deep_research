@@ -61,6 +61,14 @@ export class ZyteFetchProvider implements PageFetchProvider {
   }
 }
 
+/** Base64-encodes the UTF-8 bytes of a value, so non-Latin-1 keys stay encodable. */
 function toBase64(value: string): string {
-  return typeof btoa === "function" ? btoa(value) : Buffer.from(value, "utf8").toString("base64");
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary);
 }
