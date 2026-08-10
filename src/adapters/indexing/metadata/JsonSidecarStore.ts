@@ -1,9 +1,9 @@
-import { createHash } from "crypto";
-import { mkdir, readdir, readFile, writeFile } from "fs/promises";
-import { join } from "path";
+import { FileSystemPort } from "@application/ports";
+import { joinVaultPath, sha256Hex } from "@shared";
 
 export class JsonSidecarStore<T extends { sourcePath: string }> {
   constructor(
+    private readonly fileSystem: FileSystemPort,
     private readonly folder: string,
     private readonly subdirectory: string,
     private readonly isValid: (value: unknown) => value is T,
@@ -11,7 +11,7 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
 
   async read(sourcePath: string): Promise<T | null> {
     try {
-      const raw = await readFile(this.fileFor(sourcePath), "utf8");
+      const raw = await this.fileSystem.readText(this.fileFor(sourcePath));
       const parsed: unknown = JSON.parse(raw);
       return this.isValid(parsed) && parsed.sourcePath === sourcePath ? parsed : null;
     } catch {
@@ -20,14 +20,16 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
   }
 
   async write(value: T): Promise<void> {
-    await mkdir(this.dir(), { recursive: true });
-    await writeFile(this.fileFor(value.sourcePath), JSON.stringify(value, null, 2), "utf8");
+    await this.fileSystem.createFolder(this.dir());
+    await this.fileSystem.writeText(this.fileFor(value.sourcePath), JSON.stringify(value, null, 2));
   }
 
   async list(): Promise<T[]> {
     let files: string[];
     try {
-      files = await readdir(this.dir());
+      files = (await this.fileSystem.list(this.dir()))
+        .filter((entry) => entry.kind === "file")
+        .map((entry) => entry.name);
     } catch {
       return [];
     }
@@ -38,7 +40,9 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
         continue;
       }
       try {
-        const parsed: unknown = JSON.parse(await readFile(join(this.dir(), file), "utf8"));
+        const parsed: unknown = JSON.parse(
+          await this.fileSystem.readText(joinVaultPath(this.dir(), file)),
+        );
         if (this.isValid(parsed)) {
           items.push(parsed);
         }
@@ -48,11 +52,11 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
   }
 
   private dir(): string {
-    return join(this.folder, this.subdirectory);
+    return joinVaultPath(this.folder, this.subdirectory);
   }
 
   private fileFor(sourcePath: string): string {
-    const id = createHash("sha256").update(sourcePath).digest("hex").slice(0, 32);
-    return join(this.dir(), `${id}.json`);
+    const id = sha256Hex(sourcePath).slice(0, 32);
+    return joinVaultPath(this.dir(), `${id}.json`);
   }
 }

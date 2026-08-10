@@ -1,10 +1,5 @@
-import { createReadStream } from "fs";
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import { dirname } from "path";
-import { createInterface } from "readline";
-
+import { FileSystemPort } from "@application/ports";
 import { IxplorerError } from "@core/errors";
-import { isMissingFileError } from "../store/FileVectorIndexErrors";
 
 export interface AtomicIndexFile {
   path: string;
@@ -18,6 +13,7 @@ export interface AtomicIndexCommit {
 }
 
 export async function readJsonIndexFile<T>(
+  fs: FileSystemPort,
   path: string,
   isValid: (value: unknown) => value is T,
   fallback: T,
@@ -25,12 +21,12 @@ export async function readJsonIndexFile<T>(
   let content: string;
 
   try {
-    content = await readFile(path, "utf8");
-  } catch (error) {
-    if (isMissingFileError(error)) {
+    if (!(await fs.exists(path))) {
       return fallback;
     }
 
+    content = await fs.readText(path);
+  } catch (error) {
     throwIndexReadError(error, path);
   }
 
@@ -48,18 +44,19 @@ export async function readJsonIndexFile<T>(
 }
 
 export async function readJsonlIndexFile<T>(
+  fs: FileSystemPort,
   path: string,
   isValid: (value: unknown) => value is T,
 ): Promise<T[]> {
   let content: string;
 
   try {
-    content = await readFile(path, "utf8");
-  } catch (error) {
-    if (isMissingFileError(error)) {
+    if (!(await fs.exists(path))) {
       return [];
     }
 
+    content = await fs.readText(path);
+  } catch (error) {
     throwIndexReadError(error, path);
   }
 
@@ -84,6 +81,7 @@ export async function readJsonlIndexFile<T>(
 }
 
 export async function readFirstJsonlIndexRows<T>(
+  fs: FileSystemPort,
   path: string,
   isValid: (value: unknown) => value is T,
   limit: number,
@@ -92,62 +90,74 @@ export async function readFirstJsonlIndexRows<T>(
     return [];
   }
 
-  const stream = createReadStream(path, { encoding: "utf8" });
-  const lines = createInterface({ input: stream, crlfDelay: Infinity });
   const rows: T[] = [];
 
   try {
-    for await (const line of lines) {
+    if (!(await fs.exists(path))) {
+      return [];
+    }
+
+    for await (const line of fs.readTextLines(path)) {
       if (!line.trim()) {
         continue;
       }
+
       const parsed: unknown = JSON.parse(line);
+
       if (!isValid(parsed)) {
         throw new Error("JSONL row did not match the expected index schema.");
       }
+
       rows.push(parsed);
+
       if (rows.length >= limit) {
         break;
       }
     }
   } catch (error) {
-    if (isMissingFileError(error)) {
-      return [];
-    }
     throwIndexReadError(error, path);
-  } finally {
-    lines.close();
-    stream.destroy();
   }
 
   return rows;
 }
 
-export async function readBinaryIndexFile(path: string): Promise<Uint8Array> {
+export async function readBinaryIndexFile(fs: FileSystemPort, path: string): Promise<Uint8Array> {
   try {
-    return new Uint8Array(await readFile(path));
-  } catch (error) {
-    if (isMissingFileError(error)) {
+    if (!(await fs.exists(path))) {
       return new Uint8Array();
     }
 
+    return await fs.readBinary(path);
+  } catch (error) {
     throwIndexReadError(error, path);
   }
 }
 
-export async function atomicWriteIndexFiles(commit: AtomicIndexCommit): Promise<void> {
+export async function atomicWriteIndexFiles(
+  fs: FileSystemPort,
+  commit: AtomicIndexCommit,
+): Promise<void> {
   for (const file of commit.files) {
-    await atomicWriteFile(file, commit.writeId);
+    await atomicWriteFile(fs, file, commit.writeId);
   }
 
-  await atomicWriteFile(commit.manifest, commit.writeId);
+  await atomicWriteFile(fs, commit.manifest, commit.writeId);
 }
 
-async function atomicWriteFile(file: AtomicIndexFile, writeId: string): Promise<void> {
-  await mkdir(dirname(file.path), { recursive: true });
+async function atomicWriteFile(
+  fs: FileSystemPort,
+  file: AtomicIndexFile,
+  writeId: string,
+): Promise<void> {
   const tempPath = `${file.path}.${writeId}.tmp`;
-  await writeFile(tempPath, file.data);
-  await rename(tempPath, file.path);
+
+  if (typeof file.data === "string") {
+    await fs.writeText(tempPath, file.data);
+  } else {
+    await fs.writeBinary(tempPath, file.data);
+  }
+
+  await fs.rename(tempPath, file.path);
 }
 
 function throwIndexReadError(cause: unknown, path: string): never {

@@ -1,9 +1,11 @@
-import { Dirent, promises as fs } from "fs";
-import { join } from "path";
+import { FileSystemEntry, FileSystemPort } from "@application/ports";
 
-export async function measureFolderSize(path: string): Promise<number | null> {
+export async function measureFolderSize(
+  fileSystem: FileSystemPort,
+  path: string,
+): Promise<number | null> {
   try {
-    return await measureFolderSizeInner(path);
+    return await measureFolderSizeInner(fileSystem, path);
   } catch {
     return null;
   }
@@ -31,24 +33,19 @@ export function formatIndexSize(bytes: number | null | undefined): string {
   return `${formatted} ${units[unitIndex]}`;
 }
 
-async function measureFolderSizeInner(path: string): Promise<number> {
-  const entries = await fs.readdir(path, { withFileTypes: true });
-  const sizes = await Promise.all(entries.map((entry) => measureEntry(path, entry)));
+async function measureFolderSizeInner(fileSystem: FileSystemPort, path: string): Promise<number> {
+  const entries = await fileSystem.list(path);
+  const sizes = await Promise.all(entries.map((entry) => measureEntry(fileSystem, entry)));
 
   return sizes.reduce((total, size) => total + size, 0);
 }
 
-async function measureEntry(parentPath: string, entry: Dirent): Promise<number> {
-  const entryPath = join(parentPath, entry.name);
-
-  if (entry.isDirectory()) {
-    return measureFolderSizeInner(entryPath);
+async function measureEntry(fileSystem: FileSystemPort, entry: FileSystemEntry): Promise<number> {
+  if (entry.kind === "folder") {
+    return measureFolderSizeInner(fileSystem, entry.path);
   }
 
-  if (!entry.isFile()) {
-    return 0;
-  }
+  const stat = await fileSystem.stat(entry.path);
 
-  const stat = await fs.stat(entryPath);
-  return stat.size;
+  return stat?.size ?? 0;
 }

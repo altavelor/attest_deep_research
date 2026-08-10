@@ -1,5 +1,3 @@
-import { rm } from "fs/promises";
-
 import { IxplorerError } from "@core/errors";
 import {
   IndexFailedSourceSnapshot,
@@ -7,6 +5,7 @@ import {
   IndexStore,
   IndexStoreMetadata,
   IndexStoreWriteSession,
+  FileSystemPort,
   SourceSnapshotIndexStore,
 } from "@application/ports";
 import { EmbeddedChunk, RetrievedChunk, SourceReference } from "@core/model";
@@ -62,6 +61,7 @@ export type {
 } from "./FileVectorIndexFormat";
 
 export interface FileVectorIndexStoreOptions {
+  fileSystem: FileSystemPort;
   folder: string;
   profileId?: string;
   shardCount?: number;
@@ -76,6 +76,7 @@ const DEFAULT_PROFILE_ID = "default";
 export class FileVectorIndexStore
   implements IndexStore, SourceSnapshotIndexStore, FileVectorPathResolver, FileVectorStateAccess
 {
+  readonly fileSystem: FileSystemPort;
   private readonly folder: string;
   private readonly profileId: string;
   private readonly shardCount: number;
@@ -84,11 +85,13 @@ export class FileVectorIndexStore
   private state: FileVectorIndexState | null = null;
 
   constructor(options: FileVectorIndexStoreOptions) {
+    this.fileSystem = options.fileSystem;
     this.folder = options.folder;
     this.profileId = options.profileId ?? DEFAULT_PROFILE_ID;
     this.shardCount = options.shardCount ?? DEFAULT_FILE_VECTOR_SHARD_COUNT;
     this.now = options.now ?? (() => new Date());
     this.persistence = new FileVectorIndexPersistence({
+      fileSystem: this.fileSystem,
       folder: this.folder,
       now: this.now,
       createWriteId: () => createWriteId(this.now),
@@ -195,7 +198,10 @@ export class FileVectorIndexStore
   }
 
   async clear(): Promise<void> {
-    await rm(this.folder, { recursive: true, force: true });
+    if (await this.fileSystem.exists(this.folder)) {
+      await this.fileSystem.removeFolder(this.folder, { recursive: true });
+    }
+
     this.state = null;
   }
 
