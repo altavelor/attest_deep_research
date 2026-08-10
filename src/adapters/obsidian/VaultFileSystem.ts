@@ -2,6 +2,8 @@ import { DataAdapter, normalizePath } from "obsidian";
 import { FileSystemEntry, FileSystemPort, FileSystemStat } from "@application/ports";
 import { joinVaultPath, vaultBasename, vaultDirname } from "@shared";
 
+const BACKUP_SUFFIX = "ixplorer-replaced";
+
 /**
  * Vault-relative file system backed by Obsidian's `DataAdapter`. It is the only
  * storage path used by the indexing and chat stores, so the same code runs on
@@ -11,11 +13,16 @@ export class VaultFileSystem implements FileSystemPort {
   constructor(private readonly adapter: DataAdapter) {}
 
   async exists(path: string): Promise<boolean> {
-    return this.adapter.exists(this.resolve(path));
+    const target = this.resolve(path);
+    await this.recoverInterruptedRename(target);
+
+    return this.adapter.exists(target);
   }
 
   async stat(path: string): Promise<FileSystemStat | null> {
-    const stat = await this.adapter.stat(this.resolve(path));
+    const target = this.resolve(path);
+    await this.recoverInterruptedRename(target);
+    const stat = await this.adapter.stat(target);
 
     if (!stat) {
       return null;
@@ -51,7 +58,10 @@ export class VaultFileSystem implements FileSystemPort {
   }
 
   async readText(path: string): Promise<string> {
-    return this.adapter.read(this.resolve(path));
+    const target = this.resolve(path);
+    await this.recoverInterruptedRename(target);
+
+    return this.adapter.read(target);
   }
 
   async *readTextLines(path: string): AsyncIterable<string> {
@@ -75,7 +85,10 @@ export class VaultFileSystem implements FileSystemPort {
   }
 
   async readBinary(path: string): Promise<Uint8Array> {
-    return new Uint8Array(await this.adapter.readBinary(this.resolve(path)));
+    const target = this.resolve(path);
+    await this.recoverInterruptedRename(target);
+
+    return new Uint8Array(await this.adapter.readBinary(target));
   }
 
   async writeText(path: string, content: string): Promise<void> {
@@ -96,15 +109,58 @@ export class VaultFileSystem implements FileSystemPort {
     await this.adapter.append(normalized, content);
   }
 
+  /**
+   * Replaces the target file. `DataAdapter.rename` refuses an existing target
+   * and offers no atomic swap, so the previous file is kept under a backup name
+   * until the replacement is in place; an interrupted call therefore leaves the
+   * old file recoverable rather than leaving no file at all.
+   */
   async rename(fromPath: string, toPath: string): Promise<void> {
+    const source = this.resolve(fromPath);
     const target = this.resolve(toPath);
     await this.createFolder(vaultDirname(target));
 
-    if (await this.adapter.exists(target)) {
-      await this.adapter.remove(target);
+    if (!(await this.adapter.exists(target))) {
+      await this.adapter.rename(source, target);
+      return;
     }
 
-    await this.adapter.rename(this.resolve(fromPath), target);
+    const backup = `${target}.${BACKUP_SUFFIX}`;
+
+    if (await this.adapter.exists(backup)) {
+      await this.adapter.remove(backup);
+    }
+
+    await this.adapter.rename(target, backup);
+
+    try {
+      await this.adapter.rename(source, target);
+    } catch (error) {
+      await this.adapter.rename(backup, target);
+      throw error;
+    }
+
+    await this.adapter.remove(backup);
+  }
+
+  /**
+   * Restores a file left behind by a {@link rename} that was interrupted after
+   * the previous file was moved aside. Reads run this first, so a process that
+   * died mid-replace sees the old file instead of no file.
+   */
+  private async recoverInterruptedRename(target: string): Promise<void> {
+    const backup = `${target}.${BACKUP_SUFFIX}`;
+
+    if (!(await this.adapter.exists(backup))) {
+      return;
+    }
+
+    if (await this.adapter.exists(target)) {
+      await this.adapter.remove(backup);
+      return;
+    }
+
+    await this.adapter.rename(backup, target);
   }
 
   async remove(path: string): Promise<void> {

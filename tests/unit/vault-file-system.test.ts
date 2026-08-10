@@ -149,3 +149,57 @@ describe("VaultFileSystem", () => {
     await expect(fileSystem.readText("index/missing.json")).rejects.toThrow();
   });
 });
+
+describe("VaultFileSystem crash-safe replace", () => {
+  it("keeps the previous file recoverable when the replace is interrupted", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", '{"generation":1}');
+    await fileSystem.writeText("index/manifest.json.w1.tmp", '{"generation":2}');
+
+    const realRename = adapter.rename.bind(adapter);
+    let renameCalls = 0;
+    adapter.rename = async (from: string, to: string) => {
+      renameCalls += 1;
+      if (renameCalls === 2) {
+        throw new Error("process died mid-replace");
+      }
+      return realRename(from, to);
+    };
+
+    await expect(
+      fileSystem.rename("index/manifest.json.w1.tmp", "index/manifest.json"),
+    ).rejects.toThrow();
+
+    adapter.rename = realRename;
+
+    expect(await fileSystem.exists("index/manifest.json")).toBe(true);
+    expect(await fileSystem.readText("index/manifest.json")).toBe('{"generation":1}');
+  });
+
+  it("recovers the previous file when the process dies before the replacement lands", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", '{"generation":1}');
+    await adapter.rename("index/manifest.json", "index/manifest.json.ixplorer-replaced");
+
+    expect(await fileSystem.exists("index/manifest.json")).toBe(true);
+    expect(await fileSystem.readText("index/manifest.json")).toBe('{"generation":1}');
+    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+  });
+
+  it("leaves no backup behind after a successful replace", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", "old");
+    await fileSystem.writeText("index/manifest.json.tmp", "new");
+    await fileSystem.rename("index/manifest.json.tmp", "index/manifest.json");
+
+    expect(await fileSystem.readText("index/manifest.json")).toBe("new");
+    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+    expect(await adapter.exists("index/manifest.json.tmp")).toBe(false);
+  });
+});

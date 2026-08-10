@@ -368,7 +368,8 @@ const FIXED_LITERAL_LENGTHS = (() => {
 const FIXED_LITERAL_CODES = buildCanonicalCodes(FIXED_LITERAL_LENGTHS);
 
 class BitWriter {
-  private readonly bytes: number[] = [];
+  private bytes = new Uint8Array(1024);
+  private length = 0;
   private bitBuffer = 0;
   private bitCount = 0;
 
@@ -378,11 +379,22 @@ class BitWriter {
       this.bitCount += 1;
 
       if (this.bitCount === 8) {
-        this.bytes.push(this.bitBuffer);
+        this.pushByte(this.bitBuffer);
         this.bitBuffer = 0;
         this.bitCount = 0;
       }
     }
+  }
+
+  private pushByte(byte: number): void {
+    if (this.length === this.bytes.length) {
+      const grown = new Uint8Array(this.bytes.length * 2);
+      grown.set(this.bytes);
+      this.bytes = grown;
+    }
+
+    this.bytes[this.length] = byte;
+    this.length += 1;
   }
 
   writeCode(code: number, length: number): void {
@@ -393,10 +405,10 @@ class BitWriter {
 
   finish(): Uint8Array {
     if (this.bitCount > 0) {
-      this.bytes.push(this.bitBuffer);
+      this.pushByte(this.bitBuffer);
     }
 
-    return new Uint8Array(this.bytes);
+    return this.bytes.slice(0, this.length);
   }
 }
 
@@ -567,46 +579,6 @@ export function deflateZlib(data: Uint8Array): Uint8Array {
   output[tail + 1] = (checksum >>> 16) & 0xff;
   output[tail + 2] = (checksum >>> 8) & 0xff;
   output[tail + 3] = checksum & 0xff;
-
-  return output;
-}
-
-/**
- * Wraps bytes as a valid zlib stream using uncompressed stored blocks. It keeps
- * PNG encoding dependency-free on mobile; the output is larger than a real
- * compressor would produce but is accepted by every zlib decoder.
- */
-export function deflateZlibStored(data: Uint8Array): Uint8Array {
-  const maxBlock = 0xffff;
-  const blockCount = Math.max(1, Math.ceil(data.length / maxBlock));
-  const output = new Uint8Array(2 + blockCount * 5 + data.length + 4);
-  let offset = 0;
-
-  output[offset] = 0x78;
-  output[offset + 1] = 0x01;
-  offset += 2;
-
-  for (let index = 0; index < blockCount; index += 1) {
-    const start = index * maxBlock;
-    const length = Math.min(maxBlock, data.length - start);
-    const isFinal = index === blockCount - 1;
-
-    output[offset] = isFinal ? 1 : 0;
-    output[offset + 1] = length & 0xff;
-    output[offset + 2] = (length >>> 8) & 0xff;
-    output[offset + 3] = ~length & 0xff;
-    output[offset + 4] = (~length >>> 8) & 0xff;
-    offset += 5;
-
-    output.set(data.subarray(start, start + length), offset);
-    offset += length;
-  }
-
-  const checksum = adler32(data);
-  output[offset] = (checksum >>> 24) & 0xff;
-  output[offset + 1] = (checksum >>> 16) & 0xff;
-  output[offset + 2] = (checksum >>> 8) & 0xff;
-  output[offset + 3] = checksum & 0xff;
 
   return output;
 }
