@@ -203,3 +203,75 @@ describe("VaultFileSystem crash-safe replace", () => {
     expect(await adapter.exists("index/manifest.json.tmp")).toBe(false);
   });
 });
+
+describe("VaultFileSystem recovery via listing", () => {
+  it("restores an interrupted replace that is only ever reached through list", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("chats/chat-abc.json", '{"id":"chat-abc"}');
+    await adapter.rename("chats/chat-abc.json", "chats/chat-abc.json.ixplorer-replaced");
+
+    const entries = await fileSystem.list("chats");
+
+    expect(entries.map((entry) => entry.name)).toEqual(["chat-abc.json"]);
+    expect(await fileSystem.readText("chats/chat-abc.json")).toBe('{"id":"chat-abc"}');
+  });
+
+  it("never reports backup files, so they are not counted or listed", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/a.json", "1");
+    await fileSystem.writeText("index/a.json.ixplorer-replaced", "stale");
+
+    const entries = await fileSystem.list("index");
+
+    expect(entries.map((entry) => entry.name)).toEqual(["a.json"]);
+  });
+});
+
+describe("VaultFileSystem recovery is best effort", () => {
+  it("reports the original read failure when recovery itself fails", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    adapter.rename = async () => {
+      throw new Error("recovery exploded");
+    };
+    await adapter.writeBinary(
+      "index/manifest.json.ixplorer-replaced",
+      new TextEncoder().encode("old").slice().buffer as ArrayBuffer,
+    );
+
+    await expect(fileSystem.readText("index/manifest.json")).rejects.toThrow(/File not found/);
+  });
+
+  it("keeps a missing file missing rather than failing when recovery cannot run", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    adapter.exists = async () => {
+      throw new Error("adapter unavailable");
+    };
+
+    await expect(fileSystem.exists("index/manifest.json")).rejects.toThrow(/adapter unavailable/);
+  });
+
+  it("serialises concurrent replaces of the same target", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", "v0");
+    await fileSystem.writeText("index/a.tmp", "v1");
+    await fileSystem.writeText("index/b.tmp", "v2");
+
+    await Promise.all([
+      fileSystem.rename("index/a.tmp", "index/manifest.json"),
+      fileSystem.rename("index/b.tmp", "index/manifest.json"),
+    ]);
+
+    expect(["v1", "v2"]).toContain(await fileSystem.readText("index/manifest.json"));
+    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+  });
+});
