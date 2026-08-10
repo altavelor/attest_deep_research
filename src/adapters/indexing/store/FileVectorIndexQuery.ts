@@ -1,3 +1,4 @@
+import { FileSystemPort } from "@application/ports";
 import { RetrievedChunk, SourceReference } from "@core/model";
 import { chunkMatchesRetrievalOptions } from "@core/retrieval";
 import { readJsonlIndexFile } from "../inventory/fileIndexFiles";
@@ -27,6 +28,7 @@ const keywordQueryCache = new WeakMap<FileVectorIndexState, KeywordQueryCacheEnt
 
 function keywordQueryDataFor(
   state: FileVectorIndexState,
+  fileSystem: FileSystemPort,
   pathFor: (relativePath: string) => string,
 ): KeywordQueryCacheEntry["loaded"] {
   const cached = keywordQueryCache.get(state);
@@ -46,7 +48,11 @@ function keywordQueryDataFor(
       }
 
       rowsByShard.push(
-        await readJsonlIndexFile(pathFor(`keywords/${shard.id}.terms.jsonl`), isKeywordPostingRow),
+        await readJsonlIndexFile(
+          fileSystem,
+          pathFor(`keywords/${shard.id}.terms.jsonl`),
+          isKeywordPostingRow,
+        ),
       );
     }
 
@@ -67,9 +73,10 @@ export async function searchFileVectorKeywords(
     sourceKinds?: Array<SourceReference["kind"]>;
     fileExtensions?: string[];
   },
+  fileSystem: FileSystemPort,
   pathFor: (relativePath: string) => string,
 ): Promise<RetrievedChunk[]> {
-  const { lookup, chunkById } = await keywordQueryDataFor(state, pathFor);
+  const { lookup, chunkById } = await keywordQueryDataFor(state, fileSystem, pathFor);
 
   const matches = rankKeywordLookup(
     query,

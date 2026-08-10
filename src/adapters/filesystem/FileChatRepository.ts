@@ -1,7 +1,5 @@
-import { mkdir, readFile, readdir, rename, unlink, writeFile } from "fs/promises";
-import { basename, join } from "path";
-
-import { ChatRepository } from "@application/ports";
+import { ChatRepository, FileSystemPort } from "@application/ports";
+import { joinVaultPath, vaultBasename } from "@shared";
 import {
   CHAT_SCHEMA_VERSION,
   SaveChatInput,
@@ -14,6 +12,7 @@ import {
 } from "@core/chat/savedChat";
 
 export interface FileChatRepositoryOptions {
+  fileSystem: FileSystemPort;
   folder: string;
   now?: () => Date;
   createId?: () => string;
@@ -21,19 +20,23 @@ export interface FileChatRepositoryOptions {
 
 export class FileChatRepository implements ChatRepository {
   private static readonly mutationQueues = new Map<string, Promise<void>>();
+  private readonly fileSystem: FileSystemPort;
   private readonly folder: string;
   private readonly now: () => Date;
   private readonly createId: () => string;
 
   constructor(options: FileChatRepositoryOptions) {
+    this.fileSystem = options.fileSystem;
     this.folder = options.folder;
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? createChatId;
   }
 
   async listChats(): Promise<SavedChatSummary[]> {
-    await mkdir(this.folder, { recursive: true });
-    const files = await readdir(this.folder);
+    await this.fileSystem.createFolder(this.folder);
+    const files = (await this.fileSystem.list(this.folder))
+      .filter((entry) => entry.kind === "file")
+      .map((entry) => entry.name);
     const summaries: SavedChatSummary[] = [];
 
     for (const file of files) {
@@ -41,7 +44,7 @@ export class FileChatRepository implements ChatRepository {
         continue;
       }
 
-      const id = basename(file, ".json");
+      const id = vaultBasename(file, ".json");
 
       if (!isSafeChatId(id)) {
         continue;
@@ -67,7 +70,7 @@ export class FileChatRepository implements ChatRepository {
 
   async loadChat(id: string): Promise<SavedChat | null> {
     assertSafeChatId(id);
-    await mkdir(this.folder, { recursive: true });
+    await this.fileSystem.createFolder(this.folder);
     return this.readChatFile(id);
   }
 
@@ -75,7 +78,7 @@ export class FileChatRepository implements ChatRepository {
     const id = input.id ?? this.createId();
     assertSafeChatId(id);
     return this.mutateChat(id, async () => {
-      await mkdir(this.folder, { recursive: true });
+      await this.fileSystem.createFolder(this.folder);
       const now = this.now().toISOString();
       const existing = await this.readChatFile(id);
       const createdAt = input.createdAt ?? existing?.createdAt ?? now;
@@ -92,7 +95,7 @@ export class FileChatRepository implements ChatRepository {
         isFavorite: existing?.isFavorite === true,
       };
 
-      await writeJsonAtomically(this.chatPath(id), chat);
+      await this.writeJsonAtomically(this.chatPath(id), chat);
       return chat;
     });
   }
@@ -100,7 +103,7 @@ export class FileChatRepository implements ChatRepository {
   async renameChat(id: string, title: string): Promise<SavedChat | null> {
     assertSafeChatId(id);
     return this.mutateChat(id, async () => {
-      await mkdir(this.folder, { recursive: true });
+      await this.fileSystem.createFolder(this.folder);
       const existing = await this.readChatFile(id);
 
       if (!existing) {
@@ -112,7 +115,7 @@ export class FileChatRepository implements ChatRepository {
         title: normalizeTitle(title),
         updatedAt: this.now().toISOString(),
       };
-      await writeJsonAtomically(this.chatPath(id), chat);
+      await this.writeJsonAtomically(this.chatPath(id), chat);
       return chat;
     });
   }
@@ -120,7 +123,7 @@ export class FileChatRepository implements ChatRepository {
   async setChatFavorite(id: string, isFavorite: boolean): Promise<SavedChat | null> {
     assertSafeChatId(id);
     return this.mutateChat(id, async () => {
-      await mkdir(this.folder, { recursive: true });
+      await this.fileSystem.createFolder(this.folder);
       const existing = await this.readChatFile(id);
 
       if (!existing) {
@@ -128,7 +131,7 @@ export class FileChatRepository implements ChatRepository {
       }
 
       const chat: SavedChat = { ...existing, isFavorite };
-      await writeJsonAtomically(this.chatPath(id), chat);
+      await this.writeJsonAtomically(this.chatPath(id), chat);
       return chat;
     });
   }
@@ -137,28 +140,25 @@ export class FileChatRepository implements ChatRepository {
     assertSafeChatId(id);
 
     await this.mutateChat(id, async () => {
-      try {
-        await unlink(this.chatPath(id));
-      } catch (error) {
-        if (isNodeError(error) && error.code === "ENOENT") {
-          return;
-        }
+      const path = this.chatPath(id);
 
-        throw error;
+      if (await this.fileSystem.exists(path)) {
+        await this.fileSystem.remove(path);
       }
     });
   }
 
   private async readChatFile(id: string): Promise<SavedChat | null> {
+    const path = this.chatPath(id);
+
+    if (!(await this.fileSystem.exists(path))) {
+      return null;
+    }
+
     try {
-      const raw = await readFile(this.chatPath(id), "utf8");
-      const parsed = JSON.parse(raw) as unknown;
+      const parsed = JSON.parse(await this.fileSystem.readText(path)) as unknown;
       return isSavedChat(parsed) ? parsed : null;
     } catch (error) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return null;
-      }
-
       if (error instanceof SyntaxError) {
         return null;
       }
@@ -168,7 +168,13 @@ export class FileChatRepository implements ChatRepository {
   }
 
   private chatPath(id: string): string {
-    return join(this.folder, `${id}.json`);
+    return joinVaultPath(this.folder, `${id}.json`);
+  }
+
+  private async writeJsonAtomically(path: string, value: unknown): Promise<void> {
+    const tempPath = `${path}.tmp`;
+    await this.fileSystem.writeText(tempPath, `${JSON.stringify(value, null, 2)}\n`);
+    await this.fileSystem.rename(tempPath, path);
   }
 
   private async mutateChat<T>(id: string, operation: () => Promise<T>): Promise<T> {
@@ -200,14 +206,4 @@ function assertSafeChatId(id: string): void {
   if (!isSafeChatId(id)) {
     throw new Error(`Unsafe chat id: ${id}`);
   }
-}
-
-async function writeJsonAtomically(path: string, value: unknown): Promise<void> {
-  const tempPath = `${path}.tmp`;
-  await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  await rename(tempPath, path);
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
 }

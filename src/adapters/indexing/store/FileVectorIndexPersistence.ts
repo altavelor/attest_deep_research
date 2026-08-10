@@ -1,6 +1,5 @@
-import { join } from "path";
-
-import type { DocumentImageManifestScope } from "@application/ports";
+import type { DocumentImageManifestScope, FileSystemPort } from "@application/ports";
+import { joinVaultPath } from "@shared";
 
 import {
   AtomicIndexFile,
@@ -43,6 +42,7 @@ import { languageInventoryFromSources } from "../pipeline/languageDetection";
 import { FileVectorIndexState, FileVectorIndexWriteChanges } from "./FileVectorIndexState";
 
 export interface FileVectorIndexPersistenceOptions {
+  fileSystem: FileSystemPort;
   folder: string;
   now: () => Date;
   createWriteId: () => string;
@@ -72,12 +72,14 @@ interface ResolvedImageManifest {
 }
 
 export class FileVectorIndexPersistence {
+  private readonly fileSystem: FileSystemPort;
   private readonly folder: string;
   private readonly now: () => Date;
   private readonly createWriteId: () => string;
   private readonly onPerformance?: (event: FileVectorIndexPersistenceEvent) => void;
 
   constructor(options: FileVectorIndexPersistenceOptions) {
+    this.fileSystem = options.fileSystem;
     this.folder = options.folder;
     this.now = options.now;
     this.createWriteId = options.createWriteId;
@@ -85,7 +87,7 @@ export class FileVectorIndexPersistence {
   }
 
   pathFor(relativePath: string): string {
-    return join(this.folder, relativePath);
+    return joinVaultPath(this.folder, relativePath);
   }
 
   /**
@@ -115,11 +117,16 @@ export class FileVectorIndexPersistence {
 
   /** Image manifest of the last full rebuild; empty when the index predates it. */
   async readImageManifest(): Promise<ImageManifestEntry[]> {
-    return readJsonlIndexFile(this.pathFor(IMAGE_MANIFEST_FILE), isImageManifestEntry);
+    return readJsonlIndexFile(
+      this.fileSystem,
+      this.pathFor(IMAGE_MANIFEST_FILE),
+      isImageManifestEntry,
+    );
   }
 
   async readManifest(): Promise<FileVectorManifest | null> {
     return readJsonIndexFile<FileVectorManifest | null>(
+      this.fileSystem,
       this.pathFor(MANIFEST_FILE),
       isFileVectorManifestOrNull,
       null,
@@ -152,6 +159,7 @@ export class FileVectorIndexPersistence {
     for (const shard of nonEmptyShards) {
       rows.push(
         ...(await readFirstJsonlIndexRows(
+          this.fileSystem,
           this.pathFor(shard.chunkMetadataFile),
           isChunkRow,
           Math.min(rowsPerShard, limit - rows.length),
@@ -166,6 +174,7 @@ export class FileVectorIndexPersistence {
 
   async loadState(manifest: FileVectorManifest): Promise<FileVectorIndexState> {
     const sources = await readJsonlIndexFile(
+      this.fileSystem,
       this.pathFor(manifest.sourceSnapshotFile),
       isSourceSnapshot,
     );
@@ -175,8 +184,15 @@ export class FileVectorIndexPersistence {
     const keywordIndexedChunkIds = new Set<string>();
 
     for (const shard of manifest.shards) {
-      const rows = await readJsonlIndexFile(this.pathFor(shard.chunkMetadataFile), isChunkRow);
-      const vectorBytes = await readBinaryIndexFile(this.pathFor(shard.vectorFile));
+      const rows = await readJsonlIndexFile(
+        this.fileSystem,
+        this.pathFor(shard.chunkMetadataFile),
+        isChunkRow,
+      );
+      const vectorBytes = await readBinaryIndexFile(
+        this.fileSystem,
+        this.pathFor(shard.vectorFile),
+      );
 
       shardChunkCounts.set(shard.id, rows.length);
       shardVectorByteLengths.set(shard.id, vectorBytes.byteLength);
@@ -312,7 +328,7 @@ export class FileVectorIndexPersistence {
     state.manifest = manifest;
 
     const diskWriteStartedAt = Date.now();
-    await atomicWriteIndexFiles({
+    await atomicWriteIndexFiles(this.fileSystem, {
       files,
       manifest: {
         path: this.pathFor(MANIFEST_FILE),
@@ -335,7 +351,11 @@ export class FileVectorIndexPersistence {
   }
 
   private async readKeywordRows(shardId: string): Promise<KeywordPostingRow[]> {
-    return readJsonlIndexFile(this.pathFor(`keywords/${shardId}.terms.jsonl`), isKeywordPostingRow);
+    return readJsonlIndexFile(
+      this.fileSystem,
+      this.pathFor(`keywords/${shardId}.terms.jsonl`),
+      isKeywordPostingRow,
+    );
   }
 
   private async buildDirtyKeywordRows(

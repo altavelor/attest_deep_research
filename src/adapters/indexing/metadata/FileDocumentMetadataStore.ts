@@ -1,11 +1,11 @@
-import { DocumentMetadataStore, SourceDocumentMetadata } from "@application/ports";
+import { DocumentMetadataStore, FileSystemPort, SourceDocumentMetadata } from "@application/ports";
 import { JsonSidecarStore } from "./JsonSidecarStore";
 
 export class FileDocumentMetadataStore implements DocumentMetadataStore {
   private readonly store: JsonSidecarStore<SourceDocumentMetadata>;
 
-  constructor(folder: string) {
-    this.store = new JsonSidecarStore(folder, "metadata", isSourceDocumentMetadata);
+  constructor(fileSystem: FileSystemPort, folder: string) {
+    this.store = new JsonSidecarStore(fileSystem, folder, "metadata", isSourceDocumentMetadata);
   }
 
   read(sourcePath: string): Promise<SourceDocumentMetadata | null> {

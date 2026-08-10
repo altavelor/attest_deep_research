@@ -1,8 +1,10 @@
-import { createHash } from "crypto";
-import { mkdir, readdir, readFile, writeFile } from "fs/promises";
-import { join } from "path";
-
-import { DocumentClaim, DocumentClaimStore, SourceDocumentClaims } from "@application/ports";
+import {
+  DocumentClaim,
+  DocumentClaimStore,
+  FileSystemPort,
+  SourceDocumentClaims,
+} from "@application/ports";
+import { joinVaultPath, sha256Hex } from "@shared";
 
 interface ClaimsHeader {
   schemaVersion: 1;
@@ -12,11 +14,14 @@ interface ClaimsHeader {
 }
 
 export class FileDocumentClaimStore implements DocumentClaimStore {
-  constructor(private readonly folder: string) {}
+  constructor(
+    private readonly fileSystem: FileSystemPort,
+    private readonly folder: string,
+  ) {}
 
   async read(sourcePath: string): Promise<SourceDocumentClaims | null> {
     try {
-      const raw = await readFile(this.fileFor(sourcePath), "utf8");
+      const raw = await this.fileSystem.readText(this.fileFor(sourcePath));
       const parsed = parseClaimsFile(raw);
       return parsed && parsed.sourcePath === sourcePath ? parsed : null;
     } catch {
@@ -25,14 +30,16 @@ export class FileDocumentClaimStore implements DocumentClaimStore {
   }
 
   async write(claims: SourceDocumentClaims): Promise<void> {
-    await mkdir(this.dir(), { recursive: true });
-    await writeFile(this.fileFor(claims.sourcePath), serializeClaimsFile(claims), "utf8");
+    await this.fileSystem.createFolder(this.dir());
+    await this.fileSystem.writeText(this.fileFor(claims.sourcePath), serializeClaimsFile(claims));
   }
 
   async list(): Promise<SourceDocumentClaims[]> {
     let files: string[];
     try {
-      files = await readdir(this.dir());
+      files = (await this.fileSystem.list(this.dir()))
+        .filter((entry) => entry.kind === "file")
+        .map((entry) => entry.name);
     } catch {
       return [];
     }
@@ -43,7 +50,9 @@ export class FileDocumentClaimStore implements DocumentClaimStore {
         continue;
       }
       try {
-        const parsed = parseClaimsFile(await readFile(join(this.dir(), file), "utf8"));
+        const parsed = parseClaimsFile(
+          await this.fileSystem.readText(joinVaultPath(this.dir(), file)),
+        );
         if (parsed) {
           items.push(parsed);
         }
@@ -53,12 +62,12 @@ export class FileDocumentClaimStore implements DocumentClaimStore {
   }
 
   private dir(): string {
-    return join(this.folder, "claims");
+    return joinVaultPath(this.folder, "claims");
   }
 
   private fileFor(sourcePath: string): string {
-    const id = createHash("sha256").update(sourcePath).digest("hex").slice(0, 32);
-    return join(this.dir(), `${id}.jsonl`);
+    const id = sha256Hex(sourcePath).slice(0, 32);
+    return joinVaultPath(this.dir(), `${id}.jsonl`);
   }
 }
 
