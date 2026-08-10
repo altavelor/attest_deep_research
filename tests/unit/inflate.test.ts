@@ -120,6 +120,71 @@ describe("inflateZlib", () => {
   it("rejects input too short to hold a header", () => {
     expect(() => inflateZlib(new Uint8Array([0x78]))).toThrow(/too short/);
   });
+
+  it("rejects a stream whose adler32 trailer does not match the data", () => {
+    const compressed = new Uint8Array(deflateSync(Buffer.from(repetitiveBytes(5_000))));
+    compressed[compressed.length - 1] ^= 0xff;
+
+    expect(() => inflateZlib(compressed)).toThrow(/checksum/);
+  });
+
+  it("rejects a stream whose payload was tampered with under a stale checksum", () => {
+    const original = repetitiveBytes(5_000);
+    const compressed = new Uint8Array(deflateSync(Buffer.from(original), { level: 0 }));
+    const storedByte = compressed.findIndex((_, index) => index > 10);
+    compressed[storedByte] ^= 0x01;
+
+    expect(() => inflateZlib(compressed)).toThrow(/checksum/);
+  });
+
+  it("rejects a stream truncated so the checksum is missing", () => {
+    const compressed = new Uint8Array(deflateSync(Buffer.from(repetitiveBytes(1_000))));
+
+    expect(() => inflateZlib(compressed.subarray(0, compressed.length - 2))).toThrow();
+  });
+
+  it("accepts a valid stream, so the checksum check is not vacuous", () => {
+    const original = repetitiveBytes(5_000);
+
+    expect(Array.from(inflateZlib(new Uint8Array(deflateSync(Buffer.from(original)))))).toEqual(
+      Array.from(original),
+    );
+  });
+});
+
+describe("DEFLATE bit order matches the reference implementation", () => {
+  it("decodes dynamic-Huffman output from zlib, whose codes are not palindromic", () => {
+    const text = Buffer.from(
+      "the quick brown fox jumps over the lazy dog ".repeat(2000) +
+        "ZZZQQQXXX rare symbols skew the code lengths ".repeat(37),
+      "utf8",
+    );
+    const compressed = new Uint8Array(deflateRawSync(text, { level: 9 }));
+
+    expect(Buffer.from(inflateRaw(compressed)).toString("utf8")).toBe(text.toString("utf8"));
+  });
+
+  it("decodes fixed-Huffman output from zlib", () => {
+    const small = Buffer.from("abcdefghijklmnopqrstuvwxyz0123456789", "utf8");
+    const compressed = new Uint8Array(deflateRawSync(small, { level: 1 }));
+
+    expect(Buffer.from(inflateRaw(compressed)).toString("utf8")).toBe(small.toString("utf8"));
+  });
+
+  it("round-trips both directions against zlib across many payloads", () => {
+    for (let index = 0; index < 60; index += 1) {
+      const source = new Uint8Array(
+        Buffer.concat([randomCryptoBytes(index * 11), Buffer.from("ab".repeat(index * 3), "utf8")]),
+      );
+
+      expect(Array.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(source)))))).toEqual(
+        Array.from(source),
+      );
+      expect(Array.from(inflateRaw(new Uint8Array(deflateRawSync(Buffer.from(source)))))).toEqual(
+        Array.from(source),
+      );
+    }
+  });
 });
 
 describe("deflateRaw", () => {
