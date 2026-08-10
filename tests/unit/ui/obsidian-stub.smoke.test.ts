@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   App,
   DropdownComponent,
-  FileSystemAdapter,
   ItemView,
   Menu,
+  MemoryDataAdapter,
   Notice,
   Plugin,
   Setting,
@@ -342,15 +342,21 @@ describe("Vault stub", () => {
     expect(app.vault.getAbstractFileByPath("Missing.md")).toBeNull();
   });
 
-  it("has no filesystem-backed adapter until a test opts in", () => {
+  it("stores adapter writes in memory so no test reaches the real filesystem", async () => {
     const app = new App();
+    const adapter = app.vault.adapter as MemoryDataAdapter;
 
-    expect(app.vault.adapter).not.toBeInstanceOf(FileSystemAdapter);
+    expect(adapter).toBeInstanceOf(MemoryDataAdapter);
 
-    app.vault.useLocalPath("/tmp/ixplorer-test");
+    await adapter.mkdir(".ixplorer");
+    await adapter.write(".ixplorer/state.json", '{"ok":true}');
 
-    expect(app.vault.adapter).toBeInstanceOf(FileSystemAdapter);
-    expect((app.vault.adapter as FileSystemAdapter).getBasePath()).toBe("/tmp/ixplorer-test");
+    expect(await adapter.read(".ixplorer/state.json")).toBe('{"ok":true}');
+    expect(await adapter.list(".ixplorer")).toEqual({
+      files: [".ixplorer/state.json"],
+      folders: [],
+    });
+    expect(await adapter.exists("/tmp/ixplorer-test")).toBe(false);
   });
 });
 
