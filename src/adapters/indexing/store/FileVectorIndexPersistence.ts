@@ -1,5 +1,5 @@
 import type { DocumentImageManifestScope, FileSystemPort } from "@application/ports";
-import { joinVaultPath } from "@shared";
+import { resolveInsideVaultFolder } from "@shared";
 
 import {
   AtomicIndexFile,
@@ -86,8 +86,13 @@ export class FileVectorIndexPersistence {
     this.onPerformance = options.onPerformance;
   }
 
+  /**
+   * Resolves an index-relative path. Shard and keyword file names come from the
+   * stored manifest, which is untrusted on-disk data, so a name that escapes
+   * the index folder is rejected rather than silently clamped.
+   */
   pathFor(relativePath: string): string {
-    return joinVaultPath(this.folder, relativePath);
+    return resolveInsideVaultFolder(this.folder, relativePath);
   }
 
   /**

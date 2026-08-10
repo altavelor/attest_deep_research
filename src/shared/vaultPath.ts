@@ -49,13 +49,6 @@ export function vaultBasename(path: string, suffix?: string): string {
   return name;
 }
 
-export function vaultExtname(path: string): string {
-  const name = vaultBasename(path);
-  const index = name.lastIndexOf(".");
-
-  return index <= 0 ? "" : name.slice(index);
-}
-
 export function isInsideVaultFolder(folder: string, path: string): boolean {
   const normalizedFolder = joinVaultPath(folder);
   const normalizedPath = joinVaultPath(path);

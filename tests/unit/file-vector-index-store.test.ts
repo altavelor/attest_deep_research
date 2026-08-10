@@ -806,3 +806,18 @@ function sameShardPaths(): [string, string] {
 
   throw new Error("Could not find two test paths in the same shard.");
 }
+
+describe("FileVectorIndexStore manifest path containment", () => {
+  it("rejects a shard file name from the manifest that escapes the index folder", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder: "index",
+      profileId: "escape",
+    });
+
+    expect(() => store.pathFor("../../secrets.json")).toThrow(/escapes/);
+    expect(() => store.pathFor("shards/../../../outside.bin")).toThrow(/escapes/);
+    expect(store.pathFor("shards/00.chunks.jsonl")).toBe("index/shards/00.chunks.jsonl");
+  });
+});
