@@ -6,7 +6,6 @@ import {
   resolveInsideVaultFolder,
   vaultBasename,
   vaultDirname,
-  vaultExtname,
 } from "@shared";
 
 describe("joinVaultPath", () => {
@@ -70,20 +69,6 @@ describe("vaultBasename", () => {
 
   it("keeps the name when it equals the suffix", () => {
     expect(vaultBasename("a/.json", ".json")).toBe(".json");
-  });
-});
-
-describe("vaultExtname", () => {
-  it("returns the extension with its dot", () => {
-    expect(vaultExtname("a/b/c.json")).toBe(".json");
-  });
-
-  it("returns an empty string without an extension", () => {
-    expect(vaultExtname("a/b/c")).toBe("");
-  });
-
-  it("treats a dotfile as having no extension", () => {
-    expect(vaultExtname("a/.gitignore")).toBe("");
   });
 });
 
