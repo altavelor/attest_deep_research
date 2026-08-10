@@ -247,7 +247,7 @@ describe("VaultFileSystem recovery is best effort", () => {
     await expect(fileSystem.readText("index/manifest.json")).rejects.toThrow(/File not found/);
   });
 
-  it("keeps a missing file missing rather than failing when recovery cannot run", async () => {
+  it("propagates an adapter failure from exists instead of hiding it as a missing file", async () => {
     const adapter = new MemoryDataAdapter();
     const fileSystem = new VaultFileSystem(adapter as never);
 
@@ -272,6 +272,37 @@ describe("VaultFileSystem recovery is best effort", () => {
     ]);
 
     expect(["v1", "v2"]).toContain(await fileSystem.readText("index/manifest.json"));
+    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+  });
+});
+
+describe("VaultFileSystem reads never destroy a backup", () => {
+  it("keeps the backup when the original is present, so a synced pair survives listing", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", "current");
+    await fileSystem.writeText("index/manifest.json.ixplorer-replaced", "previous");
+
+    await fileSystem.list("index");
+    await fileSystem.exists("index/manifest.json");
+    await fileSystem.readText("index/manifest.json");
+
+    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(true);
+    expect(await adapter.read("index/manifest.json.ixplorer-replaced")).toBe("previous");
+  });
+
+  it("clears a stale backup on the next replace rather than on a read", async () => {
+    const adapter = new MemoryDataAdapter();
+    const fileSystem = new VaultFileSystem(adapter as never);
+
+    await fileSystem.writeText("index/manifest.json", "current");
+    await fileSystem.writeText("index/manifest.json.ixplorer-replaced", "stale");
+    await fileSystem.writeText("index/next.tmp", "next");
+
+    await fileSystem.rename("index/next.tmp", "index/manifest.json");
+
+    expect(await fileSystem.readText("index/manifest.json")).toBe("next");
     expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
   });
 });

@@ -59,7 +59,9 @@ export class VaultFileSystem implements FileSystemPort {
 
     if (backups.length > 0 && allowRecovery) {
       for (const backup of backups) {
-        await this.recoverInterruptedRename(backup.slice(0, -(BACKUP_SUFFIX.length + 1)));
+        await this.recoverInterruptedRename(
+          this.resolve(backup.slice(0, -(BACKUP_SUFFIX.length + 1))),
+        );
       }
 
       return this.list(path, false);
@@ -224,7 +226,8 @@ export class VaultFileSystem implements FileSystemPort {
    * Restores a file left behind by a {@link rename} that was interrupted after
    * the previous file was moved aside. Reads fall back to it only after missing
    * the file, so the common path costs nothing and a failure here never turns a
-   * read into an error.
+   * read into an error. It never deletes: a stale backup is cleared by the next
+   * replace, so reading can never destroy a recoverable copy.
    */
   private async recoverInterruptedRename(target: string): Promise<void> {
     const backup = `${target}.${BACKUP_SUFFIX}`;
@@ -236,7 +239,6 @@ export class VaultFileSystem implements FileSystemPort {
         }
 
         if (await this.adapter.exists(target)) {
-          await this.adapter.remove(backup);
           return;
         }
 
