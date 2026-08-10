@@ -1,8 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
 
 import { App, ItemView, WorkspaceLeaf } from "../../stubs/obsidian";
 import type { Plugin as StubPlugin } from "../../stubs/obsidian";
@@ -51,15 +48,12 @@ async function openChatLeaf(app: App): Promise<WorkspaceLeaf> {
 }
 
 describe("Ixplorer plugin lifecycle", () => {
-  let vaultPath: string;
   let app: App;
   let plugin: IxplorerPlugin;
 
   beforeEach(async () => {
     createContainer();
-    vaultPath = await mkdtemp(join(tmpdir(), "ixplorer-plugin-"));
     app = new App();
-    app.vault.useLocalPath(vaultPath);
     plugin = createPlugin(app);
     await plugin.onload();
   });
@@ -68,7 +62,6 @@ describe("Ixplorer plugin lifecycle", () => {
     plugin.unload();
     restoreDomTimers();
     resetDom();
-    await rm(vaultPath, { recursive: true, force: true });
   });
 
   it("redisplays only the open chat leaves", async () => {
@@ -205,15 +198,12 @@ describe("Ixplorer plugin lifecycle", () => {
 });
 
 describe("Ixplorer vault warm-up caches", () => {
-  let vaultPath: string;
   let app: App;
   let plugin: IxplorerPlugin;
 
   beforeEach(async () => {
     createContainer();
-    vaultPath = await mkdtemp(join(tmpdir(), "ixplorer-warm-"));
     app = new App();
-    app.vault.useLocalPath(vaultPath);
     plugin = createPlugin(app);
     await plugin.onload();
   });
@@ -221,7 +211,6 @@ describe("Ixplorer vault warm-up caches", () => {
   afterEach(async () => {
     restoreDomTimers();
     resetDom();
-    await rm(vaultPath, { recursive: true, force: true });
   });
 
   it("releases its vault subscriptions when the plugin unloads", () => {

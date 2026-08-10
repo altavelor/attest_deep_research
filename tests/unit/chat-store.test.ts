@@ -1,10 +1,7 @@
-import { existsSync, mkdtempSync, rmSync } from "fs";
-import { readFile, writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { inferChatTitle } from "@core/chat/savedChat";
+
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 const CHAT_SETTINGS = {
   chatModelProfileId: "chat-model",
@@ -14,18 +11,15 @@ const CHAT_SETTINGS = {
 };
 
 describe("FileChatStore", () => {
-  let folder: string;
+  const folder = ".ixplorer/chats";
+  let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), "ixplorer-chats-"));
-  });
-
-  afterEach(() => {
-    rmSync(folder, { recursive: true, force: true });
+    fileSystem = new MemoryFileSystem();
   });
 
   it("persists the none search mode", async () => {
-    const store = new FileChatStore({ folder, createId: () => "chat-none" });
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "chat-none" });
 
     await store.saveChat({
       messages: [],
@@ -45,6 +39,7 @@ describe("FileChatStore", () => {
   it("saves a chat and lists summaries by most recent update", async () => {
     let now = new Date("2026-06-10T10:00:00.000Z");
     const store = new FileChatStore({
+      fileSystem,
       folder,
       now: () => now,
       createId: () => "chat-fixed",
@@ -110,6 +105,7 @@ describe("FileChatStore", () => {
   it("updates an existing chat while preserving createdAt", async () => {
     let now = new Date("2026-06-10T10:00:00.000Z");
     const store = new FileChatStore({
+      fileSystem,
       folder,
       now: () => now,
       createId: () => "chat-fixed",
@@ -141,7 +137,7 @@ describe("FileChatStore", () => {
   });
 
   it("persists favorite state without changing the saved chat history", async () => {
-    const store = new FileChatStore({ folder, createId: () => "favorite-chat" });
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "favorite-chat" });
     await store.saveChat({
       messages: [{ role: "user", content: "Keep this history", createdAt: "2026-06-10T10:00:00Z" }],
       lastAnswer: null,
@@ -168,8 +164,8 @@ describe("FileChatStore", () => {
   });
 
   it("serializes favorite updates with concurrent saves from another repository instance", async () => {
-    const firstStore = new FileChatStore({ folder, createId: () => "shared-chat" });
-    const secondStore = new FileChatStore({ folder });
+    const firstStore = new FileChatStore({ fileSystem, folder, createId: () => "shared-chat" });
+    const secondStore = new FileChatStore({ fileSystem, folder });
     await firstStore.saveChat({
       messages: [{ role: "user", content: "Original message", createdAt: "2026-06-10T10:00:00Z" }],
       lastAnswer: null,
@@ -201,7 +197,7 @@ describe("FileChatStore", () => {
   });
 
   it("persists segmented reasoning separately from the assistant answer", async () => {
-    const store = new FileChatStore({ folder, createId: () => "reasoning" });
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "reasoning" });
 
     await store.saveChat({
       messages: [
@@ -233,6 +229,7 @@ describe("FileChatStore", () => {
 
   it("writes JSON atomically without leaving temporary files", async () => {
     const store = new FileChatStore({
+      fileSystem,
       folder,
       now: () => new Date("2026-06-10T10:00:00.000Z"),
       createId: () => "atomic",
@@ -245,13 +242,14 @@ describe("FileChatStore", () => {
       chatSettings: CHAT_SETTINGS,
     });
 
-    expect(existsSync(join(folder, "atomic.json.tmp"))).toBe(false);
-    const raw = await readFile(join(folder, "atomic.json"), "utf8");
+    await expect(fileSystem.exists(`${folder}/atomic.json.tmp`)).resolves.toBe(false);
+    const raw = await fileSystem.readText(`${folder}/atomic.json`);
     expect(JSON.parse(raw)).toMatchObject({ id: "atomic", schemaVersion: 2 });
   });
 
   it("saves compact summary markers while counting only visible messages", async () => {
     const store = new FileChatStore({
+      fileSystem,
       folder,
       now: () => new Date("2026-06-10T10:00:00.000Z"),
       createId: () => "compacted",
@@ -294,9 +292,9 @@ describe("FileChatStore", () => {
   });
 
   it("ignores chats without saved chat settings", async () => {
-    const store = new FileChatStore({ folder });
-    await writeFile(
-      join(folder, "missing-settings.json"),
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/missing-settings.json`,
       JSON.stringify({
         schemaVersion: 2,
         id: "missing-settings",
@@ -309,16 +307,15 @@ describe("FileChatStore", () => {
         lastAnswer: null,
         attachedContextPaths: [],
       }),
-      "utf8",
     );
 
     await expect(store.loadChat("missing-settings")).resolves.toBeNull();
   });
 
   it("treats legacy saved chats without favorite state as not favorited", async () => {
-    const store = new FileChatStore({ folder });
-    await writeFile(
-      join(folder, "legacy.json"),
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/legacy.json`,
       JSON.stringify({
         schemaVersion: 2,
         id: "legacy",
@@ -330,7 +327,6 @@ describe("FileChatStore", () => {
         attachedContextPaths: [],
         chatSettings: CHAT_SETTINGS,
       }),
-      "utf8",
     );
 
     expect(await store.loadChat("legacy")).toMatchObject({ id: "legacy" });
@@ -340,7 +336,7 @@ describe("FileChatStore", () => {
   });
 
   it("rejects unsafe chat ids", async () => {
-    const store = new FileChatStore({ folder });
+    const store = new FileChatStore({ fileSystem, folder });
 
     await expect(store.loadChat("../settings")).rejects.toThrow("Unsafe chat id");
     await expect(
@@ -355,14 +351,13 @@ describe("FileChatStore", () => {
   });
 
   it("skips malformed files and makes delete plus missing mutations idempotent", async () => {
-    const store = new FileChatStore({ folder });
-    await writeFile(join(folder, "broken.json"), "{not json", "utf8");
-    await writeFile(
-      join(folder, "not-a-chat.json"),
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(`${folder}/broken.json`, "{not json");
+    await fileSystem.writeText(
+      `${folder}/not-a-chat.json`,
       JSON.stringify({ title: "wrong shape" }),
-      "utf8",
     );
-    await writeFile(join(folder, "notes.txt"), "not a chat", "utf8");
+    await fileSystem.writeText(`${folder}/notes.txt`, "not a chat");
 
     await expect(store.listChats()).resolves.toEqual([]);
     await expect(store.renameChat("missing", "Renamed")).resolves.toBeNull();
