@@ -61,4 +61,30 @@ describe("extractFb2ImageRefs", () => {
 
     expect(extractFb2ImageRefs(source, false)).toEqual([]);
   });
+
+  it("keeps extracting later images after one binary fails to decode", () => {
+    const encoded = Buffer.from(PNG_HEADER).toString("base64");
+    const source = [
+      `<binary id="broken" content-type="image/png">${"A".repeat(4001)}</binary>`,
+      `<binary id="good" content-type="image/png">${encoded}</binary>`,
+    ].join("\n");
+
+    expect(extractFb2ImageRefs(source, false)).toEqual([
+      { locator: "binary:good", format: "png", data: PNG_HEADER },
+    ]);
+  });
+
+  it("keeps extracting when a binary carries characters outside the base64 alphabet", () => {
+    const encoded = Buffer.from(PNG_HEADER).toString("base64");
+    const source = [
+      `<binary id="first" content-type="image/png">${encoded}</binary>`,
+      `<binary id="junk" content-type="image/png">!!!!****</binary>`,
+      `<binary id="last" content-type="image/png">${encoded}</binary>`,
+    ].join("\n");
+
+    expect(extractFb2ImageRefs(source, false).map((ref) => ref.locator)).toEqual([
+      "binary:first",
+      "binary:last",
+    ]);
+  });
 });
