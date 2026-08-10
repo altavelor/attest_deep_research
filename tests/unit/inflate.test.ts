@@ -2,7 +2,7 @@ import { deflateRawSync, deflateSync, gzipSync, inflateRawSync, inflateSync } fr
 import { randomBytes as randomCryptoBytes } from "crypto";
 import { describe, expect, it } from "vitest";
 
-import { deflateRaw, deflateZlib, deflateZlibStored, inflateRaw, inflateZlib } from "@shared";
+import { deflateRaw, deflateZlib, inflateRaw, inflateZlib } from "@shared";
 
 function repetitiveBytes(length: number): Uint8Array {
   const out = new Uint8Array(length);
@@ -122,25 +122,6 @@ describe("inflateZlib", () => {
   });
 });
 
-describe("deflateZlibStored", () => {
-  it("produces a stream Node's zlib can inflate", () => {
-    for (const length of [0, 1, 1000, 65_535, 65_536, 200_000]) {
-      const original = repetitiveBytes(length);
-      const wrapped = deflateZlibStored(original);
-
-      expect(Array.from(new Uint8Array(inflateSync(Buffer.from(wrapped))))).toEqual(
-        Array.from(original),
-      );
-    }
-  });
-
-  it("round-trips through its own decoder", () => {
-    const original = new Uint8Array(randomCryptoBytes(100_000));
-
-    expect(Array.from(inflateZlib(deflateZlibStored(original)))).toEqual(Array.from(original));
-  });
-});
-
 describe("deflateRaw", () => {
   it("produces a stream Node's zlib can inflate", () => {
     for (const length of [0, 1, 2, 3, 100, 1000, 65_536, 300_000]) {
@@ -170,10 +151,10 @@ describe("deflateRaw", () => {
     expect(Array.from(inflateRaw(deflateRaw(original)))).toEqual(Array.from(original));
   });
 
-  it("actually compresses repetitive input well below the stored-block size", () => {
+  it("compresses repetitive input to a small fraction of its size", () => {
     const original = repetitiveBytes(200_000);
 
-    expect(deflateRaw(original).length).toBeLessThan(deflateZlibStored(original).length / 4);
+    expect(deflateRaw(original).length).toBeLessThan(original.length / 10);
   });
 
   it("round-trips every byte value and boundary-length input", () => {

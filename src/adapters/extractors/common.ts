@@ -147,6 +147,7 @@ export class ZipArchive {
 
       const method = readUint16LE(buffer, offset + 10);
       const compressedSize = readUint32LE(buffer, offset + 20);
+      const uncompressedSize = readUint32LE(buffer, offset + 24);
       const fileNameLength = readUint16LE(buffer, offset + 28);
       const extraLength = readUint16LE(buffer, offset + 30);
       const commentLength = readUint16LE(buffer, offset + 32);
@@ -155,7 +156,7 @@ export class ZipArchive {
       const compressedData = readLocalFileData(buffer, localHeaderOffset, compressedSize);
 
       if (!fileName.endsWith("/")) {
-        entries.set(fileName, inflateZipEntry(compressedData, method));
+        entries.set(fileName, inflateZipEntry(compressedData, method, uncompressedSize));
       }
 
       offset += 46 + fileNameLength + extraLength + commentLength;
@@ -179,6 +180,8 @@ export class ZipArchive {
   }
 }
 
+const MAX_ZIP_ENTRY_BYTES = 128 * 1024 * 1024;
+
 function findEndOfCentralDirectory(buffer: Uint8Array): number {
   for (let offset = buffer.length - 22; offset >= 0; offset -= 1) {
     if (readUint32LE(buffer, offset) === 0x06054b50) {
@@ -201,13 +204,20 @@ function readLocalFileData(buffer: Uint8Array, offset: number, compressedSize: n
   return buffer.subarray(dataOffset, dataOffset + compressedSize);
 }
 
-function inflateZipEntry(data: Uint8Array, method: number): Uint8Array {
+/**
+ * Inflates one archive entry, bounded by the size its central directory
+ * declares. Archives are untrusted input, so an entry that expands past its own
+ * header, or past the hard ceiling, is rejected instead of exhausting memory.
+ */
+function inflateZipEntry(data: Uint8Array, method: number, uncompressedSize: number): Uint8Array {
   if (method === 0) {
     return data;
   }
 
   if (method === 8) {
-    return inflateRaw(data);
+    const declared = uncompressedSize > 0 ? uncompressedSize : MAX_ZIP_ENTRY_BYTES;
+
+    return inflateRaw(data, { maxOutputLength: Math.min(declared, MAX_ZIP_ENTRY_BYTES) });
   }
 
   throw new Error(`Unsupported ZIP compression method: ${method}`);
