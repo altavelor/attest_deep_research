@@ -68,6 +68,10 @@ class BitReader {
     this.bitCount = 0;
   }
 
+  bytesConsumed(): number {
+    return this.position;
+  }
+
   readAlignedBytes(count: number): Uint8Array {
     if (this.position + count > this.data.length) {
       throw new CorruptCompressedDataError("Stored block runs past the end of the stream.");
@@ -267,6 +271,13 @@ function readDynamicTables(reader: BitReader): [HuffmanTable, HuffmanTable] {
  * Malformed input always throws rather than returning partial output.
  */
 export function inflateRaw(data: Uint8Array, options: InflateOptions = {}): Uint8Array {
+  return inflateRawCore(data, options).output;
+}
+
+function inflateRawCore(
+  data: Uint8Array,
+  options: InflateOptions,
+): { output: Uint8Array; consumed: number } {
   const limit = options.maxOutputLength ?? 1 << 30;
   const reader = new BitReader(data);
   const output = new OutputBuffer(limit);
@@ -327,7 +338,7 @@ export function inflateRaw(data: Uint8Array, options: InflateOptions = {}): Uint
     }
   }
 
-  return output.toUint8Array();
+  return { output: output.toUint8Array(), consumed: reader.bytesConsumed() };
 }
 
 /**
@@ -352,7 +363,25 @@ export function inflateZlib(data: Uint8Array, options: InflateOptions = {}): Uin
     throw new CorruptCompressedDataError("Preset dictionaries are not supported.");
   }
 
-  return inflateRaw(data.subarray(2), options);
+  const { output, consumed } = inflateRawCore(data.subarray(2), options);
+  const trailer = 2 + consumed;
+
+  if (trailer + 4 > data.length) {
+    throw new CorruptCompressedDataError("Zlib stream is missing its checksum.");
+  }
+
+  const expected =
+    ((data[trailer] << 24) |
+      (data[trailer + 1] << 16) |
+      (data[trailer + 2] << 8) |
+      data[trailer + 3]) >>>
+    0;
+
+  if (expected !== adler32(output)) {
+    throw new CorruptCompressedDataError("Zlib checksum does not match the decompressed data.");
+  }
+
+  return output;
 }
 
 const FIXED_LITERAL_LENGTHS = (() => {
