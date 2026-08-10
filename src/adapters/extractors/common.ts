@@ -135,6 +135,7 @@ export class ZipArchive {
   static read(data: ArrayBuffer | string): ZipArchive {
     const buffer = readInputBuffer(data);
     const entries = new Map<string, Uint8Array>();
+    let remainingBudget = MAX_ZIP_TOTAL_BYTES;
     const eocdOffset = findEndOfCentralDirectory(buffer);
     const centralDirectoryOffset = readUint32LE(buffer, eocdOffset + 16);
     const totalEntries = readUint16LE(buffer, eocdOffset + 10);
@@ -156,7 +157,9 @@ export class ZipArchive {
       const compressedData = readLocalFileData(buffer, localHeaderOffset, compressedSize);
 
       if (!fileName.endsWith("/")) {
-        entries.set(fileName, inflateZipEntry(compressedData, method, uncompressedSize));
+        const inflated = inflateZipEntry(compressedData, method, uncompressedSize, remainingBudget);
+        remainingBudget -= inflated.length;
+        entries.set(fileName, inflated);
       }
 
       offset += 46 + fileNameLength + extraLength + commentLength;
@@ -181,6 +184,7 @@ export class ZipArchive {
 }
 
 const MAX_ZIP_ENTRY_BYTES = 128 * 1024 * 1024;
+const MAX_ZIP_TOTAL_BYTES = 512 * 1024 * 1024;
 
 function findEndOfCentralDirectory(buffer: Uint8Array): number {
   for (let offset = buffer.length - 22; offset >= 0; offset -= 1) {
@@ -209,15 +213,29 @@ function readLocalFileData(buffer: Uint8Array, offset: number, compressedSize: n
  * declares. Archives are untrusted input, so an entry that expands past its own
  * header, or past the hard ceiling, is rejected instead of exhausting memory.
  */
-function inflateZipEntry(data: Uint8Array, method: number, uncompressedSize: number): Uint8Array {
+function inflateZipEntry(
+  data: Uint8Array,
+  method: number,
+  uncompressedSize: number,
+  remainingBudget: number,
+): Uint8Array {
+  if (remainingBudget <= 0) {
+    throw new Error("ZIP archive expands beyond the allowed total size.");
+  }
+
   if (method === 0) {
+    if (data.length > remainingBudget) {
+      throw new Error("ZIP archive expands beyond the allowed total size.");
+    }
+
     return data;
   }
 
   if (method === 8) {
     const declared = uncompressedSize > 0 ? uncompressedSize : MAX_ZIP_ENTRY_BYTES;
+    const limit = Math.min(declared, MAX_ZIP_ENTRY_BYTES, remainingBudget);
 
-    return inflateRaw(data, { maxOutputLength: Math.min(declared, MAX_ZIP_ENTRY_BYTES) });
+    return inflateRaw(data, { maxOutputLength: limit });
   }
 
   throw new Error(`Unsupported ZIP compression method: ${method}`);

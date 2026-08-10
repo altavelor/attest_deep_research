@@ -10,10 +10,17 @@ const BACKUP_SUFFIX = "ixplorer-replaced";
  * desktop and on mobile where Node built-ins are unavailable.
  */
 export class VaultFileSystem implements FileSystemPort {
+  private readonly replaceLocks = new Map<string, Promise<void>>();
+
   constructor(private readonly adapter: DataAdapter) {}
 
   async exists(path: string): Promise<boolean> {
     const target = this.resolve(path);
+
+    if (await this.adapter.exists(target)) {
+      return true;
+    }
+
     await this.recoverInterruptedRename(target);
 
     return this.adapter.exists(target);
@@ -21,8 +28,12 @@ export class VaultFileSystem implements FileSystemPort {
 
   async stat(path: string): Promise<FileSystemStat | null> {
     const target = this.resolve(path);
-    await this.recoverInterruptedRename(target);
-    const stat = await this.adapter.stat(target);
+    let stat = await this.adapter.stat(target);
+
+    if (!stat) {
+      await this.recoverInterruptedRename(target);
+      stat = await this.adapter.stat(target);
+    }
 
     if (!stat) {
       return null;
@@ -35,13 +46,29 @@ export class VaultFileSystem implements FileSystemPort {
     };
   }
 
-  async list(path: string): Promise<FileSystemEntry[]> {
+  /**
+   * Lists a folder, first restoring any file left behind by an interrupted
+   * replace. Backups are never reported: callers such as the chat list and the
+   * index size report would otherwise miss a recoverable file or count it twice.
+   */
+  async list(path: string, allowRecovery = true): Promise<FileSystemEntry[]> {
     const listed = await this.adapter.list(this.resolve(path));
     const files = listed.files ?? [];
     const folders = listed.folders ?? [];
+    const backups = files.filter((entry) => entry.endsWith(`.${BACKUP_SUFFIX}`));
+
+    if (backups.length > 0 && allowRecovery) {
+      for (const backup of backups) {
+        await this.recoverInterruptedRename(backup.slice(0, -(BACKUP_SUFFIX.length + 1)));
+      }
+
+      return this.list(path, false);
+    }
 
     return [
-      ...files.map((entry) => this.toEntry(entry, "file")),
+      ...files
+        .filter((entry) => !entry.endsWith(`.${BACKUP_SUFFIX}`))
+        .map((entry) => this.toEntry(entry, "file")),
       ...folders.map((entry) => this.toEntry(entry, "folder")),
     ];
   }
@@ -59,9 +86,18 @@ export class VaultFileSystem implements FileSystemPort {
 
   async readText(path: string): Promise<string> {
     const target = this.resolve(path);
-    await this.recoverInterruptedRename(target);
 
-    return this.adapter.read(target);
+    try {
+      return await this.adapter.read(target);
+    } catch (error) {
+      await this.recoverInterruptedRename(target);
+
+      if (!(await this.adapter.exists(target))) {
+        throw error;
+      }
+
+      return this.adapter.read(target);
+    }
   }
 
   async *readTextLines(path: string): AsyncIterable<string> {
@@ -86,9 +122,18 @@ export class VaultFileSystem implements FileSystemPort {
 
   async readBinary(path: string): Promise<Uint8Array> {
     const target = this.resolve(path);
-    await this.recoverInterruptedRename(target);
 
-    return new Uint8Array(await this.adapter.readBinary(target));
+    try {
+      return new Uint8Array(await this.adapter.readBinary(target));
+    } catch (error) {
+      await this.recoverInterruptedRename(target);
+
+      if (!(await this.adapter.exists(target))) {
+        throw error;
+      }
+
+      return new Uint8Array(await this.adapter.readBinary(target));
+    }
   }
 
   async writeText(path: string, content: string): Promise<void> {
@@ -120,47 +165,86 @@ export class VaultFileSystem implements FileSystemPort {
     const target = this.resolve(toPath);
     await this.createFolder(vaultDirname(target));
 
-    if (!(await this.adapter.exists(target))) {
-      await this.adapter.rename(source, target);
+    await this.withTargetLock(target, async () => {
+      if (!(await this.adapter.exists(target))) {
+        await this.adapter.rename(source, target);
+        return;
+      }
+
+      const backup = `${target}.${BACKUP_SUFFIX}`;
+
+      if (await this.adapter.exists(backup)) {
+        await this.adapter.remove(backup);
+      }
+
+      await this.adapter.rename(target, backup);
+
+      try {
+        await this.adapter.rename(source, target);
+      } catch (error) {
+        await this.restoreBackup(backup, target);
+        throw error;
+      }
+
+      await this.adapter.remove(backup);
+    });
+  }
+
+  /** Puts the saved copy back, never masking the failure that triggered it. */
+  private async restoreBackup(backup: string, target: string): Promise<void> {
+    try {
+      if (!(await this.adapter.exists(target))) {
+        await this.adapter.rename(backup, target);
+      }
+    } catch {
       return;
     }
+  }
 
-    const backup = `${target}.${BACKUP_SUFFIX}`;
-
-    if (await this.adapter.exists(backup)) {
-      await this.adapter.remove(backup);
-    }
-
-    await this.adapter.rename(target, backup);
+  /** Serialises replaces of one path so concurrent writers cannot interleave. */
+  private async withTargetLock(target: string, operation: () => Promise<void>): Promise<void> {
+    const previous = this.replaceLocks.get(target) ?? Promise.resolve();
+    const result = previous.catch(() => undefined).then(operation);
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.replaceLocks.set(target, settled);
 
     try {
-      await this.adapter.rename(source, target);
-    } catch (error) {
-      await this.adapter.rename(backup, target);
-      throw error;
+      await result;
+    } finally {
+      if (this.replaceLocks.get(target) === settled) {
+        this.replaceLocks.delete(target);
+      }
     }
-
-    await this.adapter.remove(backup);
   }
 
   /**
    * Restores a file left behind by a {@link rename} that was interrupted after
-   * the previous file was moved aside. Reads run this first, so a process that
-   * died mid-replace sees the old file instead of no file.
+   * the previous file was moved aside. Reads fall back to it only after missing
+   * the file, so the common path costs nothing and a failure here never turns a
+   * read into an error.
    */
   private async recoverInterruptedRename(target: string): Promise<void> {
     const backup = `${target}.${BACKUP_SUFFIX}`;
 
-    if (!(await this.adapter.exists(backup))) {
-      return;
-    }
+    await this.withTargetLock(target, async () => {
+      try {
+        if (!(await this.adapter.exists(backup))) {
+          return;
+        }
 
-    if (await this.adapter.exists(target)) {
-      await this.adapter.remove(backup);
-      return;
-    }
+        if (await this.adapter.exists(target)) {
+          await this.adapter.remove(backup);
+          return;
+        }
 
-    await this.adapter.rename(backup, target);
+        await this.adapter.rename(backup, target);
+      } catch {
+        return;
+      }
+    });
   }
 
   async remove(path: string): Promise<void> {
