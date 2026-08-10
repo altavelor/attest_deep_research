@@ -1,4 +1,5 @@
 import { hasDecodableDimensions, IMAGE_EXTRACTION_LIMITS } from "@core/media";
+import { decodeLatin1, indexOfAscii } from "../bytes";
 import { readInputBuffer } from "../common";
 import { pdfRasterToPng, type PdfRasterSpec } from "./pdfRasterPng";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
@@ -30,7 +31,7 @@ interface PdfObject {
 }
 
 /** Pure scan over PDF bytes; exported for tests and the index manifest. */
-export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): DocumentImageRef[] {
+export function extractPdfImageRefs(buffer: Uint8Array, metadataOnly: boolean): DocumentImageRef[] {
   const objects = indexObjects(buffer);
   const pageByObject = mapObjectsToPages(buffer, objects);
   const refs: DocumentImageRef[] = [];
@@ -39,8 +40,8 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
 
   for (const object of objects) {
     if (refs.length >= IMAGE_EXTRACTION_LIMITS.candidatesPerSource) break;
-    const header = buffer.toString(
-      "latin1",
+    const header = decodeLatin1(
+      buffer,
       object.headerEnd,
       Math.min(object.headerEnd + 2000, object.end),
     );
@@ -72,7 +73,7 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
       data = png;
     } else if (
       (width === undefined || height === undefined) &&
-      !hasDecodableDimensions(new Uint8Array(stream), "jpeg")
+      !hasDecodableDimensions(stream, "jpeg")
     ) {
       continue;
     }
@@ -89,14 +90,14 @@ export function extractPdfImageRefs(buffer: Buffer, metadataOnly: boolean): Docu
       format: encoding === "flate" ? "png" : "jpeg",
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
-      ...(metadataOnly ? {} : { data: new Uint8Array(data) }),
+      ...(metadataOnly ? {} : { data }),
     });
   }
   return refs;
 }
 
-function indexObjects(buffer: Buffer): PdfObject[] {
-  const source = buffer.toString("latin1");
+function indexObjects(buffer: Uint8Array): PdfObject[] {
+  const source = decodeLatin1(buffer);
   const objects: PdfObject[] = [];
   OBJECT_HEADER.lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -120,13 +121,13 @@ function indexObjects(buffer: Buffer): PdfObject[] {
 }
 
 /** Associates image XObjects with the 1-based page that references them. */
-function mapObjectsToPages(buffer: Buffer, objects: PdfObject[]): Map<number, number> {
+function mapObjectsToPages(buffer: Uint8Array, objects: PdfObject[]): Map<number, number> {
   const pageByObject = new Map<number, number>();
   let pageNumber = 0;
 
   for (const object of objects) {
-    const header = buffer.toString(
-      "latin1",
+    const header = decodeLatin1(
+      buffer,
       object.headerEnd,
       Math.min(object.headerEnd + 4000, object.end),
     );
@@ -143,16 +144,16 @@ function mapObjectsToPages(buffer: Buffer, objects: PdfObject[]): Map<number, nu
   return pageByObject;
 }
 
-function readStream(buffer: Buffer, object: PdfObject): Buffer | undefined {
+function readStream(buffer: Uint8Array, object: PdfObject): Uint8Array | undefined {
   const region = buffer.subarray(object.headerEnd, object.end);
-  const start = region.indexOf("stream", 0, "latin1");
+  const start = indexOfAscii(region, "stream");
   if (start === -1) return undefined;
   let dataStart = start + "stream".length;
   if (region[dataStart] === 0x0d) dataStart += 1;
   if (region[dataStart] === 0x0a) dataStart += 1;
-  const end = region.indexOf("endstream", dataStart, "latin1");
+  const end = indexOfAscii(region, "endstream", dataStart);
   if (end === -1 || end <= dataStart) return undefined;
-  return Buffer.from(region.subarray(dataStart, end));
+  return region.slice(dataStart, end);
 }
 
 function dictNumber(header: string, key: string): number | undefined {
