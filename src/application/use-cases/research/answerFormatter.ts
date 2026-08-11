@@ -3,6 +3,7 @@ import { linkifyUrlCitations } from "./urlCitations";
 import { AnswerWebReference, ResearchAnswer } from "@core/answer";
 import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
 import { Citation } from "@core/model";
+import { normalizeCitationDensity, replaceCitationTokens } from "@core/research";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   const citations = dedupeCitationsBySource(answer.citations);
@@ -37,6 +38,13 @@ function renderAnswerBody(
   dedupedCitations: Citation[],
   webReferences: readonly AnswerWebReference[],
 ): string {
+  const normalizedAnswer = normalizeCitationDensity(
+    answer.answer,
+    new Set([
+      ...answer.citations.map((citation) => citation.id),
+      ...webReferences.map((reference) => reference.id),
+    ]),
+  );
   const numberByKey = new Map(
     dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
   );
@@ -51,10 +59,11 @@ function renderAnswerBody(
     numberById.set(reference.id, dedupedCitations.length + index + 1);
   });
 
-  const numbered = answer.answer.replace(/\[([^\]\n]{1,200})\]/g, (whole, inner: string) => {
-    const number = numberById.get(inner.trim());
-    return number === undefined ? whole : `[${number}]`;
-  });
+  const numbered = replaceCitationTokens(
+    normalizedAnswer,
+    new Set(numberById.keys()),
+    (label) => `[${numberById.get(label)}]`,
+  );
 
   return linkifyUrlCitations(numbered);
 }

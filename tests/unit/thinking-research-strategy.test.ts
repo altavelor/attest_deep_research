@@ -180,6 +180,7 @@ describe("ThinkingResearchStrategy failure paths", () => {
     if (outcome.kind !== "failed") return;
     expect(outcome.diagnostics).toMatchObject({
       executionStrategy: "instant-fallback",
+      answer: { citations: { verificationRan: false } },
       thinking: { fallbackReason: "provider-error" },
     });
   });
@@ -249,6 +250,12 @@ describe("ThinkingResearchStrategy failure paths", () => {
         citations: [],
         contextDiagnostics: {
           thinking: { unknownCitationIds: ["missing-source"] },
+          answer: {
+            citations: {
+              verificationRan: true,
+              unknownCitationIds: ["missing-source"],
+            },
+          },
         },
       },
     });
@@ -256,7 +263,12 @@ describe("ThinkingResearchStrategy failure paths", () => {
 
   it("adds active-note evidence before the model runs and exposes a cited note in the answer", async () => {
     const modelRound = scriptedRounds(() => ({
-      items: [{ type: "text" as const, text: "The active note is relevant [active-1]." }],
+      items: [
+        {
+          type: "text" as const,
+          text: "The active note is relevant [active-1] [active-1].",
+        },
+      ],
       stopReason: "complete" as const,
     }));
     const noteTools = {
@@ -296,8 +308,21 @@ describe("ThinkingResearchStrategy failure paths", () => {
     expect(outcome).toEqual({ kind: "completed" });
     expect(events.find((event) => event.type === "complete")).toMatchObject({
       answer: {
+        answer: "The active note is relevant [active-1].",
         evidence: [{ id: "active-1" }],
         citations: [{ id: "active-1" }],
+        contextDiagnostics: {
+          answer: {
+            citations: {
+              occurrences: 2,
+              uniqueLabels: 1,
+              byLabel: { "active-1": 2 },
+              uncitedPromptSourceIds: [],
+              collapsedOccurrences: 1,
+              verificationRan: true,
+            },
+          },
+        },
       },
     });
   });

@@ -155,7 +155,7 @@ export function computeFindings(sections: ReportSections): FindingsSection {
       severity: "info",
       code: "unknown-citations",
       title: "Answer contains citation IDs not found in evidence",
-      detail: `The model cited ${answer.unknownCitationIds.length} ID(s) that do not correspond to any retrieved evidence chunk. These citations are dropped from the final answer.`,
+      detail: `The model cited ${answer.unknownCitationIds.length} ID(s) that do not correspond to any retrieved evidence chunk. They are excluded from citation metadata and may remain visible in the answer text.`,
       affectedSection: "answer",
       evidence: { ids: answer.unknownCitationIds },
     });
@@ -169,6 +169,38 @@ export function computeFindings(sections: ReportSections): FindingsSection {
       detail: `${answer.unverifiedCitations.length} citation(s) point to a real evidence chunk whose wording does not lexically overlap the surrounding claim. The citation may be misattributed — verify against the source before relying on it.`,
       affectedSection: "answer",
       evidence: { ids: answer.unverifiedCitations },
+    });
+  }
+
+  if (answer.stats && !answer.stats.citations.verificationRan) {
+    findings.push({
+      severity: "warning",
+      code: "citation-verification-not-run",
+      title: "Citation verification was not run",
+      detail:
+        "Citation checks were not performed for this answer, so no conclusion about citation validity can be drawn.",
+      affectedSection: "answer",
+      evidence: {},
+    });
+  }
+  if (answer.stats && answer.stats.citations.per100Words > 10) {
+    findings.push({
+      severity: "warning",
+      code: "citation-density-high",
+      title: "Citation density is high",
+      detail: `The answer has ${answer.stats.citations.per100Words} citations per 100 words.`,
+      affectedSection: "answer",
+      evidence: { per100Words: answer.stats.citations.per100Words },
+    });
+  }
+  if (answer.stats && answer.stats.citations.uncitedPromptSourceIds.length > 0) {
+    findings.push({
+      severity: "info",
+      code: "prompt-sources-uncited",
+      title: "Prompt sources were not cited",
+      detail: `${answer.stats.citations.uncitedPromptSourceIds.length} source(s) included in the prompt were not cited.`,
+      affectedSection: "answer",
+      evidence: { ids: answer.stats.citations.uncitedPromptSourceIds },
     });
   }
 

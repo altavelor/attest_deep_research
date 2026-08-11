@@ -224,8 +224,11 @@ export function buildAnswerSection(d: ContextDiagnostics): AnswerSection {
   return {
     projection: d.projection ?? null,
     delivery: d.delivery ?? null,
-    unknownCitationIds: d.thinking?.unknownCitationIds ?? [],
-    unverifiedCitations: d.thinking?.unverifiedCitations ?? [],
+    unknownCitationIds:
+      d.answer?.citations.unknownCitationIds ?? d.thinking?.unknownCitationIds ?? [],
+    unverifiedCitations:
+      d.answer?.citations.unverifiedCitations ?? d.thinking?.unverifiedCitations ?? [],
+    stats: d.answer ?? null,
   };
 }
 

@@ -10,6 +10,7 @@ const CLAIM_WINDOW_CHARS = 240;
 
 export interface CitationVerificationOptions {
   urlToEvidenceId: ReadonlyMap<string, string>;
+  onCitation?: (citation: { label: string; index: number }) => void;
 }
 
 /**
@@ -32,6 +33,7 @@ export function verifyCitations(
 
   for (const match of answerText.matchAll(/\[([^\]\n]{1,200})\]/g)) {
     const token = match[1].trim();
+    options.onCitation?.({ label: token, index: match.index ?? 0 });
     const evidenceId = resolveToken(token, options.urlToEvidenceId);
     if (!evidenceId) {
       continue;
