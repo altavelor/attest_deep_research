@@ -8,7 +8,7 @@ import {
 } from "@core/diagnostics";
 
 export interface DiagnosticReportV3 {
-  schemaVersion: 3;
+  schemaVersion: 4;
   question: string;
   findings: FindingsSection;
   model: ModelSection;
@@ -177,6 +177,7 @@ export interface AnswerSection {
   delivery: ContextDiagnostics["delivery"] | null;
   unknownCitationIds: string[];
   unverifiedCitations: string[];
+  stats: ContextDiagnostics["answer"] | null;
 }
 
 export interface StatsSection {
