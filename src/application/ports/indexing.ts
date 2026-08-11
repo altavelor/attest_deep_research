@@ -47,8 +47,7 @@ export interface IndexStoreWriteSession {
  * so image discovery stays consistent with the index without a rebuild.
  */
 export type DocumentImageManifestScope =
-  | { mode: "replace" }
-  | { mode: "merge"; documentPaths: readonly string[] };
+  { mode: "replace" } | { mode: "merge"; documentPaths: readonly string[] };
 
 export interface DocumentImageManifestEntry {
   documentPath: string;
