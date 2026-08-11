@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  citationOccurrencesFromText,
   citationIdsFromText,
   normalizeCitationTokens,
 } from "@application/use-cases/research/strategies/citations";
@@ -8,6 +9,15 @@ describe("citationIdsFromText", () => {
   it("extracts bracketed tokens verbatim", () => {
     const ids = citationIdsFromText("Claim [web:abc] and [doc:1] cite [web:abc].");
     expect([...ids].sort()).toEqual(["doc:1", "web:abc"]);
+  });
+});
+
+describe("citationOccurrencesFromText", () => {
+  it("returns every bracket token with its original offset", () => {
+    expect(citationOccurrencesFromText("First [source-a], then [source-a].")).toEqual([
+      { label: "source-a", index: 6 },
+      { label: "source-a", index: 23 },
+    ]);
   });
 });
 
@@ -45,11 +55,13 @@ describe("normalizeCitationTokens", () => {
   });
 
   it("collapses a link and an evidence id for the same source into one token", () => {
-    const { text } = normalizeCitationTokens(
+    const { text, collapsedOccurrences, collapsedByLabel } = normalizeCitationTokens(
       "Claim [url:https://openai.com/pricing] [web:hash-openai] holds.",
       urlToEvidenceId,
     );
     expect(text).toBe("Claim [web:hash-openai] holds.");
+    expect(collapsedOccurrences).toBe(1);
+    expect(collapsedByLabel).toEqual({ "web:hash-openai": 1 });
   });
 
   it("keeps two pages of one domain as two distinct sources", () => {

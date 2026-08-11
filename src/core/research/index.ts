@@ -1,5 +1,6 @@
 export * from "./prompts";
 export * from "./citationLabels";
+export * from "./citationDensity";
 export * from "./citationTokens";
 export * from "./attachments";
 export * from "./thinkingPrompts";
