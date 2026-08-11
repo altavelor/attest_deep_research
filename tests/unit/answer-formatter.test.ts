@@ -50,6 +50,33 @@ Use local models with citations [1].
     expect(note).toContain("3. [https://example.com/unseen](https://example.com/unseen)");
   });
 
+  it("normalizes citation density before numbering without changing markdown links", () => {
+    const repeated: ResearchAnswer = {
+      ...answer(),
+      answer:
+        "First claim [local-1]. Second claim [local-1]. Read [guide](https://example.com/guide).",
+    };
+
+    expect(formatResearchAnswerNote(repeated)).toContain(
+      "First claim [1]. Second claim. Read [guide](https://example.com/guide).",
+    );
+  });
+
+  it("does not renumber a known citation id used by a Markdown reference link", () => {
+    const withReferenceLink: ResearchAnswer = {
+      ...answer(),
+      answer: [
+        "Read [guide][local-1]. Claim [local-1][local-1].",
+        "",
+        "[local-1]: https://example.com/guide",
+      ].join("\n"),
+    };
+
+    expect(formatResearchAnswerNote(withReferenceLink)).toContain(
+      ["Read [guide][local-1]. Claim [1].", "", "[local-1]: https://example.com/guide"].join("\n"),
+    );
+  });
+
   it("creates a vault-safe note path from the question and timestamp", () => {
     expect(researchAnswerNotePath(answer())).toBe(
       "Attest/2026-05-16-how-should-i-use-local-models.md",

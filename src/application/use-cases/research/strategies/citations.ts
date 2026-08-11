@@ -28,9 +28,13 @@ export function citationsForEvidence(
 }
 
 export function citationIdsFromText(text: string): Set<string> {
-  return new Set(
-    [...text.matchAll(/\[([^\]\n]{1,200})\]/g)].map((match) => match[1].trim()).filter(Boolean),
-  );
+  return new Set(citationOccurrencesFromText(text).map((citation) => citation.label));
+}
+
+export function citationOccurrencesFromText(text: string): Array<{ label: string; index: number }> {
+  return [...text.matchAll(/\[([^\]\n]{1,200})\]/g)]
+    .map((match) => ({ label: match[1].trim(), index: match.index ?? 0 }))
+    .filter((citation) => citation.label.length > 0);
 }
 
 export interface NormalizedCitationTokens {

@@ -3,6 +3,7 @@ import { MarkdownRenderer, setIcon } from "obsidian";
 import { shouldShowAnswerNoteActions } from "@core/conversation";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
+import { normalizeCitationDensity } from "@core/research";
 import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
 import type { Translate } from "@adapters/i18n";
 import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
@@ -118,7 +119,16 @@ function renderAssistantAnswer(
  */
 function answerMarkdown(message: ChatDisplayMessage): string {
   const content = messageMarkdownContent(message);
-  return message.answer ? content : linkifyUrlCitations(content, { label: shortUrlCitationLabel });
+  if (!message.answer) {
+    return linkifyUrlCitations(content, { label: shortUrlCitationLabel });
+  }
+  return normalizeCitationDensity(
+    content,
+    new Set([
+      ...message.answer.citations.map((citation) => citation.id),
+      ...(message.answer.webReferences ?? []).map((reference) => reference.id),
+    ]),
+  );
 }
 
 /**
