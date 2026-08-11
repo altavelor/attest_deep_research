@@ -20,12 +20,12 @@ export class AdvancedSettingsSection {
 
   render(containerEl: HTMLElement): void {
     const { t } = this.options;
-    const details = containerEl.createEl("details", { cls: "ixplorer-settings-advanced" });
+    const details = containerEl.createEl("details", { cls: "attest-settings-advanced" });
     details.createEl("summary", {
-      cls: "ixplorer-settings-advanced__summary",
+      cls: "attest-settings-advanced__summary",
       text: t("common.advanced"),
     });
-    new Setting(details.createDiv({ cls: "ixplorer-settings-advanced__content" }))
+    new Setting(details.createDiv({ cls: "attest-settings-advanced__content" }))
       .setName(t("settings.advanced.debugMode.name"))
       .setDesc(t("settings.advanced.debugMode.desc"))
       .addToggle((toggle) =>

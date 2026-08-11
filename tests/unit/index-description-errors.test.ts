@@ -12,7 +12,7 @@ const wholeVaultProfile = createIndexProfile({
   id: "default",
   name: "  Whole\nvault  <index>  ",
   mode: "wholeVault",
-  indexFolder: ".ixplorer/default",
+  indexFolder: ".attest/default",
   includeFolders: [],
   excludeGlobs: [],
 });
@@ -21,7 +21,7 @@ const selectedProfile = createIndexProfile({
   id: "research",
   name: "Research library",
   mode: "selected",
-  indexFolder: ".ixplorer/research",
+  indexFolder: ".attest/research",
   includeFolders: [],
   excludeGlobs: ["Archive/**"],
 });

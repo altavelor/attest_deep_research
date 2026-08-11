@@ -93,7 +93,7 @@ function resetScrollWhenEmptied(element: HTMLElement): void {
 function openPicker(onSubmit = vi.fn()) {
   const modal = new IndexPathPickerModal(vaultApp(), { t, selectedPaths: [], onSubmit });
   modal.open();
-  const treeEl = modal.contentEl.querySelector<HTMLElement>(".ixplorer-index-path-picker");
+  const treeEl = modal.contentEl.querySelector<HTMLElement>(".attest-index-path-picker");
   if (!treeEl) throw new Error("The picker did not render its tree.");
   resetScrollWhenEmptied(treeEl);
   return { modal, treeEl, onSubmit };
@@ -135,7 +135,7 @@ describe("index path picker scroll position", () => {
     treeEl.querySelector<HTMLButtonElement>('button[aria-label="Toggle notes"]')?.click();
 
     expect(treeEl.scrollTop).toBe(90);
-    expect(treeEl.querySelectorAll(".ixplorer-index-path-picker__row").length).toBeGreaterThan(13);
+    expect(treeEl.querySelectorAll(".attest-index-path-picker__row").length).toBeGreaterThan(13);
     modal.close();
   });
 

@@ -54,10 +54,10 @@ export class ContextDocumentPickerModal extends Modal {
     const t = this.options.t;
     this.titleEl.setText(t("chat.contextPicker.title"));
     this.contentEl.empty();
-    this.contentEl.addClass("ixplorer-context-picker");
+    this.contentEl.addClass("attest-context-picker");
 
     const search = this.contentEl.createEl("input", {
-      cls: "ixplorer-context-picker__search",
+      cls: "attest-context-picker__search",
       attr: {
         type: "search",
         placeholder: t("chat.contextPicker.filter"),
@@ -69,10 +69,10 @@ export class ContextDocumentPickerModal extends Modal {
       this.renderList();
     });
 
-    this.listEl = this.contentEl.createDiv({ cls: "ixplorer-context-picker__list" });
+    this.listEl = this.contentEl.createDiv({ cls: "attest-context-picker__list" });
     this.renderList();
 
-    const actions = this.contentEl.createDiv({ cls: "ixplorer-context-picker__actions" });
+    const actions = this.contentEl.createDiv({ cls: "attest-context-picker__actions" });
     const cancel = actions.createEl("button", {
       text: t("common.cancel"),
       attr: { type: "button" },
@@ -114,12 +114,12 @@ export class ContextDocumentPickerModal extends Modal {
 
   private renderFolder(containerEl: HTMLElement, folder: TreeFolder, depth: number): void {
     for (const child of folder.folders) {
-      const row = containerEl.createDiv({ cls: "ixplorer-context-picker__row" });
+      const row = containerEl.createDiv({ cls: "attest-context-picker__row" });
       row.style.setProperty("--picker-depth", String(depth));
 
       const expanded = this.expandedFolders.has(child.path);
       const toggle = row.createEl("button", {
-        cls: "ixplorer-context-picker__toggle",
+        cls: "attest-context-picker__toggle",
         attr: {
           type: "button",
           "aria-label": expanded
@@ -138,7 +138,7 @@ export class ContextDocumentPickerModal extends Modal {
       });
 
       const label = row.createEl("label", {
-        cls: "ixplorer-context-picker__item ixplorer-context-picker__item--folder",
+        cls: "attest-context-picker__item attest-context-picker__item--folder",
       });
       const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
       const covered = this.isCoveredByFolder(child.path);
@@ -152,10 +152,10 @@ export class ContextDocumentPickerModal extends Modal {
         }
         this.renderList();
       });
-      setIcon(label.createSpan({ cls: "ixplorer-context-picker__icon" }), "folder");
+      setIcon(label.createSpan({ cls: "attest-context-picker__icon" }), "folder");
       label.createSpan({ text: child.name });
       label.createSpan({
-        cls: "ixplorer-context-picker__count",
+        cls: "attest-context-picker__count",
         text: String(child.totalFiles),
       });
 
@@ -170,11 +170,11 @@ export class ContextDocumentPickerModal extends Modal {
   }
 
   private renderFileRow(containerEl: HTMLElement, filePath: string, depth: number): void {
-    const row = containerEl.createDiv({ cls: "ixplorer-context-picker__row" });
+    const row = containerEl.createDiv({ cls: "attest-context-picker__row" });
     row.style.setProperty("--picker-depth", String(depth));
-    row.createSpan({ cls: "ixplorer-context-picker__toggle-spacer" });
+    row.createSpan({ cls: "attest-context-picker__toggle-spacer" });
 
-    const label = row.createEl("label", { cls: "ixplorer-context-picker__item" });
+    const label = row.createEl("label", { cls: "attest-context-picker__item" });
     const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
     const covered = this.isCoveredByFolder(filePath);
     checkbox.checked = covered || this.selectedPaths.has(filePath);
@@ -186,7 +186,7 @@ export class ContextDocumentPickerModal extends Modal {
         this.selectedPaths.delete(filePath);
       }
     });
-    setIcon(label.createSpan({ cls: "ixplorer-context-picker__icon" }), "file-text");
+    setIcon(label.createSpan({ cls: "attest-context-picker__icon" }), "file-text");
     label.createSpan({ text: this.query ? filePath : baseName(filePath) });
   }
 

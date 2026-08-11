@@ -6,7 +6,7 @@ import { IndexSourceReportItem } from "@adapters/indexing";
 import { EnrichmentProfileController } from "@adapters/indexing";
 import { IndexingProfileController } from "@adapters/indexing";
 import { measureFolderSize } from "@adapters/indexing";
-import { IxplorerSettingTab } from "./ui/SettingsTab";
+import { AttestSettingTab } from "./ui/SettingsTab";
 import { PluginDebugLogger } from "@adapters/settings";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
@@ -18,7 +18,7 @@ import {
   resolveEmbeddingModelProfile,
   resolveServerProfile,
 } from "@adapters/settings";
-import { IxplorerSettings } from "@adapters/settings";
+import { AttestSettings } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
 import { DEFAULT_LOCALE, resolveLocale } from "@core/i18n";
 import { createTranslator } from "@adapters/i18n";
@@ -30,7 +30,7 @@ import type { FileSystemPort } from "@application/ports";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
 import { VaultFileSystem } from "@adapters/obsidian/VaultFileSystem";
 import { VaultWarmCaches } from "./composition/VaultWarmCaches";
-import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
+import { ATTEST_CHAT_VIEW_TYPE, AttestChatView } from "./ui/chat/AttestChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import {
   CompositionContext,
@@ -53,9 +53,9 @@ import {
   resolveIndexProfileForUse,
 } from "./composition/profileResolvers";
 
-export default class IxplorerPlugin extends Plugin {
+export default class AttestPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
-  settings: IxplorerSettings = DEFAULT_SETTINGS;
+  settings: AttestSettings = DEFAULT_SETTINGS;
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
   private translator: UiTranslator = createTranslator(DEFAULT_LOCALE);
@@ -163,9 +163,9 @@ export default class IxplorerPlugin extends Plugin {
       void this.indexing.refreshIndexSize(startupIndexProfile.id);
     }
     this.registerView(
-      IXPLORER_CHAT_VIEW_TYPE,
+      ATTEST_CHAT_VIEW_TYPE,
       (leaf) =>
-        new IxplorerChatView(leaf, {
+        new AttestChatView(leaf, {
           createResearchService: (chatModelProfileId, indexProfileId) =>
             createResearchService(this.composition, chatModelProfileId, indexProfileId),
           isWebSearchEnabled: () =>
@@ -225,7 +225,7 @@ export default class IxplorerPlugin extends Plugin {
         }),
     );
     this.registerCommands();
-    this.addSettingTab(new IxplorerSettingTab(this.app, this));
+    this.addSettingTab(new AttestSettingTab(this.app, this));
   }
 
   onunload(): void {
@@ -253,7 +253,7 @@ export default class IxplorerPlugin extends Plugin {
    */
   applyUiLanguage(): void {
     this.rebindTranslator();
-    this.removeCommand("open-ixplorer-chat");
+    this.removeCommand("open-attest-chat");
     this.registerCommands();
   }
 
@@ -269,7 +269,7 @@ export default class IxplorerPlugin extends Plugin {
 
   private registerCommands(): void {
     this.addCommand({
-      id: "open-ixplorer-chat",
+      id: "open-attest-chat",
       name: this.translate("command.openChat"),
       icon: "bot-message-square",
       callback: () => {
@@ -360,12 +360,12 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   async activateChatView(): Promise<void> {
-    const existingLeaf = this.app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)[0];
+    const existingLeaf = this.app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)[0];
     const leaf =
       existingLeaf ?? this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(true);
 
     await leaf.setViewState({
-      type: IXPLORER_CHAT_VIEW_TYPE,
+      type: ATTEST_CHAT_VIEW_TYPE,
       active: true,
     });
     await this.app.workspace.revealLeaf(leaf);
@@ -391,8 +391,8 @@ export default class IxplorerPlugin extends Plugin {
   }
 
   refreshChatViews(): void {
-    for (const leaf of this.app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)) {
-      if (leaf.view instanceof IxplorerChatView) {
+    for (const leaf of this.app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)) {
+      if (leaf.view instanceof AttestChatView) {
         leaf.view.redisplay();
       }
     }
@@ -401,7 +401,7 @@ export default class IxplorerPlugin extends Plugin {
   private createChatStore(): FileChatStore {
     return new FileChatStore({
       fileSystem: this.fileSystem,
-      folder: ".ixplorer/chats",
+      folder: ".attest/chats",
     });
   }
 

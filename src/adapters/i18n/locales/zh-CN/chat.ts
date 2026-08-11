@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "打开 Ixplorer 聊天",
+  "command.openChat": "打开 Attest 聊天",
 
   "chat.tab.chat": "聊天",
   "chat.tab.indexSearch": "索引搜索",
@@ -33,9 +33,9 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.stop": "停止当前回答",
   "chat.composer.submit.unavailable": "无法提问：{message}",
 
-  "chat.status.noChatModel": "请在 Ixplorer 设置中创建并选择聊天模型配置。",
-  "chat.status.noIndex": "请在 Ixplorer 设置中创建并选择一个启用中的索引。",
-  "chat.status.webSearchDisabled": "请在 Ixplorer 设置中启用网络搜索以使用该搜索模式。",
+  "chat.status.noChatModel": "请在 Attest 设置中创建并选择聊天模型配置。",
+  "chat.status.noIndex": "请在 Attest 设置中创建并选择一个启用中的索引。",
+  "chat.status.webSearchDisabled": "请在 Attest 设置中启用网络搜索以使用该搜索模式。",
   "chat.status.legacyIndexImages": "该索引支持文本搜索，但要从文档中发现图片需要完整重建索引。",
   "chat.status.contextWindow.unknown": "模型上下文窗口大小未知",
   "chat.status.contextWindow.title": "上下文窗口：",
@@ -119,9 +119,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} 天前",
   "chat.savedChats.time.weeks": "{count} 周前",
 
-  "chat.answerNote.saved": "已将 Ixplorer 回答保存为新笔记。",
-  "chat.answerNote.openNoteFirst": "追加 Ixplorer 回答前请先打开一篇笔记。",
-  "chat.answerNote.appended": "已将 Ixplorer 回答追加到当前笔记。",
+  "chat.answerNote.saved": "已将 Attest 回答保存为新笔记。",
+  "chat.answerNote.openNoteFirst": "追加 Attest 回答前请先打开一篇笔记。",
+  "chat.answerNote.appended": "已将 Attest 回答追加到当前笔记。",
 
   "chat.research.contextTooLong": "当前聊天过长，超出所选模型的上下文窗口。",
   "chat.compact.nothingToCompact": "较早的聊天历史不足，无法压缩。",

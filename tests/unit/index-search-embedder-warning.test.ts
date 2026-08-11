@@ -8,9 +8,9 @@ import {
 } from "@apps/obsidian/composition/profileResolvers";
 import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
-import type { EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
+import type { EmbeddingModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
 
-function createSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {
+function createSettings(overrides: Partial<AttestSettings> = {}): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
@@ -117,7 +117,7 @@ describe("index-search debug panel", () => {
     });
 
     expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
-      "The selected index's embedding model profile is unavailable. Update it in Ixplorer settings.",
+      "The selected index's embedding model profile is unavailable. Update it in Attest settings.",
     );
   });
 
@@ -140,7 +140,7 @@ describe("index-search debug panel", () => {
     });
 
     expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
-      "The selected index's embedding model cannot create embeddings. Update it in Ixplorer settings.",
+      "The selected index's embedding model cannot create embeddings. Update it in Attest settings.",
     );
   });
 
@@ -159,13 +159,13 @@ describe("index-search debug panel", () => {
     });
 
     expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
-      "The selected index's embedding model profile is suspended. Update it in Ixplorer settings.",
+      "The selected index's embedding model profile is suspended. Update it in Attest settings.",
     );
   });
 
   it("warns when no index is selected or its embedding server is unavailable", () => {
     expect(indexSearchEmbedderWarning(createSettings(), translate, "missing")).toBe(
-      "Select an indexed profile in Ixplorer settings before searching.",
+      "Select an indexed profile in Attest settings before searching.",
     );
 
     const settings = createSettings({
@@ -181,7 +181,7 @@ describe("index-search debug panel", () => {
     });
 
     expect(indexSearchEmbedderWarning(settings, translate, "index")).toBe(
-      "The selected index's embedding server is unavailable. Update it in Ixplorer settings.",
+      "The selected index's embedding server is unavailable. Update it in Attest settings.",
     );
   });
 

@@ -12,7 +12,7 @@ export function createMentionAutocomplete(
   contextFilePaths: string[],
 ): MentionAutocompleteHandle {
   const autocompleteEl = containerEl.createDiv({
-    cls: "ixplorer-chat__mention-autocomplete is-hidden",
+    cls: "attest-chat__mention-autocomplete is-hidden",
     attr: { role: "listbox" },
   });
   let candidates: MentionCandidate[] = [];
@@ -49,7 +49,7 @@ export function createMentionAutocomplete(
     autocompleteEl.removeClass("is-hidden");
     candidates.forEach((candidate, index) => {
       const item = autocompleteEl.createEl("button", {
-        cls: `ixplorer-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
+        cls: `attest-chat__mention-option${index === activeIndex ? " is-active" : ""}`,
         text: candidate.label,
         attr: {
           type: "button",

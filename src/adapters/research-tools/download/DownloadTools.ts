@@ -92,7 +92,7 @@ export const DownloadDocumentTool = defineTool<DownloadDocumentDeps, DownloadInp
   {
     name: DOWNLOAD_DOCUMENT_TOOL,
     description:
-      "Download a document (primarily PDF) from a public http(s) URL and save it into the vault. Requires user confirmation. Provide `path` (vault-relative, may end in '/' for a folder) to control the destination; otherwise the file lands in the default Ixplorer folder with a name derived from the URL.",
+      "Download a document (primarily PDF) from a public http(s) URL and save it into the vault. Requires user confirmation. Provide `path` (vault-relative, may end in '/' for a folder) to control the destination; otherwise the file lands in the default Attest folder with a name derived from the URL.",
     schema: {
       url: str(MAX_URL_CHARS, {
         required: true,

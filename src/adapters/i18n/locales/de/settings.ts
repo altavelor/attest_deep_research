@@ -4,10 +4,10 @@ export const settings: EnSettingsMessages = {
   "settings.language.heading": "Sprache",
   "settings.language.name": "Oberflächensprache",
   "settings.language.desc":
-    "Sprache der Ixplorer-Oberfläche. Wird ohne Neustart von Obsidian übernommen.",
+    "Sprache der Attest-Oberfläche. Wird ohne Neustart von Obsidian übernommen.",
   "settings.language.auto": "Automatisch (Obsidian folgen)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "Schnellstart",
   "settings.tab.quickStart.steps":
     "1. Server hinzufügen → 2. Chat-Modell hinzufügen → 3. (optional) Index hinzufügen",
@@ -19,7 +19,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.retrieval.heading": "Abruf",
   "settings.retrieval.desc":
-    "Steuert, wie Ixplorer vor der Antwort lokale Belege sowie Graph-, Index-, Dokument- und Web-Belege findet.",
+    "Steuert, wie Attest vor der Antwort lokale Belege sowie Graph-, Index-, Dokument- und Web-Belege findet.",
   "settings.retrieval.graph.heading": "Obsidian-Graph",
   "settings.retrieval.useLinkedNotes.name": "Verlinkte Notizen verwenden",
   "settings.retrieval.useLinkedNotes.desc":
@@ -73,7 +73,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "Externe Quellen",
   "settings.webSources.desc":
-    "Externe, vom Nutzer ausgelöste Websuche über die aktivierten Quellen. Ixplorer sendet nur die eingegebene Frage, niemals abgerufene Vault-Inhalte.",
+    "Externe, vom Nutzer ausgelöste Websuche über die aktivierten Quellen. Attest sendet nur die eingegebene Frage, niemals abgerufene Vault-Inhalte.",
   "settings.webSources.count": "{enabled} von {total} aktiviert",
   "settings.webSources.column.source": "Quelle",
   "settings.webSources.column.actions": "Aktionen",

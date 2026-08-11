@@ -1,5 +1,5 @@
 import { reasoningVerified } from "./capabilityPresentation";
-import { ChatModelProfile, IxplorerSettings, NewChatDefaults, NewChatSearchMode } from "./types";
+import { ChatModelProfile, AttestSettings, NewChatDefaults, NewChatSearchMode } from "./types";
 
 export const NEW_CHAT_SEARCH_MODES: NewChatSearchMode[] = [
   "none",
@@ -49,7 +49,7 @@ export function readNewChatDefaults(savedSettings: unknown): NewChatDefaults {
  * the first available profile, and degrades `thinking` to `instant` when the
  * default chat model has no verified agent capability.
  */
-export function normalizeNewChatDefaults(settings: IxplorerSettings): void {
+export function normalizeNewChatDefaults(settings: AttestSettings): void {
   const defaults = { ...DEFAULT_NEW_CHAT_DEFAULTS, ...settings.newChatDefaults };
 
   defaults.searchMode = isSearchMode(defaults.searchMode) ? defaults.searchMode : "indexOnly";

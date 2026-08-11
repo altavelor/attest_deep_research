@@ -12,7 +12,7 @@ import {
 } from "@core/agent";
 import { ChatToolChoice, ChatToolDefinition } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { parseResponsesTerminalEvent, protocolError } from "./OpenAiResponsesStreamParser";
 
 export interface OpenAiResponsesClientOptions {
@@ -360,6 +360,6 @@ function mapToolOutput(output: ModelToolOutput): Record<string, unknown> {
   };
 }
 
-function unsupported(message: string): IxplorerError {
-  return new IxplorerError({ code: "UNSUPPORTED_CAPABILITY", message });
+function unsupported(message: string): AttestError {
+  return new AttestError({ code: "UNSUPPORTED_CAPABILITY", message });
 }

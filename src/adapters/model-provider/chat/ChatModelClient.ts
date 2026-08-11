@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import { Ollama } from "ollama";
 
 import { ApiFormat, ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import {
@@ -104,7 +104,7 @@ export class ChatModelClient implements ChatModelProvider {
     }
   }
 
-  private translateOpenAiError(error: unknown): IxplorerError {
+  private translateOpenAiError(error: unknown): AttestError {
     return translateOpenAiError(error, {
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
       unavailableMessage: "The chat model provider is unavailable.",
@@ -127,7 +127,7 @@ export class ChatModelClient implements ChatModelProvider {
     return listOllamaModels(this.ollama!, this.apiKey);
   }
 
-  private translateAnthropicError(error: unknown): IxplorerError {
+  private translateAnthropicError(error: unknown): AttestError {
     return translateAnthropicError(error, {
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
       unavailableMessage: "The chat model provider is unavailable.",

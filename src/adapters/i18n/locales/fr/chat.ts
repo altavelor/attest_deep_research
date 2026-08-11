@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "Ouvrir le chat Ixplorer",
+  "command.openChat": "Ouvrir le chat Attest",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Recherche dans l’index",
@@ -34,10 +34,10 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.unavailable": "Demande indisponible : {message}",
 
   "chat.status.noChatModel":
-    "Créer et sélectionner un profil de modèle de chat dans les paramètres Ixplorer.",
-  "chat.status.noIndex": "Créer et sélectionner un index actif dans les paramètres Ixplorer.",
+    "Créer et sélectionner un profil de modèle de chat dans les paramètres Attest.",
+  "chat.status.noIndex": "Créer et sélectionner un index actif dans les paramètres Attest.",
   "chat.status.webSearchDisabled":
-    "Activer la recherche web dans les paramètres Ixplorer pour utiliser ce mode de recherche.",
+    "Activer la recherche web dans les paramètres Attest pour utiliser ce mode de recherche.",
   "chat.status.legacyIndexImages":
     "La recherche textuelle fonctionne avec cet index, mais la découverte d’images dans les documents exige une reconstruction complète.",
   "chat.status.contextWindow.unknown": "Taille inconnue de la fenêtre de contexte du modèle",
@@ -127,9 +127,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} j",
   "chat.savedChats.time.weeks": "{count} sem.",
 
-  "chat.answerNote.saved": "Réponse Ixplorer enregistrée dans une nouvelle note.",
-  "chat.answerNote.openNoteFirst": "Ouvrir une note avant d’y ajouter une réponse Ixplorer.",
-  "chat.answerNote.appended": "Réponse Ixplorer ajoutée à la note active.",
+  "chat.answerNote.saved": "Réponse Attest enregistrée dans une nouvelle note.",
+  "chat.answerNote.openNoteFirst": "Ouvrir une note avant d’y ajouter une réponse Attest.",
+  "chat.answerNote.appended": "Réponse Attest ajoutée à la note active.",
 
   "chat.research.contextTooLong":
     "Le chat actuel est trop long pour la fenêtre de contexte du modèle sélectionné.",

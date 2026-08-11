@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 
 import { isRecord } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { mapOpenAiMessage } from "../providers/messageMappers";
 import { InlineReasoningParser } from "./InlineReasoningParser";
 import { parseOpenAiChatDelta, textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
@@ -12,7 +12,7 @@ import { parseTextToolCalls } from "./textToolCalls";
 interface OpenAiChatStreamOptions {
   openai: OpenAI;
   request: ChatRequest;
-  translateError(error: unknown): IxplorerError;
+  translateError(error: unknown): AttestError;
   onReasoningObserved?(observation: { protocol: "chat-completions"; dialect: string }): void;
 }
 
@@ -240,7 +240,7 @@ function mapOpenAiToolChoice(request: ChatRequest): unknown {
 
 function validateSpecificTool(request: ChatRequest, name: string): void {
   if (!request.tools?.some((tool) => tool.function.name === name)) {
-    throw new IxplorerError({
+    throw new AttestError({
       code: "UNSUPPORTED_CAPABILITY",
       message: `Specific tool is not defined: ${name}.`,
     });

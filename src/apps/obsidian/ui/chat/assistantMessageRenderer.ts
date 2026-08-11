@@ -27,17 +27,17 @@ export function renderAssistantMessageContent(
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
 ): void {
-  const progressEl = contentEl.createDiv({ cls: "ixplorer-chat__research-progress-host" });
+  const progressEl = contentEl.createDiv({ cls: "attest-chat__research-progress-host" });
   const hasWorkflow = renderWorkflowNodes(
     progressEl,
     message,
     createWorkflowRenderContext(options),
   );
-  contentEl.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
+  contentEl.toggleClass("attest-chat__message-content--workflow", hasWorkflow);
   if (message.isFallback) {
     renderFallbackBanner(contentEl, options.t, message.fallbackReason);
   }
-  const answerEl = contentEl.createDiv({ cls: "ixplorer-chat__answer-content" });
+  const answerEl = contentEl.createDiv({ cls: "attest-chat__answer-content" });
   renderAssistantAnswer(answerEl, message, options, hasWorkflow);
 }
 
@@ -46,8 +46,8 @@ export function patchAssistantMessageContent(
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
 ): boolean {
-  const progressEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__research-progress-host");
-  const answerEl = messageEl.querySelector<HTMLElement>(".ixplorer-chat__answer-content");
+  const progressEl = messageEl.querySelector<HTMLElement>(".attest-chat__research-progress-host");
+  const answerEl = messageEl.querySelector<HTMLElement>(".attest-chat__answer-content");
   if (!progressEl || !answerEl) return false;
 
   const contentEl = progressEl.parentElement;
@@ -60,8 +60,8 @@ export function patchAssistantMessageContent(
     createWorkflowRenderContext(options),
     uiState,
   );
-  contentEl?.toggleClass("ixplorer-chat__message-content--workflow", hasWorkflow);
-  messageEl.querySelector<HTMLElement>(".ixplorer-chat__fallback-notice")?.remove();
+  contentEl?.toggleClass("attest-chat__message-content--workflow", hasWorkflow);
+  messageEl.querySelector<HTMLElement>(".attest-chat__fallback-notice")?.remove();
   if (message.isFallback && answerEl.parentElement) {
     renderFallbackBanner(answerEl.parentElement, options.t, message.fallbackReason);
   }
@@ -134,19 +134,19 @@ function renderAssistantAnswerHeader(
   const hasFinalAnswerText = messageMarkdownContent(message).trim().length > 0;
   if (!hasFinalAnswerText && !shouldShowAnswerNoteActions(message)) return;
 
-  const header = answerEl.createDiv({ cls: "ixplorer-chat__answer-header" });
+  const header = answerEl.createDiv({ cls: "attest-chat__answer-header" });
   if (hasWorkflow) {
     header.createSpan({
-      cls: "ixplorer-chat__answer-status-dot",
+      cls: "attest-chat__answer-status-dot",
       attr: { "aria-hidden": "true" },
     });
   }
-  const actions = header.createDiv({ cls: "ixplorer-chat__answer-actions" });
+  const actions = header.createDiv({ cls: "attest-chat__answer-actions" });
   createMessageIconButton(
     actions,
     "copy",
     options.t("chat.message.copy"),
-    "ixplorer-chat__message-copy",
+    "attest-chat__message-copy",
     () => {
       void copyToClipboard(messageDisplayContent(message), options.t);
     },
@@ -156,14 +156,14 @@ function renderAssistantAnswerHeader(
       actions,
       "file-plus-2",
       options.t("chat.answer.saveToNewNote"),
-      "ixplorer-chat__message-save-answer",
+      "attest-chat__message-save-answer",
       () => options.onSaveAnswerToNewNote(message.answer!),
     );
     createMessageIconButton(
       actions,
       "file-input",
       options.t("chat.answer.appendToActiveNote"),
-      "ixplorer-chat__message-append-answer",
+      "attest-chat__message-append-answer",
       () => options.onAppendAnswerToActiveNote(message.answer!),
     );
   }
@@ -196,14 +196,14 @@ function renderFallbackBanner(containerEl: HTMLElement, t: Translate, reason?: s
     "tool-result-budget-exceeded": t("chat.fallback.toolResultBudgetExceeded"),
     "context-limit-exceeded": t("chat.fallback.contextLimitExceeded"),
   };
-  const bannerEl = containerEl.createDiv({ cls: "ixplorer-chat__fallback-notice" });
-  const iconEl = bannerEl.createSpan({ cls: "ixplorer-chat__fallback-notice-icon" });
+  const bannerEl = containerEl.createDiv({ cls: "attest-chat__fallback-notice" });
+  const iconEl = bannerEl.createSpan({ cls: "attest-chat__fallback-notice-icon" });
   setIcon(iconEl, "alert-triangle");
   const text = reason
     ? (reasonLabel[reason] ?? t("chat.fallback.other", { reason }))
     : t("chat.fallback.incomplete");
   bannerEl.createSpan({
-    cls: "ixplorer-chat__fallback-notice-text",
+    cls: "attest-chat__fallback-notice-text",
     text: t("chat.fallback.partial", { reason: text }),
   });
 }

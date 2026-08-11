@@ -1,12 +1,12 @@
 import Anthropic, { APIError, APIUserAbortError } from "@anthropic-ai/sdk";
 
-import { IxplorerError, IxplorerErrorCode } from "@core/errors";
+import { AttestError, AttestErrorCode } from "@core/errors";
 import { isRecord } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 
 type UnavailableCode = Extract<
-  IxplorerErrorCode,
+  AttestErrorCode,
   "MODEL_PROVIDER_UNAVAILABLE" | "EMBEDDING_UNAVAILABLE"
 >;
 
@@ -109,15 +109,15 @@ export interface AnthropicErrorTranslation {
 }
 
 /**
- * Converts SDK errors into the plugin's IxplorerError taxonomy (MODEL_NOT_FOUND
+ * Converts SDK errors into the plugin's AttestError taxonomy (MODEL_NOT_FOUND
  * on 404, the supplied unavailable code otherwise). User aborts are re-thrown
  * unchanged so the research loop can treat them as cancellations.
  */
 export function translateAnthropicError(
   error: unknown,
   translation: AnthropicErrorTranslation,
-): IxplorerError | never {
-  if (error instanceof IxplorerError) return error;
+): AttestError | never {
+  if (error instanceof AttestError) return error;
   if (
     error instanceof APIUserAbortError ||
     (error instanceof Error && error.name === "AbortError")
@@ -129,10 +129,10 @@ export function translateAnthropicError(
     const status = error.status;
     const details = providerErrorDetails(error, translation.apiKey);
     if (status === 404) {
-      return new IxplorerError({ code: "MODEL_NOT_FOUND", details: { status, ...details } });
+      return new AttestError({ code: "MODEL_NOT_FOUND", details: { status, ...details } });
     }
     if (typeof status === "number") {
-      return new IxplorerError({
+      return new AttestError({
         code: translation.unavailableCode,
         message: `Provider returned HTTP ${status}.`,
         details: { status, ...details },
@@ -140,7 +140,7 @@ export function translateAnthropicError(
     }
   }
 
-  return new IxplorerError({
+  return new AttestError({
     code: translation.unavailableCode,
     message: translation.unavailableMessage,
     cause: error,

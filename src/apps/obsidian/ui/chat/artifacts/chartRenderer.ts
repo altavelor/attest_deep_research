@@ -18,13 +18,13 @@ export function renderChartArtifact(
   chart: ChartArtifact,
   t: Translate,
 ): void {
-  const figure = containerEl.createEl("figure", { cls: "ixplorer-artifact ixplorer-chart" });
-  figure.createEl("figcaption", { cls: "ixplorer-artifact__title", text: chart.title });
+  const figure = containerEl.createEl("figure", { cls: "attest-artifact attest-chart" });
+  figure.createEl("figcaption", { cls: "attest-artifact__title", text: chart.title });
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${CHART_VIEWPORT.width} ${CHART_VIEWPORT.height}`);
   svg.setAttribute("role", "img");
-  svg.setAttribute("class", "ixplorer-chart__svg");
+  svg.setAttribute("class", "attest-chart__svg");
   svg.setAttribute("aria-label", chartAriaLabel(chart, t));
   figure.appendChild(svg);
 
@@ -37,10 +37,10 @@ export function renderChartArtifact(
   renderLegend(figure, chart);
 
   if (chart.caption) {
-    figure.createDiv({ cls: "ixplorer-artifact__caption", text: chart.caption });
+    figure.createDiv({ cls: "attest-artifact__caption", text: chart.caption });
   }
 
-  const details = figure.createEl("details", { cls: "ixplorer-chart__data" });
+  const details = figure.createEl("details", { cls: "attest-chart__data" });
   details.createEl("summary", { text: t("chat.artifact.chart.data") });
   renderDataTable(details, chart);
 }
@@ -59,7 +59,7 @@ function renderCartesian(svg: SVGSVGElement, chart: ChartArtifact): void {
 
   chart.series.forEach((series, seriesIndex) => {
     const group = element(svg, "g", {
-      class: `ixplorer-chart__series is-series-${seriesIndex % 4}`,
+      class: `attest-chart__series is-series-${seriesIndex % 4}`,
     });
     if (chart.chartType === "bar") {
       renderBars(group, series, seriesIndex, chart.series.length, scale);
@@ -67,7 +67,7 @@ function renderCartesian(svg: SVGSVGElement, chart: ChartArtifact): void {
     }
     if (chart.chartType === "line") {
       const line = element(group, "polyline", {
-        class: "ixplorer-chart__line",
+        class: "attest-chart__line",
         points: seriesPolyline(series, scale),
         fill: "none",
         "stroke-dasharray": SERIES_DASHES[seriesIndex % SERIES_DASHES.length]!,
@@ -79,7 +79,7 @@ function renderCartesian(svg: SVGSVGElement, chart: ChartArtifact): void {
 }
 
 function renderAxes(svg: SVGSVGElement, chart: ChartArtifact, scale: ChartScale): void {
-  const axes = element(svg, "g", { class: "ixplorer-chart__axes", "aria-hidden": "true" });
+  const axes = element(svg, "g", { class: "attest-chart__axes", "aria-hidden": "true" });
   element(axes, "line", {
     x1: String(scale.plot.x),
     y1: String(scale.plot.y + scale.plot.height),
@@ -95,7 +95,7 @@ function renderAxes(svg: SVGSVGElement, chart: ChartArtifact, scale: ChartScale)
 
   for (const value of [scale.minY, (scale.minY + scale.maxY) / 2, scale.maxY]) {
     const label = element(axes, "text", {
-      class: "ixplorer-chart__tick",
+      class: "attest-chart__tick",
       x: String(scale.plot.x - 8),
       y: String(scale.yFor(value) + 4),
       "text-anchor": "end",
@@ -107,7 +107,7 @@ function renderAxes(svg: SVGSVGElement, chart: ChartArtifact, scale: ChartScale)
   scale.categories.forEach((category, index) => {
     if (index % step !== 0) return;
     const label = element(axes, "text", {
-      class: "ixplorer-chart__tick",
+      class: "attest-chart__tick",
       x: String(scale.xFor(index)),
       y: String(scale.plot.y + scale.plot.height + 18),
       "text-anchor": "middle",
@@ -117,7 +117,7 @@ function renderAxes(svg: SVGSVGElement, chart: ChartArtifact, scale: ChartScale)
 
   if (chart.xLabel) {
     const label = element(axes, "text", {
-      class: "ixplorer-chart__axis-label",
+      class: "attest-chart__axis-label",
       x: String(scale.plot.x + scale.plot.width / 2),
       y: String(CHART_VIEWPORT.height - 6),
       "text-anchor": "middle",
@@ -126,7 +126,7 @@ function renderAxes(svg: SVGSVGElement, chart: ChartArtifact, scale: ChartScale)
   }
   if (chart.yLabel) {
     const label = element(axes, "text", {
-      class: "ixplorer-chart__axis-label",
+      class: "attest-chart__axis-label",
       x: String(-(scale.plot.y + scale.plot.height / 2)),
       y: "14",
       transform: "rotate(-90)",
@@ -151,7 +151,7 @@ function renderBars(
     if (centre === undefined) continue;
     const y = scale.yFor(point.y);
     element(group, "rect", {
-      class: "ixplorer-chart__bar",
+      class: "attest-chart__bar",
       x: String(centre - scale.bandWidth * 0.4 + slot * seriesIndex),
       y: String(Math.min(y, baseline)),
       width: String(Math.max(1, slot - 2)),
@@ -174,14 +174,14 @@ function renderMarkers(
     const y = scale.yFor(point.y);
     if (shape === "circle") {
       element(group, "circle", {
-        class: "ixplorer-chart__marker",
+        class: "attest-chart__marker",
         cx: String(x),
         cy: String(y),
         r: "4",
       });
     } else if (shape === "square") {
       element(group, "rect", {
-        class: "ixplorer-chart__marker",
+        class: "attest-chart__marker",
         x: String(x - 4),
         y: String(y - 4),
         width: "8",
@@ -192,7 +192,7 @@ function renderMarkers(
         shape === "triangle"
           ? `${x},${y - 5} ${x + 5},${y + 4} ${x - 5},${y + 4}`
           : `${x},${y - 5} ${x + 5},${y} ${x},${y + 5} ${x - 5},${y}`;
-      element(group, "polygon", { class: "ixplorer-chart__marker", points });
+      element(group, "polygon", { class: "attest-chart__marker", points });
     }
   }
 }
@@ -201,7 +201,7 @@ function renderPie(svg: SVGSVGElement, chart: ChartArtifact): void {
   const slices = pieSlices(chart.series[0]!);
   slices.forEach((slice, index) => {
     const path = element(svg, "path", {
-      class: `ixplorer-chart__slice is-series-${index % 4}`,
+      class: `attest-chart__slice is-series-${index % 4}`,
       d: slice.path,
     });
     const title = element(path, "title", {});
@@ -210,7 +210,7 @@ function renderPie(svg: SVGSVGElement, chart: ChartArtifact): void {
 }
 
 function renderLegend(figure: HTMLElement, chart: ChartArtifact): void {
-  const legend = figure.createEl("ul", { cls: "ixplorer-chart__legend" });
+  const legend = figure.createEl("ul", { cls: "attest-chart__legend" });
   const items =
     chart.chartType === "pie"
       ? chart.series[0]!.points.map((point) => String(point.x))
@@ -218,10 +218,10 @@ function renderLegend(figure: HTMLElement, chart: ChartArtifact): void {
 
   items.forEach((label, index) => {
     const item = legend.createEl("li", {
-      cls: `ixplorer-chart__legend-item is-series-${index % 4}`,
+      cls: `attest-chart__legend-item is-series-${index % 4}`,
     });
     item.createSpan({
-      cls: `ixplorer-chart__legend-swatch is-${chart.chartType === "pie" ? "circle" : SERIES_SHAPES[index % SERIES_SHAPES.length]}`,
+      cls: `attest-chart__legend-swatch is-${chart.chartType === "pie" ? "circle" : SERIES_SHAPES[index % SERIES_SHAPES.length]}`,
       attr: { "aria-hidden": "true" },
     });
     item.createSpan({ text: label });
@@ -239,7 +239,7 @@ function renderDataTable(containerEl: HTMLElement, chart: ChartArtifact): void {
         .split(" | ")
         .map((cell) => cell.trim().replace(/\\\|/g, "|")),
     );
-  const table = containerEl.createEl("table", { cls: "ixplorer-chart__table" });
+  const table = containerEl.createEl("table", { cls: "attest-chart__table" });
   const head = table.createEl("thead").createEl("tr");
   for (const cell of rows[0] ?? []) head.createEl("th", { text: cell });
   const body = table.createEl("tbody");

@@ -1,8 +1,8 @@
 import { ApiFormat, ChatModelProvider, ChatRequest } from "@core/agent";
 import { ChatToolDefinition, ToolCallingCapabilities } from "@core/agent";
 
-const PROBE_A = "ixplorer_probe_a";
-const PROBE_B = "ixplorer_probe_b";
+const PROBE_A = "attest_probe_a";
+const PROBE_B = "attest_probe_b";
 const PROBE_TOOLS: ChatToolDefinition[] = [PROBE_A, PROBE_B].map((name) => ({
   type: "function",
   function: {

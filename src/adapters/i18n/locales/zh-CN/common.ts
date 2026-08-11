@@ -14,13 +14,13 @@ export const common: EnCommonMessages = {
   "profile.error.serverUnavailable": "所选服务器配置不可用。",
   "profile.error.indexNotBuilt": "在聊天或搜索中使用前，请先为该配置建立索引。",
   "profile.error.indexUnavailable": "所选索引配置不可用。",
-  "profile.warning.indexNotSelected": "搜索前请在 Ixplorer 设置中选择一个已建立索引的配置。",
+  "profile.warning.indexNotSelected": "搜索前请在 Attest 设置中选择一个已建立索引的配置。",
   "profile.warning.embeddingProfileUnavailable":
-    "所选索引的嵌入模型配置不可用。请在 Ixplorer 设置中更新。",
+    "所选索引的嵌入模型配置不可用。请在 Attest 设置中更新。",
   "profile.warning.embeddingProfileSuspended":
-    "所选索引的嵌入模型配置已停用。请在 Ixplorer 设置中更新。",
+    "所选索引的嵌入模型配置已停用。请在 Attest 设置中更新。",
   "profile.warning.embeddingNotSupported":
-    "所选索引的嵌入模型无法生成嵌入。请在 Ixplorer 设置中更新。",
+    "所选索引的嵌入模型无法生成嵌入。请在 Attest 设置中更新。",
   "profile.warning.embeddingServerUnavailable":
-    "所选索引的嵌入服务器不可用。请在 Ixplorer 设置中更新。",
+    "所选索引的嵌入服务器不可用。请在 Attest 设置中更新。",
 };

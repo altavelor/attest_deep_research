@@ -32,7 +32,7 @@ describe("SavedChatsPanel", () => {
       onOpenChat: vi.fn(),
       onViewAll: vi.fn(),
     });
-    expect(empty.querySelector(".ixplorer-chat__empty-note")?.textContent).toContain("empty");
+    expect(empty.querySelector(".attest-chat__empty-note")?.textContent).toContain("empty");
 
     const container = document.createElement("div");
     const onViewAll = vi.fn();
@@ -42,8 +42,8 @@ describe("SavedChatsPanel", () => {
       onOpenChat: vi.fn(),
       onViewAll,
     });
-    expect(container.querySelectorAll(".ixplorer-chat__saved-item")).toHaveLength(5);
-    container.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-view-all")?.click();
+    expect(container.querySelectorAll(".attest-chat__saved-item")).toHaveLength(5);
+    container.querySelector<HTMLButtonElement>(".attest-chat__saved-view-all")?.click();
     expect(onViewAll).toHaveBeenCalledOnce();
   });
 
@@ -67,13 +67,13 @@ describe("SavedChatsPanel", () => {
       onDeleteChat,
     });
 
-    expect(container.querySelectorAll(".ixplorer-chat__history-item")).toHaveLength(1);
+    expect(container.querySelectorAll(".attest-chat__history-item")).toHaveLength(1);
     expect(container.querySelector(".is-active")).not.toBeNull();
-    container.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+    container.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
     container.querySelector<HTMLButtonElement>(".is-favorite")?.click();
-    const buttons = container.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action");
+    const buttons = container.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action");
     buttons[1]?.click();
-    const input = container.querySelector<HTMLInputElement>(".ixplorer-chat__saved-title-input")!;
+    const input = container.querySelector<HTMLInputElement>(".attest-chat__saved-title-input")!;
     input.value = "Renamed";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     buttons[2]?.click();
@@ -104,7 +104,7 @@ describe("SavedChatsPanel", () => {
     search.value = "missing";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onSearchQueryChange).toHaveBeenCalledWith("missing");
-    expect(container.querySelector(".ixplorer-chat__history-empty")?.textContent).toContain(
+    expect(container.querySelector(".attest-chat__history-empty")?.textContent).toContain(
       "noMatches",
     );
 
@@ -119,15 +119,13 @@ describe("SavedChatsPanel", () => {
       onOpenChat: vi.fn(),
       onRenameChat,
     });
-    container.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action")[0]?.click();
-    const input = container.querySelector<HTMLInputElement>(".ixplorer-chat__saved-title-input")!;
+    container.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[0]?.click();
+    const input = container.querySelector<HTMLInputElement>(".attest-chat__saved-title-input")!;
     input.value = "Discarded";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
     expect(onRenameChat).not.toHaveBeenCalled();
-    expect(container.querySelector(".ixplorer-chat__saved-title")?.textContent).toBe(
-      "Project notes",
-    );
+    expect(container.querySelector(".attest-chat__saved-title")?.textContent).toBe("Project notes");
   });
 
   it("keeps the popover inside the host while positioning it below the anchor", () => {

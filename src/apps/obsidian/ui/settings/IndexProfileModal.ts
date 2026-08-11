@@ -74,7 +74,7 @@ export class IndexProfileModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: this.options.profile
         ? t("settings.indexProfileModal.editTitle")
@@ -227,10 +227,10 @@ export class IndexProfileModal extends Modal {
           }).open();
         }),
       );
-    const selectedEl = containerEl.createDiv({ cls: "ixplorer-index-path-summary" });
+    const selectedEl = containerEl.createDiv({ cls: "attest-index-path-summary" });
     if (paths.length === 0) {
       selectedEl.createDiv({
-        cls: "ixplorer-index-path-summary__empty",
+        cls: "attest-index-path-summary__empty",
         text: t("settings.indexProfileModal.noPaths"),
       });
       return;
@@ -238,7 +238,7 @@ export class IndexProfileModal extends Modal {
 
     for (const path of paths) {
       selectedEl.createDiv({
-        cls: "ixplorer-index-path-summary__item",
+        cls: "attest-index-path-summary__item",
         text: path,
         attr: { title: path },
       });
@@ -304,7 +304,7 @@ export class IndexProfileModal extends Modal {
       id,
       name: this.name,
       mode: this.mode,
-      indexFolder: this.options.profile?.indexFolder ?? `.ixplorer/indexes/${id}`,
+      indexFolder: this.options.profile?.indexFolder ?? `.attest/indexes/${id}`,
       includeFolders: this.mode === "wholeVault" ? ["/"] : this.includeFolders,
       excludeGlobs: this.mode === "wholeVault" ? this.excludeGlobs : [],
       embeddingModelProfileId: this.embeddingModelProfileId,

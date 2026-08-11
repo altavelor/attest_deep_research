@@ -6,7 +6,7 @@ import { throwRebuildRequired } from "./FileVectorIndexErrors";
 import type { IndexDescription } from "../inventory/IndexDescription";
 
 export const FILE_VECTOR_INDEX_SCHEMA_VERSION = 2;
-export const FILE_VECTOR_INDEX_FORMAT = "ixplorer-file-vector-index";
+export const FILE_VECTOR_INDEX_FORMAT = "attest-file-vector-index";
 export const DEFAULT_FILE_VECTOR_SHARD_COUNT = 32;
 export const DEFAULT_KEYWORD_MIN_TOKEN_LENGTH = 3;
 export const DEFAULT_EMBEDDING_BATCH_SIZE = 32;

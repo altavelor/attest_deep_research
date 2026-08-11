@@ -348,15 +348,15 @@ describe("Vault stub", () => {
 
     expect(adapter).toBeInstanceOf(MemoryDataAdapter);
 
-    await adapter.mkdir(".ixplorer");
-    await adapter.write(".ixplorer/state.json", '{"ok":true}');
+    await adapter.mkdir(".attest");
+    await adapter.write(".attest/state.json", '{"ok":true}');
 
-    expect(await adapter.read(".ixplorer/state.json")).toBe('{"ok":true}');
-    expect(await adapter.list(".ixplorer")).toEqual({
-      files: [".ixplorer/state.json"],
+    expect(await adapter.read(".attest/state.json")).toBe('{"ok":true}');
+    expect(await adapter.list(".attest")).toEqual({
+      files: [".attest/state.json"],
       folders: [],
     });
-    expect(await adapter.exists("/tmp/ixplorer-test")).toBe(false);
+    expect(await adapter.exists("/tmp/attest-test")).toBe(false);
   });
 });
 
@@ -376,9 +376,9 @@ describe("Notice stub", () => {
 
 describe("DOM helper additions", () => {
   it("reports class membership and appends text nodes", () => {
-    const el = container.createDiv({ cls: "ixplorer-chat" });
+    const el = container.createDiv({ cls: "attest-chat" });
 
-    expect(el.hasClass("ixplorer-chat")).toBe(true);
+    expect(el.hasClass("attest-chat")).toBe(true);
     expect(el.hasClass("is-hidden")).toBe(false);
 
     el.appendText("first");

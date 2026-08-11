@@ -62,7 +62,7 @@ export class IndexRunModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: this.indexExists()
         ? t("settings.indexRun.updateTitle", { profile: this.options.profile.name })
@@ -71,7 +71,7 @@ export class IndexRunModal extends Modal {
 
     this.renderEmbeddingSection(contentEl);
     this.renderAdvancedSection(contentEl);
-    this.warningEl = contentEl.createDiv({ cls: "ixplorer-index-run__warning" });
+    this.warningEl = contentEl.createDiv({ cls: "attest-index-run__warning" });
     this.footerEl = contentEl.createDiv();
     this.refresh();
   }
@@ -94,7 +94,7 @@ export class IndexRunModal extends Modal {
 
   private renderEmbeddingSection(containerEl: HTMLElement): void {
     const { t } = this.options;
-    const section = containerEl.createDiv({ cls: "ixplorer-index-run__section" });
+    const section = containerEl.createDiv({ cls: "attest-index-run__section" });
     new Setting(section)
       .setName(t("settings.indexRun.embedding.name"))
       .setDesc(t("settings.indexRun.embedding.desc"))
@@ -128,19 +128,16 @@ export class IndexRunModal extends Modal {
 
   private renderAdvancedSection(containerEl: HTMLElement): void {
     const { t } = this.options;
-    const details = containerEl.createEl("details", { cls: "ixplorer-index-run__advanced" });
+    const details = containerEl.createEl("details", { cls: "attest-index-run__advanced" });
     details.open = this.metadataEnabled;
     details.createEl("summary", {
-      cls: "ixplorer-index-run__advanced-summary",
+      cls: "attest-index-run__advanced-summary",
       text: t("common.advanced"),
     });
-    const content = details.createDiv({ cls: "ixplorer-index-run__advanced-content" });
+    const content = details.createDiv({ cls: "attest-index-run__advanced-content" });
 
-    const warning = content.createDiv({ cls: "ixplorer-index-run__token-warning" });
-    setIcon(
-      warning.createSpan({ cls: "ixplorer-index-run__token-warning-icon" }),
-      "alert-triangle",
-    );
+    const warning = content.createDiv({ cls: "attest-index-run__token-warning" });
+    setIcon(warning.createSpan({ cls: "attest-index-run__token-warning-icon" }), "alert-triangle");
     warning.createSpan({ text: t("settings.indexRun.tokenWarning") });
 
     this.renderMetadataSection(content);
@@ -148,7 +145,7 @@ export class IndexRunModal extends Modal {
 
   private renderMetadataSection(containerEl: HTMLElement): void {
     const { t } = this.options;
-    const section = containerEl.createDiv({ cls: "ixplorer-index-run__section" });
+    const section = containerEl.createDiv({ cls: "attest-index-run__section" });
     this.metadataSectionEl = section;
     new Setting(section)
       .setName(t("settings.indexRun.metadata.name"))
@@ -215,8 +212,8 @@ export class IndexRunModal extends Modal {
     const { t } = this.options;
     this.footerEl.empty();
     const actions = new Setting(this.footerEl)
-      .setClass("ixplorer-profile-modal__actions")
-      .setClass("ixplorer-index-run__actions");
+      .setClass("attest-profile-modal__actions")
+      .setClass("attest-index-run__actions");
 
     if (!this.indexExists()) {
       actions.addButton((button) => {

@@ -23,15 +23,15 @@ export function renderImageGalleryArtifact(
   options: GalleryRenderOptions,
 ): void {
   const section = containerEl.createEl("figure", {
-    cls: "ixplorer-artifact ixplorer-gallery",
+    cls: "attest-artifact attest-gallery",
     attr: { role: "group", "aria-label": gallery.title ?? options.t("chat.artifact.gallery.aria") },
   });
   if (gallery.title) {
-    section.createEl("figcaption", { cls: "ixplorer-artifact__title", text: gallery.title });
+    section.createEl("figcaption", { cls: "attest-artifact__title", text: gallery.title });
   }
 
   const grid = section.createDiv({
-    cls: `ixplorer-gallery__grid is-count-${gallery.images.length}`,
+    cls: `attest-gallery__grid is-count-${gallery.images.length}`,
   });
   const revokers: Array<() => void> = [];
   revokersByGallery.set(section, revokers);
@@ -43,9 +43,7 @@ export function renderImageGalleryArtifact(
 
 /** Releases object URLs created for embedded document images. */
 export function disposeGalleryArtifacts(containerEl: HTMLElement): void {
-  for (const section of Array.from(
-    containerEl.querySelectorAll<HTMLElement>(".ixplorer-gallery"),
-  )) {
+  for (const section of Array.from(containerEl.querySelectorAll<HTMLElement>(".attest-gallery"))) {
     for (const revoke of revokersByGallery.get(section) ?? []) revoke();
     revokersByGallery.delete(section);
   }
@@ -59,9 +57,9 @@ function renderCard(
   options: GalleryRenderOptions,
   revokers: Array<() => void>,
 ): void {
-  const card = grid.createDiv({ cls: "ixplorer-gallery__card" });
+  const card = grid.createDiv({ cls: "attest-gallery__card" });
   const trigger = card.createEl("button", {
-    cls: "ixplorer-gallery__trigger",
+    cls: "attest-gallery__trigger",
     attr: {
       type: "button",
       "aria-label": options.t("chat.artifact.image.open.aria", {
@@ -81,10 +79,10 @@ function renderCard(
     }).open();
   });
 
-  const meta = card.createDiv({ cls: "ixplorer-gallery__meta" });
-  meta.createDiv({ cls: "ixplorer-gallery__alt", text: image.alt || image.sourceLabel });
+  const meta = card.createDiv({ cls: "attest-gallery__meta" });
+  meta.createDiv({ cls: "attest-gallery__alt", text: image.alt || image.sourceLabel });
   meta.createDiv({
-    cls: "ixplorer-artifact__attribution",
+    cls: "attest-artifact__attribution",
     text: attributionText(image, options.t),
   });
   renderSourceLink(meta, image, options.t);
@@ -101,7 +99,7 @@ function renderCard(
     }
     if (resolved.revoke) revokers.push(resolved.revoke);
     const img = trigger.createEl("img", {
-      cls: "ixplorer-gallery__image",
+      cls: "attest-gallery__image",
       attr: { src: resolved.src, alt: image.alt, loading: "lazy", referrerpolicy: "no-referrer" },
     });
     img.addEventListener("error", () => {

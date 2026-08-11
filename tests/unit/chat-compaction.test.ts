@@ -180,7 +180,7 @@ describe("ChatCompaction", () => {
     const messages: ChatDisplayMessage[] = [
       user("Find relevant notes."),
       {
-        ...assistant("The note says to use Ixplorer."),
+        ...assistant("The note says to use Attest."),
         researchProgress: {
           phase: "complete",
           disclosure: "auto",
@@ -201,8 +201,8 @@ describe("ChatCompaction", () => {
               label: "Search index",
               status: "complete",
               resultSummary: "1 result",
-              args: { query: "Ixplorer" },
-              resultJson: '{"results":[{"path":"Notes/Ixplorer.md","text":"Use Ixplorer."}]}',
+              args: { query: "Attest" },
+              resultJson: '{"results":[{"path":"Notes/Attest.md","text":"Use Attest."}]}',
               children: [
                 {
                   kind: "tool-call",
@@ -210,8 +210,8 @@ describe("ChatCompaction", () => {
                   name: "read_note",
                   label: "Read note",
                   status: "complete",
-                  args: { path: "Notes/Ixplorer.md" },
-                  resultJson: '{"content":"Use Ixplorer."}',
+                  args: { path: "Notes/Attest.md" },
+                  resultJson: '{"content":"Use Attest."}',
                 },
               ],
             },
@@ -222,16 +222,16 @@ describe("ChatCompaction", () => {
 
     const [, assistantHistory] = chatHistoryForPrompt(messages);
 
-    expect(assistantHistory.content).toContain("The note says to use Ixplorer.");
+    expect(assistantHistory.content).toContain("The note says to use Attest.");
     expect(assistantHistory.content).toContain("Research trace:");
     expect(assistantHistory.content).toContain("Reasoning summary: Need local evidence.");
     expect(assistantHistory.content).toContain("Reasoning: Search before answering.");
     expect(assistantHistory.content).toContain("Checkpoint round 1: Searching the index");
     expect(assistantHistory.content).toContain(
-      'Tool search_index [complete] Search index; args: {"query":"Ixplorer"}; summary: 1 result; result: {"results":[{"path":"Notes/Ixplorer.md","text":"Use Ixplorer."}]}',
+      'Tool search_index [complete] Search index; args: {"query":"Attest"}; summary: 1 result; result: {"results":[{"path":"Notes/Attest.md","text":"Use Attest."}]}',
     );
     expect(assistantHistory.content).toContain(
-      'Child tool read_note [complete] Read note; args: {"path":"Notes/Ixplorer.md"}; result: {"content":"Use Ixplorer."}',
+      'Child tool read_note [complete] Read note; args: {"path":"Notes/Attest.md"}; result: {"content":"Use Attest."}',
     );
   });
 });

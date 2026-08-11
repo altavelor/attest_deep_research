@@ -1,9 +1,9 @@
 import { OpenAiResponsesClient } from "@adapters/model-provider/chat/responses/OpenAiResponsesClient";
 import { ReasoningCapabilitySettings, ServerProfile } from "./types";
 import type { PluginRequestLogger } from "./debugLogger";
-import { isIxplorerError } from "@core/errors";
+import { isAttestError } from "@core/errors";
 
-const PROBE_TOOL = "ixplorer_responses_probe";
+const PROBE_TOOL = "attest_responses_probe";
 const PROBE_MAX_OUTPUT_TOKENS = 512;
 const FALLBACK_REASONING_EFFORTS = ["medium", "low", "high", "minimal"] as const;
 export const RESPONSES_PROBE_CONTRACT_VERSION = 1;
@@ -146,8 +146,8 @@ async function runProbe(
     }
     return { ok: true };
   } catch (error) {
-    const providerMessage = isIxplorerError(error) ? error.details?.providerMessage : undefined;
-    const protocolReason = isIxplorerError(error) ? error.details?.reason : undefined;
+    const providerMessage = isAttestError(error) ? error.details?.providerMessage : undefined;
+    const protocolReason = isAttestError(error) ? error.details?.reason : undefined;
     return {
       ok: false,
       ...(typeof providerMessage === "string"

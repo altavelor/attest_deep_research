@@ -17,9 +17,9 @@ import {
 } from "@adapters/settings";
 import { isIndexProfileSelectable } from "@adapters/settings";
 import { createToolCapabilitySettings, withProbeResults } from "@adapters/settings";
-import { IxplorerSettings } from "@adapters/settings";
+import { AttestSettings } from "@adapters/settings";
 
-describe("Ixplorer settings", () => {
+describe("Attest settings", () => {
   it("uses local-first safe defaults when saved data is absent or not current", () => {
     expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(readSettings({ includeFolders: ["Notes"] })).toEqual(DEFAULT_SETTINGS);
@@ -35,7 +35,7 @@ describe("Ixplorer settings", () => {
     });
     expect(getActiveIndexProfile(DEFAULT_SETTINGS)).toMatchObject({
       id: "default",
-      indexFolder: ".ixplorer/index",
+      indexFolder: ".attest/index",
       embeddingModelProfileId: "",
       isSuspended: true,
       shardCount: 32,
@@ -124,7 +124,7 @@ describe("Ixplorer settings", () => {
   it("preserves current settings while dropping an unknown legacy setting", () => {
     const settings = readSettings({
       ...currentSettings({ debugMode: true }),
-      legacyIndexFolder: ".ixplorer/legacy-index",
+      legacyIndexFolder: ".attest/legacy-index",
     });
 
     expect(settings.debugMode).toBe(true);
@@ -252,11 +252,11 @@ describe("Ixplorer settings", () => {
     expect(normalizeUrl(" http://localhost:1234/v1/ ", "fallback")).toBe(
       "http://localhost:1234/v1",
     );
-    expect(normalizeVaultFolder(" /.ixplorer/index/ ")).toBe(".ixplorer/index");
+    expect(normalizeVaultFolder(" /.attest/index/ ")).toBe(".attest/index");
   });
 });
 
-function currentSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {
+function currentSettings(overrides: Partial<AttestSettings> = {}): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...overrides,

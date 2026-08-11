@@ -1,12 +1,12 @@
 import OpenAI, { APIError } from "openai";
 
-import { IxplorerError, IxplorerErrorCode } from "@core/errors";
+import { AttestError, AttestErrorCode } from "@core/errors";
 import { isRecord } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 
 type UnavailableCode = Extract<
-  IxplorerErrorCode,
+  AttestErrorCode,
   "MODEL_PROVIDER_UNAVAILABLE" | "EMBEDDING_UNAVAILABLE"
 >;
 
@@ -95,27 +95,27 @@ export interface OpenAiErrorTranslation {
 }
 
 /**
- * Converts SDK errors into the plugin's IxplorerError taxonomy so the rest of
+ * Converts SDK errors into the plugin's AttestError taxonomy so the rest of
  * the app keeps reacting to stable codes (MODEL_NOT_FOUND on 404, the supplied
  * unavailable code otherwise).
  */
 export function translateOpenAiError(
   error: unknown,
   translation: OpenAiErrorTranslation,
-): IxplorerError {
-  if (error instanceof IxplorerError) return error;
+): AttestError {
+  if (error instanceof AttestError) return error;
 
   if (error instanceof APIError) {
     const status = error.status;
     const details = providerErrorDetails(error, translation.apiKey);
     if (status === 404) {
-      return new IxplorerError({
+      return new AttestError({
         code: "MODEL_NOT_FOUND",
         details: { status, ...details },
       });
     }
     if (typeof status === "number") {
-      return new IxplorerError({
+      return new AttestError({
         code: translation.unavailableCode,
         message: `Provider returned HTTP ${status}.`,
         details: { status, ...details },
@@ -123,7 +123,7 @@ export function translateOpenAiError(
     }
   }
 
-  return new IxplorerError({
+  return new AttestError({
     code: translation.unavailableCode,
     message: translation.unavailableMessage,
     cause: error,

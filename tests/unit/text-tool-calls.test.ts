@@ -24,7 +24,7 @@ const tools: ChatToolDefinition[] = [
 describe("parseTextToolCalls", () => {
   it("recovers the namespaced wrapped function-call syntax leaked by gemma", () => {
     const calls = parseTextToolCalls(
-      '<|tool_call>call:ixplorer.list_notes(path="")<tool_call|>',
+      '<|tool_call>call:attest.list_notes(path="")<tool_call|>',
       tools,
     );
     expect(calls).toEqual([{ id: "text_call_0", name: "list_notes", arguments: { path: "" } }]);

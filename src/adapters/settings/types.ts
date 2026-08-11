@@ -99,7 +99,7 @@ export interface NewChatDefaults {
   includeActiveFileContext: boolean;
 }
 
-export interface IxplorerSettings {
+export interface AttestSettings {
   serverProfiles: ServerProfile[];
   chatModelProfiles: ChatModelProfile[];
   embeddingModelProfiles: EmbeddingModelProfile[];

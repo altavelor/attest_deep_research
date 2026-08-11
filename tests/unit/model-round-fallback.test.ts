@@ -1,5 +1,5 @@
 import { FallbackModelRoundProvider } from "@adapters/model-provider";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { ModelRoundProvider } from "@core/agent";
 
 function provider(runRound: ModelRoundProvider["runRound"]): ModelRoundProvider {
@@ -14,7 +14,7 @@ describe("FallbackModelRoundProvider", () => {
     });
     const wrapper = new FallbackModelRoundProvider(
       provider(async () => {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "UNSUPPORTED_CAPABILITY",
           message: "Responses is unsupported",
         });
@@ -33,7 +33,7 @@ describe("FallbackModelRoundProvider", () => {
     const wrapper = new FallbackModelRoundProvider(
       provider(async (request) => {
         request.onEvent?.({ type: "text-delta", text: "partial" });
-        throw new IxplorerError({
+        throw new AttestError({
           code: "UNSUPPORTED_CAPABILITY",
           message: "late failure",
         });

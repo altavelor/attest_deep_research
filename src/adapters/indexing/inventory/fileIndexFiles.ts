@@ -1,5 +1,5 @@
 import { FileSystemPort } from "@application/ports";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 export interface AtomicIndexFile {
   path: string;
@@ -161,7 +161,7 @@ async function atomicWriteFile(
 }
 
 function throwIndexReadError(cause: unknown, path: string): never {
-  throw new IxplorerError({
+  throw new AttestError({
     code: "INDEX_REBUILD_REQUIRED",
     message: "The file-backed index could not be read.",
     cause,

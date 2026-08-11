@@ -36,7 +36,7 @@ export class SavedChatsPopoverController {
     }
     await this.options.refreshSavedChats();
     this.anchorEl = anchorEl;
-    this.popoverEl = this.options.hostEl.createDiv({ cls: "ixplorer-chat__history-popover" });
+    this.popoverEl = this.options.hostEl.createDiv({ cls: "attest-chat__history-popover" });
     this.render();
     positionSavedChatsPopover(this.options.hostEl, anchorEl, this.popoverEl);
     document.addEventListener("pointerdown", this.onDocumentPointerDown, true);

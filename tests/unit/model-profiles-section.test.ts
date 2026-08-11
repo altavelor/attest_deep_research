@@ -50,7 +50,7 @@ describe("ModelProfilesSection", () => {
 
     section.render(container);
     const defaults = container.querySelectorAll<HTMLButtonElement>(
-      ".ixplorer-settings__default-action",
+      ".attest-settings__default-action",
     );
     expect(defaults).toHaveLength(2);
     expect(defaults[1]!.disabled).toBe(true);
@@ -97,7 +97,7 @@ describe("ModelProfilesSection", () => {
 
     section.render(container);
     container
-      .querySelector<HTMLButtonElement>(".ixplorer-settings__test-capabilities-action")!
+      .querySelector<HTMLButtonElement>(".attest-settings__test-capabilities-action")!
       .click();
     await Promise.resolve();
 
@@ -153,7 +153,7 @@ describe("ModelProfilesSection", () => {
     const container = createContainer();
 
     section.render(container);
-    const rows = container.querySelectorAll<HTMLElement>(".ixplorer-settings-profile-list__item");
+    const rows = container.querySelectorAll<HTMLElement>(".attest-settings-profile-list__item");
     const unusedRow = Array.from(rows).find((row) => row.textContent?.includes("Unused server"))!;
     const usedRow = Array.from(rows).find((row) => row.textContent?.includes("Used server"))!;
     const unusedDelete = unusedRow.querySelectorAll<HTMLButtonElement>("button").item(1);

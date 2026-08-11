@@ -30,7 +30,7 @@ export class IndexPathPickerModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", { text: t("settings.indexPathPicker.title") });
 
     new Setting(contentEl).setName(t("settings.indexPathPicker.search.name")).addSearch((search) =>
@@ -40,7 +40,7 @@ export class IndexPathPickerModal extends Modal {
       }),
     );
 
-    this.treeEl = contentEl.createDiv({ cls: "ixplorer-index-path-picker" });
+    this.treeEl = contentEl.createDiv({ cls: "attest-index-path-picker" });
     this.renderTree();
 
     renderModalActions(contentEl, {
@@ -86,7 +86,7 @@ export class IndexPathPickerModal extends Modal {
 
     if (matches.length === 0) {
       containerEl.createDiv({
-        cls: "ixplorer-profile-modal__model-empty",
+        cls: "attest-profile-modal__model-empty",
         text: this.options.t("settings.indexPathPicker.empty"),
       });
       return;
@@ -115,13 +115,13 @@ export class IndexPathPickerModal extends Modal {
     const { t } = this.options;
     const path = normalizePickerPath(file.path);
     const row = containerEl.createDiv({
-      cls: "ixplorer-index-path-picker__row",
+      cls: "attest-index-path-picker__row",
       attr: { style: `padding-left: ${depth * 1.25}rem` },
     });
 
     if (file instanceof TFolder) {
       const expandButton = row.createEl("button", {
-        cls: "clickable-icon ixplorer-index-path-picker__expand",
+        cls: "clickable-icon attest-index-path-picker__expand",
         attr: {
           type: "button",
           "aria-label": t("settings.indexPathPicker.toggle", {
@@ -139,7 +139,7 @@ export class IndexPathPickerModal extends Modal {
         this.renderTree({ preserveScroll: true });
       });
     } else {
-      row.createSpan({ cls: "ixplorer-index-path-picker__spacer" });
+      row.createSpan({ cls: "attest-index-path-picker__spacer" });
     }
 
     const checkbox = row.createEl("input", {

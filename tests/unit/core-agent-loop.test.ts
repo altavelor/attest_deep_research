@@ -1,5 +1,5 @@
 import { runAgentLoop } from "@core/agent";
-import { isIxplorerError } from "@core/errors";
+import { isAttestError } from "@core/errors";
 import type { ModelRoundProvider, ModelRoundResult } from "@core/agent";
 
 function provider(rounds: ModelRoundResult[]): ModelRoundProvider {
@@ -73,7 +73,7 @@ describe("core runAgentLoop", () => {
     ).rejects.toThrow();
   });
 
-  it("reports the stop reason through an IxplorerError and disposes the continuation", async () => {
+  it("reports the stop reason through an AttestError and disposes the continuation", async () => {
     const dispose = vi.fn();
     const error = await runAgentLoop({
       modelRound: provider([
@@ -89,7 +89,7 @@ describe("core runAgentLoop", () => {
       executeTool: async () => ({ ok: true, result: "{}" }),
     }).catch((thrown: unknown) => thrown);
 
-    expect(isIxplorerError(error)).toBe(true);
+    expect(isAttestError(error)).toBe(true);
     expect(error).toMatchObject({
       code: "MODEL_PROVIDER_UNAVAILABLE",
       details: { reason: "model-round-length" },

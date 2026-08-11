@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
-import type { IxplorerSettings } from "@adapters/settings";
+import type { AttestSettings } from "@adapters/settings";
 import { createTranslator } from "@adapters/i18n";
 import { NewChatDefaultsSection } from "@apps/obsidian/ui/settings/NewChatDefaultsSection";
 import {
@@ -14,7 +14,7 @@ import {
 
 const t = createTranslator("en").t;
 
-function settings(): IxplorerSettings {
+function settings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: [cloneIndexProfile(DEFAULT_SETTINGS.indexProfiles[0])],

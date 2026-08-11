@@ -130,7 +130,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: t(TITLE_MESSAGE_KEYS[this.options.profile ? "edit" : "add"][this.options.kind]),
     });
@@ -185,10 +185,10 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
             this.modelName = nextModelName;
             this.renderModelMenu();
           });
-        text.inputEl.addClass("ixplorer-profile-modal__model-input");
+        text.inputEl.addClass("attest-profile-modal__model-input");
         this.modelMenuEl =
           text.inputEl.parentElement?.createDiv({
-            cls: "ixplorer-profile-modal__model-menu is-hidden",
+            cls: "attest-profile-modal__model-menu is-hidden",
             attr: { role: "listbox" },
           }) ?? null;
         text.inputEl.addEventListener("focus", () => this.renderModelMenu());
@@ -213,7 +213,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     if (this.options.kind === "chat") {
       this.renderCapabilityControls(contentEl);
-      const advanced = contentEl.createEl("details", { cls: "ixplorer-profile-modal__advanced" });
+      const advanced = contentEl.createEl("details", { cls: "attest-profile-modal__advanced" });
       advanced.createEl("summary", { text: t("common.advanced") });
       const advancedContent = advanced.createDiv();
       new Setting(advancedContent)
@@ -298,7 +298,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     if (models.length === 0) {
       this.modelMenuEl.createDiv({
-        cls: "ixplorer-profile-modal__model-empty",
+        cls: "attest-profile-modal__model-empty",
         text: this.options.t("settings.modelProfileModal.model.empty"),
       });
       this.modelMenuEl.removeClass("is-hidden");
@@ -307,7 +307,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
 
     for (const model of models) {
       const option = this.modelMenuEl.createEl("button", {
-        cls: "ixplorer-profile-modal__model-option",
+        cls: "attest-profile-modal__model-option",
         text: model.name,
         attr: {
           type: "button",

@@ -98,26 +98,26 @@ export function renderChatComposer(
   options: ChatComposerOptions,
 ): ChatComposerRefs {
   const { t } = options;
-  const formEl = containerEl.createEl("form", { cls: "ixplorer-chat__form" });
+  const formEl = containerEl.createEl("form", { cls: "attest-chat__form" });
   formEl.addEventListener("submit", (event) => {
     event.preventDefault();
     options.onSubmit();
   });
 
   const progressStatusEl = formEl.createDiv({
-    cls: "ixplorer-chat__progress-status",
+    cls: "attest-chat__progress-status",
     attr: { "aria-live": "polite" },
   });
 
-  const composerPanelEl = formEl.createDiv({ cls: "ixplorer-chat__composer-panel" });
+  const composerPanelEl = formEl.createDiv({ cls: "attest-chat__composer-panel" });
 
-  const attachmentsRowEl = composerPanelEl.createDiv({ cls: "ixplorer-chat__attachments-row" });
-  const attachedContextEl = attachmentsRowEl.createDiv({ cls: "ixplorer-chat__attachments" });
+  const attachmentsRowEl = composerPanelEl.createDiv({ cls: "attest-chat__attachments-row" });
+  const attachedContextEl = attachmentsRowEl.createDiv({ cls: "attest-chat__attachments" });
   enableHorizontalWheelScroll(attachedContextEl);
   let currentContextMode: ContextMode =
     options.settings.contextMode === "filter" ? "filter" : "include";
   const contextModeDropdown = createMenuDropdown(attachmentsRowEl, {
-    cls: "ixplorer-chat__dropdown--context-mode",
+    cls: "attest-chat__dropdown--context-mode",
     ariaLabel: t("chat.composer.contextMode.aria"),
     placeholder: t("chat.composer.contextMode.include"),
     items: contextModeItems(t),
@@ -130,7 +130,7 @@ export function renderChatComposer(
   contextModeDropdown.el.parentElement?.toggleClass("is-hidden", true);
 
   const textareaEl = composerPanelEl.createEl("textarea", {
-    cls: "ixplorer-chat__input",
+    cls: "attest-chat__input",
     attr: {
       rows: "1",
       placeholder: t("chat.composer.placeholder"),
@@ -159,10 +159,10 @@ export function renderChatComposer(
     options.onSubmit();
   });
 
-  const modelRow = composerPanelEl.createDiv({ cls: "ixplorer-chat__model-row" });
+  const modelRow = composerPanelEl.createDiv({ cls: "attest-chat__model-row" });
 
   const attachButton = modelRow.createEl("button", {
-    cls: "ixplorer-chat__icon-button",
+    cls: "attest-chat__icon-button",
     attr: {
       type: "button",
       "aria-label": t("chat.composer.attach"),
@@ -175,9 +175,9 @@ export function renderChatComposer(
   let currentSearchMode = getResearchSearchMode(options.settings.searchMode);
   let currentIndexId = options.settings.indexProfileId ?? "";
 
-  const sourcesEl = modelRow.createDiv({ cls: "ixplorer-chat__sources" });
+  const sourcesEl = modelRow.createDiv({ cls: "attest-chat__sources" });
   const sourcesModeDropdown = createMenuDropdown(sourcesEl, {
-    cls: "ixplorer-chat__dropdown--sources",
+    cls: "attest-chat__dropdown--sources",
     ariaLabel: t("chat.composer.sources.aria"),
     placeholder: t("chat.composer.sources.placeholder"),
     items: searchModeItems(t),
@@ -195,7 +195,7 @@ export function renderChatComposer(
       .map((index) => ({ id: index.id, name: index.name }));
 
   const indexButton = sourcesEl.createEl("button", {
-    cls: "ixplorer-chat__sources-index",
+    cls: "attest-chat__sources-index",
     attr: { type: "button", "aria-label": t("chat.composer.index.aria") },
   });
   setIcon(indexButton, "chevron-down");
@@ -229,8 +229,8 @@ export function renderChatComposer(
   let currentResearchMode: Extract<ResearchMode, "instant" | "thinking"> =
     options.researchMode === "thinking" ? "thinking" : "instant";
   const researchModeDropdown = createMenuDropdown(modelRow, {
-    cls: "ixplorer-chat__dropdown--research-mode",
-    menuCls: "ixplorer-chat__research-menu",
+    cls: "attest-chat__dropdown--research-mode",
+    menuCls: "attest-chat__research-menu",
     ariaLabel: t("chat.composer.researchMode.aria"),
     placeholder: t("chat.composer.researchMode.instant"),
     items: researchModeItems(t),
@@ -242,7 +242,7 @@ export function renderChatComposer(
   });
 
   const contextIndicatorEl = modelRow.createSpan({
-    cls: "ixplorer-chat__context-indicator",
+    cls: "attest-chat__context-indicator",
     attr: {
       role: "status",
       "aria-label": t("chat.status.contextWindow.unknown"),
@@ -252,7 +252,7 @@ export function renderChatComposer(
 
   let currentModel = options.settings.chatModelProfileId;
   const modelDropdown = createMenuDropdown(modelRow, {
-    cls: "ixplorer-chat__dropdown--model",
+    cls: "attest-chat__dropdown--model",
     ariaLabel: t("chat.composer.model.aria"),
     placeholder: t("chat.composer.model.placeholder"),
     items: options.availableModels
@@ -282,9 +282,9 @@ export function renderChatComposer(
   }
   syncResearchModeAvailability();
 
-  const submitButtonTooltipEl = modelRow.createSpan({ cls: "ixplorer-chat__submit-tooltip" });
+  const submitButtonTooltipEl = modelRow.createSpan({ cls: "attest-chat__submit-tooltip" });
   const submitButtonEl = submitButtonTooltipEl.createEl("button", {
-    cls: "mod-cta ixplorer-chat__submit",
+    cls: "mod-cta attest-chat__submit",
     attr: { type: "button" },
   });
   setIcon(submitButtonEl, "arrow-up");
@@ -386,13 +386,13 @@ export function renderAttachedContext(
 
   for (const path of paths) {
     const isFolder = path.endsWith("/");
-    const chip = containerEl.createSpan({ cls: "ixplorer-chat__attachment" });
+    const chip = containerEl.createSpan({ cls: "attest-chat__attachment" });
     chip.setAttr("title", path);
     setIcon(
-      chip.createSpan({ cls: "ixplorer-chat__attachment-icon" }),
+      chip.createSpan({ cls: "attest-chat__attachment-icon" }),
       isFolder ? "folder" : "file-text",
     );
-    chip.createSpan({ cls: "ixplorer-chat__attachment-name", text: attachmentDisplayName(path) });
+    chip.createSpan({ cls: "attest-chat__attachment-name", text: attachmentDisplayName(path) });
     const removeLabel = t("chat.composer.attachment.remove", { path });
     const removeButton = chip.createEl("button", {
       attr: {

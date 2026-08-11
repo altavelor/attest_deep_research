@@ -1,4 +1,4 @@
-import { IxplorerSettings } from "@adapters/settings/types";
+import { AttestSettings } from "@adapters/settings/types";
 import { Extractor, ExtractorInput } from "@application/ports";
 import { ExtractedChunk } from "@core/model";
 import { chunkMarkdown } from "@adapters/indexing/pipeline/chunker";
@@ -25,7 +25,7 @@ export class MarkdownExtractor implements Extractor {
     this.chunkOverlap = options.chunkOverlap;
   }
 
-  static fromSettings(settings: IxplorerSettings): MarkdownExtractor {
+  static fromSettings(settings: AttestSettings): MarkdownExtractor {
     return new MarkdownExtractor({
       includeFolders: settings.includeFolders,
       excludeGlobs: settings.excludeGlobs,

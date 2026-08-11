@@ -10,7 +10,7 @@ export function downloadDiagnosticHtml(
   environment: DiagnosticDownloadEnvironment = browserDownloadEnvironment(),
 ): string {
   const suffix = sanitizeFilenamePart(identity ?? new Date().toISOString());
-  const filename = `ixplorer-diagnostic-${suffix}.html`;
+  const filename = `attest-diagnostic-${suffix}.html`;
   const url = environment.createObjectUrl(new Blob([html], { type: "text/html;charset=utf-8" }));
   try {
     environment.trigger(url, filename);

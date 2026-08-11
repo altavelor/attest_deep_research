@@ -1,7 +1,7 @@
 import type { Ollama } from "ollama";
 
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import {
   listOllamaModels,
   streamOllamaChat,
@@ -118,7 +118,7 @@ describe("ollama chat stream error handling", () => {
       (error: unknown) => error,
     );
 
-    expect(failure).toBeInstanceOf(IxplorerError);
+    expect(failure).toBeInstanceOf(AttestError);
     expect(failure).toMatchObject({
       code: "MODEL_PROVIDER_UNAVAILABLE",
       details: { status: 500, providerMessage: "internal failure with key [redacted]" },
@@ -135,7 +135,7 @@ describe("ollama chat stream error handling", () => {
   });
 
   it("keeps an already typed error unchanged", async () => {
-    const original = new IxplorerError({ code: "UNSUPPORTED_CAPABILITY" });
+    const original = new AttestError({ code: "UNSUPPORTED_CAPABILITY" });
     const ollama = fakeOllama([]);
     ollama.chat.mockRejectedValue(original);
 
@@ -156,9 +156,9 @@ describe("ollama chat stream error handling", () => {
         (error: unknown) => error,
       );
 
-    expect(failure).toBeInstanceOf(IxplorerError);
-    expect((failure as IxplorerError).code).toBe("MODEL_PROVIDER_UNAVAILABLE");
-    expect((failure as IxplorerError).details).toBeUndefined();
+    expect(failure).toBeInstanceOf(AttestError);
+    expect((failure as AttestError).code).toBe("MODEL_PROVIDER_UNAVAILABLE");
+    expect((failure as AttestError).details).toBeUndefined();
   });
 
   it("propagates an abort as-is rather than wrapping it", async () => {

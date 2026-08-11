@@ -91,7 +91,7 @@ describe("IndexReportModal", () => {
     expect(text).toContain("Document summary.");
     expect(text).toContain("Methods: Method summary.");
     expect(text).toContain("Unreadable PDF");
-    expect(modal.contentEl.querySelectorAll(".ixplorer-index-report__row")).toHaveLength(2);
+    expect(modal.contentEl.querySelectorAll(".attest-index-report__row")).toHaveLength(2);
   });
 
   it("shows an empty-state message and close action when no report exists", () => {

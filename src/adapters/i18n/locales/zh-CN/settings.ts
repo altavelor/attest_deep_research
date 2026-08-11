@@ -3,10 +3,10 @@ import type { EnSettingsMessages } from "../en/settings";
 export const settings: EnSettingsMessages = {
   "settings.language.heading": "语言",
   "settings.language.name": "界面语言",
-  "settings.language.desc": "Ixplorer 界面的语言。无需重启 Obsidian 即可生效。",
+  "settings.language.desc": "Attest 界面的语言。无需重启 Obsidian 即可生效。",
   "settings.language.auto": "自动（跟随 Obsidian）",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "快速开始",
   "settings.tab.quickStart.steps": "1. 添加服务器 → 2. 添加聊天模型 → 3.（可选）添加索引",
   "settings.tab.gateHint": "请先添加聊天模型配置",
@@ -15,7 +15,7 @@ export const settings: EnSettingsMessages = {
   "settings.advanced.debugMode.desc": "记录插件请求与响应详情。API 密钥会被隐去。",
 
   "settings.retrieval.heading": "检索",
-  "settings.retrieval.desc": "控制 Ixplorer 回答前如何查找本地、图谱、索引、文档和网络证据。",
+  "settings.retrieval.desc": "控制 Attest 回答前如何查找本地、图谱、索引、文档和网络证据。",
   "settings.retrieval.graph.heading": "Obsidian 图谱",
   "settings.retrieval.useLinkedNotes.name": "使用关联笔记",
   "settings.retrieval.useLinkedNotes.desc":
@@ -64,7 +64,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "外部来源",
   "settings.webSources.desc":
-    "在已启用的来源中进行由用户发起的外部网络搜索。Ixplorer 仅发送所输入的问题，绝不发送检索到的仓库内容。",
+    "在已启用的来源中进行由用户发起的外部网络搜索。Attest 仅发送所输入的问题，绝不发送检索到的仓库内容。",
   "settings.webSources.count": "已启用 {enabled}/{total}",
   "settings.webSources.column.source": "来源",
   "settings.webSources.column.actions": "操作",

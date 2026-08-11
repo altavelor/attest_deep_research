@@ -22,8 +22,8 @@ describe("probeToolControlCapabilities", () => {
         request.toolChoice?.type === "specific"
           ? [{ id: "specific", name: request.toolChoice.name, arguments: {} }]
           : [
-              { id: "required-a", name: "ixplorer_probe_a", arguments: {} },
-              { id: "required-b", name: "ixplorer_probe_b", arguments: {} },
+              { id: "required-a", name: "attest_probe_a", arguments: {} },
+              { id: "required-b", name: "attest_probe_b", arguments: {} },
             ],
     }));
     const result = await probeToolControlCapabilities({
@@ -37,8 +37,8 @@ describe("probeToolControlCapabilities", () => {
     expect(result.parallelCalls).toBe(true);
 
     expect(result.probeAuditData.ranAt).toBeTruthy();
-    expect(result.probeAuditData.results.required).toContain("ixplorer_probe_a");
-    expect(result.probeAuditData.results.specific).toContain("ixplorer_probe_b");
+    expect(result.probeAuditData.results.required).toContain("attest_probe_a");
+    expect(result.probeAuditData.results.specific).toContain("attest_probe_b");
     expect(result.probeAuditData.results.auto).toEqual([]);
     expect(provider.requests).toHaveLength(2);
     expect(JSON.stringify(provider.requests)).not.toMatch(/vault|index|note|web/i);
@@ -81,7 +81,7 @@ describe("probeToolControlCapabilities", () => {
         {
           id: "p",
           name:
-            request.toolChoice?.type === "specific" ? request.toolChoice.name : "ixplorer_probe_a",
+            request.toolChoice?.type === "specific" ? request.toolChoice.name : "attest_probe_a",
           arguments: { raw: "{" },
         },
       ],
@@ -106,7 +106,7 @@ describe("probeToolControlCapabilities", () => {
         return {
           content: "",
           isComplete: true,
-          toolCalls: [{ id: "a", name: "ixplorer_probe_a", arguments: {} }],
+          toolCalls: [{ id: "a", name: "attest_probe_a", arguments: {} }],
         };
       }
       return { content: "", isComplete: true };
@@ -119,7 +119,7 @@ describe("probeToolControlCapabilities", () => {
     expect(result.calls).toBe(true);
     expect(result.choiceRequired).toBe(false);
     expect(result.choiceSpecific).toBe(false);
-    expect(result.probeAuditData.results.auto).toContain("ixplorer_probe_a");
+    expect(result.probeAuditData.results.auto).toContain("attest_probe_a");
     expect(callCount).toBe(3);
   });
 });

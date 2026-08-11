@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { inflateRaw, sha256Hex } from "@shared";
 export { normalizeVaultPath as normalizePath } from "@shared";
 
@@ -116,10 +116,10 @@ export function extractionFailed(
   format: DocumentFormat,
   path: string,
   cause: unknown,
-): IxplorerError {
-  return new IxplorerError({
+): AttestError {
+  return new AttestError({
     code: "EXTRACTION_FAILED",
-    message: `Ixplorer could not read this ${format.toUpperCase()} file.`,
+    message: `Attest could not read this ${format.toUpperCase()} file.`,
     cause,
     details: { path, format },
   });

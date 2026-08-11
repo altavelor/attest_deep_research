@@ -68,7 +68,7 @@ function workflowMessage(chain: ChainItem[], finalizing: boolean): ChatDisplayMe
 }
 
 function renderWorkflowSurfaces(host: HTMLElement): void {
-  const transcript = host.createDiv({ cls: "ixplorer-chat__transcript" });
+  const transcript = host.createDiv({ cls: "attest-chat__transcript" });
   const context = {
     app: new App(),
     markdownContext: new Component(),
@@ -143,7 +143,7 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
     onDeleteChat: () => {},
   });
   for (const activeTab of ["history", "favorites"] as const) {
-    renderSavedChatsPopoverContent(host.createDiv({ cls: "ixplorer-chat__history-popover" }), {
+    renderSavedChatsPopoverContent(host.createDiv({ cls: "attest-chat__history-popover" }), {
       savedChats,
       currentChatId: "a",
       searchQuery: "",

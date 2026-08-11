@@ -16,7 +16,7 @@ import {
 import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
 import { DEFAULT_UI_LANGUAGE } from "./uiLanguage";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { IxplorerSettings } from "./types";
+import { AttestSettings } from "./types";
 
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   id: DEFAULT_INDEX_PROFILE_ID,
@@ -24,7 +24,7 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   mode: "wholeVault",
   indexFolder: DEFAULT_INDEX_FOLDER,
   includeFolders: ["/"],
-  excludeGlobs: [".obsidian/**", ".trash/**", ".ixplorer/**"],
+  excludeGlobs: [".obsidian/**", ".trash/**", ".attest/**"],
   embeddingModelProfileId: "",
   isSuspended: true,
   suspendedReason: "Select an embedding model profile.",
@@ -44,7 +44,7 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   updatedAt: DEFAULT_PROFILE_TIMESTAMP,
 };
 
-export const DEFAULT_SETTINGS: IxplorerSettings = {
+export const DEFAULT_SETTINGS: AttestSettings = {
   serverProfiles: [],
   chatModelProfiles: [],
   embeddingModelProfiles: [],

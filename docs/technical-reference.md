@@ -14,8 +14,8 @@ npm run build
 
 The build output is `dist/main.js`, `dist/manifest.json`, and `dist/styles.css`. To use a local
 development build in an Obsidian vault, link these three artifacts into
-`.obsidian/plugins/ixplorer/`. `npm run dev` rebuilds in watch mode; alternatively set
-`IXPLORER_OUTPUT_DIR` to an explicit plugin directory.
+`.obsidian/plugins/attest/`. `npm run dev` rebuilds in watch mode; alternatively set
+`ATTEST_OUTPUT_DIR` to an explicit plugin directory.
 
 ## Project commands
 
@@ -35,7 +35,7 @@ is generated from `src/apps/obsidian/styles.json`.
 
 ## Research architecture
 
-Ixplorer separates the stable `instant` and `thinking` strategies:
+Attest separates the stable `instant` and `thinking` strategies:
 
 - **Instant** assembles evidence and synthesizes a deterministic answer without an agent loop.
 - **Thinking** uses capability-gated, multi-round tool calling. It falls back to Instant when the

@@ -4,13 +4,13 @@ import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { DEFAULT_SETTINGS, cloneIndexProfile, fetchAvailableModels } from "@adapters/settings";
-import type { ChatModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
+import type { ChatModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
 import { PluginDebugLogger } from "@adapters/settings";
 import * as settingsApi from "@adapters/settings";
 import { SettingsCapabilityProber } from "@apps/obsidian/ui/settings/SettingsCapabilityProber";
-import { IxplorerSettingTab } from "@apps/obsidian/ui/SettingsTab";
-import IxplorerPluginClass from "@apps/obsidian/main";
-import type IxplorerPlugin from "@apps/obsidian/main";
+import { AttestSettingTab } from "@apps/obsidian/ui/SettingsTab";
+import AttestPluginClass from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import {
   installObsidianDomHelpers,
   pendingTimerCount,
@@ -53,7 +53,7 @@ function chatProfile(): ChatModelProfile {
   };
 }
 
-function createSettings(): IxplorerSettings {
+function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
@@ -63,18 +63,18 @@ function createSettings(): IxplorerSettings {
   };
 }
 
-function createProberHost(settings: IxplorerSettings): IxplorerPlugin {
+function createProberHost(settings: AttestSettings): AttestPlugin {
   return {
     settings,
     logger: new PluginDebugLogger({ getSettings: () => settings }),
     saveSettings: async () => {},
-  } as unknown as IxplorerPlugin;
+  } as unknown as AttestPlugin;
 }
 
-function createPlugin(app: App, settings: IxplorerSettings): IxplorerPlugin {
-  const plugin = new IxplorerPluginClass(app as unknown as ObsidianApp, {
-    id: "ixplorer",
-    name: "Ixplorer",
+function createPlugin(app: App, settings: AttestSettings): AttestPlugin {
+  const plugin = new AttestPluginClass(app as unknown as ObsidianApp, {
+    id: "attest",
+    name: "Attest",
     version: "0.0.0",
     minAppVersion: "1.0.0",
     author: "test",
@@ -125,7 +125,7 @@ describe("settings capability prober subscriptions", () => {
   it("does not accumulate a redisplay subscription across repeated display() calls", () => {
     const settings = createSettings();
     const app = new App();
-    const tab = new IxplorerSettingTab(app as unknown as ObsidianApp, createPlugin(app, settings));
+    const tab = new AttestSettingTab(app as unknown as ObsidianApp, createPlugin(app, settings));
     const prober = (tab as unknown as { prober: SettingsCapabilityProber }).prober;
 
     tab.display();
@@ -141,7 +141,7 @@ describe("settings capability prober subscriptions", () => {
   it("releases the redisplay subscription on hide()", () => {
     const settings = createSettings();
     const app = new App();
-    const tab = new IxplorerSettingTab(app as unknown as ObsidianApp, createPlugin(app, settings));
+    const tab = new AttestSettingTab(app as unknown as ObsidianApp, createPlugin(app, settings));
     const prober = (tab as unknown as { prober: SettingsCapabilityProber }).prober;
 
     tab.display();
@@ -162,7 +162,7 @@ describe("settings capability prober subscriptions", () => {
         saveSettings: async () => {
           saves += 1;
         },
-      } as IxplorerPlugin,
+      } as AttestPlugin,
       fetchedModelsByServerId: models,
       requestRedisplay: () => {},
     });
@@ -216,7 +216,7 @@ describe("settings capability prober subscriptions", () => {
         saveSettings: async () => {
           saves += 1;
         },
-      } as IxplorerPlugin,
+      } as AttestPlugin,
       fetchedModelsByServerId: new Map(),
       requestRedisplay: () => {},
     });

@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 import type { IndexProfile } from "@adapters/indexing";
 import { DEFAULT_INDEX_PROFILE, DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
-import type { IxplorerSettings } from "@adapters/settings";
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type { AttestSettings } from "@adapters/settings";
+import type AttestPlugin from "@apps/obsidian/main";
 import { createTranslator } from "@adapters/i18n";
 import { IndexProfilesSection } from "@apps/obsidian/ui/settings/IndexProfilesSection";
 import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
@@ -40,7 +40,7 @@ function enrichmentState() {
   };
 }
 
-function createPlugin(settings: IxplorerSettings): IxplorerPlugin {
+function createPlugin(settings: AttestSettings): AttestPlugin {
   return {
     settings,
     translate: createTranslator("en").t,
@@ -55,10 +55,10 @@ function createPlugin(settings: IxplorerSettings): IxplorerPlugin {
       subscribeAll: () => () => {},
     },
     saveSettings: async () => {},
-  } as unknown as IxplorerPlugin;
+  } as unknown as AttestPlugin;
 }
 
-function render(settings: IxplorerSettings): {
+function render(settings: AttestSettings): {
   container: HTMLElement;
   section: IndexProfilesSection;
 } {
@@ -70,10 +70,10 @@ function render(settings: IxplorerSettings): {
 }
 
 function rows(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(".ixplorer-settings-index-list__item"));
+  return Array.from(container.querySelectorAll<HTMLElement>(".attest-settings-index-list__item"));
 }
 
-function settingsWith(profiles: IndexProfile[], defaultIndexProfileId: string): IxplorerSettings {
+function settingsWith(profiles: IndexProfile[], defaultIndexProfileId: string): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: profiles,
@@ -111,7 +111,7 @@ describe("index profiles section rendering", () => {
 
     const [row] = rows(container);
     expect(rows(container)).toHaveLength(1);
-    expect(row.querySelector(".ixplorer-settings-profile-list__status")).toBeNull();
+    expect(row.querySelector(".attest-settings-profile-list__status")).toBeNull();
     expect(row.querySelector('button[aria-label="Set as default index"]')).toBeNull();
     section.dispose();
   });
@@ -134,7 +134,7 @@ describe("index profiles section rendering", () => {
     );
 
     const [row] = rows(container);
-    const status = row.querySelector(".ixplorer-settings-profile-list__status");
+    const status = row.querySelector(".attest-settings-profile-list__status");
     expect(status?.textContent).toBe("Suspended");
     expect(status?.getAttribute("title")).toBe("Select an embedding model profile.");
     expect(
@@ -158,7 +158,7 @@ describe("index profiles section rendering", () => {
 
     expect(rows(container)).toHaveLength(0);
     expect(
-      container.querySelector(".ixplorer-settings-profile-table__header")?.textContent,
+      container.querySelector(".attest-settings-profile-table__header")?.textContent,
     ).toContain("Status");
     expect(
       container.querySelector<HTMLButtonElement>('button[aria-label="Add index profile"]')
@@ -189,7 +189,7 @@ describe("index profiles section rendering", () => {
     );
 
     const statuses = rows(container).map(
-      (row) => row.querySelector(".ixplorer-settings-profile-list__status")?.textContent ?? null,
+      (row) => row.querySelector(".attest-settings-profile-list__status")?.textContent ?? null,
     );
     expect(statuses).toEqual([null, null]);
     section.dispose();

@@ -3,12 +3,12 @@ import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
 import { shardIdForSourcePath } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("FileVectorIndexStore", () => {
-  const folder = ".ixplorer/index";
+  const folder = ".attest/index";
   let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {
@@ -817,7 +817,7 @@ describe("FileVectorIndexStore manifest path containment", () => {
       profileId: "escape",
     });
 
-    expect(() => store.pathFor("../../secrets.json")).toThrow(IxplorerError);
+    expect(() => store.pathFor("../../secrets.json")).toThrow(AttestError);
     expect(() => store.pathFor("../../secrets.json")).toThrow(/outside its folder/);
     expect(() => store.pathFor("shards/../../../outside.bin")).toThrow(/outside its folder/);
 
@@ -825,7 +825,7 @@ describe("FileVectorIndexStore manifest path containment", () => {
       store.pathFor("../../secrets.json");
       expect.unreachable("path containment must reject the manifest entry");
     } catch (error) {
-      expect((error as IxplorerError).code).toBe("INDEX_REBUILD_REQUIRED");
+      expect((error as AttestError).code).toBe("INDEX_REBUILD_REQUIRED");
     }
     expect(store.pathFor("shards/00.chunks.jsonl")).toBe("index/shards/00.chunks.jsonl");
   });

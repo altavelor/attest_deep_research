@@ -1,5 +1,5 @@
 import { ChatModelClient } from "@adapters/model-provider";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -322,7 +322,7 @@ describe("ChatModelClient", () => {
       })) {
         void _chunk;
       }
-    }).rejects.toBeInstanceOf(IxplorerError);
+    }).rejects.toBeInstanceOf(AttestError);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -856,7 +856,7 @@ describe("ChatModelClient", () => {
       .mockResolvedValue(
         streamResponse(
           [
-            '{"message":{"role":"assistant","content":"<|tool_call>call:ixplorer.list_notes(path=\\"\\")<tool_call|>"},"done":false}\n',
+            '{"message":{"role":"assistant","content":"<|tool_call>call:attest.list_notes(path=\\"\\")<tool_call|>"},"done":false}\n',
             '{"message":{"role":"assistant","content":""},"done":true}\n',
           ],
           "application/x-ndjson",
@@ -939,7 +939,7 @@ describe("ChatModelClient", () => {
 
     await expect(client.listModels()).rejects.toMatchObject({
       code: "MODEL_PROVIDER_UNAVAILABLE",
-    } satisfies Partial<IxplorerError>);
+    } satisfies Partial<AttestError>);
   });
 
   it("maps missing chat models to recoverable errors", async () => {
@@ -958,6 +958,6 @@ describe("ChatModelClient", () => {
 
     await expect(stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
       code: "MODEL_NOT_FOUND",
-    } satisfies Partial<IxplorerError>);
+    } satisfies Partial<AttestError>);
   });
 });

@@ -2,9 +2,9 @@ import { DEFAULT_SETTINGS, cloneIndexProfile } from "./defaults";
 import { readNewChatDefaults } from "./newChatDefaults";
 import { normalizeSettingsState } from "./normalization";
 import { readUiLanguage } from "./uiLanguage";
-import { IxplorerSettings } from "./types";
+import { AttestSettings } from "./types";
 
-export function readSettings(savedData: unknown): IxplorerSettings {
+export function readSettings(savedData: unknown): AttestSettings {
   if (!isCurrentSettings(savedData)) {
     return dropUnknownSettings(DEFAULT_SETTINGS);
   }
@@ -14,7 +14,7 @@ export function readSettings(savedData: unknown): IxplorerSettings {
   return dropUnknownSettings(settings);
 }
 
-function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
+function cloneSettings(settings: AttestSettings): AttestSettings {
   return {
     ...settings,
     newChatDefaults: readNewChatDefaults(settings),
@@ -58,7 +58,7 @@ function cloneSettings(settings: IxplorerSettings): IxplorerSettings {
   };
 }
 
-function dropUnknownSettings(settings: IxplorerSettings): IxplorerSettings {
+function dropUnknownSettings(settings: AttestSettings): AttestSettings {
   return {
     serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
     chatModelProfiles: settings.chatModelProfiles.map((profile) => ({
@@ -111,12 +111,12 @@ function dropUnknownSettings(settings: IxplorerSettings): IxplorerSettings {
   };
 }
 
-function isCurrentSettings(value: unknown): value is IxplorerSettings {
+function isCurrentSettings(value: unknown): value is AttestSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
 
-  const settings = value as Partial<IxplorerSettings>;
+  const settings = value as Partial<AttestSettings>;
   return (
     Array.isArray(settings.serverProfiles) &&
     Array.isArray(settings.chatModelProfiles) &&

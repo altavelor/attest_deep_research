@@ -1,17 +1,17 @@
-.ixplorer-chat__citation-blocks {
+.attest-chat__citation-blocks {
   display: grid;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
 
-.ixplorer-chat__citation-summary {
+.attest-chat__citation-summary {
   cursor: pointer;
   color: var(--text-muted);
   font-size: var(--font-ui-small);
   font-weight: var(--font-semibold);
 }
 
-.ixplorer-chat__citation-anchor {
+.attest-chat__citation-anchor {
   display: inline-flex;
   height: 1.25rem;
   min-width: 1.25rem;
@@ -28,11 +28,11 @@
   vertical-align: baseline;
 }
 
-.ixplorer-chat__citation-anchor + .ixplorer-chat__citation-anchor {
+.attest-chat__citation-anchor + .attest-chat__citation-anchor {
   margin-inline-start: 0.25rem;
 }
 
-.ixplorer-chat__citation-block {
+.attest-chat__citation-block {
   display: grid;
   gap: 0.375rem;
   margin-top: 0.5rem;
@@ -43,22 +43,22 @@
   cursor: pointer;
 }
 
-.ixplorer-chat__citation-block:hover,
-.ixplorer-chat__citation-block:focus,
-.ixplorer-chat__citation-block.is-highlighted,
-.ixplorer-chat__citation-anchor.is-highlighted {
+.attest-chat__citation-block:hover,
+.attest-chat__citation-block:focus,
+.attest-chat__citation-block.is-highlighted,
+.attest-chat__citation-anchor.is-highlighted {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.ixplorer-chat__citation-block-header {
+.attest-chat__citation-block-header {
   display: flex;
   gap: 0.5rem;
   align-items: center;
   justify-content: space-between;
 }
 
-.ixplorer-chat__citation-number {
+.attest-chat__citation-number {
   display: inline-flex;
   width: 1.5rem;
   height: 1.5rem;
@@ -72,7 +72,7 @@
   font-weight: var(--font-semibold);
 }
 
-.ixplorer-chat__citation-block-source {
+.attest-chat__citation-block-source {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -83,7 +83,7 @@
   white-space: nowrap;
 }
 
-.ixplorer-chat__citation-copy {
+.attest-chat__citation-copy {
   width: 1.75rem;
   height: 1.75rem;
   padding: 0;
@@ -92,12 +92,12 @@
   transition: opacity 120ms ease;
 }
 
-.ixplorer-chat__citation-block:focus-within .ixplorer-chat__citation-copy,
-.ixplorer-chat__citation-block:hover .ixplorer-chat__citation-copy {
+.attest-chat__citation-block:focus-within .attest-chat__citation-copy,
+.attest-chat__citation-block:hover .attest-chat__citation-copy {
   opacity: 1;
 }
 
-.ixplorer-chat__citation-block-text {
+.attest-chat__citation-block-text {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-muted);
@@ -107,14 +107,14 @@
   white-space: pre-wrap;
 }
 
-.ixplorer-chat__citation-popover {
+.attest-chat__citation-popover {
   position: absolute;
   z-index: 30;
   width: min(34rem, calc(100% - 1rem));
   padding: 0;
 }
 
-.ixplorer-chat__citation-popover-card {
+.attest-chat__citation-popover-card {
   display: grid;
   gap: 0.375rem;
   padding: 0.625rem;
@@ -125,14 +125,14 @@
   cursor: pointer;
 }
 
-.ixplorer-chat__citation-popover-card:focus,
-.ixplorer-chat__citation-popover-card:hover {
+.attest-chat__citation-popover-card:focus,
+.attest-chat__citation-popover-card:hover {
   box-shadow:
     0 0 0 1px var(--interactive-accent),
     var(--shadow-s);
 }
 
-.ixplorer-chat__citation-popover-card:focus-within .ixplorer-chat__citation-copy,
-.ixplorer-chat__citation-popover-card:hover .ixplorer-chat__citation-copy {
+.attest-chat__citation-popover-card:focus-within .attest-chat__citation-copy,
+.attest-chat__citation-popover-card:hover .attest-chat__citation-copy {
   opacity: 1;
 }

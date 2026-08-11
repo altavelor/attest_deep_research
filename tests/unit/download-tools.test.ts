@@ -55,7 +55,7 @@ function makeDownloadTool(
   return new DownloadDocumentTool({
     provider: { search: vi.fn(), ...provider } as SearchProvider,
     writer,
-    defaultFolder: extra.defaultFolder ?? "Ixplorer/Downloads",
+    defaultFolder: extra.defaultFolder ?? "Attest/Downloads",
     confirmation: { confirm: extra.confirm ?? (async () => true) },
   });
 }
@@ -74,10 +74,10 @@ describe("DownloadDocumentTool", () => {
 
     expect(execution).toMatchObject({
       ok: true,
-      value: { path: "Ixplorer/Downloads/paper.pdf", bytes: 4, contentType: "application/pdf" },
+      value: { path: "Attest/Downloads/paper.pdf", bytes: 4, contentType: "application/pdf" },
     });
-    expect(writer.binary.get("Ixplorer/Downloads/paper.pdf")).toEqual(new Uint8Array([1, 2, 3, 4]));
-    expect(writer.folders.has("Ixplorer/Downloads")).toBe(true);
+    expect(writer.binary.get("Attest/Downloads/paper.pdf")).toEqual(new Uint8Array([1, 2, 3, 4]));
+    expect(writer.folders.has("Attest/Downloads")).toBe(true);
   });
 
   it("prefers the Content-Disposition filename over an opaque URL segment", async () => {
@@ -95,7 +95,7 @@ describe("DownloadDocumentTool", () => {
 
     expect(execution).toMatchObject({
       ok: true,
-      value: { path: "Ixplorer/Downloads/Annual Report.pdf" },
+      value: { path: "Attest/Downloads/Annual Report.pdf" },
     });
   });
 
@@ -139,7 +139,7 @@ describe("DownloadDocumentTool", () => {
   it("refuses to overwrite an existing file unless overwrite is set", async () => {
     const fetchDocument = vi.fn().mockResolvedValue(pdfDocument());
     const writer = new MemoryWriter();
-    writer.existing.add("Ixplorer/Downloads/paper.pdf");
+    writer.existing.add("Attest/Downloads/paper.pdf");
     const tool = makeDownloadTool({ fetchDocument }, writer);
 
     const blocked = await executeTool(tool, call({ url: "https://example.com/paper.pdf" }));
@@ -305,7 +305,7 @@ describe("documentDownload helpers", () => {
 
   it("rejects traversal and reserved paths", () => {
     expect(validateDownloadPath("../escape.pdf").ok).toBe(false);
-    expect(validateDownloadPath(".ixplorer/x.pdf").ok).toBe(false);
+    expect(validateDownloadPath(".attest/x.pdf").ok).toBe(false);
     expect(validateDownloadPath("Refs/ok.pdf").ok).toBe(true);
   });
 });

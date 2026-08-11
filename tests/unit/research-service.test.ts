@@ -739,7 +739,7 @@ describe("ResearchService", () => {
         {
           content: "",
           isComplete: true,
-          toolCalls: [{ id: "call-1", name: "list_notes", arguments: { path: "Ixplorer/" } }],
+          toolCalls: [{ id: "call-1", name: "list_notes", arguments: { path: "Attest/" } }],
         },
       ],
       [{ content: "Listed notes.", isComplete: true }],
@@ -759,7 +759,7 @@ describe("ResearchService", () => {
         parallelCalls: false,
       },
       noteTools: new NoteToolService({
-        files: new MemoryContextFiles({ "Ixplorer/note.md": "Ixplorer note" }),
+        files: new MemoryContextFiles({ "Attest/note.md": "Attest note" }),
         extractors: [new MarkdownExtractor()],
       }),
       now: fixedNow,
@@ -767,7 +767,7 @@ describe("ResearchService", () => {
 
     const events = await collectAsync(
       service.answer({
-        question: "show notes in ixplorer folder",
+        question: "show notes in attest folder",
         mode: "thinking",
         searchMode: "none",
         includeContextDiagnostics: true,

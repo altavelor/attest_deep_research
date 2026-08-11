@@ -13,7 +13,7 @@ export interface MenuDropdownHandle {
   setItemDisabled(id: string, reason: string | undefined): void;
 }
 
-const MENU_CLASS = "ixplorer-chat__menu";
+const MENU_CLASS = "attest-chat__menu";
 
 /** Creates a compact label-and-caret button backed by an Obsidian DOM menu. */
 export function createMenuDropdown(
@@ -28,13 +28,13 @@ export function createMenuDropdown(
     menuCls?: string;
   },
 ): MenuDropdownHandle {
-  const wrapEl = parentEl.createSpan({ cls: "ixplorer-chat__dropdown-wrap" });
+  const wrapEl = parentEl.createSpan({ cls: "attest-chat__dropdown-wrap" });
   const buttonEl = wrapEl.createEl("button", {
-    cls: `ixplorer-chat__dropdown ${config.cls}`,
+    cls: `attest-chat__dropdown ${config.cls}`,
     attr: { type: "button", "aria-label": config.ariaLabel },
   });
-  const valueEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-value" });
-  const caretEl = buttonEl.createSpan({ cls: "ixplorer-chat__dropdown-caret" });
+  const valueEl = buttonEl.createSpan({ cls: "attest-chat__dropdown-value" });
+  const caretEl = buttonEl.createSpan({ cls: "attest-chat__dropdown-caret" });
   setIcon(caretEl, "chevron-down");
 
   let currentId = config.initialId;

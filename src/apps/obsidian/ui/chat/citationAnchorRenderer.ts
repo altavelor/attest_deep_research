@@ -14,7 +14,7 @@ export function renderInlineCitationAnchors(
 
   const createAnchor = (ref: ChatCitationRef): HTMLElement => {
     const button = document.createElement("button");
-    button.className = "ixplorer-chat__citation-anchor";
+    button.className = "attest-chat__citation-anchor";
     button.type = "button";
     button.textContent = `[${ref.number}]`;
     button.setAttr("aria-label", options.t("chat.citation.openSource", { number: ref.number }));
