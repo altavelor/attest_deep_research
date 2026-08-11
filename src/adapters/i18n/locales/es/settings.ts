@@ -3,10 +3,10 @@ import type { EnSettingsMessages } from "../en/settings";
 export const settings: EnSettingsMessages = {
   "settings.language.heading": "Idioma",
   "settings.language.name": "Idioma de la interfaz",
-  "settings.language.desc": "Idioma de la interfaz de Ixplorer. Se aplica sin reiniciar Obsidian.",
+  "settings.language.desc": "Idioma de la interfaz de Attest. Se aplica sin reiniciar Obsidian.",
   "settings.language.auto": "Automático (según Obsidian)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "Inicio rápido",
   "settings.tab.quickStart.steps":
     "1. Añadir un servidor → 2. Añadir un modelo de chat → 3. (opcional) Añadir un índice",
@@ -18,7 +18,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.retrieval.heading": "Recuperación",
   "settings.retrieval.desc":
-    "Controla cómo Ixplorer busca evidencias locales, del grafo, del índice, de documentos y de la web antes de responder.",
+    "Controla cómo Attest busca evidencias locales, del grafo, del índice, de documentos y de la web antes de responder.",
   "settings.retrieval.graph.heading": "Grafo de Obsidian",
   "settings.retrieval.useLinkedNotes.name": "Usar notas enlazadas",
   "settings.retrieval.useLinkedNotes.desc":
@@ -74,7 +74,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "Fuentes externas",
   "settings.webSources.desc":
-    "Búsqueda web externa iniciada por la persona usuaria en las fuentes activadas. Ixplorer envía solo la pregunta escrita, nunca contenido recuperado de la bóveda.",
+    "Búsqueda web externa iniciada por la persona usuaria en las fuentes activadas. Attest envía solo la pregunta escrita, nunca contenido recuperado de la bóveda.",
   "settings.webSources.count": "{enabled} de {total} activadas",
   "settings.webSources.column.source": "Fuente",
   "settings.webSources.column.actions": "Acciones",

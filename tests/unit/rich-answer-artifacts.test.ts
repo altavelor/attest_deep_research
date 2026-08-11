@@ -267,7 +267,7 @@ describe("image url and path policy", () => {
     ["notes/a.png", true],
     ["../secret.png", false],
     ["/abs/a.png", false],
-    [".ixplorer/x.png", false],
+    [".attest/x.png", false],
     ["c:\\a.png", false],
   ])("vault path %s containment is %s", (path, expected) => {
     expect(isSafeVaultImagePath(path)).toBe(expected);

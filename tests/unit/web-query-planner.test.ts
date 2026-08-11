@@ -8,7 +8,7 @@ import {
   findWebSourceDescriptor,
 } from "@core/web";
 import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { parseWebSearchInput } from "@application/research";
 import { SearchProviderResult, WebSearchSource } from "@application/ports";
 import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
@@ -511,7 +511,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("reports the fate of every source in the selection trace", async () => {
-    const unauthorized = new IxplorerError({
+    const unauthorized = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Brave rejected the credentials.",
       details: { sourceId: "brave", reason: "unauthorized" },
@@ -561,7 +561,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("falls back to the sources dropped for the intent when every qualified one is suspended", async () => {
-    const unauthorized = new IxplorerError({
+    const unauthorized = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Wikipedia rejected the credentials.",
       details: { sourceId: "wikipedia", reason: "unauthorized" },
@@ -588,7 +588,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("queries the intent fallback by score rather than by registry order", async () => {
-    const unauthorized = new IxplorerError({
+    const unauthorized = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Wikipedia rejected the credentials.",
       details: { sourceId: "wikipedia", reason: "unauthorized" },
@@ -615,7 +615,7 @@ describe("WebQueryPlanner", () => {
 
   it("reports every source when the intent fallback finds nothing healthy either", async () => {
     const suspend = (sourceId: string) =>
-      new IxplorerError({
+      new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: `${sourceId} rejected the credentials.`,
         details: { sourceId, reason: "unauthorized" },
@@ -688,7 +688,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("auto-suspends a source on unauthorized and skips it in later searches", async () => {
-    const unauthorized = new IxplorerError({
+    const unauthorized = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Brave rejected the credentials.",
       details: { sourceId: "brave", reason: "unauthorized" },
@@ -707,7 +707,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("suspends rate-limited sources only until the cooldown passes", async () => {
-    const rateLimited = new IxplorerError({
+    const rateLimited = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Brave rate limit exceeded.",
       details: { sourceId: "brave", reason: "rate-limited" },
@@ -732,7 +732,7 @@ describe("WebQueryPlanner", () => {
   });
 
   it("shares suspensions across planner instances via an external health tracker", async () => {
-    const unauthorized = new IxplorerError({
+    const unauthorized = new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: "Brave rejected the credentials.",
       details: { sourceId: "brave", reason: "unauthorized" },
@@ -794,7 +794,7 @@ describe("WebQueryPlanner", () => {
     const health = new WebSourceHealthTracker();
     const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000, "auto", () => {
       // What HttpWebSearchSource actually throws when its request is aborted.
-      throw new IxplorerError({
+      throw new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: "DuckDuckGo timed out.",
         details: { sourceId: "duckduckgo", reason: "timeout" },

@@ -47,7 +47,7 @@ function panelRefs(host: HTMLElement) {
   const form = host.querySelector<HTMLFormElement>("form");
   const profile = host.querySelector<HTMLSelectElement>("select");
   const query = host.querySelector<HTMLTextAreaElement>("textarea");
-  const button = host.querySelector<HTMLButtonElement>(".ixplorer-index-search__button");
+  const button = host.querySelector<HTMLButtonElement>(".attest-index-search__button");
   if (!form || !profile || !query || !button) {
     throw new Error("The index-search panel did not render its controls.");
   }
@@ -166,7 +166,7 @@ describe("index search panel accessibility roles", () => {
 
     controller.render(container);
 
-    const warning = container.querySelector<HTMLElement>(".ixplorer-index-search__warning");
+    const warning = container.querySelector<HTMLElement>(".attest-index-search__warning");
     expect(warning?.getAttribute("role")).toBe("alert");
     expect(warning?.textContent).toBe("Embedder is missing.");
   });
@@ -175,20 +175,20 @@ describe("index search panel accessibility roles", () => {
     const { controller } = createController();
     controller.render(container);
 
-    const results = container.querySelector<HTMLElement>(".ixplorer-index-search__results");
+    const results = container.querySelector<HTMLElement>(".attest-index-search__results");
     expect(results?.getAttribute("role")).toBe("list");
 
     const refs = panelRefs(container);
     refs.query.value = "matched";
     refs.submit();
     await vi.waitFor(() => {
-      if (!container.querySelector(".ixplorer-index-search__result")) {
+      if (!container.querySelector(".attest-index-search__result")) {
         throw new Error("No result rendered yet.");
       }
     });
 
     const items = Array.from(
-      container.querySelectorAll<HTMLElement>(".ixplorer-index-search__result"),
+      container.querySelectorAll<HTMLElement>(".attest-index-search__result"),
     );
     expect(items).toHaveLength(1);
     expect(items[0]?.getAttribute("role")).toBe("listitem");

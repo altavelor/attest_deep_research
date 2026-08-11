@@ -104,7 +104,7 @@ describe("settings shared UI helpers", () => {
 
     button.click();
     expect(onClick).toHaveBeenCalledTimes(1);
-    expect(container.querySelector(".ixplorer-settings__category-heading")?.textContent).toContain(
+    expect(container.querySelector(".attest-settings__category-heading")?.textContent).toContain(
       "Models",
     );
     expect((container.querySelectorAll("button")[1] as HTMLButtonElement).disabled).toBe(true);

@@ -78,11 +78,11 @@ function renderMessage(
   options: ChatTranscriptOptions,
 ): void {
   const messageEl = transcriptEl.createDiv({
-    cls: `ixplorer-chat__message ixplorer-chat__message--${message.role}`,
+    cls: `attest-chat__message attest-chat__message--${message.role}`,
   });
   renderMessageHeader(messageEl, message, index, options);
   const contentEl = messageEl.createDiv({
-    cls: `ixplorer-chat__message-content ixplorer-chat__message-content--${message.role}`,
+    cls: `attest-chat__message-content attest-chat__message-content--${message.role}`,
   });
   if (message.role === "user" && options.editingMessageIndex === index) {
     renderQuestionEditor(contentEl, message, index, options);
@@ -100,16 +100,16 @@ function renderMessageHeader(
   index: number,
   options: ChatTranscriptOptions,
 ): void {
-  const header = messageEl.createDiv({ cls: "ixplorer-chat__message-header" });
+  const header = messageEl.createDiv({ cls: "attest-chat__message-header" });
   header.createSpan({
-    cls: "ixplorer-chat__message-label",
+    cls: "attest-chat__message-label",
     text:
       message.role === "user"
         ? options.t("chat.message.you")
         : message.modelName || options.assistantLabel || options.t("chat.message.assistant"),
   });
   header.createSpan({
-    cls: "ixplorer-chat__message-time",
+    cls: "attest-chat__message-time",
     text: formatMessageTime(message.createdAt, options.locale ?? DEFAULT_LOCALE),
   });
   renderHeaderActions(header, message, index, options);
@@ -137,29 +137,29 @@ function renderUserMessageContent(
   const contextPaths = message.contextPaths ?? [];
   if (contextPaths.length > 0) {
     const contextEl = containerEl.createDiv({
-      cls: "ixplorer-chat__message-context",
+      cls: "attest-chat__message-context",
       attr: { role: "list", "aria-label": t("chat.message.contextDocuments.aria") },
     });
     for (const path of contextPaths) {
       const itemEl = contextEl.createDiv({
-        cls: "ixplorer-chat__message-context-item",
+        cls: "attest-chat__message-context-item",
         attr: { role: "listitem", title: path },
       });
       setIcon(
         itemEl.createSpan({
-          cls: "ixplorer-chat__message-context-icon",
+          cls: "attest-chat__message-context-icon",
           attr: { "aria-hidden": "true" },
         }),
         path.endsWith("/") ? "folder" : "file-text",
       );
       itemEl.createSpan({
-        cls: "ixplorer-chat__message-context-name",
+        cls: "attest-chat__message-context-name",
         text: attachmentDisplayName(path),
       });
     }
   }
   containerEl.createDiv({
-    cls: "ixplorer-chat__message-text",
+    cls: "attest-chat__message-text",
     text: messageDisplayContent(message),
   });
 }
@@ -176,20 +176,20 @@ function renderHeaderActions(
 ): void {
   let actions: HTMLElement | null = null;
   const ensureActions = (): HTMLElement =>
-    (actions ??= header.createDiv({ cls: "ixplorer-chat__message-actions" }));
+    (actions ??= header.createDiv({ cls: "attest-chat__message-actions" }));
   if (message.role === "user") {
     createMessageIconButton(
       ensureActions(),
       "pencil",
       options.t("chat.message.edit"),
-      "ixplorer-chat__message-edit",
+      "attest-chat__message-edit",
       () => options.onEditQuestion(index),
     );
     createMessageIconButton(
       ensureActions(),
       "copy",
       options.t("chat.message.copy"),
-      "ixplorer-chat__message-copy",
+      "attest-chat__message-copy",
       () => {
         void copyToClipboard(messageDisplayContent(message), options.t);
       },
@@ -200,7 +200,7 @@ function renderHeaderActions(
       ensureActions(),
       "bug",
       options.t("chat.message.diagnostic"),
-      "ixplorer-chat__message-diagnostic",
+      "attest-chat__message-diagnostic",
       () => options.onOpenDiagnosticReport(message.contextDiagnostics!),
     );
   }
@@ -234,9 +234,9 @@ export function patchActiveAssistantMessage(
     .reverse()
     .find((candidate) => candidate.kind !== "compact-summary");
   if (message?.role !== "assistant") return false;
-  const messageElements = transcriptEl.querySelectorAll<HTMLElement>(".ixplorer-chat__message");
+  const messageElements = transcriptEl.querySelectorAll<HTMLElement>(".attest-chat__message");
   const messageEl = messageElements.item(messageElements.length - 1);
-  if (!messageEl?.classList.contains("ixplorer-chat__message--assistant")) return false;
+  if (!messageEl?.classList.contains("attest-chat__message--assistant")) return false;
   if (!patchAssistantMessageContent(messageEl, message, options)) return false;
   applyScrollAnchor(transcriptEl, scroll);
   return true;
@@ -279,10 +279,10 @@ export function renderFollowUps(
   containerEl.empty();
   if (followUps.length === 0) return;
   containerEl.createEl("h3", { text: t("chat.followUps.title") });
-  const list = containerEl.createDiv({ cls: "ixplorer-chat__followup-list" });
+  const list = containerEl.createDiv({ cls: "attest-chat__followup-list" });
   for (const question of followUps) {
     const button = list.createEl("button", {
-      cls: "ixplorer-chat__followup",
+      cls: "attest-chat__followup",
       text: question,
       attr: { type: "button" },
     });
@@ -297,7 +297,7 @@ function renderQuestionEditor(
   options: ChatTranscriptOptions,
 ): void {
   const textarea = containerEl.createEl("textarea", {
-    cls: "ixplorer-chat__message-editor",
+    cls: "attest-chat__message-editor",
     attr: { rows: "2", "aria-label": options.t("chat.message.edit") },
   });
   textarea.value = message.content;

@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import {
   areCredentialsComplete,
   extractSiteFilters,
@@ -163,7 +163,7 @@ export class HttpWebSearchSource implements WebSearchSource {
       }
       return await response.text();
     } catch (error) {
-      if (error instanceof IxplorerError) {
+      if (error instanceof AttestError) {
         this.logger?.logError(error, context);
         throw error;
       }
@@ -178,7 +178,7 @@ export class HttpWebSearchSource implements WebSearchSource {
     }
   }
 
-  private httpFailure(status: number): IxplorerError {
+  private httpFailure(status: number): AttestError {
     if (status === 401 || status === 403) {
       return this.failure("unauthorized", `rejected the credentials (HTTP ${status}).`, undefined, {
         status,
@@ -196,8 +196,8 @@ export class HttpWebSearchSource implements WebSearchSource {
     suffix: string,
     cause?: unknown,
     details?: Record<string, unknown>,
-  ): IxplorerError {
-    return new IxplorerError({
+  ): AttestError {
+    return new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: `${this.descriptor.label} ${suffix}`,
       ...(cause !== undefined ? { cause } : {}),

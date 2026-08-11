@@ -79,7 +79,7 @@ describe("saved answer artifacts with untrusted content", () => {
     );
 
     expect(rendered).toBe(false);
-    expect(container.querySelector(".ixplorer-gallery")).toBeNull();
+    expect(container.querySelector(".attest-gallery")).toBeNull();
   });
 
   it("rejects a gallery holding a vault path that escapes the vault, keeping valid ones", () => {
@@ -99,8 +99,8 @@ describe("saved answer artifacts with untrusted content", () => {
     );
 
     expect(rendered).toBe(true);
-    expect(container.querySelectorAll(".ixplorer-gallery")).toHaveLength(1);
-    expect(container.querySelector(".ixplorer-artifact__title")?.textContent).toBe("Valid");
+    expect(container.querySelectorAll(".attest-gallery")).toHaveLength(1);
+    expect(container.querySelector(".attest-artifact__title")?.textContent).toBe("Valid");
     expect(container.innerHTML).not.toContain("passwd");
   });
 
@@ -123,7 +123,7 @@ describe("saved answer artifacts with untrusted content", () => {
 
     await settle();
 
-    expect(container.querySelector(".ixplorer-gallery__alt")?.textContent).toBe(
+    expect(container.querySelector(".attest-gallery__alt")?.textContent).toBe(
       "<img src=x onerror=alert(1)>",
     );
     expect(container.querySelectorAll("img")).toHaveLength(1);
@@ -145,9 +145,9 @@ describe("saved answer artifacts with untrusted content", () => {
     );
     await settle();
 
-    const trigger = container.querySelector<HTMLButtonElement>(".ixplorer-gallery__trigger");
+    const trigger = container.querySelector<HTMLButtonElement>(".attest-gallery__trigger");
     expect(trigger?.disabled).toBe(true);
-    expect(container.querySelector(".ixplorer-artifact__unavailable")).not.toBeNull();
+    expect(container.querySelector(".attest-artifact__unavailable")).not.toBeNull();
   });
 
   it("serves a vault file image from its resource path without an object URL", async () => {

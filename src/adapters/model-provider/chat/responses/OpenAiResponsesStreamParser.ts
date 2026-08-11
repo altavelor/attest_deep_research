@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { ModelOutputItem, ModelRoundResult } from "@core/agent";
 
 export interface ParsedResponsesRound {
@@ -129,8 +129,8 @@ function requireRecord(value: unknown, reason: string): Record<string, unknown> 
   return record;
 }
 
-export function protocolError(reason: string): IxplorerError {
-  return new IxplorerError({
+export function protocolError(reason: string): AttestError {
+  return new AttestError({
     code: "MODEL_PROVIDER_UNAVAILABLE",
     message: "The Responses provider returned an invalid stream.",
     details: { reason },

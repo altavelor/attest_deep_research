@@ -14,7 +14,7 @@ function appFor(existing: TFile | null = null) {
       getFolderByPath: vi.fn(() => null),
       createFolder: vi.fn().mockResolvedValue(undefined),
       getAbstractFileByPath: vi.fn(() => existing),
-      create: vi.fn().mockResolvedValue(file("Ixplorer/tool-output.md")),
+      create: vi.fn().mockResolvedValue(file("Attest/tool-output.md")),
       modify: vi.fn().mockResolvedValue(undefined),
     },
     workspace: { getLeaf: vi.fn(() => ({ openFile })) },
@@ -34,23 +34,23 @@ describe("ToolOutputViewer", () => {
       name: "search_index",
       intent: "Search local index",
       status: "complete",
-      args: { query: "Ixplorer" },
+      args: { query: "Attest" },
       resultJson: '{"hits":1}',
     });
 
-    expect(app.vault.createFolder).toHaveBeenCalledWith("Ixplorer");
+    expect(app.vault.createFolder).toHaveBeenCalledWith("Attest");
     expect(app.vault.create).toHaveBeenCalledWith(
-      "Ixplorer/tool-output.md",
+      "Attest/tool-output.md",
       expect.stringContaining('"hits": 1'),
     );
     expect(app.workspace.getLeaf).toHaveBeenCalledWith("tab");
     expect(app.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "Ixplorer/tool-output.md" }),
+      expect.objectContaining({ path: "Attest/tool-output.md" }),
     );
   });
 
   it("updates the reusable note instead of creating another one", async () => {
-    const existing = file("Ixplorer/tool-output.md");
+    const existing = file("Attest/tool-output.md");
     const app = appFor(existing);
     const viewer = new ToolOutputViewer(
       app as never,

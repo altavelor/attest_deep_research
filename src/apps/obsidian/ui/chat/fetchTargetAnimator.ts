@@ -6,7 +6,7 @@ export class FetchTargetAnimator {
     const showNextTarget = (): void => {
       if (!targetList.isConnected) return;
       targetElements.forEach((targetEl, targetIndex) => {
-        targetEl.toggleClass("ixplorer-chat__tool-fetch-target--active", targetIndex === index);
+        targetEl.toggleClass("attest-chat__tool-fetch-target--active", targetIndex === index);
       });
       index = (index + 1) % targetElements.length;
       const timer = window.setTimeout(() => {
@@ -27,7 +27,7 @@ export class FetchTargetAnimator {
 const animatorsByTranscript = new WeakMap<HTMLElement, FetchTargetAnimator>();
 
 export function animateFetchTargets(targetList: HTMLElement, targetElements: HTMLElement[]): void {
-  const transcriptEl = targetList.closest<HTMLElement>(".ixplorer-chat__transcript");
+  const transcriptEl = targetList.closest<HTMLElement>(".attest-chat__transcript");
   if (!transcriptEl) return;
   const animator = animatorsByTranscript.get(transcriptEl) ?? new FetchTargetAnimator();
   animatorsByTranscript.set(transcriptEl, animator);
@@ -35,8 +35,8 @@ export function animateFetchTargets(targetList: HTMLElement, targetElements: HTM
 }
 
 export function disposeFetchTargetAnimations(containerEl: HTMLElement): void {
-  const transcriptEl = containerEl.matches(".ixplorer-chat__transcript")
+  const transcriptEl = containerEl.matches(".attest-chat__transcript")
     ? containerEl
-    : containerEl.closest<HTMLElement>(".ixplorer-chat__transcript");
+    : containerEl.closest<HTMLElement>(".attest-chat__transcript");
   animatorsByTranscript.get(transcriptEl ?? containerEl)?.dispose();
 }

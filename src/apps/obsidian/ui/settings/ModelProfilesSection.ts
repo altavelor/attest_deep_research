@@ -14,13 +14,13 @@ import { renderProfileList, renderProfileListItem } from "./ProfileListRenderer"
 import { ServerProfileModal } from "./ServerProfileModal";
 import { SettingsCapabilityProber } from "./SettingsCapabilityProber";
 import { renderCategoryHeading, statusForProfile } from "./shared";
-import type { IxplorerSettings } from "@adapters/settings";
+import type { AttestSettings } from "@adapters/settings";
 
 export interface ModelProfilesSectionOptions {
   app: App;
   t: Translate;
   getDirection?(): TextDirection;
-  settings: IxplorerSettings;
+  settings: AttestSettings;
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   prober: SettingsCapabilityProber;
   saveSettings(): Promise<void>;
@@ -105,7 +105,7 @@ export class ModelProfilesSection {
         extraActions: [
           {
             icon: "flask-conical",
-            className: `ixplorer-settings__test-capabilities-action${isTesting ? " is-testing" : ""}`,
+            className: `attest-settings__test-capabilities-action${isTesting ? " is-testing" : ""}`,
             label: isTesting
               ? t("settings.models.chat.testingLabel")
               : formatCapabilityStatus(t, capability),
@@ -128,7 +128,7 @@ export class ModelProfilesSection {
     }
   }
 
-  private openChatModal(profile?: IxplorerSettings["chatModelProfiles"][number]): void {
+  private openChatModal(profile?: AttestSettings["chatModelProfiles"][number]): void {
     const { settings } = this.options;
     new ModelProfileModal(this.options.app, {
       t: this.options.t,
@@ -188,7 +188,7 @@ export class ModelProfilesSection {
         extraActions: [
           {
             icon: "star",
-            className: "ixplorer-settings__default-action",
+            className: "attest-settings__default-action",
             label:
               settings.activeEmbeddingModelProfileId === profile.id
                 ? t("settings.models.embedding.defaultAction")
@@ -219,7 +219,7 @@ export class ModelProfilesSection {
     }
   }
 
-  private openEmbeddingModal(profile?: IxplorerSettings["embeddingModelProfiles"][number]): void {
+  private openEmbeddingModal(profile?: AttestSettings["embeddingModelProfiles"][number]): void {
     const { settings } = this.options;
     new ModelProfileModal(this.options.app, {
       t: this.options.t,

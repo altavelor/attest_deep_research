@@ -1,4 +1,4 @@
-import { isIxplorerError, IxplorerError } from "@core/errors";
+import { isAttestError, AttestError } from "@core/errors";
 import { VaultFileSummary } from "@application/ports";
 import { positiveIntegerOrDefault } from "@shared";
 import type { IndexFailedSourceSnapshot } from "@application/ports";
@@ -319,7 +319,7 @@ function defaultYieldToEventLoop(): Promise<void> {
 }
 
 function indexingErrorMessage(error: unknown): string {
-  if (isIxplorerError(error)) {
+  if (isAttestError(error)) {
     const message = error.message.trim();
     const causeMessage =
       typeof error.details?.causeMessage === "string" ? error.details.causeMessage.trim() : "";
@@ -339,7 +339,7 @@ function indexingErrorMessage(error: unknown): string {
 }
 
 function indexingErrorDetails(error: unknown): Record<string, unknown> | undefined {
-  if (error instanceof IxplorerError) {
+  if (error instanceof AttestError) {
     return error.details;
   }
 

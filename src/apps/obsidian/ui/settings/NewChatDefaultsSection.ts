@@ -1,5 +1,5 @@
 import {
-  IxplorerSettings,
+  AttestSettings,
   NEW_CHAT_SEARCH_MODES,
   NewChatSearchMode,
   supportsThinkingMode,
@@ -10,7 +10,7 @@ import { renderCategoryHeading } from "./shared";
 
 export interface NewChatDefaultsSectionOptions {
   t: Translate;
-  settings: IxplorerSettings;
+  settings: AttestSettings;
   saveSettings(): Promise<void>;
   requestRedisplay(): void;
 }
@@ -40,7 +40,7 @@ export class NewChatDefaultsSection {
     this.renderActiveFileContext(containerEl);
   }
 
-  private get defaults(): IxplorerSettings["newChatDefaults"] {
+  private get defaults(): AttestSettings["newChatDefaults"] {
     return this.options.settings.newChatDefaults;
   }
 

@@ -3,10 +3,10 @@ import type { EnSettingsMessages } from "../en/settings";
 export const settings: EnSettingsMessages = {
   "settings.language.heading": "Язык",
   "settings.language.name": "Язык интерфейса",
-  "settings.language.desc": "Язык интерфейса Ixplorer. Применяется без перезапуска Obsidian.",
+  "settings.language.desc": "Язык интерфейса Attest. Применяется без перезапуска Obsidian.",
   "settings.language.auto": "Автоматически (как в Obsidian)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "Быстрый старт",
   "settings.tab.quickStart.steps":
     "1. Добавьте сервер → 2. Добавьте чат-модель → 3. (необязательно) Добавьте индекс",
@@ -18,7 +18,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.retrieval.heading": "Поиск свидетельств",
   "settings.retrieval.desc":
-    "Определяет, как Ixplorer ищет свидетельства в заметках, графе, индексе, документах и вебе перед ответом.",
+    "Определяет, как Attest ищет свидетельства в заметках, графе, индексе, документах и вебе перед ответом.",
   "settings.retrieval.graph.heading": "Граф Obsidian",
   "settings.retrieval.useLinkedNotes.name": "Использовать связанные заметки",
   "settings.retrieval.useLinkedNotes.desc":
@@ -73,7 +73,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "Внешние источники",
   "settings.webSources.desc":
-    "Внешний веб-поиск по включённым источникам, запускаемый пользователем. Ixplorer отправляет только введённый вопрос и никогда — содержимое хранилища.",
+    "Внешний веб-поиск по включённым источникам, запускаемый пользователем. Attest отправляет только введённый вопрос и никогда — содержимое хранилища.",
   "settings.webSources.count": "включено {enabled} из {total}",
   "settings.webSources.column.source": "Источник",
   "settings.webSources.column.actions": "Действия",

@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { OpenAiResponsesClient } from "@adapters/model-provider";
 import { parseResponsesTerminalEvent } from "@adapters/model-provider/chat/responses/OpenAiResponsesStreamParser";
 
@@ -10,7 +10,7 @@ function completed(output: unknown[], usage?: unknown): unknown {
 }
 
 function expectProtocolError(value: unknown, reason: string): void {
-  expect(() => parseResponsesTerminalEvent(value)).toThrow(IxplorerError);
+  expect(() => parseResponsesTerminalEvent(value)).toThrow(AttestError);
   try {
     parseResponsesTerminalEvent(value);
   } catch (error) {

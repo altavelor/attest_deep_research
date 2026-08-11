@@ -193,7 +193,7 @@ function parseIpv6(value: string): number[] | undefined {
   return [...head, ...Array.from({ length: fill }, () => 0), ...tail];
 }
 
-/** True when the path stays inside the vault and outside Ixplorer's own folders. */
+/** True when the path stays inside the vault and outside Attest's own folders. */
 export function isSafeVaultImagePath(path: string): boolean {
   const trimmed = path.trim();
   if (!trimmed || trimmed.length > 1024) return false;

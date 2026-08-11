@@ -137,8 +137,8 @@ describe("validateMutablePath", () => {
     expect(validateMutablePath("")).toEqual({ ok: false, reason: "invalid-path" });
   });
 
-  it("rejects .ixplorer/ paths", () => {
-    expect(validateMutablePath(".ixplorer/skills/foo.md")).toEqual({
+  it("rejects .attest/ paths", () => {
+    expect(validateMutablePath(".attest/skills/foo.md")).toEqual({
       ok: false,
       reason: "forbidden-path",
     });
@@ -334,13 +334,13 @@ describe("create_note tool", () => {
     expect(writer.files.get("Notes/Exists.md")).toBe("new");
   });
 
-  it("returns forbidden-path for .ixplorer/ path", async () => {
+  it("returns forbidden-path for .attest/ path", async () => {
     const writer = makeWriter();
     const svc = makeService(writer);
     const result = await svc.execute({
       id: "c4",
       name: "create_note",
-      arguments: { path: ".ixplorer/skills/foo.md", content: "x" },
+      arguments: { path: ".attest/skills/foo.md", content: "x" },
     });
     expect(JSON.parse(result.result).reason).toBe("forbidden-path");
   });
@@ -494,13 +494,13 @@ describe("delete_note tool", () => {
     expect(JSON.parse(result.result).reason).toBe("not-found");
   });
 
-  it("returns forbidden-path for .ixplorer/ path", async () => {
-    const writer = makeWriter({ ".ixplorer/foo.md": "x" });
+  it("returns forbidden-path for .attest/ path", async () => {
+    const writer = makeWriter({ ".attest/foo.md": "x" });
     const svc = makeService(writer);
     const result = await svc.execute({
       id: "d3",
       name: "delete_note",
-      arguments: { path: ".ixplorer/foo.md" },
+      arguments: { path: ".attest/foo.md" },
     });
     expect(JSON.parse(result.result).reason).toBe("forbidden-path");
   });

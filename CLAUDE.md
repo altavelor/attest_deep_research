@@ -1,4 +1,4 @@
-# Ixplorer — Claude Code instructions
+# Attest — Claude Code instructions
 
 The project architecture rules (mandatory and shared by all agents) are documented
 in [AGENTS.md](AGENTS.md). Follow them for every code extension or refactor.

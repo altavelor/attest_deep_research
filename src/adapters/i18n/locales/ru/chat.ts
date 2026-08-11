@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "Открыть чат Ixplorer",
+  "command.openChat": "Открыть чат Attest",
 
   "chat.tab.chat": "Чат",
   "chat.tab.indexSearch": "Поиск по индексу",
@@ -33,10 +33,10 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.stop": "Остановить текущий ответ",
   "chat.composer.submit.unavailable": "Вопрос недоступен: {message}",
 
-  "chat.status.noChatModel": "Создайте и выберите профиль чат-модели в настройках Ixplorer.",
-  "chat.status.noIndex": "Создайте и выберите активный индекс в настройках Ixplorer.",
+  "chat.status.noChatModel": "Создайте и выберите профиль чат-модели в настройках Attest.",
+  "chat.status.noIndex": "Создайте и выберите активный индекс в настройках Attest.",
   "chat.status.webSearchDisabled":
-    "Включите веб-поиск в настройках Ixplorer, чтобы использовать этот режим поиска.",
+    "Включите веб-поиск в настройках Attest, чтобы использовать этот режим поиска.",
   "chat.status.legacyIndexImages":
     "Текстовый поиск с этим индексом работает, но для поиска изображений в документах нужна полная пересборка.",
   "chat.status.contextWindow.unknown": "Размер контекстного окна модели неизвестен",
@@ -128,9 +128,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} д",
   "chat.savedChats.time.weeks": "{count} нед",
 
-  "chat.answerNote.saved": "Ответ Ixplorer сохранён в новую заметку.",
-  "chat.answerNote.openNoteFirst": "Откройте заметку, прежде чем добавлять в неё ответ Ixplorer.",
-  "chat.answerNote.appended": "Ответ Ixplorer добавлен в активную заметку.",
+  "chat.answerNote.saved": "Ответ Attest сохранён в новую заметку.",
+  "chat.answerNote.openNoteFirst": "Откройте заметку, прежде чем добавлять в неё ответ Attest.",
+  "chat.answerNote.appended": "Ответ Attest добавлен в активную заметку.",
 
   "chat.research.contextTooLong":
     "Текущий чат слишком длинный для контекстного окна выбранной модели.",

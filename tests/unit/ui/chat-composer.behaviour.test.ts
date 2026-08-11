@@ -79,11 +79,11 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     controller,
     redisplay,
     state,
-    textarea: () => query<HTMLTextAreaElement>("textarea.ixplorer-chat__input"),
-    submitButton: () => query<HTMLButtonElement>("button.ixplorer-chat__submit"),
-    modelButton: () => query<HTMLButtonElement>("button.ixplorer-chat__dropdown--model"),
-    attachButton: () => query<HTMLButtonElement>("button.ixplorer-chat__icon-button"),
-    contextIndicator: () => query(".ixplorer-chat__context-indicator"),
+    textarea: () => query<HTMLTextAreaElement>("textarea.attest-chat__input"),
+    submitButton: () => query<HTMLButtonElement>("button.attest-chat__submit"),
+    modelButton: () => query<HTMLButtonElement>("button.attest-chat__dropdown--model"),
+    attachButton: () => query<HTMLButtonElement>("button.attest-chat__icon-button"),
+    contextIndicator: () => query(".attest-chat__context-indicator"),
   };
 }
 
@@ -139,7 +139,7 @@ describe("chat composer redisplay", () => {
     harness.redisplay();
 
     const names = Array.from(
-      container.querySelectorAll(".ixplorer-chat__attachment-name"),
+      container.querySelectorAll(".attest-chat__attachment-name"),
       (element) => element.textContent,
     );
     expect(names).toEqual(["One.md", "Folder"]);
@@ -214,13 +214,13 @@ describe("chat composer run state", () => {
     harness.controller.updateSubmitAvailability();
 
     const indicator = harness.contextIndicator();
-    expect(indicator.style.getPropertyValue("--ixplorer-context-used")).toBe("95%");
+    expect(indicator.style.getPropertyValue("--attest-context-used")).toBe("95%");
     expect(indicator.classList.contains("is-warning")).toBe(true);
 
     harness.state.contextWindowUsage = null;
     harness.controller.updateSubmitAvailability();
 
-    expect(indicator.style.getPropertyValue("--ixplorer-context-used")).toBe("0%");
+    expect(indicator.style.getPropertyValue("--attest-context-used")).toBe("0%");
     expect(indicator.getAttribute("title")).toBe("Unknown model context window size");
   });
 });

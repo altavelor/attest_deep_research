@@ -194,14 +194,14 @@ export class ChatComposerController {
     const usage = this.options.getContextWindowUsage();
     if (!usage) {
       const unknown = this.options.t("chat.status.contextWindow.unknown");
-      contextIndicatorEl.style.setProperty("--ixplorer-context-used", "0%");
+      contextIndicatorEl.style.setProperty("--attest-context-used", "0%");
       contextIndicatorEl.setAttr("title", unknown);
       contextIndicatorEl.setAttr("aria-label", unknown);
       return;
     }
 
     const status = contextWindowStatus(usage.estimatedTokens, usage.limitTokens, this.options.t);
-    contextIndicatorEl.style.setProperty("--ixplorer-context-used", `${status.usedPercent}%`);
+    contextIndicatorEl.style.setProperty("--attest-context-used", `${status.usedPercent}%`);
     contextIndicatorEl.toggleClass("is-warning", status.isWarning);
     contextIndicatorEl.setAttr("title", status.title);
     contextIndicatorEl.setAttr("aria-label", status.ariaLabel);

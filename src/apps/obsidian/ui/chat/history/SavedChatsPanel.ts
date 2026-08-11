@@ -36,32 +36,32 @@ export function renderSavedChatsEmptyState(
   containerEl: HTMLElement,
   options: SavedChatsEmptyStateOptions,
 ): void {
-  const empty = containerEl.createDiv({ cls: "ixplorer-chat__empty-state" });
-  const header = empty.createDiv({ cls: "ixplorer-chat__empty-header" });
+  const empty = containerEl.createDiv({ cls: "attest-chat__empty-state" });
+  const header = empty.createDiv({ cls: "attest-chat__empty-header" });
   header.createEl("h3", { text: options.t("chat.savedChats.title") });
   header.createSpan({
-    cls: "ixplorer-chat__empty-count",
+    cls: "attest-chat__empty-count",
     text: options.t("chat.savedChats.count", { count: options.savedChats.length }),
   });
 
   if (options.savedChats.length === 0) {
     empty.createDiv({
-      cls: "ixplorer-chat__empty-note",
+      cls: "attest-chat__empty-note",
       text: options.t("chat.savedChats.empty"),
     });
     return;
   }
 
-  const list = empty.createDiv({ cls: "ixplorer-chat__saved-list" });
+  const list = empty.createDiv({ cls: "attest-chat__saved-list" });
   const visibleChats = options.savedChats.slice(0, 5);
   for (const chat of visibleChats) {
-    renderSavedChatRow(list, chat, "ixplorer-chat__saved-item", options);
+    renderSavedChatRow(list, chat, "attest-chat__saved-item", options);
   }
 
   const hiddenCount = options.savedChats.length - visibleChats.length;
   if (hiddenCount > 0) {
     const viewAll = list.createEl("button", {
-      cls: "ixplorer-chat__saved-view-all",
+      cls: "attest-chat__saved-view-all",
       attr: { type: "button" },
     });
     viewAll.createSpan({ text: options.t("chat.savedChats.viewAll") });
@@ -76,12 +76,12 @@ export function renderSavedChatsPopoverContent(
 ): void {
   containerEl.empty();
 
-  const tabs = containerEl.createDiv({ cls: "ixplorer-chat__history-tabs" });
+  const tabs = containerEl.createDiv({ cls: "attest-chat__history-tabs" });
   renderSavedChatsTab(tabs, "history", options.t("chat.savedChats.tab.history"), options);
   renderSavedChatsTab(tabs, "favorites", options.t("chat.savedChats.tab.favorites"), options);
 
-  const searchRow = containerEl.createDiv({ cls: "ixplorer-chat__history-search" });
-  setIcon(searchRow.createSpan({ cls: "ixplorer-chat__history-search-icon" }), "search");
+  const searchRow = containerEl.createDiv({ cls: "attest-chat__history-search" });
+  setIcon(searchRow.createSpan({ cls: "attest-chat__history-search-icon" }), "search");
   const searchInput = searchRow.createEl("input", {
     attr: {
       type: "search",
@@ -98,7 +98,7 @@ export function renderSavedChatsPopoverContent(
     });
   });
 
-  const header = containerEl.createDiv({ cls: "ixplorer-chat__history-header" });
+  const header = containerEl.createDiv({ cls: "attest-chat__history-header" });
   header.createSpan({
     text:
       options.activeTab === "history"
@@ -110,12 +110,12 @@ export function renderSavedChatsPopoverContent(
 
   const filtered = filterSavedChatSummaries(chatsInTab, options.searchQuery);
   const list = containerEl.createDiv({
-    cls: `ixplorer-chat__history-list${options.activeTab === "favorites" ? " is-favorites" : ""}${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
+    cls: `attest-chat__history-list${options.activeTab === "favorites" ? " is-favorites" : ""}${shouldScrollSavedChatsList(filtered.length) ? " is-scrollable" : ""}`,
   });
 
   if (filtered.length === 0) {
     list.createDiv({
-      cls: "ixplorer-chat__history-empty",
+      cls: "attest-chat__history-empty",
       text:
         chatsInTab.length === 0
           ? options.activeTab === "history"
@@ -127,7 +127,7 @@ export function renderSavedChatsPopoverContent(
   }
 
   for (const chat of filtered) {
-    const item = renderSavedChatRow(list, chat, "ixplorer-chat__history-item", options);
+    const item = renderSavedChatRow(list, chat, "attest-chat__history-item", options);
     if (chat.id === options.currentChatId) {
       item.addClass("is-active");
     }
@@ -148,7 +148,7 @@ function renderSavedChatsTab(
   options: SavedChatsPanelOptions,
 ): void {
   const button = containerEl.createEl("button", {
-    cls: `ixplorer-chat__history-tab${options.activeTab === tab ? " is-active" : ""}`,
+    cls: `attest-chat__history-tab${options.activeTab === tab ? " is-active" : ""}`,
     text: label,
     attr: {
       type: "button",
@@ -183,28 +183,28 @@ function renderSavedChatRow(
   className: string,
   options: Pick<SavedChatsPanelOptions, "onOpenChat" | "t"> & SavedChatRowActions,
 ): HTMLElement {
-  const row = containerEl.createDiv({ cls: `${className} ixplorer-chat__saved-row` });
+  const row = containerEl.createDiv({ cls: `${className} attest-chat__saved-row` });
 
   const button = row.createEl("button", {
-    cls: "ixplorer-chat__saved-open",
+    cls: "attest-chat__saved-open",
     attr: { type: "button" },
   });
-  const title = button.createSpan({ cls: "ixplorer-chat__saved-title", text: chat.title });
+  const title = button.createSpan({ cls: "attest-chat__saved-title", text: chat.title });
   title.setAttr("title", chat.title);
-  const meta = button.createSpan({ cls: "ixplorer-chat__saved-meta" });
+  const meta = button.createSpan({ cls: "attest-chat__saved-meta" });
   meta.createSpan({ text: formatMessageCount(chat.messageCount, options.t) });
   meta.createSpan({ text: formatRelativeTime(chat.updatedAt, options.t) });
   button.addEventListener("click", () => options.onOpenChat(chat.id));
 
   if (options.onRenameChat || options.onDeleteChat || options.onToggleFavorite) {
     const actions = row.createDiv({
-      cls: `ixplorer-chat__saved-actions${chat.isFavorite ? " has-favorite" : ""}`,
+      cls: `attest-chat__saved-actions${chat.isFavorite ? " has-favorite" : ""}`,
     });
 
     if (options.onToggleFavorite) {
       const isFavorite = chat.isFavorite === true;
       const favoriteButton = actions.createEl("button", {
-        cls: `ixplorer-chat__saved-action${isFavorite ? " is-favorite" : ""}`,
+        cls: `attest-chat__saved-action${isFavorite ? " is-favorite" : ""}`,
         attr: {
           type: "button",
           "aria-label": isFavorite
@@ -224,7 +224,7 @@ function renderSavedChatRow(
 
     if (options.onRenameChat) {
       const editButton = actions.createEl("button", {
-        cls: "ixplorer-chat__saved-action",
+        cls: "attest-chat__saved-action",
         attr: {
           type: "button",
           "aria-label": options.t("chat.savedChats.rename"),
@@ -240,7 +240,7 @@ function renderSavedChatRow(
 
     if (options.onDeleteChat) {
       const deleteButton = actions.createEl("button", {
-        cls: "ixplorer-chat__saved-action ixplorer-chat__saved-action--delete",
+        cls: "attest-chat__saved-action attest-chat__saved-action--delete",
         attr: {
           type: "button",
           "aria-label": options.t("chat.savedChats.delete"),
@@ -270,7 +270,7 @@ function startInlineTitleEdit(
 
   const input = document.createElement("input");
   input.type = "text";
-  input.className = "ixplorer-chat__saved-title-input";
+  input.className = "attest-chat__saved-title-input";
   input.value = chat.title;
   input.maxLength = 200;
   titleEl.replaceWith(input);

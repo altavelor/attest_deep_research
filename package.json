@@ -1,7 +1,7 @@
 {
-  "name": "ixplorer",
+  "name": "attest",
   "version": "0.1.0",
-  "description": "Open-source Obsidian plugin for Agentic Vaults & Deep Research.",
+  "description": "Open-source Obsidian plugin for AI deep research over your vault with verifiable citations.",
   "private": true,
   "main": "main.js",
   "scripts": {

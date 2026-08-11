@@ -7,7 +7,7 @@ import {
 } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import {
   AttachedFileManifestEntry,
   buildResearchPrompt,
@@ -202,7 +202,7 @@ export class AnswerSynthesisService {
       }
       const result = await resultPromise;
       if (result.stopReason !== "complete") {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "MODEL_PROVIDER_UNAVAILABLE",
           message: "The model did not complete the synthesis round.",
           details: { reason: `model-round-${result.stopReason}` },
@@ -314,7 +314,7 @@ export class AnswerSynthesisService {
       return;
     }
 
-    throw new IxplorerError({
+    throw new AttestError({
       code: "CONTEXT_WINDOW_EXCEEDED",
       details: {
         contextLimitTokens: this.contextLimitTokens,

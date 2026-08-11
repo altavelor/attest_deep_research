@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { positiveIntegerOrDefault } from "@shared";
 import { Extractor, ExtractorInput } from "@application/ports";
 import { ExtractedChunk, PdfSourceReference } from "@core/model";
@@ -115,9 +115,9 @@ export class PdfExtractor implements Extractor {
         );
       }
     } catch (error) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EXTRACTION_FAILED",
-        message: "Ixplorer could not read this PDF.",
+        message: "Attest could not read this PDF.",
         cause: error,
         details: { path: input.path, causeMessage: errorMessage(error) },
       });

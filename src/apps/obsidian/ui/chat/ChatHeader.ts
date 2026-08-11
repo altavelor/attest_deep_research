@@ -2,13 +2,13 @@ import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
 
-export type IxplorerPanel = "chat" | "indexSearch";
+export type AttestPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
-  activePanel: IxplorerPanel;
+  activePanel: AttestPanel;
   isDebugMode: boolean;
   t: Translate;
-  onPanelChange(panel: IxplorerPanel): void;
+  onPanelChange(panel: AttestPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
   onNewChat(): void;
 }
@@ -18,7 +18,7 @@ export function renderPanelTabs(containerEl: HTMLElement, options: ChatHeaderOpt
     return;
   }
 
-  const tabs = containerEl.createDiv({ cls: "ixplorer-chat__tabs", attr: { role: "tablist" } });
+  const tabs = containerEl.createDiv({ cls: "attest-chat__tabs", attr: { role: "tablist" } });
   createPanelTab(tabs, "chat", options.t("chat.tab.chat"), options);
   createPanelTab(tabs, "indexSearch", options.t("chat.tab.indexSearch"), options);
 }
@@ -27,7 +27,7 @@ export function renderChatWindowActions(
   containerEl: HTMLElement,
   options: ChatHeaderOptions,
 ): void {
-  const actions = containerEl.createDiv({ cls: "ixplorer-chat__window-actions" });
+  const actions = containerEl.createDiv({ cls: "attest-chat__window-actions" });
   const historyButton = createHeaderIconButton(actions, {
     icon: "history",
     label: options.t("chat.action.history"),
@@ -44,12 +44,12 @@ export function renderChatWindowActions(
 
 function createPanelTab(
   containerEl: HTMLElement,
-  panel: IxplorerPanel,
+  panel: AttestPanel,
   label: string,
   options: ChatHeaderOptions,
 ): void {
   const button = containerEl.createEl("button", {
-    cls: `ixplorer-chat__tab${options.activePanel === panel ? " is-active" : ""}`,
+    cls: `attest-chat__tab${options.activePanel === panel ? " is-active" : ""}`,
     text: label,
     attr: {
       type: "button",
@@ -70,7 +70,7 @@ function createHeaderIconButton(
   },
 ): HTMLButtonElement {
   const button = containerEl.createEl("button", {
-    cls: "ixplorer-chat__icon-button",
+    cls: "attest-chat__icon-button",
     attr: {
       type: "button",
       "aria-label": options.label,

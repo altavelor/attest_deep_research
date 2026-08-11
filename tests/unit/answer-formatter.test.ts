@@ -4,7 +4,7 @@ import { SourceReference } from "@core/model";
 
 describe("answer formatter", () => {
   it("formats the final answer with timestamp, question, answer, citations, and follow-ups", () => {
-    expect(formatResearchAnswerNote(answer())).toBe(`# Ixplorer Research
+    expect(formatResearchAnswerNote(answer())).toBe(`# Attest Research
 
 **Created:** 2026-05-16T00:00:00.000Z
 
@@ -52,7 +52,7 @@ Use local models with citations [1].
 
   it("creates a vault-safe note path from the question and timestamp", () => {
     expect(researchAnswerNotePath(answer())).toBe(
-      "Ixplorer/2026-05-16-how-should-i-use-local-models.md",
+      "Attest/2026-05-16-how-should-i-use-local-models.md",
     );
   });
 });

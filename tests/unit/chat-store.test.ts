@@ -11,7 +11,7 @@ const CHAT_SETTINGS = {
 };
 
 describe("FileChatStore", () => {
-  const folder = ".ixplorer/chats";
+  const folder = ".attest/chats";
   let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {

@@ -13,10 +13,10 @@ import {
 } from "@application/web";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
 import { DUCKDUCKGO_DESCRIPTOR, isWebSourceActive } from "@core/web";
-import { IxplorerSettings } from "@adapters/settings";
+import { AttestSettings } from "@adapters/settings";
 
 export interface WebSearchFactoryOptions {
-  settings: IxplorerSettings;
+  settings: AttestSettings;
   logger: PluginDebugLogger;
   health: WebSourceHealthTracker;
 

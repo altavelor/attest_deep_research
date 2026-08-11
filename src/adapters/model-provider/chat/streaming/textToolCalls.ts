@@ -5,7 +5,7 @@ import { ChatToolCall, ChatToolDefinition } from "@core/agent";
  * emit tool calls as plain text in the content stream instead of as structured
  * `tool_calls`. Examples we have observed:
  *
- *   <tool_call>call:ixplorer.list_notes(path="")<tool_call>
+ *   <tool_call>call:attest.list_notes(path="")<tool_call>
  *   <tool_call>{"name": "list_notes", "arguments": {"path": ""}}</tool_call>
  *   ```tool_code
  *   list_notes(path="")

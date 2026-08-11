@@ -1,4 +1,4 @@
-import { IxplorerSettings } from "@adapters/settings";
+import { AttestSettings } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 import { App, Setting, setIcon } from "obsidian";
 import type { Translate } from "@adapters/i18n";
@@ -10,7 +10,7 @@ export interface RetrievalSettingsSectionOptions {
   app: App;
   t: Translate;
   getDirection?(): TextDirection;
-  settings: IxplorerSettings;
+  settings: AttestSettings;
   webSourceHealth: WebSourceHealthTracker;
   hasActiveChatModel: boolean;
   saveSettings(): Promise<void>;
@@ -33,12 +33,12 @@ export class RetrievalSettingsSection {
   private gateHost(containerEl: HTMLElement): HTMLElement {
     if (this.options.hasActiveChatModel) return containerEl;
 
-    const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
-    const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
-    setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
+    const section = containerEl.createDiv({ cls: "attest-settings__gated-section" });
+    const hint = section.createDiv({ cls: "attest-settings__gate-hint" });
+    setIcon(hint.createSpan({ cls: "attest-settings__gate-hint-icon" }), "info");
     hint.createSpan({ text: this.options.t("settings.tab.gateHint") });
     return section.createDiv({
-      cls: "ixplorer-settings__gated-content is-disabled",
+      cls: "attest-settings__gated-content is-disabled",
       attr: { "aria-disabled": "true", inert: "" },
     });
   }

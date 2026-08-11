@@ -24,14 +24,14 @@ export function renderToolNode(
     t: context.t,
   });
   const node = listEl.createDiv({
-    cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--tool ixplorer-chat__workflow-node--${item.status}`,
+    cls: `attest-chat__workflow-node attest-chat__workflow-node--tool attest-chat__workflow-node--${item.status}`,
     attr: { "data-tool-id": item.id },
   });
-  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--tool" });
-  const body = node.createDiv({ cls: "ixplorer-chat__workflow-body" });
-  const head = body.createDiv({ cls: "ixplorer-chat__tool-head" });
+  node.createSpan({ cls: "attest-chat__workflow-dot attest-chat__workflow-dot--tool" });
+  const body = node.createDiv({ cls: "attest-chat__workflow-body" });
+  const head = body.createDiv({ cls: "attest-chat__tool-head" });
   head.createSpan({
-    cls: "ixplorer-chat__tool-name",
+    cls: "attest-chat__tool-name",
     text: toolTitle(item.name),
   });
   if (view.intent) {
@@ -44,15 +44,15 @@ export function renderToolNode(
         context.t,
       );
     } else {
-      head.createSpan({ cls: "ixplorer-chat__tool-intent", text: view.intent });
+      head.createSpan({ cls: "attest-chat__tool-intent", text: view.intent });
     }
   }
   if (item.phase && item.status === "pending") {
-    head.createSpan({ cls: "ixplorer-chat__tool-phase", text: item.phase });
+    head.createSpan({ cls: "attest-chat__tool-phase", text: item.phase });
   }
   if (view.badge) {
     head.createSpan({
-      cls: "ixplorer-chat__tool-badge",
+      cls: "attest-chat__tool-badge",
       text: view.badge.text,
       ...(view.badge.tooltip
         ? { attr: { "aria-label": view.badge.tooltip, title: view.badge.tooltip } }
@@ -87,7 +87,7 @@ export function renderToolNode(
   }
   if (item.children && item.children.length > 0) {
     const nested = body.createDiv({
-      cls: "ixplorer-chat__workflow ixplorer-chat__workflow--nested",
+      cls: "attest-chat__workflow attest-chat__workflow--nested",
     });
     for (const child of item.children) {
       if (child.kind === "tool-call") renderToolNode(nested, child, context);
@@ -103,21 +103,21 @@ function renderFetchTargets(
   t: Translate,
 ): void {
   head.createSpan({
-    cls: "ixplorer-chat__tool-intent ixplorer-chat__tool-intent--fetch",
+    cls: "attest-chat__tool-intent attest-chat__tool-intent--fetch",
     text: intent,
   });
   const targetList = head.createSpan({
-    cls: "ixplorer-chat__tool-fetch-targets",
+    cls: "attest-chat__tool-fetch-targets",
     attr: { "aria-label": t("chat.workflow.tool.fetching.aria", { targets: targets.join(", ") }) },
   });
   const targetElements = targets.map((target) =>
     targetList.createSpan({
-      cls: "ixplorer-chat__tool-fetch-target",
+      cls: "attest-chat__tool-fetch-target",
       text: target,
       attr: { "aria-hidden": "true" },
     }),
   );
-  targetElements[0]?.addClass("ixplorer-chat__tool-fetch-target--active");
+  targetElements[0]?.addClass("attest-chat__tool-fetch-target--active");
   if (animate) animateFetchTargets(targetList, targetElements);
 }
 
@@ -130,16 +130,16 @@ function renderToolCell(
   cellOptions: { variant: "in" | "out"; onOpen: () => void },
 ): void {
   const wrap = parentEl.createDiv({
-    cls: `ixplorer-chat__tool-cell ixplorer-chat__tool-cell--${cellOptions.variant}`,
+    cls: `attest-chat__tool-cell attest-chat__tool-cell--${cellOptions.variant}`,
     attr: { "data-tool-cell-id": cellId, role: "button", tabindex: "0" },
   });
-  const header = wrap.createDiv({ cls: "ixplorer-chat__tool-cell-header" });
-  header.createSpan({ cls: "ixplorer-chat__tool-cell-label", text: label });
+  const header = wrap.createDiv({ cls: "attest-chat__tool-cell-header" });
+  header.createSpan({ cls: "attest-chat__tool-cell-label", text: label });
   header.createSpan({
-    cls: "ixplorer-chat__tool-cell-open-hint",
+    cls: "attest-chat__tool-cell-open-hint",
     text: context.t("chat.workflow.tool.openFullOutput"),
   });
-  renderToolCellBody(wrap.createDiv({ cls: "ixplorer-chat__tool-cell-body" }), cell, context);
+  renderToolCellBody(wrap.createDiv({ cls: "attest-chat__tool-cell-body" }), cell, context);
   wrap.addEventListener("click", () => {
     if (!hasTextSelectionWithin(wrap)) cellOptions.onOpen();
   });
@@ -169,7 +169,7 @@ function renderToolCellBody(
 ): void {
   if (cell.kind === "code") {
     bodyEl
-      .createEl("pre", { cls: "ixplorer-chat__tool-cell-code" })
+      .createEl("pre", { cls: "attest-chat__tool-cell-code" })
       .createEl("code", { text: cell.text });
     return;
   }
@@ -177,18 +177,18 @@ function renderToolCellBody(
     void MarkdownRenderer.render(context.app, cell.text, bodyEl, "", context.markdownContext);
     return;
   }
-  const diffEl = bodyEl.createDiv({ cls: "ixplorer-chat__diff" });
+  const diffEl = bodyEl.createDiv({ cls: "attest-chat__diff" });
   cell.hunks.forEach((hunk, index) => {
-    if (index > 0) diffEl.createDiv({ cls: "ixplorer-chat__diff-gap", text: "⋯" });
+    if (index > 0) diffEl.createDiv({ cls: "attest-chat__diff-gap", text: "⋯" });
     for (const line of hunk.lines) {
       const lineEl = diffEl.createDiv({
-        cls: `ixplorer-chat__diff-line ixplorer-chat__diff-line--${line.type}`,
+        cls: `attest-chat__diff-line attest-chat__diff-line--${line.type}`,
       });
       lineEl.createSpan({
-        cls: "ixplorer-chat__diff-sign",
+        cls: "attest-chat__diff-sign",
         text: line.type === "add" ? "+" : line.type === "remove" ? "−" : " ",
       });
-      lineEl.createSpan({ cls: "ixplorer-chat__diff-text", text: line.text });
+      lineEl.createSpan({ cls: "attest-chat__diff-text", text: line.text });
     }
   });
 }

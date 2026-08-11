@@ -1,7 +1,7 @@
 import { IndexResearchTool } from "@adapters/research-tools/index/IndexResearchTool";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { executeTool } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { ResearchRetriever } from "@application/contracts";
 import { markdownSource, retrieved } from "../helpers/factories";
 
@@ -125,9 +125,9 @@ describe("IndexResearchTool", () => {
   it("hides the failure detail when the selected index is missing", async () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockRejectedValue(
-        new IxplorerError({
+        new AttestError({
           code: "INDEX_UNAVAILABLE",
-          message: "No index at /Users/someone/vault/.ixplorer.",
+          message: "No index at /Users/someone/vault/.attest.",
         }),
       ),
     };

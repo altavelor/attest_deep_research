@@ -70,9 +70,7 @@ describe("image lightbox keyboard flow", () => {
     await settle();
 
     expect(modal.titleEl.textContent).toBe("Alt b");
-    expect(modal.contentEl.querySelector(".ixplorer-lightbox__position")?.textContent).toBe(
-      "2 of 3",
-    );
+    expect(modal.contentEl.querySelector(".attest-lightbox__position")?.textContent).toBe("2 of 3");
   });
 
   it("moves forward and backward with the arrow keys", async () => {
@@ -94,15 +92,11 @@ describe("image lightbox keyboard flow", () => {
 
     pressKey(modal, "ArrowLeft");
     await settle();
-    expect(modal.contentEl.querySelector(".ixplorer-lightbox__position")?.textContent).toBe(
-      "3 of 3",
-    );
+    expect(modal.contentEl.querySelector(".attest-lightbox__position")?.textContent).toBe("3 of 3");
 
     pressKey(modal, "ArrowRight");
     await settle();
-    expect(modal.contentEl.querySelector(".ixplorer-lightbox__position")?.textContent).toBe(
-      "1 of 3",
-    );
+    expect(modal.contentEl.querySelector(".attest-lightbox__position")?.textContent).toBe("1 of 3");
   });
 
   it("ignores arrow keys for a single image", async () => {
@@ -113,7 +107,7 @@ describe("image lightbox keyboard flow", () => {
     await settle();
 
     expect(modal.titleEl.textContent).toBe("Alt solo");
-    expect(modal.contentEl.querySelector(".ixplorer-lightbox__nav")).toBeNull();
+    expect(modal.contentEl.querySelector(".attest-lightbox__nav")).toBeNull();
   });
 
   it("restores focus to the trigger that opened it", async () => {

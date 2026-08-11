@@ -1,5 +1,5 @@
 import { WEB_SOURCE_CATALOG, WebSourceProfile } from "@core/web";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { createWebSearchSources, HttpWebSearchSource, WEB_SOURCE_DEFINITIONS } from "@adapters/web";
 import {
   DEFAULT_SETTINGS,
@@ -340,12 +340,12 @@ describe("HttpWebSearchSource", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces IxplorerError instances", async () => {
+  it("surfaces AttestError instances", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("boom"));
     const error = await sourceFor("brave", fetchMock as typeof fetch)
       .search("query")
       .catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(IxplorerError);
+    expect(error).toBeInstanceOf(AttestError);
   });
 });
 

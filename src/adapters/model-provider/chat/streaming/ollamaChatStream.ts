@@ -7,7 +7,7 @@ import type {
 } from "ollama";
 
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { isRecord } from "@shared";
 import { mapOllamaMessage } from "../providers/messageMappers";
 import { textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
@@ -156,19 +156,19 @@ function ollamaThink(effort: string | undefined): boolean | "high" | "medium" | 
   return true;
 }
 
-function translateOllamaError(error: unknown, apiKey: string | undefined): IxplorerError | never {
-  if (error instanceof IxplorerError) return error;
+function translateOllamaError(error: unknown, apiKey: string | undefined): AttestError | never {
+  if (error instanceof AttestError) return error;
   if (error instanceof Error && error.name === "AbortError") throw error;
   const status =
     isRecord(error) && typeof error.status_code === "number" ? error.status_code : undefined;
   if (status === 404) {
-    return new IxplorerError({ code: "MODEL_NOT_FOUND", details: { status } });
+    return new AttestError({ code: "MODEL_NOT_FOUND", details: { status } });
   }
   const message =
     isRecord(error) && typeof error.error === "string"
       ? sanitizeOllamaMessage(error.error, apiKey)
       : undefined;
-  return new IxplorerError({
+  return new AttestError({
     code: "MODEL_PROVIDER_UNAVAILABLE",
     message: "The chat model provider is unavailable.",
     ...(status !== undefined || message
@@ -190,7 +190,7 @@ function sanitizeOllamaMessage(value: string, apiKey: string | undefined): strin
 
 function validateOllamaToolChoice(request: ChatRequest): void {
   if (request.toolChoice?.type === "required" || request.toolChoice?.type === "specific") {
-    throw new IxplorerError({
+    throw new AttestError({
       code: "UNSUPPORTED_CAPABILITY",
       message: "Ollama does not support required or specific tool choice.",
     });

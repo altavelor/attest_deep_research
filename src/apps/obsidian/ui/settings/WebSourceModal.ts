@@ -36,12 +36,12 @@ export class WebSourceModal extends Modal {
     const { contentEl } = this;
     const { descriptor, t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: t("settings.webSourceModal.title", { source: descriptor.label }),
     });
 
-    const info = contentEl.createEl("p", { cls: "ixplorer-websource-modal__info" });
+    const info = contentEl.createEl("p", { cls: "attest-websource-modal__info" });
     info.appendText(t("settings.webSourceModal.info", { note: descriptor.freeTierNote }));
     info.createEl("a", {
       text: t("settings.webSourceModal.providerDocs"),

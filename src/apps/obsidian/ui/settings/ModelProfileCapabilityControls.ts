@@ -39,7 +39,7 @@ export function renderModelProfileCapabilityControls(
   const capabilityHeading = new Setting(options.containerEl)
     .setName(t("settings.capabilityControls.heading"))
     .setHeading();
-  capabilityHeading.settingEl.addClass("ixplorer-profile-modal__capabilities-heading");
+  capabilityHeading.settingEl.addClass("attest-profile-modal__capabilities-heading");
   capabilityHeading.setDesc(capabilityStatus).addButton((button) =>
     button
       .setIcon("flask-conical")
@@ -159,8 +159,8 @@ function hasCapabilityTestResult(profile: ChatModelProfile | undefined): boolean
 
 function applyDisabledState(setting: Setting, disabled: boolean, reason: string | undefined): void {
   if (!disabled) return;
-  setting.settingEl.addClass("ixplorer-profile-modal__setting--disabled");
+  setting.settingEl.addClass("attest-profile-modal__setting--disabled");
   if (reason) {
-    setting.descEl.createDiv({ cls: "ixplorer-profile-modal__warning", text: reason });
+    setting.descEl.createDiv({ cls: "attest-profile-modal__warning", text: reason });
   }
 }

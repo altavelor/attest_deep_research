@@ -75,7 +75,7 @@ function renderTranscript(host: HTMLElement): void {
 
 function activeTargets(host: HTMLElement): string[] {
   return Array.from(
-    host.querySelectorAll(".ixplorer-chat__tool-fetch-target--active"),
+    host.querySelectorAll(".attest-chat__tool-fetch-target--active"),
     (el) => el.textContent ?? "",
   );
 }
@@ -85,7 +85,7 @@ let transcript: HTMLElement;
 beforeEach(() => {
   useDomFakeTimers();
   transcript = createContainer();
-  transcript.classList.add("ixplorer-chat__transcript");
+  transcript.classList.add("attest-chat__transcript");
 });
 
 afterEach(() => {
@@ -98,7 +98,7 @@ describe("fetch-target animation in a pending web fetch", () => {
     renderTranscript(transcript);
 
     const targets = Array.from(
-      transcript.querySelectorAll(".ixplorer-chat__tool-fetch-target"),
+      transcript.querySelectorAll(".attest-chat__tool-fetch-target"),
       (el) => el.textContent ?? "",
     );
     expect(targets).toEqual(["alpha.example", "beta.example", "gamma.example"]);
@@ -127,7 +127,7 @@ describe("fetch-target animation in a pending web fetch", () => {
       onOpenToolOutput: () => {},
     });
 
-    expect(transcript.querySelectorAll(".ixplorer-chat__tool-fetch-target")).toHaveLength(0);
+    expect(transcript.querySelectorAll(".attest-chat__tool-fetch-target")).toHaveLength(0);
     expect(pendingTimerCount()).toBe(0);
     await advanceTime(5_000);
     expect(activeTargets(transcript)).toEqual([]);

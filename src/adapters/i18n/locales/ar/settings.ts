@@ -3,10 +3,10 @@ import type { EnSettingsMessages } from "../en/settings";
 export const settings: EnSettingsMessages = {
   "settings.language.heading": "اللغة",
   "settings.language.name": "لغة الواجهة",
-  "settings.language.desc": "لغة واجهة Ixplorer. تُطبَّق دون إعادة تشغيل Obsidian.",
+  "settings.language.desc": "لغة واجهة Attest. تُطبَّق دون إعادة تشغيل Obsidian.",
   "settings.language.auto": "تلقائي (تتبع Obsidian)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "بداية سريعة",
   "settings.tab.quickStart.steps": "1. أضف خادمًا → 2. أضف نموذج محادثة → 3. (اختياري) أضف فهرسًا",
   "settings.tab.gateHint": "أضف ملف نموذج محادثة أولًا",
@@ -16,7 +16,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.retrieval.heading": "الاسترجاع",
   "settings.retrieval.desc":
-    "يتحكم في طريقة عثور Ixplorer على الأدلة المحلية والرسومية والفهرسية والمستندية والويب قبل الإجابة.",
+    "يتحكم في طريقة عثور Attest على الأدلة المحلية والرسومية والفهرسية والمستندية والويب قبل الإجابة.",
   "settings.retrieval.graph.heading": "رسم Obsidian البياني",
   "settings.retrieval.useLinkedNotes.name": "استخدام الملاحظات المرتبطة",
   "settings.retrieval.useLinkedNotes.desc":
@@ -69,7 +69,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "المصادر الخارجية",
   "settings.webSources.desc":
-    "بحث ويب خارجي يبدأه المستخدم عبر المصادر المفعّلة. يرسل Ixplorer السؤال المكتوب فقط، ولا يرسل أبدًا محتوى الخزنة المسترجَع.",
+    "بحث ويب خارجي يبدأه المستخدم عبر المصادر المفعّلة. يرسل Attest السؤال المكتوب فقط، ولا يرسل أبدًا محتوى الخزنة المسترجَع.",
   "settings.webSources.count": "{enabled} من {total} مفعّل",
   "settings.webSources.column.source": "المصدر",
   "settings.webSources.column.actions": "الإجراءات",

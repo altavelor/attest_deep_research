@@ -28,7 +28,7 @@ describe("keyword search at corpus scale (Ф0)", () => {
 
   it("serves repeat queries from the cached lookup without re-reading keyword files", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const store = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -50,7 +50,7 @@ describe("keyword search at corpus scale (Ф0)", () => {
 
   it("invalidates the cached lookup after a commit changes the index", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const store = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([chunk("chunk-a", "Research/a.md", "local model", [1, 0])]);

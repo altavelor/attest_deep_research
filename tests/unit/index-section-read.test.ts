@@ -4,7 +4,7 @@ import { EmbeddedChunk, SourceReference } from "@core/model";
 import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("readIndexSection (Ф2.1)", () => {
-  const folder = ".ixplorer/index";
+  const folder = ".attest/index";
   let store: FileVectorIndexStore;
   let inventory: FileVectorInventoryStore;
 

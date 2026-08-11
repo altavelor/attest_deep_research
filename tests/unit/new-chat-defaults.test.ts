@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SETTINGS,
-  IxplorerSettings,
+  AttestSettings,
   cloneIndexProfile,
   createIndexProfile,
   getActiveIndexProfile,
@@ -195,7 +195,7 @@ function embeddingProfile(): EmbeddingModelProfile {
   };
 }
 
-function baseSettings(): IxplorerSettings {
+function baseSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     newChatDefaults: { ...DEFAULT_SETTINGS.newChatDefaults },

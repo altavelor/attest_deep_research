@@ -35,7 +35,7 @@ export class IndexReportModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: t("settings.indexReport.title", { profile: this.options.profile.name }),
     });
@@ -48,7 +48,7 @@ export class IndexReportModal extends Modal {
     const summariesBySourcePath = new Map(
       (this.options.summaries ?? []).map((item) => [item.sourcePath, item]),
     );
-    const summary = contentEl.createDiv({ cls: "ixplorer-index-report__summary" });
+    const summary = contentEl.createDiv({ cls: "attest-index-report__summary" });
     summary.createDiv({ text: t("settings.indexReport.indexedFiles", { count: indexed.length }) });
     summary.createDiv({ text: t("settings.indexReport.failedFiles", { count: failed.length }) });
     summary.createDiv({ text: t("settings.indexReport.chunks", { count: totalChunks }) });
@@ -58,29 +58,29 @@ export class IndexReportModal extends Modal {
 
     this.renderIndexMetadataSection(contentEl, metadata);
 
-    const list = contentEl.createDiv({ cls: "ixplorer-index-report__list" });
+    const list = contentEl.createDiv({ cls: "attest-index-report__list" });
     if (this.options.report.length === 0) {
       list.createDiv({
-        cls: "ixplorer-index-report__empty",
+        cls: "attest-index-report__empty",
         text: t("settings.indexReport.empty"),
       });
     } else {
       for (const item of this.options.report) {
         const row = list.createDiv({
-          cls: `ixplorer-index-report__row is-${item.status}`,
+          cls: `attest-index-report__row is-${item.status}`,
         });
-        const title = row.createDiv({ cls: "ixplorer-index-report__path" });
+        const title = row.createDiv({ cls: "attest-index-report__path" });
         title.setText(item.sourcePath);
         title.setAttr("title", item.sourcePath);
         row.createDiv({
-          cls: "ixplorer-index-report__status",
+          cls: "attest-index-report__status",
           text:
             item.status === "indexed"
               ? t("settings.indexReport.chunks", { count: item.chunkCount })
               : t("settings.indexReport.failed"),
         });
         row.createDiv({
-          cls: "ixplorer-index-report__detail",
+          cls: "attest-index-report__detail",
           text:
             item.status === "failed"
               ? (item.errorMessage ?? t("settings.indexReport.indexingFailed"))
@@ -97,7 +97,7 @@ export class IndexReportModal extends Modal {
       }
     }
 
-    new Setting(contentEl).setClass("ixplorer-profile-modal__actions").addButton((button) =>
+    new Setting(contentEl).setClass("attest-profile-modal__actions").addButton((button) =>
       button
         .setCta()
         .setButtonText(t("common.close"))
@@ -119,9 +119,9 @@ export class IndexReportModal extends Modal {
     }
 
     const { t } = this.options;
-    const details = containerEl.createEl("details", { cls: "ixplorer-index-report__section" });
+    const details = containerEl.createEl("details", { cls: "attest-index-report__section" });
     details.createEl("summary", { text: t("settings.indexReport.metadataSection") });
-    const body = details.createDiv({ cls: "ixplorer-index-report__section-body" });
+    const body = details.createDiv({ cls: "attest-index-report__section-body" });
 
     const models = [...new Set(metadata.map((item) => item.extraction.model))];
     const lastExtractedAt = metadata
@@ -129,7 +129,7 @@ export class IndexReportModal extends Modal {
       .sort()
       .at(-1);
     const totalReferences = metadata.reduce((total, item) => total + item.references.length, 0);
-    const facts = body.createDiv({ cls: "ixplorer-index-report__facts" });
+    const facts = body.createDiv({ cls: "attest-index-report__facts" });
     facts.createDiv({
       text: t("settings.indexReport.extractionModel", { models: models.join(", ") }),
     });
@@ -150,11 +150,11 @@ export class IndexReportModal extends Modal {
     const shared = sharedReferences(metadata, 2).slice(0, SHARED_REFERENCES_SHOWN);
     if (shared.length > 0) {
       body.createDiv({
-        cls: "ixplorer-index-report__facts-heading",
+        cls: "attest-index-report__facts-heading",
         text: t("settings.indexReport.sharedReferences"),
       });
       for (const reference of shared) {
-        const line = body.createDiv({ cls: "ixplorer-index-report__reference" });
+        const line = body.createDiv({ cls: "attest-index-report__reference" });
         line.setText(
           t("settings.indexReport.sharedReference", {
             count: reference.citedBy.length,
@@ -171,9 +171,9 @@ export class IndexReportModal extends Modal {
 
   private renderSourceMetadata(row: HTMLElement, metadata: SourceDocumentMetadata): void {
     const { t } = this.options;
-    const details = row.createEl("details", { cls: "ixplorer-index-report__section" });
+    const details = row.createEl("details", { cls: "attest-index-report__section" });
     details.createEl("summary", { text: metadataSummaryLine(t, metadata) });
-    const body = details.createDiv({ cls: "ixplorer-index-report__section-body" });
+    const body = details.createDiv({ cls: "attest-index-report__section-body" });
 
     if (metadata.authors && metadata.authors.length > 0) {
       body.createDiv({
@@ -181,30 +181,30 @@ export class IndexReportModal extends Modal {
       });
     }
     if (metadata.abstract) {
-      body.createDiv({ cls: "ixplorer-index-report__abstract", text: metadata.abstract });
+      body.createDiv({ cls: "attest-index-report__abstract", text: metadata.abstract });
     }
     if (metadata.references.length > 0) {
       body.createDiv({
-        cls: "ixplorer-index-report__facts-heading",
+        cls: "attest-index-report__facts-heading",
         text: t("settings.indexReport.references", { count: metadata.references.length }),
       });
       for (const reference of metadata.references) {
-        body.createDiv({ cls: "ixplorer-index-report__reference", text: reference.raw });
+        body.createDiv({ cls: "attest-index-report__reference", text: reference.raw });
       }
     }
   }
 
   private renderSourceSummaries(row: HTMLElement, summaries: SourceDocumentSummaries): void {
     const { t } = this.options;
-    const details = row.createEl("details", { cls: "ixplorer-index-report__section" });
+    const details = row.createEl("details", { cls: "attest-index-report__section" });
     details.createEl("summary", {
       text: t("settings.indexReport.summary", { count: summaries.sections.length }),
     });
-    const body = details.createDiv({ cls: "ixplorer-index-report__section-body" });
-    body.createDiv({ cls: "ixplorer-index-report__abstract", text: summaries.document.summary });
+    const body = details.createDiv({ cls: "attest-index-report__section-body" });
+    body.createDiv({ cls: "attest-index-report__abstract", text: summaries.document.summary });
     for (const section of summaries.sections) {
       body.createDiv({
-        cls: "ixplorer-index-report__reference",
+        cls: "attest-index-report__reference",
         text: t("settings.indexReport.section", {
           heading: section.headingPath.join(" > "),
           summary: section.summary,

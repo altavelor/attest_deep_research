@@ -72,7 +72,7 @@ describe("readable diagnostic HTML (v3)", () => {
   it("exports escaped self-contained HTML without executable or remote resources", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("<!doctype html>");
-    expect(html).toContain("Ixplorer");
+    expect(html).toContain("Attest");
 
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script");

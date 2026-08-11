@@ -1,5 +1,5 @@
 import { ApiFormat } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { ReasoningCapabilitySettings } from "@adapters/settings/types";
 
 export interface ResponsesPolicyInput {
@@ -15,7 +15,7 @@ export interface ResponsesPolicyDecision {
 }
 
 function unsupported(message: string): never {
-  throw new IxplorerError({ code: "UNSUPPORTED_CAPABILITY", message });
+  throw new AttestError({ code: "UNSUPPORTED_CAPABILITY", message });
 }
 
 export function resolveResponsesProviderPolicy(

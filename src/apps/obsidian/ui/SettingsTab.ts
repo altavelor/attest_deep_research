@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, setIcon } from "obsidian";
 
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import { DiscoveredModel, normalizeSettingsState } from "@adapters/settings";
 import { AdvancedSettingsSection } from "./settings/AdvancedSettingsSection";
 import { SettingsCapabilityProber } from "./settings/SettingsCapabilityProber";
@@ -12,7 +12,7 @@ import { RetrievalSettingsSection } from "./settings/RetrievalSettingsSection";
 import { renderCategoryHeading } from "./settings/shared";
 
 /** Thin Obsidian settings-tab composition root for focused settings sections. */
-export class IxplorerSettingTab extends PluginSettingTab {
+export class AttestSettingTab extends PluginSettingTab {
   private unsubscribeCapabilityProbes: (() => void) | null = null;
   private readonly fetchedModelsByServerId = new Map<string, DiscoveredModel[]>();
   private metadataRefreshStarted = false;
@@ -21,7 +21,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
   constructor(
     app: App,
-    private readonly plugin: IxplorerPlugin,
+    private readonly plugin: AttestPlugin,
   ) {
     super(app, plugin);
     this.prober = new SettingsCapabilityProber({
@@ -46,7 +46,7 @@ export class IxplorerSettingTab extends PluginSettingTab {
     this.indexProfiles.dispose();
     normalizeSettingsState(this.plugin.settings);
     this.containerEl.empty();
-    this.containerEl.addClass("ixplorer-settings");
+    this.containerEl.addClass("attest-settings");
     this.containerEl.setAttr("dir", this.plugin.getTranslator().direction);
 
     renderCategoryHeading(this.containerEl, this.plugin.translate("settings.tab.heading"));
@@ -100,27 +100,27 @@ export class IxplorerSettingTab extends PluginSettingTab {
 
   private renderQuickStart(containerEl: HTMLElement): void {
     if (this.plugin.settings.serverProfiles.length > 0) return;
-    const banner = containerEl.createDiv({ cls: "ixplorer-settings__quickstart" });
-    setIcon(banner.createSpan({ cls: "ixplorer-settings__quickstart-icon" }), "rocket");
-    const body = banner.createDiv({ cls: "ixplorer-settings__quickstart-body" });
+    const banner = containerEl.createDiv({ cls: "attest-settings__quickstart" });
+    setIcon(banner.createSpan({ cls: "attest-settings__quickstart-icon" }), "rocket");
+    const body = banner.createDiv({ cls: "attest-settings__quickstart-body" });
     body.createDiv({
-      cls: "ixplorer-settings__quickstart-title",
+      cls: "attest-settings__quickstart-title",
       text: this.plugin.translate("settings.tab.quickStart.title"),
     });
     body.createDiv({
-      cls: "ixplorer-settings__quickstart-steps",
+      cls: "attest-settings__quickstart-steps",
       text: this.plugin.translate("settings.tab.quickStart.steps"),
     });
   }
 
   private gateHost(containerEl: HTMLElement): HTMLElement {
     if (this.hasActiveChatModel()) return containerEl;
-    const section = containerEl.createDiv({ cls: "ixplorer-settings__gated-section" });
-    const hint = section.createDiv({ cls: "ixplorer-settings__gate-hint" });
-    setIcon(hint.createSpan({ cls: "ixplorer-settings__gate-hint-icon" }), "info");
+    const section = containerEl.createDiv({ cls: "attest-settings__gated-section" });
+    const hint = section.createDiv({ cls: "attest-settings__gate-hint" });
+    setIcon(hint.createSpan({ cls: "attest-settings__gate-hint-icon" }), "info");
     hint.createSpan({ text: this.plugin.translate("settings.tab.gateHint") });
     return section.createDiv({
-      cls: "ixplorer-settings__gated-content is-disabled",
+      cls: "attest-settings__gated-content is-disabled",
       attr: { "aria-disabled": "true", inert: "" },
     });
   }

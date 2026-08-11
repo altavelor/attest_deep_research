@@ -13,9 +13,9 @@ describe("VaultFileSystem", () => {
   });
 
   it("round-trips text through the vault adapter", async () => {
-    await fileSystem.writeText(".ixplorer/index/manifest.json", '{"ok":true}');
+    await fileSystem.writeText(".attest/index/manifest.json", '{"ok":true}');
 
-    expect(await fileSystem.readText(".ixplorer/index/manifest.json")).toBe('{"ok":true}');
+    expect(await fileSystem.readText(".attest/index/manifest.json")).toBe('{"ok":true}');
   });
 
   it("creates missing parent folders when writing", async () => {
@@ -183,11 +183,11 @@ describe("VaultFileSystem crash-safe replace", () => {
     const fileSystem = new VaultFileSystem(adapter as never);
 
     await fileSystem.writeText("index/manifest.json", '{"generation":1}');
-    await adapter.rename("index/manifest.json", "index/manifest.json.ixplorer-replaced");
+    await adapter.rename("index/manifest.json", "index/manifest.json.attest-replaced");
 
     expect(await fileSystem.exists("index/manifest.json")).toBe(true);
     expect(await fileSystem.readText("index/manifest.json")).toBe('{"generation":1}');
-    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+    expect(await adapter.exists("index/manifest.json.attest-replaced")).toBe(false);
   });
 
   it("leaves no backup behind after a successful replace", async () => {
@@ -199,7 +199,7 @@ describe("VaultFileSystem crash-safe replace", () => {
     await fileSystem.rename("index/manifest.json.tmp", "index/manifest.json");
 
     expect(await fileSystem.readText("index/manifest.json")).toBe("new");
-    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+    expect(await adapter.exists("index/manifest.json.attest-replaced")).toBe(false);
     expect(await adapter.exists("index/manifest.json.tmp")).toBe(false);
   });
 });
@@ -210,7 +210,7 @@ describe("VaultFileSystem recovery via listing", () => {
     const fileSystem = new VaultFileSystem(adapter as never);
 
     await fileSystem.writeText("chats/chat-abc.json", '{"id":"chat-abc"}');
-    await adapter.rename("chats/chat-abc.json", "chats/chat-abc.json.ixplorer-replaced");
+    await adapter.rename("chats/chat-abc.json", "chats/chat-abc.json.attest-replaced");
 
     const entries = await fileSystem.list("chats");
 
@@ -223,7 +223,7 @@ describe("VaultFileSystem recovery via listing", () => {
     const fileSystem = new VaultFileSystem(adapter as never);
 
     await fileSystem.writeText("index/a.json", "1");
-    await fileSystem.writeText("index/a.json.ixplorer-replaced", "stale");
+    await fileSystem.writeText("index/a.json.attest-replaced", "stale");
 
     const entries = await fileSystem.list("index");
 
@@ -240,7 +240,7 @@ describe("VaultFileSystem recovery is best effort", () => {
       throw new Error("recovery exploded");
     };
     await adapter.writeBinary(
-      "index/manifest.json.ixplorer-replaced",
+      "index/manifest.json.attest-replaced",
       new TextEncoder().encode("old").slice().buffer as ArrayBuffer,
     );
 
@@ -272,7 +272,7 @@ describe("VaultFileSystem recovery is best effort", () => {
     ]);
 
     expect(["v1", "v2"]).toContain(await fileSystem.readText("index/manifest.json"));
-    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+    expect(await adapter.exists("index/manifest.json.attest-replaced")).toBe(false);
   });
 });
 
@@ -282,14 +282,14 @@ describe("VaultFileSystem reads never destroy a backup", () => {
     const fileSystem = new VaultFileSystem(adapter as never);
 
     await fileSystem.writeText("index/manifest.json", "current");
-    await fileSystem.writeText("index/manifest.json.ixplorer-replaced", "previous");
+    await fileSystem.writeText("index/manifest.json.attest-replaced", "previous");
 
     await fileSystem.list("index");
     await fileSystem.exists("index/manifest.json");
     await fileSystem.readText("index/manifest.json");
 
-    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(true);
-    expect(await adapter.read("index/manifest.json.ixplorer-replaced")).toBe("previous");
+    expect(await adapter.exists("index/manifest.json.attest-replaced")).toBe(true);
+    expect(await adapter.read("index/manifest.json.attest-replaced")).toBe("previous");
   });
 
   it("clears a stale backup on the next replace rather than on a read", async () => {
@@ -297,12 +297,12 @@ describe("VaultFileSystem reads never destroy a backup", () => {
     const fileSystem = new VaultFileSystem(adapter as never);
 
     await fileSystem.writeText("index/manifest.json", "current");
-    await fileSystem.writeText("index/manifest.json.ixplorer-replaced", "stale");
+    await fileSystem.writeText("index/manifest.json.attest-replaced", "stale");
     await fileSystem.writeText("index/next.tmp", "next");
 
     await fileSystem.rename("index/next.tmp", "index/manifest.json");
 
     expect(await fileSystem.readText("index/manifest.json")).toBe("next");
-    expect(await adapter.exists("index/manifest.json.ixplorer-replaced")).toBe(false);
+    expect(await adapter.exists("index/manifest.json.attest-replaced")).toBe(false);
   });
 });
