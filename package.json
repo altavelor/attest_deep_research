@@ -27,7 +27,7 @@
   "author": "altavelor",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.12.12",
+    "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "^4.1.10",
     "builtin-modules": "^5.3.0",
     "dependency-cruiser": "^17.4.3",

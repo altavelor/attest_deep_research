@@ -19,7 +19,7 @@
     "esModuleInterop": true,
     "importHelpers": true,
     "isolatedModules": true,
-    "lib": ["DOM", "ES2020"],
+    "lib": ["DOM", "ES2022"],
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
