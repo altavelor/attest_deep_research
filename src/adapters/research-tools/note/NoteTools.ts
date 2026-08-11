@@ -33,7 +33,7 @@ export function validateMutablePath(path: string): { ok: true } | { ok: false; r
   if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
     return { ok: false, reason: "invalid-path" };
   }
-  if (path === ".ixplorer" || path.startsWith(".ixplorer/")) {
+  if (path === ".attest" || path.startsWith(".attest/")) {
     return { ok: false, reason: "forbidden-path" };
   }
   return { ok: true };
@@ -246,7 +246,7 @@ export class NoteToolService {
     if (!path) {
       return jsonResult(false, { ok: false, reason: "missing-path" });
     }
-    if (path === ".ixplorer" || path.startsWith(".ixplorer/")) {
+    if (path === ".attest" || path.startsWith(".attest/")) {
       return jsonResult(false, { ok: false, reason: "forbidden-path", path });
     }
 

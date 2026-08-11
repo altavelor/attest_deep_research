@@ -37,7 +37,7 @@ export class CitationPopoverController {
     this.setHighlight(ref.key, true);
     this.popoverEl?.remove();
     const popover = this.hostEl.createDiv({
-      cls: "ixplorer-chat__citation-popover",
+      cls: "attest-chat__citation-popover",
       attr: { "data-citation-key": ref.key },
     });
     popover.addEventListener("mouseenter", () => {
@@ -88,7 +88,7 @@ export class CitationPopoverController {
 
   scrollBlockIntoView(key: string): void {
     const block = this.hostEl.querySelector<HTMLElement>(
-      `.ixplorer-chat__citation-block[data-citation-key="${cssEscape(key)}"]`,
+      `.attest-chat__citation-block[data-citation-key="${cssEscape(key)}"]`,
     );
     const details = block?.closest("details");
     if (details instanceof HTMLDetailsElement) {
@@ -153,17 +153,17 @@ export function renderCitationBlocks(
   },
 ): void {
   const details = containerEl.createEl("details", {
-    cls: "ixplorer-chat__citation-blocks",
+    cls: "attest-chat__citation-blocks",
   });
   details.open = refs.length <= 3;
   details.createEl("summary", {
-    cls: "ixplorer-chat__citation-summary",
+    cls: "attest-chat__citation-summary",
     text: options.t("chat.citation.sourcesUsed", { count: refs.length }),
   });
 
   for (const ref of refs) {
     const block = details.createDiv({
-      cls: "ixplorer-chat__citation-block",
+      cls: "attest-chat__citation-block",
       attr: { role: "link", tabindex: "0", "data-citation-key": ref.key },
     });
     block.addEventListener("click", () => {
@@ -192,7 +192,7 @@ function renderCitationPopoverContent(
   t: Translate,
 ): void {
   const block = containerEl.createDiv({
-    cls: "ixplorer-chat__citation-popover-card",
+    cls: "attest-chat__citation-popover-card",
     attr: { role: "link", tabindex: "0" },
   });
   block.addEventListener("click", () => {
@@ -210,16 +210,16 @@ function renderCitationPopoverContent(
 }
 
 function renderCitationCard(block: HTMLElement, ref: ChatCitationRef, t: Translate): void {
-  const header = block.createDiv({ cls: "ixplorer-chat__citation-block-header" });
-  header.createSpan({ cls: "ixplorer-chat__citation-number", text: String(ref.number) });
+  const header = block.createDiv({ cls: "attest-chat__citation-block-header" });
+  header.createSpan({ cls: "attest-chat__citation-number", text: String(ref.number) });
   header.createSpan({
-    cls: "ixplorer-chat__citation-block-source",
+    cls: "attest-chat__citation-block-source",
     text: formatIndexSearchCitation(ref.chunk, t),
   });
   if (isLinkOnlyChunk(ref.chunk)) return;
 
   const copyButton = header.createEl("button", {
-    cls: "ixplorer-chat__citation-copy",
+    cls: "attest-chat__citation-copy",
     attr: {
       type: "button",
       "aria-label": t("chat.citation.copy"),
@@ -232,7 +232,7 @@ function renderCitationCard(block: HTMLElement, ref: ChatCitationRef, t: Transla
     void copyToClipboard(ref.chunk.text, t);
   });
   block.createDiv({
-    cls: "ixplorer-chat__citation-block-text",
+    cls: "attest-chat__citation-block-text",
     text: ref.chunk.text,
   });
 }

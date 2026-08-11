@@ -1,4 +1,4 @@
-export type IxplorerErrorCode =
+export type AttestErrorCode =
   | "INVALID_SETTINGS"
   | "MODEL_PROVIDER_UNAVAILABLE"
   | "MODEL_NOT_FOUND"
@@ -14,50 +14,50 @@ export type IxplorerErrorCode =
   | "WEB_SEARCH_FAILED"
   | "UNKNOWN";
 
-const USER_MESSAGES: Record<IxplorerErrorCode, string> = {
-  INVALID_SETTINGS: "Check Ixplorer settings and try again.",
+const USER_MESSAGES: Record<AttestErrorCode, string> = {
+  INVALID_SETTINGS: "Check Attest settings and try again.",
   MODEL_PROVIDER_UNAVAILABLE: "The local model provider is unavailable.",
   MODEL_NOT_FOUND: "The configured model is not available.",
   UNSUPPORTED_CAPABILITY: "The selected model does not support this capability.",
   EMBEDDING_UNAVAILABLE: "The embedding provider is unavailable.",
   INDEX_UNAVAILABLE: "The local search index is unavailable.",
   INDEX_REBUILD_REQUIRED: "The local search index needs to be rebuilt.",
-  EXTRACTION_FAILED: "Ixplorer could not read this file.",
+  EXTRACTION_FAILED: "Attest could not read this file.",
   CONTEXT_WINDOW_EXCEEDED: "The current chat is too long for the selected model context window.",
-  INVALID_SKILL_SELECTION: "Select exactly one valid Ixplorer skill and try again.",
+  INVALID_SKILL_SELECTION: "Select exactly one valid Attest skill and try again.",
   SKILL_TOO_LARGE: "The selected skill is too large for the current model context window.",
-  WEB_SEARCH_DISABLED: "Web search is disabled in Ixplorer settings.",
+  WEB_SEARCH_DISABLED: "Web search is disabled in Attest settings.",
   WEB_SEARCH_FAILED: "Web search failed.",
-  UNKNOWN: "Something went wrong in Ixplorer.",
+  UNKNOWN: "Something went wrong in Attest.",
 };
 
-export interface IxplorerErrorOptions {
-  code: IxplorerErrorCode;
+export interface AttestErrorOptions {
+  code: AttestErrorCode;
   message?: string;
   cause?: unknown;
   details?: Record<string, unknown>;
 }
 
-export class IxplorerError extends Error {
-  readonly code: IxplorerErrorCode;
+export class AttestError extends Error {
+  readonly code: AttestErrorCode;
   readonly cause?: unknown;
   readonly details?: Record<string, unknown>;
 
-  constructor(options: IxplorerErrorOptions) {
+  constructor(options: AttestErrorOptions) {
     super(options.message ?? USER_MESSAGES[options.code]);
-    this.name = "IxplorerError";
+    this.name = "AttestError";
     this.code = options.code;
     this.cause = options.cause;
     this.details = options.details;
   }
 }
 
-export function isIxplorerError(error: unknown): error is IxplorerError {
-  return error instanceof IxplorerError;
+export function isAttestError(error: unknown): error is AttestError {
+  return error instanceof AttestError;
 }
 
 export function toUserMessage(error: unknown): string {
-  if (isIxplorerError(error)) {
+  if (isAttestError(error)) {
     if (error.code === "UNSUPPORTED_CAPABILITY") return error.message;
     if (error.code === "MODEL_PROVIDER_UNAVAILABLE" || error.code === "MODEL_NOT_FOUND") {
       return modelRequestUserMessage(error);
@@ -68,7 +68,7 @@ export function toUserMessage(error: unknown): string {
   return USER_MESSAGES.UNKNOWN;
 }
 
-function modelRequestUserMessage(error: IxplorerError): string {
+function modelRequestUserMessage(error: AttestError): string {
   const providerMessage = detailMessage(error.details?.providerMessage);
   if (providerMessage) {
     const status = error.details?.status;
@@ -92,6 +92,6 @@ function errorMessage(error: unknown): string | undefined {
   return detailMessage(error);
 }
 
-export function errorCodeFromUnknown(error: unknown): IxplorerErrorCode {
-  return isIxplorerError(error) ? error.code : "UNKNOWN";
+export function errorCodeFromUnknown(error: unknown): AttestErrorCode {
+  return isAttestError(error) ? error.code : "UNKNOWN";
 }

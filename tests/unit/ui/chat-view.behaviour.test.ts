@@ -5,10 +5,10 @@ import { App, View, WorkspaceLeaf, takeNotices } from "../../stubs/obsidian";
 import type { WorkspaceLeaf as ObsidianWorkspaceLeaf } from "obsidian";
 
 import {
-  IXPLORER_CHAT_VIEW_TYPE,
-  IxplorerChatView,
-  type IxplorerChatViewServices,
-} from "@apps/obsidian/ui/chat/IxplorerChatView";
+  ATTEST_CHAT_VIEW_TYPE,
+  AttestChatView,
+  type AttestChatViewServices,
+} from "@apps/obsidian/ui/chat/AttestChatView";
 import { createTranslator } from "@adapters/i18n";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import type { SavedChat, SavedChatSummary } from "@core/chat/savedChat";
@@ -81,8 +81,8 @@ const savedChat: SavedChat = {
   chatSettings: { chatModelProfileId: "model", indexProfileId: "index", searchMode: "indexOnly" },
 };
 
-function createServices(overrides: Partial<IxplorerChatViewServices> = {}) {
-  const services: IxplorerChatViewServices = {
+function createServices(overrides: Partial<AttestChatViewServices> = {}) {
+  const services: AttestChatViewServices = {
     createResearchService: () => {
       throw new Error("The test must not start a research run.");
     },
@@ -112,39 +112,39 @@ function createServices(overrides: Partial<IxplorerChatViewServices> = {}) {
   return services;
 }
 
-async function openView(overrides: Partial<IxplorerChatViewServices> = {}) {
+async function openView(overrides: Partial<AttestChatViewServices> = {}) {
   const app = new App();
   const workspace = app.workspace;
   const services = createServices(overrides);
   workspace.registerViewFactory(
-    IXPLORER_CHAT_VIEW_TYPE,
+    ATTEST_CHAT_VIEW_TYPE,
     (leaf) =>
-      new IxplorerChatView(leaf as unknown as ObsidianWorkspaceLeaf, services) as unknown as View,
+      new AttestChatView(leaf as unknown as ObsidianWorkspaceLeaf, services) as unknown as View,
   );
   const leaf: WorkspaceLeaf = workspace.createLeaf();
-  await leaf.setViewState({ type: IXPLORER_CHAT_VIEW_TYPE });
-  const view = leaf.view as unknown as IxplorerChatView;
+  await leaf.setViewState({ type: ATTEST_CHAT_VIEW_TYPE });
+  const view = leaf.view as unknown as AttestChatView;
   return { app, workspace, leaf, view, services };
 }
 
-function panelState(view: IxplorerChatView) {
+function panelState(view: AttestChatView) {
   const root = view.contentEl;
-  const chatPanel = root.querySelector<HTMLElement>(".ixplorer-chat__panel");
-  const indexPanel = root.querySelector<HTMLElement>(".ixplorer-index-search");
+  const chatPanel = root.querySelector<HTMLElement>(".attest-chat__panel");
+  const indexPanel = root.querySelector<HTMLElement>(".attest-index-search");
   return {
     chatHidden: chatPanel?.classList.contains("is-hidden") ?? null,
     indexPresent: indexPanel !== null,
     indexHidden: indexPanel?.classList.contains("is-hidden") ?? null,
     selectedTabs: Array.from(
-      root.querySelectorAll('.ixplorer-chat__tab[aria-selected="true"]'),
+      root.querySelectorAll('.attest-chat__tab[aria-selected="true"]'),
       (tab) => tab.textContent,
     ),
   };
 }
 
-function tab(view: IxplorerChatView, label: string): HTMLButtonElement {
+function tab(view: AttestChatView, label: string): HTMLButtonElement {
   const found = Array.from(
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__tab"),
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__tab"),
   ).find((button) => button.textContent === label);
   if (!found) throw new Error(`No "${label}" tab is rendered.`);
   return found;
@@ -193,7 +193,7 @@ describe("chat view panel selection", () => {
   it("hides the tabs and the index search panel outside debug mode", async () => {
     const { view, leaf } = await openView({ isDebugMode: () => false });
 
-    expect(view.contentEl.querySelectorAll(".ixplorer-chat__tab")).toHaveLength(0);
+    expect(view.contentEl.querySelectorAll(".attest-chat__tab")).toHaveLength(0);
     expect(panelState(view)).toEqual({
       chatHidden: false,
       indexPresent: false,
@@ -231,9 +231,9 @@ describe("chat view transcript disposal", () => {
         messages: [...savedChat.messages, streamingAssistant],
       }),
     });
-    opened.view.contentEl.querySelector<HTMLElement>(".ixplorer-chat__saved-open")?.click();
+    opened.view.contentEl.querySelector<HTMLElement>(".attest-chat__saved-open")?.click();
     await vi.waitFor(() => {
-      if (!opened.view.contentEl.querySelector(".ixplorer-chat__tool-fetch-target")) {
+      if (!opened.view.contentEl.querySelector(".attest-chat__tool-fetch-target")) {
         throw new Error("The pending fetch targets were not rendered yet.");
       }
     });
@@ -270,15 +270,15 @@ describe("saved chats from the chat view", () => {
     const loadSavedChat = vi.fn(async () => savedChat);
     const { view, leaf } = await openView({ loadSavedChat });
 
-    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
     await vi.waitFor(() => {
       expect(loadSavedChat).toHaveBeenCalledWith(savedChat.id);
-      expect(view.contentEl.querySelector(".ixplorer-chat__message-text")?.textContent).toBe(
+      expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
       );
     });
-    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).toBeNull();
+    expect(view.contentEl.querySelector(".attest-chat__empty-state")).toBeNull();
     await leaf.detach();
   });
 
@@ -287,12 +287,12 @@ describe("saved chats from the chat view", () => {
     const listSavedChats = vi.fn(async () => [summary]);
     const { view, leaf } = await openView({ loadSavedChat, listSavedChats });
 
-    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
     await vi.waitFor(() => expect(loadSavedChat).toHaveBeenCalledWith(summary.id));
     expect(takeNotices().map((notice) => notice.message)).toEqual(["Saved chat was not found."]);
     expect(listSavedChats).toHaveBeenCalledTimes(2);
-    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).not.toBeNull();
+    expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();
     await leaf.detach();
   });
 
@@ -306,17 +306,17 @@ describe("saved chats from the chat view", () => {
       deleteSavedChat,
     });
 
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__icon-button")[0]?.click();
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[0]?.click();
     await vi.waitFor(() => {
-      expect(view.contentEl.querySelector(".ixplorer-chat__history-popover")).not.toBeNull();
+      expect(view.contentEl.querySelector(".attest-chat__history-popover")).not.toBeNull();
     });
 
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action")[0]?.click();
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[0]?.click();
     await vi.waitFor(() => expect(setSavedChatFavorite).toHaveBeenCalledWith(summary.id, true));
 
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action")[1]?.click();
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[1]?.click();
     const titleInput = view.contentEl.querySelector<HTMLInputElement>(
-      ".ixplorer-chat__saved-title-input",
+      ".attest-chat__saved-title-input",
     );
     titleInput!.value = "Renamed research";
     titleInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -325,7 +325,7 @@ describe("saved chats from the chat view", () => {
     });
 
     view.contentEl
-      .querySelectorAll<HTMLButtonElement>(".ixplorer-chat__saved-action--delete")[0]
+      .querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action--delete")[0]
       ?.click();
     await vi.waitFor(() => expect(deleteSavedChat).toHaveBeenCalledWith(summary.id));
     await vi.waitFor(() => {
@@ -343,21 +343,21 @@ describe("saved chats from the chat view", () => {
     }));
     const { view, leaf } = await openView({ saveChat });
 
-    view.contentEl.querySelector<HTMLButtonElement>(".ixplorer-chat__saved-open")?.click();
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
     await vi.waitFor(() => {
-      expect(view.contentEl.querySelector(".ixplorer-chat__message-text")?.textContent).toBe(
+      expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
       );
     });
 
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".ixplorer-chat__icon-button")[1]?.click();
+    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[1]?.click();
     await vi.waitFor(() => {
       expect(saveChat).toHaveBeenCalledWith(
         expect.objectContaining({ id: savedChat.id, createdAt: savedChat.createdAt }),
       );
-      expect(view.contentEl.querySelector(".ixplorer-chat__message")).toBeNull();
+      expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
     });
-    expect(view.contentEl.querySelector(".ixplorer-chat__empty-state")).not.toBeNull();
+    expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();
     await leaf.detach();
   });
 });

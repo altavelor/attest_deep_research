@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { isRecord } from "@shared";
 import {
   ApiFormat,
@@ -62,7 +62,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     if (this.provider === "anthropic") {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "Anthropic embeddings are not supported.",
       });
@@ -85,7 +85,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     );
 
     if (!isOpenAiModelsResponse(body)) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "The OpenAI-compatible provider returned an invalid models response.",
       });
@@ -102,7 +102,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     );
 
     if (!isOllamaTagsResponse(body)) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "Ollama returned an invalid tags response.",
       });
@@ -124,7 +124,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     );
 
     if (!isOpenAiEmbeddingsResponse(body)) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "The OpenAI-compatible provider returned an invalid embeddings response.",
       });
@@ -149,7 +149,7 @@ export class EmbeddingClient implements EmbeddingProviderClient {
     );
 
     if (!isOllamaEmbedResponse(body)) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "Ollama returned an invalid embeddings response.",
       });

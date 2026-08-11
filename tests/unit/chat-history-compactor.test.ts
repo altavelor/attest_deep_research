@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { takeNotices } from "../stubs/obsidian";
 import { ChatHistoryCompactor } from "@apps/obsidian/ui/chat/research/ChatHistoryCompactor";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import type { ChatDisplayMessage } from "@core/conversation";
 
 function message(role: "user" | "assistant", content: string): ChatDisplayMessage {
@@ -89,7 +89,7 @@ describe("ChatHistoryCompactor", () => {
     ];
     const state = harness(original);
     state.summarizeChatHistoryForCompaction.mockRejectedValueOnce(
-      new IxplorerError({ code: "MODEL_PROVIDER_UNAVAILABLE", cause: new Error("offline") }),
+      new AttestError({ code: "MODEL_PROVIDER_UNAVAILABLE", cause: new Error("offline") }),
     );
 
     await expect(state.compactor.compactHistory({ automatic: false })).resolves.toBe(false);

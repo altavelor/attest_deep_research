@@ -5,8 +5,8 @@ import { App, ItemView, WorkspaceLeaf } from "../../stubs/obsidian";
 import type { Plugin as StubPlugin } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
-import IxplorerPlugin from "@apps/obsidian/main";
-import { IXPLORER_CHAT_VIEW_TYPE } from "@apps/obsidian/ui/chat/IxplorerChatView";
+import AttestPlugin from "@apps/obsidian/main";
+import { ATTEST_CHAT_VIEW_TYPE } from "@apps/obsidian/ui/chat/AttestChatView";
 import { createContainer, resetDom, restoreDomTimers } from "../../helpers/domHarness";
 
 const FOREIGN_VIEW_TYPE = "foreign-view";
@@ -22,10 +22,10 @@ class ForeignView extends ItemView {
   }
 }
 
-function createPlugin(app: App): IxplorerPlugin {
-  return new IxplorerPlugin(app as unknown as ObsidianApp, {
-    id: "ixplorer",
-    name: "Ixplorer",
+function createPlugin(app: App): AttestPlugin {
+  return new AttestPlugin(app as unknown as ObsidianApp, {
+    id: "attest",
+    name: "Attest",
     version: "0.0.0",
     minAppVersion: "1.0.0",
     author: "test",
@@ -33,7 +33,7 @@ function createPlugin(app: App): IxplorerPlugin {
   });
 }
 
-function asStubPlugin(plugin: IxplorerPlugin): StubPlugin {
+function asStubPlugin(plugin: AttestPlugin): StubPlugin {
   return plugin as unknown as StubPlugin;
 }
 
@@ -43,13 +43,13 @@ function markerOf(view: { contentEl: HTMLElement }, name: string): HTMLElement {
 
 async function openChatLeaf(app: App): Promise<WorkspaceLeaf> {
   const leaf = app.workspace.createLeaf();
-  await leaf.setViewState({ type: IXPLORER_CHAT_VIEW_TYPE, active: true });
+  await leaf.setViewState({ type: ATTEST_CHAT_VIEW_TYPE, active: true });
   return leaf;
 }
 
-describe("Ixplorer plugin lifecycle", () => {
+describe("Attest plugin lifecycle", () => {
   let app: App;
-  let plugin: IxplorerPlugin;
+  let plugin: AttestPlugin;
 
   beforeEach(async () => {
     createContainer();
@@ -93,7 +93,7 @@ describe("Ixplorer plugin lifecycle", () => {
     plugin.refreshChatViews();
 
     const view = leaf.view as unknown as { contentEl: HTMLElement };
-    expect(view.contentEl.querySelectorAll(".ixplorer-chat").length).toBe(1);
+    expect(view.contentEl.querySelectorAll(".attest-chat").length).toBe(1);
   });
 
   it("replaces the chat command when the interface language changes", () => {
@@ -102,7 +102,7 @@ describe("Ixplorer plugin lifecycle", () => {
     plugin.applyUiLanguage();
 
     expect(asStubPlugin(plugin).commands).toEqual([
-      expect.objectContaining({ id: "open-ixplorer-chat", name: "Открыть чат Ixplorer" }),
+      expect.objectContaining({ id: "open-attest-chat", name: "Открыть чат Attest" }),
     ]);
   });
 
@@ -121,14 +121,14 @@ describe("Ixplorer plugin lifecycle", () => {
     await plugin.activateChatView();
 
     expect(app.workspace.revealedLeaves).toEqual([chatLeaf]);
-    expect(app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)).toEqual([chatLeaf]);
+    expect(app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)).toEqual([chatLeaf]);
   });
 
   it("creates and reveals a chat leaf when no chat is open", async () => {
     await plugin.activateChatView();
 
-    const [chatLeaf] = app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE);
-    expect(chatLeaf?.view?.getViewType()).toBe(IXPLORER_CHAT_VIEW_TYPE);
+    const [chatLeaf] = app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE);
+    expect(chatLeaf?.view?.getViewType()).toBe(ATTEST_CHAT_VIEW_TYPE);
     expect(app.workspace.revealedLeaves).toEqual([chatLeaf]);
   });
 
@@ -162,7 +162,7 @@ describe("Ixplorer plugin lifecycle", () => {
 
     await plugin.activateChatView();
 
-    expect(app.workspace.getLeavesOfType(IXPLORER_CHAT_VIEW_TYPE)).toHaveLength(1);
+    expect(app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)).toHaveLength(1);
     expect(app.workspace.revealedLeaves).toHaveLength(1);
   });
 
@@ -177,19 +177,19 @@ describe("Ixplorer plugin lifecycle", () => {
     plugin.openSettingsTab();
 
     expect(open).toHaveBeenCalledOnce();
-    expect(openTabById).toHaveBeenCalledWith("ixplorer");
+    expect(openTabById).toHaveBeenCalledWith("attest");
   });
 
   it("releases the view type, command and settings tab registered on load", async () => {
-    expect(app.workspace.getViewFactory(IXPLORER_CHAT_VIEW_TYPE)).toBeDefined();
+    expect(app.workspace.getViewFactory(ATTEST_CHAT_VIEW_TYPE)).toBeDefined();
     expect(asStubPlugin(plugin).commands.map((command) => command.id)).toContain(
-      "open-ixplorer-chat",
+      "open-attest-chat",
     );
     expect(asStubPlugin(plugin).settingTabs).toHaveLength(1);
 
     plugin.unload();
 
-    expect(app.workspace.getViewFactory(IXPLORER_CHAT_VIEW_TYPE)).toBeUndefined();
+    expect(app.workspace.getViewFactory(ATTEST_CHAT_VIEW_TYPE)).toBeUndefined();
     expect(asStubPlugin(plugin).commands).toHaveLength(0);
     expect(asStubPlugin(plugin).settingTabs).toHaveLength(0);
     expect(asStubPlugin(plugin).registrationCount()).toBe(0);
@@ -197,9 +197,9 @@ describe("Ixplorer plugin lifecycle", () => {
   });
 });
 
-describe("Ixplorer vault warm-up caches", () => {
+describe("Attest vault warm-up caches", () => {
   let app: App;
-  let plugin: IxplorerPlugin;
+  let plugin: AttestPlugin;
 
   beforeEach(async () => {
     createContainer();

@@ -98,7 +98,7 @@ describe("inline citation anchors", () => {
       transcriptOptions,
     );
 
-    const anchors = container.querySelectorAll(".ixplorer-chat__citation-anchor");
+    const anchors = container.querySelectorAll(".attest-chat__citation-anchor");
     expect(anchors).toHaveLength(1);
     expect(anchors[0].textContent).toBe("[1]");
     expect(container.querySelector("p")?.textContent).toBe("GPT-4o costs $2.50 per 1M [1].");
@@ -120,7 +120,7 @@ describe("inline citation anchors", () => {
     renderAssistantMessageContent(container, finalized, renderOptions);
     await settle();
 
-    const answers = container.querySelectorAll(".ixplorer-chat__answer-content");
+    const answers = container.querySelectorAll(".attest-chat__answer-content");
     expect(answers[0].textContent).toContain("[unseen — example.com](https://example.com/unseen)");
     expect(answers[1].textContent).not.toContain("](https://example.com/unseen)");
   });
@@ -134,7 +134,7 @@ describe("inline citation anchors", () => {
       transcriptOptions,
     );
 
-    expect(container.querySelectorAll(".ixplorer-chat__citation-anchor")).toHaveLength(1);
+    expect(container.querySelectorAll(".attest-chat__citation-anchor")).toHaveLength(1);
   });
 });
 
@@ -156,7 +156,7 @@ describe("web references without evidence", () => {
     );
 
     expect(
-      Array.from(container.querySelectorAll(".ixplorer-chat__citation-anchor")).map(
+      Array.from(container.querySelectorAll(".attest-chat__citation-anchor")).map(
         (anchor) => anchor.textContent,
       ),
     ).toEqual(["[1]", "[2]"]);
@@ -169,13 +169,13 @@ describe("web references without evidence", () => {
       onHighlight: () => {},
     });
 
-    const blocks = container.querySelectorAll<HTMLElement>(".ixplorer-chat__citation-block");
+    const blocks = container.querySelectorAll<HTMLElement>(".attest-chat__citation-block");
     expect(blocks).toHaveLength(2);
     const linkOnly = blocks[1];
     expect(linkOnly.textContent).toContain("https://example.com/unseen");
-    expect(linkOnly.querySelector(".ixplorer-chat__citation-block-text")).toBeNull();
-    expect(linkOnly.querySelector(".ixplorer-chat__citation-copy")).toBeNull();
-    expect(blocks[0].querySelector(".ixplorer-chat__citation-block-text")?.textContent).toContain(
+    expect(linkOnly.querySelector(".attest-chat__citation-block-text")).toBeNull();
+    expect(linkOnly.querySelector(".attest-chat__citation-copy")).toBeNull();
+    expect(blocks[0].querySelector(".attest-chat__citation-block-text")?.textContent).toContain(
       "GPT-4o costs",
     );
   });
@@ -214,19 +214,19 @@ describe("answer status dot", () => {
 
   it("omits the timeline dot for an Instant run and keeps it for a Thinking run", () => {
     renderAssistantMessageContent(container, assistant("instant"), renderOptions);
-    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).toBeNull();
-    expect(container.querySelector(".ixplorer-chat__workflow")).toBeNull();
+    expect(container.querySelector(".attest-chat__answer-status-dot")).toBeNull();
+    expect(container.querySelector(".attest-chat__workflow")).toBeNull();
 
     const thinkingHost = createContainer();
     renderAssistantMessageContent(thinkingHost, assistant("thinking"), renderOptions);
-    expect(thinkingHost.querySelector(".ixplorer-chat__answer-status-dot")).not.toBeNull();
+    expect(thinkingHost.querySelector(".attest-chat__answer-status-dot")).not.toBeNull();
   });
 
   it("omits the dot on the patched render path too", () => {
     renderAssistantMessageContent(container, assistant("thinking"), renderOptions);
-    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).not.toBeNull();
+    expect(container.querySelector(".attest-chat__answer-status-dot")).not.toBeNull();
 
     expect(patchAssistantMessageContent(container, assistant("instant"), renderOptions)).toBe(true);
-    expect(container.querySelector(".ixplorer-chat__answer-status-dot")).toBeNull();
+    expect(container.querySelector(".attest-chat__answer-status-dot")).toBeNull();
   });
 });

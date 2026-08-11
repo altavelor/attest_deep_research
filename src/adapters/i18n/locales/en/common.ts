@@ -14,15 +14,15 @@ export const common = {
   "profile.error.indexNotBuilt": "Index this profile before using it in chat or search.",
   "profile.error.indexUnavailable": "The selected index profile is unavailable.",
   "profile.warning.indexNotSelected":
-    "Select an indexed profile in Ixplorer settings before searching.",
+    "Select an indexed profile in Attest settings before searching.",
   "profile.warning.embeddingProfileUnavailable":
-    "The selected index's embedding model profile is unavailable. Update it in Ixplorer settings.",
+    "The selected index's embedding model profile is unavailable. Update it in Attest settings.",
   "profile.warning.embeddingProfileSuspended":
-    "The selected index's embedding model profile is suspended. Update it in Ixplorer settings.",
+    "The selected index's embedding model profile is suspended. Update it in Attest settings.",
   "profile.warning.embeddingNotSupported":
-    "The selected index's embedding model cannot create embeddings. Update it in Ixplorer settings.",
+    "The selected index's embedding model cannot create embeddings. Update it in Attest settings.",
   "profile.warning.embeddingServerUnavailable":
-    "The selected index's embedding server is unavailable. Update it in Ixplorer settings.",
+    "The selected index's embedding server is unavailable. Update it in Attest settings.",
 };
 
 export type EnCommonMessages = Record<keyof typeof common, string>;

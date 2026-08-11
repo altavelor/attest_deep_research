@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "Ixplorer-Chat öffnen",
+  "command.openChat": "Attest-Chat öffnen",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Index-Suche",
@@ -34,10 +34,10 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.unavailable": "Fragen nicht möglich: {message}",
 
   "chat.status.noChatModel":
-    "In den Ixplorer-Einstellungen ein Chat-Modell-Profil anlegen und auswählen.",
-  "chat.status.noIndex": "In den Ixplorer-Einstellungen einen aktiven Index anlegen und auswählen.",
+    "In den Attest-Einstellungen ein Chat-Modell-Profil anlegen und auswählen.",
+  "chat.status.noIndex": "In den Attest-Einstellungen einen aktiven Index anlegen und auswählen.",
   "chat.status.webSearchDisabled":
-    "Websuche in den Ixplorer-Einstellungen aktivieren, um diesen Suchmodus zu nutzen.",
+    "Websuche in den Attest-Einstellungen aktivieren, um diesen Suchmodus zu nutzen.",
   "chat.status.legacyIndexImages":
     "Die Textsuche funktioniert mit diesem Index, doch die Bildsuche in den Dokumenten erfordert einen vollständigen Neuaufbau.",
   "chat.status.contextWindow.unknown": "Größe des Kontextfensters des Modells unbekannt",
@@ -127,9 +127,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} T.",
   "chat.savedChats.time.weeks": "{count} Wo.",
 
-  "chat.answerNote.saved": "Ixplorer-Antwort in einer neuen Notiz gespeichert.",
-  "chat.answerNote.openNoteFirst": "Eine Notiz öffnen, bevor eine Ixplorer-Antwort angehängt wird.",
-  "chat.answerNote.appended": "Ixplorer-Antwort an die aktive Notiz angehängt.",
+  "chat.answerNote.saved": "Attest-Antwort in einer neuen Notiz gespeichert.",
+  "chat.answerNote.openNoteFirst": "Eine Notiz öffnen, bevor eine Attest-Antwort angehängt wird.",
+  "chat.answerNote.appended": "Attest-Antwort an die aktive Notiz angehängt.",
 
   "chat.research.contextTooLong":
     "Der aktuelle Chat ist zu lang für das Kontextfenster des ausgewählten Modells.",

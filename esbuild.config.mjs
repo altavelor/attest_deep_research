@@ -28,7 +28,7 @@ const nodeShims = {
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
 const defaultOutputDir = resolve("dist");
-const pluginOutputDir = process.env.IXPLORER_OUTPUT_DIR ?? defaultOutputDir;
+const pluginOutputDir = process.env.ATTEST_OUTPUT_DIR ?? defaultOutputDir;
 const pluginOutputFile = join(pluginOutputDir, "main.js");
 
 const banner =

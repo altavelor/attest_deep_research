@@ -1,6 +1,6 @@
 import { Notice } from "obsidian";
 
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import { ChatModelClient } from "@adapters/model-provider";
 import { isResponsesCapabilityCurrent, probeResponsesCapabilities } from "@adapters/settings";
 import { startChatProfileProbes as startChatProfileProbeTasks } from "@adapters/settings";
@@ -25,7 +25,7 @@ import {
 } from "@adapters/settings";
 
 export interface CapabilityProberHost {
-  readonly plugin: IxplorerPlugin;
+  readonly plugin: AttestPlugin;
 
   readonly fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
 
@@ -39,7 +39,7 @@ export interface CapabilityProberHost {
  * the settings tab and only calls back to redisplay when state changes.
  */
 export class SettingsCapabilityProber {
-  private readonly plugin: IxplorerPlugin;
+  private readonly plugin: AttestPlugin;
   private readonly fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   private readonly requestRedisplay: () => void;
   private readonly states = new Map<

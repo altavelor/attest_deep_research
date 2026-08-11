@@ -57,7 +57,7 @@ export function renderWorkflowNodes(
   const hasStreamingCheckpoint = checkpoints.some(
     (checkpoint) => checkpoint.status === "streaming",
   );
-  const listEl = hostEl.createDiv({ cls: "ixplorer-chat__workflow" });
+  const listEl = hostEl.createDiv({ cls: "attest-chat__workflow" });
 
   const state: WorkflowState = {
     isStreaming,

@@ -3,7 +3,7 @@ import type { Translate } from "@adapters/i18n";
 import {
   ChatModelProfile,
   EmbeddingModelProfile,
-  IxplorerSettings,
+  AttestSettings,
   ServerProfile,
 } from "@adapters/settings";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@adapters/settings";
 
 export function requireChatModelProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   profileId?: string,
 ): ChatModelProfile {
@@ -26,7 +26,7 @@ export function requireChatModelProfile(
 }
 
 export function requireEmbeddingModelProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   profileId?: string,
 ): EmbeddingModelProfile {
@@ -38,7 +38,7 @@ export function requireEmbeddingModelProfile(
 }
 
 export function requireServerProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   profileId: string,
 ): ServerProfile {
@@ -50,7 +50,7 @@ export function requireServerProfile(
 }
 
 export function resolveIndexProfileForUse(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   profileId?: string,
 ): IndexProfile {
@@ -79,7 +79,7 @@ export function resolveIndexProfileForUse(
 }
 
 export function requireIndexProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   profileId: string,
 ): IndexProfile {
@@ -91,7 +91,7 @@ export function requireIndexProfile(
 }
 
 export function indexSearchEmbedderWarning(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   translate: Translate,
   indexProfileId: string,
 ): string | undefined {

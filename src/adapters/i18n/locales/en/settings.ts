@@ -2,10 +2,10 @@ export const settings = {
   "settings.language.heading": "Language",
   "settings.language.name": "Interface language",
   "settings.language.desc":
-    "Language of the Ixplorer interface. Applies without restarting Obsidian.",
+    "Language of the Attest interface. Applies without restarting Obsidian.",
   "settings.language.auto": "Automatic (follow Obsidian)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "Quick start",
   "settings.tab.quickStart.steps":
     "1. Add a server → 2. Add a chat model → 3. (optional) Add an index",
@@ -17,7 +17,7 @@ export const settings = {
 
   "settings.retrieval.heading": "Retrieval",
   "settings.retrieval.desc":
-    "Controls how Ixplorer finds local, graph, index, document, and web evidence before answering.",
+    "Controls how Attest finds local, graph, index, document, and web evidence before answering.",
   "settings.retrieval.graph.heading": "Obsidian graph",
   "settings.retrieval.useLinkedNotes.name": "Use linked notes",
   "settings.retrieval.useLinkedNotes.desc":
@@ -70,7 +70,7 @@ export const settings = {
 
   "settings.webSources.heading": "External sources",
   "settings.webSources.desc":
-    "External, user-initiated web search across the enabled sources. Ixplorer sends only the typed question, never retrieved vault content.",
+    "External, user-initiated web search across the enabled sources. Attest sends only the typed question, never retrieved vault content.",
   "settings.webSources.count": "{enabled} of {total} enabled",
   "settings.webSources.column.source": "Source",
   "settings.webSources.column.actions": "Actions",

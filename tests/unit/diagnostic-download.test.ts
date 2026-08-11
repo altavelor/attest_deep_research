@@ -16,11 +16,11 @@ describe("diagnostic HTML download", () => {
     };
 
     expect(downloadDiagnosticHtml("<html></html>", "run / unsafe", environment)).toBe(
-      "ixplorer-diagnostic-run-unsafe.html",
+      "attest-diagnostic-run-unsafe.html",
     );
     expect(calls).toEqual([
       "create",
-      "trigger:blob:report:ixplorer-diagnostic-run-unsafe.html",
+      "trigger:blob:report:attest-diagnostic-run-unsafe.html",
       "revoke:blob:report",
     ]);
   });

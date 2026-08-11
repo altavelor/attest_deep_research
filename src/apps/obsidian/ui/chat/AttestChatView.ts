@@ -18,7 +18,7 @@ import { ToolOutputViewer } from "./toolOutputViewer";
 import { describeToolCall } from "./toolCallView";
 import type { ChainItem } from "@core/conversation";
 import { IndexProfileSelectOption } from "./ChatComposer";
-import { IxplorerPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
+import { AttestPanel, renderChatWindowActions, renderPanelTabs } from "./ChatHeader";
 import {
   disposeChatTranscript,
   patchActiveAssistantMessage,
@@ -59,11 +59,11 @@ import { SavedChatSessionController } from "./history/SavedChatSessionController
 import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
 import { ChatComposerController } from "./ChatComposerController";
 
-export const IXPLORER_CHAT_VIEW_TYPE = "ixplorer-chat";
+export const ATTEST_CHAT_VIEW_TYPE = "attest-chat";
 
 export type { IndexSearchOptions, IndexSearchResult };
 
-export interface IxplorerChatViewServices {
+export interface AttestChatViewServices {
   createResearchService(chatModelProfileId?: string, indexProfileId?: string): ResearchService;
   isWebSearchEnabled(): boolean;
   getChatModel(): string;
@@ -91,8 +91,8 @@ export interface IxplorerChatViewServices {
   shouldIncludeActiveFileContext(): boolean;
 }
 
-export class IxplorerChatView extends ItemView {
-  private readonly services: IxplorerChatViewServices;
+export class AttestChatView extends ItemView {
+  private readonly services: AttestChatViewServices;
 
   /** Late-bound lookup so a language change applies on the next render. */
   private readonly t: Translate = (key, params) => this.services.getTranslator().t(key, params);
@@ -108,7 +108,7 @@ export class IxplorerChatView extends ItemView {
   private currentChatSettings: SavedChatSettings;
   private currentResearchMode: ResearchMode = "instant";
   private readonly savedChatSession: SavedChatSessionController;
-  private activePanel: IxplorerPanel = "chat";
+  private activePanel: AttestPanel = "chat";
   private isRunning = false;
   private editingMessageIndex: number | null = null;
 
@@ -118,7 +118,7 @@ export class IxplorerChatView extends ItemView {
   private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
 
-  constructor(leaf: WorkspaceLeaf, services: IxplorerChatViewServices) {
+  constructor(leaf: WorkspaceLeaf, services: AttestChatViewServices) {
     super(leaf);
     this.services = services;
     this.citationPopover = new CitationPopoverController({
@@ -247,11 +247,11 @@ export class IxplorerChatView extends ItemView {
   }
 
   getViewType(): string {
-    return IXPLORER_CHAT_VIEW_TYPE;
+    return ATTEST_CHAT_VIEW_TYPE;
   }
 
   getDisplayText(): string {
-    return "Ixplorer";
+    return "Attest";
   }
 
   getIcon(): string {
@@ -287,36 +287,36 @@ export class IxplorerChatView extends ItemView {
       disposeChatTranscript(this.transcriptEl);
     }
     this.contentEl.empty();
-    this.contentEl.addClass("ixplorer-chat-view");
+    this.contentEl.addClass("attest-chat-view");
     this.contentEl.setAttr("dir", this.services.getTranslator().direction);
     if (!this.services.isDebugMode()) {
       this.activePanel = "chat";
     }
 
-    const root = this.contentEl.createDiv({ cls: "ixplorer-chat" });
-    const header = root.createDiv({ cls: "ixplorer-chat__header" });
-    header.createEl("h2", { text: "Ixplorer" });
+    const root = this.contentEl.createDiv({ cls: "attest-chat" });
+    const header = root.createDiv({ cls: "attest-chat__header" });
+    header.createEl("h2", { text: "Attest" });
     renderPanelTabs(header, this.headerOptions());
 
     const chatPanel = root.createDiv({
-      cls: `ixplorer-chat__panel${this.activePanel === "chat" ? "" : " is-hidden"}`,
+      cls: `attest-chat__panel${this.activePanel === "chat" ? "" : " is-hidden"}`,
     });
-    const chatToolbar = chatPanel.createDiv({ cls: "ixplorer-chat__toolbar" });
+    const chatToolbar = chatPanel.createDiv({ cls: "attest-chat__toolbar" });
     renderChatWindowActions(chatToolbar, this.headerOptions());
 
     this.transcriptEl = chatPanel.createDiv({
-      cls: "ixplorer-chat__transcript",
+      cls: "attest-chat__transcript",
       attr: { role: "log", "aria-live": "polite" },
     });
 
-    const results = chatPanel.createDiv({ cls: "ixplorer-chat__results" });
-    this.followUpsEl = results.createDiv({ cls: "ixplorer-chat__followups" });
+    const results = chatPanel.createDiv({ cls: "attest-chat__results" });
+    this.followUpsEl = results.createDiv({ cls: "attest-chat__followups" });
 
     this.composer.render(chatPanel);
 
     if (this.services.isDebugMode()) {
       const indexSearchRoot = root.createDiv({
-        cls: `ixplorer-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
+        cls: `attest-index-search${this.activePanel === "indexSearch" ? "" : " is-hidden"}`,
       });
       this.indexSearch.render(indexSearchRoot);
     }
@@ -594,7 +594,7 @@ export class IxplorerChatView extends ItemView {
     const action = notice.messageEl.createEl("a", {
       text: this.t("chat.notice.openIndexSettings"),
       href: "#",
-      cls: "ixplorer-chat__notice-action",
+      cls: "attest-chat__notice-action",
     });
     action.addEventListener("click", (event) => {
       event.preventDefault();

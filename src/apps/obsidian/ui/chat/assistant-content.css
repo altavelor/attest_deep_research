@@ -1,64 +1,64 @@
-.ixplorer-chat__message-content--assistant :is(p, ul, ol, blockquote, pre) {
+.attest-chat__message-content--assistant :is(p, ul, ol, blockquote, pre) {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
-.ixplorer-chat__message-content--assistant :is(h1, h2, h3, h4, h5, h6) {
+.attest-chat__message-content--assistant :is(h1, h2, h3, h4, h5, h6) {
   margin-top: 0.75rem;
   margin-bottom: 0.375rem;
   font-size: var(--font-ui-large);
   line-height: 1.3;
 }
 
-.ixplorer-chat__message-content--assistant :is(ul, ol) {
+.attest-chat__message-content--assistant :is(ul, ol) {
   padding-inline-start: 1.5rem;
 }
 
-.ixplorer-chat__message-content--assistant li {
+.attest-chat__message-content--assistant li {
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
   padding-inline-start: 0.125rem;
 }
 
-.ixplorer-chat__message-content--assistant li > :is(p, ul, ol) {
+.attest-chat__message-content--assistant li > :is(p, ul, ol) {
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
 }
 
-.ixplorer-chat__message-content--assistant .markdown-rendered {
+.attest-chat__message-content--assistant .markdown-rendered {
   font-size: inherit;
   line-height: 1.45;
 }
 
-.ixplorer-chat__message-content--assistant > :first-child,
-.ixplorer-chat__message-content--assistant .markdown-rendered > :first-child {
+.attest-chat__message-content--assistant > :first-child,
+.attest-chat__message-content--assistant .markdown-rendered > :first-child {
   margin-top: 0;
 }
 
-.ixplorer-chat__message-content--assistant > :last-child,
-.ixplorer-chat__message-content--assistant .markdown-rendered > :last-child {
+.attest-chat__message-content--assistant > :last-child,
+.attest-chat__message-content--assistant .markdown-rendered > :last-child {
   margin-bottom: 0;
 }
 
-.ixplorer-chat__results {
+.attest-chat__results {
   display: grid;
   min-width: 0;
   gap: 0.75rem;
 }
 
-.ixplorer-chat__followups h3 {
+.attest-chat__followups h3 {
   margin: 0 0 0.375rem;
   font-size: var(--font-ui-medium);
 }
 
-.ixplorer-chat__followup {
+.attest-chat__followup {
   height: auto;
   max-width: 100%;
   white-space: normal;
   text-align: start;
 }
 
-.ixplorer-chat__followup-list {
+.attest-chat__followup-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;

@@ -1,7 +1,7 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 export function throwRebuildRequired(details: Record<string, unknown>): never {
-  throw new IxplorerError({
+  throw new AttestError({
     code: "INDEX_REBUILD_REQUIRED",
     message: "The file-backed index format is inconsistent.",
     details,

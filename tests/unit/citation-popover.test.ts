@@ -51,7 +51,7 @@ describe("CitationPopover", () => {
     const container = createContainer();
 
     renderCitationBlocks(container, refs, { t, onOpenChunk, onHighlight });
-    const blocks = container.querySelectorAll<HTMLElement>(".ixplorer-chat__citation-block");
+    const blocks = container.querySelectorAll<HTMLElement>(".attest-chat__citation-block");
     expect(refs).toHaveLength(2);
     expect(refs[0]?.chunkIds).toEqual(new Set(["first", "second"]));
     expect(blocks).toHaveLength(2);
@@ -74,14 +74,14 @@ describe("CitationPopover", () => {
     const ref = buildCitationRefs([chunk("first")])[0]!;
 
     controller.open(anchor, ref);
-    const popover = host.querySelector<HTMLElement>(".ixplorer-chat__citation-popover");
+    const popover = host.querySelector<HTMLElement>(".attest-chat__citation-popover");
     expect(popover).not.toBeNull();
     expect(anchor.classList.contains("is-highlighted")).toBe(true);
-    popover!.querySelector<HTMLElement>(".ixplorer-chat__citation-popover-card")!.click();
+    popover!.querySelector<HTMLElement>(".attest-chat__citation-popover-card")!.click();
     expect(onOpenChunk).toHaveBeenCalledWith(ref.chunk);
 
     controller.close();
-    expect(host.querySelector(".ixplorer-chat__citation-popover")).toBeNull();
+    expect(host.querySelector(".attest-chat__citation-popover")).toBeNull();
     expect(anchor.classList.contains("is-highlighted")).toBe(false);
   });
 });

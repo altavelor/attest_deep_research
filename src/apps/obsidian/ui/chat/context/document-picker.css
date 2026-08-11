@@ -1,13 +1,13 @@
-.ixplorer-context-picker {
+.attest-context-picker {
   display: grid;
   gap: 0.75rem;
 }
 
-.ixplorer-context-picker__search {
+.attest-context-picker__search {
   width: 100%;
 }
 
-.ixplorer-context-picker__list {
+.attest-context-picker__list {
   display: grid;
   max-height: 20rem;
   overflow-y: auto;
@@ -15,18 +15,18 @@
   border-radius: 8px;
 }
 
-.ixplorer-context-picker__row {
+.attest-context-picker__row {
   display: flex;
   align-items: center;
   padding-left: calc(var(--picker-depth, 0) * 1.1rem);
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.ixplorer-context-picker__row:last-child {
+.attest-context-picker__row:last-child {
   border-bottom: 0;
 }
 
-.ixplorer-context-picker__toggle {
+.attest-context-picker__toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -40,12 +40,12 @@
   cursor: pointer;
 }
 
-.ixplorer-context-picker__toggle-spacer {
+.attest-context-picker__toggle-spacer {
   width: 1.5rem;
   flex-shrink: 0;
 }
 
-.ixplorer-context-picker__item {
+.attest-context-picker__item {
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -55,41 +55,41 @@
   font-size: var(--font-ui-small);
 }
 
-.ixplorer-context-picker__item--folder {
+.attest-context-picker__item--folder {
   font-weight: 500;
 }
 
-.ixplorer-context-picker__icon {
+.attest-context-picker__icon {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--text-muted);
 }
 
-.ixplorer-context-picker__icon svg {
+.attest-context-picker__icon svg {
   width: 0.9rem;
   height: 0.9rem;
 }
 
-.ixplorer-context-picker__count {
+.attest-context-picker__count {
   margin-left: auto;
   padding-right: 0.5rem;
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
 }
 
-.ixplorer-context-picker__item input[type="checkbox"]:disabled {
+.attest-context-picker__item input[type="checkbox"]:disabled {
   opacity: 0.5;
 }
 
-.ixplorer-context-picker__item span {
+.attest-context-picker__item span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ixplorer-context-picker__actions {
+.attest-context-picker__actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;

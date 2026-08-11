@@ -27,7 +27,7 @@ describe("file vector index format", () => {
 
     expect(manifest).toMatchObject({
       schemaVersion: 2,
-      format: "ixplorer-file-vector-index",
+      format: "attest-file-vector-index",
       profileId: "default",
       embeddingModel: "nomic",
       embeddingDimensions: 3,
@@ -140,7 +140,7 @@ describe("file vector index format", () => {
 });
 
 describe("corrupt file-backed index files", () => {
-  const folder = ".ixplorer/index";
+  const folder = ".attest/index";
   let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {

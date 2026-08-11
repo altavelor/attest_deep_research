@@ -1,9 +1,9 @@
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
-import { IxplorerSettings } from "./types";
+import { AttestSettings } from "./types";
 
 /** Returns the stored profile or a switched-off blank; never mutates settings. */
 export function getWebSourceProfile(
-  settings: Pick<IxplorerSettings, "webSources">,
+  settings: Pick<AttestSettings, "webSources">,
   sourceId: string,
 ): WebSourceProfile {
   return (
@@ -17,7 +17,7 @@ export function getWebSourceProfile(
 
 /** Replaces (or appends) the profile for its sourceId. */
 export function upsertWebSourceProfile(
-  settings: Pick<IxplorerSettings, "webSources">,
+  settings: Pick<AttestSettings, "webSources">,
   profile: WebSourceProfile,
 ): void {
   const index = settings.webSources.findIndex((entry) => entry.sourceId === profile.sourceId);
@@ -30,7 +30,7 @@ export function upsertWebSourceProfile(
 
 /** True when the source's required credentials are filled in. */
 export function isWebSourceConfigured(
-  settings: Pick<IxplorerSettings, "webSources">,
+  settings: Pick<AttestSettings, "webSources">,
   sourceId: string,
 ): boolean {
   const descriptor = findWebSourceDescriptor(sourceId);

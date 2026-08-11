@@ -8,9 +8,9 @@ import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { IxplorerSettings } from "./types";
+import { AttestSettings } from "./types";
 
-export function normalizeSettingsState(settings: IxplorerSettings): void {
+export function normalizeSettingsState(settings: AttestSettings): void {
   markInvalidProfilesSuspended(settings);
   normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
@@ -32,7 +32,7 @@ export function normalizeSettingsState(settings: IxplorerSettings): void {
  * duckduckgo entry; per-source result limits no longer exist (the planner
  * derives per-source fetch sizes from the tool's requested limit).
  */
-function migrateLegacyWebSettings(settings: IxplorerSettings): void {
+function migrateLegacyWebSettings(settings: AttestSettings): void {
   const legacy = settings as unknown as Record<string, unknown>;
   if (!Array.isArray(settings.webSources)) {
     settings.webSources = [];
@@ -54,7 +54,7 @@ function migrateLegacyWebSettings(settings: IxplorerSettings): void {
  * stored `enabled: true` becomes the "auto" activation, everything else becomes
  * "off"; an already valid `activation` is kept, so the pass is idempotent.
  */
-function migrateWebSourceActivation(settings: IxplorerSettings): void {
+function migrateWebSourceActivation(settings: AttestSettings): void {
   for (const profile of settings.webSources) {
     if (typeof profile !== "object" || profile === null) {
       continue;
@@ -72,7 +72,7 @@ function migrateWebSourceActivation(settings: IxplorerSettings): void {
  * for sources removed from the catalog and force-disables ones whose required
  * credentials are missing (the UI gates the toggle, this guards stale data).
  */
-function normalizeWebSources(settings: IxplorerSettings): void {
+function normalizeWebSources(settings: AttestSettings): void {
   const entries = Array.isArray(settings.webSources) ? settings.webSources : [];
   settings.webSources = entries.flatMap((entry) => {
     const descriptor =
@@ -120,7 +120,7 @@ export function isProfileActive<T extends { isSuspended?: boolean }>(profile: T)
   return !isProfileSuspended(profile);
 }
 
-function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
+function markInvalidProfilesSuspended(settings: AttestSettings): void {
   for (const server of settings.serverProfiles) {
     server.isSuspended = server.isSuspended === true;
     server.suspendedReason = server.isSuspended
@@ -159,7 +159,7 @@ function markInvalidProfilesSuspended(settings: IxplorerSettings): void {
   }
 }
 
-function normalizeActiveEmbeddingModel(settings: IxplorerSettings): void {
+function normalizeActiveEmbeddingModel(settings: AttestSettings): void {
   if (
     settings.activeEmbeddingModelProfileId &&
     !settings.embeddingModelProfiles.some(
@@ -171,7 +171,7 @@ function normalizeActiveEmbeddingModel(settings: IxplorerSettings): void {
   }
 }
 
-function normalizeIndexProfiles(settings: IxplorerSettings): void {
+function normalizeIndexProfiles(settings: AttestSettings): void {
   for (const profile of settings.indexProfiles) {
     normalizeIndexProfileNumbers(profile);
     const embedding = profile.embeddingModelProfileId

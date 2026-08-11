@@ -1,4 +1,4 @@
-# Best Practices — Ixplorer
+# Best Practices — Attest
 
 These rules are mandatory for code in this repository. [AGENTS.md](AGENTS.md) is
 the source of truth; this file contains the portion that is verifiable in review.

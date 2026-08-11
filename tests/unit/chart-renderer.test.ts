@@ -47,17 +47,17 @@ describe("renderChartArtifact", () => {
 
     expect(container.querySelector("svg")?.getAttribute("aria-label")).toContain("Monthly results");
     expect(container.querySelectorAll("polyline")).toHaveLength(2);
-    expect(container.querySelectorAll("circle, rect.ixplorer-chart__marker")).toHaveLength(4);
-    expect(container.querySelectorAll(".ixplorer-chart__axis-label")).toHaveLength(2);
-    expect(container.querySelectorAll(".ixplorer-chart__legend-item")).toHaveLength(2);
-    expect(container.querySelectorAll(".ixplorer-chart__table tbody tr")).toHaveLength(2);
+    expect(container.querySelectorAll("circle, rect.attest-chart__marker")).toHaveLength(4);
+    expect(container.querySelectorAll(".attest-chart__axis-label")).toHaveLength(2);
+    expect(container.querySelectorAll(".attest-chart__legend-item")).toHaveLength(2);
+    expect(container.querySelectorAll(".attest-chart__table tbody tr")).toHaveLength(2);
     expect(container.textContent).toContain("Collected during the experiment.");
   });
 
   it("renders grouped bars and pie slices with point-based legends", () => {
     const bars = document.createElement("div");
     renderChartArtifact(bars, chart({ chartType: "bar", caption: undefined }), t);
-    expect(bars.querySelectorAll("rect.ixplorer-chart__bar")).toHaveLength(4);
+    expect(bars.querySelectorAll("rect.attest-chart__bar")).toHaveLength(4);
     expect(bars.querySelectorAll("polyline")).toHaveLength(0);
 
     const pie = document.createElement("div");
@@ -77,10 +77,10 @@ describe("renderChartArtifact", () => {
       }),
       t,
     );
-    expect(pie.querySelectorAll("path.ixplorer-chart__slice")).toHaveLength(2);
+    expect(pie.querySelectorAll("path.attest-chart__slice")).toHaveLength(2);
     expect(pie.querySelectorAll("path title")[0]?.textContent).toContain("Yes: 3 (75%)");
     expect(
-      Array.from(pie.querySelectorAll(".ixplorer-chart__legend-item")).map(
+      Array.from(pie.querySelectorAll(".attest-chart__legend-item")).map(
         (item) => item.textContent,
       ),
     ).toEqual(["Yes", "No"]);

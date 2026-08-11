@@ -1,9 +1,9 @@
 import { PluginDebugLogger } from "@adapters/settings";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
-import { IxplorerSettings } from "@adapters/settings";
-import { IxplorerError } from "@core/errors";
+import { AttestSettings } from "@adapters/settings";
+import { AttestError } from "@core/errors";
 
-function createSettings(overrides: Partial<IxplorerSettings> = {}): IxplorerSettings {
+function createSettings(overrides: Partial<AttestSettings> = {}): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...overrides,
@@ -92,7 +92,7 @@ describe("PluginDebugLogger", () => {
     });
 
     expect(debug).toHaveBeenCalledWith(
-      "[Ixplorer] Indexing file",
+      "[Attest] Indexing file",
       expect.objectContaining({
         path: "Research/a.md",
         outcome: "indexed",
@@ -128,7 +128,7 @@ describe("PluginDebugLogger", () => {
     logger.logProbeResult(context);
 
     expect(debug).toHaveBeenCalledTimes(1);
-    expect(debug).toHaveBeenCalledWith("[Ixplorer] Probe result", {
+    expect(debug).toHaveBeenCalledWith("[Attest] Probe result", {
       probe: "tool-capabilities",
       profileId: "chat-qwen",
       model: "qwen3",
@@ -152,7 +152,7 @@ describe("PluginDebugLogger", () => {
     logger.logConfiguration("initial-load", createSettings({ debugMode: true }));
     expect(debug).toHaveBeenCalledTimes(1);
     expect(debug).toHaveBeenCalledWith(
-      "[Ixplorer] Configuration",
+      "[Attest] Configuration",
       expect.objectContaining({
         stage: "initial-load",
         settings: expect.objectContaining({ debugMode: true }),
@@ -183,7 +183,7 @@ describe("PluginDebugLogger", () => {
     });
 
     logger.logError(
-      new IxplorerError({
+      new AttestError({
         code: "EMBEDDING_UNAVAILABLE",
         message: "Embedding provider failed.",
       }),
@@ -217,7 +217,7 @@ describe("PluginDebugLogger", () => {
     });
 
     logger.logError(
-      new IxplorerError({
+      new AttestError({
         code: "MODEL_PROVIDER_UNAVAILABLE",
         message:
           "Provider rejected authorization=Bearer secret-token at https://url-user:url-password@provider.example/v1/chat?api_key=secret-key",

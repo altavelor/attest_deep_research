@@ -22,7 +22,7 @@ export function renderNav(report: DiagnosticReportV3): string {
   )
     .map((id) => `<a class="nav-anchor" href="#${attr(id)}">${h(id)}</a>`)
     .join("");
-  return `<nav class="top-nav" aria-label="Sections"><span class="nav-brand">Ixplorer</span><span class="nav-label">Diagnostic report</span><div class="nav-anchors">${anchors}</div></nav>`;
+  return `<nav class="top-nav" aria-label="Sections"><span class="nav-brand">Attest</span><span class="nav-label">Diagnostic report</span><div class="nav-anchors">${anchors}</div></nav>`;
 }
 
 export function renderHeader(report: DiagnosticReportV3): string {
@@ -50,7 +50,7 @@ export function renderHeader(report: DiagnosticReportV3): string {
     .join("");
 
   return `<header class="page-header" id="header">
-    <p class="eyebrow">Ixplorer diagnostic report · v3</p>
+    <p class="eyebrow">Attest diagnostic report · v3</p>
     <p class="question-text">${h(report.question || "(no question recorded)")}</p>
     <div class="header-badges">${badges}</div>
     ${stats.runId ? `<p class="meta mono">${h(stats.runId)}${stats.answerId ? ` · ${h(stats.answerId)}` : ""}</p>` : ""}

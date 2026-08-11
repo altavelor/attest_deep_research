@@ -5,7 +5,7 @@ import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./att
 import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
 
 export const RESEARCH_SYSTEM_PROMPT =
-  "You are Ixplorer, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Cite claims based on evidence with the short bracketed label shown next to each source, e.g. [S1]. Cite only labels that appear in the evidence below, or source handles returned by a tool you actually called — never invent labels, citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
+  "You are Attest, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Cite claims based on evidence with the short bracketed label shown next to each source, e.g. [S1]. Cite only labels that appear in the evidence below, or source handles returned by a tool you actually called — never invent labels, citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
 
 export interface ResearchSystemPromptOptions {
   indexDescription?: string;
@@ -54,7 +54,7 @@ function buildVaultToolsSection(toolNames: readonly string[]): string {
     "Invoke tools through the function-calling mechanism — emit a real tool call, not text.",
     'Do NOT write the call as prose or pseudo-syntax such as `list_notes(path="")`,',
     "`<tool_call>...`, or a JSON code block. Use the plain tool name without any namespace prefix",
-    "(call `list_notes`, not `ixplorer.list_notes`). Make one call, then wait for its result.",
+    "(call `list_notes`, not `attest.list_notes`). Make one call, then wait for its result.",
   ].join("\n");
 }
 

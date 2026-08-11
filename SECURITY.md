@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the latest released version of Ixplorer receives security fixes.
+Only the latest released version of Attest receives security fixes.
 
 | Version | Supported |
 | ------- | --------- |
@@ -12,8 +12,8 @@ Only the latest released version of Ixplorer receives security fixes.
 ## Reporting a vulnerability
 
 Report vulnerabilities privately through
-[GitHub Security Advisories](https://github.com/altavelor/ixplorer_deep_research/security/advisories/new).
-If you cannot use that channel, email <pstrabery@gmail.com> with the subject `Ixplorer security`.
+[GitHub Security Advisories](https://github.com/altavelor/attest_deep_research/security/advisories/new).
+If you cannot use that channel, email <pstrabery@gmail.com> with the subject `Attest security`.
 
 Do not open a public issue or pull request for a suspected vulnerability.
 

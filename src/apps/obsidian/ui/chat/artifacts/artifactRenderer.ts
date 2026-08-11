@@ -22,7 +22,7 @@ export function renderAnswerArtifacts(
   const safe = sanitizeAnswerArtifacts(artifacts);
   if (!safe) return false;
 
-  const listEl = containerEl.createDiv({ cls: "ixplorer-artifacts" });
+  const listEl = containerEl.createDiv({ cls: "attest-artifacts" });
   for (const artifact of safe) {
     if (artifact.type === "image-gallery") {
       renderImageGalleryArtifact(listEl, artifact, options);

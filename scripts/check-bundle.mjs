@@ -34,7 +34,7 @@ const FORBIDDEN_MODULES = [
   "zlib",
 ];
 
-const bundlePath = resolve(process.env.IXPLORER_OUTPUT_DIR ?? "dist", "main.js");
+const bundlePath = resolve(process.env.ATTEST_OUTPUT_DIR ?? "dist", "main.js");
 
 let bundle;
 try {

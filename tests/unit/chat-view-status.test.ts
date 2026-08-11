@@ -17,7 +17,7 @@ describe("chat view status", () => {
         },
         t,
       ),
-    ).toBe("Enable web search in Ixplorer settings to use this search mode.");
+    ).toBe("Enable web search in Attest settings to use this search mode.");
   });
 
   it("formats context-window warnings from token usage", () => {

@@ -98,7 +98,7 @@ export function validateDownloadPath(path: string): { ok: true } | { ok: false; 
   if (segments[segments.length - 1] === "") {
     return { ok: false, reason: "invalid-path" };
   }
-  if (path === ".ixplorer" || path.startsWith(".ixplorer/")) {
+  if (path === ".attest" || path.startsWith(".attest/")) {
     return { ok: false, reason: "forbidden-path" };
   }
   return { ok: true };

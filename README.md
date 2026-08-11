@@ -1,34 +1,45 @@
-# Ixplorer
+# Attest
 
-Ixplorer is a local-first research assistant for Obsidian Desktop. It searches a selected part of
-your vault, produces answers with citations, and can use configured web search when needed.
+**Answers from your notes, backed by sources you can open.**
 
-Technical documentation for development, builds, and releases is available in the
-[Technical reference](docs/technical-reference.md).
+Attest turns your vault into something you can ask questions of. Instead of searching for the note
+that might hold the answer, you ask in plain language — “What did we decide about pricing?” — and
+get a written answer built from your own notes, where every claim is attested by the note, heading,
+or document page it came from. One click takes you to the source.
 
-## Before you begin
+You choose which folders it may read, and which AI model answers: a model running on your own
+machine, or a cloud service you already use. Nothing leaves your vault unless you ask it to.
 
-- Ixplorer runs in Obsidian Desktop. Mobile applications are not yet supported.
-- Chat requires a local or cloud LLM provider.
-- Vault search requires an embedding model.
-- Cloud providers require your API key; local Ollama and LM Studio can work without one.
+> **Obsidian 1.5.0+ on desktop · works with local models or cloud AI services**
+
+## What you can do
+
+- **Ask across a whole set of notes at once** — pick the folders that matter and leave the rest out.
+- **Trust the answer** — each statement carries a citation you can open and read for yourself.
+- **Pick the pace** — a quick answer for simple questions, or a slower mode that works through the
+  question step by step and shows its progress.
+- **Look beyond the vault** — optionally let a question reach the web when your notes are not enough.
+- **Keep what is useful** — save an answer as a new note or add it to the note you are writing.
+  Attest never changes a note on its own.
 
 ## Installation
 
-Install Ixplorer through **Settings → Community plugins** in Obsidian when the plugin is available
-in the catalog. Then enable it and open **Settings → Ixplorer**.
+Attest is not yet available in the Obsidian Community plugin catalog. When it is published,
+install it through **Settings → Community plugins**, then enable it and open
+**Settings → Attest**.
 
-## Quick start
+## Quick start: ask your first cited question
 
-1. Create a **Server profile** for your chat and embeddings provider.
+1. Create a **Server profile** for your chat and embedding provider.
 2. Create a **Chat model profile** and select its server profile and model.
 3. Create an **Embedding model profile**.
 4. Create or select an **Index profile**, specify the vault folders to index, and choose the
    embedding model.
 5. Start indexing and wait for the completed status.
-6. Open Ixplorer chat, select the index profile, and ask a question.
+6. Open Attest chat, select the index profile, and ask a question such as: _“What did we decide about pricing?”_
+7. Open a citation in the answer to inspect the supporting note or document page.
 
-If a step is unavailable, open the corresponding Settings section. Ixplorer displays the status of
+If a step is unavailable, open the corresponding Settings section. Attest displays the status of
 each model and index profile.
 
 ## Configuring providers
@@ -49,14 +60,14 @@ each model and index profile.
 ### Anthropic and other cloud providers
 
 1. Create a Server profile with the appropriate API format and endpoint.
-2. Enter the API key only in the Ixplorer settings field.
+2. Enter the API key only in the Attest settings field.
 3. Create separate chat and embedding profiles if the provider uses different models.
 
 Use the test button in the profile settings to check the connection before the first indexing run.
 
 ## Indexing your vault
 
-An Index profile determines which notes Ixplorer can use as local sources.
+An Index profile determines which notes Attest can use as local sources.
 
 - Choose the desired folders; `/` means the entire vault.
 - Exclude system or private folders with glob patterns.
@@ -64,8 +75,8 @@ An Index profile determines which notes Ixplorer can use as local sources.
 - Use incremental refresh after note changes; rebuild recreates the local index.
 - You can stop indexing and start it again later.
 
-Ixplorer supports Markdown, TXT, PDF, EPUB, FB2, and DOCX. OCR is not yet available for scanned
-PDFs without a text layer.
+Attest supports Markdown, TXT, PDF, EPUB, FB2, and DOCX. Scanned PDFs without a text layer cannot
+be read.
 
 ## Research modes
 
@@ -77,10 +88,8 @@ need a predictable short answer or when the model has not passed the capability 
 ### Thinking
 
 A multi-step mode for compatible models. It can search for additional sources and displays its
-progress in chat. If the model does not support the required capabilities, Ixplorer explains why
+progress in chat. If the model does not support the required capabilities, Attest explains why
 and falls back to Instant.
-
-Deep Research is a future standalone mode and is not part of the current stable user flow.
 
 ## Working with answers
 
@@ -98,6 +107,15 @@ providers receive only the data needed for the user-selected request.
 
 Note mutations are disabled by default. Enable them only for a model and vault you trust.
 
+## Compatibility and limitations
+
+| Requirement  | Details                                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| Obsidian     | Desktop 1.5.0 or later; mobile is not supported.                                                           |
+| Chat         | A configured local or cloud chat model is required.                                                        |
+| Vault search | A configured embedding model and a completed index are required.                                           |
+| Documents    | Markdown, TXT, PDF, EPUB, FB2, and DOCX are supported. Scanned PDFs without a text layer are not readable. |
+
 ## Diagnostics and troubleshooting
 
 The diagnostic report in the toolbar helps with provider, index, or research-flow problems. Before
@@ -111,12 +129,23 @@ sending a report, make sure it contains no private notes, and never attach an AP
 | Web request failed     | Disable web search for a vault-only answer or check source settings.   |
 | Citation does not open | Make sure the source file has not been deleted or moved.               |
 
-Report vulnerabilities under the [Security policy](SECURITY.md), and reproducible bugs through
-GitHub Issues with a diagnostic report that excludes secrets and private content.
+## Help, development, and security
 
-## Limitations
+For development builds, project commands, architecture, and release requirements, see the
+[Technical reference](docs/technical-reference.md). Report reproducible bugs in
+[GitHub Issues](https://github.com/altavelor/attest_deep_research/issues), excluding API keys and
+private notes. Report vulnerabilities through the [Security policy](SECURITY.md).
 
-- Obsidian Desktop only.
-- No OCR for scanned PDFs or analysis of images and charts.
-- Web search uses only configured sources and can be disabled completely.
-- Deep Research, resumable queues, and a standalone report exporter are not yet available.
+## Support the project
+
+Attest is free and open source, built in spare time. If it saves you time, you can support further
+work through [GitHub Sponsors](https://github.com/sponsors/altavelor),
+[Buy Me a Coffee](https://buymeacoffee.com/altavelor), or [Boosty](https://boosty.to/altavelor).
+
+Support is entirely optional and never unlocks features — every capability stays available to
+everyone. Starring the repository, reporting a bug, or describing how you use Attest helps just as
+much.
+
+## License
+
+Attest is available under the [MIT License](LICENSE).

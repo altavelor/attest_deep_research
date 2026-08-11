@@ -102,7 +102,7 @@ function profile(overrides: Partial<IndexProfile> = {}): IndexProfile {
     id: "index-a",
     name: "Index A",
     mode: "wholeVault",
-    indexFolder: ".ixplorer/indexes/index-a",
+    indexFolder: ".attest/indexes/index-a",
     includeFolders: ["/"],
     excludeGlobs: [],
     embeddingModelProfileId: "embed-a",

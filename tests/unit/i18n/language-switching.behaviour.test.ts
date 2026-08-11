@@ -9,10 +9,10 @@ import type {
 } from "obsidian";
 
 import {
-  IXPLORER_CHAT_VIEW_TYPE,
-  IxplorerChatView,
-  type IxplorerChatViewServices,
-} from "@apps/obsidian/ui/chat/IxplorerChatView";
+  ATTEST_CHAT_VIEW_TYPE,
+  AttestChatView,
+  type AttestChatViewServices,
+} from "@apps/obsidian/ui/chat/AttestChatView";
 import { createTranslator } from "@adapters/i18n";
 import type { UiTranslator } from "@adapters/i18n";
 import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
@@ -20,7 +20,7 @@ import { ContextDocumentPickerModal } from "@apps/obsidian/ui/chat/context/Conte
 
 const PROBE_KEY = "chat.composer.placeholder";
 
-function createServices(getTranslator: () => UiTranslator): IxplorerChatViewServices {
+function createServices(getTranslator: () => UiTranslator): AttestChatViewServices {
   return {
     createResearchService: () => {
       throw new Error("The test must not start a research run.");
@@ -55,16 +55,16 @@ async function openView(getTranslator: () => UiTranslator) {
   const app = new App();
   const services = createServices(getTranslator);
   app.workspace.registerViewFactory(
-    IXPLORER_CHAT_VIEW_TYPE,
+    ATTEST_CHAT_VIEW_TYPE,
     (leaf) =>
-      new IxplorerChatView(leaf as unknown as ObsidianWorkspaceLeaf, services) as unknown as View,
+      new AttestChatView(leaf as unknown as ObsidianWorkspaceLeaf, services) as unknown as View,
   );
   const leaf: WorkspaceLeaf = app.workspace.createLeaf();
-  await leaf.setViewState({ type: IXPLORER_CHAT_VIEW_TYPE });
-  return leaf.view as unknown as IxplorerChatView;
+  await leaf.setViewState({ type: ATTEST_CHAT_VIEW_TYPE });
+  return leaf.view as unknown as AttestChatView;
 }
 
-function composerPlaceholder(view: IxplorerChatView): string | null {
+function composerPlaceholder(view: AttestChatView): string | null {
   return view.contentEl.querySelector("textarea")?.getAttribute("placeholder") ?? null;
 }
 

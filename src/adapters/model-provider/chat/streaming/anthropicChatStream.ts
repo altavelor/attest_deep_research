@@ -1,14 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { mapAnthropicMessages } from "../providers/messageMappers";
 import { textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
 
 interface AnthropicChatStreamOptions {
   anthropic: Anthropic;
   request: ChatRequest;
-  translateError(error: unknown): IxplorerError;
+  translateError(error: unknown): AttestError;
 }
 
 export async function* streamAnthropicChat({
@@ -145,7 +145,7 @@ function mapAnthropicToolChoice(request: ChatRequest): Anthropic.ToolChoice {
 
 function validateSpecificTool(request: ChatRequest, name: string): void {
   if (!request.tools?.some((tool) => tool.function.name === name)) {
-    throw new IxplorerError({
+    throw new AttestError({
       code: "UNSUPPORTED_CAPABILITY",
       message: `Specific tool is not defined: ${name}.`,
     });
