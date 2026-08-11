@@ -3,6 +3,7 @@ import {
   imageFormatFromMimeType,
   IMAGE_EXTRACTION_LIMITS,
 } from "@core/media";
+import { decodeBase64 } from "../base64";
 import { readInputText } from "../common";
 import type { DocumentImageExtractor, DocumentImageInput, DocumentImageRef } from "./types";
 
@@ -40,12 +41,8 @@ export function extractFb2ImageRefs(source: string, metadataOnly: boolean): Docu
 
     let data: Uint8Array | undefined;
     if (!metadataOnly) {
-      try {
-        data = new Uint8Array(Buffer.from(base64, "base64"));
-      } catch {
-        continue;
-      }
-      if (data.length === 0) continue;
+      data = decodeBase64(base64);
+      if (!data || data.length === 0) continue;
       if (!hasDecodableDimensions(data, format)) continue;
     }
 

@@ -3,7 +3,7 @@ import {
   IndexChunkInventoryStore,
   LanguageInventoryIndexStore,
 } from "@application/ports";
-import { KeywordSearchIndexStore } from "@application/ports";
+import { FileSystemPort, KeywordSearchIndexStore } from "@application/ports";
 import { LanguageInventoryItem } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { RetrievalOptions } from "@core/retrieval";
@@ -13,6 +13,7 @@ import type { FileVectorStateAccess } from "./FileVectorIndexState";
 import { sourcePathFromReference } from "./FileVectorIndexVector";
 
 export interface FileVectorPathResolver {
+  readonly fileSystem: FileSystemPort;
   pathFor(relativePath: string): string;
 }
 
@@ -44,7 +45,7 @@ export class FileVectorIndexReader
 
   async searchKeywords(query: string, options: RetrievalOptions): Promise<RetrievedChunk[]> {
     return this.state.withState([], (state) =>
-      searchFileVectorKeywords(state, query, options, (relativePath) =>
+      searchFileVectorKeywords(state, query, options, this.paths.fileSystem, (relativePath) =>
         this.paths.pathFor(relativePath),
       ),
     );

@@ -1,8 +1,8 @@
-import { createHash } from "crypto";
-import { inflateRawSync } from "zlib";
-
 import { IxplorerError } from "@core/errors";
+import { inflateRaw, sha256Hex } from "@shared";
 export { normalizeVaultPath as normalizePath } from "@shared";
+
+import { decodeUtf8, encodeUtf8, readUint16LE, readUint32LE } from "./bytes";
 import { DocumentFormat, DocumentSourceReference, ExtractedChunk } from "@core/model";
 
 export interface DocumentExtractorOptions {
@@ -73,8 +73,8 @@ export function readInputText(data: ArrayBuffer | string): string {
   return typeof data === "string" ? data : new TextDecoder().decode(data);
 }
 
-export function readInputBuffer(data: ArrayBuffer | string): Buffer {
-  return typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+export function readInputBuffer(data: ArrayBuffer | string): Uint8Array {
+  return typeof data === "string" ? encodeUtf8(data) : new Uint8Array(data);
 }
 
 export function fileNameFromPath(path: string): string {
@@ -82,7 +82,7 @@ export function fileNameFromPath(path: string): string {
 }
 
 export function stableId(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
+  return sha256Hex(value);
 }
 
 export function normalizeText(value: string): string {
@@ -126,36 +126,40 @@ export function extractionFailed(
 }
 
 export class ZipArchive {
-  private readonly entries: Map<string, Buffer>;
+  private readonly entries: Map<string, Uint8Array>;
 
-  private constructor(entries: Map<string, Buffer>) {
+  private constructor(entries: Map<string, Uint8Array>) {
     this.entries = entries;
   }
 
   static read(data: ArrayBuffer | string): ZipArchive {
     const buffer = readInputBuffer(data);
-    const entries = new Map<string, Buffer>();
+    const entries = new Map<string, Uint8Array>();
+    let remainingBudget = MAX_ZIP_TOTAL_BYTES;
     const eocdOffset = findEndOfCentralDirectory(buffer);
-    const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
-    const totalEntries = buffer.readUInt16LE(eocdOffset + 10);
+    const centralDirectoryOffset = readUint32LE(buffer, eocdOffset + 16);
+    const totalEntries = readUint16LE(buffer, eocdOffset + 10);
     let offset = centralDirectoryOffset;
 
     for (let index = 0; index < totalEntries; index += 1) {
-      if (buffer.readUInt32LE(offset) !== 0x02014b50) {
+      if (readUint32LE(buffer, offset) !== 0x02014b50) {
         throw new Error("Invalid ZIP central directory entry.");
       }
 
-      const method = buffer.readUInt16LE(offset + 10);
-      const compressedSize = buffer.readUInt32LE(offset + 20);
-      const fileNameLength = buffer.readUInt16LE(offset + 28);
-      const extraLength = buffer.readUInt16LE(offset + 30);
-      const commentLength = buffer.readUInt16LE(offset + 32);
-      const localHeaderOffset = buffer.readUInt32LE(offset + 42);
-      const fileName = buffer.toString("utf8", offset + 46, offset + 46 + fileNameLength);
+      const method = readUint16LE(buffer, offset + 10);
+      const compressedSize = readUint32LE(buffer, offset + 20);
+      const uncompressedSize = readUint32LE(buffer, offset + 24);
+      const fileNameLength = readUint16LE(buffer, offset + 28);
+      const extraLength = readUint16LE(buffer, offset + 30);
+      const commentLength = readUint16LE(buffer, offset + 32);
+      const localHeaderOffset = readUint32LE(buffer, offset + 42);
+      const fileName = decodeUtf8(buffer, offset + 46, offset + 46 + fileNameLength);
       const compressedData = readLocalFileData(buffer, localHeaderOffset, compressedSize);
 
       if (!fileName.endsWith("/")) {
-        entries.set(fileName, inflateZipEntry(compressedData, method));
+        const inflated = inflateZipEntry(compressedData, method, uncompressedSize, remainingBudget);
+        remainingBudget -= inflated.length;
+        entries.set(fileName, inflated);
       }
 
       offset += 46 + fileNameLength + extraLength + commentLength;
@@ -165,10 +169,12 @@ export class ZipArchive {
   }
 
   text(path: string): string | undefined {
-    return this.entries.get(path)?.toString("utf8");
+    const bytes = this.entries.get(path);
+
+    return bytes ? decodeUtf8(bytes) : undefined;
   }
 
-  bytes(path: string): Buffer | undefined {
+  bytes(path: string): Uint8Array | undefined {
     return this.entries.get(path);
   }
 
@@ -177,9 +183,12 @@ export class ZipArchive {
   }
 }
 
-function findEndOfCentralDirectory(buffer: Buffer): number {
+const MAX_ZIP_ENTRY_BYTES = 128 * 1024 * 1024;
+const MAX_ZIP_TOTAL_BYTES = 512 * 1024 * 1024;
+
+function findEndOfCentralDirectory(buffer: Uint8Array): number {
   for (let offset = buffer.length - 22; offset >= 0; offset -= 1) {
-    if (buffer.readUInt32LE(offset) === 0x06054b50) {
+    if (readUint32LE(buffer, offset) === 0x06054b50) {
       return offset;
     }
   }
@@ -187,25 +196,46 @@ function findEndOfCentralDirectory(buffer: Buffer): number {
   throw new Error("ZIP end of central directory was not found.");
 }
 
-function readLocalFileData(buffer: Buffer, offset: number, compressedSize: number): Buffer {
-  if (buffer.readUInt32LE(offset) !== 0x04034b50) {
+function readLocalFileData(buffer: Uint8Array, offset: number, compressedSize: number): Uint8Array {
+  if (readUint32LE(buffer, offset) !== 0x04034b50) {
     throw new Error("Invalid ZIP local file header.");
   }
 
-  const fileNameLength = buffer.readUInt16LE(offset + 26);
-  const extraLength = buffer.readUInt16LE(offset + 28);
+  const fileNameLength = readUint16LE(buffer, offset + 26);
+  const extraLength = readUint16LE(buffer, offset + 28);
   const dataOffset = offset + 30 + fileNameLength + extraLength;
 
   return buffer.subarray(dataOffset, dataOffset + compressedSize);
 }
 
-function inflateZipEntry(data: Buffer, method: number): Buffer {
+/**
+ * Inflates one archive entry, bounded by the size its central directory
+ * declares. Archives are untrusted input, so an entry that expands past its own
+ * header, or past the hard ceiling, is rejected instead of exhausting memory.
+ */
+function inflateZipEntry(
+  data: Uint8Array,
+  method: number,
+  uncompressedSize: number,
+  remainingBudget: number,
+): Uint8Array {
+  if (remainingBudget <= 0) {
+    throw new Error("ZIP archive expands beyond the allowed total size.");
+  }
+
   if (method === 0) {
+    if (data.length > remainingBudget) {
+      throw new Error("ZIP archive expands beyond the allowed total size.");
+    }
+
     return data;
   }
 
   if (method === 8) {
-    return inflateRawSync(data);
+    const declared = uncompressedSize > 0 ? uncompressedSize : MAX_ZIP_ENTRY_BYTES;
+    const limit = Math.min(declared, MAX_ZIP_ENTRY_BYTES, remainingBudget);
+
+    return inflateRaw(data, { maxOutputLength: limit });
   }
 
   throw new Error(`Unsupported ZIP compression method: ${method}`);

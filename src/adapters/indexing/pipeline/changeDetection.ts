@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { sha256Hex } from "@shared";
 
 export interface FileSnapshot {
   modifiedTime: number;
@@ -39,13 +39,5 @@ export function updateSnapshot(
 }
 
 export function hashFileData(data: ArrayBuffer | string): string {
-  const hash = createHash("sha256");
-
-  if (typeof data === "string") {
-    hash.update(data);
-  } else {
-    hash.update(Buffer.from(data));
-  }
-
-  return hash.digest("hex");
+  return sha256Hex(data);
 }

@@ -1,6 +1,7 @@
 import { App } from "obsidian";
 
 import { IndexingState } from "@adapters/indexing";
+import { FileSystemPort } from "@application/ports";
 import { PdfTextCache } from "@adapters/extractors";
 import { IxplorerSettings, PluginDebugLogger } from "@adapters/settings";
 import type { UiTranslator } from "@adapters/i18n";
@@ -14,8 +15,8 @@ export interface CompositionContext {
   pdfTextCache: PdfTextCache;
   webSourceHealth: WebSourceHealthTracker;
   warmCaches: VaultWarmCaches;
+  fileSystem: FileSystemPort;
   getSettings(): IxplorerSettings;
   saveSettings(): Promise<void>;
-  getVaultLocalPath(path: string): string;
   getIndexingState(profileId: string): IndexingState;
 }

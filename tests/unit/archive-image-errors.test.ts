@@ -1,6 +1,7 @@
 import { deflateRawSync } from "zlib";
 
 import { extractDocumentImages } from "@adapters/extractors";
+import { ZipArchive } from "@adapters/extractors/common";
 
 function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
   const files = Object.entries(entries).map(([name, content]) => {
@@ -71,6 +72,54 @@ function epub(entries: Record<string, Buffer | string>): ArrayBuffer {
 function locators(path: string, data: ArrayBuffer | string): string[] {
   return extractDocumentImages({ path, data }).map((ref) => ref.locator);
 }
+
+describe("archive entries are bounded by their declared uncompressed size", () => {
+  /** Builds a one-entry ZIP whose central directory understates the real size. */
+  function lyingArchive(realBytes: number, declaredSize: number): ArrayBuffer {
+    const payload = Buffer.alloc(realBytes, 0);
+    const compressed = deflateRawSync(payload);
+    const name = Buffer.from("word/document.xml", "utf8");
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(declaredSize, 22);
+    local.writeUInt16LE(name.length, 26);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(declaredSize, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(0, 42);
+
+    const centralBuffer = Buffer.concat([central, name]);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(1, 8);
+    eocd.writeUInt16LE(1, 10);
+    eocd.writeUInt32LE(centralBuffer.length, 12);
+    eocd.writeUInt32LE(30 + name.length + compressed.length, 16);
+
+    const zipped = Buffer.concat([local, name, compressed, centralBuffer, eocd]);
+    return zipped.buffer.slice(
+      zipped.byteOffset,
+      zipped.byteOffset + zipped.byteLength,
+    ) as ArrayBuffer;
+  }
+
+  it("rejects an entry that expands past the size its header declares", () => {
+    expect(() => ZipArchive.read(lyingArchive(4 * 1024 * 1024, 64))).toThrow(/exceeds/);
+  });
+
+  it("still reads an entry whose declared size is honest", () => {
+    const archive = ZipArchive.read(lyingArchive(1024, 1024));
+
+    expect(archive.bytes("word/document.xml")?.length).toBe(1024);
+  });
+});
 
 describe("docx image extraction rejects untrusted archive entries", () => {
   it("yields nothing for a truncated archive", () => {

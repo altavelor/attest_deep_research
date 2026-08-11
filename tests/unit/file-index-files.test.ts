@@ -1,7 +1,3 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import {
   atomicWriteIndexFiles,
   readBinaryIndexFile,
@@ -10,79 +6,84 @@ import {
   readFirstJsonlIndexRows,
 } from "@adapters/indexing";
 
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+
 describe("file index files", () => {
-  let folder: string;
+  const folder = ".ixplorer/index";
+  let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), "ixplorer-file-index-"));
-  });
-
-  afterEach(() => {
-    rmSync(folder, { recursive: true, force: true });
+    fileSystem = new MemoryFileSystem();
   });
 
   it("returns fallbacks for missing JSON, JSONL, and binary files", async () => {
     await expect(
-      readJsonIndexFile(join(folder, "missing.json"), isOkObject, { ok: true }),
+      readJsonIndexFile(fileSystem, `${folder}/missing.json`, isOkObject, { ok: true }),
     ).resolves.toEqual({ ok: true });
-    await expect(readJsonlIndexFile(join(folder, "missing.jsonl"), isAnyRecord)).resolves.toEqual(
-      [],
-    );
-    await expect(readBinaryIndexFile(join(folder, "missing.bin"))).resolves.toEqual(
+    await expect(
+      readJsonlIndexFile(fileSystem, `${folder}/missing.jsonl`, isAnyRecord),
+    ).resolves.toEqual([]);
+    await expect(readBinaryIndexFile(fileSystem, `${folder}/missing.bin`)).resolves.toEqual(
       new Uint8Array(),
     );
   });
 
   it("rejects corrupt JSON and JSONL as rebuild-needed", async () => {
-    await atomicWriteIndexFiles({
+    await atomicWriteIndexFiles(fileSystem, {
       files: [
-        { path: join(folder, "bad.json"), data: "{not-json" },
-        { path: join(folder, "bad.jsonl"), data: '{"ok":true}\nnot-json\n' },
+        { path: `${folder}/bad.json`, data: "{not-json" },
+        { path: `${folder}/bad.jsonl`, data: '{"ok":true}\nnot-json\n' },
       ],
-      manifest: { path: join(folder, "manifest.json"), data: '{"ok":true}' },
+      manifest: { path: `${folder}/manifest.json`, data: '{"ok":true}' },
       writeId: "bad",
     });
 
     await expect(
-      readJsonIndexFile(join(folder, "bad.json"), isAnyRecord, {}),
+      readJsonIndexFile(fileSystem, `${folder}/bad.json`, isAnyRecord, {}),
     ).rejects.toMatchObject({ code: "INDEX_REBUILD_REQUIRED" });
-    await expect(readJsonlIndexFile(join(folder, "bad.jsonl"), isAnyRecord)).rejects.toMatchObject({
+    await expect(
+      readJsonlIndexFile(fileSystem, `${folder}/bad.jsonl`, isAnyRecord),
+    ).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
     });
   });
 
   it("reads a bounded JSONL prefix without loading the remaining rows", async () => {
-    const path = join(folder, "rows.jsonl");
-    await atomicWriteIndexFiles({
+    const path = `${folder}/rows.jsonl`;
+    await atomicWriteIndexFiles(fileSystem, {
       files: [{ path, data: '{"id":1}\n{"id":2}\nnot-json\n' }],
-      manifest: { path: join(folder, "manifest.json"), data: '{"ok":true}' },
+      manifest: { path: `${folder}/manifest.json`, data: '{"ok":true}' },
       writeId: "bounded",
     });
 
-    await expect(readFirstJsonlIndexRows(path, isAnyRecord, 2)).resolves.toEqual([
+    await expect(readFirstJsonlIndexRows(fileSystem, path, isAnyRecord, 2)).resolves.toEqual([
       { id: 1 },
       { id: 2 },
     ]);
     await expect(
-      readFirstJsonlIndexRows(join(folder, "missing.jsonl"), isAnyRecord, 2),
+      readFirstJsonlIndexRows(fileSystem, `${folder}/missing.jsonl`, isAnyRecord, 2),
     ).resolves.toEqual([]);
   });
 
   it("commits all files and publishes the manifest last without leaving temp files", async () => {
-    await atomicWriteIndexFiles({
+    await atomicWriteIndexFiles(fileSystem, {
       files: [
-        { path: join(folder, "sources.jsonl"), data: '{"sourcePath":"a.md"}\n' },
-        { path: join(folder, "shards", "00.chunks.jsonl"), data: '{"id":"chunk"}\n' },
-        { path: join(folder, "shards", "00.vectors.bin"), data: new Uint8Array([1, 2, 3, 4]) },
+        { path: `${folder}/sources.jsonl`, data: '{"sourcePath":"a.md"}\n' },
+        { path: `${folder}/shards/00.chunks.jsonl`, data: '{"id":"chunk"}\n' },
+        { path: `${folder}/shards/00.vectors.bin`, data: new Uint8Array([1, 2, 3, 4]) },
       ],
-      manifest: { path: join(folder, "manifest.json"), data: '{"schemaVersion":1}' },
+      manifest: { path: `${folder}/manifest.json`, data: '{"schemaVersion":1}' },
       writeId: "commit",
     });
 
-    expect(readFileSync(join(folder, "manifest.json"), "utf8")).toBe('{"schemaVersion":1}');
-    expect(readFileSync(join(folder, "sources.jsonl"), "utf8")).toBe('{"sourcePath":"a.md"}\n');
-    expect(existsSync(join(folder, "shards", "00.vectors.bin"))).toBe(true);
-    expect(existsSync(join(folder, "manifest.json.commit.tmp"))).toBe(false);
+    await expect(fileSystem.readText(`${folder}/manifest.json`)).resolves.toBe(
+      '{"schemaVersion":1}',
+    );
+    await expect(fileSystem.readText(`${folder}/sources.jsonl`)).resolves.toBe(
+      '{"sourcePath":"a.md"}\n',
+    );
+    await expect(fileSystem.exists(`${folder}/shards/00.vectors.bin`)).resolves.toBe(true);
+    await expect(fileSystem.exists(`${folder}/manifest.json.commit.tmp`)).resolves.toBe(false);
   });
 });
 
