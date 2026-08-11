@@ -110,7 +110,7 @@ export interface ToolCapabilityProbeAudit {
 }
 
 export interface ContextDiagnostics {
-  reportSchemaVersion?: 2;
+  reportSchemaVersion?: 2 | 4;
   executionStrategy?: ResearchExecutionStrategy;
 
   question?: string;
@@ -161,6 +161,26 @@ export interface ContextDiagnostics {
   stream?: StreamDiagnostics;
   projection?: ProjectionDiagnostics;
   delivery?: DeliveryDiagnostics;
+  answer?: AnswerDiagnostics;
+}
+
+export interface AnswerDiagnostics {
+  characters: number;
+  words: number;
+  sentences: number;
+  citations: {
+    occurrences: number;
+    uniqueLabels: number;
+    per100Words: number;
+    sentenceCoverage: number;
+    maxLabelsPerSentence: number;
+    byLabel: Record<string, number>;
+    uncitedPromptSourceIds: string[];
+    collapsedOccurrences: number;
+    verificationRan: boolean;
+    unknownCitationIds: string[];
+    unverifiedCitations: string[];
+  };
 }
 
 export interface DiagnosticTimelineEvent {
@@ -413,8 +433,15 @@ export interface WebResultDiagnostic {
   textPreview: string;
   status: "candidate" | "included" | "dropped";
   promptOrder?: number;
-  reason?: "duplicate-url" | "web-evidence-limit" | "evidence-planner";
+  reason?: WebResultExclusionReason;
+  contentFallbackReason?: "unreadable-fetched-content";
 }
+
+export type WebResultExclusionReason =
+  | "canonical-duplicate-url"
+  | "unreadable-web-content"
+  | "web-evidence-limit"
+  | "evidence-planner";
 
 export interface RetrievalChunkDiagnostic {
   id: string;

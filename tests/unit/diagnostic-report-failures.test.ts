@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildDiagnosticReportV3 } from "@apps/obsidian/ui/diagnostics/report/build";
 import {
+  buildAnswerSection,
   buildModelSection,
   buildPreflightSection,
   buildRequestSection,
@@ -128,6 +129,12 @@ describe("diagnostic findings for a failing run", () => {
     expect(codes).toContain("unverified-citations");
     expect(codes).toContain("index-stale");
 
+    const unknownCitation = report.findings.findings.find(
+      (finding) => finding.code === "unknown-citations",
+    );
+    expect(unknownCitation?.detail).toContain("may remain visible in the answer text");
+    expect(unknownCitation?.detail).not.toContain("dropped from the final answer");
+
     const severities = report.findings.findings.map((finding) => finding.severity);
     const rank = { error: 0, warning: 1, info: 2 } as const;
     expect(severities.map((severity) => rank[severity])).toEqual(
@@ -187,6 +194,36 @@ describe("diagnostic findings for a failing run", () => {
 });
 
 describe("diagnostic report sections with missing optional data", () => {
+  it("projects answer statistics and findings while preserving absent legacy statistics", () => {
+    const stats = {
+      characters: 10,
+      words: 2,
+      sentences: 1,
+      citations: {
+        occurrences: 1,
+        uniqueLabels: 1,
+        per100Words: 50,
+        sentenceCoverage: 100,
+        maxLabelsPerSentence: 1,
+        byLabel: { a: 1 },
+        uncitedPromptSourceIds: ["b"],
+        collapsedOccurrences: 0,
+        verificationRan: false,
+        unknownCitationIds: [],
+        unverifiedCitations: [],
+      },
+    };
+    expect(buildAnswerSection(baseDiagnostics({ answer: stats }))).toMatchObject({ stats });
+    const report = buildDiagnosticReportV3(baseDiagnostics({ answer: stats }));
+    expect(report.findings.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        "citation-verification-not-run",
+        "citation-density-high",
+        "prompt-sources-uncited",
+      ]),
+    );
+    expect(buildAnswerSection(baseDiagnostics()).stats).toBeNull();
+  });
   it("keeps optional model sub-sections null instead of inventing them", () => {
     const model = buildModelSection(baseDiagnostics());
 

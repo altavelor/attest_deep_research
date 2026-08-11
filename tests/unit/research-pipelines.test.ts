@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryExpansionService } from "@adapters/retrieval";
 import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
@@ -231,7 +233,7 @@ describe("WebResearchPipeline", () => {
           textSource: "search-snippet",
           textPreview: duplicate.snippet,
           status: "dropped",
-          reason: "duplicate-url",
+          reason: "canonical-duplicate-url",
         },
         {
           chunkId: limited.id,
@@ -241,6 +243,132 @@ describe("WebResearchPipeline", () => {
         },
       ],
     });
+  });
+
+  it("prefers fetched canonical duplicates and fills the released evidence slot", async () => {
+    const mobileSnippet = webSource("https://m.example.com/cheesecake/amp/");
+    mobileSnippet.wasContentFetched = false;
+    mobileSnippet.snippet = "Cheesecake recipe preview";
+    const fetchedDesktop = webSource("https://www.example.com/cheesecake?utm_source=search");
+    fetchedDesktop.snippet = "Short preview";
+    const nextUnique = webSource("https://news.example.com/cheesecake-guide");
+    nextUnique.wasContentFetched = false;
+    nextUnique.snippet = "Cheesecake guide with practical recipe details";
+    const searchProvider = new FakeSearchProvider([
+      {
+        source: mobileSnippet,
+        rank: 1,
+        query: "cheesecake recipe",
+      },
+      {
+        source: fetchedDesktop,
+        extractedText: "Complete cheesecake recipe with ingredients and cooking instructions.",
+        rank: 6,
+        query: "cheesecake recipe",
+      },
+      {
+        source: nextUnique,
+        rank: 7,
+        query: "cheesecake recipe",
+      },
+    ]);
+    const pipeline = new WebResearchPipeline({ searchProvider, evidenceLimit: 2 });
+
+    const result = await completedValue(pipeline.search("cheesecake recipe", true));
+
+    expect(result.chunks).toHaveLength(2);
+    expect(result.chunks.map((chunk) => chunk.id)).toContain(fetchedDesktop.id);
+    expect(result.chunks.map((chunk) => chunk.id)).toContain(nextUnique.id);
+    expect(result.chunks.map((chunk) => chunk.id)).not.toContain(mobileSnippet.id);
+    expect(result.diagnostics?.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          chunkId: mobileSnippet.id,
+          status: "dropped",
+          reason: "canonical-duplicate-url",
+        }),
+        expect.objectContaining({
+          chunkId: fetchedDesktop.id,
+          processingRank: 1,
+          status: "candidate",
+        }),
+        expect.objectContaining({
+          chunkId: nextUnique.id,
+          processingRank: 2,
+          status: "candidate",
+        }),
+      ]),
+    );
+  });
+
+  it("falls back from unreadable fetched content to a readable search snippet", async () => {
+    const source = webSource("https://example.com/readable-fallback");
+    source.snippet = "Readable search preview with cheesecake instructions.";
+    const searchProvider = new FakeSearchProvider([
+      {
+        source,
+        extractedText: decodedInvalidUtf8Fixture(),
+        rank: 1,
+        query: "cheesecake instructions",
+      },
+    ]);
+    const pipeline = new WebResearchPipeline({ searchProvider, evidenceLimit: 1 });
+
+    const result = await completedValue(pipeline.search("cheesecake instructions", true));
+
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0]).toMatchObject({
+      id: source.id,
+      text: source.snippet,
+      source: { wasContentFetched: false },
+    });
+    expect(result.diagnostics?.results[0]).toMatchObject({
+      chunkId: source.id,
+      status: "candidate",
+      textSource: "search-snippet",
+      contentFallbackReason: "unreadable-fetched-content",
+    });
+  });
+
+  it("drops a fully unreadable result and fills its slot with the next candidate", async () => {
+    const unreadable = webSource("https://example.com/broken");
+    const mojibake = decodedInvalidUtf8Fixture();
+    unreadable.snippet = mojibake;
+    const replacement = webSource("https://example.com/replacement");
+    replacement.wasContentFetched = false;
+    replacement.snippet = "Readable replacement evidence for the cheesecake recipe.";
+    const searchProvider = new FakeSearchProvider([
+      {
+        source: unreadable,
+        extractedText: mojibake,
+        rank: 1,
+        query: "cheesecake recipe",
+      },
+      {
+        source: replacement,
+        rank: 2,
+        query: "cheesecake recipe",
+      },
+    ]);
+    const pipeline = new WebResearchPipeline({ searchProvider, evidenceLimit: 1 });
+
+    const result = await completedValue(pipeline.search("cheesecake recipe", true));
+
+    expect(result.chunks.map((chunk) => chunk.id)).toEqual([replacement.id]);
+    expect(result.diagnostics?.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          chunkId: unreadable.id,
+          status: "dropped",
+          reason: "unreadable-web-content",
+        }),
+        expect.objectContaining({
+          chunkId: replacement.id,
+          processingRank: 1,
+          status: "candidate",
+        }),
+      ]),
+    );
   });
 });
 
@@ -410,6 +538,22 @@ describe("AnswerSynthesisService", () => {
 
 function tick(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function completedValue<T>(generator: AsyncGenerator<unknown, T>): Promise<T> {
+  let step = await generator.next();
+  while (!step.done) {
+    step = await generator.next();
+  }
+  return step.value;
+}
+
+function decodedInvalidUtf8Fixture(): string {
+  const encoded = readFileSync(
+    join(__dirname, "..", "fixtures", "web", "russianfood-invalid-utf8.base64"),
+    "utf8",
+  ).trim();
+  return new TextDecoder("utf-8").decode(Uint8Array.from(Buffer.from(encoded, "base64")));
 }
 
 function retrievalOf(ids: string[], path: string) {

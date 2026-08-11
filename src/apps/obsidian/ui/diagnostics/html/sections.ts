@@ -50,7 +50,7 @@ export function renderHeader(report: DiagnosticReportV3): string {
     .join("");
 
   return `<header class="page-header" id="header">
-    <p class="eyebrow">Attest diagnostic report · v3</p>
+    <p class="eyebrow">Attest diagnostic report · v${h(report.schemaVersion)}</p>
     <p class="question-text">${h(report.question || "(no question recorded)")}</p>
     <div class="header-badges">${badges}</div>
     ${stats.runId ? `<p class="meta mono">${h(stats.runId)}${stats.answerId ? ` · ${h(stats.answerId)}` : ""}</p>` : ""}
@@ -351,6 +351,34 @@ export function renderInternals(report: DiagnosticReportV3): string {
         ],
         ["Coalesced updates", h(d.coalescedUpdates)],
         ["Persistence", badge(d.persistenceStatus, persV)],
+      ]);
+  }
+
+  if (answer.stats) {
+    const c = answer.stats.citations;
+    html +=
+      sub("Answer and citations") +
+      dl([
+        [
+          "Characters / words / sentences",
+          `${h(answer.stats.characters)} / ${h(answer.stats.words)} / ${h(answer.stats.sentences)}`,
+        ],
+        ["Citation occurrences / unique labels", `${h(c.occurrences)} / ${h(c.uniqueLabels)}`],
+        ["Citations per 100 words", h(c.per100Words)],
+        ["Sentences with citations", `${h(c.sentenceCoverage)}%`],
+        ["Maximum labels per sentence", h(c.maxLabelsPerSentence)],
+        ["Collapsed citation occurrences", h(c.collapsedOccurrences)],
+        [
+          "Citation verification",
+          c.verificationRan ? badge("ran", "success") : badge("not run", "warning"),
+        ],
+        [
+          "Citation distribution",
+          Object.entries(c.byLabel)
+            .map(([id, count]) => `${h(id)}: ${h(count)}`)
+            .join(", ") || "—",
+        ],
+        ["Prompt sources not cited", c.uncitedPromptSourceIds.map(h).join(", ") || "—"],
       ]);
   }
 

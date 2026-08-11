@@ -23,12 +23,14 @@ import {
   ResearchStrategyOutcome,
 } from "./ResearchStrategy";
 import {
+  citationOccurrencesFromText,
   dedupeEvidence,
   mergeCitations,
   normalizeCitationTokens,
   webUrlEvidenceIndex,
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
+import { buildAnswerDiagnostics } from "./answerDiagnostics";
 
 const MAX_TRACED_WEB_SEARCHES = 20;
 import {
@@ -257,21 +259,25 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       [...snapshot.citations],
     );
     const urlToEvidenceId = webUrlEvidenceIndex(evidence);
-    const {
-      text: answerText,
-      ids: citedIds,
-      webReferences,
-    } = result.ok
+    const unverifiedCitations = result.ok
+      ? verifyCitations(result.answerText, evidence, { urlToEvidenceId })
+      : [];
+    const normalized = result.ok
       ? normalizeCitationTokens(result.answerText, urlToEvidenceId)
-      : { text: "", ids: new Set<string>(), webReferences: [] };
+      : {
+          text: "",
+          ids: new Set<string>(),
+          webReferences: [],
+          collapsedOccurrences: 0,
+          collapsedByLabel: {},
+        };
+    const { text: answerText, ids: citedIds, webReferences } = normalized;
     const knownIds = new Set(evidence.map((chunk) => chunk.id));
     const webReferenceIds = new Set(webReferences.map((reference) => reference.id));
     const unknownCitationIds = [...citedIds].filter(
       (id) => !knownIds.has(id) && !webReferenceIds.has(id),
     );
-    const unverifiedCitations = result.ok
-      ? verifyCitations(answerText, evidence, { urlToEvidenceId })
-      : [];
+    const citationOccurrences = citationOccurrencesFromText(answerText);
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
       assembled?.diagnostics ??
@@ -280,6 +286,17 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         result.ok ? "thinking" : "instant-fallback",
       );
     diagnostics.executionStrategy = result.ok ? "thinking" : "instant-fallback";
+    diagnostics.answer = buildAnswerDiagnostics({
+      answerText,
+      promptSourceIds: result.ok ? evidence.map((chunk) => chunk.id) : [],
+      citationLabels: [...knownIds, ...webReferenceIds],
+      collapsedOccurrences: normalized.collapsedOccurrences,
+      collapsedByLabel: normalized.collapsedByLabel,
+      verificationRan: result.ok,
+      unknownCitationIds,
+      unverifiedCitations,
+      citationOccurrences,
+    });
     diagnostics.question = question;
     diagnostics.modelName = this.deps.chatModelName;
     diagnostics.modelApiFormat = this.deps.apiFormat;
