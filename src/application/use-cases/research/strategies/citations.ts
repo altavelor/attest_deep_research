@@ -37,6 +37,10 @@ export interface NormalizedCitationTokens {
   text: string;
   ids: Set<string>;
 
+  collapsedOccurrences: number;
+
+  collapsedByLabel: Record<string, number>;
+
   webReferences: AnswerWebReference[];
 }
 
@@ -93,9 +97,12 @@ export function normalizeCitationTokens(
   }
   rewritten += text.slice(copiedUpTo);
 
+  const collapsed = collapseAdjacentTokens(rewritten);
   return {
-    text: collapseAdjacentTokens(rewritten),
+    text: collapsed.text,
     ids,
+    collapsedOccurrences: collapsed.occurrences,
+    collapsedByLabel: collapsed.byLabel,
     webReferences: [...webReferenceIdByUrl].map(([url, id]) => ({ id, url })),
   };
 }
@@ -130,11 +137,30 @@ function markdownDestinationLength(text: string, index: number): number {
  * brackets, which is what a link and an evidence id for one source become once
  * both are normalized to the same token.
  */
-function collapseAdjacentTokens(text: string): string {
-  return text.replace(
-    new RegExp(`(${CITATION_TOKEN_SOURCE})(?:[ \\t]*\\1)+`, "g"),
-    (_whole, first: string) => first,
-  );
+function collapseAdjacentTokens(text: string): {
+  text: string;
+  occurrences: number;
+  byLabel: Record<string, number>;
+} {
+  let occurrences = 0;
+  const countsByLabel = new Map<string, number>();
+  return {
+    text: text.replace(
+      new RegExp(`(${CITATION_TOKEN_SOURCE})(?:[ \\t]*\\1)+`, "g"),
+      (whole, first: string) => {
+        const collapsedCount = Math.max(
+          0,
+          (whole.match(new RegExp(CITATION_TOKEN_SOURCE, "g")) ?? []).length - 1,
+        );
+        occurrences += collapsedCount;
+        const label = first.slice(1, -1);
+        countsByLabel.set(label, (countsByLabel.get(label) ?? 0) + collapsedCount);
+        return first;
+      },
+    ),
+    occurrences,
+    byLabel: Object.fromEntries(countsByLabel),
+  };
 }
 
 /**
