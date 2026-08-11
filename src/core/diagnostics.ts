@@ -110,7 +110,7 @@ export interface ToolCapabilityProbeAudit {
 }
 
 export interface ContextDiagnostics {
-  reportSchemaVersion?: 2;
+  reportSchemaVersion?: 2 | 4;
   executionStrategy?: ResearchExecutionStrategy;
 
   question?: string;
@@ -161,6 +161,26 @@ export interface ContextDiagnostics {
   stream?: StreamDiagnostics;
   projection?: ProjectionDiagnostics;
   delivery?: DeliveryDiagnostics;
+  answer?: AnswerDiagnostics;
+}
+
+export interface AnswerDiagnostics {
+  characters: number;
+  words: number;
+  sentences: number;
+  citations: {
+    occurrences: number;
+    uniqueLabels: number;
+    per100Words: number;
+    sentenceCoverage: number;
+    maxLabelsPerSentence: number;
+    byLabel: Record<string, number>;
+    uncitedPromptSourceIds: string[];
+    collapsedOccurrences: number;
+    verificationRan: boolean;
+    unknownCitationIds: string[];
+    unverifiedCitations: string[];
+  };
 }
 
 export interface DiagnosticTimelineEvent {

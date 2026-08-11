@@ -187,6 +187,38 @@ describe("diagnostic html rendering of a failing report", () => {
     ).toBe("");
   });
 
+  it("renders answer citation statistics and omits them for legacy diagnostics", () => {
+    const report = buildDiagnosticReportV3(
+      diagnostics({
+        answer: {
+          characters: 20,
+          words: 4,
+          sentences: 1,
+          citations: {
+            occurrences: 2,
+            uniqueLabels: 1,
+            per100Words: 50,
+            sentenceCoverage: 100,
+            maxLabelsPerSentence: 1,
+            byLabel: { "source-1": 2 },
+            uncitedPromptSourceIds: ["source-2"],
+            collapsedOccurrences: 1,
+            verificationRan: true,
+            unknownCitationIds: [],
+            unverifiedCitations: [],
+          },
+        },
+      }),
+    );
+    const html = renderInternals(report);
+    expect(html).toContain("Answer and citations");
+    expect(html).toContain("source-1: 2");
+    expect(html).toContain("source-2");
+    expect(renderInternals(buildDiagnosticReportV3(diagnostics()))).not.toContain(
+      "Answer and citations",
+    );
+  });
+
   it("renders a rich trace with stream, probe audit, web results, and answer delivery", () => {
     const report = failingReport();
     const mutable = report as unknown as {

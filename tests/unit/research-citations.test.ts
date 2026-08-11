@@ -45,11 +45,13 @@ describe("normalizeCitationTokens", () => {
   });
 
   it("collapses a link and an evidence id for the same source into one token", () => {
-    const { text } = normalizeCitationTokens(
+    const { text, collapsedOccurrences, collapsedByLabel } = normalizeCitationTokens(
       "Claim [url:https://openai.com/pricing] [web:hash-openai] holds.",
       urlToEvidenceId,
     );
     expect(text).toBe("Claim [web:hash-openai] holds.");
+    expect(collapsedOccurrences).toBe(1);
+    expect(collapsedByLabel).toEqual({ "web:hash-openai": 1 });
   });
 
   it("keeps two pages of one domain as two distinct sources", () => {

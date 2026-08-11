@@ -80,7 +80,7 @@ export class AgentRunDiagnosticCollector {
   complete(diagnostics: ContextDiagnostics): void {
     const completedAt = this.now();
     this.push("run.completed", undefined, "success");
-    diagnostics.reportSchemaVersion = 2;
+    diagnostics.reportSchemaVersion = 4;
     diagnostics.run = {
       runId: this.options.runId,
       answerId: this.options.answerId,
