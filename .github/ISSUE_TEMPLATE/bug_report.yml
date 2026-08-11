@@ -1,0 +1,101 @@
+name: Bug report
+description: Report a reproducible problem in Attest
+title: "[Bug]: "
+labels:
+  - bug
+  - type:bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never include API keys, tokens, or private note content. Redact them before submitting.
+        For a suspected vulnerability, use the [Security policy](../blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Attest version
+      description: The `version` field in `manifest.json`, or the version shown in Obsidian settings.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      placeholder: 1.5.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: providers
+    attributes:
+      label: Configured providers
+      description: Chat and embedding providers, without any credentials.
+      placeholder: Chat — Ollama (llama3.1), embeddings — LM Studio (nomic-embed-text)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or diagnostics
+      description: Developer console output or a diagnostic report. Redact keys and note content.
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This report contains no API keys and no private note content.
+          required: true
