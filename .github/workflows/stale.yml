@@ -1,0 +1,43 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: stale-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    name: Mark and close inactive items
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Mark stale issues and pull requests
+        uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.1.0
+        with:
+          days-before-stale: 60
+          days-before-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-issue-label: status:stale
+          stale-pr-label: status:stale
+          exempt-issue-labels: agent,status:in-progress,status:blocked,help wanted,good first issue
+          exempt-pr-labels: agent,status:in-progress,status:blocked
+          exempt-all-milestones: true
+          stale-issue-message: |
+            This issue has had no activity for 60 days and is now marked stale.
+            Comment to keep it open; otherwise it closes in 14 days.
+          stale-pr-message: |
+            This pull request has had no activity for 30 days and is now marked stale.
+            Comment or push to keep it open; otherwise it closes in 14 days.
+          close-issue-message: |
+            Closing after 14 days without activity. Comment to reopen if this is still relevant.
+          close-pr-message: |
+            Closing after 14 days without activity. Reopen when you continue the work.
+          operations-per-run: 100
+          ascending: true
