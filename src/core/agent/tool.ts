@@ -14,10 +14,7 @@ export interface ChatToolCall {
 }
 
 export type ChatToolChoice =
-  | { type: "auto" }
-  | { type: "none" }
-  | { type: "required" }
-  | { type: "specific"; name: string };
+  { type: "auto" } | { type: "none" } | { type: "required" } | { type: "specific"; name: string };
 
 export interface ToolCallingCapabilities {
   calls: boolean;

@@ -4,13 +4,7 @@ import { ChatToolChoice, ToolCallingCapabilities } from "./agent/tool";
 export type ContextMode = "include" | "filter";
 
 export type ContextSourceRole =
-  | "attached"
-  | "mention"
-  | "active"
-  | "question"
-  | "retrieval"
-  | "graph"
-  | "web";
+  "attached" | "mention" | "active" | "question" | "retrieval" | "graph" | "web";
 
 export interface ContextDiagnosticSource {
   path: string;
@@ -343,10 +337,7 @@ export interface IndexDescriptionPromptContext {
 }
 
 export type ResearchExecutionStrategy =
-  | "instant"
-  | "instant-fallback"
-  | "thinking"
-  | "deep-research";
+  "instant" | "instant-fallback" | "thinking" | "deep-research";
 
 export interface WebContextDiagnostics {
   originalQuestion: string;
@@ -438,10 +429,7 @@ export interface WebResultDiagnostic {
 }
 
 export type WebResultExclusionReason =
-  | "canonical-duplicate-url"
-  | "unreadable-web-content"
-  | "web-evidence-limit"
-  | "evidence-planner";
+  "canonical-duplicate-url" | "unreadable-web-content" | "web-evidence-limit" | "evidence-planner";
 
 export interface RetrievalChunkDiagnostic {
   id: string;
