@@ -5,7 +5,19 @@ import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./att
 import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
 
 export const RESEARCH_SYSTEM_PROMPT =
-  "You are Attest, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. Cite claims based on evidence with the short bracketed label shown next to each source, e.g. [S1]. Cite only labels that appear in the evidence below, or source handles returned by a tool you actually called — never invent labels, citation IDs, URLs, or sources. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
+  "You are Attest, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
+
+const CITATION_POLICY = [
+  "## Citation policy",
+  "Cite when the claim would be wrong to assert without the source.",
+  "Cite numbers, proportions, temperatures, time, specific techniques, recommendations, cases where sources disagree, and direct wording from a source.",
+  "Do not cite common knowledge, shared steps that all sources agree on, your own synthesis, transitions, or introductory wording.",
+  "Use one citation at the end of the claim, not after each clause.",
+  "When sources agree, cite the most substantive source. Cite multiple sources only when they provide different facts or contradict each other.",
+  "Do not repeat the same label in adjacent sentences of a paragraph for the same claim.",
+  "Use only the short bracketed labels shown with the evidence, for example [S1], or source handles returned by a tool you actually called. Never invent labels, citation IDs, URLs, or sources.",
+  "Do not add a separate citations, sources, or bibliography section.",
+].join("\n");
 
 export interface ResearchSystemPromptOptions {
   indexDescription?: string;
@@ -59,7 +71,7 @@ function buildVaultToolsSection(toolNames: readonly string[]): string {
 }
 
 export function buildResearchSystemPrompt(options: ResearchSystemPromptOptions = {}): string {
-  const sections = [RESEARCH_SYSTEM_PROMPT, currentDateLine(options.now)];
+  const sections = [RESEARCH_SYSTEM_PROMPT, CITATION_POLICY, currentDateLine(options.now)];
 
   if (options.noteToolNames && options.noteToolNames.length > 0) {
     const vaultTools = buildVaultToolsSection(options.noteToolNames);
@@ -138,8 +150,6 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
     "Do not ask the user what to do with the evidence or merely summarize what they supplied.",
     "Treat explicit context as authoritative when it conflicts with retrieved evidence.",
     "Synthesize all relevant facts from the evidence before concluding.",
-    "Cite claims with the bracketed source label shown next to each item, for example [S1].",
-    "Do not add a separate citations, sources, or bibliography section.",
     ...(hasEvidence
       ? ["If the evidence is insufficient for evidence-dependent claims, say what is missing."]
       : []),
