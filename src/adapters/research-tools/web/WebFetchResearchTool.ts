@@ -13,8 +13,7 @@ interface FetchWebPagesInput {
 }
 
 export type FetchWebPageResult =
-  | ({ ok: true } & FetchWebPageOutput)
-  | { ok: false; resultId: string; error: ToolError };
+  ({ ok: true } & FetchWebPageOutput) | { ok: false; resultId: string; error: ToolError };
 
 export interface FetchWebPagesOutput {
   pages: FetchWebPageResult[];
