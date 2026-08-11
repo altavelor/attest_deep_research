@@ -1,5 +1,12 @@
 import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
+import { buildAnswerDiagnostics } from "./strategies/answerDiagnostics";
+import { verifyCitations } from "./strategies/citationVerification";
+import {
+  citationIdsFromText,
+  normalizeCitationTokens,
+  webUrlEvidenceIndex,
+} from "./strategies/citations";
 import {
   ContextDiagnostics,
   IndexDescriptionPromptContext,
@@ -22,7 +29,6 @@ import {
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "@application/research/toolPorts";
-import { citationIdsFromText } from "./strategies/citations";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -267,6 +273,35 @@ export class AnswerSynthesisService {
         warnings: contextDiagnostics.warnings.includes(warning)
           ? contextDiagnostics.warnings
           : [...contextDiagnostics.warnings, warning],
+      };
+    }
+    if (contextDiagnostics) {
+      const urlToEvidenceId = webUrlEvidenceIndex(input.evidence);
+      const normalized = normalizeCitationTokens(answerText, urlToEvidenceId);
+      const knownCitationIds = new Set(input.evidence.map((chunk) => chunk.id));
+      const webReferenceIds = new Set(normalized.webReferences.map((reference) => reference.id));
+      const normalizedUnknownIds = [...normalized.ids].filter(
+        (id) => !knownCitationIds.has(id) && !webReferenceIds.has(id),
+      );
+      const unknownCitationIds = [...new Set([...rewrite.unknownLabels, ...normalizedUnknownIds])];
+      const citationOccurrences: Array<{ label: string; index: number }> = [];
+      const unverifiedCitations = verifyCitations(normalized.text, input.evidence, {
+        urlToEvidenceId,
+        onCitation: (citation) => citationOccurrences.push(citation),
+      });
+      contextDiagnostics = {
+        ...contextDiagnostics,
+        answer: buildAnswerDiagnostics({
+          answerText: normalized.text,
+          promptSourceIds: input.evidence.map((chunk) => chunk.id),
+          citationLabels: [...knownCitationIds, ...webReferenceIds],
+          collapsedOccurrences: normalized.collapsedOccurrences,
+          collapsedByLabel: normalized.collapsedByLabel,
+          verificationRan: true,
+          unknownCitationIds,
+          unverifiedCitations,
+          citationOccurrences,
+        }),
       };
     }
     const finalAnswer: ResearchAnswer = {
