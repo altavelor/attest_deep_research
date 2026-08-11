@@ -52,13 +52,7 @@ export interface IndexSourceReportItem {
 }
 
 export type IndexingProgressPhase =
-  | "scanning"
-  | "checking"
-  | "extracting"
-  | "chunking"
-  | "embedding"
-  | "writing"
-  | "complete";
+  "scanning" | "checking" | "extracting" | "chunking" | "embedding" | "writing" | "complete";
 
 export interface IndexingServiceOptions {
   files: VaultFileProvider;

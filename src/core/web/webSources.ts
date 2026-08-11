@@ -1,14 +1,7 @@
 import type { WebQueryLanguage } from "./queryContext";
 
 export type WebSourceCategory =
-  | "serp"
-  | "neural"
-  | "academic"
-  | "encyclopedia"
-  | "community"
-  | "news"
-  | "fetch"
-  | "image";
+  "serp" | "neural" | "academic" | "encyclopedia" | "community" | "news" | "fetch" | "image";
 
 export interface WebSourceCapabilities {
   search: boolean;

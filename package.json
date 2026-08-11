@@ -32,9 +32,9 @@
     "builtin-modules": "^5.3.0",
     "dependency-cruiser": "^17.4.3",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.11.1",
-    "obsidian": "^1.5.12",
-    "prettier": "^3.3.2",
+    "happy-dom": "^20.11.2",
+    "obsidian": "^1.13.1",
+    "prettier": "^3.9.6",
     "tslib": "^2.6.3",
     "typescript": "^5.4.5",
     "vitest": "^4.1.10"

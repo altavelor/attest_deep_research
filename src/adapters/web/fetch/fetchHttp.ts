@@ -18,8 +18,7 @@ export interface HttpRequestSpec {
 }
 
 export type HttpTextResult =
-  | { ok: true; text: string; status: number }
-  | { ok: false; result: WebPageFetchFailure };
+  { ok: true; text: string; status: number } | { ok: false; result: WebPageFetchFailure };
 
 export async function requestText(
   spec: HttpRequestSpec,
