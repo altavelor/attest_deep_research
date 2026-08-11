@@ -1,13 +1,13 @@
 import { formatCitation } from "@core/retrieval";
 import { SearchProvider, SearchProviderResult, WebSearchOptions } from "@application/ports/web";
-import { WebContextDiagnostics } from "@core/diagnostics";
+import { WebContextDiagnostics, WebResultExclusionReason } from "@core/diagnostics";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
 import { tokenSetForSearch } from "@core/retrieval";
 import { normalizeInlineWhitespace } from "@shared";
 import { estimateTextTokens } from "@core/research";
 import type { ResearchModeWebParameters } from "@core/research";
-import type { WebSelectionMode } from "@core/web";
+import { assessWebTextQuality, canonicalizeWebEvidenceUrl, type WebSelectionMode } from "@core/web";
 import type { WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import { ResearchStreamEvent } from "@application/contracts/research";
 
@@ -39,6 +39,13 @@ const DEFAULT_WEB_PARAMETERS: ResearchModeWebParameters = {
 };
 
 const MAX_FETCHES = 3;
+
+interface PreparedWebResult {
+  original: SearchProviderResult;
+  effective?: SearchProviderResult;
+  exclusionReason?: WebResultExclusionReason;
+  contentFallbackReason?: "unreadable-fetched-content";
+}
 
 export class WebResearchPipeline {
   private readonly searchProvider?: SearchProvider;
@@ -102,7 +109,11 @@ export class WebResearchPipeline {
     }
 
     yield { type: "status", message: "Fetching sources..." };
-    const rankedResults = rankWebResults(dedupeWebResults(results), question);
+    const preparedResults = prepareWebResults(results);
+    const rankedResults = rankWebResults(
+      preparedResults.flatMap((result) => (result.effective ? [result.effective] : [])),
+      question,
+    );
     const selectedResults = rankedResults.slice(0, evidenceLimit);
     const chunks = selectedResults.map((result) => webResultToChunk(result));
 
@@ -114,7 +125,7 @@ export class WebResearchPipeline {
         "direct",
         queries,
         search.requests,
-        results,
+        preparedResults,
         rankedResults,
         evidenceLimit,
         sourceSelection,
@@ -128,7 +139,7 @@ function createWebDiagnostics(
   queryStrategy: WebContextDiagnostics["queryStrategy"],
   queries: string[],
   requests: WebContextDiagnostics["requests"],
-  rawResults: SearchProviderResult[],
+  preparedResults: PreparedWebResult[],
   rankedResults: SearchProviderResult[],
   evidenceLimit = 0,
   sourceSelection?: WebSourceSelectionDiagnostics,
@@ -136,18 +147,23 @@ function createWebDiagnostics(
   const processingRanks = new Map(
     rankedResults.map((result, index) => [result, index + 1] as const),
   );
-  const retainedResults = new Set(rankedResults);
 
   return {
     originalQuestion,
     queryStrategy,
     queries,
     requests,
-    results: rawResults.map((result) => {
-      const text = result.extractedText ?? result.source.snippet;
-      const processingRank = processingRanks.get(result);
-      const isDuplicate = !retainedResults.has(result);
+    results: preparedResults.map((prepared) => {
+      const result = prepared.original;
+      const effective = prepared.effective;
+      const text =
+        effective?.extractedText ??
+        effective?.source.snippet ??
+        result.extractedText ??
+        result.source.snippet;
+      const processingRank = effective ? processingRanks.get(effective) : undefined;
       const exceedsLimit = processingRank !== undefined && processingRank > evidenceLimit;
+      const reason = prepared.exclusionReason ?? (exceedsLimit ? "web-evidence-limit" : undefined);
 
       return {
         chunkId: result.source.id,
@@ -157,20 +173,25 @@ function createWebDiagnostics(
         providerRank: result.rank,
         ...(processingRank !== undefined ? { processingRank } : {}),
         relevanceScore: webResultScore(
-          result,
+          effective ?? result,
           tokenSetForSearch(originalQuestion, { minLength: 3 }),
         ),
         wasContentFetched: result.source.wasContentFetched,
-        textSource: result.extractedText !== undefined ? "fetched-content" : "search-snippet",
+        textSource: effective
+          ? effective.extractedText !== undefined
+            ? "fetched-content"
+            : "search-snippet"
+          : result.extractedText !== undefined
+            ? "fetched-content"
+            : "search-snippet",
         textCharacters: text.length,
         estimatedTokens: estimateTextTokens(text),
         textPreview: normalizeInlineWhitespace(text).slice(0, 240),
-        status: isDuplicate || exceedsLimit ? "dropped" : "candidate",
-        ...(isDuplicate
-          ? { reason: "duplicate-url" as const }
-          : exceedsLimit
-            ? { reason: "web-evidence-limit" as const }
-            : {}),
+        status: reason ? "dropped" : "candidate",
+        ...(reason ? { reason } : {}),
+        ...(prepared.contentFallbackReason
+          ? { contentFallbackReason: prepared.contentFallbackReason }
+          : {}),
       };
     }),
     finalPrompt: { includedChunkIds: [], usedTokens: 0 },
@@ -178,19 +199,68 @@ function createWebDiagnostics(
   };
 }
 
-function dedupeWebResults(results: SearchProviderResult[]): SearchProviderResult[] {
-  const byUrl = new Map<string, SearchProviderResult>();
+function prepareWebResults(results: SearchProviderResult[]): PreparedWebResult[] {
+  const prepared = results.map((result) => prepareWebResult(result));
+  const byCanonicalUrl = new Map<string, PreparedWebResult>();
 
-  for (const result of results) {
-    const key = normalizedWebResultUrl(result.source.url);
-    const existing = byUrl.get(key);
-
-    if (!existing || result.rank < existing.rank) {
-      byUrl.set(key, result);
+  for (const candidate of prepared) {
+    if (!candidate.effective) continue;
+    const key = canonicalizeWebEvidenceUrl(candidate.effective.source.url);
+    const existing = byCanonicalUrl.get(key);
+    if (!existing) {
+      byCanonicalUrl.set(key, candidate);
+      continue;
+    }
+    if (isMoreSubstantive(candidate.effective, existing.effective!)) {
+      existing.exclusionReason = "canonical-duplicate-url";
+      existing.effective = undefined;
+      byCanonicalUrl.set(key, candidate);
+    } else {
+      candidate.exclusionReason = "canonical-duplicate-url";
+      candidate.effective = undefined;
     }
   }
 
-  return Array.from(byUrl.values());
+  return prepared;
+}
+
+function prepareWebResult(result: SearchProviderResult): PreparedWebResult {
+  if (result.extractedText !== undefined && !assessWebTextQuality(result.extractedText).readable) {
+    if (!assessWebTextQuality(result.source.snippet).readable) {
+      return { original: result, exclusionReason: "unreadable-web-content" };
+    }
+    return {
+      original: result,
+      effective: {
+        ...result,
+        extractedText: undefined,
+        source: { ...result.source, wasContentFetched: false },
+      },
+      contentFallbackReason: "unreadable-fetched-content",
+    };
+  }
+
+  return {
+    original: result,
+    effective: {
+      ...result,
+      source: { ...result.source, wasContentFetched: result.extractedText !== undefined },
+    },
+  };
+}
+
+function isMoreSubstantive(
+  candidate: SearchProviderResult,
+  existing: SearchProviderResult,
+): boolean {
+  const candidateFetched = candidate.extractedText !== undefined;
+  const existingFetched = existing.extractedText !== undefined;
+  if (candidateFetched !== existingFetched) return candidateFetched;
+
+  const candidateLength = (candidate.extractedText ?? candidate.source.snippet).trim().length;
+  const existingLength = (existing.extractedText ?? existing.source.snippet).trim().length;
+  if (candidateLength !== existingLength) return candidateLength > existingLength;
+  return candidate.rank < existing.rank;
 }
 
 function rankWebResults(results: SearchProviderResult[], question: string): SearchProviderResult[] {
@@ -231,21 +301,4 @@ function webResultToChunk(result: SearchProviderResult): RetrievedChunk {
     score: webResultScore(result, tokenSetForSearch(result.query, { minLength: 3 })),
     contentHash: `web:${result.source.url}`,
   };
-}
-
-function normalizedWebResultUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    url.hash = "";
-
-    for (const key of Array.from(url.searchParams.keys())) {
-      if (key === "fbclid" || key === "gclid" || key.startsWith("utm_")) {
-        url.searchParams.delete(key);
-      }
-    }
-
-    return url.toString();
-  } catch {
-    return value;
-  }
 }

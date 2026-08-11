@@ -21,7 +21,7 @@ export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): Diagno
   const findings = computeFindings({ model, preflight, request, reasoning, answer });
 
   return redactSensitiveData({
-    schemaVersion: 3,
+    schemaVersion: 4,
     question: diagnostics.question ?? "",
     findings,
     model,
