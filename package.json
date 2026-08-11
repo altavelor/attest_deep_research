@@ -29,7 +29,7 @@
   "devDependencies": {
     "@types/node": "^20.12.12",
     "@vitest/coverage-v8": "^4.1.10",
-    "builtin-modules": "^3.3.0",
+    "builtin-modules": "^5.3.0",
     "dependency-cruiser": "^17.4.3",
     "esbuild": "^0.28.2",
     "happy-dom": "^20.11.1",
