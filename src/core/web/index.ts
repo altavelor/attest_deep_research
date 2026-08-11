@@ -16,6 +16,8 @@ export {
 } from "./webSources";
 
 export { selectWebSources } from "./sourceSelection";
+export { assessWebTextQuality, canonicalizeWebEvidenceUrl } from "./evidenceQuality";
+export type { WebTextQualityAssessment } from "./evidenceQuality";
 export type {
   WebSelectionMode,
   WebSourceCandidate,

@@ -37,6 +37,40 @@ class MemoryContextFiles implements ContextFileProvider {
 }
 
 describe("buildResearchPrompt", () => {
+  it("includes the claim-sensitive citation policy exactly once in the instant prompt pair", () => {
+    const system = buildResearchSystemPrompt();
+    const user = buildResearchPrompt({
+      question: "How should I prepare this recipe?",
+      evidence: [retrieved("recipe-1", markdownSource("Recipes/example.md"), "Recipe evidence")],
+      maxEvidenceItems: 2,
+    });
+    const combined = `${system}\n${user}`;
+
+    expect(combined.match(/^## Citation policy$/gm) ?? []).toHaveLength(1);
+    expect(system).toContain("## Citation policy");
+    expect(user).not.toContain("## Citation policy");
+    expect(user).not.toContain("Cite claims with the bracketed source label");
+
+    expect(combined).toContain("wrong to assert without the source");
+    expect(combined).toContain("numbers");
+    expect(combined).toContain("proportions");
+    expect(combined).toContain("temperatures");
+    expect(combined).toContain("time");
+    expect(combined).toContain("specific techniques");
+    expect(combined).toContain("recommendations");
+    expect(combined).toContain("sources disagree");
+    expect(combined).toContain("direct wording");
+    expect(combined).toContain("common knowledge");
+    expect(combined).toContain("shared steps");
+    expect(combined).toContain("your own synthesis");
+    expect(combined).toContain("transitions");
+    expect(combined).toContain("one citation at the end of the claim");
+    expect(combined).toContain("most substantive source");
+    expect(combined).toContain("different facts or contradict each other");
+    expect(combined).toContain("Do not repeat the same label in adjacent sentences");
+    expect(combined).not.toMatch(/(?:at most|no more than|max(?:imum)? of) \d+ citations?/i);
+  });
+
   it("allows a direct general-knowledge answer when no evidence is available", () => {
     const system = buildResearchSystemPrompt();
     const prompt = buildResearchPrompt({

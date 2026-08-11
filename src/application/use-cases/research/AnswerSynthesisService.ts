@@ -3,6 +3,7 @@ import { ResearchAnswer } from "@core/answer";
 import { buildAnswerDiagnostics } from "./strategies/answerDiagnostics";
 import { verifyCitations } from "./strategies/citationVerification";
 import {
+  citationOccurrencesFromText,
   citationIdsFromText,
   normalizeCitationTokens,
   webUrlEvidenceIndex,
@@ -277,6 +278,9 @@ export class AnswerSynthesisService {
     }
     if (contextDiagnostics) {
       const urlToEvidenceId = webUrlEvidenceIndex(input.evidence);
+      const unverifiedCitations = verifyCitations(answerText, input.evidence, {
+        urlToEvidenceId,
+      });
       const normalized = normalizeCitationTokens(answerText, urlToEvidenceId);
       const knownCitationIds = new Set(input.evidence.map((chunk) => chunk.id));
       const webReferenceIds = new Set(normalized.webReferences.map((reference) => reference.id));
@@ -284,11 +288,7 @@ export class AnswerSynthesisService {
         (id) => !knownCitationIds.has(id) && !webReferenceIds.has(id),
       );
       const unknownCitationIds = [...new Set([...rewrite.unknownLabels, ...normalizedUnknownIds])];
-      const citationOccurrences: Array<{ label: string; index: number }> = [];
-      const unverifiedCitations = verifyCitations(normalized.text, input.evidence, {
-        urlToEvidenceId,
-        onCitation: (citation) => citationOccurrences.push(citation),
-      });
+      const citationOccurrences = citationOccurrencesFromText(normalized.text);
       contextDiagnostics = {
         ...contextDiagnostics,
         answer: buildAnswerDiagnostics({

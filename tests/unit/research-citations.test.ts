@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  citationOccurrencesFromText,
   citationIdsFromText,
   normalizeCitationTokens,
 } from "@application/use-cases/research/strategies/citations";
@@ -8,6 +9,15 @@ describe("citationIdsFromText", () => {
   it("extracts bracketed tokens verbatim", () => {
     const ids = citationIdsFromText("Claim [web:abc] and [doc:1] cite [web:abc].");
     expect([...ids].sort()).toEqual(["doc:1", "web:abc"]);
+  });
+});
+
+describe("citationOccurrencesFromText", () => {
+  it("returns every bracket token with its original offset", () => {
+    expect(citationOccurrencesFromText("First [source-a], then [source-a].")).toEqual([
+      { label: "source-a", index: 6 },
+      { label: "source-a", index: 23 },
+    ]);
   });
 });
 

@@ -433,8 +433,15 @@ export interface WebResultDiagnostic {
   textPreview: string;
   status: "candidate" | "included" | "dropped";
   promptOrder?: number;
-  reason?: "duplicate-url" | "web-evidence-limit" | "evidence-planner";
+  reason?: WebResultExclusionReason;
+  contentFallbackReason?: "unreadable-fetched-content";
 }
+
+export type WebResultExclusionReason =
+  | "canonical-duplicate-url"
+  | "unreadable-web-content"
+  | "web-evidence-limit"
+  | "evidence-planner";
 
 export interface RetrievalChunkDiagnostic {
   id: string;
