@@ -23,6 +23,7 @@ import {
   ResearchStrategyOutcome,
 } from "./ResearchStrategy";
 import {
+  citationOccurrencesFromText,
   dedupeEvidence,
   mergeCitations,
   normalizeCitationTokens,
@@ -258,6 +259,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       [...snapshot.citations],
     );
     const urlToEvidenceId = webUrlEvidenceIndex(evidence);
+    const unverifiedCitations = result.ok
+      ? verifyCitations(result.answerText, evidence, { urlToEvidenceId })
+      : [];
     const normalized = result.ok
       ? normalizeCitationTokens(result.answerText, urlToEvidenceId)
       : {
@@ -273,13 +277,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
     const unknownCitationIds = [...citedIds].filter(
       (id) => !knownIds.has(id) && !webReferenceIds.has(id),
     );
-    const citationOccurrences: Array<{ label: string; index: number }> = [];
-    const unverifiedCitations = result.ok
-      ? verifyCitations(answerText, evidence, {
-          urlToEvidenceId,
-          onCitation: (citation) => citationOccurrences.push(citation),
-        })
-      : [];
+    const citationOccurrences = citationOccurrencesFromText(answerText);
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
       assembled?.diagnostics ??

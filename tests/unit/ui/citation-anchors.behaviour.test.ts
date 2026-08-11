@@ -229,4 +229,38 @@ describe("answer status dot", () => {
     expect(patchAssistantMessageContent(container, assistant("instant"), renderOptions)).toBe(true);
     expect(container.querySelector(".attest-chat__answer-status-dot")).toBeNull();
   });
+
+  it("normalizes finalized citation density before rendering markdown", () => {
+    const finalized = message({
+      content: `First claim [${EVIDENCE_ID}]. Second claim [${EVIDENCE_ID}].`,
+    });
+
+    renderAssistantMessageContent(container, finalized, renderOptions);
+
+    expect(MarkdownRenderer.render).toHaveBeenCalledWith(
+      renderOptions.app,
+      `First claim [${EVIDENCE_ID}]. Second claim.`,
+      expect.any(HTMLElement),
+      "",
+      renderOptions.markdownContext,
+    );
+  });
+
+  it("preserves a Markdown reference link whose text matches a known citation id", () => {
+    const markdown = [
+      `Read [${EVIDENCE_ID}][${EVIDENCE_ID}].`,
+      "",
+      `[${EVIDENCE_ID}]: https://openai.com/pricing`,
+    ].join("\n");
+
+    renderAssistantMessageContent(container, message({ content: markdown }), renderOptions);
+
+    expect(MarkdownRenderer.render).toHaveBeenCalledWith(
+      renderOptions.app,
+      markdown,
+      expect.any(HTMLElement),
+      "",
+      renderOptions.markdownContext,
+    );
+  });
 });
