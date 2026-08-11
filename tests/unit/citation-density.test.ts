@@ -67,20 +67,29 @@ describe("normalizeCitationDensity", () => {
   });
 
   it("does not count a known label used as a Markdown reference id as a citation", () => {
-    const labels = new Set(["source-a"]);
+    const labels = new Set(["source-a", "source-b"]);
     const answer = [
-      "Read [guide][source-a]. Claim [source-a][source-a].",
+      "Read [guide][source-a]. Claim [source-b][source-b].",
       "",
       "[source-a]: https://example.com/guide",
     ].join("\n");
 
     expect(normalizeCitationDensity(answer, labels)).toBe(
       [
-        "Read [guide][source-a]. Claim [source-a].",
+        "Read [guide][source-a]. Claim [source-b].",
         "",
         "[source-a]: https://example.com/guide",
       ].join("\n"),
     );
+  });
+
+  it("preserves a full Markdown reference link whose text and known reference id match", () => {
+    const labels = new Set(["source-a"]);
+    const answer = ["Read [source-a][source-a].", "", "[source-a]: https://example.com/guide"].join(
+      "\n",
+    );
+
+    expect(normalizeCitationDensity(answer, labels)).toBe(answer);
   });
 
   it("only changes labels present in the whitelist", () => {

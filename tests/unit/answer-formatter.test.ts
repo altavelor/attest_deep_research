@@ -66,7 +66,7 @@ Use local models with citations [1].
     const withReferenceLink: ResearchAnswer = {
       ...answer(),
       answer: [
-        "Read [guide][local-1]. Claim [local-1][local-1].",
+        "Read [guide][local-1]. Claim [local-duplicate][local-duplicate].",
         "",
         "[local-1]: https://example.com/guide",
       ].join("\n"),
@@ -74,6 +74,17 @@ Use local models with citations [1].
 
     expect(formatResearchAnswerNote(withReferenceLink)).toContain(
       ["Read [guide][local-1]. Claim [1].", "", "[local-1]: https://example.com/guide"].join("\n"),
+    );
+  });
+
+  it("preserves a Markdown reference link when its text matches its known citation id", () => {
+    const withMatchingReferenceLink: ResearchAnswer = {
+      ...answer(),
+      answer: ["Read [local-1][local-1].", "", "[local-1]: https://example.com/guide"].join("\n"),
+    };
+
+    expect(formatResearchAnswerNote(withMatchingReferenceLink)).toContain(
+      ["Read [local-1][local-1].", "", "[local-1]: https://example.com/guide"].join("\n"),
     );
   });
 

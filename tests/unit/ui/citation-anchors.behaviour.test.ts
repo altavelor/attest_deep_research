@@ -245,4 +245,22 @@ describe("answer status dot", () => {
       renderOptions.markdownContext,
     );
   });
+
+  it("preserves a Markdown reference link whose text matches a known citation id", () => {
+    const markdown = [
+      `Read [${EVIDENCE_ID}][${EVIDENCE_ID}].`,
+      "",
+      `[${EVIDENCE_ID}]: https://openai.com/pricing`,
+    ].join("\n");
+
+    renderAssistantMessageContent(container, message({ content: markdown }), renderOptions);
+
+    expect(MarkdownRenderer.render).toHaveBeenCalledWith(
+      renderOptions.app,
+      markdown,
+      expect.any(HTMLElement),
+      "",
+      renderOptions.markdownContext,
+    );
+  });
 });

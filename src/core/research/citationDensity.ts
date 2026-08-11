@@ -116,11 +116,8 @@ function protectedMarkdownBracketStarts(
 
   for (const match of text.matchAll(/!?\[([^\]\n]*)\]\[([^\]\n]*)\]/g)) {
     const referenceId = normalizeReferenceId(match[2] || match[1]);
-    const firstLabel = match[1].trim();
     const secondLabel = match[2].trim();
-    const clearlyReference =
-      !citationLabels.has(secondLabel) ||
-      (definitions.has(referenceId) && normalizeReferenceId(firstLabel) !== referenceId);
+    const clearlyReference = !citationLabels.has(secondLabel) || definitions.has(referenceId);
     if (!clearlyReference) continue;
     const firstStart = (match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0);
     const secondStart = text.indexOf("[", firstStart + 1);
