@@ -1,11 +1,11 @@
-import { DocumentSummaryStore, SourceDocumentSummaries } from "@application/ports";
+import { DocumentSummaryStore, FileSystemPort, SourceDocumentSummaries } from "@application/ports";
 import { JsonSidecarStore } from "./JsonSidecarStore";
 
 export class FileDocumentSummaryStore implements DocumentSummaryStore {
   private readonly store: JsonSidecarStore<SourceDocumentSummaries>;
 
-  constructor(folder: string) {
-    this.store = new JsonSidecarStore(folder, "summaries", isSourceDocumentSummaries);
+  constructor(fileSystem: FileSystemPort, folder: string) {
+    this.store = new JsonSidecarStore(fileSystem, folder, "summaries", isSourceDocumentSummaries);
   }
 
   read(sourcePath: string): Promise<SourceDocumentSummaries | null> {

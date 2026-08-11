@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
     "styles": "node scripts/build-styles.mjs",
-    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "build": "tsc --noEmit && node esbuild.config.mjs production && node scripts/check-bundle.mjs",
     "test": "vitest run",
     "release:check": "node scripts/release-check.mjs",
     "test:coverage": "vitest run --coverage",
@@ -15,7 +15,8 @@
     "typecheck:core": "tsc -p tsconfig.core.json",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --check .",
-    "check": "npm run typecheck && npm run typecheck:core && npm run test:coverage && npm run depcruise && npm run format && npm run build"
+    "check": "npm run typecheck && npm run typecheck:core && npm run test:coverage && npm run depcruise && npm run format && npm run build",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "keywords": [
     "obsidian",

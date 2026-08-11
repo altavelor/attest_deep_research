@@ -1,4 +1,6 @@
-import { deflateSync, inflateSync } from "zlib";
+import { deflateZlib, inflateZlib } from "@shared";
+
+import { concatBytes, writeUint32BE } from "../bytes";
 
 export interface PdfRasterSpec {
   width: number;
@@ -10,10 +12,10 @@ export interface PdfRasterSpec {
   predictorColors: number;
 }
 
-const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
+const PNG_SIGNATURE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** Converts a Flate-compressed raster into a PNG, or undefined when unsupported. */
-export function pdfRasterToPng(stream: Buffer, spec: PdfRasterSpec): Buffer | undefined {
+export function pdfRasterToPng(stream: Uint8Array, spec: PdfRasterSpec): Uint8Array | undefined {
   if (spec.bitsPerComponent !== 8) return undefined;
   if (spec.components !== 1 && spec.components !== 3) return undefined;
   if (spec.width <= 0 || spec.height <= 0) return undefined;
@@ -22,9 +24,9 @@ export function pdfRasterToPng(stream: Buffer, spec: PdfRasterSpec): Buffer | un
   const predicted = spec.predictor >= 10;
   if (predicted && !hasConsistentPredictor(spec)) return undefined;
 
-  let samples: Buffer;
+  let samples: Uint8Array;
   try {
-    samples = inflateSync(stream, {
+    samples = inflateZlib(stream, {
       maxOutputLength: spec.height * (rowBytes + (predicted ? 1 : 0)),
     });
   } catch {
@@ -53,7 +55,7 @@ function hasConsistentPredictor(spec: PdfRasterSpec): boolean {
 }
 
 /** Reverses the per-row PNG filters PDF applies when `/Predictor >= 10`. */
-function undoPngPredictor(data: Buffer, spec: PdfRasterSpec): Buffer | undefined {
+function undoPngPredictor(data: Uint8Array, spec: PdfRasterSpec): Uint8Array | undefined {
   const colors = spec.predictorColors > 0 ? spec.predictorColors : spec.components;
   const columns = spec.predictorColumns > 0 ? spec.predictorColumns : spec.width;
   const pixelBytes = Math.max(1, colors);
@@ -61,14 +63,14 @@ function undoPngPredictor(data: Buffer, spec: PdfRasterSpec): Buffer | undefined
   const rows = Math.floor(data.length / (rowBytes + 1));
   if (rows <= 0) return undefined;
 
-  const output = Buffer.alloc(rows * rowBytes);
-  let previous = Buffer.alloc(rowBytes);
+  const output = new Uint8Array(rows * rowBytes);
+  let previous = new Uint8Array(rowBytes);
 
   for (let row = 0; row < rows; row += 1) {
     const start = row * (rowBytes + 1);
     const filter = data[start]!;
     if (filter > 4) return undefined;
-    const current = Buffer.from(data.subarray(start + 1, start + 1 + rowBytes));
+    const current = data.slice(start + 1, start + 1 + rowBytes);
 
     for (let index = 0; index < rowBytes; index += 1) {
       const left = index >= pixelBytes ? current[index - pixelBytes]! : 0;
@@ -77,7 +79,7 @@ function undoPngPredictor(data: Buffer, spec: PdfRasterSpec): Buffer | undefined
       const raw = current[index]!;
       current[index] = unfilterByte(filter, raw, left, up, upLeft);
     }
-    current.copy(output, row * rowBytes);
+    output.set(current, row * rowBytes);
     previous = current;
   }
   return output;
@@ -116,35 +118,48 @@ function paeth(left: number, up: number, upLeft: number): number {
   return distUp <= distUpLeft ? up : upLeft;
 }
 
-function encodePng(samples: Buffer, width: number, height: number, components: number): Buffer {
+function encodePng(
+  samples: Uint8Array,
+  width: number,
+  height: number,
+  components: number,
+): Uint8Array {
   const rowBytes = width * components;
-  const raw = Buffer.alloc((rowBytes + 1) * height);
+  const raw = new Uint8Array((rowBytes + 1) * height);
   for (let row = 0; row < height; row += 1) {
     raw[row * (rowBytes + 1)] = 0;
-    samples.copy(raw, row * (rowBytes + 1) + 1, row * rowBytes, (row + 1) * rowBytes);
+    raw.set(samples.subarray(row * rowBytes, (row + 1) * rowBytes), row * (rowBytes + 1) + 1);
   }
 
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header.writeUInt8(8, 8);
-  header.writeUInt8(components === 1 ? 0 : 2, 9);
+  const header = new Uint8Array(13);
+  writeUint32BE(header, 0, width);
+  writeUint32BE(header, 4, height);
+  header[8] = 8;
+  header[9] = components === 1 ? 0 : 2;
 
-  return Buffer.concat([
+  return concatBytes([
     PNG_SIGNATURE,
     pngChunk("IHDR", header),
-    pngChunk("IDAT", deflateSync(raw)),
-    pngChunk("IEND", Buffer.alloc(0)),
+    pngChunk("IDAT", deflateZlib(raw)),
+    pngChunk("IEND", new Uint8Array(0)),
   ]);
 }
 
-function pngChunk(type: string, data: Buffer): Buffer {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length, 0);
-  const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body), 0);
-  return Buffer.concat([length, body, crc]);
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const length = new Uint8Array(4);
+  writeUint32BE(length, 0, data.length);
+  const body = concatBytes([asciiBytes(type), data]);
+  const crc = new Uint8Array(4);
+  writeUint32BE(crc, 0, crc32(body));
+  return concatBytes([length, body, crc]);
+}
+
+function asciiBytes(value: string): Uint8Array {
+  const bytes = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    bytes[index] = value.charCodeAt(index) & 0xff;
+  }
+  return bytes;
 }
 
 const CRC_TABLE = (() => {
@@ -159,7 +174,7 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
-function crc32(data: Buffer): number {
+function crc32(data: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of data) {
     crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);

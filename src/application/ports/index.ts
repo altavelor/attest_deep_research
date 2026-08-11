@@ -2,6 +2,7 @@ export * from "./chat";
 export * from "./documentClaims";
 export * from "./documentMetadata";
 export * from "./documentSummaries";
+export * from "./fileSystem";
 export * from "./images";
 export * from "./indexing";
 export * from "./retrieval";

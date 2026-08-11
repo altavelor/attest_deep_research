@@ -134,6 +134,32 @@ describe("architecture: import boundaries", () => {
     expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 
+  it("no source file imports a Node built-in, which Obsidian Mobile cannot provide", () => {
+    const violations: Violation[] = [];
+    for (const file of files) {
+      for (const spec of importsOf(file)) {
+        if (classifyImport(file, spec).kind === "node-builtin") {
+          violations.push({ from: rel(file), to: spec, rule: "src -> node-builtin" });
+        }
+      }
+    }
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+  });
+
+  it("no source file uses the Node-only Buffer global", () => {
+    const violations: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      if (/(?<![A-Za-z0-9_$.])Buffer(?![A-Za-z0-9_$])/.test(source)) {
+        violations.push(rel(file));
+      }
+    }
+    expect(
+      violations,
+      `Buffer is unavailable on Obsidian Mobile: ${violations.join(", ")}`,
+    ).toEqual([]);
+  });
+
   it("baseline allowlist entries still exist (remove stale entries as files migrate)", () => {
     const fileSet = new Set(files.map(rel));
     const stale = [...UI_IMPORT_ALLOWLIST].filter((p) => !fileSet.has(p));

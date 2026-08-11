@@ -1,24 +1,18 @@
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import { FileVectorIndexStore, FileVectorInventoryStore } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
 
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+
 describe("readIndexSection (Ф2.1)", () => {
-  let folder: string;
+  const folder = ".ixplorer/index";
   let store: FileVectorIndexStore;
   let inventory: FileVectorInventoryStore;
 
   beforeEach(async () => {
-    folder = mkdtempSync(join(tmpdir(), "ixplorer-section-"));
-    store = new FileVectorIndexStore({ folder, profileId: "default" });
+    const fileSystem = new MemoryFileSystem();
+    store = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     inventory = new FileVectorInventoryStore(store);
-  });
-
-  afterEach(() => {
-    rmSync(folder, { recursive: true, force: true });
   });
 
   it("returns the contiguous run sharing the hit's heading path", async () => {

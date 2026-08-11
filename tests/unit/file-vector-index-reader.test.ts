@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FileVectorIndexReader } from "@adapters/indexing";
 
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+
 function reader(rows: Array<Record<string, unknown>>) {
   const state = {
     withState: vi.fn(async (_fallback: unknown, read: (value: unknown) => unknown) =>
@@ -9,7 +11,10 @@ function reader(rows: Array<Record<string, unknown>>) {
     ),
   };
   return {
-    reader: new FileVectorIndexReader(state as never, { pathFor: (path) => `/index/${path}` }),
+    reader: new FileVectorIndexReader(state as never, {
+      fileSystem: new MemoryFileSystem(),
+      pathFor: (path) => `.ixplorer/index/${path}`,
+    }),
     state,
   };
 }

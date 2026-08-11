@@ -1,5 +1,4 @@
-import { FileSystemAdapter, Notice, Plugin } from "obsidian";
-import { join } from "path";
+import { Notice, Plugin } from "obsidian";
 
 import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { PdfTextCache } from "@adapters/extractors";
@@ -27,7 +26,9 @@ import type { Translate, UiTranslator } from "@adapters/i18n";
 import { readObsidianLanguage } from "@adapters/obsidian/ObsidianLanguageProbe";
 import { isWebSourceActive } from "@core/web";
 import { WebSourceHealthTracker } from "@application/web";
+import type { FileSystemPort } from "@application/ports";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
+import { VaultFileSystem } from "@adapters/obsidian/VaultFileSystem";
 import { VaultWarmCaches } from "./composition/VaultWarmCaches";
 import { IXPLORER_CHAT_VIEW_TYPE, IxplorerChatView } from "./ui/chat/IxplorerChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
@@ -89,9 +90,8 @@ export default class IxplorerPlugin extends Plugin {
       createIndexingService(this.composition, profileId, onProgress),
     measureIndexSize: (profileId) =>
       measureFolderSize(
-        this.getVaultLocalPath(
-          requireIndexProfile(this.settings, this.translate, profileId).indexFolder,
-        ),
+        this.fileSystem,
+        requireIndexProfile(this.settings, this.translate, profileId).indexFolder,
       ),
     onError: (error) => new Notice(toUserMessage(error)),
     onComplete: async (profileId, state) => {
@@ -124,6 +124,7 @@ export default class IxplorerPlugin extends Plugin {
   readonly webSourceHealth = new WebSourceHealthTracker();
 
   private warmCaches?: VaultWarmCaches;
+  private vaultFileSystem?: FileSystemPort;
 
   /** Opens the plugin's settings tab; used by in-chat notices that link to it. */
   openSettingsTab(): void {
@@ -143,9 +144,9 @@ export default class IxplorerPlugin extends Plugin {
       pdfTextCache: this.pdfTextCache,
       webSourceHealth: this.webSourceHealth,
       warmCaches: this.requireWarmCaches(),
+      fileSystem: this.fileSystem,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
-      getVaultLocalPath: (path) => this.getVaultLocalPath(path),
       getIndexingState: (profileId) => this.indexing.getState(profileId),
     };
   }
@@ -399,7 +400,8 @@ export default class IxplorerPlugin extends Plugin {
 
   private createChatStore(): FileChatStore {
     return new FileChatStore({
-      folder: this.getVaultLocalPath(".ixplorer/chats"),
+      fileSystem: this.fileSystem,
+      folder: ".ixplorer/chats",
     });
   }
 
@@ -448,13 +450,9 @@ export default class IxplorerPlugin extends Plugin {
     };
   }
 
-  private getVaultLocalPath(path: string): string {
-    const adapter = this.app.vault.adapter;
+  private get fileSystem(): FileSystemPort {
+    this.vaultFileSystem ??= new VaultFileSystem(this.app.vault.adapter);
 
-    if (adapter instanceof FileSystemAdapter) {
-      return join(adapter.getBasePath(), path);
-    }
-
-    return path;
+    return this.vaultFileSystem;
   }
 }

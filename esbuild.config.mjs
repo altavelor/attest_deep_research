@@ -1,4 +1,3 @@
-import builtins from "builtin-modules";
 import esbuild from "esbuild";
 import { copyFile, mkdir } from "fs/promises";
 import { join, resolve } from "path";
@@ -12,6 +11,18 @@ const srcAliases = {
   "@apps": resolve("src/apps"),
   "@shared": resolve("src/shared"),
   "@manifest": resolve("manifest.json"),
+};
+
+/*
+ * Dependencies may import Node built-ins on code paths this plugin never
+ * reaches (the Anthropic SDK loads credentials from disk only when no API key
+ * is supplied). Aliasing them keeps `require("fs")` out of the mobile bundle.
+ */
+const nodeShims = {
+  fs: resolve("shims/nodeUnavailable.mjs"),
+  "node:fs": resolve("shims/nodeUnavailable.mjs"),
+  path: resolve("shims/nodeUnavailable.mjs"),
+  "node:path": resolve("shims/nodeUnavailable.mjs"),
 };
 
 const production = process.argv[2] === "production";
@@ -34,7 +45,7 @@ async function copyPluginAssets() {
 await mkdir(pluginOutputDir, { recursive: true });
 
 const context = await esbuild.context({
-  alias: srcAliases,
+  alias: { ...srcAliases, ...nodeShims },
   banner: {
     js: banner,
   },
@@ -54,9 +65,6 @@ const context = await esbuild.context({
     "@lezer/common",
     "@lezer/highlight",
     "@lezer/lr",
-    ...builtins,
-
-    ...builtins.map((name) => `node:${name}`),
   ],
   format: "cjs",
   logLevel: "info",

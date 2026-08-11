@@ -1,23 +1,23 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
-import { readdir } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import { FileVectorIndexStore, isFileVectorManifest } from "@adapters/indexing";
 import { FileVectorInventoryStore } from "@adapters/indexing";
 import { FileVectorIndexReader } from "@adapters/indexing";
 import { shardIdForSourcePath } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
+import { IxplorerError } from "@core/errors";
+
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("FileVectorIndexStore", () => {
-  let folder: string;
+  const folder = ".ixplorer/index";
+  let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), "ixplorer-file-index-"));
+    fileSystem = new MemoryFileSystem();
   });
 
   it("persists chunks in source-path shards and returns cosine-ranked results after reopen", async () => {
     const store = new FileVectorIndexStore({
+      fileSystem,
       folder,
       profileId: "default",
       now: fixedNow,
@@ -29,18 +29,20 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-b", "Research/b.md", "beta project note", [0, 1], "hash-b"),
     ]);
 
-    const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(await fileSystem.readText(`${folder}/manifest.json`));
     expect(isFileVectorManifest(manifest)).toBe(true);
     expect(manifest.chunkCount).toBe(2);
     expect(manifest.sourceCount).toBe(2);
     expect(manifest.shardCount).toBe(32);
 
     const shardId = shardIdForSourcePath("Research/a.md");
-    expect(existsSync(join(folder, "shards", `${shardId}.chunks.jsonl`))).toBe(true);
-    expect(existsSync(join(folder, "shards", `${shardId}.vectors.bin`))).toBe(true);
-    expect(existsSync(join(folder, "keywords", `${shardId}.terms.jsonl`))).toBe(true);
+    await expect(fileSystem.exists(`${folder}/shards/${shardId}.chunks.jsonl`)).resolves.toBe(true);
+    await expect(fileSystem.exists(`${folder}/shards/${shardId}.vectors.bin`)).resolves.toBe(true);
+    await expect(fileSystem.exists(`${folder}/keywords/${shardId}.terms.jsonl`)).resolves.toBe(
+      true,
+    );
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await reopened.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
     const results = await reopened.query([0.9, 0.1], 2);
@@ -50,6 +52,7 @@ describe("FileVectorIndexStore", () => {
 
   it("does not create empty shard files during initialization", async () => {
     const store = new FileVectorIndexStore({
+      fileSystem,
       folder,
       profileId: "default",
       now: fixedNow,
@@ -57,14 +60,15 @@ describe("FileVectorIndexStore", () => {
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
-    expect(existsSync(join(folder, "manifest.json"))).toBe(true);
-    expect(existsSync(join(folder, "sources.jsonl"))).toBe(true);
-    expect(existsSync(join(folder, "shards"))).toBe(false);
-    expect(existsSync(join(folder, "keywords"))).toBe(false);
+    await expect(fileSystem.exists(`${folder}/manifest.json`)).resolves.toBe(true);
+    await expect(fileSystem.exists(`${folder}/sources.jsonl`)).resolves.toBe(true);
+    await expect(fileSystem.exists(`${folder}/shards`)).resolves.toBe(false);
+    await expect(fileSystem.exists(`${folder}/keywords`)).resolves.toBe(false);
   });
 
   it("commits write sessions once and writes only changed source shards", async () => {
     const store = new FileVectorIndexStore({
+      fileSystem,
       folder,
       profileId: "default",
       now: fixedNow,
@@ -80,12 +84,12 @@ describe("FileVectorIndexStore", () => {
       chunk("chunk-a-3", "Research/a.md", "alpha third note", [1, 0], "hash-a"),
     ]);
 
-    expect(existsSync(join(folder, "shards"))).toBe(false);
+    await expect(fileSystem.exists(`${folder}/shards`)).resolves.toBe(false);
 
     await writer.commit();
 
     const shardId = shardIdForSourcePath("Research/a.md");
-    const shardFiles = await readdir(join(folder, "shards"));
+    const shardFiles = (await fileSystem.list(`${folder}/shards`)).map((entry) => entry.name);
     expect(shardFiles.sort()).toEqual([`${shardId}.chunks.jsonl`, `${shardId}.vectors.bin`]);
     expect((await store.query([1, 0], 10)).map((result) => result.id)).toEqual([
       "chunk-a",
@@ -95,7 +99,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("replaces existing source chunks and updates sources.jsonl", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -108,7 +117,7 @@ describe("FileVectorIndexStore", () => {
     const results = await store.query([0, 1], 10);
     expect(results.map((result) => result.id)).toEqual(["chunk-a-new", "chunk-b"]);
 
-    const sources = readJsonl(join(folder, "sources.jsonl"));
+    const sources = await readJsonl(fileSystem, `${folder}/sources.jsonl`);
     expect(sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -121,7 +130,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("persists source snapshot mtime and content hash updates separately from chunk metadata", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([chunk("chunk-a", "Research/a.md", "new text", [1, 0], "chunk-hash")]);
@@ -134,7 +148,7 @@ describe("FileVectorIndexStore", () => {
       },
     ]);
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     const snapshots = await reopened.loadSourceSnapshots();
 
     expect(snapshots).toEqual([
@@ -151,7 +165,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("loads per-source report with chunk counts and failed reasons", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -184,7 +203,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("derives language inventory from stored chunks when manifest inventory is unavailable", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -197,7 +221,7 @@ describe("FileVectorIndexStore", () => {
       ),
     ]);
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
 
     await expect(
       new FileVectorIndexReader(reopened, reopened).getLanguageInventory(),
@@ -205,7 +229,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("searches keyword postings without embeddings and updates them after source replacement", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -235,7 +264,12 @@ describe("FileVectorIndexStore", () => {
 
   it("updates keyword postings for dirty sources without dropping clean sources in the same shard", async () => {
     const [leftPath, rightPath] = sameShardPaths();
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -265,12 +299,17 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("records per-shard keyword counts in the manifest for clean-shard reuse", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([chunk("chunk-a", "Research/a.md", "alpha keyword", [1, 0], "hash-a")]);
 
-    const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(await fileSystem.readText(`${folder}/manifest.json`));
     const shardId = shardIdForSourcePath("Research/a.md");
     const shard = manifest.shards.find((candidate: { id: string }) => candidate.id === shardId);
 
@@ -278,7 +317,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("keeps earlier chunks when one source is upserted across embedding batches", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -293,7 +337,7 @@ describe("FileVectorIndexStore", () => {
       "chunk-a-3",
     ]);
 
-    const sources = readJsonl(join(folder, "sources.jsonl"));
+    const sources = await readJsonl(fileSystem, `${folder}/sources.jsonl`);
     expect(sources).toEqual([
       expect.objectContaining({
         sourcePath: "Research/a.md",
@@ -302,7 +346,12 @@ describe("FileVectorIndexStore", () => {
     ]);
   });
   it("lists indexed sources with filters and cursor pagination", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -347,7 +396,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("lists chunks for one source in document order and filters by heading path", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -372,7 +426,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("reads a bounded chunk window and marks truncated chunks", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -394,7 +453,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("finds literal and regex matches without semantic ranking", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -439,7 +503,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("returns source outline, summary topics, and metadata search results", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -487,7 +556,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("deletes by source path and fully clears profile files", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
@@ -499,32 +573,47 @@ describe("FileVectorIndexStore", () => {
     expect((await store.query([1, 0], 10)).map((result) => result.id)).toEqual(["chunk-b"]);
 
     await store.clear();
-    await expect(readdir(folder)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fileSystem.exists(folder)).resolves.toBe(false);
   });
 
   it("requires a rebuild when embedding metadata changes", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await expect(
       reopened.initialize({ embeddingModel: "other-model", embeddingDimensions: 2 }),
     ).rejects.toMatchObject({ code: "INDEX_REBUILD_REQUIRED" });
   });
 
   it("initializes a current manifest when files exist without a manifest", async () => {
-    writeFileSync(join(folder, "unknown-file"), "not a file-backed manifest");
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    await fileSystem.writeText(`${folder}/unknown-file`, "not a file-backed manifest");
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
 
     await expect(
       store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 }),
     ).resolves.toBeUndefined();
-    expect(existsSync(join(folder, "manifest.json"))).toBe(true);
+    await expect(fileSystem.exists(`${folder}/manifest.json`)).resolves.toBe(true);
   });
 
   it("reads back the document images written by a rebuild", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
     const writer = await store.beginWrite();
@@ -543,7 +632,7 @@ describe("FileVectorIndexStore", () => {
     );
     await writer.commit();
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await expect(reopened.listDocumentImages()).resolves.toEqual([
       {
         documentPath: "Research/a.md",
@@ -556,7 +645,12 @@ describe("FileVectorIndexStore", () => {
   });
 
   it("merges incremental image rows over the stored manifest", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
     const rebuild = await store.beginWrite();
@@ -588,14 +682,19 @@ describe("FileVectorIndexStore", () => {
     );
     await update.commit();
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     const images = await reopened.listDocumentImages();
     expect(images.map((entry) => entry.locator).sort()).toEqual(["link:a2.png", "link:b.png"]);
-    expect(JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8")).indexVersion).toBe(1);
+    expect(JSON.parse(await fileSystem.readText(`${folder}/manifest.json`)).indexVersion).toBe(1);
   });
 
   it("drops image rows of documents the index no longer holds", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
     const rebuild = await store.beginWrite();
@@ -616,13 +715,18 @@ describe("FileVectorIndexStore", () => {
     await update.deleteBySourcePath("Research/b.md");
     await update.commit();
 
-    const reopened = new FileVectorIndexStore({ folder, profileId: "default" });
+    const reopened = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     const images = await reopened.listDocumentImages();
     expect(images.map((entry) => entry.locator)).toEqual(["link:a.png"]);
   });
 
   it("does not create a manifest from an incremental write on a legacy index", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
 
     const update = await store.beginWrite();
@@ -633,12 +737,17 @@ describe("FileVectorIndexStore", () => {
     );
     await update.commit();
 
-    expect(existsSync(join(folder, "images.jsonl"))).toBe(false);
+    await expect(fileSystem.exists(`${folder}/images.jsonl`)).resolves.toBe(false);
     await expect(store.listDocumentImages()).resolves.toEqual([]);
   });
 
   it("reports no document images for an index below the required version", async () => {
-    const store = new FileVectorIndexStore({ folder, profileId: "default", now: fixedNow });
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder,
+      profileId: "default",
+      now: fixedNow,
+    });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([chunk("chunk-a", "Research/a.md", "note", [1, 0], "hash-a")]);
 
@@ -678,8 +787,8 @@ function fixedNow(): Date {
   return new Date("2026-01-01T00:00:00.000Z");
 }
 
-function readJsonl(path: string): unknown[] {
-  return readFileSync(path, "utf8")
+async function readJsonl(fileSystem: MemoryFileSystem, path: string): Promise<unknown[]> {
+  return (await fileSystem.readText(path))
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
@@ -698,3 +807,26 @@ function sameShardPaths(): [string, string] {
 
   throw new Error("Could not find two test paths in the same shard.");
 }
+
+describe("FileVectorIndexStore manifest path containment", () => {
+  it("rejects a shard file name from the manifest that escapes the index folder", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const store = new FileVectorIndexStore({
+      fileSystem,
+      folder: "index",
+      profileId: "escape",
+    });
+
+    expect(() => store.pathFor("../../secrets.json")).toThrow(IxplorerError);
+    expect(() => store.pathFor("../../secrets.json")).toThrow(/outside its folder/);
+    expect(() => store.pathFor("shards/../../../outside.bin")).toThrow(/outside its folder/);
+
+    try {
+      store.pathFor("../../secrets.json");
+      expect.unreachable("path containment must reject the manifest entry");
+    } catch (error) {
+      expect((error as IxplorerError).code).toBe("INDEX_REBUILD_REQUIRED");
+    }
+    expect(store.pathFor("shards/00.chunks.jsonl")).toBe("index/shards/00.chunks.jsonl");
+  });
+});

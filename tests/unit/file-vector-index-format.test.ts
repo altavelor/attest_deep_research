@@ -1,7 +1,3 @@
-import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import {
   DEFAULT_FILE_VECTOR_SHARD_COUNT,
   createFileVectorManifest,
@@ -16,6 +12,8 @@ import {
   isSourceSnapshot,
 } from "@adapters/indexing/store/FileVectorIndexFormat";
 import type { EmbeddedChunk, SourceReference } from "@core/model";
+
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("file vector index format", () => {
   it("creates a versioned manifest for 32 source-path hash shards", () => {
@@ -142,18 +140,15 @@ describe("file vector index format", () => {
 });
 
 describe("corrupt file-backed index files", () => {
-  let folder: string;
+  const folder = ".ixplorer/index";
+  let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), "ixplorer-format-"));
-  });
-
-  afterEach(() => {
-    rmSync(folder, { recursive: true, force: true });
+    fileSystem = new MemoryFileSystem();
   });
 
   async function writeIndex(): Promise<string> {
-    const store = new FileVectorIndexStore({ folder, profileId: "default" });
+    const store = new FileVectorIndexStore({ fileSystem, folder, profileId: "default" });
     await store.initialize({ embeddingModel: "nomic", embeddingDimensions: 2 });
     await store.upsert([
       chunk("chunk-a", "Research/a.md", "alpha note", [1, 0], "hash-a"),
@@ -163,7 +158,7 @@ describe("corrupt file-backed index files", () => {
   }
 
   function reopen(): Promise<void> {
-    return new FileVectorIndexStore({ folder, profileId: "default" }).initialize({
+    return new FileVectorIndexStore({ fileSystem, folder, profileId: "default" }).initialize({
       embeddingModel: "nomic",
       embeddingDimensions: 2,
     });
@@ -171,9 +166,9 @@ describe("corrupt file-backed index files", () => {
 
   it("fails to reopen an index whose chunk metadata row was truncated mid-write", async () => {
     const shardId = await writeIndex();
-    const path = join(folder, "shards", `${shardId}.chunks.jsonl`);
-    const content = readFileSync(path, "utf8");
-    writeFileSync(path, content.slice(0, content.length - 20));
+    const path = `${folder}/shards/${shardId}.chunks.jsonl`;
+    const content = await fileSystem.readText(path);
+    await fileSystem.writeText(path, content.slice(0, content.length - 20));
 
     await expect(reopen()).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
@@ -183,8 +178,8 @@ describe("corrupt file-backed index files", () => {
 
   it("fails to reopen an index whose vector file was truncated", async () => {
     const shardId = await writeIndex();
-    const path = join(folder, "shards", `${shardId}.vectors.bin`);
-    truncateSync(path, 8);
+    const path = `${folder}/shards/${shardId}.vectors.bin`;
+    await fileSystem.writeBinary(path, (await fileSystem.readBinary(path)).slice(0, 8));
 
     await expect(reopen()).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
@@ -194,7 +189,7 @@ describe("corrupt file-backed index files", () => {
 
   it("fails to reopen an index whose source snapshot is missing a written row", async () => {
     await writeIndex();
-    writeFileSync(join(folder, "sources.jsonl"), "");
+    await fileSystem.writeText(`${folder}/sources.jsonl`, "");
 
     await expect(reopen()).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
@@ -204,10 +199,10 @@ describe("corrupt file-backed index files", () => {
 
   it("fails to reopen an index whose manifest was written only in part", async () => {
     await writeIndex();
-    const path = join(folder, "manifest.json");
-    const manifest = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const path = `${folder}/manifest.json`;
+    const manifest = JSON.parse(await fileSystem.readText(path)) as Record<string, unknown>;
     delete manifest.shards;
-    writeFileSync(path, JSON.stringify(manifest));
+    await fileSystem.writeText(path, JSON.stringify(manifest));
 
     await expect(reopen()).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",
@@ -217,7 +212,7 @@ describe("corrupt file-backed index files", () => {
 
   it("fails to reopen an index whose keyword postings were not all flushed", async () => {
     const shardId = await writeIndex();
-    writeFileSync(join(folder, "keywords", `${shardId}.terms.jsonl`), "");
+    await fileSystem.writeText(`${folder}/keywords/${shardId}.terms.jsonl`, "");
 
     await expect(reopen()).rejects.toMatchObject({
       code: "INDEX_REBUILD_REQUIRED",

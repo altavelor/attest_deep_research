@@ -1,7 +1,3 @@
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import {
   EnrichIndexSources,
   normalizeReference,
@@ -17,6 +13,8 @@ import {
   FileDocumentSummaryStore,
   parseExtractedMetadata,
 } from "@adapters/indexing";
+
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("bibliography normalization", () => {
   it("extracts DOI, year, and a title key from a raw reference", () => {
@@ -69,342 +67,321 @@ describe("parseExtractedMetadata", () => {
 
 describe("FileDocumentMetadataStore", () => {
   it("round-trips metadata and lists it", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-meta-"));
-    try {
-      const store = new FileDocumentMetadataStore(folder);
-      const metadata = doc("Tales.pdf", ["Smith J. Privacy. 2021."]);
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const store = new FileDocumentMetadataStore(fileSystem, folder);
+    const metadata = doc("Tales.pdf", ["Smith J. Privacy. 2021."]);
 
-      await store.write(metadata);
+    await store.write(metadata);
 
-      expect(await store.read("Tales.pdf")).toEqual(metadata);
-      expect(await store.read("Other.pdf")).toBeNull();
-      expect(await store.list()).toEqual([metadata]);
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    expect(await store.read("Tales.pdf")).toEqual(metadata);
+    expect(await store.read("Other.pdf")).toBeNull();
+    expect(await store.list()).toEqual([metadata]);
   });
 });
 
 describe("EnrichIndexSources", () => {
   it("extracts changed sources and skips up-to-date ones", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-enrich-"));
-    try {
-      const store = new FileDocumentMetadataStore(folder);
-      await store.write(doc("b.pdf", []));
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const store = new FileDocumentMetadataStore(fileSystem, folder);
+    await store.write(doc("b.pdf", []));
 
-      const extractor: DocumentMetadataExtractor & { calls: string[] } = {
-        model: "test-model",
-        promptVersion: 1,
-        calls: [],
-        async extract(input) {
-          this.calls.push(input.sourcePath);
-          return { title: `Title of ${input.sourcePath}`, references: ["Smith J. Privacy. 2021."] };
-        },
-      };
+    const extractor: DocumentMetadataExtractor & { calls: string[] } = {
+      model: "test-model",
+      promptVersion: 1,
+      calls: [],
+      async extract(input) {
+        this.calls.push(input.sourcePath);
+        return { title: `Title of ${input.sourcePath}`, references: ["Smith J. Privacy. 2021."] };
+      },
+    };
 
-      const enrichment = new EnrichIndexSources({
-        retriever: fakeRetriever(["a.pdf", "b.pdf"]),
-        metadataStore: store,
-        extractor,
-        now: () => new Date("2026-07-03T00:00:00Z"),
-      });
+    const enrichment = new EnrichIndexSources({
+      retriever: fakeRetriever(["a.pdf", "b.pdf"]),
+      metadataStore: store,
+      extractor,
+      now: () => new Date("2026-07-03T00:00:00Z"),
+    });
 
-      const result = await enrichment.run();
+    const result = await enrichment.run();
 
-      expect(result).toEqual({ extracted: 1, skipped: 1, failed: 0 });
-      expect(extractor.calls).toEqual(["a.pdf"]);
-      const written = await store.read("a.pdf");
-      expect(written?.title).toBe("Title of a.pdf");
-      expect(written?.references[0].normalized?.year).toBe(2021);
-      expect(written?.extraction).toEqual({
-        model: "test-model",
-        promptVersion: 1,
-        extractedAt: "2026-07-03T00:00:00.000Z",
-      });
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    expect(result).toEqual({ extracted: 1, skipped: 1, failed: 0 });
+    expect(extractor.calls).toEqual(["a.pdf"]);
+    const written = await store.read("a.pdf");
+    expect(written?.title).toBe("Title of a.pdf");
+    expect(written?.references[0].normalized?.year).toBe(2021);
+    expect(written?.extraction).toEqual({
+      model: "test-model",
+      promptVersion: 1,
+      extractedAt: "2026-07-03T00:00:00.000Z",
+    });
   });
 });
 
 describe("EnrichIndexSources summaries (Ф4)", () => {
   it("summarizes outline sections and reduces them into a document summary", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summaries-"));
-    try {
-      const metadataStore = new FileDocumentMetadataStore(folder);
-      const summaryStore = new FileDocumentSummaryStore(folder);
-      const sectionCalls: string[] = [];
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
+    const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
+    const sectionCalls: string[] = [];
 
-      const enrichment = new EnrichIndexSources({
-        retriever: {
-          ...fakeRetriever(["book.pdf"]),
-          getIndexSourceOutline: async () => ({
-            sourcePath: "book.pdf",
-            title: "book.pdf",
-            kind: "pdf" as const,
-            chunkCount: 20,
-            charCount: 10_000,
-            sections: [
-              sectionOutline(["Riquet with the Tuft"], 0, 9),
-              sectionOutline(["The Sleeping Beauty"], 10, 19),
-            ],
-          }),
+    const enrichment = new EnrichIndexSources({
+      retriever: {
+        ...fakeRetriever(["book.pdf"]),
+        getIndexSourceOutline: async () => ({
+          sourcePath: "book.pdf",
+          title: "book.pdf",
+          kind: "pdf" as const,
+          chunkCount: 20,
+          charCount: 10_000,
+          sections: [
+            sectionOutline(["Riquet with the Tuft"], 0, 9),
+            sectionOutline(["The Sleeping Beauty"], 10, 19),
+          ],
+        }),
+      },
+      metadataStore,
+      summaryStore,
+      extractor: {
+        model: "t",
+        promptVersion: 1,
+        extract: async () => ({ title: "Fairy Tales", references: [] }),
+      },
+      summarizer: {
+        model: "sum-model",
+        promptVersion: 1,
+        summarizeSection: async (input) => {
+          sectionCalls.push(input.headingPath.join(">"));
+          return `Summary of ${input.headingPath.at(-1)}`;
         },
-        metadataStore,
-        summaryStore,
-        extractor: {
-          model: "t",
-          promptVersion: 1,
-          extract: async () => ({ title: "Fairy Tales", references: [] }),
-        },
-        summarizer: {
-          model: "sum-model",
-          promptVersion: 1,
-          summarizeSection: async (input) => {
-            sectionCalls.push(input.headingPath.join(">"));
-            return `Summary of ${input.headingPath.at(-1)}`;
-          },
-          summarizeDocument: async (input) => ({
-            summary: `Doc summary from ${input.sectionSummaries.length} sections`,
-            oneLiner: "A fairy tale collection.",
-          }),
-        },
-        now: () => new Date("2026-07-03T00:00:00Z"),
-      });
+        summarizeDocument: async (input) => ({
+          summary: `Doc summary from ${input.sectionSummaries.length} sections`,
+          oneLiner: "A fairy tale collection.",
+        }),
+      },
+      now: () => new Date("2026-07-03T00:00:00Z"),
+    });
 
-      const result = await enrichment.run();
+    const result = await enrichment.run();
 
-      expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
-      expect(sectionCalls).toEqual(["Riquet with the Tuft", "The Sleeping Beauty"]);
-      const summaries = await summaryStore.read("book.pdf");
-      expect(summaries?.document).toEqual({
-        summary: "Doc summary from 2 sections",
-        oneLiner: "A fairy tale collection.",
-      });
-      expect(summaries?.sections.map((s) => s.summary)).toEqual([
-        "Summary of Riquet with the Tuft",
-        "Summary of The Sleeping Beauty",
-      ]);
+    expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
+    expect(sectionCalls).toEqual(["Riquet with the Tuft", "The Sleeping Beauty"]);
+    const summaries = await summaryStore.read("book.pdf");
+    expect(summaries?.document).toEqual({
+      summary: "Doc summary from 2 sections",
+      oneLiner: "A fairy tale collection.",
+    });
+    expect(summaries?.sections.map((s) => s.summary)).toEqual([
+      "Summary of Riquet with the Tuft",
+      "Summary of The Sleeping Beauty",
+    ]);
 
-      const second = await enrichment.run();
-      expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    const second = await enrichment.run();
+    expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
   });
 
   it("summarizes sections with bounded concurrency, preserves order, and retries transient failures", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summary-concurrency-"));
-    try {
-      const metadataStore = new FileDocumentMetadataStore(folder);
-      const summaryStore = new FileDocumentSummaryStore(folder);
-      const active: string[] = [];
-      let maxActive = 0;
-      const calls = new Map<string, number>();
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
+    const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
+    const active: string[] = [];
+    let maxActive = 0;
+    const calls = new Map<string, number>();
 
-      const enrichment = new EnrichIndexSources({
-        retriever: outlineRetriever("book.pdf", [
-          sectionOutline(["One"], 0, 0, 2_000),
-          sectionOutline(["Two"], 1, 1, 2_000),
-          sectionOutline(["Three"], 2, 2, 2_000),
-          sectionOutline(["Four"], 3, 3, 2_000),
-        ]),
-        metadataStore,
+    const enrichment = new EnrichIndexSources({
+      retriever: outlineRetriever("book.pdf", [
+        sectionOutline(["One"], 0, 0, 2_000),
+        sectionOutline(["Two"], 1, 1, 2_000),
+        sectionOutline(["Three"], 2, 2, 2_000),
+        sectionOutline(["Four"], 3, 3, 2_000),
+      ]),
+      metadataStore,
+      summaryStore,
+      extractor: {
+        model: "t",
+        promptVersion: 1,
+        extract: async () => ({ title: "Book", references: [] }),
+      },
+      summarizer: {
+        model: "sum-model",
+        promptVersion: 1,
+        summarizeSection: async (input) => {
+          const name = input.headingPath.at(-1) ?? "";
+          calls.set(name, (calls.get(name) ?? 0) + 1);
+          if (name === "Two" && calls.get(name) === 1) {
+            throw new Error("429 rate limit");
+          }
+          active.push(name);
+          maxActive = Math.max(maxActive, active.length);
+          await wait(5);
+          active.splice(active.indexOf(name), 1);
+          return `Summary of ${name}`;
+        },
+        summarizeDocument: async (input) => ({
+          summary: `Doc summary from ${input.sectionSummaries.length} sections`,
+          oneLiner: "A book.",
+        }),
+      },
+      sectionSummaryConcurrency: 2,
+      retryBackoffMs: 1,
+      now: () => new Date("2026-07-03T00:00:00Z"),
+    });
+
+    await expect(enrichment.run()).resolves.toEqual({ extracted: 1, skipped: 0, failed: 0 });
+
+    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(calls.get("Two")).toBe(2);
+    const summaries = await summaryStore.read("book.pdf");
+    expect(summaries?.sections.map((section) => section.headingPath.at(-1))).toEqual([
+      "One",
+      "Two",
+      "Three",
+      "Four",
+    ]);
+  });
+
+  it("skips low-value sections and merges adjacent short sections before summarizing", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
+    const calls: string[] = [];
+
+    const enrichment = new EnrichIndexSources({
+      retriever: outlineRetriever("book.pdf", [
+        sectionOutline(["Introduction"], 0, 0, 300),
+        sectionOutline(["Acknowledgements"], 1, 1, 1_500),
+        sectionOutline(["Background"], 2, 2, 320),
+        sectionOutline(["Method"], 3, 3, 2_000),
+        sectionOutline(["References"], 4, 4, 3_000),
+      ]),
+      metadataStore: new FileDocumentMetadataStore(fileSystem, folder),
+      summaryStore,
+      extractor: {
+        model: "t",
+        promptVersion: 1,
+        extract: async () => ({ title: "Book", references: [] }),
+      },
+      summarizer: {
+        model: "sum-model",
+        promptVersion: 1,
+        summarizeSection: async (input) => {
+          calls.push(input.headingPath.join(" + "));
+          return `Summary of ${input.headingPath.join(" + ")}`;
+        },
+        summarizeDocument: async (input) => ({
+          summary: `Doc summary from ${input.sectionSummaries.length} sections`,
+          oneLiner: "A book.",
+        }),
+      },
+      now: () => new Date("2026-07-03T00:00:00Z"),
+    });
+
+    await enrichment.run();
+
+    expect(calls).toEqual(["Introduction + Background", "Method"]);
+    const summaries = await summaryStore.read("book.pdf");
+    expect(summaries?.sections).toHaveLength(2);
+    expect(summaries?.sections[0]).toMatchObject({
+      headingPath: ["Introduction", "Background"],
+      chunkStart: 0,
+      chunkEnd: 2,
+    });
+  });
+
+  it("uses a small-document fast path without section summary calls", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    let sectionCalls = 0;
+    const enrichment = new EnrichIndexSources({
+      retriever: outlineRetriever("short.pdf", [sectionOutline(["Only"], 0, 1, 1_000)], {
+        chunkCount: 2,
+        charCount: 1_000,
+      }),
+      metadataStore: new FileDocumentMetadataStore(fileSystem, folder),
+      summaryStore: new FileDocumentSummaryStore(fileSystem, folder),
+      extractor: {
+        model: "t",
+        promptVersion: 1,
+        extract: async () => ({ title: "Short", references: [] }),
+      },
+      summarizer: {
+        model: "sum-model",
+        promptVersion: 1,
+        summarizeSection: async () => {
+          sectionCalls += 1;
+          return "unused";
+        },
+        summarizeDocument: async (input) => ({
+          summary: `Doc summary from ${input.sectionSummaries[0]}`,
+          oneLiner: "A short document.",
+        }),
+      },
+    });
+
+    await enrichment.run();
+
+    expect(sectionCalls).toBe(0);
+    const summaries = await new FileDocumentSummaryStore(fileSystem, folder).read("short.pdf");
+    expect(summaries?.sections).toEqual([]);
+    expect(summaries?.document.summary).toContain("Full text of short.pdf");
+  });
+
+  it("reuses unchanged section summaries by section hash when the source hash changes", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
+    const calls: string[] = [];
+    let sourceHash = "hash-v1";
+    let changedSectionText = "Full text of changed.pdf Changed";
+
+    const retriever = mutableOutlineRetriever(
+      () => sourceHash,
+      () => [
+        { headingPath: ["Stable"], text: "Full text of changed.pdf Stable", charCount: 2_000 },
+        { headingPath: ["Changed"], text: changedSectionText, charCount: 2_000 },
+      ],
+    );
+
+    const createEnrichment = () =>
+      new EnrichIndexSources({
+        retriever,
+        metadataStore: new FileDocumentMetadataStore(fileSystem, folder),
         summaryStore,
         extractor: {
           model: "t",
           promptVersion: 1,
-          extract: async () => ({ title: "Book", references: [] }),
+          extract: async () => ({ title: "Changed", references: [] }),
         },
         summarizer: {
           model: "sum-model",
           promptVersion: 1,
           summarizeSection: async (input) => {
             const name = input.headingPath.at(-1) ?? "";
-            calls.set(name, (calls.get(name) ?? 0) + 1);
-            if (name === "Two" && calls.get(name) === 1) {
-              throw new Error("429 rate limit");
-            }
-            active.push(name);
-            maxActive = Math.max(maxActive, active.length);
-            await wait(5);
-            active.splice(active.indexOf(name), 1);
-            return `Summary of ${name}`;
+            calls.push(name);
+            return `Summary of ${name} ${calls.length}`;
           },
           summarizeDocument: async (input) => ({
             summary: `Doc summary from ${input.sectionSummaries.length} sections`,
-            oneLiner: "A book.",
-          }),
-        },
-        sectionSummaryConcurrency: 2,
-        retryBackoffMs: 1,
-        now: () => new Date("2026-07-03T00:00:00Z"),
-      });
-
-      await expect(enrichment.run()).resolves.toEqual({ extracted: 1, skipped: 0, failed: 0 });
-
-      expect(maxActive).toBeLessThanOrEqual(2);
-      expect(calls.get("Two")).toBe(2);
-      const summaries = await summaryStore.read("book.pdf");
-      expect(summaries?.sections.map((section) => section.headingPath.at(-1))).toEqual([
-        "One",
-        "Two",
-        "Three",
-        "Four",
-      ]);
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
-  });
-
-  it("skips low-value sections and merges adjacent short sections before summarizing", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summary-filter-"));
-    try {
-      const summaryStore = new FileDocumentSummaryStore(folder);
-      const calls: string[] = [];
-
-      const enrichment = new EnrichIndexSources({
-        retriever: outlineRetriever("book.pdf", [
-          sectionOutline(["Introduction"], 0, 0, 300),
-          sectionOutline(["Acknowledgements"], 1, 1, 1_500),
-          sectionOutline(["Background"], 2, 2, 320),
-          sectionOutline(["Method"], 3, 3, 2_000),
-          sectionOutline(["References"], 4, 4, 3_000),
-        ]),
-        metadataStore: new FileDocumentMetadataStore(folder),
-        summaryStore,
-        extractor: {
-          model: "t",
-          promptVersion: 1,
-          extract: async () => ({ title: "Book", references: [] }),
-        },
-        summarizer: {
-          model: "sum-model",
-          promptVersion: 1,
-          summarizeSection: async (input) => {
-            calls.push(input.headingPath.join(" + "));
-            return `Summary of ${input.headingPath.join(" + ")}`;
-          },
-          summarizeDocument: async (input) => ({
-            summary: `Doc summary from ${input.sectionSummaries.length} sections`,
-            oneLiner: "A book.",
-          }),
-        },
-        now: () => new Date("2026-07-03T00:00:00Z"),
-      });
-
-      await enrichment.run();
-
-      expect(calls).toEqual(["Introduction + Background", "Method"]);
-      const summaries = await summaryStore.read("book.pdf");
-      expect(summaries?.sections).toHaveLength(2);
-      expect(summaries?.sections[0]).toMatchObject({
-        headingPath: ["Introduction", "Background"],
-        chunkStart: 0,
-        chunkEnd: 2,
-      });
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
-  });
-
-  it("uses a small-document fast path without section summary calls", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summary-small-"));
-    try {
-      let sectionCalls = 0;
-      const enrichment = new EnrichIndexSources({
-        retriever: outlineRetriever("short.pdf", [sectionOutline(["Only"], 0, 1, 1_000)], {
-          chunkCount: 2,
-          charCount: 1_000,
-        }),
-        metadataStore: new FileDocumentMetadataStore(folder),
-        summaryStore: new FileDocumentSummaryStore(folder),
-        extractor: {
-          model: "t",
-          promptVersion: 1,
-          extract: async () => ({ title: "Short", references: [] }),
-        },
-        summarizer: {
-          model: "sum-model",
-          promptVersion: 1,
-          summarizeSection: async () => {
-            sectionCalls += 1;
-            return "unused";
-          },
-          summarizeDocument: async (input) => ({
-            summary: `Doc summary from ${input.sectionSummaries[0]}`,
-            oneLiner: "A short document.",
+            oneLiner: "A changed document.",
           }),
         },
       });
 
-      await enrichment.run();
+    await createEnrichment().run();
+    sourceHash = "hash-v2";
+    changedSectionText = "Full text of changed.pdf Changed updated";
+    await createEnrichment().run();
 
-      expect(sectionCalls).toBe(0);
-      const summaries = await new FileDocumentSummaryStore(folder).read("short.pdf");
-      expect(summaries?.sections).toEqual([]);
-      expect(summaries?.document.summary).toContain("Full text of short.pdf");
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
-  });
-
-  it("reuses unchanged section summaries by section hash when the source hash changes", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-summary-cache-"));
-    try {
-      const summaryStore = new FileDocumentSummaryStore(folder);
-      const calls: string[] = [];
-      let sourceHash = "hash-v1";
-      let changedSectionText = "Full text of changed.pdf Changed";
-
-      const retriever = mutableOutlineRetriever(
-        () => sourceHash,
-        () => [
-          { headingPath: ["Stable"], text: "Full text of changed.pdf Stable", charCount: 2_000 },
-          { headingPath: ["Changed"], text: changedSectionText, charCount: 2_000 },
-        ],
-      );
-
-      const createEnrichment = () =>
-        new EnrichIndexSources({
-          retriever,
-          metadataStore: new FileDocumentMetadataStore(folder),
-          summaryStore,
-          extractor: {
-            model: "t",
-            promptVersion: 1,
-            extract: async () => ({ title: "Changed", references: [] }),
-          },
-          summarizer: {
-            model: "sum-model",
-            promptVersion: 1,
-            summarizeSection: async (input) => {
-              const name = input.headingPath.at(-1) ?? "";
-              calls.push(name);
-              return `Summary of ${name} ${calls.length}`;
-            },
-            summarizeDocument: async (input) => ({
-              summary: `Doc summary from ${input.sectionSummaries.length} sections`,
-              oneLiner: "A changed document.",
-            }),
-          },
-        });
-
-      await createEnrichment().run();
-      sourceHash = "hash-v2";
-      changedSectionText = "Full text of changed.pdf Changed updated";
-      await createEnrichment().run();
-
-      expect(calls).toEqual(["Stable", "Changed", "Changed"]);
-      const summaries = await summaryStore.read("changed.pdf");
-      expect(summaries?.contentHash).toBe("hash-v2");
-      expect(summaries?.sections.map((section) => section.summary)).toEqual([
-        "Summary of Stable 1",
-        "Summary of Changed 3",
-      ]);
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    expect(calls).toEqual(["Stable", "Changed", "Changed"]);
+    const summaries = await summaryStore.read("changed.pdf");
+    expect(summaries?.contentHash).toBe("hash-v2");
+    expect(summaries?.sections.map((section) => section.summary)).toEqual([
+      "Summary of Stable 1",
+      "Summary of Changed 3",
+    ]);
   });
 });
 
@@ -461,61 +438,58 @@ describe("EnrichmentProfileController", () => {
 
 describe("EnrichIndexSources claims (Ф7)", () => {
   it("extracts claims per content section and skips references; re-run is incremental", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "ixplorer-claims-"));
-    try {
-      const metadataStore = new FileDocumentMetadataStore(folder);
-      const claimStore = new FileDocumentClaimStore(folder);
-      const extractCalls: string[] = [];
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".ixplorer/index";
+    const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
+    const claimStore = new FileDocumentClaimStore(fileSystem, folder);
+    const extractCalls: string[] = [];
 
-      const enrichment = new EnrichIndexSources({
-        retriever: outlineRetriever("book.pdf", [
-          sectionOutline(["Findings"], 0, 4, 3_000),
-          sectionOutline(["References"], 5, 9, 3_000),
-        ]),
-        metadataStore,
-        extractor: {
-          model: "t",
-          promptVersion: 1,
-          extract: async () => ({ title: "Book", references: [] }),
+    const enrichment = new EnrichIndexSources({
+      retriever: outlineRetriever("book.pdf", [
+        sectionOutline(["Findings"], 0, 4, 3_000),
+        sectionOutline(["References"], 5, 9, 3_000),
+      ]),
+      metadataStore,
+      extractor: {
+        model: "t",
+        promptVersion: 1,
+        extract: async () => ({ title: "Book", references: [] }),
+      },
+      claimStore,
+      claimExtractor: {
+        model: "claim-model",
+        promptVersion: 1,
+        extract: async (input) => {
+          extractCalls.push(input.headingPath.join(">"));
+          return [
+            {
+              subject: "effect",
+              statement: `Claim from ${input.headingPath.at(-1)}.`,
+              topicKeys: ["t"],
+            },
+          ];
         },
-        claimStore,
-        claimExtractor: {
-          model: "claim-model",
-          promptVersion: 1,
-          extract: async (input) => {
-            extractCalls.push(input.headingPath.join(">"));
-            return [
-              {
-                subject: "effect",
-                statement: `Claim from ${input.headingPath.at(-1)}.`,
-                topicKeys: ["t"],
-              },
-            ];
-          },
-        },
-        now: () => new Date("2026-07-03T00:00:00Z"),
-      });
+      },
+      now: () => new Date("2026-07-03T00:00:00Z"),
+    });
 
-      const result = await enrichment.run();
+    const result = await enrichment.run();
 
-      expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
+    expect(result).toEqual({ extracted: 1, skipped: 0, failed: 0 });
 
-      expect(extractCalls).toEqual(["Findings"]);
-      const stored = await claimStore.read("book.pdf");
-      expect(stored?.claims).toHaveLength(1);
-      expect(stored?.claims[0]).toMatchObject({
-        chunkId: "book.pdf-Findings",
-        sourcePath: "book.pdf",
-        subject: "effect",
-      });
-      expect(stored?.generation.model).toBe("claim-model");
+    expect(extractCalls).toEqual(["Findings"]);
+    const stored = await claimStore.read("book.pdf");
+    expect(stored?.claims).toHaveLength(1);
+    expect(stored?.claims[0]).toMatchObject({
+      chunkId: "book.pdf-Findings",
+      sourcePath: "book.pdf",
+      subject: "effect",
+    });
+    expect(stored?.generation.model).toBe("claim-model");
 
-      const second = await enrichment.run();
-      expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
-      expect(extractCalls).toEqual(["Findings"]);
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    const second = await enrichment.run();
+    expect(second).toEqual({ extracted: 0, skipped: 1, failed: 0 });
+    expect(extractCalls).toEqual(["Findings"]);
   });
 });
 

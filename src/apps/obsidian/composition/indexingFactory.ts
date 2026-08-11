@@ -75,7 +75,8 @@ export function createVectorIndexStoreForProfile(
   profile: IndexProfile,
 ): FileVectorIndexStore {
   return new FileVectorIndexStore({
-    folder: ctx.getVaultLocalPath(profile.indexFolder),
+    fileSystem: ctx.fileSystem,
+    folder: profile.indexFolder,
     profileId: profile.id,
     shardCount: profile.shardCount,
     onPerformance: (event) => ctx.logger.logIndexingPerformance(event),
@@ -111,19 +112,19 @@ export function createDocumentMetadataStoreForProfile(
   ctx: CompositionContext,
   profile: IndexProfile,
 ): FileDocumentMetadataStore {
-  return new FileDocumentMetadataStore(ctx.getVaultLocalPath(profile.indexFolder));
+  return new FileDocumentMetadataStore(ctx.fileSystem, profile.indexFolder);
 }
 export function createDocumentSummaryStoreForProfile(
   ctx: CompositionContext,
   profile: IndexProfile,
 ): FileDocumentSummaryStore {
-  return new FileDocumentSummaryStore(ctx.getVaultLocalPath(profile.indexFolder));
+  return new FileDocumentSummaryStore(ctx.fileSystem, profile.indexFolder);
 }
 export function createDocumentClaimStoreForProfile(
   ctx: CompositionContext,
   profile: IndexProfile,
 ): FileDocumentClaimStore {
-  return new FileDocumentClaimStore(ctx.getVaultLocalPath(profile.indexFolder));
+  return new FileDocumentClaimStore(ctx.fileSystem, profile.indexFolder);
 }
 export function createExtractorsForProfile(ctx: CompositionContext, profile: IndexProfile) {
   return buildExtractors(ctx, profile, true);
