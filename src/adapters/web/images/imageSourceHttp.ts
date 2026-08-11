@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 export const IMAGE_SEARCH_DEFAULTS = {
   timeoutMs: 15_000,
@@ -40,14 +40,14 @@ export async function requestImageJson(
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: `${sourceId} responded with ${response.status}.`,
       });
     }
     const body = await readBoundedText(response, IMAGE_SEARCH_DEFAULTS.maxResponseChars);
     if (body === undefined) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: `${sourceId} returned an oversized response.`,
       });
@@ -55,15 +55,15 @@ export async function requestImageJson(
     try {
       return JSON.parse(body);
     } catch {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: `${sourceId} returned a malformed response.`,
       });
     }
   } catch (error) {
-    if (error instanceof IxplorerError) throw error;
+    if (error instanceof AttestError) throw error;
     const aborted = error instanceof Error && error.name === "AbortError";
-    throw new IxplorerError({
+    throw new AttestError({
       code: "WEB_SEARCH_FAILED",
       message: aborted ? `${sourceId} timed out.` : `${sourceId} request failed.`,
     });

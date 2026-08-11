@@ -1,5 +1,5 @@
 import { EmbeddingClient } from "@adapters/model-provider";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -123,7 +123,7 @@ describe("EmbeddingClient", () => {
 
     await expect(client.listModels()).rejects.toMatchObject({
       code: "EMBEDDING_UNAVAILABLE",
-    } satisfies Partial<IxplorerError>);
+    } satisfies Partial<AttestError>);
   });
 
   it("maps missing embedding models to recoverable errors", async () => {
@@ -138,7 +138,7 @@ describe("EmbeddingClient", () => {
 
     await expect(client.embed({ model: "missing", input: ["chunk"] })).rejects.toMatchObject({
       code: "MODEL_NOT_FOUND",
-    } satisfies Partial<IxplorerError>);
+    } satisfies Partial<AttestError>);
   });
 
   it("rejects malformed embedding responses", async () => {
@@ -152,7 +152,7 @@ describe("EmbeddingClient", () => {
     await expect(client.embed({ model: "embeddinggemma", input: ["chunk"] })).rejects.toMatchObject(
       {
         code: "EMBEDDING_UNAVAILABLE",
-      } satisfies Partial<IxplorerError>,
+      } satisfies Partial<AttestError>,
     );
   });
 });

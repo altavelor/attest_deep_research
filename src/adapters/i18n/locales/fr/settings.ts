@@ -3,10 +3,10 @@ import type { EnSettingsMessages } from "../en/settings";
 export const settings: EnSettingsMessages = {
   "settings.language.heading": "Langue",
   "settings.language.name": "Langue de l’interface",
-  "settings.language.desc": "Langue de l’interface Ixplorer. S’applique sans redémarrer Obsidian.",
+  "settings.language.desc": "Langue de l’interface Attest. S’applique sans redémarrer Obsidian.",
   "settings.language.auto": "Automatique (suivre Obsidian)",
 
-  "settings.tab.heading": "Ixplorer",
+  "settings.tab.heading": "Attest",
   "settings.tab.quickStart.title": "Démarrage rapide",
   "settings.tab.quickStart.steps":
     "1. Ajouter un serveur → 2. Ajouter un modèle de chat → 3. (facultatif) Ajouter un index",
@@ -18,7 +18,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.retrieval.heading": "Récupération",
   "settings.retrieval.desc":
-    "Détermine comment Ixplorer trouve des éléments probants locaux, issus du graphe, de l’index, des documents et du web avant de répondre.",
+    "Détermine comment Attest trouve des éléments probants locaux, issus du graphe, de l’index, des documents et du web avant de répondre.",
   "settings.retrieval.graph.heading": "Graphe Obsidian",
   "settings.retrieval.useLinkedNotes.name": "Utiliser les notes liées",
   "settings.retrieval.useLinkedNotes.desc":
@@ -74,7 +74,7 @@ export const settings: EnSettingsMessages = {
 
   "settings.webSources.heading": "Sources externes",
   "settings.webSources.desc":
-    "Recherche web externe lancée par l’utilisateur sur les sources activées. Ixplorer n’envoie que la question saisie, jamais le contenu récupéré du coffre.",
+    "Recherche web externe lancée par l’utilisateur sur les sources activées. Attest n’envoie que la question saisie, jamais le contenu récupéré du coffre.",
   "settings.webSources.count": "{enabled} sur {total} activées",
   "settings.webSources.column.source": "Source",
   "settings.webSources.column.actions": "Actions",

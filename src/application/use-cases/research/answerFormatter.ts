@@ -8,7 +8,7 @@ export function formatResearchAnswerNote(answer: ResearchAnswer): string {
   const citations = dedupeCitationsBySource(answer.citations);
   const webReferences = answer.webReferences ?? [];
   return [
-    "# Ixplorer Research",
+    "# Attest Research",
     "",
     `**Created:** ${answer.createdAt}`,
     "",
@@ -136,7 +136,7 @@ export function researchAnswerNotePath(answer: ResearchAnswer): string {
   const date = answer.createdAt.slice(0, 10);
   const slug = slugify(answer.question) || "research-answer";
 
-  return `Ixplorer/${date}-${slug}.md`;
+  return `Attest/${date}-${slug}.md`;
 }
 
 export function formatResearchAnswerAppendBlock(answer: ResearchAnswer): string {

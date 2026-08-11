@@ -173,7 +173,7 @@ describe("coverage report script", () => {
       baseRef: "origin/main",
     });
 
-    expect(markdown).toContain("<!-- ixplorer-coverage-report -->");
+    expect(markdown).toContain("<!-- attest-coverage-report -->");
     expect(markdown).toContain("### Changed lines (vs `origin/main`)");
     expect(markdown).toContain("**50.00%** of 2 added instrumented lines are covered");
     expect(markdown).toContain("| `src/core/example.ts` | 2 | 50.00% | 2 |");

@@ -38,7 +38,7 @@ describe("AnswerNoteWriter", () => {
 
     await writer.saveAnswerToNewNote(answer);
 
-    expect(vault.createFolder).toHaveBeenCalledWith("Ixplorer");
+    expect(vault.createFolder).toHaveBeenCalledWith("Attest");
     expect(vault.create).toHaveBeenCalledWith(expect.stringMatching(/-2\.md$/), expect.any(String));
   });
 

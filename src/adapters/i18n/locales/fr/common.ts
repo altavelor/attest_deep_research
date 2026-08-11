@@ -18,13 +18,13 @@ export const common: EnCommonMessages = {
     "Indexer ce profil avant de l’utiliser dans le chat ou la recherche.",
   "profile.error.indexUnavailable": "Le profil d’index sélectionné est indisponible.",
   "profile.warning.indexNotSelected":
-    "Sélectionner un profil indexé dans les paramètres Ixplorer avant de lancer une recherche.",
+    "Sélectionner un profil indexé dans les paramètres Attest avant de lancer une recherche.",
   "profile.warning.embeddingProfileUnavailable":
-    "Le profil de modèle d’embeddings de l’index sélectionné est indisponible. Le mettre à jour dans les paramètres Ixplorer.",
+    "Le profil de modèle d’embeddings de l’index sélectionné est indisponible. Le mettre à jour dans les paramètres Attest.",
   "profile.warning.embeddingProfileSuspended":
-    "Le profil de modèle d’embeddings de l’index sélectionné est suspendu. Le mettre à jour dans les paramètres Ixplorer.",
+    "Le profil de modèle d’embeddings de l’index sélectionné est suspendu. Le mettre à jour dans les paramètres Attest.",
   "profile.warning.embeddingNotSupported":
-    "Le modèle d’embeddings de l’index sélectionné ne peut pas créer d’embeddings. Le mettre à jour dans les paramètres Ixplorer.",
+    "Le modèle d’embeddings de l’index sélectionné ne peut pas créer d’embeddings. Le mettre à jour dans les paramètres Attest.",
   "profile.warning.embeddingServerUnavailable":
-    "Le serveur d’embeddings de l’index sélectionné est indisponible. Le mettre à jour dans les paramètres Ixplorer.",
+    "Le serveur d’embeddings de l’index sélectionné est indisponible. Le mettre à jour dans les paramètres Attest.",
 };

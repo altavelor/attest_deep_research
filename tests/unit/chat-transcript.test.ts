@@ -16,7 +16,7 @@ function options(overrides: Partial<ChatTranscriptOptions> = {}): ChatTranscript
     markdownContext: {} as never,
     messages: [],
     editingMessageIndex: null,
-    assistantLabel: "Ixplorer",
+    assistantLabel: "Attest",
     isDebugMode: false,
     t: ((key: string) => key) as never,
     renderEmptyState: vi.fn(),
@@ -59,7 +59,7 @@ describe("ChatTranscript", () => {
     );
 
     expect(renderEmptyState).toHaveBeenCalledWith(transcript);
-    expect(transcript.querySelector(".ixplorer-chat__message")).toBeNull();
+    expect(transcript.querySelector(".attest-chat__message")).toBeNull();
   });
 
   it("renders attached context names and submits or cancels an edited user question", () => {
@@ -80,13 +80,13 @@ describe("ChatTranscript", () => {
     });
 
     renderChatTranscript(transcript, base);
-    expect(Array.from(transcript.querySelectorAll(".ixplorer-chat__message-context-name"))).toEqual(
+    expect(Array.from(transcript.querySelectorAll(".attest-chat__message-context-name"))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ textContent: "Plan.md" }),
         expect.objectContaining({ textContent: "Books" }),
       ]),
     );
-    transcript.querySelector<HTMLButtonElement>(".ixplorer-chat__message-edit")?.click();
+    transcript.querySelector<HTMLButtonElement>(".attest-chat__message-edit")?.click();
     expect(onEditQuestion).toHaveBeenCalledWith(0);
 
     renderChatTranscript(transcript, { ...base, editingMessageIndex: 0 });
@@ -107,7 +107,7 @@ describe("ChatTranscript", () => {
     expect(container.children).toHaveLength(0);
 
     renderFollowUps(container, ["What changed?"], onSelect, ((key: string) => key) as never);
-    container.querySelector<HTMLButtonElement>(".ixplorer-chat__followup")?.click();
+    container.querySelector<HTMLButtonElement>(".attest-chat__followup")?.click();
 
     expect(onSelect).toHaveBeenCalledWith("What changed?");
   });
@@ -124,7 +124,7 @@ describe("ChatTranscript", () => {
     ).toBe(false);
 
     const assistant = document.createElement("div");
-    assistant.className = "ixplorer-chat__message ixplorer-chat__message--assistant";
+    assistant.className = "attest-chat__message attest-chat__message--assistant";
     transcript.append(assistant);
     expect(
       patchActiveAssistantMessage(
@@ -179,10 +179,10 @@ describe("ChatTranscript", () => {
       }),
     );
 
-    expect(transcript.querySelector(".ixplorer-chat__message-label")?.textContent).toBe(
+    expect(transcript.querySelector(".attest-chat__message-label")?.textContent).toBe(
       "Research model",
     );
-    transcript.querySelector<HTMLButtonElement>(".ixplorer-chat__message-diagnostic")?.click();
+    transcript.querySelector<HTMLButtonElement>(".attest-chat__message-diagnostic")?.click();
     expect(onOpenDiagnosticReport).toHaveBeenCalledWith(diagnostics);
   });
 
@@ -197,7 +197,7 @@ describe("ChatTranscript", () => {
     transcript.scrollTop = 390;
     renderChatTranscript(transcript, options({ messages: [message] }));
     expect(transcript.scrollTop).toBe(500);
-    expect(transcript.querySelector(".ixplorer-chat__message-time")?.textContent).toBe("");
+    expect(transcript.querySelector(".attest-chat__message-time")?.textContent).toBe("");
 
     transcript.scrollTop = 120;
     renderChatTranscript(transcript, options({ messages: [message] }));

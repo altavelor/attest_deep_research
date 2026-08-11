@@ -1,4 +1,4 @@
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import { IndexProfile, formatIndexSize } from "@adapters/indexing";
 import { MAX_INDEX_PROFILE_COUNT, getActiveIndexProfile } from "@adapters/settings";
 import { App, Notice, Setting } from "obsidian";
@@ -18,7 +18,7 @@ export class IndexProfilesSection {
 
   constructor(
     private readonly app: App,
-    private readonly plugin: IxplorerPlugin,
+    private readonly plugin: AttestPlugin,
     private readonly requestRedisplay: () => void,
   ) {}
 
@@ -36,8 +36,8 @@ export class IndexProfilesSection {
   render(containerEl: HTMLElement): void {
     const t = this.t;
     new Setting(containerEl).setName(t("settings.indexing.heading")).setHeading();
-    const section = containerEl.createDiv({ cls: "ixplorer-settings-profile-section" });
-    const header = section.createDiv({ cls: "ixplorer-settings-profile-section__header" });
+    const section = containerEl.createDiv({ cls: "attest-settings-profile-section" });
+    const header = section.createDiv({ cls: "attest-settings-profile-section__header" });
     header.createEl("h3", { text: t("settings.indexProfiles.title") });
     createIconButton(header, {
       icon: "plus",
@@ -46,10 +46,10 @@ export class IndexProfilesSection {
       onClick: () => this.openAddModal(),
     });
     const table = section.createDiv({
-      cls: "ixplorer-settings-profile-table ixplorer-settings-index-table",
+      cls: "attest-settings-profile-table attest-settings-index-table",
     });
     const tableHeader = table.createDiv({
-      cls: "ixplorer-settings-profile-table__header ixplorer-settings-index-table__header",
+      cls: "attest-settings-profile-table__header attest-settings-index-table__header",
       attr: { role: "row" },
     });
     for (const title of [
@@ -59,7 +59,7 @@ export class IndexProfilesSection {
       t("settings.indexProfiles.column.actions"),
     ])
       tableHeader.createSpan({ text: title });
-    const rows = table.createDiv({ cls: "ixplorer-settings-profile-list" });
+    const rows = table.createDiv({ cls: "attest-settings-profile-list" });
     const renderRows = () => {
       rows.empty();
       this.renderRows(rows);
@@ -79,10 +79,10 @@ export class IndexProfilesSection {
       const pendingIndexAction = this.pendingIndexActions.get(profile.id);
       const pendingEnrichmentAction = this.pendingEnrichmentActions.get(profile.id);
       const row = containerEl.createDiv({
-        cls: "ixplorer-settings-profile-list__item ixplorer-settings-index-list__item",
+        cls: "attest-settings-profile-list__item attest-settings-index-list__item",
       });
-      const name = row.createDiv({ cls: "ixplorer-settings-profile-list__name" });
-      name.createDiv({ cls: "ixplorer-settings-index-list__title", text: profile.name });
+      const name = row.createDiv({ cls: "attest-settings-profile-list__name" });
+      name.createDiv({ cls: "attest-settings-index-list__title", text: profile.name });
       const columnStatus = resolveIndexProfileColumnStatus({
         t,
         indexing,
@@ -95,14 +95,14 @@ export class IndexProfilesSection {
       name.createDiv({
         cls: columnStatus
           ? [
-              "ixplorer-settings-index-list__meta",
-              "ixplorer-settings-index-list__status",
+              "attest-settings-index-list__meta",
+              "attest-settings-index-list__status",
               columnStatus.kind,
               columnStatus.animated ? "is-animated" : "",
             ]
               .filter(Boolean)
               .join(" ")
-          : "ixplorer-settings-index-list__meta",
+          : "attest-settings-index-list__meta",
         text:
           columnStatus?.label ??
           t("settings.indexProfiles.meta", {
@@ -118,11 +118,11 @@ export class IndexProfilesSection {
       });
       if (enrichment.status !== "idle" && !columnStatus)
         name.createDiv({
-          cls: "ixplorer-settings-index-list__meta",
+          cls: "attest-settings-index-list__meta",
           text: formatEnrichmentStatus(t, enrichment),
         });
       row.createDiv({
-        cls: "ixplorer-settings-index-list__size",
+        cls: "attest-settings-index-list__size",
         text: t("settings.indexProfiles.size", {
           size: formatIndexSize(indexing.indexSizeBytes ?? profile.indexSizeBytes ?? 0),
           files: indexing.indexedFiles + indexing.skippedFiles || profile.indexedFileCount || 0,
@@ -137,16 +137,18 @@ export class IndexProfilesSection {
       });
       if (status)
         row.createSpan({
-          cls: `ixplorer-settings-profile-list__status ${status.kind}`,
+          cls: `attest-settings-profile-list__status ${status.kind}`,
           text: status.label,
           attr: { title: status.title },
         });
-      else row.createSpan({ cls: "ixplorer-settings-profile-list__status-placeholder" });
-      this.renderActions(
-        row.createDiv({ cls: "ixplorer-settings-profile-list__actions" }),
-        profile,
-        { busy, indexing, enrichment, pendingIndexAction, pendingEnrichmentAction },
-      );
+      else row.createSpan({ cls: "attest-settings-profile-list__status-placeholder" });
+      this.renderActions(row.createDiv({ cls: "attest-settings-profile-list__actions" }), profile, {
+        busy,
+        indexing,
+        enrichment,
+        pendingIndexAction,
+        pendingEnrichmentAction,
+      });
     }
   }
 
@@ -155,8 +157,8 @@ export class IndexProfilesSection {
     profile: IndexProfile,
     state: {
       busy: string | undefined;
-      indexing: ReturnType<IxplorerPlugin["indexing"]["getState"]>;
-      enrichment: ReturnType<IxplorerPlugin["enrichment"]["getState"]>;
+      indexing: ReturnType<AttestPlugin["indexing"]["getState"]>;
+      enrichment: ReturnType<AttestPlugin["enrichment"]["getState"]>;
       pendingIndexAction: IndexPendingAction | undefined;
       pendingEnrichmentAction: EnrichmentPendingAction | undefined;
     },

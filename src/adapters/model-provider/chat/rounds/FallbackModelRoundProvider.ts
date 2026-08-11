@@ -1,4 +1,4 @@
-import { isIxplorerError } from "@core/errors";
+import { isAttestError } from "@core/errors";
 import { ModelRoundProvider, ModelRoundRequest, ModelRoundResult } from "@core/agent";
 
 export class FallbackModelRoundProvider implements ModelRoundProvider {
@@ -44,7 +44,7 @@ export class FallbackModelRoundProvider implements ModelRoundProvider {
 }
 
 function isClassifiedUnsupported(error: unknown): boolean {
-  if (!isIxplorerError(error)) return false;
+  if (!isAttestError(error)) return false;
   if (error.code === "UNSUPPORTED_CAPABILITY") return true;
   const providerCode = String(error.details?.providerCode ?? "").toLowerCase();
   const providerMessage = String(error.details?.providerMessage ?? "").toLowerCase();

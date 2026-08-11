@@ -22,7 +22,7 @@ describe("mention autocomplete controller", () => {
     ]);
 
     autocomplete.update();
-    expect(container.querySelectorAll(".ixplorer-chat__mention-option")).toHaveLength(2);
+    expect(container.querySelectorAll(".attest-chat__mention-option")).toHaveLength(2);
     expect(autocomplete.handleKeydown(new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(
       true,
     );
@@ -31,7 +31,7 @@ describe("mention autocomplete controller", () => {
     expect(onInput).toHaveBeenCalledTimes(1);
     expect(
       container
-        .querySelector(".ixplorer-chat__mention-autocomplete")
+        .querySelector(".attest-chat__mention-autocomplete")
         ?.classList.contains("is-hidden"),
     ).toBe(true);
   });
@@ -52,7 +52,7 @@ describe("mention autocomplete controller", () => {
     autocomplete.update();
     expect(
       container
-        .querySelector(".ixplorer-chat__mention-autocomplete")
+        .querySelector(".attest-chat__mention-autocomplete")
         ?.classList.contains("is-hidden"),
     ).toBe(true);
   });

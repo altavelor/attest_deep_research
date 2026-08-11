@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import {
   IndexFailedSourceSnapshot,
   IndexSourceSnapshot,
@@ -189,7 +189,7 @@ export class FileVectorIndexStore
 
     function ensureWriterOpen(): void {
       if (closed) {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "INDEX_UNAVAILABLE",
           message: "The file-backed index write session is already closed.",
         });
@@ -254,7 +254,7 @@ export class FileVectorIndexStore
     const manifest = this.state?.manifest ?? (await this.persistence.readManifest());
 
     if (manifest === null) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "INDEX_UNAVAILABLE",
         message: "The committed index is unavailable for description generation.",
       });
@@ -373,7 +373,7 @@ export class FileVectorIndexStore
 
   private requireState(): FileVectorIndexState {
     if (this.state === null) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "INDEX_UNAVAILABLE",
         message: "The file-backed index store has not been initialized.",
       });

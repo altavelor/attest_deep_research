@@ -205,7 +205,7 @@ export function formatLineRanges(lines, limit = 10) {
  * change adds, followed by the aggregate totals per architectural layer.
  */
 export function renderMarkdown({ scopes, patch, baseRef }) {
-  const out = ["<!-- ixplorer-coverage-report -->", "## Coverage report", ""];
+  const out = ["<!-- attest-coverage-report -->", "## Coverage report", ""];
   if (patch === null) {
     out.push("_No diff base available, reporting totals only._", "");
   } else if (patch.total === 0) {

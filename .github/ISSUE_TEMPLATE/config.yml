@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question or setup help
+    url: https://github.com/altavelor/attest_deep_research/discussions/categories/q-a
+    about: Ask about installation, model providers, or configuration.
+
+  - name: Idea or feedback
+    url: https://github.com/altavelor/attest_deep_research/discussions/categories/ideas
+    about: Discuss an open-ended idea before it becomes a feature request.
+
+  - name: Report a security vulnerability
+    url: https://github.com/altavelor/attest_deep_research/security/advisories/new
+    about: Report privately through GitHub Security Advisories. Never open a public issue.

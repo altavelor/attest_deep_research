@@ -68,7 +68,7 @@ describe("parseExtractedMetadata", () => {
 describe("FileDocumentMetadataStore", () => {
   it("round-trips metadata and lists it", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const store = new FileDocumentMetadataStore(fileSystem, folder);
     const metadata = doc("Tales.pdf", ["Smith J. Privacy. 2021."]);
 
@@ -83,7 +83,7 @@ describe("FileDocumentMetadataStore", () => {
 describe("EnrichIndexSources", () => {
   it("extracts changed sources and skips up-to-date ones", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const store = new FileDocumentMetadataStore(fileSystem, folder);
     await store.write(doc("b.pdf", []));
 
@@ -122,7 +122,7 @@ describe("EnrichIndexSources", () => {
 describe("EnrichIndexSources summaries (Ф4)", () => {
   it("summarizes outline sections and reduces them into a document summary", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
     const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
     const sectionCalls: string[] = [];
@@ -184,7 +184,7 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
 
   it("summarizes sections with bounded concurrency, preserves order, and retries transient failures", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
     const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
     const active: string[] = [];
@@ -245,7 +245,7 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
 
   it("skips low-value sections and merges adjacent short sections before summarizing", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
     const calls: string[] = [];
 
@@ -293,7 +293,7 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
 
   it("uses a small-document fast path without section summary calls", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     let sectionCalls = 0;
     const enrichment = new EnrichIndexSources({
       retriever: outlineRetriever("short.pdf", [sectionOutline(["Only"], 0, 1, 1_000)], {
@@ -331,7 +331,7 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
 
   it("reuses unchanged section summaries by section hash when the source hash changes", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const summaryStore = new FileDocumentSummaryStore(fileSystem, folder);
     const calls: string[] = [];
     let sourceHash = "hash-v1";
@@ -439,7 +439,7 @@ describe("EnrichmentProfileController", () => {
 describe("EnrichIndexSources claims (Ф7)", () => {
   it("extracts claims per content section and skips references; re-run is incremental", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     const metadataStore = new FileDocumentMetadataStore(fileSystem, folder);
     const claimStore = new FileDocumentClaimStore(fileSystem, folder);
     const extractCalls: string[] = [];

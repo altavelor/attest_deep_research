@@ -8,17 +8,17 @@ import { readStyleModules } from "../helpers/readStyles";
 import { renderStyleCatalogue } from "../helpers/styleCatalogue";
 import { resetDom } from "../helpers/domHarness";
 
-const STYLED_CLASS_PREFIX = "ixplorer-";
+const STYLED_CLASS_PREFIX = "attest-";
 const REPORT_DIRECTORY = "coverage";
 
 const UNSTYLED_QUERY_HOOKS: Record<string, string> = {
-  "ixplorer-chat__workflow-node--complete": "Tool-status marker read by transcript queries.",
-  "ixplorer-chat__workflow-node--finalizing": "Finalizing marker read by transcript queries.",
-  "ixplorer-chat__workflow-node--thinking": "Reasoning marker read by transcript queries.",
-  "ixplorer-chat__workflow-node--tool": "Tool marker read by transcript queries.",
-  "ixplorer-settings-advanced__content": "Advanced block anchor with no own styling.",
-  "ixplorer-settings-websource-table": "Web-source table anchor with no own styling.",
-  "ixplorer-settings__gated-section": "Gate wrapper whose children carry the styling.",
+  "attest-chat__workflow-node--complete": "Tool-status marker read by transcript queries.",
+  "attest-chat__workflow-node--finalizing": "Finalizing marker read by transcript queries.",
+  "attest-chat__workflow-node--thinking": "Reasoning marker read by transcript queries.",
+  "attest-chat__workflow-node--tool": "Tool marker read by transcript queries.",
+  "attest-settings-advanced__content": "Advanced block anchor with no own styling.",
+  "attest-settings-websource-table": "Web-source table anchor with no own styling.",
+  "attest-settings__gated-section": "Gate wrapper whose children carry the styling.",
 };
 
 function declaredClasses(css: string): Set<string> {

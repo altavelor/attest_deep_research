@@ -20,14 +20,14 @@ export function renderCategoryHeading(
     setting.setDesc(description);
   }
 
-  setting.settingEl.addClass("ixplorer-settings__category-heading");
+  setting.settingEl.addClass("attest-settings__category-heading");
 }
 
 export function renderSubcategoryHeading(containerEl: HTMLElement, name: string): void {
   new Setting(containerEl)
     .setName(name)
     .setHeading()
-    .settingEl.addClass("ixplorer-settings__subcategory-heading");
+    .settingEl.addClass("attest-settings__subcategory-heading");
 }
 
 export function statusForProfile(
@@ -129,7 +129,7 @@ export function renderModalActions(
   actions: { t: Translate; onCancel(): void; onSave(): void; saveLabel?: string },
 ): void {
   new Setting(containerEl)
-    .setClass("ixplorer-profile-modal__actions")
+    .setClass("attest-profile-modal__actions")
     .addButton((button) =>
       button.setButtonText(actions.t("common.cancel")).onClick(actions.onCancel),
     )
@@ -152,7 +152,7 @@ export function createIconButton(
   },
 ): HTMLButtonElement {
   const button = containerEl.createEl("button", {
-    cls: ["clickable-icon", "ixplorer-settings__icon-button", options.className]
+    cls: ["clickable-icon", "attest-settings__icon-button", options.className]
       .filter(Boolean)
       .join(" "),
     attr: {

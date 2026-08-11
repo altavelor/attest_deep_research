@@ -5,11 +5,11 @@ import { cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "./defaults";
 import { isProfileActive, isProfileSuspended, normalizeSettingsState } from "./normalization";
 import { normalizeIndexProfileNumbers, normalizeProfileName } from "./parsers";
 import { resolveToolCapabilities } from "./toolCapabilities";
-import { ChatModelProfile, EmbeddingModelProfile, IxplorerSettings, ServerProfile } from "./types";
+import { ChatModelProfile, EmbeddingModelProfile, AttestSettings, ServerProfile } from "./types";
 
 const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 
-export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile {
+export function getActiveIndexProfile(settings: AttestSettings): IndexProfile {
   return (
     settings.indexProfiles.find(
       (profile) =>
@@ -22,7 +22,7 @@ export function getActiveIndexProfile(settings: IxplorerSettings): IndexProfile 
 }
 
 export function updateActiveIndexProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   updates: Partial<
     Pick<
       IndexProfile,
@@ -71,9 +71,7 @@ export function isValidProfileName(value: string): boolean {
   return normalized.length > 0 && normalized.length <= MAX_PROFILE_NAME_LENGTH;
 }
 
-export function getActiveChatModelProfile(
-  settings: IxplorerSettings,
-): ChatModelProfile | undefined {
+export function getActiveChatModelProfile(settings: AttestSettings): ChatModelProfile | undefined {
   return settings.chatModelProfiles.find(
     (profile) =>
       profile.id === settings.newChatDefaults.chatModelProfileId && !isProfileSuspended(profile),
@@ -81,7 +79,7 @@ export function getActiveChatModelProfile(
 }
 
 export function resolveChatModelProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   profileId: string | undefined,
 ): ChatModelProfile | undefined {
   const requested = profileId
@@ -96,7 +94,7 @@ export function resolveChatModelProfile(
 }
 
 export function resolveEmbeddingModelProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   profileId: string | undefined,
 ): EmbeddingModelProfile | undefined {
   return settings.embeddingModelProfiles.find(
@@ -105,7 +103,7 @@ export function resolveEmbeddingModelProfile(
 }
 
 export function resolveServerProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   profileId: string | undefined,
 ): ServerProfile | undefined {
   return settings.serverProfiles.find(
@@ -113,10 +111,7 @@ export function resolveServerProfile(
   );
 }
 
-export function canDeleteServerProfile(
-  settings: IxplorerSettings,
-  serverProfileId: string,
-): boolean {
+export function canDeleteServerProfile(settings: AttestSettings, serverProfileId: string): boolean {
   return (
     !settings.chatModelProfiles.some((profile) => profile.serverProfileId === serverProfileId) &&
     !settings.embeddingModelProfiles.some((profile) => profile.serverProfileId === serverProfileId)
@@ -124,7 +119,7 @@ export function canDeleteServerProfile(
 }
 
 export function canDeleteEmbeddingModelProfile(
-  settings: IxplorerSettings,
+  settings: AttestSettings,
   embeddingModelProfileId: string,
 ): boolean {
   return !settings.indexProfiles.some(

@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "Abrir el chat de Ixplorer",
+  "command.openChat": "Abrir el chat de Attest",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Búsqueda en el índice",
@@ -34,10 +34,10 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.unavailable": "No se puede preguntar: {message}",
 
   "chat.status.noChatModel":
-    "Crear y seleccionar un perfil de modelo de chat en los ajustes de Ixplorer.",
-  "chat.status.noIndex": "Crear y seleccionar un índice activo en los ajustes de Ixplorer.",
+    "Crear y seleccionar un perfil de modelo de chat en los ajustes de Attest.",
+  "chat.status.noIndex": "Crear y seleccionar un índice activo en los ajustes de Attest.",
   "chat.status.webSearchDisabled":
-    "Activar la búsqueda web en los ajustes de Ixplorer para usar este modo de búsqueda.",
+    "Activar la búsqueda web en los ajustes de Attest para usar este modo de búsqueda.",
   "chat.status.legacyIndexImages":
     "La búsqueda de texto funciona con este índice, pero el descubrimiento de imágenes de los documentos requiere una reconstrucción completa.",
   "chat.status.contextWindow.unknown": "Tamaño desconocido de la ventana de contexto del modelo",
@@ -129,9 +129,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} d",
   "chat.savedChats.time.weeks": "{count} sem",
 
-  "chat.answerNote.saved": "Respuesta de Ixplorer guardada en una nota nueva.",
-  "chat.answerNote.openNoteFirst": "Abrir una nota antes de añadir una respuesta de Ixplorer.",
-  "chat.answerNote.appended": "Respuesta de Ixplorer añadida a la nota activa.",
+  "chat.answerNote.saved": "Respuesta de Attest guardada en una nota nueva.",
+  "chat.answerNote.openNoteFirst": "Abrir una nota antes de añadir una respuesta de Attest.",
+  "chat.answerNote.appended": "Respuesta de Attest añadida a la nota activa.",
 
   "chat.research.contextTooLong":
     "El chat actual es demasiado largo para la ventana de contexto del modelo seleccionado.",

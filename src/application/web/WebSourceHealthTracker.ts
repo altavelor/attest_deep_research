@@ -1,4 +1,4 @@
-import { isIxplorerError } from "@core/errors";
+import { isAttestError } from "@core/errors";
 
 export type WebSourceIssueReason = "unauthorized" | "rate-limited";
 
@@ -22,7 +22,7 @@ export class WebSourceHealthTracker {
 
   /** Bad key or exhausted quota ⇒ stop hitting the source instead of failing every search. */
   reportFailure(sourceId: string, error: unknown): void {
-    if (!isIxplorerError(error)) {
+    if (!isAttestError(error)) {
       return;
     }
     const reason = error.details?.reason;

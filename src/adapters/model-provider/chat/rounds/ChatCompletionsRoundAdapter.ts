@@ -5,7 +5,7 @@ import {
   ModelRoundRequest,
   ModelRoundResult,
 } from "@core/agent";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
   constructor(private readonly chatModel: ChatModelProvider) {}
@@ -16,7 +16,7 @@ export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
 
   async runRound(request: ModelRoundRequest): Promise<ModelRoundResult> {
     if (request.continuation || request.toolOutputs) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "UNSUPPORTED_CAPABILITY",
         message: "Chat Completions does not support opaque Responses continuation.",
       });
@@ -32,7 +32,7 @@ export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
 
     for await (const chunk of this.chatModel.streamChat(request)) {
       if (completed) {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "MODEL_PROVIDER_UNAVAILABLE",
           message: "The chat provider emitted data after completing a model round.",
         });
@@ -74,7 +74,7 @@ export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
     }
 
     if (!completed) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "MODEL_PROVIDER_UNAVAILABLE",
         message: "The chat provider ended before completing a model round.",
       });

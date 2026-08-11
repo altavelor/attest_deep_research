@@ -1,7 +1,7 @@
 import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
-  "command.openChat": "فتح محادثة Ixplorer",
+  "command.openChat": "فتح محادثة Attest",
 
   "chat.tab.chat": "المحادثة",
   "chat.tab.indexSearch": "بحث الفهرس",
@@ -33,10 +33,9 @@ export const chat: EnChatMessages = {
   "chat.composer.submit.stop": "أوقف الإجابة الحالية",
   "chat.composer.submit.unavailable": "لا يمكن السؤال: {message}",
 
-  "chat.status.noChatModel": "أنشئ واختر ملف نموذج محادثة في إعدادات Ixplorer.",
-  "chat.status.noIndex": "أنشئ واختر فهرسًا نشطًا في إعدادات Ixplorer.",
-  "chat.status.webSearchDisabled":
-    "فعّل البحث على الويب في إعدادات Ixplorer لاستخدام وضع البحث هذا.",
+  "chat.status.noChatModel": "أنشئ واختر ملف نموذج محادثة في إعدادات Attest.",
+  "chat.status.noIndex": "أنشئ واختر فهرسًا نشطًا في إعدادات Attest.",
+  "chat.status.webSearchDisabled": "فعّل البحث على الويب في إعدادات Attest لاستخدام وضع البحث هذا.",
   "chat.status.legacyIndexImages":
     "يعمل البحث النصي مع هذا الفهرس، لكن اكتشاف الصور في مستنداتك يتطلب إعادة بناء كاملة.",
   "chat.status.contextWindow.unknown": "حجم نافذة سياق النموذج غير معروف",
@@ -122,9 +121,9 @@ export const chat: EnChatMessages = {
   "chat.savedChats.time.days": "{count} ي",
   "chat.savedChats.time.weeks": "{count} أ",
 
-  "chat.answerNote.saved": "حُفظت إجابة Ixplorer في ملاحظة جديدة.",
-  "chat.answerNote.openNoteFirst": "افتح ملاحظة قبل إلحاق إجابة Ixplorer.",
-  "chat.answerNote.appended": "أُلحقت إجابة Ixplorer بالملاحظة النشطة.",
+  "chat.answerNote.saved": "حُفظت إجابة Attest في ملاحظة جديدة.",
+  "chat.answerNote.openNoteFirst": "افتح ملاحظة قبل إلحاق إجابة Attest.",
+  "chat.answerNote.appended": "أُلحقت إجابة Attest بالملاحظة النشطة.",
 
   "chat.research.contextTooLong": "المحادثة الحالية طويلة جدًا بالنسبة لنافذة سياق النموذج المحدد.",
   "chat.compact.nothingToCompact": "لا يوجد سجل محادثة قديم كافٍ لضغطه.",

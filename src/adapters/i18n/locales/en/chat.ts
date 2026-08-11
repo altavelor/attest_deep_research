@@ -1,5 +1,5 @@
 export const chat = {
-  "command.openChat": "Open Ixplorer chat",
+  "command.openChat": "Open Attest chat",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Index search",
@@ -31,10 +31,9 @@ export const chat = {
   "chat.composer.submit.stop": "Stop the current answer",
   "chat.composer.submit.unavailable": "Ask unavailable: {message}",
 
-  "chat.status.noChatModel": "Create and select a chat model profile in Ixplorer settings.",
-  "chat.status.noIndex": "Create and select an active index in Ixplorer settings.",
-  "chat.status.webSearchDisabled":
-    "Enable web search in Ixplorer settings to use this search mode.",
+  "chat.status.noChatModel": "Create and select a chat model profile in Attest settings.",
+  "chat.status.noIndex": "Create and select an active index in Attest settings.",
+  "chat.status.webSearchDisabled": "Enable web search in Attest settings to use this search mode.",
   "chat.status.legacyIndexImages":
     "Text search works with this index, but image discovery from your documents needs a full rebuild.",
   "chat.status.contextWindow.unknown": "Unknown model context window size",
@@ -120,9 +119,9 @@ export const chat = {
   "chat.savedChats.time.days": "{count}d",
   "chat.savedChats.time.weeks": "{count}w",
 
-  "chat.answerNote.saved": "Saved Ixplorer answer to a new note.",
-  "chat.answerNote.openNoteFirst": "Open a note before appending an Ixplorer answer.",
-  "chat.answerNote.appended": "Appended Ixplorer answer to the active note.",
+  "chat.answerNote.saved": "Saved Attest answer to a new note.",
+  "chat.answerNote.openNoteFirst": "Open a note before appending an Attest answer.",
+  "chat.answerNote.appended": "Appended Attest answer to the active note.",
 
   "chat.research.contextTooLong":
     "The current chat is too long for the selected model context window.",

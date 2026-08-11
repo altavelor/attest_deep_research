@@ -46,14 +46,14 @@ describe("tool workflow node renderer", () => {
       ["docs.example.com"],
     );
 
-    expect(list.querySelector(".ixplorer-chat__tool-fetch-target--active")?.textContent).toBe(
+    expect(list.querySelector(".attest-chat__tool-fetch-target--active")?.textContent).toBe(
       "docs.example.com",
     );
     expect(list.textContent).toContain("downloading");
-    expect(list.querySelectorAll(".ixplorer-chat__tool-cell")).toHaveLength(2);
-    expect(list.querySelector(".ixplorer-chat__workflow--nested")).not.toBeNull();
-    expect(list.querySelector(".ixplorer-chat__tool-badge")?.textContent).toBe("keyword-only");
-    list.querySelector<HTMLElement>(".ixplorer-chat__tool-cell")!.click();
+    expect(list.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(2);
+    expect(list.querySelector(".attest-chat__workflow--nested")).not.toBeNull();
+    expect(list.querySelector(".attest-chat__tool-badge")?.textContent).toBe("keyword-only");
+    list.querySelector<HTMLElement>(".attest-chat__tool-cell")!.click();
     expect(onOpenToolOutput).toHaveBeenCalledWith(expect.objectContaining({ id: "fetch" }));
   });
 
@@ -79,11 +79,11 @@ describe("tool workflow node renderer", () => {
       } as never,
     );
 
-    expect(list.querySelector(".ixplorer-chat__diff-line--remove")?.textContent).toContain(
+    expect(list.querySelector(".attest-chat__diff-line--remove")?.textContent).toContain(
       "Old line",
     );
-    expect(list.querySelector(".ixplorer-chat__diff-line--add")?.textContent).toContain("New line");
-    const cell = list.querySelector<HTMLElement>(".ixplorer-chat__tool-cell")!;
+    expect(list.querySelector(".attest-chat__diff-line--add")?.textContent).toContain("New line");
+    const cell = list.querySelector<HTMLElement>(".attest-chat__tool-cell")!;
     cell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     expect(onOpenToolOutput).toHaveBeenCalledWith(expect.objectContaining({ id: "update" }));
   });

@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ChatToolCall, ChatToolDefinition } from "./tool";
 import {
@@ -126,7 +126,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
       answerText = roundResult.content;
 
       if (roundResult.stopReason === "length" || roundResult.stopReason === "error") {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "MODEL_PROVIDER_UNAVAILABLE",
           details: { reason: `model-round-${roundResult.stopReason}` },
         });

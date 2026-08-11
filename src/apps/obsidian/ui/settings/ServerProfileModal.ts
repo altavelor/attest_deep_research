@@ -35,7 +35,7 @@ export class ServerProfileModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
-    contentEl.addClass("ixplorer-profile-modal");
+    contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: this.options.profile
         ? t("settings.serverModal.editTitle")

@@ -81,7 +81,7 @@ describe("ModelProfileModal", () => {
     modelInput.focus();
     modelInput.dispatchEvent(new Event("focus"));
     const option = modal.contentEl.querySelector<HTMLButtonElement>(
-      '.ixplorer-profile-modal__model-option[role="option"]',
+      '.attest-profile-modal__model-option[role="option"]',
     );
     expect(option?.textContent).toBe("chat-model");
     option!.click();
@@ -133,7 +133,7 @@ describe("ModelProfileModal", () => {
     modelInput.focus();
     modelInput.dispatchEvent(new Event("focus"));
     modal.contentEl
-      .querySelector<HTMLButtonElement>('.ixplorer-profile-modal__model-option[role="option"]')!
+      .querySelector<HTMLButtonElement>('.attest-profile-modal__model-option[role="option"]')!
       .click();
     Array.from(modal.contentEl.querySelectorAll<HTMLButtonElement>("button"))
       .find((button) => button.textContent === "Save")!

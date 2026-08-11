@@ -17,13 +17,13 @@ export const common: EnCommonMessages = {
   "profile.error.indexNotBuilt": "Indexar este perfil antes de usarlo en el chat o la búsqueda.",
   "profile.error.indexUnavailable": "El perfil de índice seleccionado no está disponible.",
   "profile.warning.indexNotSelected":
-    "Seleccionar un perfil indexado en los ajustes de Ixplorer antes de buscar.",
+    "Seleccionar un perfil indexado en los ajustes de Attest antes de buscar.",
   "profile.warning.embeddingProfileUnavailable":
-    "El perfil de modelo de embeddings del índice seleccionado no está disponible. Actualizarlo en los ajustes de Ixplorer.",
+    "El perfil de modelo de embeddings del índice seleccionado no está disponible. Actualizarlo en los ajustes de Attest.",
   "profile.warning.embeddingProfileSuspended":
-    "El perfil de modelo de embeddings del índice seleccionado está suspendido. Actualizarlo en los ajustes de Ixplorer.",
+    "El perfil de modelo de embeddings del índice seleccionado está suspendido. Actualizarlo en los ajustes de Attest.",
   "profile.warning.embeddingNotSupported":
-    "El modelo de embeddings del índice seleccionado no puede crear embeddings. Actualizarlo en los ajustes de Ixplorer.",
+    "El modelo de embeddings del índice seleccionado no puede crear embeddings. Actualizarlo en los ajustes de Attest.",
   "profile.warning.embeddingServerUnavailable":
-    "El servidor de embeddings del índice seleccionado no está disponible. Actualizarlo en los ajustes de Ixplorer.",
+    "El servidor de embeddings del índice seleccionado no está disponible. Actualizarlo en los ajustes de Attest.",
 };

@@ -1,8 +1,8 @@
-# Ixplorer Repository Instructions
+# Attest Repository Instructions
 
 ## Project and task source
 
-Ixplorer is an open-source Obsidian plugin written in TypeScript.
+Attest is an open-source Obsidian plugin written in TypeScript.
 
 For issue-driven work, the linked GitHub issue is the source of truth. Before
 changing code, read the complete issue, identify every acceptance criterion,

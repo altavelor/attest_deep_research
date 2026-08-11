@@ -2,7 +2,7 @@ import { DataAdapter, normalizePath } from "obsidian";
 import { FileSystemEntry, FileSystemPort, FileSystemStat } from "@application/ports";
 import { joinVaultPath, vaultBasename, vaultDirname } from "@shared";
 
-const BACKUP_SUFFIX = "ixplorer-replaced";
+const BACKUP_SUFFIX = "attest-replaced";
 
 /**
  * Vault-relative file system backed by Obsidian's `DataAdapter`. It is the only

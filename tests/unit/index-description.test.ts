@@ -11,7 +11,7 @@ const profile = createIndexProfile({
   id: "research",
   name: "Research library",
   mode: "selected",
-  indexFolder: ".ixplorer/research",
+  indexFolder: ".attest/research",
   includeFolders: ["Research", "Books"],
   excludeGlobs: ["Archive/**"],
 });

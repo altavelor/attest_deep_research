@@ -13,26 +13,26 @@ export function renderThinkingNode(
 ): void {
   const { active, renderContext, uiState } = context;
   const node = listEl.createDiv({
-    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking",
+    cls: "attest-chat__workflow-node attest-chat__workflow-node--thinking",
   });
-  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
-  const body = node.createDiv({ cls: "ixplorer-chat__workflow-body" });
+  node.createSpan({ cls: "attest-chat__workflow-dot attest-chat__workflow-dot--thinking" });
+  const body = node.createDiv({ cls: "attest-chat__workflow-body" });
   if (!active && isLongThinking(content)) {
     const details = body.createEl("details", {
-      cls: "ixplorer-chat__thinking",
+      cls: "attest-chat__thinking",
       attr: { "data-thinking-id": id },
     });
     details.open = uiState?.openThinking.has(id) ?? false;
-    const summary = details.createEl("summary", { cls: "ixplorer-chat__thinking-summary" });
-    setIcon(summary.createSpan({ cls: "ixplorer-chat__thinking-caret" }), "chevron-right");
+    const summary = details.createEl("summary", { cls: "attest-chat__thinking-summary" });
+    setIcon(summary.createSpan({ cls: "attest-chat__thinking-caret" }), "chevron-right");
     summary.createSpan({
-      cls: "ixplorer-chat__thinking-summary-label",
+      cls: "attest-chat__thinking-summary-label",
       text: renderContext.t("chat.workflow.thinking"),
     });
     void MarkdownRenderer.render(
       renderContext.app,
       content,
-      details.createDiv({ cls: "ixplorer-chat__workflow-text" }),
+      details.createDiv({ cls: "attest-chat__workflow-text" }),
       "",
       renderContext.markdownContext,
     );
@@ -40,14 +40,14 @@ export function renderThinkingNode(
   }
   if (active) {
     body.createDiv({
-      cls: "ixplorer-chat__workflow-heading",
+      cls: "attest-chat__workflow-heading",
       text: renderContext.t("chat.workflow.thinkingActive"),
     });
   }
   void MarkdownRenderer.render(
     renderContext.app,
     content,
-    body.createDiv({ cls: "ixplorer-chat__workflow-text" }),
+    body.createDiv({ cls: "attest-chat__workflow-text" }),
     "",
     renderContext.markdownContext,
   );
@@ -59,15 +59,15 @@ export function renderSummaryNode(
   context: WorkflowRenderContext,
 ): void {
   const node = listEl.createDiv({
-    cls: "ixplorer-chat__workflow-node ixplorer-chat__workflow-node--summary",
+    cls: "attest-chat__workflow-node attest-chat__workflow-node--summary",
   });
-  node.createSpan({ cls: "ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--thinking" });
+  node.createSpan({ cls: "attest-chat__workflow-dot attest-chat__workflow-dot--thinking" });
   void MarkdownRenderer.render(
     context.app,
     content,
     node
-      .createDiv({ cls: "ixplorer-chat__workflow-body" })
-      .createDiv({ cls: "ixplorer-chat__workflow-text" }),
+      .createDiv({ cls: "attest-chat__workflow-body" })
+      .createDiv({ cls: "attest-chat__workflow-text" }),
     "",
     context.markdownContext,
   );
@@ -98,13 +98,13 @@ function renderActiveThinkingNode(
 ): void {
   const isFinalizing = phase === "finalizing";
   const node = listEl.createDiv({
-    cls: `ixplorer-chat__workflow-node ixplorer-chat__workflow-node--thinking-active${isFinalizing ? " ixplorer-chat__workflow-node--finalizing" : ""}`,
+    cls: `attest-chat__workflow-node attest-chat__workflow-node--thinking-active${isFinalizing ? " attest-chat__workflow-node--finalizing" : ""}`,
   });
   node.createSpan({
-    cls: `ixplorer-chat__workflow-dot ixplorer-chat__workflow-dot--${isFinalizing ? "finalizing" : "thinking"}`,
+    cls: `attest-chat__workflow-dot attest-chat__workflow-dot--${isFinalizing ? "finalizing" : "thinking"}`,
   });
   node.createDiv({
-    cls: "ixplorer-chat__workflow-heading",
+    cls: "attest-chat__workflow-heading",
     text: isFinalizing ? t("chat.workflow.finalizing") : t("chat.workflow.thinkingActive"),
   });
 }

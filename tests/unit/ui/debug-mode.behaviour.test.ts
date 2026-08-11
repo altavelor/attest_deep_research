@@ -61,27 +61,27 @@ describe("debug-mode gating of the workflow transcript", () => {
   it("hides tool input and output cells outside debug mode", () => {
     expect(renderWorkflow(container, false)).toBe(true);
 
-    expect(container.querySelectorAll(".ixplorer-chat__tool-cell")).toHaveLength(0);
+    expect(container.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(0);
     expect(container.textContent).not.toContain("private result");
     expect(container.textContent).not.toContain("hits");
   });
 
   it("keeps the tool-call header visible in both modes", () => {
     renderWorkflow(container, false);
-    const withoutDebug = container.querySelector(".ixplorer-chat__tool-name")?.textContent;
+    const withoutDebug = container.querySelector(".attest-chat__tool-name")?.textContent;
 
     container.innerHTML = "";
     renderWorkflow(container, true);
 
     expect(withoutDebug).toBeTruthy();
-    expect(container.querySelector(".ixplorer-chat__tool-name")?.textContent).toBe(withoutDebug);
+    expect(container.querySelector(".attest-chat__tool-name")?.textContent).toBe(withoutDebug);
   });
 
   it("shows In and Out cells in debug mode", () => {
     renderWorkflow(container, true);
 
     const labels = Array.from(
-      container.querySelectorAll(".ixplorer-chat__tool-cell-label"),
+      container.querySelectorAll(".attest-chat__tool-cell-label"),
       (el) => el.textContent,
     );
     expect(labels).toEqual(["In", "Out"]);
@@ -98,7 +98,7 @@ describe("debug-mode gating of the workflow transcript", () => {
       onOpenToolOutput,
     });
 
-    const cell = container.querySelector<HTMLElement>(".ixplorer-chat__tool-cell");
+    const cell = container.querySelector<HTMLElement>(".attest-chat__tool-cell");
     expect(cell?.getAttribute("tabindex")).toBe("0");
     cell?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 

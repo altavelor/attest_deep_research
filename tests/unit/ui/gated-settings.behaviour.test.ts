@@ -35,7 +35,7 @@ describe("retrieval settings gated behind a chat model profile", () => {
   it("marks the gated content as disabled and inert for assistive technology", () => {
     render(container, false);
 
-    const gated = container.querySelector<HTMLElement>(".ixplorer-settings__gated-content");
+    const gated = container.querySelector<HTMLElement>(".attest-settings__gated-content");
     expect(gated).not.toBeNull();
     expect(gated?.getAttribute("aria-disabled")).toBe("true");
     expect(gated?.hasAttribute("inert")).toBe(true);
@@ -46,7 +46,7 @@ describe("retrieval settings gated behind a chat model profile", () => {
   it("renders the settings ungated once a chat model profile exists", () => {
     render(container, true);
 
-    expect(container.querySelector(".ixplorer-settings__gated-content")).toBeNull();
+    expect(container.querySelector(".attest-settings__gated-content")).toBeNull();
     expect(container.querySelector("[inert]")).toBeNull();
     expect(container.textContent).toContain("Retrieval");
   });

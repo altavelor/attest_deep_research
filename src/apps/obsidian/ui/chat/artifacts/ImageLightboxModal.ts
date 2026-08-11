@@ -33,7 +33,7 @@ export class ImageLightboxModal extends Modal {
   onOpen(): void {
     this.closed = false;
     this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
-    this.modalEl.addClass("ixplorer-lightbox");
+    this.modalEl.addClass("attest-lightbox");
     this.scope.register([], "ArrowRight", () => {
       this.step(1);
       return false;
@@ -76,7 +76,7 @@ export class ImageLightboxModal extends Modal {
     contentEl.empty();
     this.titleEl.setText(image.alt || image.sourceLabel);
 
-    const stage = contentEl.createDiv({ cls: "ixplorer-lightbox__stage" });
+    const stage = contentEl.createDiv({ cls: "attest-lightbox__stage" });
     const resolved = await resolveAnswerImageSource(image, this.options, false);
     if (this.closed || generation !== this.renderGeneration) {
       resolved?.revoke?.();
@@ -85,7 +85,7 @@ export class ImageLightboxModal extends Modal {
     if (resolved) {
       this.revokeCurrent = resolved.revoke;
       const img = stage.createEl("img", {
-        cls: "ixplorer-lightbox__image",
+        cls: "attest-lightbox__image",
         attr: { src: resolved.src, alt: image.alt },
       });
       img.addEventListener("error", () => {
@@ -100,17 +100,17 @@ export class ImageLightboxModal extends Modal {
       this.renderNavigation(stage);
     }
 
-    const footer = contentEl.createDiv({ cls: "ixplorer-lightbox__footer" });
+    const footer = contentEl.createDiv({ cls: "attest-lightbox__footer" });
     if (image.caption) {
-      footer.createDiv({ cls: "ixplorer-artifact__caption", text: image.caption });
+      footer.createDiv({ cls: "attest-artifact__caption", text: image.caption });
     }
     footer.createDiv({
-      cls: "ixplorer-artifact__attribution",
+      cls: "attest-artifact__attribution",
       text: attributionText(image, this.options.t),
     });
     renderSourceLink(footer, image, this.options.t);
     footer.createDiv({
-      cls: "ixplorer-lightbox__position",
+      cls: "attest-lightbox__position",
       text: this.options.t("chat.artifact.image.position", {
         index: this.index + 1,
         total: this.options.images.length,
@@ -120,14 +120,14 @@ export class ImageLightboxModal extends Modal {
 
   private renderNavigation(stage: HTMLElement): void {
     const previous = stage.createEl("button", {
-      cls: "ixplorer-lightbox__nav is-previous",
+      cls: "attest-lightbox__nav is-previous",
       attr: { type: "button", "aria-label": this.options.t("chat.artifact.image.previous") },
     });
     setIcon(previous, "chevron-left");
     previous.addEventListener("click", () => this.step(-1));
 
     const next = stage.createEl("button", {
-      cls: "ixplorer-lightbox__nav is-next",
+      cls: "attest-lightbox__nav is-next",
       attr: { type: "button", "aria-label": this.options.t("chat.artifact.image.next") },
     });
     setIcon(next, "chevron-right");
@@ -140,7 +140,7 @@ export function renderUnavailable(
   image: AnswerImage,
   t: Translate,
 ): void {
-  const fallback = containerEl.createDiv({ cls: "ixplorer-artifact__unavailable" });
+  const fallback = containerEl.createDiv({ cls: "attest-artifact__unavailable" });
   const icon = fallback.createSpan({ attr: { "aria-hidden": "true" } });
   setIcon(icon, "image-off");
   fallback.createSpan({
@@ -156,14 +156,14 @@ export function renderSourceLink(containerEl: HTMLElement, image: AnswerImage, t
     : t("chat.artifact.image.openSourcePage");
   if (image.vaultSource && !/^https?:/i.test(image.sourceUrl)) {
     containerEl.createEl("a", {
-      cls: "ixplorer-artifact__source internal-link",
+      cls: "attest-artifact__source internal-link",
       text: t("chat.artifact.image.openVaultSource", { name: image.sourceLabel }),
       attr: { href: image.sourceUrl, "data-href": image.sourceUrl },
     });
     return;
   }
   containerEl.createEl("a", {
-    cls: "ixplorer-artifact__source",
+    cls: "attest-artifact__source",
     text: label,
     attr: { href: image.sourceUrl, target: "_blank", rel: "noopener noreferrer" },
   });

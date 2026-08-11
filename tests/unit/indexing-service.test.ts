@@ -10,7 +10,7 @@ import {
 } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
@@ -97,9 +97,9 @@ describe("IndexingService", () => {
     ).toEqual(["Research/a.md", "Research/notes.txt"]);
   });
 
-  it("never indexes saved chats from the internal Ixplorer folder", async () => {
+  it("never indexes saved chats from the internal Attest folder", async () => {
     const files = new FakeVaultFileProvider([
-      file(".ixplorer/chats/chat-1.json", 1, '{"messages":[{"content":"saved answer"}]}'),
+      file(".attest/chats/chat-1.json", 1, '{"messages":[{"content":"saved answer"}]}'),
       file("Research/a.md", 1, "# A"),
     ]);
     const jsonExtractor = new FakeExtractor(".json");
@@ -120,7 +120,7 @@ describe("IndexingService", () => {
 
     expect(jsonExtractor.extractedPaths).toEqual([]);
     expect(markdownExtractor.extractedPaths).toEqual(["Research/a.md"]);
-    expect(files.readPaths).not.toContain(".ixplorer/chats/chat-1.json");
+    expect(files.readPaths).not.toContain(".attest/chats/chat-1.json");
   });
 
   it("embeds chunks with source path and heading context while storing clean chunk text", async () => {
@@ -158,7 +158,7 @@ describe("IndexingService", () => {
       extractors: [
         new EmptyPathExtractor("Research/empty.pdf"),
         new FailingPathExtractor("Research/fail.md"),
-        new FailingIxplorerPathExtractor("Research/broken.pdf"),
+        new FailingAttestPathExtractor("Research/broken.pdf"),
         new FakeExtractor(".md"),
         new FakeExtractor(".pdf"),
       ],
@@ -202,7 +202,7 @@ describe("IndexingService", () => {
           path: "Research/broken.pdf",
           outcome: "failed",
           reason: "extraction-failed",
-          errorMessage: "Ixplorer could not read this PDF. Cause: incorrect header check",
+          errorMessage: "Attest could not read this PDF. Cause: incorrect header check",
           errorDetails: expect.objectContaining({ causeMessage: "incorrect header check" }),
         }),
       ]),
@@ -530,7 +530,7 @@ class FailingPathExtractor implements Extractor {
   }
 }
 
-class FailingIxplorerPathExtractor implements Extractor {
+class FailingAttestPathExtractor implements Extractor {
   constructor(private readonly failedPath: string) {}
 
   supports(path: string): boolean {
@@ -538,9 +538,9 @@ class FailingIxplorerPathExtractor implements Extractor {
   }
 
   async extract(input: { path: string }): Promise<ExtractedChunk[]> {
-    throw new IxplorerError({
+    throw new AttestError({
       code: "EXTRACTION_FAILED",
-      message: "Ixplorer could not read this PDF.",
+      message: "Attest could not read this PDF.",
       details: { path: input.path, causeMessage: "incorrect header check" },
     });
   }
@@ -827,7 +827,7 @@ class EmptyExtractor implements Extractor {
 
 class UninitializedWriteStore extends FakeIndexStore {
   async beginWrite(): Promise<IndexStoreWriteSession> {
-    throw new IxplorerError({
+    throw new AttestError({
       code: "INDEX_UNAVAILABLE",
       message: "The file-backed index has not been initialized.",
     });

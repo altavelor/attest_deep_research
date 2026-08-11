@@ -34,14 +34,14 @@ export function renderIndexSearchPanel(
   const { t } = options;
   containerEl.empty();
 
-  const form = containerEl.createEl("form", { cls: "ixplorer-index-search__form" });
+  const form = containerEl.createEl("form", { cls: "attest-index-search__form" });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     options.onSubmit();
   });
 
   const profileEl = form.createEl("select", {
-    cls: "ixplorer-index-search__profile",
+    cls: "attest-index-search__profile",
     attr: { "aria-label": t("indexSearch.profile.aria") },
   });
   for (const profile of options.profiles) {
@@ -64,7 +64,7 @@ export function renderIndexSearchPanel(
   profileEl.disabled = !profileEl.value || options.isSearching;
   profileEl.addEventListener("change", () => options.onProfileChange?.());
 
-  const filters = form.createDiv({ cls: "ixplorer-index-search__filters" });
+  const filters = form.createDiv({ cls: "attest-index-search__filters" });
   const topKEl = createLabeledInput(filters, {
     label: t("indexSearch.topK"),
     value: "5",
@@ -87,9 +87,9 @@ export function renderIndexSearchPanel(
     placeholder: t("indexSearch.extension.placeholder"),
   });
 
-  const queryRow = form.createDiv({ cls: "ixplorer-index-search__query-row" });
+  const queryRow = form.createDiv({ cls: "attest-index-search__query-row" });
   const queryEl = queryRow.createEl("textarea", {
-    cls: "ixplorer-index-search__query",
+    cls: "attest-index-search__query",
     attr: {
       rows: "2",
       placeholder: t("indexSearch.query.placeholder"),
@@ -105,7 +105,7 @@ export function renderIndexSearchPanel(
     options.onSubmit();
   });
   const buttonEl = queryRow.createEl("button", {
-    cls: "ixplorer-index-search__button",
+    cls: "attest-index-search__button",
     attr: {
       type: "submit",
       "aria-label": t("indexSearch.run"),
@@ -116,7 +116,7 @@ export function renderIndexSearchPanel(
   buttonEl.disabled = options.isSearchBlocked || options.isSearching;
 
   const resultsEl = containerEl.createDiv({
-    cls: "ixplorer-index-search__results",
+    cls: "attest-index-search__results",
     attr: { role: "list" },
   });
   renderIndexSearchResults(resultsEl, options);
@@ -143,7 +143,7 @@ export function renderIndexSearchResults(
 
   if (options.warning) {
     containerEl.createDiv({
-      cls: "ixplorer-index-search__warning",
+      cls: "attest-index-search__warning",
       text: options.warning,
       attr: { role: "alert" },
     });
@@ -151,7 +151,7 @@ export function renderIndexSearchResults(
 
   if (options.error) {
     containerEl.createDiv({
-      cls: "ixplorer-index-search__empty",
+      cls: "attest-index-search__empty",
       text: options.error,
     });
     return;
@@ -159,7 +159,7 @@ export function renderIndexSearchResults(
 
   if (options.isSearching) {
     containerEl.createDiv({
-      cls: "ixplorer-index-search__empty",
+      cls: "attest-index-search__empty",
       text: options.t("indexSearch.searching"),
     });
     return;
@@ -167,7 +167,7 @@ export function renderIndexSearchResults(
 
   if (options.results.length === 0) {
     containerEl.createDiv({
-      cls: "ixplorer-index-search__empty",
+      cls: "attest-index-search__empty",
       text: options.t("indexSearch.empty"),
     });
     return;
@@ -175,13 +175,13 @@ export function renderIndexSearchResults(
 
   for (const chunk of options.results) {
     const item = containerEl.createDiv({
-      cls: "ixplorer-index-search__result",
+      cls: "attest-index-search__result",
       attr: { role: "listitem" },
     });
-    const header = item.createDiv({ cls: "ixplorer-index-search__result-header" });
+    const header = item.createDiv({ cls: "attest-index-search__result-header" });
     const citation = formatIndexSearchCitation(chunk, options.t);
     const openButton = header.createEl("button", {
-      cls: "ixplorer-index-search__result-title",
+      cls: "attest-index-search__result-title",
       text: citation,
       attr: { type: "button" },
     });
@@ -189,11 +189,11 @@ export function renderIndexSearchResults(
       options.onOpenResult(chunk);
     });
     header.createSpan({
-      cls: "ixplorer-index-search__score",
+      cls: "attest-index-search__score",
       text: chunk.score.toFixed(3),
     });
     item.createDiv({
-      cls: "ixplorer-index-search__snippet",
+      cls: "attest-index-search__snippet",
       text: chunk.text,
     });
   }
@@ -211,7 +211,7 @@ function createLabeledInput(
     placeholder?: string;
   },
 ): HTMLInputElement {
-  const label = containerEl.createEl("label", { cls: "ixplorer-index-search__filter" });
+  const label = containerEl.createEl("label", { cls: "attest-index-search__filter" });
   label.createSpan({ text: options.label });
   const input = label.createEl("input", {
     attr: {

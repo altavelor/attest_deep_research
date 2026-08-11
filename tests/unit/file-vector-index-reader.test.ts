@@ -13,7 +13,7 @@ function reader(rows: Array<Record<string, unknown>>) {
   return {
     reader: new FileVectorIndexReader(state as never, {
       fileSystem: new MemoryFileSystem(),
-      pathFor: (path) => `.ixplorer/index/${path}`,
+      pathFor: (path) => `.attest/index/${path}`,
     }),
     state,
   };

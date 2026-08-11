@@ -20,7 +20,7 @@ export interface ToolOutputDetail {
  * littering the vault with one file per tool call.
  */
 export class ToolOutputViewer {
-  private static readonly NOTE_PATH = "Ixplorer/tool-output.md";
+  private static readonly NOTE_PATH = "Attest/tool-output.md";
 
   constructor(
     private readonly app: App,

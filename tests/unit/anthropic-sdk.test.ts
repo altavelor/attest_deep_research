@@ -6,7 +6,7 @@ import {
   normalizeAnthropicBaseUrl,
   translateAnthropicError,
 } from "@adapters/model-provider/chat/providers/anthropicSdk";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 
 describe("Anthropic SDK adapter", () => {
   it("normalizes stored versioned base URLs", () => {
@@ -31,7 +31,7 @@ describe("Anthropic SDK adapter", () => {
 
     const response = await fetchWithLogging("https://api.example.com/v1/messages", {
       method: "post",
-      headers: { "X-API-Key": "missing", "x-client": "ixplorer" },
+      headers: { "X-API-Key": "missing", "x-client": "attest" },
     });
 
     expect(response.status).toBe(201);
@@ -83,7 +83,7 @@ describe("Anthropic SDK adapter", () => {
         unavailableMessage: "Unavailable",
       }),
     ).toMatchObject({ code: "MODEL_PROVIDER_UNAVAILABLE", message: "Unavailable" });
-    const alreadyMapped = new IxplorerError({ code: "MODEL_NOT_FOUND" });
+    const alreadyMapped = new AttestError({ code: "MODEL_NOT_FOUND" });
     expect(
       translateAnthropicError(alreadyMapped, {
         unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",

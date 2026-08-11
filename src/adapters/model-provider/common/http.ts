@@ -1,4 +1,4 @@
-import { IxplorerError, IxplorerErrorCode } from "@core/errors";
+import { AttestError, AttestErrorCode } from "@core/errors";
 import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 
@@ -9,10 +9,7 @@ export interface ProviderHttpClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
-  unavailableCode: Extract<
-    IxplorerErrorCode,
-    "MODEL_PROVIDER_UNAVAILABLE" | "EMBEDDING_UNAVAILABLE"
-  >;
+  unavailableCode: Extract<AttestErrorCode, "MODEL_PROVIDER_UNAVAILABLE" | "EMBEDDING_UNAVAILABLE">;
   unavailableMessage: string;
 }
 
@@ -79,14 +76,14 @@ export class ProviderHttpClient {
       }
 
       if (response.status === 404) {
-        throw new IxplorerError({
+        throw new AttestError({
           code: "MODEL_NOT_FOUND",
           details: { status: response.status, ...providerErrorDetails(providerError) },
         });
       }
 
       if (!response.ok) {
-        throw new IxplorerError({
+        throw new AttestError({
           code: this.unavailableCode,
           message: `Provider returned HTTP ${response.status}.`,
           details: { status: response.status, ...providerErrorDetails(providerError) },
@@ -95,12 +92,12 @@ export class ProviderHttpClient {
 
       return response;
     } catch (error) {
-      if (error instanceof IxplorerError) {
+      if (error instanceof AttestError) {
         this.logger?.logError(error, logContext);
         throw error;
       }
 
-      const wrappedError = new IxplorerError({
+      const wrappedError = new AttestError({
         code: this.unavailableCode,
         message: this.unavailableMessage,
         cause: error,
@@ -128,7 +125,7 @@ export class ProviderHttpClient {
       });
       return body;
     } catch (error) {
-      const wrappedError = new IxplorerError({
+      const wrappedError = new AttestError({
         code: this.unavailableCode,
         message: invalidJsonMessage,
         cause: error,

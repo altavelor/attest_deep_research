@@ -4,7 +4,7 @@ import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { DEFAULT_SETTINGS } from "@adapters/settings";
-import type { IxplorerSettings } from "@adapters/settings";
+import type { AttestSettings } from "@adapters/settings";
 import { createTranslator } from "@adapters/i18n";
 import type { WebSourceActivation } from "@core/web";
 import { WebSourcesSection } from "@apps/obsidian/ui/settings/WebSourcesSection";
@@ -20,14 +20,14 @@ import {
 
 const t = createTranslator("en").t;
 
-function settingsWith(activation: WebSourceActivation): IxplorerSettings {
+function settingsWith(activation: WebSourceActivation): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     webSources: [{ sourceId: "duckduckgo", activation, credentials: {} }],
   };
 }
 
-function render(settings: IxplorerSettings) {
+function render(settings: AttestSettings) {
   const saveSettings = vi.fn(async () => {});
   const requestRedisplay = vi.fn();
   const section = new WebSourcesSection({
@@ -45,15 +45,15 @@ function render(settings: IxplorerSettings) {
 }
 
 function lampFor(container: HTMLElement, sourceId: string): HTMLElement {
-  const rows = Array.from(container.querySelectorAll(".ixplorer-settings-websource-list__item"));
+  const rows = Array.from(container.querySelectorAll(".attest-settings-websource-list__item"));
   const row = rows.find((candidate) => candidate.textContent?.includes("DuckDuckGo"));
   expect(row, `no row for ${sourceId}`).toBeDefined();
-  const lamp = row!.querySelector<HTMLElement>(".ixplorer-settings-websource-lamp");
+  const lamp = row!.querySelector<HTMLElement>(".attest-settings-websource-lamp");
   expect(lamp).not.toBeNull();
   return lamp!;
 }
 
-function activationOf(settings: IxplorerSettings): WebSourceActivation | undefined {
+function activationOf(settings: AttestSettings): WebSourceActivation | undefined {
   return settings.webSources.find((profile) => profile.sourceId === "duckduckgo")?.activation;
 }
 
@@ -112,7 +112,7 @@ describe("WebSourcesSection activation lamp", () => {
   });
 
   it("counts every non-off source as enabled in the section header", () => {
-    const enabled = (settings: IxplorerSettings) =>
+    const enabled = (settings: AttestSettings) =>
       render(settings).container.textContent?.match(/(\d+) of \d+ enabled/)?.[1] ??
       render(settings).container.textContent;
 

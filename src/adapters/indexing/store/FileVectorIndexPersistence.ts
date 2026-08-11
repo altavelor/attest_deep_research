@@ -1,5 +1,5 @@
 import type { DocumentImageManifestScope, FileSystemPort } from "@application/ports";
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import { resolveInsideVaultFolder } from "@shared";
 
 import {
@@ -96,7 +96,7 @@ export class FileVectorIndexPersistence {
     try {
       return resolveInsideVaultFolder(this.folder, relativePath);
     } catch (cause) {
-      throw new IxplorerError({
+      throw new AttestError({
         code: "INDEX_REBUILD_REQUIRED",
         message: "The file-backed index refers to a file outside its folder.",
         cause,

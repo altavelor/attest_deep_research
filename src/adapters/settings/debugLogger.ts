@@ -1,11 +1,11 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import type { SubAgentLogEvent, SubAgentLogger } from "@application/research";
 import type {
   IndexingFileLogEvent,
   IndexingLogger,
   IndexingPerformanceLogEvent,
 } from "@adapters/indexing/IndexingService";
-import type { IxplorerSettings } from "./types";
+import type { AttestSettings } from "./types";
 import { redactSensitiveData } from "@shared";
 
 export interface RequestLogContext {
@@ -38,12 +38,12 @@ export interface PluginRequestLogger {
 }
 
 export interface PluginDebugLoggerOptions {
-  getSettings: () => IxplorerSettings;
+  getSettings: () => AttestSettings;
   console?: Pick<Console, "debug" | "error">;
 }
 
 export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, SubAgentLogger {
-  private readonly getSettings: () => IxplorerSettings;
+  private readonly getSettings: () => AttestSettings;
   private readonly console: Pick<Console, "debug" | "error">;
   private readonly loggedErrors = new WeakSet<object>();
 
@@ -59,7 +59,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Request", {
+    this.console.debug("[Attest] Request", {
       ...(redactSensitiveData(context) as RequestLogContext),
       settings: redactSensitiveData(settings),
     });
@@ -72,7 +72,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Response", {
+    this.console.debug("[Attest] Response", {
       ...(redactSensitiveData(context) as ResponseLogContext),
       settings: redactSensitiveData(settings),
     });
@@ -87,7 +87,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       this.loggedErrors.add(error);
     }
 
-    this.console.error("[Ixplorer] Error", {
+    this.console.error("[Attest] Error", {
       context: redactSensitiveData(context),
       error: redactSensitiveData(serializeError(error)),
       settings: redactSensitiveData(this.getSettings()),
@@ -99,15 +99,15 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Probe result", redactSensitiveData(context));
+    this.console.debug("[Attest] Probe result", redactSensitiveData(context));
   }
 
-  logConfiguration(stage: string, settings: IxplorerSettings): void {
+  logConfiguration(stage: string, settings: AttestSettings): void {
     if (!settings.debugMode) {
       return;
     }
 
-    this.console.debug("[Ixplorer] Configuration", {
+    this.console.debug("[Attest] Configuration", {
       stage,
       settings: redactSensitiveData(settings),
     });
@@ -120,7 +120,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Indexing file", {
+    this.console.debug("[Attest] Indexing file", {
       ...event,
       settings: redactSensitiveData(settings),
     });
@@ -131,7 +131,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug(`[Ixplorer] SubAgent ${event.type}`, redactSensitiveData(event));
+    this.console.debug(`[Attest] SubAgent ${event.type}`, redactSensitiveData(event));
   }
 
   logIndexingPerformance(event: IndexingPerformanceLogEvent): void {
@@ -141,7 +141,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
       return;
     }
 
-    this.console.debug("[Ixplorer] Indexing performance", {
+    this.console.debug("[Attest] Indexing performance", {
       ...event,
       settings: redactSensitiveData(settings),
     });
@@ -149,7 +149,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
 }
 
 function serializeError(error: unknown): unknown {
-  if (error instanceof IxplorerError) {
+  if (error instanceof AttestError) {
     return {
       name: error.name,
       code: error.code,

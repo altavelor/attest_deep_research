@@ -38,7 +38,7 @@ export class Plugin extends Component {
 
   constructor(
     public app: App,
-    public manifest: PluginManifest = { id: "ixplorer", name: "Ixplorer", version: "0.0.0" },
+    public manifest: PluginManifest = { id: "attest", name: "Attest", version: "0.0.0" },
   ) {
     super();
   }

@@ -4,10 +4,10 @@ import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
-import type { ChatModelProfile, IxplorerSettings, ServerProfile } from "@adapters/settings";
-import { IxplorerSettingTab } from "@apps/obsidian/ui/SettingsTab";
-import IxplorerPluginClass from "@apps/obsidian/main";
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type { ChatModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
+import { AttestSettingTab } from "@apps/obsidian/ui/SettingsTab";
+import AttestPluginClass from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import {
   installObsidianDomHelpers,
   resetDom,
@@ -49,7 +49,7 @@ function chatProfile(): ChatModelProfile {
   };
 }
 
-function createSettings(): IxplorerSettings {
+function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
@@ -60,19 +60,19 @@ function createSettings(): IxplorerSettings {
   };
 }
 
-function createTab(): IxplorerSettingTab {
+function createTab(): AttestSettingTab {
   const app = new App();
   const settings = createSettings();
-  const plugin = new IxplorerPluginClass(app as unknown as ObsidianApp, {
-    id: "ixplorer",
-    name: "Ixplorer",
+  const plugin = new AttestPluginClass(app as unknown as ObsidianApp, {
+    id: "attest",
+    name: "Attest",
     version: "0.0.0",
     minAppVersion: "1.0.0",
     author: "test",
     description: "test",
   });
   plugin.settings = settings;
-  const tab = new IxplorerSettingTab(app as unknown as ObsidianApp, plugin as IxplorerPlugin);
+  const tab = new AttestSettingTab(app as unknown as ObsidianApp, plugin as AttestPlugin);
   tab.display();
   return tab;
 }
@@ -163,7 +163,7 @@ describe("settings tab sections", () => {
 
     expect(container.querySelector('button[aria-label="Set as default model"]')).toBeNull();
     expect(
-      Array.from(container.querySelectorAll(".ixplorer-settings-profile-list__status")).map(
+      Array.from(container.querySelectorAll(".attest-settings-profile-list__status")).map(
         (status) => status.textContent,
       ),
     ).not.toContain("Default");
@@ -172,11 +172,11 @@ describe("settings tab sections", () => {
   it("renders the category headings in their declared order", () => {
     const container = renderTab();
     const headings = Array.from(
-      container.querySelectorAll(".ixplorer-settings__category-heading"),
+      container.querySelectorAll(".attest-settings__category-heading"),
     ).map((item) => item.firstElementChild?.textContent?.trim() ?? "");
 
     expect(headings).toEqual([
-      "Ixplorer",
+      "Attest",
       "Model profiles",
       "New chat defaults",
       "Retrieval",
@@ -186,8 +186,8 @@ describe("settings tab sections", () => {
 
   it("renders the indexing section before the advanced section", () => {
     const container = renderTab();
-    const indexing = container.querySelector(".ixplorer-settings-index-table");
-    const advanced = container.querySelector(".ixplorer-settings-advanced");
+    const indexing = container.querySelector(".attest-settings-index-table");
+    const advanced = container.querySelector(".attest-settings-advanced");
 
     expect(indexing).not.toBeNull();
     expect(advanced).not.toBeNull();

@@ -110,7 +110,7 @@ export async function probeDocumentUrl(
 function probeHeaders(): Record<string, string> {
   return {
     accept: "*/*",
-    "user-agent": "Mozilla/5.0 (compatible; IxplorerDocumentProbe/1.0; +https://obsidian.md)",
+    "user-agent": "Mozilla/5.0 (compatible; AttestDocumentProbe/1.0; +https://obsidian.md)",
   };
 }
 

@@ -4,14 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
 import type {
   ChatModelProfile,
-  IxplorerSettings,
+  AttestSettings,
   ServerProfile,
   ToolCapabilityProbeResult,
 } from "@adapters/settings";
 import { PluginDebugLogger } from "@adapters/settings";
 import { createTranslator } from "@adapters/i18n";
 import { SettingsCapabilityProber } from "@apps/obsidian/ui/settings/SettingsCapabilityProber";
-import type IxplorerPlugin from "@apps/obsidian/main";
+import type AttestPlugin from "@apps/obsidian/main";
 import { takeNotices } from "../../stubs/obsidian";
 import {
   installObsidianDomHelpers,
@@ -95,7 +95,7 @@ function chatProfile(): ChatModelProfile {
   };
 }
 
-function createSettings(): IxplorerSettings {
+function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
     indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
@@ -107,7 +107,7 @@ function createSettings(): IxplorerSettings {
 
 interface Harness {
   prober: SettingsCapabilityProber;
-  settings: IxplorerSettings;
+  settings: AttestSettings;
   savedCount(): number;
   redisplayCount(): number;
   release(): void;
@@ -124,7 +124,7 @@ function createHarness(): Harness {
     saveSettings: async () => {
       saved += 1;
     },
-  } as unknown as IxplorerPlugin;
+  } as unknown as AttestPlugin;
   const prober = new SettingsCapabilityProber({
     plugin,
     fetchedModelsByServerId: new Map(),

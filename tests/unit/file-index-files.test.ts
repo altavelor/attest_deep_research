@@ -9,7 +9,7 @@ import {
 import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 describe("file index files", () => {
-  const folder = ".ixplorer/index";
+  const folder = ".attest/index";
   let fileSystem: MemoryFileSystem;
 
   beforeEach(() => {

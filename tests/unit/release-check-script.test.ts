@@ -29,7 +29,7 @@ const {
 } = releaseCheck;
 
 const validManifest = {
-  id: "ixplorer",
+  id: "attest",
   version: "0.1.0",
   minAppVersion: "1.5.0",
 };
@@ -79,7 +79,7 @@ describe("release check version metadata", () => {
       versions: { "0.1": "1.5.0" },
     });
     const badId = checkVersionMetadata({
-      manifest: { ...validManifest, id: "obsidian-ixplorer" },
+      manifest: { ...validManifest, id: "obsidian-attest" },
       packageJson: { version: "0.1.0" },
       versions: { "0.1.0": "1.5.0" },
     });
@@ -148,7 +148,7 @@ describe("release check secret scan", () => {
   });
 
   it("scans release assets larger than four MiB", () => {
-    const root = mkdtempSync(join(tmpdir(), "ixplorer-release-check-"));
+    const root = mkdtempSync(join(tmpdir(), "attest-release-check-"));
     const releaseDir = join(root, "dist");
     mkdirSync(releaseDir);
     writeFileSync(join(releaseDir, "manifest.json"), "{}");

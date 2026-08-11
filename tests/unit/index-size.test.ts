@@ -17,7 +17,7 @@ describe("index size formatting", () => {
 
   it("sums file sizes across nested folders", async () => {
     const fileSystem = new MemoryFileSystem();
-    const folder = ".ixplorer/index";
+    const folder = ".attest/index";
     await fileSystem.writeBinary(`${folder}/vectors.bin`, new Uint8Array(12));
     await fileSystem.writeBinary(`${folder}/shards/part-1.json`, new Uint8Array(7));
 
@@ -27,6 +27,6 @@ describe("index size formatting", () => {
   it("returns unavailable when the index folder cannot be read", async () => {
     const fileSystem = new MemoryFileSystem();
 
-    await expect(measureFolderSize(fileSystem, ".ixplorer/missing")).resolves.toBeNull();
+    await expect(measureFolderSize(fileSystem, ".attest/missing")).resolves.toBeNull();
   });
 });

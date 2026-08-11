@@ -44,14 +44,14 @@ class DiagnosticReportModal extends Modal {
     this.modalEl.setAttr("dir", this.getDirection?.() ?? "ltr");
     const report = buildDiagnosticReportV3(this.diagnostics);
     const rawJson = JSON.stringify(report, null, 2);
-    this.modalEl.addClass("ixplorer-chat__diagnostic-modal");
+    this.modalEl.addClass("attest-chat__diagnostic-modal");
     this.setTitle("Diagnostic report");
     this.contentEl.empty();
-    this.contentEl.addClass("ixplorer-chat__diagnostic-modal-content");
+    this.contentEl.addClass("attest-chat__diagnostic-modal-content");
 
-    const toolbar = this.modalEl.createDiv({ cls: "ixplorer-chat__diagnostic-modal-toolbar" });
+    const toolbar = this.modalEl.createDiv({ cls: "attest-chat__diagnostic-modal-toolbar" });
     const modeSwitch = toolbar.createDiv({
-      cls: "ixplorer-chat__diagnostic-mode-switch",
+      cls: "attest-chat__diagnostic-mode-switch",
       attr: { role: "group", "aria-label": "Diagnostic report view" },
     });
     const readableButton = modeSwitch.createEl("button", {
@@ -92,11 +92,11 @@ class DiagnosticReportModal extends Modal {
     }
 
     const readablePanel = this.contentEl.createDiv({
-      cls: "ixplorer-chat__diagnostic-readable",
+      cls: "attest-chat__diagnostic-readable",
     });
     renderReadableDiagnosticReport(readablePanel, report);
     const rawPanel = this.contentEl.createEl("pre", {
-      cls: "ixplorer-chat__diagnostic-modal-report",
+      cls: "attest-chat__diagnostic-modal-report",
       text: rawJson,
     });
     rawPanel.hidden = true;
@@ -125,6 +125,6 @@ class DiagnosticReportModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
-    this.modalEl.removeClass("ixplorer-chat__diagnostic-modal");
+    this.modalEl.removeClass("attest-chat__diagnostic-modal");
   }
 }

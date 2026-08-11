@@ -1,4 +1,4 @@
-import { IxplorerError } from "@core/errors";
+import { AttestError } from "@core/errors";
 import {
   SearchProvider,
   SearchProviderResult,
@@ -153,12 +153,12 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         }),
       );
     } catch (error) {
-      if (error instanceof IxplorerError) {
+      if (error instanceof AttestError) {
         this.logger?.logError(error);
         throw error;
       }
 
-      const wrappedError = new IxplorerError({
+      const wrappedError = new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: "DuckDuckGo search failed.",
         cause: error,
@@ -262,7 +262,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
         continue;
       }
 
-      throw new IxplorerError({
+      throw new AttestError({
         code: "WEB_SEARCH_FAILED",
         message: `DuckDuckGo returned HTTP ${response.status}.`,
         details: { status: response.status },

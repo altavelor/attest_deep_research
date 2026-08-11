@@ -11,7 +11,7 @@ import type {
   IndexingPerformanceLogEvent,
 } from "../types";
 
-const INTERNAL_EXCLUDE_GLOBS = [".ixplorer/**"];
+const INTERNAL_EXCLUDE_GLOBS = [".attest/**"];
 
 export class FileProcessor {
   private readonly options: FileProcessorOptions;
