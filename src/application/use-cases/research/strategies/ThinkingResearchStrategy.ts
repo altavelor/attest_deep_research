@@ -29,6 +29,7 @@ import {
   webUrlEvidenceIndex,
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
+import { buildAnswerDiagnostics } from "./answerDiagnostics";
 
 const MAX_TRACED_WEB_SEARCHES = 20;
 import {
@@ -257,20 +258,27 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       [...snapshot.citations],
     );
     const urlToEvidenceId = webUrlEvidenceIndex(evidence);
-    const {
-      text: answerText,
-      ids: citedIds,
-      webReferences,
-    } = result.ok
+    const normalized = result.ok
       ? normalizeCitationTokens(result.answerText, urlToEvidenceId)
-      : { text: "", ids: new Set<string>(), webReferences: [] };
+      : {
+          text: "",
+          ids: new Set<string>(),
+          webReferences: [],
+          collapsedOccurrences: 0,
+          collapsedByLabel: {},
+        };
+    const { text: answerText, ids: citedIds, webReferences } = normalized;
     const knownIds = new Set(evidence.map((chunk) => chunk.id));
     const webReferenceIds = new Set(webReferences.map((reference) => reference.id));
     const unknownCitationIds = [...citedIds].filter(
       (id) => !knownIds.has(id) && !webReferenceIds.has(id),
     );
+    const citationOccurrences: Array<{ label: string; index: number }> = [];
     const unverifiedCitations = result.ok
-      ? verifyCitations(answerText, evidence, { urlToEvidenceId })
+      ? verifyCitations(answerText, evidence, {
+          urlToEvidenceId,
+          onCitation: (citation) => citationOccurrences.push(citation),
+        })
       : [];
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
@@ -280,6 +288,17 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         result.ok ? "thinking" : "instant-fallback",
       );
     diagnostics.executionStrategy = result.ok ? "thinking" : "instant-fallback";
+    diagnostics.answer = buildAnswerDiagnostics({
+      answerText,
+      promptSourceIds: result.ok ? evidence.map((chunk) => chunk.id) : [],
+      citationLabels: [...knownIds, ...webReferenceIds],
+      collapsedOccurrences: normalized.collapsedOccurrences,
+      collapsedByLabel: normalized.collapsedByLabel,
+      verificationRan: result.ok,
+      unknownCitationIds,
+      unverifiedCitations,
+      citationOccurrences,
+    });
     diagnostics.question = question;
     diagnostics.modelName = this.deps.chatModelName;
     diagnostics.modelApiFormat = this.deps.apiFormat;

@@ -199,10 +199,72 @@ describe("ResearchService", () => {
     if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
     expect(completion.answer.contextDiagnostics?.executionStrategy).toBe("instant");
     expect(completion.answer.contextDiagnostics?.thinking).toBeUndefined();
+    expect(completion.answer.contextDiagnostics?.answer).toMatchObject({
+      citations: { verificationRan: true, occurrences: 0 },
+    });
     expect(completion.answer.contextDiagnostics?.capabilityProvenance).toEqual({ calls: "probe" });
     expect(chatModel.requests).toHaveLength(1);
     expect(chatModel.requests[0].tools).toBeUndefined();
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
+  });
+
+  it("records positive, collapsed, unknown and web-reference citation diagnostics for Instant", async () => {
+    const source = markdownSource("Research/source.md");
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-source-1", source, "Evidence supports the answer.")],
+      citations: [citation("local-source-1", source, "Research/source.md")],
+      usedFallback: false,
+    });
+    const chatModel = new FakeChatModel([
+      {
+        content:
+          "Evidence [S1, S1], unknown [missing-source], web [url:https://example.com/unseen].",
+        isComplete: true,
+      },
+    ]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
+      retriever,
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "Use the evidence",
+        mode: "instant",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+    const completion = events.at(-1);
+    if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
+
+    expect(completion.answer).toMatchObject({
+      answer:
+        "Evidence [local-source-1][local-source-1], unknown [missing-source], web [url:https://example.com/unseen].",
+      citations: [{ id: "local-source-1" }],
+      contextDiagnostics: {
+        answer: {
+          citations: {
+            occurrences: 3,
+            uniqueLabels: 2,
+            per100Words: 27.27,
+            sentenceCoverage: 100,
+            maxLabelsPerSentence: 2,
+            byLabel: { "local-source-1": 2, "web-ref-1": 1 },
+            uncitedPromptSourceIds: [],
+            collapsedOccurrences: 1,
+            verificationRan: true,
+            unknownCitationIds: ["missing-source"],
+          },
+        },
+      },
+    });
+    expect(completion.answer).not.toHaveProperty("webReferences");
   });
 
   it("suppresses the optional tool loop when Instant is selected", async () => {
