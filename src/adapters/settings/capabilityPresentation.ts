@@ -2,11 +2,7 @@ import { createToolCapabilitySettings } from "./toolCapabilities";
 import { ChatModelProfile, ReasoningCapabilitySettings } from "./types";
 
 export type CapabilityVerificationPhase =
-  | "testing"
-  | "verified"
-  | "not-verified"
-  | "failed"
-  | "not-tested";
+  "testing" | "verified" | "not-verified" | "failed" | "not-tested";
 
 export interface CapabilityVerificationState {
   tools: CapabilityVerificationPhase;
