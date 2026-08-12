@@ -101,14 +101,14 @@ function parseCanonicalLink(html: string): string | undefined {
 
 export function extractReadableText(html: string, maxLength: number): string {
   const withoutIgnoredContent = html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<nav\b[\s\S]*?<\/nav>/gi, " ")
-    .replace(/<header\b[\s\S]*?<\/header>/gi, " ")
-    .replace(/<footer\b[\s\S]*?<\/footer>/gi, " ")
-    .replace(/<aside\b[\s\S]*?<\/aside>/gi, " ");
+    .replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
+    .replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, " ")
+    .replace(/<noscript\b[\s\S]*?(?:<\/noscript\s*>|$)/gi, " ")
+    .replace(/<svg\b[\s\S]*?(?:<\/svg\s*>|$)/gi, " ")
+    .replace(/<nav\b[\s\S]*?(?:<\/nav\s*>|$)/gi, " ")
+    .replace(/<header\b[\s\S]*?(?:<\/header\s*>|$)/gi, " ")
+    .replace(/<footer\b[\s\S]*?(?:<\/footer\s*>|$)/gi, " ")
+    .replace(/<aside\b[\s\S]*?(?:<\/aside\s*>|$)/gi, " ");
 
   return normalizeInlineWhitespace(stripHtml(withoutIgnoredContent)).slice(0, maxLength);
 }
@@ -188,18 +188,27 @@ function stripHtml(html: string): string {
 }
 
 function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, codepoint: string) =>
-      String.fromCodePoint(Number.parseInt(codepoint, 16)),
-    )
-    .replace(/&#(\d+);/g, (_, codepoint: string) =>
-      String.fromCodePoint(Number.parseInt(codepoint, 10)),
-    );
+  return value.replace(
+    /&(?:amp|lt|gt|quot|#39|#x([0-9a-f]+)|#(\d+));/gi,
+    (entity, hex: string | undefined, decimal: string | undefined) => {
+      if (hex !== undefined) return safeFromCodePoint(Number.parseInt(hex, 16), entity);
+      if (decimal !== undefined) return safeFromCodePoint(Number.parseInt(decimal, 10), entity);
+      return NAMED_ENTITIES[entity.toLowerCase()] ?? entity;
+    },
+  );
+}
+
+const NAMED_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
+
+function safeFromCodePoint(codepoint: number, fallback: string): string {
+  if (!Number.isFinite(codepoint) || codepoint < 0 || codepoint > 0x10ffff) return fallback;
+  return String.fromCodePoint(codepoint);
 }
 
 function parseAnchors(html: string): HtmlAnchor[] {
