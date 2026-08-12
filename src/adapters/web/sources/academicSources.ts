@@ -141,8 +141,14 @@ export const wikipediaDefinition: WebSourceDefinition = {
 
 /** MediaWiki wraps matches in <span class="searchmatch">…</span>. */
 function stripSearchHighlights(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&");
+  let stripped = html;
+  let previous: string;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/<[^>]*>/g, "");
+  } while (stripped !== previous);
+
+  return stripped
+    .replace(/[<>]/g, "")
+    .replace(/&(quot|amp);/g, (_, name: string) => (name === "quot" ? '"' : "&"));
 }

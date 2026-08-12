@@ -60,5 +60,5 @@ function clamp(value: string): string {
 
 /** Escapes brackets, which would otherwise terminate the markdown link early. */
 function escapeLinkLabel(value: string): string {
-  return value.replace(/([[\]])/g, "\\$1");
+  return value.replace(/([\\[\]])/g, "\\$1");
 }
