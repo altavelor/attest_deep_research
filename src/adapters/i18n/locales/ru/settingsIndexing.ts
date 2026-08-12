@@ -158,6 +158,8 @@ export const settingsIndexing: EnSettingsIndexingMessages = {
     "Игнорировать сохранённые метаданные и выполнить извлечение для каждого документа заново.",
   "settings.indexRun.embeddingChangedWarning":
     "Смена модели эмбеддингов требует полной переиндексации: запуск пересоберёт индекс (и его метаданные) с нуля.",
+  "settings.indexRun.mobileRebuildWarning":
+    "Полная перестройка на мобильном устройстве может расходовать много заряда, памяти и трафика. Нажмите «Перестроить» ещё раз для подтверждения.",
   "settings.indexRun.start": "Начать",
   "settings.indexRun.rebuild": "Пересобрать",
   "settings.indexRun.update": "Обновить",

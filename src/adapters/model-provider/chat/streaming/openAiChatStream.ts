@@ -52,6 +52,7 @@ export async function* streamOpenAiCompatibleChat({
       stream = await open({ ...baseBody, ...attempt });
       break;
     } catch (error) {
+      throwIfAborted(request.signal);
       firstError ??= error;
       if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
         throw translateError(firstError);
@@ -147,6 +148,7 @@ export async function* streamOpenAiCompatibleChat({
       if (repetition.isRepeating()) break;
     }
   } catch (error) {
+    throwIfAborted(request.signal);
     throw translateError(error);
   }
 
@@ -173,6 +175,11 @@ export async function* streamOpenAiCompatibleChat({
     events,
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
   };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  throw signal.reason ?? new DOMException("The request was aborted.", "AbortError");
 }
 
 /**

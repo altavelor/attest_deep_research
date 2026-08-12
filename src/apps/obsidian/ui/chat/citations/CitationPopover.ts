@@ -25,6 +25,8 @@ export class CitationPopoverController {
   private readonly onOpenChunk: (chunk: RetrievedChunk) => void;
   private popoverEl: HTMLElement | null = null;
   private closeTimer: number | null = null;
+  private highlightTimer: number | null = null;
+  private highlightTimerKey: string | null = null;
 
   constructor(options: CitationPopoverControllerOptions) {
     this.hostEl = options.hostEl;
@@ -72,6 +74,12 @@ export class CitationPopoverController {
 
   close(): void {
     this.cancelClose();
+    if (this.highlightTimer !== null) {
+      window.clearTimeout(this.highlightTimer);
+      this.highlightTimer = null;
+      if (this.highlightTimerKey) this.setHighlight(this.highlightTimerKey, false);
+      this.highlightTimerKey = null;
+    }
     const key = this.popoverEl?.dataset.citationKey;
     if (key) {
       this.setHighlight(key, false);
@@ -96,7 +104,13 @@ export class CitationPopoverController {
     }
     block?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     this.setHighlight(key, true);
-    window.setTimeout(() => this.setHighlight(key, false), 900);
+    if (this.highlightTimer !== null) window.clearTimeout(this.highlightTimer);
+    this.highlightTimerKey = key;
+    this.highlightTimer = window.setTimeout(() => {
+      this.highlightTimer = null;
+      this.highlightTimerKey = null;
+      this.setHighlight(key, false);
+    }, 900);
   }
 
   private position(anchorEl: HTMLElement, popoverEl: HTMLElement): void {

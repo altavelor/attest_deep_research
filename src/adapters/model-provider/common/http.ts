@@ -43,7 +43,11 @@ export class ProviderHttpClient {
     const abortFromExternal = () => controller.abort(externalSignal?.reason);
     externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
     if (externalSignal?.aborted) abortFromExternal();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new DOMException("The provider request timed out.", "TimeoutError"));
+    }, this.timeoutMs);
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
     const requestInit = withAuthorization(init, this.apiKey);
@@ -97,6 +101,10 @@ export class ProviderHttpClient {
         throw error;
       }
 
+      if (externalSignal?.aborted && !timedOut) {
+        throw externalSignal.reason instanceof Error ? externalSignal.reason : abortError();
+      }
+
       const wrappedError = new AttestError({
         code: this.unavailableCode,
         message: this.unavailableMessage,
@@ -137,6 +145,12 @@ export class ProviderHttpClient {
       throw wrappedError;
     }
   }
+}
+
+function abortError(): Error {
+  const error = new Error("The request was aborted.");
+  error.name = "AbortError";
+  return error;
 }
 
 interface ProviderErrorSummary {

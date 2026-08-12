@@ -1,4 +1,4 @@
-import { Notice } from "obsidian";
+import { Notice, Platform } from "obsidian";
 
 import type AttestPlugin from "@apps/obsidian/main";
 import { ChatModelClient } from "@adapters/model-provider";
@@ -10,6 +10,7 @@ import {
   verifyEmbeddingCapability,
   DiscoveredModel,
 } from "@adapters/settings";
+import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 import { probeToolControlCapabilities, ToolCapabilityProbeResult } from "@adapters/settings";
 import { createToolCapabilitySettings } from "@adapters/settings";
 import { capabilityCacheKey, ModelCapabilitySnapshot, unknownSnapshot } from "@adapters/settings";
@@ -86,7 +87,10 @@ export class SettingsCapabilityProber {
       (candidate) => candidate.isSuspended !== true,
     )) {
       const identity = `${server.baseUrl}|${server.updatedAt}`;
-      const result = await fetchAvailableModels(server, { logger: this.plugin.logger });
+      const result = await fetchAvailableModels(server, {
+        logger: this.plugin.logger,
+        fetch: this.providerFetch(server, "buffered"),
+      });
       const currentServer = this.plugin.settings.serverProfiles.find(
         (candidate) => candidate.id === server.id,
       );
@@ -112,7 +116,10 @@ export class SettingsCapabilityProber {
   }
 
   async fetchModelsForServer(server: ServerProfile): Promise<DiscoveredModel[]> {
-    const result = await fetchAvailableModels(server, { logger: this.plugin.logger });
+    const result = await fetchAvailableModels(server, {
+      logger: this.plugin.logger,
+      fetch: this.providerFetch(server, "buffered"),
+    });
     this.fetchedModelsByServerId.set(server.id, result.models);
     new Notice(result.message);
     return result.models;
@@ -122,7 +129,10 @@ export class SettingsCapabilityProber {
     server: ServerProfile,
     modelName: string,
   ): Promise<number | undefined> {
-    return fetchModelContextLength(server, modelName, { logger: this.plugin.logger });
+    return fetchModelContextLength(server, modelName, {
+      logger: this.plugin.logger,
+      fetch: this.providerFetch(server, "buffered"),
+    });
   }
 
   startEmbeddingProfileProbe(profileId: string): void {
@@ -215,6 +225,7 @@ export class SettingsCapabilityProber {
             baseUrl: server.baseUrl,
             apiKey: server.apiKey,
             logger: this.plugin.logger,
+            fetch: this.providerFetch(server, "streaming"),
           }),
           model: target.modelName,
         }),
@@ -228,6 +239,7 @@ export class SettingsCapabilityProber {
                 savedProfile.reasoningCapabilities?.efforts ??
                 [],
               logger: this.plugin.logger,
+              fetch: this.providerFetch(server, "streaming"),
             })
         : undefined,
       onTools: async (probe) => {
@@ -386,7 +398,10 @@ export class SettingsCapabilityProber {
     server: ServerProfile,
     modelName: string,
   ): Promise<boolean> {
-    return verifyEmbeddingCapability(server, modelName, { logger: this.plugin.logger });
+    return verifyEmbeddingCapability(server, modelName, {
+      logger: this.plugin.logger,
+      fetch: this.providerFetch(server, "buffered"),
+    });
   }
 
   private async probeToolsForServer(
@@ -399,10 +414,15 @@ export class SettingsCapabilityProber {
         baseUrl: server.baseUrl,
         apiKey: server.apiKey,
         logger: this.plugin.logger,
+        fetch: this.providerFetch(server, "streaming"),
       }),
       model: modelName,
       apiFormat: server.apiFormat,
     });
+  }
+
+  private providerFetch(server: ServerProfile, kind: "streaming" | "buffered"): typeof fetch {
+    return resolveProviderFetch(server, kind, Platform.isMobile);
   }
 
   private async updateChatProfileAfterProbe(

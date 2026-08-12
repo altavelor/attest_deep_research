@@ -26,7 +26,7 @@ describe("plugin metadata", () => {
     expect(manifest.description.trim()).not.toBe("");
     expect(manifest.version).toMatch(SEMVER);
     expect(manifest.minAppVersion).toMatch(SEMVER);
-    expect(manifest.isDesktopOnly).toBe(true);
+    expect(manifest.isDesktopOnly).toBe(false);
   });
 
   it("keeps package.json and versions.json in sync with the manifest", () => {

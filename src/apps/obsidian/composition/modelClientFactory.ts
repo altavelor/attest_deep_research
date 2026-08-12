@@ -17,6 +17,7 @@ import { QueryExpansionService } from "@adapters/retrieval";
 import type { ModelRoundProvider } from "@core/agent";
 
 import { CompositionContext } from "./CompositionContext";
+import { resolveProviderFetch } from "../modelProviderRuntime";
 
 export function createChatModelClient(
   ctx: CompositionContext,
@@ -28,6 +29,7 @@ export function createChatModelClient(
     baseUrl: server.baseUrl,
     apiKey: server.apiKey,
     logger: ctx.logger,
+    fetch: resolveProviderFetch(server, "streaming", ctx.isMobile === true),
     ...(profile
       ? {
           onReasoningObserved: (observation: { protocol: "chat-completions"; dialect: string }) => {
@@ -77,6 +79,7 @@ export function createResponsesRoundProvider(
       baseUrl: server.baseUrl,
       apiKey: server.apiKey,
       logger: ctx.logger,
+      fetch: resolveProviderFetch(server, "streaming", ctx.isMobile === true),
       reasoningEfforts: decision.efforts,
       reasoningSummary: decision.summary,
     }),

@@ -77,6 +77,7 @@ export interface AttestChatViewServices {
   getIndexSearchEmbedderWarning(indexProfileId: string): string | undefined;
 
   openIndexSettings(): void;
+  openExternalUrl?(url: string): void | Promise<void>;
 
   resolveDocumentImage?: DocumentImageResolver["resolve"];
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
@@ -264,6 +265,7 @@ export class AttestChatView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.researchController.dispose();
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
@@ -673,7 +675,13 @@ export class AttestChatView extends ItemView {
     const target = citationTarget(citation);
 
     if (target.kind === "web") {
-      window.open(target.target, "_blank", "noopener");
+      const url = normalizeExternalUrl(target.target);
+      if (!url) return;
+      if (this.services.openExternalUrl) {
+        await this.services.openExternalUrl(url);
+      } else {
+        openExternalUrlWithAnchor(url, this.contentEl.ownerDocument);
+      }
       return;
     }
 
@@ -712,4 +720,30 @@ export class AttestChatView extends ItemView {
   private async appendAnswerToActiveNote(answer: ResearchAnswer): Promise<void> {
     await this.answerNoteWriter.appendAnswerToActiveNote(answer);
   }
+}
+
+function normalizeExternalUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export function openExternalUrlWithAnchor(
+  url: string,
+  ownerDocument: Document = document,
+): boolean {
+  const normalizedUrl = normalizeExternalUrl(url);
+  if (!normalizedUrl) return false;
+
+  const anchor = ownerDocument.createElement("a");
+  anchor.href = normalizedUrl;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  ownerDocument.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  return true;
 }

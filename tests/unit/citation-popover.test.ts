@@ -84,4 +84,25 @@ describe("CitationPopover", () => {
     expect(host.querySelector(".attest-chat__citation-popover")).toBeNull();
     expect(anchor.classList.contains("is-highlighted")).toBe(false);
   });
+
+  it("cancels a pending highlight timer when closed", () => {
+    vi.useFakeTimers();
+    try {
+      const host = createContainer();
+      const block = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "source" },
+      });
+      const controller = new CitationPopoverController({ hostEl: host, t, onOpenChunk: vi.fn() });
+
+      controller.scrollBlockIntoView("source");
+      expect(block.classList.contains("is-highlighted")).toBe(true);
+      controller.close();
+      vi.runAllTimers();
+
+      expect(block.classList.contains("is-highlighted")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
