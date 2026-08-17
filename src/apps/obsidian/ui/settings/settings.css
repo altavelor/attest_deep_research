@@ -644,3 +644,7 @@
 .attest-settings-profile-list__status.is-reindex-required {
   color: var(--text-warning);
 }
+
+.attest-settings__test-capabilities-action.is-testing {
+  color: var(--color-red);
+}

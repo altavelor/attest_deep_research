@@ -50,6 +50,52 @@ function inputFor(container: HTMLElement, name: string): HTMLInputElement {
   return input!;
 }
 
+function toggleFor(container: HTMLElement, name: string): HTMLInputElement {
+  const setting = Array.from(container.querySelectorAll(".setting-item")).find(
+    (item) => item.firstElementChild?.textContent === name,
+  );
+  expect(setting).toBeDefined();
+  const toggle = setting!.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  expect(toggle).not.toBeNull();
+  return toggle!;
+}
+
+function verifiedChatProfile(overrides: Partial<ChatModelProfile> = {}): ChatModelProfile {
+  return {
+    id: "chat-verified",
+    name: "Verified chat",
+    serverProfileId: server.id,
+    modelName: model.name,
+    toolsEnabled: true,
+    noteMutationAccess: true,
+    reasoning: { mode: "on", summary: "off" },
+    reasoningCapabilities: {
+      source: "probe",
+      responses: true,
+      continuation: true,
+      summary: true,
+      efforts: ["low", "high"],
+    },
+    capabilities: {
+      chat: true,
+      embeddings: false,
+      detectionSource: "probe",
+      toolCalling: {
+        formatDefault: {
+          calls: true,
+          choiceRequired: true,
+          choiceSpecific: true,
+          parallelCalls: true,
+        },
+        probe: { calls: true, choiceRequired: true, choiceSpecific: true, parallelCalls: true },
+      },
+    },
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("ModelProfileModal", () => {
   beforeEach(() => {
     installObsidianDomHelpers();
@@ -100,6 +146,191 @@ describe("ModelProfileModal", () => {
         toolsEnabled: false,
       }),
     );
+  });
+
+  it("prefills advertised reasoning efforts when a model is selected", async () => {
+    const advertised: DiscoveredModel = {
+      id: "reasoner",
+      name: "reasoner",
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+      capabilitySnapshot: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: {
+          responseFormats: [],
+          visibleOutput: "unknown",
+          efforts: ["xhigh", "medium", "low"],
+          defaultEffort: "xhigh",
+        },
+        tools: "supported",
+        continuation: "unknown",
+        summary: "unknown",
+        source: "metadata",
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    };
+    const onSave = vi.fn(async () => {});
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      servers: [server],
+      profiles: [],
+      fetchedModelsByServerId: new Map([[server.id, [advertised]]]),
+      fetchModels: vi.fn(async () => [advertised]),
+      onSave,
+    });
+    modal.open();
+
+    const modelInput = inputFor(modal.contentEl, "Model");
+    modelInput.focus();
+    modelInput.dispatchEvent(new Event("focus"));
+    modal.contentEl
+      .querySelector<HTMLButtonElement>('.attest-profile-modal__model-option[role="option"]')!
+      .click();
+
+    const effortSelect = Array.from(modal.contentEl.querySelectorAll("select")).at(-1)!;
+    expect(Array.from(effortSelect.options, (option) => option.value)).toEqual([
+      "",
+      "xhigh",
+      "medium",
+      "low",
+    ]);
+    expect(effortSelect.disabled).toBe(false);
+  });
+
+  it("saves metadata capabilities of an existing profile that was never probed", async () => {
+    const advertised: DiscoveredModel = {
+      id: "reasoner",
+      name: "reasoner",
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+      capabilitySnapshot: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: { responseFormats: [], visibleOutput: "unknown", efforts: ["low", "high"] },
+        tools: "supported",
+        continuation: "unknown",
+        summary: "unknown",
+        source: "metadata",
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    };
+    const profile: ChatModelProfile = {
+      id: "chat-plain",
+      name: "Plain chat",
+      serverProfileId: server.id,
+      modelName: advertised.name,
+      toolsEnabled: false,
+      noteMutationAccess: false,
+      reasoning: { mode: "auto", summary: "off" },
+      capabilities: { chat: true, embeddings: false, detectionSource: "format-default" },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const onSave = vi.fn(async (_profile: ChatModelProfile) => {});
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile,
+      servers: [server],
+      profiles: [profile],
+      fetchedModelsByServerId: new Map([[server.id, [advertised]]]),
+      fetchModels: vi.fn(async () => [advertised]),
+      onSave,
+      resolveProfile: (id) => (id === profile.id ? profile : undefined),
+    });
+    modal.open();
+
+    Array.from(modal.contentEl.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === "Save")!
+      .click();
+
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolsEnabled: true,
+        noteMutationAccess: false,
+        reasoningCapabilities: expect.objectContaining({
+          source: "metadata",
+          efforts: ["low", "high"],
+        }),
+        capabilities: expect.objectContaining({
+          toolCalling: expect.objectContaining({
+            formatDefault: expect.objectContaining({ calls: true }),
+          }),
+        }),
+      }),
+    );
+    expect(onSave.mock.lastCall?.[0]).not.toHaveProperty("toolCapabilities");
+  });
+
+  it("replaces an effort the newly selected model does not advertise", () => {
+    const first: DiscoveredModel = {
+      id: "first",
+      name: "first",
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+      capabilitySnapshot: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: {
+          responseFormats: [],
+          visibleOutput: "unknown",
+          efforts: ["xhigh"],
+          defaultEffort: "xhigh",
+        },
+        tools: "supported",
+        continuation: "unknown",
+        summary: "unknown",
+        source: "metadata",
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    };
+    const second: DiscoveredModel = {
+      ...first,
+      id: "second",
+      name: "second",
+      capabilitySnapshot: {
+        ...first.capabilitySnapshot!,
+        reasoning: {
+          responseFormats: [],
+          visibleOutput: "unknown",
+          efforts: ["low", "high"],
+          defaultEffort: "low",
+        },
+      },
+    };
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      servers: [server],
+      profiles: [],
+      fetchedModelsByServerId: new Map([[server.id, [first, second]]]),
+      fetchModels: vi.fn(async () => [first, second]),
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+
+    const pick = (name: string): void => {
+      const modelInput = inputFor(modal.contentEl, "Model");
+      modelInput.value = "";
+      modelInput.dispatchEvent(new Event("input"));
+      modelInput.focus();
+      modelInput.dispatchEvent(new Event("focus"));
+      Array.from(
+        modal.contentEl.querySelectorAll<HTMLButtonElement>(
+          '.attest-profile-modal__model-option[role="option"]',
+        ),
+      )
+        .find((option) => option.textContent === name)!
+        .click();
+    };
+
+    pick("first");
+    expect(Array.from(modal.contentEl.querySelectorAll("select")).at(-1)!.value).toBe("xhigh");
+
+    pick("second");
+    const effortSelect = Array.from(modal.contentEl.querySelectorAll("select")).at(-1)!;
+    expect(Array.from(effortSelect.options, (option) => option.value)).toEqual(["", "low", "high"]);
+    expect(effortSelect.value).toBe("low");
   });
 
   it("saves an embedding profile without chat-only settings", async () => {
@@ -273,6 +504,140 @@ describe("ModelProfileModal", () => {
         }),
       }),
     );
+  });
+
+  it("shows each capability on its own line and reports provider-advertised support", () => {
+    const advertised: DiscoveredModel = {
+      id: "reasoner",
+      name: "reasoner",
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+      capabilitySnapshot: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: { responseFormats: [], visibleOutput: "unknown", efforts: ["low"] },
+        tools: "supported",
+        continuation: "unknown",
+        summary: "unknown",
+        source: "metadata",
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    };
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      servers: [server],
+      profiles: [],
+      fetchedModelsByServerId: new Map([[server.id, [advertised]]]),
+      fetchModels: vi.fn(async () => [advertised]),
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+
+    const modelInput = inputFor(modal.contentEl, "Model");
+    modelInput.focus();
+    modelInput.dispatchEvent(new Event("focus"));
+    modal.contentEl
+      .querySelector<HTMLButtonElement>('.attest-profile-modal__model-option[role="option"]')!
+      .click();
+
+    const lines = Array.from(
+      modal.contentEl.querySelectorAll(".attest-profile-modal__capability-status-line"),
+      (line) => line.textContent,
+    );
+    expect(lines).toEqual([
+      "Tools support: Reported by provider",
+      "Agent mode support: Reported by provider",
+    ]);
+  });
+
+  it("locks the capability test button while a test is running", () => {
+    const profile = verifiedChatProfile();
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile,
+      servers: [server],
+      profiles: [profile],
+      fetchedModelsByServerId: new Map([[server.id, [model]]]),
+      fetchModels: vi.fn(async () => [model]),
+      onSave: vi.fn(async () => {}),
+      onTest: vi.fn(async () => {}),
+      resolveProfile: (id) => (id === profile.id ? profile : undefined),
+      getCapabilityStatus: () => ({ tools: "testing", agent: "testing" }),
+    });
+    modal.open();
+
+    const testButton = modal.contentEl.querySelector<HTMLButtonElement>(".attest-capability-test")!;
+    expect(testButton.disabled).toBe(true);
+    expect(testButton.hasClass("is-testing")).toBe(true);
+  });
+
+  it("keeps the advanced section open across a re-render", () => {
+    const profile = verifiedChatProfile();
+    let notify: (() => void) | undefined;
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile,
+      servers: [server],
+      profiles: [profile],
+      fetchedModelsByServerId: new Map([[server.id, [model]]]),
+      fetchModels: vi.fn(async () => [model]),
+      onSave: vi.fn(async () => {}),
+      resolveProfile: (id) => (id === profile.id ? profile : undefined),
+      subscribeCapabilityStatus: (listener) => {
+        notify = listener;
+        return () => {};
+      },
+    });
+    modal.open();
+
+    const advanced = modal.contentEl.querySelector<HTMLDetailsElement>(
+      ".attest-profile-modal__advanced",
+    )!;
+    expect(advanced.open).toBe(false);
+    advanced.open = true;
+    advanced.dispatchEvent(new Event("toggle"));
+
+    notify!();
+
+    expect(
+      modal.contentEl.querySelector<HTMLDetailsElement>(".attest-profile-modal__advanced")!.open,
+    ).toBe(true);
+  });
+
+  it("enables tools by default once tools and agent mode become verified", () => {
+    const unverified = verifiedChatProfile({
+      toolsEnabled: false,
+      noteMutationAccess: false,
+      reasoningCapabilities: undefined,
+      capabilities: { chat: true, embeddings: false, detectionSource: "format-default" },
+    });
+    let current = unverified;
+    let notify: (() => void) | undefined;
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile: unverified,
+      servers: [server],
+      profiles: [unverified],
+      fetchedModelsByServerId: new Map([[server.id, [model]]]),
+      fetchModels: vi.fn(async () => [model]),
+      onSave: vi.fn(async () => {}),
+      resolveProfile: (id) => (id === current.id ? current : undefined),
+      subscribeCapabilityStatus: (listener) => {
+        notify = listener;
+        return () => {};
+      },
+    });
+    modal.open();
+
+    expect(toggleFor(modal.contentEl, "Tools").checked).toBe(false);
+
+    current = verifiedChatProfile({ id: unverified.id, toolsEnabled: false });
+    notify!();
+
+    expect(toggleFor(modal.contentEl, "Tools").checked).toBe(true);
   });
 
   it("edits a legacy chat profile with unset optional model controls", async () => {
