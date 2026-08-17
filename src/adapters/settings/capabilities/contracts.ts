@@ -18,6 +18,12 @@ export interface EffectiveToolCapabilities {
 
 export type CapabilityState = "supported" | "unsupported" | "unknown";
 
+export interface ToolControlSupport {
+  choiceRequired: boolean;
+  choiceSpecific: boolean;
+  parallelCalls: boolean;
+}
+
 export type ReasoningResponseFormat =
   | "reasoning_details"
   | "reasoning"
@@ -40,6 +46,7 @@ export interface ModelCapabilitySnapshot {
     visibleOutput: CapabilityState;
   };
   tools: CapabilityState;
+  toolControls?: ToolControlSupport;
   continuation: CapabilityState;
   summary: CapabilityState;
   source: "metadata" | "observed" | "manual" | "probe";
