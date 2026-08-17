@@ -122,4 +122,40 @@ describe("probeToolControlCapabilities", () => {
     expect(result.probeAuditData.results.auto).toContain("attest_probe_a");
     expect(callCount).toBe(3);
   });
+
+  it("propagates cancellation instead of reporting an empty probe result", async () => {
+    const controller = new AbortController();
+    const provider = new ProbeProvider(() => {
+      controller.abort();
+      throw new DOMException("aborted", "AbortError");
+    });
+
+    await expect(
+      probeToolControlCapabilities({
+        provider,
+        model: "m",
+        apiFormat: "openai-compatible",
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(provider.requests).toHaveLength(1);
+  });
+
+  it("stops before the next request when the caller cancels between probes", async () => {
+    const controller = new AbortController();
+    const provider = new ProbeProvider(() => {
+      controller.abort();
+      return { content: "", isComplete: true, toolCalls: [] };
+    });
+
+    await expect(
+      probeToolControlCapabilities({
+        provider,
+        model: "m",
+        apiFormat: "openai-compatible",
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(provider.requests).toHaveLength(1);
+  });
 });

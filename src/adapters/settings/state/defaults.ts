@@ -6,7 +6,7 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "@adapters/indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing";
 import {
   DEFAULT_DOWNLOAD_FOLDER,
   DEFAULT_INDEX_FOLDER,

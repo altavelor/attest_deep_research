@@ -429,6 +429,49 @@ describe("ModelProfileModal", () => {
     expect(toggleFor(modal.contentEl, "Tools").checked).toBe(true);
   });
 
+  it("seeds metadata for the capability that has no probe result", () => {
+    const advertised: DiscoveredModel = {
+      id: model.id,
+      name: model.name,
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+      capabilitySnapshot: {
+        protocols: { chatCompletions: "supported", responses: "unknown" },
+        reasoning: { responseFormats: [], visibleOutput: "unknown", efforts: ["low", "high"] },
+        tools: "supported",
+        continuation: "unknown",
+        summary: "unknown",
+        source: "metadata",
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        contractVersion: 1,
+      },
+    };
+    const toolsProbedOnly = verifiedChatProfile({
+      id: "tools-only",
+      reasoningCapabilities: undefined,
+      reasoning: { mode: "auto", summary: "off" },
+    });
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile: toolsProbedOnly,
+      servers: [server],
+      profiles: [toolsProbedOnly],
+      fetchedModelsByServerId: new Map([[server.id, [advertised]]]),
+      fetchModels: vi.fn(async () => [advertised]),
+      onSave: vi.fn(async (_profile: ChatModelProfile) => {}),
+      resolveProfile: (id) => (id === toolsProbedOnly.id ? toolsProbedOnly : undefined),
+    });
+    modal.open();
+
+    const lines = Array.from(
+      modal.contentEl.querySelectorAll(".attest-profile-modal__capability-status-line"),
+      (line) => line.textContent,
+    );
+    expect(lines).toEqual(["Tools support: Verified", "Agent mode support: Reported by provider"]);
+    const effortSelect = Array.from(modal.contentEl.querySelectorAll("select")).at(-1)!;
+    expect(Array.from(effortSelect.options, (option) => option.value)).toEqual(["", "low", "high"]);
+  });
+
   it("saves an embedding profile without chat-only settings", async () => {
     const embedding: DiscoveredModel = {
       id: "embedding-model",
