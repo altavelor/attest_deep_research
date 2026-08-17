@@ -2,8 +2,7 @@ import { ApiFormat } from "@core/agent";
 import type { LocalePreference } from "@core/i18n";
 import type { WebSourceProfile } from "@core/web";
 import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
-import { ToolCapabilitySettings } from "./toolCapabilities";
-import { ModelCapabilitySnapshot } from "./modelCapabilityCache";
+import { ModelCapabilitySnapshot, ToolCapabilitySettings } from "./capabilities/contracts";
 
 export interface ServerProfile {
   id: string;

@@ -9,10 +9,10 @@ import {
 } from "@adapters/model-provider/common/models";
 import { toUserMessage } from "@core/errors";
 import { ApiFormat } from "@core/agent";
-import type { PluginRequestLogger } from "./debugLogger";
-import { ModelCapability, ServerProfile } from "./types";
-import type { ModelCapabilitySnapshot } from "./modelCapabilityCache";
-import { resolveCapabilityMetadata } from "./capabilityMetadataResolver";
+import type { PluginRequestLogger } from "../debugLogger";
+import { ModelCapability, ServerProfile } from "../types";
+import type { ModelCapabilitySnapshot } from "../capabilities";
+import { resolveCapabilityMetadata } from "../capabilities";
 import { capabilityFromKinds, resolveProviderDialect } from "./providerDialects";
 import type { ProviderDialect } from "./providerDialects";
 

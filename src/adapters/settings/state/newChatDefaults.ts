@@ -1,5 +1,5 @@
-import { reasoningVerified } from "./capabilityPresentation";
-import { ChatModelProfile, AttestSettings, NewChatDefaults, NewChatSearchMode } from "./types";
+import { reasoningVerified } from "../capabilities";
+import { ChatModelProfile, AttestSettings, NewChatDefaults, NewChatSearchMode } from "../types";
 
 export const NEW_CHAT_SEARCH_MODES: NewChatSearchMode[] = [
   "none",

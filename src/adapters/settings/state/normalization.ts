@@ -8,7 +8,7 @@ import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
 import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { AttestSettings } from "./types";
+import { AttestSettings } from "../types";
 
 export function normalizeSettingsState(settings: AttestSettings): void {
   markInvalidProfilesSuspended(settings);
