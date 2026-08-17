@@ -6,6 +6,7 @@ export type ToolCapabilityLayer = Partial<ToolCallingCapabilities>;
 
 export interface ToolCapabilitySettings {
   formatDefault: ToolCallingCapabilities;
+  advertised?: ToolCapabilityLayer;
   probe?: ToolCapabilityLayer;
 
   probeAudit?: ToolCapabilityProbeAudit;

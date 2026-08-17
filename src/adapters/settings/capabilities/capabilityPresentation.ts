@@ -24,7 +24,7 @@ export function toolsVerified(profile: Pick<ChatModelProfile, "capabilities">): 
   const toolCalling = profile.capabilities?.toolCalling;
   return (
     toolCalling?.probe?.calls === true ||
-    toolCalling?.formatDefault.calls === true ||
+    toolCalling?.advertised?.calls === true ||
     profile.capabilities?.tools === true
   );
 }

@@ -51,6 +51,7 @@ export function withProbeResults(
 ): ToolCapabilitySettings {
   return {
     formatDefault: { ...settings.formatDefault },
+    ...(settings.advertised ? { advertised: { ...settings.advertised } } : {}),
     probe: { ...(settings.probe ?? {}), ...probe },
     ...(probeAudit ? { probeAudit } : {}),
   };

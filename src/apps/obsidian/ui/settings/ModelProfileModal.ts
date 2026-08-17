@@ -418,13 +418,15 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     const calls =
       model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
     const controls = model.capabilitySnapshot?.toolControls;
+    const advertised = {
+      calls,
+      choiceRequired: calls && controls?.choiceRequired === true,
+      choiceSpecific: calls && controls?.choiceSpecific === true,
+      parallelCalls: calls && controls?.parallelCalls === true,
+    };
     this.toolCapabilitySettings = {
-      formatDefault: {
-        calls,
-        choiceRequired: calls && controls?.choiceRequired === true,
-        choiceSpecific: calls && controls?.choiceSpecific === true,
-        parallelCalls: calls && controls?.parallelCalls === true,
-      },
+      formatDefault: advertised,
+      advertised,
     };
   }
 

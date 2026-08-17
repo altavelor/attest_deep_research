@@ -23,7 +23,7 @@ describe("capability presentation helpers", () => {
     updatedAt: "2026-01-01T00:00:00.000Z",
   });
 
-  it("treats probe results and advertised metadata as supported capabilities", () => {
+  it("treats probe results and explicitly advertised metadata as supported capabilities", () => {
     expect(
       toolsVerified({
         capabilities: {
@@ -40,10 +40,23 @@ describe("capability presentation helpers", () => {
           chat: true,
           embeddings: false,
           detectionSource: "metadata",
-          toolCalling: createToolCapabilitySettings(true),
+          toolCalling: {
+            ...createToolCapabilitySettings(true),
+            advertised: { calls: true },
+          },
         },
       }),
     ).toBe(true);
+    expect(
+      toolsVerified({
+        capabilities: {
+          chat: true,
+          embeddings: false,
+          detectionSource: "metadata",
+          toolCalling: createToolCapabilitySettings(true),
+        },
+      }),
+    ).toBe(false);
     expect(
       toolsVerified({
         capabilities: {
