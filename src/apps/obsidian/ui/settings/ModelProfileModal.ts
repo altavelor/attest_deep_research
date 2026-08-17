@@ -393,9 +393,17 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     if (!this.reasoningEffort || !efforts.includes(this.reasoningEffort)) {
       this.reasoningEffort = this.reasoningCapabilities?.defaultEffort ?? "";
     }
-    this.toolCapabilitySettings = createToolCapabilitySettings(
-      model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true,
-    );
+    const calls =
+      model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
+    const controls = model.capabilitySnapshot?.toolControls;
+    this.toolCapabilitySettings = {
+      formatDefault: {
+        calls,
+        choiceRequired: calls && controls?.choiceRequired === true,
+        choiceSpecific: calls && controls?.choiceSpecific === true,
+        parallelCalls: calls && controls?.parallelCalls === true,
+      },
+    };
   }
 
   /**
