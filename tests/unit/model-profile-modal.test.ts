@@ -472,6 +472,50 @@ describe("ModelProfileModal", () => {
     expect(Array.from(effortSelect.options, (option) => option.value)).toEqual(["", "low", "high"]);
   });
 
+  it("drops the saved capability status once another model is selected", () => {
+    const other: DiscoveredModel = {
+      id: "other-model",
+      name: "other-model",
+      capabilities: { chat: true, embeddings: false, detectionSource: "metadata" },
+    };
+    const probed = verifiedChatProfile();
+    const modal = new ModelProfileModal<ChatModelProfile>(new App() as unknown as ObsidianApp, {
+      t,
+      kind: "chat",
+      profile: probed,
+      servers: [server],
+      profiles: [probed],
+      fetchedModelsByServerId: new Map([[server.id, [model, other]]]),
+      fetchModels: vi.fn(async () => [model, other]),
+      onSave: vi.fn(async (_profile: ChatModelProfile) => {}),
+      resolveProfile: (id) => (id === probed.id ? probed : undefined),
+      getCapabilityStatus: () => ({ tools: "verified", agent: "verified" }),
+    });
+    modal.open();
+
+    const statusLines = (): (string | null)[] =>
+      Array.from(
+        modal.contentEl.querySelectorAll(".attest-profile-modal__capability-status-line"),
+        (line) => line.textContent,
+      );
+    expect(statusLines()).toEqual(["Tools support: Verified", "Agent mode support: Verified"]);
+
+    const modelInput = inputFor(modal.contentEl, "Model");
+    modelInput.value = "";
+    modelInput.dispatchEvent(new Event("input"));
+    modelInput.focus();
+    modelInput.dispatchEvent(new Event("focus"));
+    Array.from(
+      modal.contentEl.querySelectorAll<HTMLButtonElement>(
+        '.attest-profile-modal__model-option[role="option"]',
+      ),
+    )
+      .find((option) => option.textContent === "other-model")!
+      .click();
+
+    expect(statusLines()).toEqual(["Tools support: Not tested", "Agent mode support: Not tested"]);
+  });
+
   it("saves an embedding profile without chat-only settings", async () => {
     const embedding: DiscoveredModel = {
       id: "embedding-model",
