@@ -29,7 +29,6 @@ export const chat = {
   "chat.composer.attachment.remove": "Remove {path}",
   "chat.composer.submit.ask": "Ask",
   "chat.composer.submit.stop": "Stop the current answer",
-  "chat.composer.submit.unavailable": "Ask unavailable: {message}",
 
   "chat.status.noChatModel": "Create and select a chat model profile in Attest settings.",
   "chat.status.noIndex": "Create and select an active index in Attest settings.",
