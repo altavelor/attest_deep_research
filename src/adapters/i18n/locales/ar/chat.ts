@@ -31,7 +31,6 @@ export const chat: EnChatMessages = {
   "chat.composer.attachment.remove": "إزالة {path}",
   "chat.composer.submit.ask": "اسأل",
   "chat.composer.submit.stop": "أوقف الإجابة الحالية",
-  "chat.composer.submit.unavailable": "لا يمكن السؤال: {message}",
 
   "chat.status.noChatModel": "أنشئ واختر ملف نموذج محادثة في إعدادات Attest.",
   "chat.status.noIndex": "أنشئ واختر فهرسًا نشطًا في إعدادات Attest.",
