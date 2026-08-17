@@ -373,11 +373,6 @@
   box-shadow: none;
 }
 
-.attest-chat__submit-tooltip {
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
 .attest-chat__submit {
   width: 2.5rem;
   height: 2.5rem;

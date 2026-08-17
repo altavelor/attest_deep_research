@@ -47,7 +47,6 @@ export interface ChatComposerRefs {
   contextIndicatorEl: HTMLElement;
   textareaEl: HTMLTextAreaElement;
   submitButtonEl: HTMLButtonElement;
-  submitButtonTooltipEl: HTMLElement;
   attachedContextEl: HTMLElement;
   controls: ComposerControls;
 }
@@ -282,8 +281,7 @@ export function renderChatComposer(
   }
   syncResearchModeAvailability();
 
-  const submitButtonTooltipEl = modelRow.createSpan({ cls: "attest-chat__submit-tooltip" });
-  const submitButtonEl = submitButtonTooltipEl.createEl("button", {
+  const submitButtonEl = modelRow.createEl("button", {
     cls: "mod-cta attest-chat__submit",
     attr: { type: "button" },
   });
@@ -331,7 +329,6 @@ export function renderChatComposer(
     contextIndicatorEl,
     textareaEl,
     submitButtonEl,
-    submitButtonTooltipEl,
     attachedContextEl,
     controls,
   };
