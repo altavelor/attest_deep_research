@@ -31,7 +31,6 @@ export const chat: EnChatMessages = {
   "chat.composer.attachment.remove": "{path} entfernen",
   "chat.composer.submit.ask": "Fragen",
   "chat.composer.submit.stop": "Aktuelle Antwort stoppen",
-  "chat.composer.submit.unavailable": "Fragen nicht möglich: {message}",
 
   "chat.status.noChatModel":
     "In den Attest-Einstellungen ein Chat-Modell-Profil anlegen und auswählen.",
