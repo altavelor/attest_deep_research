@@ -14,10 +14,11 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capability.status": "{tools} · {agent}",
   "settings.capability.entry": "{subject}: {phase}",
-  "settings.capability.subject.tools": "compatibilidad con herramientas",
-  "settings.capability.subject.agent": "compatibilidad con el modo agente",
+  "settings.capability.subject.tools": "Compatibilidad con herramientas",
+  "settings.capability.subject.agent": "Compatibilidad con el modo agente",
   "settings.capability.phase.testing": "Probando…",
   "settings.capability.phase.verified": "Verificada",
+  "settings.capability.phase.advertised": "Indicado por el proveedor",
   "settings.capability.phase.notVerified": "Sin verificar",
   "settings.capability.phase.failed": "Fallida",
   "settings.capability.phase.notTested": "Sin probar",
@@ -109,6 +110,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capabilityControls.heading": "Capacidades",
   "settings.capabilityControls.testTooltip": "Probar las capacidades — {status}",
+  "settings.capabilityControls.testingTooltip": "Prueba de capacidades en curso…",
   "settings.capabilityControls.retestTooltip": "Volver a probar las capacidades — {status}",
   "settings.capabilityControls.agentic.name": "Modo agente",
   "settings.capabilityControls.agentic.desc":

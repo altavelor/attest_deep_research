@@ -4,7 +4,7 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "@adapters/indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing";
 import { ApiFormat } from "@core/agent";
 import { isRecord } from "@shared";
 import { isNonNegativeInteger, isPositiveInteger } from "@shared";

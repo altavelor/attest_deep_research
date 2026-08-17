@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS, cloneIndexProfile } from "./defaults";
 import { readNewChatDefaults } from "./newChatDefaults";
 import { normalizeSettingsState } from "./normalization";
 import { readUiLanguage } from "./uiLanguage";
-import { AttestSettings } from "./types";
+import { AttestSettings } from "../types";
 
 export function readSettings(savedData: unknown): AttestSettings {
   if (!isCurrentSettings(savedData)) {

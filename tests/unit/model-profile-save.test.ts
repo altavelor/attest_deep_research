@@ -42,6 +42,44 @@ describe("chat model profile save", () => {
     });
   });
 
+  it("adopts metadata capabilities of the same model when no probe exists", () => {
+    const current = {
+      id: "chat-1",
+      name: "Existing",
+      serverProfileId: "server-1",
+      modelName: "model-1",
+      toolsEnabled: false,
+      noteMutationAccess: false,
+      reasoning: { mode: "auto" as const, summary: "off" as const },
+      capabilities: {
+        chat: true,
+        embeddings: false,
+        toolCalling: createToolCapabilitySettings(false),
+        detectionSource: "format-default" as const,
+      },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const updated = {
+      ...current,
+      toolsEnabled: true,
+      reasoningCapabilities: {
+        source: "metadata" as const,
+        responses: false,
+        continuation: false,
+        summary: false,
+        efforts: ["low", "high"],
+      },
+      capabilities: { ...current.capabilities, toolCalling: createToolCapabilitySettings(true) },
+    };
+
+    expect(mergeChatProfileSettingsPreservingProbe(current, updated)).toMatchObject({
+      toolsEnabled: true,
+      capabilities: { toolCalling: { formatDefault: { calls: true } } },
+      reasoningCapabilities: { source: "metadata", efforts: ["low", "high"] },
+    });
+  });
+
   it("drops probe-owned capabilities when the server or model changes", () => {
     const current = {
       id: "chat-1",

@@ -56,6 +56,18 @@ describe("tool capability resolution", () => {
     });
   });
 
+  it("preserves provider-advertised capabilities when applying a probe result", () => {
+    const updated = withProbeResults(
+      { ...createToolCapabilitySettings(false), advertised: { calls: true } },
+      { calls: false },
+    );
+
+    expect(updated).toMatchObject({
+      advertised: { calls: true },
+      probe: { calls: false },
+    });
+  });
+
   it("allows probing a new unsaved profile once server and model are selected", () => {
     expect(
       canProbeToolCapabilities({
