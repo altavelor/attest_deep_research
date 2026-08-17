@@ -7,6 +7,7 @@ import { startChatProfileProbes as startChatProfileProbeTasks } from "@adapters/
 import {
   fetchAvailableModels,
   fetchModelContextLength,
+  modelRoleCountMessage,
   verifyEmbeddingCapability,
   DiscoveredModel,
 } from "@adapters/settings";
@@ -111,10 +112,13 @@ export class SettingsCapabilityProber {
     if (changed) await this.plugin.saveSettings();
   }
 
-  async fetchModelsForServer(server: ServerProfile): Promise<DiscoveredModel[]> {
+  async fetchModelsForServer(
+    server: ServerProfile,
+    kind: "chat" | "embedding",
+  ): Promise<DiscoveredModel[]> {
     const result = await fetchAvailableModels(server, { logger: this.plugin.logger });
     this.fetchedModelsByServerId.set(server.id, result.models);
-    new Notice(result.message);
+    new Notice(result.ok ? modelRoleCountMessage(server, result.models, kind) : result.message);
     return result.models;
   }
 
