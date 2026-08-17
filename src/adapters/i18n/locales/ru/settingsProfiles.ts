@@ -14,10 +14,11 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capability.status": "{tools} · {agent}",
   "settings.capability.entry": "{subject}: {phase}",
-  "settings.capability.subject.tools": "поддержка инструментов",
-  "settings.capability.subject.agent": "поддержка режима агента",
+  "settings.capability.subject.tools": "Поддержка инструментов",
+  "settings.capability.subject.agent": "Поддержка агентного режима",
   "settings.capability.phase.testing": "Проверка…",
   "settings.capability.phase.verified": "Подтверждено",
+  "settings.capability.phase.advertised": "Заявлено провайдером",
   "settings.capability.phase.notVerified": "Не подтверждено",
   "settings.capability.phase.failed": "Ошибка",
   "settings.capability.phase.notTested": "Не проверялось",
@@ -107,6 +108,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capabilityControls.heading": "Возможности",
   "settings.capabilityControls.testTooltip": "Проверить возможности — {status}",
+  "settings.capabilityControls.testingTooltip": "Идёт проверка возможностей…",
   "settings.capabilityControls.retestTooltip": "Проверить возможности заново — {status}",
   "settings.capabilityControls.agentic.name": "Режим агента",
   "settings.capabilityControls.agentic.desc": "Включить подтверждённую поддержку режима агента.",

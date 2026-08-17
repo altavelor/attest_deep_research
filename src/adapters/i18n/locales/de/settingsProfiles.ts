@@ -14,10 +14,11 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capability.status": "{tools} · {agent}",
   "settings.capability.entry": "{subject}: {phase}",
-  "settings.capability.subject.tools": "Tool-Unterstützung",
-  "settings.capability.subject.agent": "Unterstützung des Agent-Modus",
+  "settings.capability.subject.tools": "Werkzeug-Unterstützung",
+  "settings.capability.subject.agent": "Agentenmodus-Unterstützung",
   "settings.capability.phase.testing": "Test läuft…",
   "settings.capability.phase.verified": "Bestätigt",
+  "settings.capability.phase.advertised": "Vom Anbieter angegeben",
   "settings.capability.phase.notVerified": "Nicht bestätigt",
   "settings.capability.phase.failed": "Fehlgeschlagen",
   "settings.capability.phase.notTested": "Nicht getestet",
@@ -108,6 +109,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capabilityControls.heading": "Fähigkeiten",
   "settings.capabilityControls.testTooltip": "Fähigkeiten testen — {status}",
+  "settings.capabilityControls.testingTooltip": "Fähigkeitstest läuft …",
   "settings.capabilityControls.retestTooltip": "Fähigkeiten erneut testen — {status}",
   "settings.capabilityControls.agentic.name": "Agentenmodus",
   "settings.capabilityControls.agentic.desc":

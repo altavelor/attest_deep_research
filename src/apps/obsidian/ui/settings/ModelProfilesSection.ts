@@ -109,7 +109,9 @@ export class ModelProfilesSection {
             label: isTesting
               ? t("settings.models.chat.testingLabel")
               : formatCapabilityStatus(t, capability),
+            disabled: isTesting,
             onClick: async () => {
+              if (isTesting) return;
               await this.options.prober.refreshMetadataCapabilities();
               this.options.prober.startChatProfileProbes(profile.id, true);
               new Notice(t("settings.models.chat.testingNotice", { profile: profile.name }));
