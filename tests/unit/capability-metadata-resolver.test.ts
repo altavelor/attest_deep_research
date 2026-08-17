@@ -30,6 +30,25 @@ describe("capability metadata resolvers", () => {
     });
   });
 
+  it("reads the reasoning effort list an OpenRouter model advertises", () => {
+    const metadata = {
+      id: "qwen/qwen3.8-2.4t-a95b",
+      supported_parameters: ["reasoning", "reasoning_effort", "tools"],
+      reasoning: {
+        mandatory: true,
+        default_enabled: true,
+        supported_efforts: ["xhigh", "medium", "low"],
+        default_effort: "xhigh",
+      },
+    };
+
+    expect(extractReasoningEfforts(metadata)).toEqual(["xhigh", "medium", "low"]);
+    expect(resolveCapabilityMetadata(metadata)?.reasoning).toMatchObject({
+      efforts: ["xhigh", "medium", "low"],
+      defaultEffort: "xhigh",
+    });
+  });
+
   it("isolates resolver failure and continues with the next resolver", async () => {
     const snapshot = resolveCapabilityMetadata({
       supported_endpoints: ["/chat/completions"],
