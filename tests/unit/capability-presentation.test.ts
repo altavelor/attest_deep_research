@@ -23,7 +23,7 @@ describe("capability presentation helpers", () => {
     updatedAt: "2026-01-01T00:00:00.000Z",
   });
 
-  it("only treats probe-owned successful results as verified", () => {
+  it("treats probe results and advertised metadata as supported capabilities", () => {
     expect(
       toolsVerified({
         capabilities: {
@@ -39,8 +39,18 @@ describe("capability presentation helpers", () => {
         capabilities: {
           chat: true,
           embeddings: false,
-          detectionSource: "probe",
+          detectionSource: "metadata",
           toolCalling: createToolCapabilitySettings(true),
+        },
+      }),
+    ).toBe(true);
+    expect(
+      toolsVerified({
+        capabilities: {
+          chat: true,
+          embeddings: false,
+          detectionSource: "format-default",
+          toolCalling: createToolCapabilitySettings(false),
         },
       }),
     ).toBe(false);
@@ -56,10 +66,28 @@ describe("capability presentation helpers", () => {
     expect(
       reasoningVerified({
         source: "metadata",
-        responses: true,
-        continuation: true,
+        responses: false,
+        continuation: false,
+        summary: false,
+        efforts: ["low", "high"],
+      }),
+    ).toBe(true);
+    expect(
+      reasoningVerified({
+        source: "metadata",
+        responses: false,
+        continuation: false,
         summary: false,
         efforts: [],
+      }),
+    ).toBe(false);
+    expect(
+      reasoningVerified({
+        source: "probe",
+        responses: false,
+        continuation: false,
+        summary: false,
+        efforts: ["low"],
       }),
     ).toBe(false);
   });
