@@ -4,7 +4,7 @@ import {
   isWebSourceActivation,
   WebSourceActivation,
 } from "@core/web";
-import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
+import type { IndexProfile } from "@adapters/indexing";
 import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";

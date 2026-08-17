@@ -49,13 +49,17 @@ export async function probeToolControlCapabilities(
   if (options.apiFormat === "ollama") return failed;
 
   const ranAt = new Date().toISOString();
+  throwIfAborted(options.signal);
   const required = await runProbe(options, { type: "required" });
+  throwIfAborted(options.signal);
   const specific = await runProbe(options, { type: "specific", name: PROBE_B });
+  throwIfAborted(options.signal);
   const choiceRequired = required.some((name) => name === PROBE_A || name === PROBE_B);
   const choiceSpecific = specific.includes(PROBE_B);
   const parallelCalls = required.includes(PROBE_A) && required.includes(PROBE_B);
   const callsViaControlled = choiceRequired || choiceSpecific;
   const autoResults = callsViaControlled ? [] : await runProbe(options, { type: "auto" });
+  throwIfAborted(options.signal);
   const callsViaAuto = !callsViaControlled && autoResults.length > 0;
   return {
     calls: callsViaControlled || callsViaAuto,
@@ -90,7 +94,20 @@ async function runProbe(
       if (chunk.isComplete) break;
     }
     return names;
-  } catch {
+  } catch (error) {
+    if (isCancellation(error) || options.signal?.aborted === true) {
+      throw error;
+    }
     return [];
   }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) {
+    throw new DOMException("Tool capability probe cancelled.", "AbortError");
+  }
+}
+
+function isCancellation(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
