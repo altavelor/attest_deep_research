@@ -388,11 +388,19 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
    * metadata leaves unknown.
    */
   private applyDiscoveredCapabilities(model: DiscoveredModel): void {
+    this.applyDiscoveredReasoning(model);
+    this.applyDiscoveredTools(model);
+  }
+
+  private applyDiscoveredReasoning(model: DiscoveredModel): void {
     this.reasoningCapabilities = reasoningCapabilitiesFromSnapshot(model.capabilitySnapshot);
     const efforts = this.reasoningCapabilities?.efforts ?? [];
     if (!this.reasoningEffort || !efforts.includes(this.reasoningEffort)) {
       this.reasoningEffort = this.reasoningCapabilities?.defaultEffort ?? "";
     }
+  }
+
+  private applyDiscoveredTools(model: DiscoveredModel): void {
     const calls =
       model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
     const controls = model.capabilitySnapshot?.toolControls;
@@ -416,18 +424,18 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       return;
     }
 
-    if (
-      this.reasoningCapabilities?.source === "probe" ||
-      this.toolCapabilitySettings.probe !== undefined
-    ) {
-      return;
-    }
-
     const discovered = this.modelsForSelectedServer().find(
       (candidate) => candidate.name === this.modelName,
     );
-    if (discovered) {
-      this.applyDiscoveredCapabilities(discovered);
+    if (!discovered) {
+      return;
+    }
+
+    if (this.reasoningCapabilities?.source !== "probe") {
+      this.applyDiscoveredReasoning(discovered);
+    }
+    if (this.toolCapabilitySettings.probe === undefined) {
+      this.applyDiscoveredTools(discovered);
     }
   }
 
