@@ -16,7 +16,7 @@ import {
 import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
 import { DEFAULT_UI_LANGUAGE } from "./uiLanguage";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { AttestSettings } from "./types";
+import { AttestSettings } from "../types";
 
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   id: DEFAULT_INDEX_PROFILE_ID,
