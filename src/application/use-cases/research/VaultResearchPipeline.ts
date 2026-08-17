@@ -10,13 +10,13 @@ export interface VaultSearchOptions {
 }
 
 export interface VaultResearchPipelineOptions {
-  retriever: ResearchRetriever;
+  retriever?: ResearchRetriever;
   queryExpansion?: QueryExpansion;
   evidenceLimit: number;
 }
 
 export class VaultResearchPipeline {
-  private readonly retriever: ResearchRetriever;
+  private readonly retriever?: ResearchRetriever;
   private readonly queryExpansion?: QueryExpansion;
   private readonly evidenceLimit: number;
 
@@ -30,6 +30,7 @@ export class VaultResearchPipeline {
    * Search the vault for a question. Query expansion runs alongside the search
    * for the original query instead of gating it, so it can neither delay nor
    * fail that search. Linked notes are promoted by the retriever's ranking.
+   * Without a retriever — a web-only turn — the search yields no evidence.
    */
   async *search(
     question: string,
@@ -37,6 +38,11 @@ export class VaultResearchPipeline {
     boostedSourcePaths: string[] | undefined = undefined,
     options: VaultSearchOptions = {},
   ): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
+    const retriever = this.retriever;
+    if (!retriever) {
+      return { chunks: [], citations: [], usedFallback: false };
+    }
+
     const limit = options.evidenceLimit ?? this.evidenceLimit;
     const expansionEnabled = this.queryExpansion !== undefined && this.canReadLanguageInventory();
 
@@ -48,7 +54,7 @@ export class VaultResearchPipeline {
     }
 
     const hasBoostedPaths = boostedSourcePaths !== undefined && boostedSourcePaths.length > 0;
-    const search = this.retriever.search(question, {
+    const search = retriever.search(question, {
       limit,
       includeWebResults: false,
       queryVariants,
@@ -62,7 +68,7 @@ export class VaultResearchPipeline {
   }
 
   private canReadLanguageInventory(): boolean {
-    return typeof this.retriever.getLanguageInventory === "function";
+    return typeof this.retriever?.getLanguageInventory === "function";
   }
 
   /** Never rejects: a failed expansion degrades to searching the original query. */
@@ -72,13 +78,14 @@ export class VaultResearchPipeline {
     signal: AbortSignal | undefined,
   ): Promise<RetrievalQueryVariant[] | undefined> {
     const queryExpansion = this.queryExpansion;
+    const readLanguageInventory = this.retriever?.getLanguageInventory?.bind(this.retriever);
 
-    if (!queryExpansion || !this.retriever.getLanguageInventory) {
+    if (!queryExpansion || !readLanguageInventory) {
       return undefined;
     }
 
     try {
-      const languageInventory = await this.retriever.getLanguageInventory();
+      const languageInventory = await readLanguageInventory();
 
       if (languageInventory.length === 0) {
         return undefined;

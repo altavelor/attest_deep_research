@@ -166,8 +166,8 @@ export default class AttestPlugin extends Plugin {
       ATTEST_CHAT_VIEW_TYPE,
       (leaf) =>
         new AttestChatView(leaf, {
-          createResearchService: (chatModelProfileId, indexProfileId) =>
-            createResearchService(this.composition, chatModelProfileId, indexProfileId),
+          createResearchService: (chatModelProfileId, indexProfileId, searchMode) =>
+            createResearchService(this.composition, chatModelProfileId, indexProfileId, searchMode),
           isWebSearchEnabled: () =>
             this.settings.webSources.some((profile) => isWebSourceActive(profile)),
           getChatModel: () =>
@@ -220,6 +220,7 @@ export default class AttestPlugin extends Plugin {
           },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           getTranslator: () => this.translator,
+          logError: (error) => this.composition.logger.logError(error, { url: "chat:research" }),
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () =>
             this.settings.newChatDefaults.includeActiveFileContext,

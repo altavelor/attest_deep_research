@@ -64,7 +64,11 @@ export const ATTEST_CHAT_VIEW_TYPE = "attest-chat";
 export type { IndexSearchOptions, IndexSearchResult };
 
 export interface AttestChatViewServices {
-  createResearchService(chatModelProfileId?: string, indexProfileId?: string): ResearchService;
+  createResearchService(
+    chatModelProfileId?: string,
+    indexProfileId?: string,
+    searchMode?: ResearchSearchMode,
+  ): ResearchService;
   isWebSearchEnabled(): boolean;
   getChatModel(): string;
   getAvailableChatModels(): string[];
@@ -87,6 +91,7 @@ export interface AttestChatViewServices {
   setSavedChatFavorite(id: string, isFavorite: boolean): Promise<void>;
   deleteSavedChat(id: string): Promise<void>;
   getTranslator(): UiTranslator;
+  logError?(error: unknown): void;
   isDebugMode(): boolean;
   shouldIncludeActiveFileContext(): boolean;
 }
@@ -204,7 +209,9 @@ export class AttestChatView extends ItemView {
         this.services.createResearchService(
           this.currentChatSettings.chatModelProfileId,
           this.currentChatSettings.indexProfileId,
+          this.getSearchMode(),
         ),
+      logError: (error) => this.services.logError?.(error),
       getSearchMode: () => this.getSearchMode(),
       getResearchMode: () => this.currentResearchMode,
       getContextMode: () => this.currentChatSettings.contextMode ?? "include",

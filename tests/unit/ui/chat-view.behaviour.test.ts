@@ -361,3 +361,28 @@ describe("saved chats from the chat view", () => {
     await leaf.detach();
   });
 });
+
+describe("chat view research composition", () => {
+  it("composes the research turn for the active search mode", async () => {
+    const createResearchService = vi.fn(() => ({
+      answer: async function* answer() {
+        return;
+      },
+    }));
+    const { view, leaf } = await openView({
+      getDefaultSearchMode: () => "webOnly",
+      createResearchService:
+        createResearchService as unknown as AttestChatViewServices["createResearchService"],
+    });
+
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>("textarea.attest-chat__input");
+    input!.value = "What happened today?";
+    input!.dispatchEvent(new Event("input"));
+    view.contentEl.querySelector<HTMLButtonElement>("button.attest-chat__submit")?.click();
+
+    await vi.waitFor(() => {
+      expect(createResearchService).toHaveBeenCalledWith("model", "index", "webOnly");
+    });
+    await leaf.detach();
+  });
+});
