@@ -1,4 +1,4 @@
-import { ModelCapability } from "../types";
+import { ModelCapability } from "../../types";
 
 export interface ProviderModelKinds {
   chat: boolean;

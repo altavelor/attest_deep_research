@@ -1,5 +1,5 @@
 import { createToolCapabilitySettings } from "./toolCapabilities";
-import { ChatModelProfile, ReasoningCapabilitySettings } from "./types";
+import { ChatModelProfile, ReasoningCapabilitySettings } from "../types";
 
 export type CapabilityVerificationPhase =
   "testing" | "verified" | "not-verified" | "failed" | "not-tested";

@@ -1,5 +1,5 @@
 import { areCredentialsComplete, findWebSourceDescriptor, WebSourceProfile } from "@core/web";
-import { AttestSettings } from "./types";
+import { AttestSettings } from "../types";
 
 /** Returns the stored profile or a switched-off blank; never mutates settings. */
 export function getWebSourceProfile(
