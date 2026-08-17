@@ -132,7 +132,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     if (
       this.options.kind === "chat" &&
       currentProfile &&
-      "reasoningCapabilities" in currentProfile
+      "reasoningCapabilities" in currentProfile &&
+      this.savedStatusApplies()
     ) {
       this.reasoningCapabilities = currentProfile.reasoningCapabilities;
       const probedToolCalling = currentProfile.capabilities?.toolCalling;
@@ -378,6 +379,19 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     );
   }
 
+  /**
+   * A stored capability status describes the model it was measured on, so it is
+   * only shown while the edited server and model still match the saved profile.
+   */
+  private savedStatusApplies(): boolean {
+    const currentProfile = this.currentProfile();
+    return (
+      currentProfile !== undefined &&
+      currentProfile.serverProfileId === this.serverProfileId &&
+      currentProfile.modelName === this.modelName
+    );
+  }
+
   private selectedServer(): ServerProfile | undefined {
     return this.options.servers.find((server) => server.id === this.serverProfileId);
   }
@@ -604,6 +618,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       containerEl,
       currentProfile: this.currentProfile() as ChatModelProfile | undefined,
       savedProfileId: this.savedProfileId,
+      savedStatusApplies: this.savedStatusApplies(),
       getCapabilityStatus: this.options.getCapabilityStatus,
       reasoningCapabilities: this.reasoningCapabilities,
       toolCapabilities: this.toolCapabilitySettings,

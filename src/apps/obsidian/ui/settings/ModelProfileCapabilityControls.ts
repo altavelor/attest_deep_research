@@ -18,6 +18,7 @@ export interface ModelProfileCapabilityControlsOptions {
   containerEl: HTMLElement;
   currentProfile: ChatModelProfile | undefined;
   savedProfileId: string | undefined;
+  savedStatusApplies: boolean;
   getCapabilityStatus?: (profileId: string) => CapabilityVerificationState;
   reasoningCapabilities: ReasoningCapabilities;
   toolCapabilities: ToolCapabilitySettings;
@@ -160,18 +161,20 @@ function blockReason(t: Translate, verified: boolean, tested: boolean): string |
 }
 
 function isCapabilityTestRunning(options: ModelProfileCapabilityControlsOptions): boolean {
-  const status = options.savedProfileId
-    ? options.getCapabilityStatus?.(options.savedProfileId)
-    : undefined;
+  const status =
+    options.savedProfileId && options.savedStatusApplies
+      ? options.getCapabilityStatus?.(options.savedProfileId)
+      : undefined;
   return status?.tools === "testing" || status?.agent === "testing";
 }
 
 function capabilityVerificationState(
   options: ModelProfileCapabilityControlsOptions,
 ): CapabilityVerificationState {
-  const status = options.savedProfileId
-    ? options.getCapabilityStatus?.(options.savedProfileId)
-    : undefined;
+  const status =
+    options.savedProfileId && options.savedStatusApplies
+      ? options.getCapabilityStatus?.(options.savedProfileId)
+      : undefined;
   return (
     status ??
     deriveCapabilityVerificationState({
