@@ -138,7 +138,7 @@ export class ModelProfilesSection {
       servers: settings.serverProfiles,
       profiles: settings.chatModelProfiles,
       fetchedModelsByServerId: this.options.fetchedModelsByServerId,
-      fetchModels: (server) => this.options.prober.fetchModelsForServer(server),
+      fetchModels: (server) => this.options.prober.fetchModelsForServer(server, "chat"),
       fetchContextLength: (server, name) =>
         this.options.prober.fetchContextLengthForModel(server, name),
       onSave: async (saved) => {
@@ -229,7 +229,7 @@ export class ModelProfilesSection {
       servers: settings.serverProfiles,
       profiles: settings.embeddingModelProfiles,
       fetchedModelsByServerId: this.options.fetchedModelsByServerId,
-      fetchModels: (server) => this.options.prober.fetchModelsForServer(server),
+      fetchModels: (server) => this.options.prober.fetchModelsForServer(server, "embedding"),
       onSave: async (saved) => {
         const existing = settings.embeddingModelProfiles.find(
           (candidate) => candidate.id === saved.id,
