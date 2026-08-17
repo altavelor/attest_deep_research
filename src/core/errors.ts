@@ -58,7 +58,9 @@ export function isAttestError(error: unknown): error is AttestError {
 
 export function toUserMessage(error: unknown): string {
   if (isAttestError(error)) {
-    if (error.code === "UNSUPPORTED_CAPABILITY") return error.message;
+    if (error.code === "UNSUPPORTED_CAPABILITY" || error.code === "INVALID_SETTINGS") {
+      return error.message;
+    }
     if (error.code === "MODEL_PROVIDER_UNAVAILABLE" || error.code === "MODEL_NOT_FOUND") {
       return modelRequestUserMessage(error);
     }

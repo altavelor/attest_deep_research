@@ -46,7 +46,7 @@ import { SubAgentLogger, SubAgentPort } from "@application/research/subAgentPort
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 
 export interface ResearchServiceOptions {
-  retriever: ResearchRetriever;
+  retriever?: ResearchRetriever;
   chatModel: ChatModelProvider;
   chatModelName: string;
   chatOptions?: Pick<ChatRequest, "temperature" | "maxTokens">;

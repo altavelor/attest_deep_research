@@ -170,6 +170,16 @@ describe("VaultResearchPipeline", () => {
     expect(step.value.chunks.map((chunk) => chunk.id)).toEqual(["g1", "p1", "p2"]);
     expect(step.value.citations.map((entry) => entry.id)).toEqual(["g1", "p1", "p2"]);
   });
+
+  it("yields no vault evidence and no status when composed without a retriever", async () => {
+    const pipeline = new VaultResearchPipeline({ evidenceLimit: 4 });
+
+    const generator = pipeline.search("question", undefined, []);
+    const step = await generator.next();
+
+    expect(step.done).toBe(true);
+    expect(step.value).toEqual({ chunks: [], citations: [], usedFallback: false });
+  });
 });
 
 describe("WebResearchPipeline", () => {
