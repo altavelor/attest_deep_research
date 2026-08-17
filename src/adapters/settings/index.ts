@@ -12,6 +12,7 @@ export * from "./normalization";
 export * from "./parsers";
 export * from "./persistence";
 export * from "./privacyCopy";
+export * from "./providerDialects";
 export * from "./profileQueries";
 export * from "./reasoningVisibilityProbe";
 export * from "./responsesCapabilityProbe";
