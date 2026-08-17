@@ -1,4 +1,9 @@
-import { ModelCapabilitySnapshot, ReasoningResponseFormat } from "./modelCapabilityCache";
+import {
+  ModelCapabilitySnapshot,
+  ReasoningResponseFormat,
+  reasoningEffortCandidates,
+} from "./modelCapabilityCache";
+import type { ReasoningCapabilitySettings } from "../types";
 
 export interface CapabilityMetadataResolver {
   resolve(metadata: unknown): Promise<ModelCapabilitySnapshot | undefined>;
@@ -66,6 +71,30 @@ export function resolveCapabilityMetadata(
   };
 }
 
+/**
+ * Projects a discovered capability snapshot onto profile reasoning settings.
+ * The result is marked as metadata so it prefills the profile without
+ * claiming the verification that only a probe can provide.
+ */
+export function reasoningCapabilitiesFromSnapshot(
+  snapshot: ModelCapabilitySnapshot | undefined,
+): ReasoningCapabilitySettings | undefined {
+  if (!snapshot) return undefined;
+  const efforts = reasoningEffortCandidates(snapshot);
+  if (efforts.length === 0 && snapshot.protocols.responses !== "supported") return undefined;
+  return {
+    source: "metadata",
+    responses: snapshot.protocols.responses === "supported",
+    continuation: snapshot.continuation === "supported",
+    summary: snapshot.summary === "supported",
+    efforts,
+    ...(snapshot.reasoning.defaultEffort
+      ? { defaultEffort: snapshot.reasoning.defaultEffort }
+      : {}),
+    checkedAt: snapshot.checkedAt,
+  };
+}
+
 /** Returns the first advertised non-empty effort list, preserving provider order. */
 export function extractReasoningEfforts(metadata: unknown): string[] {
   if (!isRecord(metadata)) return [];
@@ -78,8 +107,11 @@ export function extractReasoningEfforts(metadata: unknown): string[] {
     capabilities && isRecord(capabilities.reasoning) ? capabilities.reasoning : undefined;
   for (const candidate of [
     metadata.supported_reasoning_efforts,
+    metadata.supported_efforts,
+    reasoning?.supported_efforts,
     reasoning?.efforts,
     reasoningParameter?.enum,
+    capabilityReasoning?.supported_efforts,
     capabilityReasoning?.efforts,
   ]) {
     const efforts = uniqueStrings(candidate);

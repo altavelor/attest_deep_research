@@ -134,6 +134,38 @@ describe("model discovery", () => {
     ]);
   });
 
+  it("carries advertised reasoning efforts from an OpenRouter listing into the snapshot", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({ data: [] })
+        : jsonResponse({
+            data: [
+              {
+                id: "qwen/qwen3.8-2.4t-a95b",
+                architecture: { output_modalities: ["text"] },
+                supported_parameters: ["tools", "reasoning", "reasoning_effort"],
+                reasoning: {
+                  mandatory: true,
+                  default_enabled: true,
+                  supported_efforts: ["xhigh", "medium", "low"],
+                  default_effort: "xhigh",
+                },
+              },
+            ],
+          }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.models[0]?.capabilitySnapshot?.reasoning).toMatchObject({
+      efforts: ["xhigh", "medium", "low"],
+      defaultEffort: "xhigh",
+    });
+    expect(result.models[0]?.capabilitySnapshot?.tools).toBe("supported");
+  });
+
   it("keeps the primary listing when a supplementary listing fails", async () => {
     const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
       String(url).includes("output_modalities=embeddings")
