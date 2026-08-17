@@ -3,6 +3,7 @@ import {
   ReasoningResponseFormat,
   reasoningEffortCandidates,
 } from "./modelCapabilityCache";
+import type { ToolControlSupport } from "./contracts";
 import type { ReasoningCapabilitySettings } from "../types";
 
 export interface CapabilityMetadataResolver {
@@ -48,6 +49,7 @@ export function resolveCapabilityMetadata(
   const supportsReasoningControl = parameters.some((parameter) =>
     ["reasoning", "reasoning_effort", "reasoning.effort"].includes(parameter),
   );
+  const toolControls = toolControlSupport(metadata, parameters);
   return {
     protocols: {
       chatCompletions: supportsChat ? "supported" : "unknown",
@@ -60,7 +62,8 @@ export function resolveCapabilityMetadata(
       ...(efforts.length > 0 ? { efforts } : {}),
       ...(defaultEffort ? { defaultEffort } : {}),
     },
-    tools: parameters.includes("tools") ? "supported" : "unknown",
+    tools: toolsSupported(metadata, parameters) ? "supported" : "unknown",
+    toolControls,
     continuation: supportsResponses ? "supported" : "unknown",
     summary: parameters.some((parameter) => parameter.includes("summary"))
       ? "supported"
@@ -68,6 +71,38 @@ export function resolveCapabilityMetadata(
     source: "metadata",
     checkedAt,
     contractVersion: 1,
+  };
+}
+
+const TOOL_PARAMETER_NAMES = ["tools", "tool_choice", "functions", "function_calling", "tool_use"];
+
+/**
+ * Recognises tool calling across the parameter names different OpenAI-compatible
+ * providers publish, including the boolean capability flags some of them use.
+ */
+export function toolsSupported(metadata: unknown, parameters: string[]): boolean {
+  if (parameters.some((parameter) => TOOL_PARAMETER_NAMES.includes(parameter))) return true;
+  if (!isRecord(metadata)) return false;
+  const capabilities = isRecord(metadata.capabilities) ? metadata.capabilities : undefined;
+  return [
+    metadata.function_calling,
+    metadata.supports_tools,
+    capabilities?.function_calling,
+    capabilities?.tools,
+    capabilities?.tool_calling,
+  ].some((value) => value === true);
+}
+
+/** Reads which tool-choice controls the provider advertises for a model. */
+export function toolControlSupport(metadata: unknown, parameters: string[]): ToolControlSupport {
+  const choice =
+    parameters.includes("tool_choice") || (isRecord(metadata) && metadata.tool_choice === true);
+  return {
+    choiceRequired: choice,
+    choiceSpecific: choice,
+    parallelCalls:
+      parameters.includes("parallel_tool_calls") ||
+      (isRecord(metadata) && metadata.parallel_tool_calls === true),
   };
 }
 
