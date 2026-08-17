@@ -31,7 +31,6 @@ export const chat: EnChatMessages = {
   "chat.composer.attachment.remove": "移除 {path}",
   "chat.composer.submit.ask": "提问",
   "chat.composer.submit.stop": "停止当前回答",
-  "chat.composer.submit.unavailable": "无法提问：{message}",
 
   "chat.status.noChatModel": "请在 Attest 设置中创建并选择聊天模型配置。",
   "chat.status.noIndex": "请在 Attest 设置中创建并选择一个启用中的索引。",
