@@ -2,6 +2,7 @@ import {
   apiFormatLabel,
   fetchAvailableModels,
   fetchModelContextLength,
+  modelRoleCountMessage,
   verifyEmbeddingCapability,
 } from "@adapters/settings";
 import { ServerProfile } from "@adapters/settings";
@@ -92,6 +93,240 @@ describe("model discovery", () => {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it("discovers OpenRouter embedding models from the modality-filtered listing", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({
+            data: [
+              {
+                id: "nvidia/nemotron-3-embed-1b",
+                architecture: { modality: "text->embeddings", output_modalities: ["embeddings"] },
+              },
+            ],
+          })
+        : jsonResponse({
+            data: [
+              {
+                id: "openai/gpt-5",
+                architecture: { modality: "text->text", output_modalities: ["text"] },
+                context_length: 400000,
+              },
+            ],
+          }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.message).toBe("Connected to OpenRouter. Found 2 models.");
+    expect(result.models.map((model) => [model.id, model.capabilities.embeddings])).toEqual([
+      ["openai/gpt-5", false],
+      ["nvidia/nemotron-3-embed-1b", true],
+    ]);
+    expect(result.models[0]?.capabilities).toMatchObject({ chat: true, contextLength: 400000 });
+    expect(result.models[1]?.capabilities).toMatchObject({ chat: false, embeddings: true });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://openrouter.ai/api/v1/models",
+      "https://openrouter.ai/api/v1/models?output_modalities=embeddings",
+    ]);
+  });
+
+  it("keeps the primary listing when a supplementary listing fails", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? Promise.reject(new TypeError("fetch failed"))
+        : jsonResponse({ data: [{ id: "openai/gpt-5" }] }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.models.map((model) => model.id)).toEqual(["openai/gpt-5"]);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://openrouter.ai/api/v1/models",
+      "https://openrouter.ai/api/v1/models?output_modalities=embeddings",
+    ]);
+  });
+
+  it("merges a model listed by both OpenRouter listings into one entry", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({
+            data: [
+              {
+                id: "nvidia/nemotron-3-embed-1b",
+                architecture: { output_modalities: ["embeddings"] },
+              },
+            ],
+          })
+        : jsonResponse({
+            data: [
+              {
+                id: "nvidia/nemotron-3-embed-1b",
+                architecture: { output_modalities: ["text"] },
+                context_length: 8192,
+              },
+            ],
+          }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.models).toHaveLength(1);
+    expect(result.models[0]?.capabilities).toMatchObject({
+      chat: true,
+      embeddings: true,
+      contextLength: 8192,
+      detectionSource: "metadata",
+    });
+  });
+
+  it("keeps context metadata found only in the supplementary listing as metadata-sourced", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({ data: [{ id: "voyage-4", context_length: 32000 }] })
+        : jsonResponse({ data: [{ id: "voyage-4" }] }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.models[0]?.capabilities).toMatchObject({
+      contextLength: 32000,
+      detectionSource: "metadata",
+    });
+  });
+
+  it("keeps the primary listing when a supplementary listing is malformed", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({ data: "nope" })
+        : jsonResponse({ data: [{ id: "openai/gpt-5" }] }),
+    );
+
+    const result = await fetchAvailableModels(server({ baseUrl: "https://openrouter.ai/api/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.models.map((model) => model.id)).toEqual(["openai/gpt-5"]);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://openrouter.ai/api/v1/models",
+      "https://openrouter.ai/api/v1/models?output_modalities=embeddings",
+    ]);
+  });
+
+  it("skips listing entries without a usable model id", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: [{ id: "" }, { name: "llama" }, { id: "  ok  " }] }));
+
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
+
+    expect(result.models.map((model) => model.id)).toEqual(["ok"]);
+  });
+
+  it("names the recognised provider in the connection message", async () => {
+    const openAiCompatible = vi.fn(async () => jsonResponse({ data: [{ id: "qwen3" }] }));
+    const ollama = vi.fn(async () => jsonResponse({ models: [{ name: "gemma" }] }));
+    const anthropic = vi.fn(async () => jsonResponse({ data: [{ id: "claude" }] }));
+
+    await expect(
+      fetchAvailableModels(server({ baseUrl: "https://api.groq.com/openai/v1" }), {
+        fetch: openAiCompatible,
+      }),
+    ).resolves.toMatchObject({ message: "Connected to Groq. Found 1 model." });
+    await expect(
+      fetchAvailableModels(server({}), { fetch: openAiCompatible }),
+    ).resolves.toMatchObject({ message: "Connected to OpenAI-compatible. Found 1 model." });
+    await expect(
+      fetchAvailableModels(server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }), {
+        fetch: ollama,
+      }),
+    ).resolves.toMatchObject({ message: "Connected to Ollama. Found 1 model." });
+    await expect(
+      fetchAvailableModels(
+        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
+        { fetch: anthropic },
+      ),
+    ).resolves.toMatchObject({ message: "Connected to Anthropic. Found 1 model." });
+  });
+
+  it("counts only the models usable for the requested profile role", async () => {
+    const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
+      String(url).includes("output_modalities=embeddings")
+        ? jsonResponse({
+            data: [
+              { id: "voyage-4", architecture: { output_modalities: ["embeddings"] } },
+              { id: "nemotron-embed", architecture: { output_modalities: ["embeddings"] } },
+            ],
+          })
+        : jsonResponse({
+            data: [
+              { id: "openai/gpt-5", architecture: { output_modalities: ["text"] } },
+              { id: "anthropic/claude", architecture: { output_modalities: ["text"] } },
+              { id: "google/gemini", architecture: { output_modalities: ["text"] } },
+            ],
+          }),
+    );
+    const serverProfile = server({ baseUrl: "https://openrouter.ai/api/v1" });
+
+    const result = await fetchAvailableModels(serverProfile, { fetch: fetchMock });
+
+    expect(modelRoleCountMessage(serverProfile, result.models, "embedding")).toBe(
+      "Connected to OpenRouter. Found 2 embedding models of 5.",
+    );
+    expect(modelRoleCountMessage(serverProfile, result.models, "chat")).toBe(
+      "Connected to OpenRouter. Found 3 chat models of 5.",
+    );
+  });
+
+  it("uses the singular form for a single model of the requested role", () => {
+    const serverProfile = server({});
+    const models = [
+      {
+        id: "text-embedding",
+        name: "text-embedding",
+        capabilities: {
+          chat: false,
+          embeddings: true,
+          detectionSource: "format-default" as const,
+        },
+      },
+    ];
+
+    expect(modelRoleCountMessage(serverProfile, models, "embedding")).toBe(
+      "Connected to OpenAI-compatible. Found 1 embedding model of 1.",
+    );
+    expect(modelRoleCountMessage(serverProfile, models, "chat")).toBe(
+      "Connected to OpenAI-compatible. Found 0 chat models of 1.",
+    );
+  });
+
+  it("reports an invalid primary models listing as a failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ models: "nope" }));
+
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
+
+    expect(result).toMatchObject({ ok: false, models: [] });
+  });
+
+  it("marks self-hosted embedding models by name so they can be selected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: [{ id: "text-embedding-nomic-v1.5" }] }));
+
+    const result = await fetchAvailableModels(server({}), { fetch: fetchMock });
+
+    expect(result.models[0]?.capabilities).toMatchObject({ chat: false, embeddings: true });
   });
 
   it("fetches Anthropic models as chat-only", async () => {
