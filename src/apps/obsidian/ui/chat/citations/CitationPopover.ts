@@ -103,8 +103,13 @@ export class CitationPopoverController {
       details.open = true;
     }
     block?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (this.highlightTimer !== null) {
+      window.clearTimeout(this.highlightTimer);
+      if (this.highlightTimerKey && this.highlightTimerKey !== key) {
+        this.setHighlight(this.highlightTimerKey, false);
+      }
+    }
     this.setHighlight(key, true);
-    if (this.highlightTimer !== null) window.clearTimeout(this.highlightTimer);
     this.highlightTimerKey = key;
     this.highlightTimer = window.setTimeout(() => {
       this.highlightTimer = null;

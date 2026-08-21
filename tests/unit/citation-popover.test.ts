@@ -105,4 +105,28 @@ describe("CitationPopover", () => {
       vi.useRealTimers();
     }
   });
+
+  it("clears the previous temporary highlight when scrolling to another citation", () => {
+    vi.useFakeTimers();
+    try {
+      const host = createContainer();
+      const first = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "first" },
+      });
+      const second = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "second" },
+      });
+      const controller = new CitationPopoverController({ hostEl: host, t, onOpenChunk: vi.fn() });
+
+      controller.scrollBlockIntoView("first");
+      controller.scrollBlockIntoView("second");
+
+      expect(first.classList.contains("is-highlighted")).toBe(false);
+      expect(second.classList.contains("is-highlighted")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
