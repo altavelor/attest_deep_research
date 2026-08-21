@@ -20,6 +20,7 @@ export class MobileIndexingLifecycle {
   private readonly pause: MobileIndexingLifecycleOptions["pause"];
   private readonly resume: MobileIndexingLifecycleOptions["resume"];
   private autoPausedProfileId?: string;
+  private autoResume?: Promise<unknown>;
   private started = false;
   private disposed = false;
 
@@ -50,16 +51,42 @@ export class MobileIndexingLifecycle {
 
   private readonly handleVisibilityChange = (): void => {
     if (this.visibility.hidden) {
-      if (!this.autoPausedProfileId) this.pauseActiveRun(true);
+      this.pauseForHiddenApp();
       return;
     }
 
     const profileId = this.autoPausedProfileId;
-    this.autoPausedProfileId = undefined;
-    if (profileId && this.getState(profileId).status === "paused") {
-      void Promise.resolve(this.resume(profileId)).catch(() => undefined);
-    }
+    if (!profileId || this.getState(profileId).status !== "paused" || this.autoResume) return;
+    this.autoResume = Promise.resolve(this.resume(profileId))
+      .catch(() => undefined)
+      .finally(() => {
+        this.autoResume = undefined;
+        if (this.autoPausedProfileId !== profileId) return;
+        if (this.visibility.hidden) {
+          this.pauseProfile(profileId);
+        } else if (this.getState(profileId).status !== "indexing") {
+          this.autoPausedProfileId = undefined;
+        }
+      });
   };
+
+  private pauseForHiddenApp(): void {
+    const profileId = this.autoPausedProfileId;
+    if (profileId) {
+      if (this.getState(profileId).status === "idle") {
+        this.autoPausedProfileId = undefined;
+        this.pauseActiveRun(true);
+      } else {
+        this.pauseProfile(profileId);
+      }
+      return;
+    }
+    this.pauseActiveRun(true);
+  }
+
+  private pauseProfile(profileId: string): void {
+    if (this.getState(profileId).status === "indexing") this.pause(profileId);
+  }
 
   private pauseActiveRun(recordForResume = false): void {
     const profileId = this.getBusyProfileId();

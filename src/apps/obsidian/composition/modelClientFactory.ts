@@ -17,7 +17,7 @@ import { QueryExpansionService } from "@adapters/retrieval";
 import type { ModelRoundProvider } from "@core/agent";
 
 import { CompositionContext } from "./CompositionContext";
-import { resolveProviderFetch } from "../modelProviderRuntime";
+import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 
 export function createChatModelClient(
   ctx: CompositionContext,

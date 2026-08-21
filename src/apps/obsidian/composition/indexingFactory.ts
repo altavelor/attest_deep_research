@@ -21,10 +21,10 @@ import { EmbeddingClient } from "@adapters/model-provider";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
 import { EmbeddingModelProfile } from "@adapters/settings";
+import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 
 import { CompositionContext } from "./CompositionContext";
 import { createLinkedImagePathResolver } from "./mediaFactory";
-import { resolveProviderFetch } from "../modelProviderRuntime";
 import {
   effectiveEmbeddingBatchSize,
   mobileIndexingOptions,
