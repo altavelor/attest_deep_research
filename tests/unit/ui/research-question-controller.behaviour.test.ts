@@ -7,6 +7,7 @@ import type { ResearchQuestionControllerOptions } from "@apps/obsidian/ui/chat/r
 import type { ResearchService, ResearchStreamEvent } from "@application/use-cases/research";
 import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
+import { AttestError } from "@core/errors";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createTranslator } from "@adapters/i18n";
 import {
@@ -444,5 +445,38 @@ describe("ResearchQuestionController cancellation", () => {
 
     expect(harness.messages().at(-1)?.content).toBe("Done");
     expect(harness.requests[0]?.signal?.aborted).toBe(false);
+  });
+});
+
+describe("ResearchQuestionController failure reporting", () => {
+  it("shows the settings error and logs it when the research service cannot be built", async () => {
+    const logged: unknown[] = [];
+    const failure = new AttestError({
+      code: "INVALID_SETTINGS",
+      message: "Index this profile before using it in chat or search.",
+    });
+    const harness = createHarness(
+      async function* events() {
+        yield { type: "complete", answer: answerFor("never") };
+      },
+      {
+        createResearchService: () => {
+          throw failure;
+        },
+        logError: (error) => {
+          logged.push(error);
+        },
+      },
+    );
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(harness.messages().at(-1)?.content).toBe(
+      "Index this profile before using it in chat or search.",
+    );
+    expect(logged).toEqual([failure]);
   });
 });

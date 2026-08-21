@@ -12,6 +12,11 @@ import {
   resolveEmbeddingModelProfile,
   resolveServerProfile,
 } from "@adapters/settings";
+import { AttestError } from "@core/errors";
+
+function invalidSettings(message: string): AttestError {
+  return new AttestError({ code: "INVALID_SETTINGS", message });
+}
 
 export function requireChatModelProfile(
   settings: AttestSettings,
@@ -20,7 +25,7 @@ export function requireChatModelProfile(
 ): ChatModelProfile {
   const profile = resolveChatModelProfile(settings, profileId);
   if (!profile) {
-    throw new Error(translate("profile.error.chatModelMissing"));
+    throw invalidSettings(translate("profile.error.chatModelMissing"));
   }
   return profile;
 }
@@ -32,7 +37,7 @@ export function requireEmbeddingModelProfile(
 ): EmbeddingModelProfile {
   const profile = resolveEmbeddingModelProfile(settings, profileId);
   if (!profile) {
-    throw new Error(translate("profile.error.embeddingModelMissing"));
+    throw invalidSettings(translate("profile.error.embeddingModelMissing"));
   }
   return profile;
 }
@@ -44,7 +49,7 @@ export function requireServerProfile(
 ): ServerProfile {
   const profile = resolveServerProfile(settings, profileId);
   if (!profile) {
-    throw new Error(translate("profile.error.serverUnavailable"));
+    throw invalidSettings(translate("profile.error.serverUnavailable"));
   }
   return profile;
 }
@@ -72,7 +77,7 @@ export function resolveIndexProfileForUse(
     (profile) => profile.isSuspended !== true && Boolean(profile.lastIndexedAt),
   );
   if (!requested && !firstIndexed) {
-    throw new Error(translate("profile.error.indexNotBuilt"));
+    throw invalidSettings(translate("profile.error.indexNotBuilt"));
   }
 
   return requested ?? firstIndexed!;
@@ -85,7 +90,7 @@ export function requireIndexProfile(
 ): IndexProfile {
   const profile = settings.indexProfiles.find((candidate) => candidate.id === profileId);
   if (!profile || profile.isSuspended) {
-    throw new Error(translate("profile.error.indexUnavailable"));
+    throw invalidSettings(translate("profile.error.indexUnavailable"));
   }
   return profile;
 }

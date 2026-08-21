@@ -65,6 +65,7 @@ export interface ResearchQuestionControllerOptions {
   renderMessages(): void;
   renderActiveMessage(): void;
   renderAnswerDetails(): void;
+  logError?(error: unknown): void;
   t: Translate;
 }
 
@@ -249,6 +250,7 @@ export class ResearchQuestionController {
         await this.options.saveCurrentChat();
       }
     } catch (error) {
+      this.options.logError?.(error);
       if (this.disposed) return;
       const finalizedMessages = interruptLastAssistantProgress(this.options.getMessages());
       this.options.setMessages(nextAssistantMessage(finalizedMessages, toUserMessage(error)));

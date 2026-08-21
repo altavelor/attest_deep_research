@@ -1,6 +1,6 @@
 import { OpenAiResponsesClient } from "@adapters/model-provider/chat/responses/OpenAiResponsesClient";
-import { ReasoningCapabilitySettings, ServerProfile } from "./types";
-import type { PluginRequestLogger } from "./debugLogger";
+import { ReasoningCapabilitySettings, ServerProfile } from "../types";
+import type { PluginRequestLogger } from "../debugLogger";
 import { isAttestError } from "@core/errors";
 
 const PROBE_TOOL = "attest_responses_probe";

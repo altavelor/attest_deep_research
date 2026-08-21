@@ -120,3 +120,16 @@
   color: var(--text-warning, var(--color-orange));
   font-size: var(--font-ui-smaller);
 }
+
+.attest-profile-modal .attest-capability-test.is-testing {
+  background-color: var(--color-red);
+  color: var(--text-on-accent);
+}
+
+.attest-profile-modal .attest-capability-test.is-testing svg {
+  animation: attest-flask-pulse 1s ease-in-out infinite;
+}
+
+.attest-profile-modal__capability-status-line {
+  line-height: 1.4;
+}

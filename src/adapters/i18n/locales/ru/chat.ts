@@ -31,7 +31,6 @@ export const chat: EnChatMessages = {
   "chat.composer.attachment.remove": "Убрать {path}",
   "chat.composer.submit.ask": "Спросить",
   "chat.composer.submit.stop": "Остановить текущий ответ",
-  "chat.composer.submit.unavailable": "Вопрос недоступен: {message}",
 
   "chat.status.noChatModel": "Создайте и выберите профиль чат-модели в настройках Attest.",
   "chat.status.noIndex": "Создайте и выберите активный индекс в настройках Attest.",

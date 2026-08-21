@@ -6,7 +6,7 @@ import {
   DEFAULT_PDF_CHUNK_OVERLAP,
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
-} from "@adapters/indexing/store/FileVectorIndexStore";
+} from "@adapters/indexing";
 import {
   DEFAULT_DOWNLOAD_FOLDER,
   DEFAULT_INDEX_FOLDER,
@@ -16,7 +16,7 @@ import {
 import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
 import { DEFAULT_UI_LANGUAGE } from "./uiLanguage";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { AttestSettings } from "./types";
+import { AttestSettings } from "../types";
 
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   id: DEFAULT_INDEX_PROFILE_ID,

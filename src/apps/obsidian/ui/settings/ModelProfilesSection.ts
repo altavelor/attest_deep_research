@@ -109,7 +109,9 @@ export class ModelProfilesSection {
             label: isTesting
               ? t("settings.models.chat.testingLabel")
               : formatCapabilityStatus(t, capability),
+            disabled: isTesting,
             onClick: async () => {
+              if (isTesting) return;
               await this.options.prober.refreshMetadataCapabilities();
               this.options.prober.startChatProfileProbes(profile.id, true);
               new Notice(t("settings.models.chat.testingNotice", { profile: profile.name }));
@@ -138,7 +140,7 @@ export class ModelProfilesSection {
       servers: settings.serverProfiles,
       profiles: settings.chatModelProfiles,
       fetchedModelsByServerId: this.options.fetchedModelsByServerId,
-      fetchModels: (server) => this.options.prober.fetchModelsForServer(server),
+      fetchModels: (server) => this.options.prober.fetchModelsForServer(server, "chat"),
       fetchContextLength: (server, name) =>
         this.options.prober.fetchContextLengthForModel(server, name),
       onSave: async (saved) => {
@@ -229,7 +231,7 @@ export class ModelProfilesSection {
       servers: settings.serverProfiles,
       profiles: settings.embeddingModelProfiles,
       fetchedModelsByServerId: this.options.fetchedModelsByServerId,
-      fetchModels: (server) => this.options.prober.fetchModelsForServer(server),
+      fetchModels: (server) => this.options.prober.fetchModelsForServer(server, "embedding"),
       onSave: async (saved) => {
         const existing = settings.embeddingModelProfiles.find(
           (candidate) => candidate.id === saved.id,

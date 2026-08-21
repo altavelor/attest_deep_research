@@ -105,6 +105,52 @@ describe("ModelProfilesSection", () => {
     expect(prober.startChatProfileProbes).toHaveBeenCalledWith("chat", true);
   });
 
+  it("locks the chat-model probe action while a probe is running", async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      chatModelProfiles: [
+        {
+          id: "chat",
+          name: "Research model",
+          serverProfileId: "server",
+          modelName: "chat-model",
+          toolsEnabled: true,
+          noteMutationAccess: false,
+          reasoning: { mode: "off" as const, summary: "off" as const },
+          createdAt: "now",
+          updatedAt: "now",
+        },
+      ],
+    };
+    const prober = {
+      statusFor: () => ({ tools: "testing", agent: "testing" }),
+      refreshMetadataCapabilities: vi.fn(async () => {}),
+      startChatProfileProbes: vi.fn(),
+    };
+    const section = new ModelProfilesSection({
+      app: {} as never,
+      t,
+      settings,
+      fetchedModelsByServerId: new Map(),
+      prober: prober as never,
+      saveSettings: vi.fn(async () => {}),
+      requestRedisplay: vi.fn(),
+    });
+    const container = createContainer();
+
+    section.render(container);
+    const action = container.querySelector<HTMLButtonElement>(
+      ".attest-settings__test-capabilities-action",
+    )!;
+    expect(action.disabled).toBe(true);
+    expect(action.hasClass("is-testing")).toBe(true);
+
+    action.click();
+    await Promise.resolve();
+
+    expect(prober.startChatProfileProbes).not.toHaveBeenCalled();
+  });
+
   it("deletes an unused server profile but disables deletion while it is referenced", async () => {
     const settings = {
       ...DEFAULT_SETTINGS,
