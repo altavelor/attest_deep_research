@@ -219,15 +219,6 @@ export class ChatComposerController {
 
     refs.submitButtonEl.disabled = disabled;
     refs.submitButtonEl.dataset.mode = mode;
-    refs.submitButtonEl.setAttr("title", message);
-    refs.submitButtonEl.setAttr(
-      "aria-label",
-      mode === "stop"
-        ? message
-        : disabled
-          ? this.options.t("chat.composer.submit.unavailable", { message })
-          : message,
-    );
-    refs.submitButtonTooltipEl.setAttr("title", message);
+    refs.submitButtonEl.setAttr("aria-label", message);
   }
 }

@@ -122,9 +122,9 @@ describe("IndexingService large-vault behavior", () => {
     expect(completed).toMatchObject({
       status: "idle",
       scannedFiles: 3,
-      indexedFiles: 2,
-      skippedFiles: 1,
-      embeddedChunks: 2,
+      indexedFiles: 3,
+      skippedFiles: 0,
+      embeddedChunks: 3,
     });
   });
 });

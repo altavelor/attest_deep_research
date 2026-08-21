@@ -1,35 +1,16 @@
-import { ChatApiProtocol } from "@core/agent";
+import {
+  CapabilityIdentity,
+  CapabilityState,
+  ModelCapabilitySnapshot,
+  ReasoningResponseFormat,
+} from "./contracts";
 
-export type CapabilityState = "supported" | "unsupported" | "unknown";
-export type ReasoningResponseFormat =
-  | "reasoning_details"
-  | "reasoning"
-  | "reasoning_content"
-  | "thinking"
-  | "inline_tags"
-  | "responses_text"
-  | "responses_summary";
-
-export interface ModelCapabilitySnapshot {
-  protocols: {
-    chatCompletions: CapabilityState;
-    responses: CapabilityState;
-  };
-  reasoning: {
-    responseFormats: ReasoningResponseFormat[];
-    requestDialect?: "responses" | "openrouter" | "provider-extension";
-    efforts?: string[];
-    defaultEffort?: string;
-    visibleOutput: CapabilityState;
-  };
-  tools: CapabilityState;
-  continuation: CapabilityState;
-  summary: CapabilityState;
-  source: "metadata" | "observed" | "manual" | "probe";
-  checkedAt: string;
-  expiresAt?: string;
-  contractVersion: 1;
-}
+export type {
+  CapabilityIdentity,
+  CapabilityState,
+  ModelCapabilitySnapshot,
+  ReasoningResponseFormat,
+} from "./contracts";
 
 export function reasoningEffortCandidates(
   snapshot: Pick<ModelCapabilitySnapshot, "reasoning">,
@@ -40,13 +21,6 @@ export function reasoningEffortCandidates(
     : snapshot.reasoning.defaultEffort
       ? [snapshot.reasoning.defaultEffort]
       : [];
-}
-
-export interface CapabilityIdentity {
-  baseUrl: string;
-  apiKey?: string;
-  model: string;
-  protocol: ChatApiProtocol;
 }
 
 export function capabilityCacheKey(identity: CapabilityIdentity): string {

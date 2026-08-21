@@ -4,7 +4,7 @@ export const obsidianRequestFetch: typeof fetch = async (input, init) => {
   const url =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const signal = init?.signal ?? undefined;
-  if (signal?.aborted) throw abortError();
+  if (signal?.aborted) throw abortReason(signal);
 
   const request = requestUrl({
     url,
@@ -23,7 +23,7 @@ export const obsidianRequestFetch: typeof fetch = async (input, init) => {
 
 function raceAbort<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(abortError());
+    const onAbort = () => reject(abortReason(signal));
     signal.addEventListener("abort", onAbort, { once: true });
     request.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
   });
@@ -33,6 +33,10 @@ function abortError(): Error {
   const error = new Error("The request was aborted.");
   error.name = "AbortError";
   return error;
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason instanceof Error ? signal.reason : abortError();
 }
 
 function normalizeFetchHeaders(headers: HeadersInit | undefined): Record<string, string> {

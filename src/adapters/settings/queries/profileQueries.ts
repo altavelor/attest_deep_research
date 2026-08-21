@@ -1,11 +1,11 @@
 import { ChatApiProtocol } from "@core/agent";
-import { IndexProfile } from "@adapters/indexing/store/FileVectorIndexStore";
-import { MAX_PROFILE_NAME_LENGTH } from "./constants";
-import { cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "./defaults";
-import { isProfileActive, isProfileSuspended, normalizeSettingsState } from "./normalization";
-import { normalizeIndexProfileNumbers, normalizeProfileName } from "./parsers";
-import { resolveToolCapabilities } from "./toolCapabilities";
-import { ChatModelProfile, EmbeddingModelProfile, AttestSettings, ServerProfile } from "./types";
+import type { IndexProfile } from "@adapters/indexing";
+import { MAX_PROFILE_NAME_LENGTH } from "../state";
+import { cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "../state";
+import { isProfileActive, isProfileSuspended, normalizeSettingsState } from "../state";
+import { normalizeIndexProfileNumbers, normalizeProfileName } from "../state";
+import { resolveToolCapabilities } from "../capabilities";
+import { ChatModelProfile, EmbeddingModelProfile, AttestSettings, ServerProfile } from "../types";
 
 const INDEX_PROFILE_NAME_PATTERN = /^[\p{L}\p{N} _.\-()[\]]+$/u;
 

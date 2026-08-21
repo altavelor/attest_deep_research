@@ -10,7 +10,7 @@ or document page it came from. One click takes you to the source.
 You choose which folders it may read, and which AI model answers: a model running on your own
 machine, or a cloud service you already use. Nothing leaves your vault unless you ask it to.
 
-> **Obsidian 1.5.0+ on desktop · works with local models or cloud AI services**
+> **Obsidian 1.5.0+ on desktop and mobile · cloud AI on iOS and Android**
 
 ## What you can do
 
@@ -65,6 +65,45 @@ each model and index profile.
 
 Use the test button in the profile settings to check the connection before the first indexing run.
 
+### Mobile providers
+
+On iOS and Android, use a cloud provider endpoint. Ollama, LM Studio on localhost, and other
+loopback endpoints are unavailable from the phone and fail immediately with an explanatory error.
+
+Streaming chat and capability probes that generate model output use direct `fetch`, so the cloud
+endpoint must return appropriate CORS headers for the Obsidian app. Model discovery, metadata
+lookups, and embedding requests use Obsidian's buffered request path. If chat fails while model
+discovery succeeds, check the provider's CORS policy or use a compatible cloud endpoint.
+
+### Recognised providers
+
+Attest recognises a provider by the base URL of the Server profile and reads its model listing in
+that provider's own format, so chat and embedding models are told apart automatically. Any other
+OpenAI-compatible endpoint keeps working through the generic listing, where a model is treated as
+an embedding model when its ID says so. A chat model whose ID contains `embed` is therefore offered
+for the embedding role instead of the chat role; its name can still be typed into the model field
+by hand.
+
+| Provider                                                 | Base URL                                | API format          | How embedding models are detected                                    |
+| -------------------------------------------------------- | --------------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| OpenRouter                                               | `https://openrouter.ai/api/v1`          | `openai-compatible` | `architecture.output_modalities`, plus a separate embeddings listing |
+| DeepInfra                                                | `https://api.deepinfra.com/v1/openai`   | `openai-compatible` | `metadata.tags`                                                      |
+| Together AI                                              | `https://api.together.xyz/v1`           | `openai-compatible` | model `type`                                                         |
+| Mistral                                                  | `https://api.mistral.ai/v1`             | `openai-compatible` | `capabilities.completion_chat`                                       |
+| OpenAI                                                   | `https://api.openai.com/v1`             | `openai-compatible` | model ID                                                             |
+| Groq                                                     | `https://api.groq.com/openai/v1`        | `openai-compatible` | model ID                                                             |
+| Fireworks AI                                             | `https://api.fireworks.ai/inference/v1` | `openai-compatible` | model ID                                                             |
+| DeepSeek                                                 | `https://api.deepseek.com`              | `openai-compatible` | model ID                                                             |
+| Cerebras                                                 | `https://api.cerebras.ai/v1`            | `openai-compatible` | model ID                                                             |
+| Nebius AI Studio                                         | `https://api.studio.nebius.com/v1`      | `openai-compatible` | model ID                                                             |
+| Novita AI                                                | `https://api.novita.ai/v3/openai`       | `openai-compatible` | model ID                                                             |
+| LM Studio, vLLM, llama.cpp and other self-hosted servers | local URL                               | `openai-compatible` | model ID                                                             |
+| Ollama                                                   | local URL                               | `ollama`            | every model is offered for both roles                                |
+| Anthropic                                                | `https://api.anthropic.com/v1`          | `anthropic`         | chat only; embeddings are not supported                              |
+
+The embedding profile is still verified with a real embedding request when it is saved, so a model
+that the provider lists but cannot embed is suspended with an explanation.
+
 ## Indexing your vault
 
 An Index profile determines which notes Attest can use as local sources.
@@ -77,6 +116,20 @@ An Index profile determines which notes Attest can use as local sources.
 
 Attest supports Markdown, TXT, PDF, EPUB, FB2, and DOCX. Scanned PDFs without a text layer cannot
 be read.
+
+### Using a desktop-built index on mobile
+
+For a large vault, build the index on desktop and sync it with the vault:
+
+1. Complete indexing on desktop and close or pause any active indexing run.
+2. Sync the index profile's relative folder (the default is `.attest/index`) and the Attest plugin
+   settings. Make sure your sync tool does not exclude hidden folders.
+3. Wait for both the index files and settings to finish syncing before opening Attest on mobile.
+4. Select the synced index profile and run a cited vault search before starting new indexing work.
+
+Mobile can update an index with conservative batch, PDF, and changed-file limits. A destructive
+rebuild requires explicit confirmation. Large or PDF-heavy rebuilds are still best performed on
+desktop and synced after completion; do not edit the same index concurrently on two devices.
 
 ## Research modes
 
@@ -111,10 +164,12 @@ Note mutations are disabled by default. Enable them only for a model and vault y
 
 | Requirement  | Details                                                                                                    |
 | ------------ | ---------------------------------------------------------------------------------------------------------- |
-| Obsidian     | Desktop 1.5.0 or later; mobile is not supported.                                                           |
-| Chat         | A configured local or cloud chat model is required.                                                        |
-| Vault search | A configured embedding model and a completed index are required.                                           |
+| Obsidian     | Obsidian 1.5.0 or later on desktop, iOS, or Android.                                                       |
+| Chat         | Desktop supports local or cloud models. Mobile requires a cloud endpoint; streaming requires CORS.         |
+| Vault search | A configured embedding model and a completed index are required; desktop-built synced indexes are best.    |
 | Documents    | Markdown, TXT, PDF, EPUB, FB2, and DOCX are supported. Scanned PDFs without a text layer are not readable. |
+
+Real-device release validation is tracked in the [mobile test checklist](docs/mobile-testing.md).
 
 ## Diagnostics and troubleshooting
 

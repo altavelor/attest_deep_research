@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@core/*": ["src/core/*"],
-      "@application/*": ["src/application/*"],
-      "@adapters/*": ["src/adapters/*"],
-      "@apps/*": ["src/apps/*"],
-      "@shared": ["src/shared"],
-      "@shared/*": ["src/shared/*"],
-      "@manifest": ["manifest.json"]
+      "@core/*": ["./src/core/*"],
+      "@application/*": ["./src/application/*"],
+      "@adapters/*": ["./src/adapters/*"],
+      "@apps/*": ["./src/apps/*"],
+      "@shared": ["./src/shared"],
+      "@shared/*": ["./src/shared/*"],
+      "@manifest": ["./manifest.json"]
     },
     "inlineSourceMap": true,
     "inlineSources": true,
@@ -19,7 +18,7 @@
     "esModuleInterop": true,
     "importHelpers": true,
     "isolatedModules": true,
-    "lib": ["DOM", "ES2020"],
+    "lib": ["DOM", "ES2022"],
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,

@@ -159,6 +159,8 @@ export const settingsIndexing: EnSettingsIndexingMessages = {
     "Gespeicherte Metadaten ignorieren und die Extraktion für jedes Dokument erneut ausführen.",
   "settings.indexRun.embeddingChangedWarning":
     "Ein Wechsel des Embedding-Modells erfordert eine vollständige Neuindizierung: dieser Lauf baut den Index (und seine Metadaten) von Grund auf neu auf.",
+  "settings.indexRun.mobileRebuildWarning":
+    "Ein Neuaufbau auf Mobilgeräten kann viel Akku, Speicher und Daten verbrauchen. Tippen Sie zur Bestätigung erneut auf Neu aufbauen.",
   "settings.indexRun.start": "Starten",
   "settings.indexRun.rebuild": "Neu aufbauen",
   "settings.indexRun.update": "Aktualisieren",

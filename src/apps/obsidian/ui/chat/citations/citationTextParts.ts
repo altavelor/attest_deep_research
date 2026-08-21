@@ -3,8 +3,7 @@ import { CITATION_TOKEN_SOURCE, stripRenderedCitationIds } from "./citationText"
 const CITATION_TOKEN = new RegExp(CITATION_TOKEN_SOURCE, "g");
 
 export type CitationTextPart =
-  | { kind: "text"; value: string }
-  | { kind: "anchor"; chunkId: string };
+  { kind: "text"; value: string } | { kind: "anchor"; chunkId: string };
 
 /**
  * Returns the parts a text node should be replaced with, or `null` when it

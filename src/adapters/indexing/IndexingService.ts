@@ -90,6 +90,9 @@ export class IndexingService {
       ...(options.resolveLinkedImagePath
         ? { resolveLinkedImagePath: options.resolveLinkedImagePath }
         : {}),
+      ...(options.maxFileSizeBytesByExtension
+        ? { maxFileSizeBytesByExtension: options.maxFileSizeBytesByExtension }
+        : {}),
     });
   }
 

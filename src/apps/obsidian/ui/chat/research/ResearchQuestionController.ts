@@ -65,6 +65,7 @@ export interface ResearchQuestionControllerOptions {
   renderMessages(): void;
   renderActiveMessage(): void;
   renderAnswerDetails(): void;
+  logError?(error: unknown): void;
   t: Translate;
 }
 
@@ -76,6 +77,7 @@ export class ResearchQuestionController {
   private running = false;
   private activeDiagnostics: AgentRunDiagnosticCollector | null = null;
   private activeRenderHandle: number | null = null;
+  private disposed = false;
   private readonly historyCompactor: ChatHistoryCompactor;
 
   constructor(options: ResearchQuestionControllerOptions) {
@@ -171,6 +173,12 @@ export class ResearchQuestionController {
     this.activeAbortController?.abort(new DOMException("Cancelled by user", "AbortError"));
   }
 
+  dispose(): void {
+    this.disposed = true;
+    this.stopRunningQuestion();
+    this.cancelActiveRender();
+  }
+
   private async runQuestion(
     question: string,
     options: {
@@ -236,12 +244,14 @@ export class ResearchQuestionController {
           completed = true;
         }
       }
-      if (!completed) {
+      if (!completed && !this.disposed) {
         this.options.setMessages(interruptLastAssistantProgress(this.options.getMessages()));
         this.options.renderActiveMessage();
         await this.options.saveCurrentChat();
       }
     } catch (error) {
+      this.options.logError?.(error);
+      if (this.disposed) return;
       const finalizedMessages = interruptLastAssistantProgress(this.options.getMessages());
       this.options.setMessages(nextAssistantMessage(finalizedMessages, toUserMessage(error)));
       await this.options.saveCurrentChat();
@@ -255,6 +265,10 @@ export class ResearchQuestionController {
         this.activeRunId = null;
       }
       this.activeDiagnostics = null;
+      if (this.disposed) {
+        this.running = false;
+        return;
+      }
       this.setRunning(false);
       this.options.setProgressStatus(null);
       this.options.setFormRunning(false);
@@ -262,7 +276,7 @@ export class ResearchQuestionController {
   }
 
   private async applyResearchEvent(event: ResearchStreamEvent, runId: string): Promise<void> {
-    if (this.activeRunId !== runId) return;
+    if (this.disposed || this.activeRunId !== runId) return;
     if (event.type === "status") {
       this.options.setProgressStatus(event.message);
       return;

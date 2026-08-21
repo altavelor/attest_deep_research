@@ -142,6 +142,8 @@ export const settingsIndexing: EnSettingsIndexingMessages = {
   "settings.indexRun.reextract.desc": "忽略已存储的元数据，对所有文档重新执行提取。",
   "settings.indexRun.embeddingChangedWarning":
     "更换嵌入模型需要完整重建索引：执行后将从零重建索引及其元数据。",
+  "settings.indexRun.mobileRebuildWarning":
+    "在移动设备上重建可能消耗大量电量、内存和流量。再次点击重建以确认。",
   "settings.indexRun.start": "开始",
   "settings.indexRun.rebuild": "重建",
   "settings.indexRun.update": "更新",

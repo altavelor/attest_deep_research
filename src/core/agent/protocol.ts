@@ -58,8 +58,7 @@ export type ModelStreamEvent =
   | { type: "complete"; stopReason: "complete" | "tool_calls" | "length" | "error" };
 
 export type ModelRoundDelta =
-  | { type: "text"; text: string }
-  | { type: "reasoningSummary"; text: string; segmentId?: string };
+  { type: "text"; text: string } | { type: "reasoningSummary"; text: string; segmentId?: string };
 
 export interface ModelRoundRequest extends ChatRequest {
   continuation?: ProviderContinuationState;

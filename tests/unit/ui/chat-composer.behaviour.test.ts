@@ -175,7 +175,21 @@ describe("chat composer run state", () => {
     expect(harness.textarea().disabled).toBe(false);
     expect(harness.modelButton().disabled).toBe(false);
     expect(harness.submitButton().dataset.mode).toBe("ask");
-    expect(harness.submitButton().getAttribute("title")).toBe("Ask");
+    expect(harness.submitButton().getAttribute("aria-label")).toBe("Ask");
+    expect(harness.submitButton().getAttribute("title")).toBeNull();
+    expect(harness.submitButton().parentElement?.getAttribute("title")).toBeNull();
+  });
+
+  it("shows a single tooltip source when submitting is unavailable", () => {
+    const harness = createComposer();
+    harness.state.searchUnavailableMessage = "Enable web search";
+    harness.controller.updateSubmitAvailability();
+
+    const submitButton = harness.submitButton();
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.getAttribute("title")).toBeNull();
+    expect(submitButton.parentElement?.getAttribute("title")).toBeNull();
+    expect(submitButton.getAttribute("aria-label")).toBe("Enable web search");
   });
 
   it("locks the submit button while the stop request is pending", () => {
@@ -196,9 +210,7 @@ describe("chat composer run state", () => {
     harness.controller.updateSubmitAvailability();
 
     expect(harness.submitButton().disabled).toBe(true);
-    expect(harness.submitButton().getAttribute("aria-label")).toBe(
-      "Ask unavailable: No index is ready",
-    );
+    expect(harness.submitButton().getAttribute("aria-label")).toBe("No index is ready");
 
     harness.state.searchUnavailableMessage = null;
     harness.controller.updateSubmitAvailability();

@@ -87,8 +87,8 @@ describe("chart geometry", () => {
     };
     const scale = buildChartScale(scatter);
     expect(scale.numericX).toBe(true);
-    const [first, second, third] = scatter.series[0]!.points.map(
-      (point) => scale.xForPoint(point)!,
+    const [first, second, third] = scatter.series[0]!.points.map((point) =>
+      scale.xForPoint(point)!,
     );
     expect(third! - second!).toBeGreaterThan((second! - first!) * 10);
     expect(first).toBeCloseTo(scale.plot.x, 5);

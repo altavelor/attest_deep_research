@@ -38,8 +38,5 @@ export function stripCitationsSection(value: string): string {
 }
 
 export function cleanupDanglingMarkdown(value: string): string {
-  return value
-    .replace(/(?:\n\s*)+\*\*\s*$/g, "")
-    .replace(/\s+\*\*\s*$/g, "")
-    .trim();
+  return value.replace(/\s+\*\*\s*$/, "").trim();
 }

@@ -1,12 +1,8 @@
 import { createToolCapabilitySettings } from "./toolCapabilities";
-import { ChatModelProfile, ReasoningCapabilitySettings } from "./types";
+import { ChatModelProfile, ReasoningCapabilitySettings } from "../types";
 
 export type CapabilityVerificationPhase =
-  | "testing"
-  | "verified"
-  | "not-verified"
-  | "failed"
-  | "not-tested";
+  "testing" | "verified" | "advertised" | "not-verified" | "failed" | "not-tested";
 
 export interface CapabilityVerificationState {
   tools: CapabilityVerificationPhase;
@@ -19,12 +15,26 @@ export function capabilityVerificationIdentity(
   return JSON.stringify([profile.serverProfileId, profile.modelName]);
 }
 
+/**
+ * Tool calling counts as supported when a probe confirmed it or when the
+ * provider metadata advertises it, so a probe stays a confirmation rather
+ * than the only way to unlock the capability.
+ */
 export function toolsVerified(profile: Pick<ChatModelProfile, "capabilities">): boolean {
-  return profile.capabilities?.toolCalling?.probe?.calls === true;
+  const toolCalling = profile.capabilities?.toolCalling;
+  return (
+    toolCalling?.probe?.calls === true ||
+    toolCalling?.advertised?.calls === true ||
+    profile.capabilities?.tools === true
+  );
 }
 
 export function reasoningVerified(capabilities: ReasoningCapabilitySettings | undefined): boolean {
-  return capabilities?.source === "probe" && capabilities.responses === true;
+  if (capabilities?.source === "probe") return capabilities.responses === true;
+  return (
+    capabilities?.source === "metadata" &&
+    (capabilities.responses === true || capabilities.efforts.length > 0)
+  );
 }
 
 export function resolvedAgenticModeAfterProbe(
@@ -42,13 +52,17 @@ export function deriveCapabilityVerificationState(
       ? profile.capabilities.toolCalling.probe.calls
         ? "verified"
         : "not-verified"
-      : "not-tested",
+      : toolsVerified(profile)
+        ? "advertised"
+        : "not-tested",
     agent:
       profile.reasoningCapabilities?.source === "probe"
         ? profile.reasoningCapabilities.responses
           ? "verified"
           : "not-verified"
-        : "not-tested",
+        : reasoningVerified(profile.reasoningCapabilities)
+          ? "advertised"
+          : "not-tested",
   };
 }
 
@@ -62,7 +76,7 @@ export function applyCapabilityVerificationState(
 export function capabilityTags(profile: ChatModelProfile): Array<"Agent" | "Tools" | "Instant"> {
   const tags: Array<"Agent" | "Tools"> = [];
   if (reasoningVerified(profile.reasoningCapabilities)) tags.push("Agent");
-  if (profile.capabilities?.tools === true) tags.push("Tools");
+  if (toolsVerified(profile)) tags.push("Tools");
   return tags.length > 0 ? tags : ["Instant"];
 }
 
@@ -80,6 +94,7 @@ export function formatCapabilityVerificationStatus(state: CapabilityVerification
     const phase: Record<CapabilityVerificationPhase, string> = {
       testing: "Testing…",
       verified: "Verified",
+      advertised: "Reported by provider",
       "not-verified": "Not verified",
       failed: "Failed",
       "not-tested": "Not tested",
@@ -104,11 +119,17 @@ export function mergeChatProfileSettingsPreservingProbe(
             ...editableCapabilities,
             tools: sameModel ? current.capabilities?.tools : undefined,
             toolCalling: sameModel
-              ? (current.capabilities?.toolCalling ?? editableCapabilities.toolCalling)
+              ? current.capabilities?.toolCalling?.probe
+                ? current.capabilities.toolCalling
+                : (editableCapabilities.toolCalling ?? current.capabilities?.toolCalling)
               : createToolCapabilitySettings(false),
           },
         }
       : {}),
-    reasoningCapabilities: sameModel ? current.reasoningCapabilities : undefined,
+    reasoningCapabilities: sameModel
+      ? current.reasoningCapabilities?.source === "probe"
+        ? current.reasoningCapabilities
+        : (updated.reasoningCapabilities ?? current.reasoningCapabilities)
+      : undefined,
   };
 }

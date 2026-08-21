@@ -44,10 +44,7 @@ export interface WebSourceReference extends SourceReferenceBase {
 }
 
 export type SourceReference =
-  | MarkdownSourceReference
-  | PdfSourceReference
-  | DocumentSourceReference
-  | WebSourceReference;
+  MarkdownSourceReference | PdfSourceReference | DocumentSourceReference | WebSourceReference;
 
 export interface ExtractedChunk {
   id: string;

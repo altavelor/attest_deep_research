@@ -52,13 +52,7 @@ export interface IndexSourceReportItem {
 }
 
 export type IndexingProgressPhase =
-  | "scanning"
-  | "checking"
-  | "extracting"
-  | "chunking"
-  | "embedding"
-  | "writing"
-  | "complete";
+  "scanning" | "checking" | "extracting" | "chunking" | "embedding" | "writing" | "complete";
 
 export interface IndexingServiceOptions {
   files: VaultFileProvider;
@@ -71,6 +65,7 @@ export interface IndexingServiceOptions {
   batchSize?: number;
   yieldEveryFiles?: number;
   maxChangedFilesPerRun?: number;
+  maxFileSizeBytesByExtension?: Readonly<Record<string, number>>;
   yieldToEventLoop?: () => Promise<void>;
   onProgress?: (state: IndexingState) => void;
   logger?: IndexingLogger;
@@ -96,6 +91,7 @@ export type PendingIndexedFile = VaultFileSummary & {
 
 export type IndexingFileLogReason =
   | "unsupported-file-type"
+  | "file-too-large"
   | "excluded-by-path"
   | "unchanged-metadata"
   | "unchanged-content"
@@ -150,6 +146,7 @@ export interface FileProcessorOptions {
   progress: IndexingProgressState;
   logger?: IndexingLogger;
   resolveLinkedImagePath?: LinkedPathResolver;
+  maxFileSizeBytesByExtension?: Readonly<Record<string, number>>;
 }
 
 export interface EmbeddingBatcherOptions {

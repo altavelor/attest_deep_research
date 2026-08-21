@@ -14,10 +14,11 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capability.status": "{tools} · {agent}",
   "settings.capability.entry": "{subject} : {phase}",
-  "settings.capability.subject.tools": "prise en charge des outils",
-  "settings.capability.subject.agent": "prise en charge du mode agent",
+  "settings.capability.subject.tools": "Prise en charge des outils",
+  "settings.capability.subject.agent": "Prise en charge du mode agent",
   "settings.capability.phase.testing": "Test en cours…",
   "settings.capability.phase.verified": "Vérifiée",
+  "settings.capability.phase.advertised": "Annoncé par le fournisseur",
   "settings.capability.phase.notVerified": "Non vérifiée",
   "settings.capability.phase.failed": "Échec",
   "settings.capability.phase.notTested": "Non testée",
@@ -110,6 +111,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capabilityControls.heading": "Capacités",
   "settings.capabilityControls.testTooltip": "Tester les capacités — {status}",
+  "settings.capabilityControls.testingTooltip": "Test des capacités en cours…",
   "settings.capabilityControls.retestTooltip": "Retester les capacités — {status}",
   "settings.capabilityControls.agentic.name": "Mode agentique",
   "settings.capabilityControls.agentic.desc": "Activer la prise en charge vérifiée du mode agent.",

@@ -40,6 +40,9 @@ export async function probeReasoningVisibility(
     if (options.signal?.aborted) throw error;
     failureReason = "reasoning-visibility-probe-failed";
   }
+  if (options.signal?.aborted) {
+    throw new DOMException("Reasoning visibility probe cancelled.", "AbortError");
+  }
   const ttlMs = visible ? 7 * 24 * 60 * 60 * 1_000 : 24 * 60 * 60 * 1_000;
   return {
     visible,

@@ -10,10 +10,7 @@ export interface WebSourceCandidate {
 }
 
 export type WebSourceExclusionReason =
-  | "disabled"
-  | "instant-specialized"
-  | "no-search-capability"
-  | "intent-mismatch";
+  "disabled" | "instant-specialized" | "no-search-capability" | "intent-mismatch";
 
 export interface WebSourceSelectionInput {
   mode: WebSelectionMode;

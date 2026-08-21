@@ -9,8 +9,7 @@ import {
 } from "./artifacts";
 
 export type ChartValidation =
-  | { ok: true; value: Omit<ChartArtifact, "id"> }
-  | { ok: false; code: string; message: string };
+  { ok: true; value: Omit<ChartArtifact, "id"> } | { ok: false; code: string; message: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -161,5 +160,5 @@ export function formatNumber(value: number): string {
 }
 
 function escapeCell(value: string): string {
-  return value.replace(/\|/g, "\\|");
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }

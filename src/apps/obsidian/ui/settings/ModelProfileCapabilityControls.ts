@@ -1,13 +1,15 @@
 import {
   CapabilityVerificationState,
   ChatModelProfile,
+  ToolCapabilitySettings,
+  deriveCapabilityVerificationState,
   formatEffortLabel,
   reasoningVerified,
   toolsVerified,
 } from "@adapters/settings";
 import { Setting } from "obsidian";
 import type { Translate } from "@adapters/i18n";
-import { formatCapabilityStatus } from "./capabilityStatusText";
+import { capabilityStatusLines, formatCapabilityStatus } from "./capabilityStatusText";
 
 type ReasoningCapabilities = ChatModelProfile["reasoningCapabilities"];
 
@@ -16,17 +18,21 @@ export interface ModelProfileCapabilityControlsOptions {
   containerEl: HTMLElement;
   currentProfile: ChatModelProfile | undefined;
   savedProfileId: string | undefined;
+  savedStatusApplies: boolean;
   getCapabilityStatus?: (profileId: string) => CapabilityVerificationState;
   reasoningCapabilities: ReasoningCapabilities;
+  toolCapabilities: ToolCapabilitySettings;
   reasoningMode: "off" | "on" | "auto";
   reasoningEffort: string;
   toolsEnabled: boolean;
   agentVerifiedSeen: boolean;
+  toolsVerifiedSeen: boolean;
   onCapabilityTest: () => void;
   onReasoningModeChange: (mode: "off" | "on" | "auto") => void;
   onReasoningEffortChange: (effort: string) => void;
   onToolsEnabledChange: (enabled: boolean) => void;
   onAgentVerifiedSeenChange: (verified: boolean) => void;
+  onToolsVerifiedSeenChange: (verified: boolean) => void;
   onRequestRerender: () => void;
 }
 
@@ -36,20 +42,36 @@ export function renderModelProfileCapabilityControls(
 ): void {
   const { t } = options;
   const capabilityStatus = resolveCapabilityStatus(options);
+  const statusLines = capabilityStatusLines(options.t, capabilityVerificationState(options));
+  const testing = isCapabilityTestRunning(options);
   const capabilityHeading = new Setting(options.containerEl)
     .setName(t("settings.capabilityControls.heading"))
     .setHeading();
   capabilityHeading.settingEl.addClass("attest-profile-modal__capabilities-heading");
-  capabilityHeading.setDesc(capabilityStatus).addButton((button) =>
+  capabilityHeading.descEl.empty();
+  for (const line of statusLines) {
+    capabilityHeading.descEl.createDiv({
+      cls: "attest-profile-modal__capability-status-line",
+      text: line,
+    });
+  }
+  capabilityHeading.addButton((button) => {
     button
       .setIcon("flask-conical")
       .setTooltip(
-        hasCapabilityTestResult(options.currentProfile)
-          ? t("settings.capabilityControls.retestTooltip", { status: capabilityStatus })
-          : t("settings.capabilityControls.testTooltip", { status: capabilityStatus }),
+        testing
+          ? t("settings.capabilityControls.testingTooltip")
+          : hasCapabilityTestResult(options)
+            ? t("settings.capabilityControls.retestTooltip", { status: capabilityStatus })
+            : t("settings.capabilityControls.testTooltip", { status: capabilityStatus }),
       )
-      .onClick(options.onCapabilityTest),
-  );
+      .setDisabled(testing)
+      .onClick(() => {
+        if (!testing) options.onCapabilityTest();
+      });
+    button.buttonEl.addClass("attest-capability-test");
+    button.buttonEl.toggleClass("is-testing", testing);
+  });
 
   renderReasoningControls(options);
 }
@@ -104,20 +126,27 @@ export function renderModelProfileToolsControl(
   options: ModelProfileCapabilityControlsOptions,
 ): void {
   const { t } = options;
-  const verified = options.currentProfile ? toolsVerified(options.currentProfile) : false;
-  if (!verified) {
-    options.onToolsEnabledChange(false);
+  const verified = toolsVerified({
+    capabilities: {
+      chat: true,
+      embeddings: false,
+      detectionSource: "format-default",
+      toolCalling: options.toolCapabilities,
+    },
+  });
+  const newlyVerified =
+    verified && !options.toolsVerifiedSeen && reasoningVerified(options.reasoningCapabilities);
+  const toolsEnabled = !verified ? false : newlyVerified ? true : options.toolsEnabled;
+  if (toolsEnabled !== options.toolsEnabled) {
+    options.onToolsEnabledChange(toolsEnabled);
   }
-  const reason = blockReason(
-    t,
-    verified,
-    Boolean(options.currentProfile?.capabilities?.toolCalling?.probe),
-  );
+  options.onToolsVerifiedSeenChange(verified);
+  const reason = blockReason(t, verified, Boolean(options.toolCapabilities.probe));
   const toolsSetting = new Setting(options.containerEl)
     .setName(t("settings.capabilityControls.tools.name"))
     .setDesc(t("settings.capabilityControls.tools.desc"))
     .addToggle((toggle) => {
-      toggle.setValue(options.toolsEnabled);
+      toggle.setValue(toolsEnabled);
       toggle.setDisabled(!verified);
       toggle.onChange(options.onToolsEnabledChange);
     });
@@ -131,29 +160,42 @@ function blockReason(t: Translate, verified: boolean, tested: boolean): string |
     : t("settings.capabilityControls.notTested");
 }
 
-function resolveCapabilityStatus(options: ModelProfileCapabilityControlsOptions): string {
-  const { t } = options;
-  const status = options.savedProfileId
-    ? options.getCapabilityStatus?.(options.savedProfileId)
-    : undefined;
-  if (status) return formatCapabilityStatus(t, status);
-
-  const tools = options.currentProfile?.capabilities?.toolCalling?.probe;
-  const agent = options.currentProfile?.reasoningCapabilities;
-  return formatCapabilityStatus(t, {
-    tools: !tools ? "not-tested" : tools.calls ? "verified" : "not-verified",
-    agent:
-      !agent || agent.source !== "probe"
-        ? "not-tested"
-        : agent.responses
-          ? "verified"
-          : "not-verified",
-  });
+function isCapabilityTestRunning(options: ModelProfileCapabilityControlsOptions): boolean {
+  const status =
+    options.savedProfileId && options.savedStatusApplies
+      ? options.getCapabilityStatus?.(options.savedProfileId)
+      : undefined;
+  return status?.tools === "testing" || status?.agent === "testing";
 }
 
-function hasCapabilityTestResult(profile: ChatModelProfile | undefined): boolean {
+function capabilityVerificationState(
+  options: ModelProfileCapabilityControlsOptions,
+): CapabilityVerificationState {
+  const status =
+    options.savedProfileId && options.savedStatusApplies
+      ? options.getCapabilityStatus?.(options.savedProfileId)
+      : undefined;
+  return (
+    status ??
+    deriveCapabilityVerificationState({
+      capabilities: {
+        chat: true,
+        embeddings: false,
+        detectionSource: "format-default",
+        toolCalling: options.toolCapabilities,
+      },
+      reasoningCapabilities: options.reasoningCapabilities,
+    })
+  );
+}
+
+function resolveCapabilityStatus(options: ModelProfileCapabilityControlsOptions): string {
+  return formatCapabilityStatus(options.t, capabilityVerificationState(options));
+}
+
+function hasCapabilityTestResult(options: ModelProfileCapabilityControlsOptions): boolean {
   return Boolean(
-    profile?.capabilities?.toolCalling?.probe || profile?.reasoningCapabilities?.source === "probe",
+    options.toolCapabilities.probe || options.reasoningCapabilities?.source === "probe",
   );
 }
 

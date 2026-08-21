@@ -1,9 +1,5 @@
 export type LlmJsonParseFailureReason =
-  | "empty-output"
-  | "json-not-found"
-  | "invalid-json"
-  | "invalid-shape"
-  | "output-too-large";
+  "empty-output" | "json-not-found" | "invalid-json" | "invalid-shape" | "output-too-large";
 
 export interface LlmJsonParseDiagnostic {
   ok: boolean;

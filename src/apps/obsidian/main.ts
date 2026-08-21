@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Platform, Plugin } from "obsidian";
 
 import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { PdfTextCache } from "@adapters/extractors";
@@ -10,7 +10,7 @@ import { AttestSettingTab } from "./ui/SettingsTab";
 import { PluginDebugLogger } from "@adapters/settings";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { normalizeSettingsState } from "@adapters/settings";
-import { reasoningVerified } from "@adapters/settings";
+import { reasoningVerified, toolsVerified } from "@adapters/settings";
 import { readSettings } from "@adapters/settings";
 import {
   getActiveIndexProfile,
@@ -52,6 +52,7 @@ import {
   requireIndexProfile,
   resolveIndexProfileForUse,
 } from "./composition/profileResolvers";
+import { MobileIndexingLifecycle } from "./indexing/MobileIndexingLifecycle";
 
 export default class AttestPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
@@ -125,6 +126,7 @@ export default class AttestPlugin extends Plugin {
 
   private warmCaches?: VaultWarmCaches;
   private vaultFileSystem?: FileSystemPort;
+  private mobileIndexingLifecycle?: MobileIndexingLifecycle;
 
   /** Opens the plugin's settings tab; used by in-chat notices that link to it. */
   openSettingsTab(): void {
@@ -145,6 +147,7 @@ export default class AttestPlugin extends Plugin {
       webSourceHealth: this.webSourceHealth,
       warmCaches: this.requireWarmCaches(),
       fileSystem: this.fileSystem,
+      isMobile: Platform.isMobile,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       getIndexingState: (profileId) => this.indexing.getState(profileId),
@@ -154,6 +157,16 @@ export default class AttestPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
+    if (Platform.isMobile) {
+      this.mobileIndexingLifecycle = new MobileIndexingLifecycle({
+        visibility: document,
+        getBusyProfileId: () => this.indexing.getBusyProfileId(),
+        getState: (profileId) => this.indexing.getState(profileId),
+        pause: (profileId) => this.indexing.pause(profileId),
+        resume: (profileId) => this.indexing.resume(profileId),
+      });
+      this.mobileIndexingLifecycle.start();
+    }
     const invalidateWarmPaths = () => this.warmCaches?.invalidatePaths();
     this.registerEvent(this.app.vault.on("create", invalidateWarmPaths));
     this.registerEvent(this.app.vault.on("delete", invalidateWarmPaths));
@@ -166,8 +179,8 @@ export default class AttestPlugin extends Plugin {
       ATTEST_CHAT_VIEW_TYPE,
       (leaf) =>
         new AttestChatView(leaf, {
-          createResearchService: (chatModelProfileId, indexProfileId) =>
-            createResearchService(this.composition, chatModelProfileId, indexProfileId),
+          createResearchService: (chatModelProfileId, indexProfileId, searchMode) =>
+            createResearchService(this.composition, chatModelProfileId, indexProfileId, searchMode),
           isWebSearchEnabled: () =>
             this.settings.webSources.some((profile) => isWebSourceActive(profile)),
           getChatModel: () =>
@@ -184,7 +197,8 @@ export default class AttestPlugin extends Plugin {
               contextLength: profile.capabilities?.contextLength,
               maxTokens: profile.maxTokens,
               isSuspended: profile.isSuspended === true,
-              supportsAgentMode: reasoningVerified(profile.reasoningCapabilities),
+              supportsAgentMode:
+                reasoningVerified(profile.reasoningCapabilities) && toolsVerified(profile),
             })),
           getDefaultChatModelProfileId: () => this.settings.newChatDefaults.chatModelProfileId,
           getDefaultIndexProfileId: () => this.settings.newChatDefaults.indexProfileId,
@@ -219,6 +233,7 @@ export default class AttestPlugin extends Plugin {
           },
           deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           getTranslator: () => this.translator,
+          logError: (error) => this.composition.logger.logError(error, { url: "chat:research" }),
           isDebugMode: () => this.settings.debugMode,
           shouldIncludeActiveFileContext: () =>
             this.settings.newChatDefaults.includeActiveFileContext,
@@ -229,6 +244,8 @@ export default class AttestPlugin extends Plugin {
   }
 
   onunload(): void {
+    this.mobileIndexingLifecycle?.dispose();
+    this.mobileIndexingLifecycle = undefined;
     this.warmCaches?.dispose();
     this.warmCaches = undefined;
   }

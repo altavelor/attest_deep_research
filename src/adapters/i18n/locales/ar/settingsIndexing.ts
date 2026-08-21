@@ -149,6 +149,8 @@ export const settingsIndexing: EnSettingsIndexingMessages = {
     "تجاهل البيانات الوصفية المخزّنة وتشغيل الاستخراج لكل مستند من جديد.",
   "settings.indexRun.embeddingChangedWarning":
     "يتطلب تغيير نموذج التضمين إعادة فهرسة كاملة: سيؤدي تشغيل هذا إلى إعادة بناء الفهرس (وبياناته الوصفية) من الصفر.",
+  "settings.indexRun.mobileRebuildWarning":
+    "قد تستهلك إعادة البناء على الهاتف قدرًا كبيرًا من البطارية والذاكرة والبيانات. اضغط إعادة البناء مرة أخرى للتأكيد.",
   "settings.indexRun.start": "بدء",
   "settings.indexRun.rebuild": "إعادة البناء",
   "settings.indexRun.update": "تحديث",

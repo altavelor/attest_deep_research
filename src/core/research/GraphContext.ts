@@ -186,7 +186,7 @@ function stripIgnoredMarkdownRegions(markdown: string): string {
     .replace(/^---[\s\S]*?^---/m, "")
     .replace(/```[\s\S]*?```/g, "")
     .replace(/`[^`\n]*`/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
 
 function normalizeLinkTarget(target: string): string {

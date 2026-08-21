@@ -152,6 +152,8 @@ export const settingsIndexing = {
     "Ignore stored metadata and run extraction for every document again.",
   "settings.indexRun.embeddingChangedWarning":
     "Changing the embedding model requires a full re-index: running this will rebuild the index (and its metadata) from scratch.",
+  "settings.indexRun.mobileRebuildWarning":
+    "Rebuilding on mobile can use significant battery, memory, and network data. Tap rebuild again to confirm.",
   "settings.indexRun.start": "Start",
   "settings.indexRun.rebuild": "Rebuild",
   "settings.indexRun.update": "Update",

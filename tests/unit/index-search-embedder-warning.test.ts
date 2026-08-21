@@ -7,6 +7,7 @@ import {
   resolveIndexProfileForUse,
 } from "@apps/obsidian/composition/profileResolvers";
 import { createTranslator } from "@adapters/i18n";
+import { errorCodeFromUnknown, toUserMessage } from "@core/errors";
 import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
 import type { EmbeddingModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
 
@@ -67,6 +68,18 @@ describe("index-search debug panel", () => {
     expect(() => resolveIndexProfileForUse(createSettings(), translate)).toThrow(
       "Index this profile before using it in chat or search.",
     );
+  });
+
+  it("reports an unbuilt index as a settings error carrying its own message", () => {
+    let thrown: unknown;
+    try {
+      resolveIndexProfileForUse(createSettings(), translate);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(errorCodeFromUnknown(thrown)).toBe("INVALID_SETTINGS");
+    expect(toUserMessage(thrown)).toBe("Index this profile before using it in chat or search.");
   });
 
   it("requires available server and model profiles", () => {
