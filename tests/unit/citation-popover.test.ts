@@ -84,4 +84,49 @@ describe("CitationPopover", () => {
     expect(host.querySelector(".attest-chat__citation-popover")).toBeNull();
     expect(anchor.classList.contains("is-highlighted")).toBe(false);
   });
+
+  it("cancels a pending highlight timer when closed", () => {
+    vi.useFakeTimers();
+    try {
+      const host = createContainer();
+      const block = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "source" },
+      });
+      const controller = new CitationPopoverController({ hostEl: host, t, onOpenChunk: vi.fn() });
+
+      controller.scrollBlockIntoView("source");
+      expect(block.classList.contains("is-highlighted")).toBe(true);
+      controller.close();
+      vi.runAllTimers();
+
+      expect(block.classList.contains("is-highlighted")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the previous temporary highlight when scrolling to another citation", () => {
+    vi.useFakeTimers();
+    try {
+      const host = createContainer();
+      const first = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "first" },
+      });
+      const second = host.createDiv({
+        cls: "attest-chat__citation-block",
+        attr: { "data-citation-key": "second" },
+      });
+      const controller = new CitationPopoverController({ hostEl: host, t, onOpenChunk: vi.fn() });
+
+      controller.scrollBlockIntoView("first");
+      controller.scrollBlockIntoView("second");
+
+      expect(first.classList.contains("is-highlighted")).toBe(false);
+      expect(second.classList.contains("is-highlighted")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

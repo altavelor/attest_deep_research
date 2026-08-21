@@ -352,6 +352,35 @@ describe("ResearchQuestionController research mode", () => {
 });
 
 describe("ResearchQuestionController cancellation", () => {
+  it("does not mutate or render after a disposed run producer ignores abort", async () => {
+    const gate = deferred();
+    const harness = createHarness(async function* events() {
+      yield { type: "delta", content: "Partial" };
+      await gate.promise;
+      yield { type: "delta", content: " late" };
+    });
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    harness.controller.dispose();
+    const messagesAfterDispose = structuredClone(harness.messages());
+    const renderCountAfterDispose = harness.renderLog.length;
+    const lifecycleAfterDispose = [...harness.lifecycleLog];
+    const statusesAfterDispose = [...harness.statuses];
+
+    gate.resolve();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(harness.requests[0]?.signal?.aborted).toBe(true);
+    expect(harness.messages()).toEqual(messagesAfterDispose);
+    expect(harness.renderLog).toHaveLength(renderCountAfterDispose);
+    expect(harness.lifecycleLog).toEqual(lifecycleAfterDispose);
+    expect(harness.statuses).toEqual(statusesAfterDispose);
+    expect(harness.controller.isRunning()).toBe(false);
+  });
+
   it("aborts the request and marks the answer interrupted mid-stream", async () => {
     const gate = deferred();
     const harness = createHarness(async function* events() {

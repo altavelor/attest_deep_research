@@ -97,6 +97,35 @@ describe("IndexingService", () => {
     ).toEqual(["Research/a.md", "Research/notes.txt"]);
   });
 
+  it("skips an oversized file before reading it", async () => {
+    const oversized = { ...file("Research/large.pdf", 1, "pdf"), size: 11 };
+    const files = new FakeVaultFileProvider([oversized]);
+    const logger = new FakeIndexingLogger();
+    const extractor = new FakeExtractor(".pdf");
+    const service = new IndexingService({
+      files,
+      extractors: [extractor],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore: new FakeIndexStore(),
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+      maxFileSizeBytesByExtension: { pdf: 10 },
+      logger,
+    });
+
+    await expect(service.manualReindex()).resolves.toMatchObject({ skippedFiles: 1 });
+    expect(files.readPaths).toEqual([]);
+    expect(extractor.extractedPaths).toEqual([]);
+    expect(logger.events).toContainEqual(
+      expect.objectContaining({
+        path: "Research/large.pdf",
+        outcome: "skipped",
+        reason: "file-too-large",
+      }),
+    );
+  });
+
   it("never indexes saved chats from the internal Attest folder", async () => {
     const files = new FakeVaultFileProvider([
       file(".attest/chats/chat-1.json", 1, '{"messages":[{"content":"saved answer"}]}'),
@@ -465,7 +494,7 @@ class FakeVaultFileProvider implements VaultFileProvider {
   }
 
   async listFiles(): Promise<VaultFileSummary[]> {
-    return this.files.map(({ path, modifiedTime }) => ({ path, modifiedTime }));
+    return this.files.map(({ path, modifiedTime, size }) => ({ path, modifiedTime, size }));
   }
 
   async readFile(path: string): Promise<ArrayBuffer | string> {

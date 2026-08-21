@@ -35,6 +35,7 @@ const FORBIDDEN_MODULES = [
 ];
 
 const bundlePath = resolve(process.env.ATTEST_OUTPUT_DIR ?? "dist", "main.js");
+const maxBundleBytes = Number(process.env.ATTEST_MAX_BUNDLE_BYTES ?? 3_600_000);
 
 let bundle;
 try {
@@ -46,6 +47,12 @@ try {
 }
 
 const failures = [];
+
+if (Buffer.byteLength(bundle, "utf8") > maxBundleBytes) {
+  failures.push(
+    `bundle is ${Buffer.byteLength(bundle, "utf8")} bytes (budget: ${maxBundleBytes} bytes)`,
+  );
+}
 
 for (const moduleName of FORBIDDEN_MODULES) {
   const pattern = new RegExp(
