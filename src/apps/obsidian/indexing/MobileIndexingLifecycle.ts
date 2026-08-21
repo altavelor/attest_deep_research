@@ -61,6 +61,10 @@ export class MobileIndexingLifecycle {
       .catch(() => undefined)
       .finally(() => {
         this.autoResume = undefined;
+        if (this.disposed) {
+          this.pauseProfile(profileId);
+          return;
+        }
         if (this.autoPausedProfileId !== profileId) return;
         if (this.visibility.hidden) {
           this.pauseProfile(profileId);

@@ -97,6 +97,45 @@ describe("MobileIndexingLifecycle", () => {
     expect(status).toBe("paused");
   });
 
+  it("pauses an auto-resumed run that completes after disposal", async () => {
+    const visibility = new FakeVisibilitySource();
+    let status: "indexing" | "paused" = "indexing";
+    let completeResume: (() => void) | undefined;
+    const resume = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completeResume = () => {
+            status = "indexing";
+            resolve();
+          };
+        }),
+    );
+    const pause = vi.fn(() => {
+      status = "paused";
+    });
+    const lifecycle = new MobileIndexingLifecycle({
+      visibility,
+      getBusyProfileId: () => "profile-a",
+      getState: () => ({ status }),
+      pause,
+      resume,
+    });
+    lifecycle.start();
+
+    visibility.setHidden(true);
+    visibility.emitChange();
+    visibility.setHidden(false);
+    visibility.emitChange();
+    lifecycle.dispose();
+    completeResume?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(pause).toHaveBeenCalledTimes(2);
+    expect(pause).toHaveBeenLastCalledWith("profile-a");
+    expect(status).toBe("paused");
+  });
+
   it("registers once and removes its listener when disposed", () => {
     const visibility = new FakeVisibilitySource();
     const lifecycle = new MobileIndexingLifecycle({
