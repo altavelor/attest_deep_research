@@ -82,4 +82,17 @@ describe("obsidianRequestFetch", () => {
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
+
+  it("preserves a caller-provided abort reason", async () => {
+    requestUrl.mockReturnValue(new Promise(() => undefined));
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled by user", "AbortError");
+    const pending = obsidianRequestFetch("https://api.example.test", {
+      signal: controller.signal,
+    });
+
+    controller.abort(reason);
+
+    await expect(pending).rejects.toBe(reason);
+  });
 });

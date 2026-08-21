@@ -62,6 +62,15 @@ describe("Attest errors", () => {
     );
   });
 
+  it("exposes actionable settings messages", () => {
+    const error = new AttestError({
+      code: "INVALID_SETTINGS",
+      message: "Index this profile before using it in chat or search.",
+    });
+
+    expect(toUserMessage(error)).toBe("Index this profile before using it in chat or search.");
+  });
+
   it("classifies unknown errors without throwing", () => {
     expect(toUserMessage(new Error("network stack details"))).toBe(
       "Something went wrong in Attest.",

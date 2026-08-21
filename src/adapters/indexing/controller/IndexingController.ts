@@ -59,12 +59,12 @@ export class IndexingController {
 
   async resume(): Promise<IndexingState> {
     const service = this.getService();
-    service.resume();
 
     if (this.inFlight) {
       await this.inFlight.catch(() => undefined);
     }
 
+    service.resume();
     return this.start();
   }
 

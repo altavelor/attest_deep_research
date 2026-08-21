@@ -16,6 +16,7 @@ export interface CompositionContext {
   webSourceHealth: WebSourceHealthTracker;
   warmCaches: VaultWarmCaches;
   fileSystem: FileSystemPort;
+  isMobile?: boolean;
   getSettings(): AttestSettings;
   saveSettings(): Promise<void>;
   getIndexingState(profileId: string): IndexingState;

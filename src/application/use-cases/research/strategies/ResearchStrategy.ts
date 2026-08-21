@@ -49,7 +49,7 @@ export interface ResearchStrategyDeps {
   vaultPipeline: VaultResearchPipeline;
   webPipeline: WebResearchPipeline;
   answerSynthesis: AnswerSynthesisService;
-  retriever: ResearchRetriever;
+  retriever?: ResearchRetriever;
   urlStatusChecker?: UrlStatusChecker;
   searchProvider?: SearchProvider;
 

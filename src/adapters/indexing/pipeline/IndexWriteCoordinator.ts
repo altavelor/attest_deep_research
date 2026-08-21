@@ -111,6 +111,8 @@ export class IndexWriteCoordinator {
   rollback(): void {
     this.writer?.rollback();
     this.writer = undefined;
+    this.snapshots.clear();
+    this.snapshotsLoaded = false;
     this.imageManifest = undefined;
     this.imageDocumentPaths.clear();
   }

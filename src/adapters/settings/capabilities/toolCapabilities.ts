@@ -1,20 +1,17 @@
 import { ToolCallingCapabilities } from "@core/agent";
-import { ToolCapabilityProbeAudit } from "@core/diagnostics";
+import {
+  EffectiveToolCapabilities,
+  ToolCapabilityLayer,
+  ToolCapabilitySettings,
+} from "./contracts";
+import type { ToolCapabilityProbeAudit } from "@core/diagnostics";
 
-export type ToolCapabilitySource = "format-default" | "probe";
-export type ToolCapabilityLayer = Partial<ToolCallingCapabilities>;
-
-export interface ToolCapabilitySettings {
-  formatDefault: ToolCallingCapabilities;
-  probe?: ToolCapabilityLayer;
-
-  probeAudit?: ToolCapabilityProbeAudit;
-}
-
-export interface EffectiveToolCapabilities {
-  capabilities: ToolCallingCapabilities;
-  provenance: Record<keyof ToolCallingCapabilities, ToolCapabilitySource>;
-}
+export type {
+  EffectiveToolCapabilities,
+  ToolCapabilityLayer,
+  ToolCapabilitySettings,
+  ToolCapabilitySource,
+} from "./contracts";
 
 const FLAGS: readonly (keyof ToolCallingCapabilities)[] = [
   "calls",
@@ -54,6 +51,7 @@ export function withProbeResults(
 ): ToolCapabilitySettings {
   return {
     formatDefault: { ...settings.formatDefault },
+    ...(settings.advertised ? { advertised: { ...settings.advertised } } : {}),
     probe: { ...(settings.probe ?? {}), ...probe },
     ...(probeAudit ? { probeAudit } : {}),
   };

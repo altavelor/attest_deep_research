@@ -18,6 +18,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
   "settings.capability.subject.agent": "دعم وضع الوكيل",
   "settings.capability.phase.testing": "جارٍ الاختبار…",
   "settings.capability.phase.verified": "تم التحقق",
+  "settings.capability.phase.advertised": "حسب بيانات المزوّد",
   "settings.capability.phase.notVerified": "لم يتم التحقق",
   "settings.capability.phase.failed": "أخفق",
   "settings.capability.phase.notTested": "لم يُختبر",
@@ -99,6 +100,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.capabilityControls.heading": "القدرات",
   "settings.capabilityControls.testTooltip": "اختبار القدرات — {status}",
+  "settings.capabilityControls.testingTooltip": "جارٍ اختبار القدرات…",
   "settings.capabilityControls.retestTooltip": "إعادة اختبار القدرات — {status}",
   "settings.capabilityControls.agentic.name": "وضع الوكيل",
   "settings.capabilityControls.agentic.desc": "تفعيل دعم وضع الوكيل المُتحقَّق منه.",

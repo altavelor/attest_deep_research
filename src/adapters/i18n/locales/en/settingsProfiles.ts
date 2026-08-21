@@ -12,10 +12,11 @@ export const settingsProfiles = {
 
   "settings.capability.status": "{tools} · {agent}",
   "settings.capability.entry": "{subject}: {phase}",
-  "settings.capability.subject.tools": "tools support",
-  "settings.capability.subject.agent": "agent mode support",
+  "settings.capability.subject.tools": "Tools support",
+  "settings.capability.subject.agent": "Agent mode support",
   "settings.capability.phase.testing": "Testing…",
   "settings.capability.phase.verified": "Verified",
+  "settings.capability.phase.advertised": "Reported by provider",
   "settings.capability.phase.notVerified": "Not verified",
   "settings.capability.phase.failed": "Failed",
   "settings.capability.phase.notTested": "Not tested",
@@ -102,6 +103,7 @@ export const settingsProfiles = {
 
   "settings.capabilityControls.heading": "Capabilities",
   "settings.capabilityControls.testTooltip": "Test capabilities — {status}",
+  "settings.capabilityControls.testingTooltip": "Capability test in progress…",
   "settings.capabilityControls.retestTooltip": "Re-test capabilities — {status}",
   "settings.capabilityControls.agentic.name": "Agentic mode",
   "settings.capabilityControls.agentic.desc": "Enable verified agent mode support.",

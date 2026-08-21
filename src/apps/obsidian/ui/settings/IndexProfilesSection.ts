@@ -1,7 +1,7 @@
 import type AttestPlugin from "@apps/obsidian/main";
 import { IndexProfile, formatIndexSize } from "@adapters/indexing";
 import { MAX_INDEX_PROFILE_COUNT, getActiveIndexProfile } from "@adapters/settings";
-import { App, Notice, Setting } from "obsidian";
+import { App, Notice, Platform, Setting } from "obsidian";
 import type { Translate } from "@adapters/i18n";
 import { IndexProfileModal } from "./IndexProfileModal";
 import { IndexReportModal } from "./IndexReportModal";
@@ -313,6 +313,7 @@ export class IndexProfilesSection {
       embeddingModels: embeddings,
       chatModels: chats,
       defaultChatModelProfileId: this.plugin.settings.newChatDefaults.chatModelProfileId,
+      isMobile: Platform.isMobile,
       onSubmit: (plan) => {
         if (plan.metadata && chats.length === 0) {
           new Notice(t("settings.indexProfiles.notice.chatRequiredForMetadata"));

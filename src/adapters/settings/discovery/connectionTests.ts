@@ -9,10 +9,12 @@ import {
 } from "@adapters/model-provider/common/models";
 import { toUserMessage } from "@core/errors";
 import { ApiFormat } from "@core/agent";
-import type { PluginRequestLogger } from "./debugLogger";
-import { ModelCapability, ServerProfile } from "./types";
-import type { ModelCapabilitySnapshot } from "./modelCapabilityCache";
-import { resolveCapabilityMetadata } from "./capabilityMetadataResolver";
+import type { PluginRequestLogger } from "../debugLogger";
+import { ModelCapability, ServerProfile } from "../types";
+import type { ModelCapabilitySnapshot } from "../capabilities";
+import { resolveCapabilityMetadata } from "../capabilities";
+import { capabilityFromKinds, resolveProviderDialect } from "./providerDialects";
+import type { ProviderDialect } from "./providerDialects";
 
 export interface DiscoveredModel {
   id: string;
@@ -44,6 +46,29 @@ export function apiFormatLabel(apiFormat: ApiFormat): string {
   }
 }
 
+export function providerLabel(serverProfile: ServerProfile): string {
+  return serverProfile.apiFormat === "openai-compatible"
+    ? resolveProviderDialect(serverProfile.baseUrl).label
+    : apiFormatLabel(serverProfile.apiFormat);
+}
+
+/**
+ * Reports how many discovered models can serve the requested profile role,
+ * because a provider listing usually mixes chat and embedding models.
+ */
+export function modelRoleCountMessage(
+  serverProfile: ServerProfile,
+  models: DiscoveredModel[],
+  kind: "chat" | "embedding",
+): string {
+  const matching = models.filter((model) =>
+    kind === "chat" ? model.capabilities.chat : model.capabilities.embeddings,
+  ).length;
+  const plural = matching === 1 ? "model" : "models";
+  const role = kind === "chat" ? "chat" : "embedding";
+  return `Connected to ${providerLabel(serverProfile)}. Found ${matching} ${role} ${plural} of ${models.length}.`;
+}
+
 export async function fetchAvailableModels(
   serverProfile: ServerProfile,
   options: ModelDiscoveryOptions = {},
@@ -58,7 +83,7 @@ export async function fetchAvailableModels(
 
     return {
       ok: true,
-      message: modelCountMessage(apiFormatLabel(serverProfile.apiFormat), models.length),
+      message: modelCountMessage(providerLabel(serverProfile), models.length),
       models,
     };
   } catch (error) {
@@ -164,29 +189,90 @@ async function fetchOpenAiCompatibleModels(
   serverProfile: ServerProfile,
   options: ModelDiscoveryOptions,
 ): Promise<DiscoveredModel[]> {
+  const dialect = resolveProviderDialect(serverProfile.baseUrl);
   const http = createDiscoveryHttp(serverProfile, options);
-  const response = await http.request("/models", { method: "GET" });
-  const body = await http.readJson(response, "The model provider returned invalid JSON.");
+  const discovered = new Map<string, DiscoveredModel>();
 
-  if (!isOpenAiModelsResponse(body)) {
-    throw new Error("The model provider returned an invalid models response.");
+  for (const [index, path] of dialect.modelListPaths.entries()) {
+    const isPrimaryList = index === 0;
+    let entries: Record<string, unknown>[] | null;
+    try {
+      const response = await http.request(path, { method: "GET" });
+      const body = await http.readJson(response, "The model provider returned invalid JSON.");
+      entries = dialect.extractEntries(body);
+    } catch (error) {
+      if (isPrimaryList) {
+        throw error;
+      }
+      continue;
+    }
+
+    if (entries === null) {
+      if (isPrimaryList) {
+        throw new Error("The model provider returned an invalid models response.");
+      }
+      continue;
+    }
+
+    for (const entry of entries) {
+      const model = discoveredModelFrom(entry, dialect);
+      if (!model) {
+        continue;
+      }
+
+      const existing = discovered.get(model.id);
+      discovered.set(model.id, existing ? mergeDiscoveredModels(existing, model) : model);
+    }
   }
 
-  return body.data.map((model) => {
-    const contextLength = contextLengthFromModelMetadata(model);
-    const capabilitySnapshot = resolveCapabilityMetadata(model);
-    return {
-      id: model.id,
-      name: model.id,
-      capabilities: {
-        ...openAiCompatibleDefaultCapability(),
-        ...(contextLength !== undefined
-          ? { contextLength, detectionSource: "metadata" as const }
-          : {}),
-      },
-      ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
-    };
-  });
+  return [...discovered.values()];
+}
+
+function discoveredModelFrom(
+  entry: Record<string, unknown>,
+  dialect: ProviderDialect,
+): DiscoveredModel | undefined {
+  const id = typeof entry.id === "string" ? entry.id.trim() : "";
+  if (!id) {
+    return undefined;
+  }
+
+  const contextLength = contextLengthFromModelMetadata(entry);
+  const capabilitySnapshot = resolveCapabilityMetadata(entry);
+  return {
+    id,
+    name: id,
+    capabilities: {
+      ...capabilityFromKinds(dialect.detectKinds(entry)),
+      ...(contextLength !== undefined
+        ? { contextLength, detectionSource: "metadata" as const }
+        : {}),
+    },
+    ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
+  };
+}
+
+function mergeDiscoveredModels(
+  existing: DiscoveredModel,
+  incoming: DiscoveredModel,
+): DiscoveredModel {
+  const contextLength = existing.capabilities.contextLength ?? incoming.capabilities.contextLength;
+  const detectionSource =
+    existing.capabilities.contextLength === undefined && contextLength !== undefined
+      ? incoming.capabilities.detectionSource
+      : existing.capabilities.detectionSource;
+
+  return {
+    ...existing,
+    capabilities: {
+      ...existing.capabilities,
+      chat: existing.capabilities.chat || incoming.capabilities.chat,
+      embeddings: existing.capabilities.embeddings || incoming.capabilities.embeddings,
+      contextLength,
+      detectionSource,
+    },
+    capabilitySnapshot: existing.capabilitySnapshot ?? incoming.capabilitySnapshot,
+  };
 }
 
 async function fetchAnthropicModels(
@@ -256,16 +342,6 @@ function createDiscoveryHttp(
     unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
     unavailableMessage: "The model provider is unavailable.",
   });
-}
-
-function openAiCompatibleDefaultCapability(): ModelCapability {
-  return {
-    chat: true,
-    embeddings: false,
-    temperature: true,
-    maxTokens: true,
-    detectionSource: "format-default",
-  };
 }
 
 function modelCountMessage(providerLabel: string, count: number): string {

@@ -159,6 +159,8 @@ export const settingsIndexing: EnSettingsIndexingMessages = {
     "Ignorar los metadatos guardados y volver a ejecutar la extracción en todos los documentos.",
   "settings.indexRun.embeddingChangedWarning":
     "Cambiar el modelo de embeddings obliga a reindexar por completo: al ejecutarlo se reconstruirán el índice y sus metadatos desde cero.",
+  "settings.indexRun.mobileRebuildWarning":
+    "Reconstruir en el móvil puede consumir mucha batería, memoria y datos. Pulsa Reconstruir otra vez para confirmar.",
   "settings.indexRun.start": "Iniciar",
   "settings.indexRun.rebuild": "Reconstruir",
   "settings.indexRun.update": "Actualizar",

@@ -20,6 +20,7 @@ export interface IndexRunModalOptions {
   embeddingModels: EmbeddingModelProfile[];
   chatModels: ChatModelProfile[];
   defaultChatModelProfileId: string;
+  isMobile?: boolean;
   onSubmit(plan: IndexRunPlan): void;
 }
 
@@ -38,6 +39,7 @@ export class IndexRunModal extends Modal {
   private footerEl: HTMLElement | null = null;
   private metadataToggle: ToggleComponent | null = null;
   private metadataSectionEl: HTMLElement | null = null;
+  private mobileRebuildArmed = false;
 
   constructor(
     app: App,
@@ -197,7 +199,9 @@ export class IndexRunModal extends Modal {
 
     if (this.warningEl) {
       this.warningEl.empty();
-      if (this.embeddingModelChanged()) {
+      if (this.mobileRebuildArmed) {
+        this.warningEl.setText(this.options.t("settings.indexRun.mobileRebuildWarning"));
+      } else if (this.embeddingModelChanged()) {
         this.warningEl.setText(this.options.t("settings.indexRun.embeddingChangedWarning"));
       }
     }
@@ -243,6 +247,16 @@ export class IndexRunModal extends Modal {
 
   private submit(mode: IndexRunPlan["mode"]): void {
     const effectiveMode = mode !== "start" && this.embeddingModelChanged() ? "rebuild" : mode;
+    if (
+      effectiveMode === "rebuild" &&
+      this.options.isMobile === true &&
+      this.indexExists() &&
+      !this.mobileRebuildArmed
+    ) {
+      this.mobileRebuildArmed = true;
+      this.refresh();
+      return;
+    }
     this.options.onSubmit({
       mode: effectiveMode,
       ...(this.embeddingEnabled

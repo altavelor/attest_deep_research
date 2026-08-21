@@ -21,9 +21,16 @@ import { EmbeddingClient } from "@adapters/model-provider";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
 import { EmbeddingModelProfile } from "@adapters/settings";
+import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 
 import { CompositionContext } from "./CompositionContext";
 import { createLinkedImagePathResolver } from "./mediaFactory";
+import {
+  effectiveEmbeddingBatchSize,
+  mobileIndexingOptions,
+  mobileFileSizeLimits,
+  pdfPageConcurrency,
+} from "./mobileIndexingPolicy";
 import {
   requireEmbeddingModelProfile,
   requireIndexProfile,
@@ -50,7 +57,11 @@ export function createIndexingService(
     embeddingModel: embeddingProfile.modelName,
     includeFolders: indexProfile.includeFolders,
     excludeGlobs: indexProfile.excludeGlobs,
-    batchSize: indexProfile.embeddingBatchSize,
+    batchSize: effectiveEmbeddingBatchSize(indexProfile.embeddingBatchSize, ctx.isMobile === true),
+    ...mobileIndexingOptions(ctx.isMobile === true),
+    ...(mobileFileSizeLimits(ctx.isMobile === true)
+      ? { maxFileSizeBytesByExtension: mobileFileSizeLimits(true) }
+      : {}),
     onProgress,
     logger: ctx.logger,
     resolveLinkedImagePath: createLinkedImagePathResolver(ctx),
@@ -66,6 +77,7 @@ export function createEmbeddingClientForProfile(
     apiFormat: server.apiFormat,
     baseUrl: server.baseUrl,
     apiKey: server.apiKey,
+    fetch: resolveProviderFetch(server, "buffered", ctx.isMobile === true),
     logger: ctx.logger,
   });
 }
@@ -147,6 +159,7 @@ function buildExtractors(ctx: CompositionContext, profile: IndexProfile, scopedM
       maxChunkLength: profile.pdfChunkSize,
       chunkOverlap: profile.pdfChunkOverlap,
       cache: ctx.pdfTextCache,
+      pageConcurrency: pdfPageConcurrency(ctx.isMobile === true),
     }),
     new EpubExtractor({ ...chunk }),
     new Fb2Extractor({ ...chunk }),

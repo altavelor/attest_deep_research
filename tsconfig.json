@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@core/*": ["src/core/*"],
-      "@application/*": ["src/application/*"],
-      "@adapters/*": ["src/adapters/*"],
-      "@apps/*": ["src/apps/*"],
-      "@shared": ["src/shared"],
-      "@shared/*": ["src/shared/*"],
-      "@manifest": ["manifest.json"]
+      "@core/*": ["./src/core/*"],
+      "@application/*": ["./src/application/*"],
+      "@adapters/*": ["./src/adapters/*"],
+      "@apps/*": ["./src/apps/*"],
+      "@shared": ["./src/shared"],
+      "@shared/*": ["./src/shared/*"],
+      "@manifest": ["./manifest.json"]
     },
     "inlineSourceMap": true,
     "inlineSources": true,

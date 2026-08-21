@@ -133,7 +133,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         noteAccess: this.deps.noteTools !== undefined,
         activeFileAccess: this.deps.noteTools !== undefined && request.includeActiveFile === true,
         noteMutationAccess: this.deps.noteTools?.mutationEnabled() === true,
-        retrieverAvailable: true,
+        retrieverAvailable: this.deps.retriever !== undefined,
         webProviderAvailable: this.deps.searchProvider !== undefined,
       },
       noteTools: this.deps.noteTools,

@@ -470,6 +470,39 @@ describe("ResearchService", () => {
     expect(chatModel.requests).toHaveLength(2);
   });
 
+  it("reports the retriever as unavailable to the thinking toolset without one", async () => {
+    const availability: Record<string, unknown>[] = [];
+    const chatModel = new FakeChatModel([
+      [{ content: "Answer.", isComplete: true }],
+      [{ content: "Answer.", isComplete: true }],
+    ]);
+    const service = new ResearchService({
+      toolsetFactory: (options) => {
+        availability.push(options.availability as unknown as Record<string, unknown>);
+        return createResearchToolRegistry(options);
+      },
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      searchProvider: new FakeSearchProvider([]),
+      chatModel,
+      chatModelName: "qwen",
+      toolCapabilities: {
+        calls: true,
+        choiceRequired: true,
+        choiceSpecific: true,
+        parallelCalls: true,
+      },
+      now: fixedNow,
+    });
+
+    await collectAsync(
+      service.answer({ question: "What happened today?", mode: "thinking", searchMode: "webOnly" }),
+    );
+
+    expect(availability).not.toHaveLength(0);
+    expect(availability[0]).toMatchObject({ retrieverAvailable: false, searchMode: "webOnly" });
+  });
+
   it("uses Thinking when a direct caller forces a sub-agent without selecting a mode", async () => {
     const chatModel = new FakeChatModel([
       [{ content: "First attempt", isComplete: true }],
@@ -940,6 +973,38 @@ describe("ResearchService", () => {
     expect(chatModel.requests.at(-1)?.messages[1].content).toContain("Active text");
     expect(chatModel.requests.at(-1)?.messages[1].content).not.toContain("Indexed text");
     expect(chatModel.requests.at(-1)?.messages[1].content).not.toContain("Web text");
+  });
+
+  it("answers a web-only instant turn composed without a retriever", async () => {
+    const webSearch = new FakeSearchProvider([
+      {
+        source: webSource("https://example.com/web"),
+        extractedText: "Web text",
+        rank: 1,
+        query: "What happened today?",
+      },
+    ]);
+    const chatModel = new FakeChatModel([{ content: "Answer.", isComplete: true }]);
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (m) => new ChatCompletionsRoundAdapter(m),
+      searchProvider: webSearch,
+      chatModel,
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({ question: "What happened today?", mode: "instant", searchMode: "webOnly" }),
+    );
+
+    expect(webSearch.requests).toHaveLength(1);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      answer: { evidence: [expect.objectContaining({ text: "Web text" })] },
+    });
+    expect(chatModel.requests.at(-1)?.messages[1].content).toContain("Web text");
   });
 
   it("carries web query and source provenance into final context diagnostics", async () => {
