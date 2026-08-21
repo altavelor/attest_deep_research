@@ -6,7 +6,8 @@ import { createToolCapabilitySettings, ToolCapabilitySettings } from "@adapters/
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
-import { CapabilityVerificationState, reasoningVerified } from "@adapters/settings";
+import { CapabilityVerificationState, reasoningVerified, toolsVerified } from "@adapters/settings";
+import { reasoningCapabilitiesFromSnapshot } from "@adapters/settings";
 import { parsePositiveInteger } from "@shared";
 import type { MessageKey, Translate } from "@adapters/i18n";
 import type { TextDirection } from "@core/i18n";
@@ -66,6 +67,12 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     this.options.kind === "chat" && this.options.profile && "toolsEnabled" in this.options.profile
       ? this.options.profile.toolsEnabled
       : true;
+  private noteMutationAccess =
+    this.options.kind === "chat" &&
+    this.options.profile &&
+    "noteMutationAccess" in this.options.profile
+      ? this.options.profile.noteMutationAccess
+      : true;
   private reasoningMode: "off" | "on" | "auto" =
     this.options.kind === "chat" && this.options.profile && "reasoning" in this.options.profile
       ? this.options.profile.reasoning.mode === "off"
@@ -96,6 +103,8 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   private modelInputEl: HTMLInputElement | null = null;
   private modelMenuEl: HTMLElement | null = null;
   private agentVerifiedSeen = reasoningVerified(this.reasoningCapabilities);
+  private toolsVerifiedSeen = this.options.profile ? toolsVerified(this.options.profile) : false;
+  private advancedOpen = false;
   private testing = false;
   private savedProfileId = this.options.profile?.id;
   private unsubscribeCapabilityStatus: (() => void) | null = null;
@@ -123,9 +132,14 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     if (
       this.options.kind === "chat" &&
       currentProfile &&
-      "reasoningCapabilities" in currentProfile
+      "reasoningCapabilities" in currentProfile &&
+      this.savedStatusApplies()
     ) {
       this.reasoningCapabilities = currentProfile.reasoningCapabilities;
+      const probedToolCalling = currentProfile.capabilities?.toolCalling;
+      if (probedToolCalling?.probe) {
+        this.toolCapabilitySettings = probedToolCalling;
+      }
     }
     const { contentEl } = this;
     const { t } = this.options;
@@ -212,8 +226,13 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       );
 
     if (this.options.kind === "chat") {
+      this.seedCapabilitiesFromDiscovery();
       this.renderCapabilityControls(contentEl);
       const advanced = contentEl.createEl("details", { cls: "attest-profile-modal__advanced" });
+      advanced.open = this.advancedOpen;
+      advanced.addEventListener("toggle", () => {
+        this.advancedOpen = advanced.open;
+      });
       advanced.createEl("summary", { text: t("common.advanced") });
       const advancedContent = advanced.createDiv();
       new Setting(advancedContent)
@@ -318,13 +337,15 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       });
       option.addEventListener("click", () => {
         if (this.modelName !== model.name) {
-          this.reasoningCapabilities = undefined;
-          this.toolCapabilitySettings = createToolCapabilitySettings(false);
+          this.applyDiscoveredCapabilities(model);
         }
         this.modelName = model.name;
         this.modelInputEl!.value = model.name;
         this.closeModelMenu();
         void this.populateContextLength(model);
+        if (this.options.kind === "chat") {
+          this.render();
+        }
       });
     }
 
@@ -358,8 +379,80 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
     );
   }
 
+  /**
+   * A stored capability status describes the model it was measured on, so it is
+   * only shown while the edited server and model still match the saved profile.
+   */
+  private savedStatusApplies(): boolean {
+    const currentProfile = this.currentProfile();
+    return (
+      currentProfile !== undefined &&
+      currentProfile.serverProfileId === this.serverProfileId &&
+      currentProfile.modelName === this.modelName
+    );
+  }
+
   private selectedServer(): ServerProfile | undefined {
     return this.options.servers.find((server) => server.id === this.serverProfileId);
+  }
+
+  /**
+   * Replaces capability state with whatever the provider already advertises
+   * for the newly selected model, so a probe is only needed for what the
+   * metadata leaves unknown.
+   */
+  private applyDiscoveredCapabilities(model: DiscoveredModel): void {
+    this.applyDiscoveredReasoning(model);
+    this.applyDiscoveredTools(model);
+  }
+
+  private applyDiscoveredReasoning(model: DiscoveredModel): void {
+    this.reasoningCapabilities = reasoningCapabilitiesFromSnapshot(model.capabilitySnapshot);
+    const efforts = this.reasoningCapabilities?.efforts ?? [];
+    if (!this.reasoningEffort || !efforts.includes(this.reasoningEffort)) {
+      this.reasoningEffort = this.reasoningCapabilities?.defaultEffort ?? "";
+    }
+  }
+
+  private applyDiscoveredTools(model: DiscoveredModel): void {
+    const calls =
+      model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
+    const controls = model.capabilitySnapshot?.toolControls;
+    const advertised = {
+      calls,
+      choiceRequired: calls && controls?.choiceRequired === true,
+      choiceSpecific: calls && controls?.choiceSpecific === true,
+      parallelCalls: calls && controls?.parallelCalls === true,
+    };
+    this.toolCapabilitySettings = {
+      formatDefault: advertised,
+      advertised,
+    };
+  }
+
+  /**
+   * Applies advertised capabilities of the currently named model whenever the
+   * profile has no probe result yet, so reopening a profile does not lose what
+   * the provider already reports.
+   */
+  private seedCapabilitiesFromDiscovery(): void {
+    if (this.options.kind !== "chat" || !this.modelName) {
+      return;
+    }
+
+    const discovered = this.modelsForSelectedServer().find(
+      (candidate) => candidate.name === this.modelName,
+    );
+    if (!discovered) {
+      return;
+    }
+
+    if (this.reasoningCapabilities?.source !== "probe") {
+      this.applyDiscoveredReasoning(discovered);
+    }
+    if (this.toolCapabilitySettings.probe === undefined) {
+      this.applyDiscoveredTools(discovered);
+    }
   }
 
   private async populateContextLength(model: DiscoveredModel): Promise<void> {
@@ -463,7 +556,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
         ? {
             ...baseProfile,
             toolsEnabled: this.toolsEnabled,
-            noteMutationAccess: this.toolsEnabled,
+            noteMutationAccess: this.toolsEnabled && this.noteMutationAccess,
             reasoning: {
               mode: this.reasoningMode,
               ...(this.reasoningEffort ? { effort: this.reasoningEffort } : {}),
@@ -496,7 +589,9 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       embeddings: this.options.kind === "embedding",
       vision: currentProfile?.capabilities?.vision,
       tools: currentProfile?.capabilities?.tools,
-      toolCalling: currentProfile?.capabilities?.toolCalling ?? this.toolCapabilitySettings,
+      toolCalling: currentProfile?.capabilities?.toolCalling?.probe
+        ? currentProfile.capabilities.toolCalling
+        : this.toolCapabilitySettings,
       temperature: model?.capabilities.temperature ?? currentProfile?.capabilities?.temperature,
       maxTokens: model?.capabilities.maxTokens ?? currentProfile?.capabilities?.maxTokens,
       contextLength,
@@ -525,11 +620,14 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       containerEl,
       currentProfile: this.currentProfile() as ChatModelProfile | undefined,
       savedProfileId: this.savedProfileId,
+      savedStatusApplies: this.savedStatusApplies(),
       getCapabilityStatus: this.options.getCapabilityStatus,
       reasoningCapabilities: this.reasoningCapabilities,
+      toolCapabilities: this.toolCapabilitySettings,
       reasoningMode: this.reasoningMode,
       reasoningEffort: this.reasoningEffort,
       toolsEnabled: this.toolsEnabled,
+      toolsVerifiedSeen: this.toolsVerifiedSeen,
       agentVerifiedSeen: this.agentVerifiedSeen,
       onCapabilityTest: () => void this.test(),
       onReasoningModeChange: (mode) => {
@@ -543,6 +641,9 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
       },
       onAgentVerifiedSeenChange: (verified) => {
         this.agentVerifiedSeen = verified;
+      },
+      onToolsVerifiedSeenChange: (verified) => {
+        this.toolsVerifiedSeen = verified;
       },
       onRequestRerender: () => this.render(),
     };

@@ -18,6 +18,7 @@ export class AttestSettingTab extends PluginSettingTab {
   private metadataRefreshStarted = false;
   private readonly prober: SettingsCapabilityProber;
   private readonly indexProfiles: IndexProfilesSection;
+  private redisplayTimer: number | null = null;
 
   constructor(
     app: App,
@@ -41,7 +42,11 @@ export class AttestSettingTab extends PluginSettingTab {
     const scrollTop = this.containerEl.scrollTop;
     this.unsubscribeCapabilityProbes?.();
     this.unsubscribeCapabilityProbes = this.prober.subscribeAll(() => {
-      window.setTimeout(() => this.display(), 0);
+      if (this.redisplayTimer !== null) window.clearTimeout(this.redisplayTimer);
+      this.redisplayTimer = window.setTimeout(() => {
+        this.redisplayTimer = null;
+        this.display();
+      }, 0);
     });
     this.indexProfiles.dispose();
     normalizeSettingsState(this.plugin.settings);
@@ -89,6 +94,10 @@ export class AttestSettingTab extends PluginSettingTab {
   }
 
   hide(): void {
+    if (this.redisplayTimer !== null) {
+      window.clearTimeout(this.redisplayTimer);
+      this.redisplayTimer = null;
+    }
     this.unsubscribeCapabilityProbes?.();
     this.unsubscribeCapabilityProbes = null;
     this.indexProfiles.dispose();

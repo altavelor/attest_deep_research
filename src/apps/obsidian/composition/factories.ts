@@ -12,7 +12,8 @@ import { ObsidianGraphContextProvider } from "@adapters/obsidian/ObsidianGraphCo
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
 import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import { ResearchService } from "@application/use-cases/research";
-import { resolveToolCapabilities } from "@adapters/settings";
+import type { ResearchSearchMode } from "@application/use-cases/research";
+import { getActiveIndexProfile, resolveToolCapabilities } from "@adapters/settings";
 import { isResponsesCapabilityCurrent } from "@adapters/settings";
 import { capabilityCacheKey } from "@adapters/settings";
 import {
@@ -66,18 +67,31 @@ export {
 } from "./indexingFactory";
 import type { CompositionContext } from "./CompositionContext";
 
+function usesIndex(searchMode: ResearchSearchMode | undefined): boolean {
+  return searchMode !== "webOnly" && searchMode !== "none";
+}
+
+/**
+ * Builds the research turn for one chat model profile. A turn that never reads
+ * the index — web-only or explicit sources only — is composed without one, so a
+ * vault with no built index still answers instead of failing to start.
+ */
 export function createResearchService(
   ctx: CompositionContext,
   chatModelProfileId?: string,
   indexProfileId?: string,
+  searchMode?: ResearchSearchMode,
 ): ResearchService {
   const settings = ctx.getSettings();
-  const indexProfile = resolveIndexProfileForUse(settings, ctx.translator.t, indexProfileId);
+  const indexProfile = usesIndex(searchMode)
+    ? resolveIndexProfileForUse(settings, ctx.translator.t, indexProfileId)
+    : undefined;
   const chatProfile = requireChatModelProfile(settings, ctx.translator.t, chatModelProfileId);
   const chatServer = requireServerProfile(settings, ctx.translator.t, chatProfile.serverProfileId);
-  const retriever = createRetrieverForProfile(ctx, indexProfile);
+  const reportedProfile = indexProfile ?? getActiveIndexProfile(settings);
+  const retriever = indexProfile ? createRetrieverForProfile(ctx, indexProfile) : undefined;
   const contextFiles = ctx.warmCaches.contextFiles();
-  const contextExtractors = createContextExtractorsForProfile(ctx, indexProfile);
+  const contextExtractors = createContextExtractorsForProfile(ctx, reportedProfile);
   const toolResolution = resolveToolCapabilities(chatProfile.capabilities?.toolCalling);
   const toolsEnabled = resolveEffectiveTools(chatProfile);
   const vaultWriter = chatProfile.noteMutationAccess ? new ObsidianVaultWriter(ctx.app) : undefined;
@@ -131,7 +145,7 @@ export function createResearchService(
       maxTokens: chatProfile.maxTokens,
     },
     contextLimitTokens: chatProfile.capabilities?.contextLength,
-    ...(settings.expandSearchQuery
+    ...(settings.expandSearchQuery && retriever
       ? { queryExpansion: createQueryExpansionService(ctx, chatProfile, chatServer) }
       : {}),
     contextAssembler: new ContextAssembler({
@@ -158,27 +172,31 @@ export function createResearchService(
       }),
     ),
     ...(createImageSearchRegistry(ctx) ? { imageSearch: createImageSearchRegistry(ctx)! } : {}),
-    documentImageCandidates: createDocumentImageCandidates(
-      ctx,
-      createVectorIndexStoreForProfile(ctx, indexProfile),
-    ),
+    ...(indexProfile
+      ? {
+          documentImageCandidates: createDocumentImageCandidates(
+            ctx,
+            createVectorIndexStoreForProfile(ctx, indexProfile),
+          ),
+          indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
+        }
+      : {}),
+    getIndexStatus: () => {
+      const state = ctx.getIndexingState(reportedProfile.id);
+      return {
+        status: state.status,
+        available: Boolean(reportedProfile.lastIndexedAt || state.indexedFiles > 0),
+        isStale: state.isStale,
+        indexedFiles: state.indexedFiles,
+        ...(state.errorMessage ? { errorMessage: state.errorMessage } : {}),
+      };
+    },
     urlStatusChecker: new FetchUrlStatusChecker({ fetch: obsidianRequestFetch }),
     toolsEnabled,
     toolCapabilities: toolResolution.capabilities,
     toolCapabilityProvenance: toolResolution.provenance,
     toolCapabilityProbeAudit: chatProfile.capabilities?.toolCalling?.probeAudit,
     apiFormat: chatServer.apiFormat,
-    indexDescription: resolveIndexDescriptionForPrompt(indexProfile),
-    getIndexStatus: () => {
-      const state = ctx.getIndexingState(indexProfile.id);
-      return {
-        status: state.status,
-        available: Boolean(indexProfile.lastIndexedAt || state.indexedFiles > 0),
-        isStale: state.isStale,
-        indexedFiles: state.indexedFiles,
-        ...(state.errorMessage ? { errorMessage: state.errorMessage } : {}),
-      };
-    },
     noteTools: toolsEnabled
       ? new NoteToolService({
           files: contextFiles,

@@ -7,11 +7,15 @@ import type { WorkspaceLeaf as ObsidianWorkspaceLeaf } from "obsidian";
 import {
   ATTEST_CHAT_VIEW_TYPE,
   AttestChatView,
+  openExternalUrlWithAnchor,
   type AttestChatViewServices,
 } from "@apps/obsidian/ui/chat/AttestChatView";
 import { createTranslator } from "@adapters/i18n";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import type { SavedChat, SavedChatSummary } from "@core/chat/savedChat";
+import type { Citation } from "@core/model";
+import type { ResearchRequest } from "@application/contracts/research";
+import type { ResearchService } from "@application/use-cases/research";
 import {
   advanceTime,
   installObsidianDomHelpers,
@@ -150,6 +154,14 @@ function tab(view: AttestChatView, label: string): HTMLButtonElement {
   return found;
 }
 
+function openCitation(view: AttestChatView, citation: Citation): Promise<void> {
+  return (
+    view as unknown as {
+      openCitation(citation: Citation): Promise<void>;
+    }
+  ).openCitation(citation);
+}
+
 beforeEach(() => {
   installObsidianDomHelpers();
 });
@@ -263,6 +275,119 @@ describe("chat view transcript disposal", () => {
 
     await leaf.detach();
   });
+
+  it("aborts an active research request when the view closes", async () => {
+    let request: ResearchRequest | undefined;
+    const { view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: (nextRequest: ResearchRequest) => {
+            request = nextRequest;
+            return (async function* pendingAnswer() {
+              await new Promise<void>((_resolve, reject) => {
+                nextRequest.signal?.addEventListener(
+                  "abort",
+                  () => reject(nextRequest.signal?.reason),
+                  { once: true },
+                );
+              });
+            })();
+          },
+        }) as unknown as ResearchService,
+    });
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input");
+    input!.value = "Keep researching";
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+    view.contentEl
+      .querySelector<HTMLFormElement>(".attest-chat__form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(request).toBeDefined());
+
+    await leaf.detach();
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+
+    expect(request?.signal?.aborted).toBe(true);
+    expect(takeNotices()).toEqual([]);
+  });
+});
+
+describe("chat view citation navigation", () => {
+  const webCitation: Citation = {
+    id: "web-source",
+    label: "Web source",
+    source: {
+      id: "web-source",
+      kind: "web",
+      title: "Web source",
+      url: "https://example.com/research?q=mobile",
+      snippet: "",
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      wasContentFetched: true,
+    },
+  };
+
+  it("uses the injected external opener for web citations", async () => {
+    const openExternalUrl = vi.fn();
+    const { view, workspace, leaf } = await openView({ openExternalUrl });
+
+    await openCitation(view, webCitation);
+
+    expect(openExternalUrl).toHaveBeenCalledWith("https://example.com/research?q=mobile");
+    expect(workspace.openedLinks).toEqual([]);
+    await leaf.detach();
+  });
+
+  it("keeps vault citations on Workspace.openLinkText", async () => {
+    const openExternalUrl = vi.fn();
+    const { view, workspace, leaf } = await openView({ openExternalUrl });
+
+    await openCitation(view, {
+      id: "vault-source",
+      label: "Vault source",
+      source: {
+        id: "vault-source",
+        kind: "markdown",
+        title: "Vault source",
+        path: "Notes/Mobile.md",
+        headingPath: ["Support"],
+      },
+    });
+
+    expect(openExternalUrl).not.toHaveBeenCalled();
+    expect(workspace.openedLinks).toEqual([{ target: "Notes/Mobile.md", sourcePath: "" }]);
+    await leaf.detach();
+  });
+
+  it("rejects non-http external citation targets before invoking the opener", async () => {
+    const openExternalUrl = vi.fn();
+    const { view, leaf } = await openView({ openExternalUrl });
+
+    await openCitation(view, {
+      ...webCitation,
+      source: {
+        id: "unsafe-web",
+        kind: "web",
+        title: "Unsafe web source",
+        url: "javascript:alert(1)",
+        snippet: "",
+        retrievedAt: "2026-01-01T00:00:00.000Z",
+        wasContentFetched: false,
+      },
+    });
+
+    expect(openExternalUrl).not.toHaveBeenCalled();
+    await leaf.detach();
+  });
+
+  it("uses a temporary anchor only for validated HTTP(S) fallback URLs", () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    expect(openExternalUrlWithAnchor("https://example.com/source", document)).toBe(true);
+    expect(openExternalUrlWithAnchor("javascript:alert(1)", document)).toBe(false);
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('a[href="https://example.com/source"]')).toBeNull();
+  });
 });
 
 describe("saved chats from the chat view", () => {
@@ -358,6 +483,31 @@ describe("saved chats from the chat view", () => {
       expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
     });
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();
+    await leaf.detach();
+  });
+});
+
+describe("chat view research composition", () => {
+  it("composes the research turn for the active search mode", async () => {
+    const createResearchService = vi.fn(() => ({
+      answer: async function* answer() {
+        return;
+      },
+    }));
+    const { view, leaf } = await openView({
+      getDefaultSearchMode: () => "webOnly",
+      createResearchService:
+        createResearchService as unknown as AttestChatViewServices["createResearchService"],
+    });
+
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>("textarea.attest-chat__input");
+    input!.value = "What happened today?";
+    input!.dispatchEvent(new Event("input"));
+    view.contentEl.querySelector<HTMLButtonElement>("button.attest-chat__submit")?.click();
+
+    await vi.waitFor(() => {
+      expect(createResearchService).toHaveBeenCalledWith("model", "index", "webOnly");
+    });
     await leaf.detach();
   });
 });

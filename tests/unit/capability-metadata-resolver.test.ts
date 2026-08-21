@@ -30,6 +30,57 @@ describe("capability metadata resolvers", () => {
     });
   });
 
+  it("reads the reasoning effort list an OpenRouter model advertises", () => {
+    const metadata = {
+      id: "qwen/qwen3.8-2.4t-a95b",
+      supported_parameters: ["reasoning", "reasoning_effort", "tools"],
+      reasoning: {
+        mandatory: true,
+        default_enabled: true,
+        supported_efforts: ["xhigh", "medium", "low"],
+        default_effort: "xhigh",
+      },
+    };
+
+    expect(extractReasoningEfforts(metadata)).toEqual(["xhigh", "medium", "low"]);
+    expect(resolveCapabilityMetadata(metadata)?.reasoning).toMatchObject({
+      efforts: ["xhigh", "medium", "low"],
+      defaultEffort: "xhigh",
+    });
+  });
+
+  it("recognises tool calling across provider parameter names and flags", () => {
+    expect(resolveCapabilityMetadata({ supported_parameters: ["tools"] })?.tools).toBe("supported");
+    expect(resolveCapabilityMetadata({ supported_parameters: ["tool_choice"] })?.tools).toBe(
+      "supported",
+    );
+    expect(resolveCapabilityMetadata({ supported_parameters: ["function_calling"] })?.tools).toBe(
+      "supported",
+    );
+    expect(
+      resolveCapabilityMetadata({
+        supported_parameters: ["temperature"],
+        capabilities: { function_calling: true },
+      })?.tools,
+    ).toBe("supported");
+    expect(resolveCapabilityMetadata({ supported_parameters: ["temperature"] })?.tools).toBe(
+      "unknown",
+    );
+  });
+
+  it("projects advertised tool controls into the snapshot", () => {
+    expect(
+      resolveCapabilityMetadata({
+        supported_parameters: ["tools", "tool_choice", "parallel_tool_calls"],
+      })?.toolControls,
+    ).toEqual({ choiceRequired: true, choiceSpecific: true, parallelCalls: true });
+    expect(resolveCapabilityMetadata({ supported_parameters: ["tools"] })?.toolControls).toEqual({
+      choiceRequired: false,
+      choiceSpecific: false,
+      parallelCalls: false,
+    });
+  });
+
   it("isolates resolver failure and continues with the next resolver", async () => {
     const snapshot = resolveCapabilityMetadata({
       supported_endpoints: ["/chat/completions"],

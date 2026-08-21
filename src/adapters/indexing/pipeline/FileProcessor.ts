@@ -44,6 +44,19 @@ export class FileProcessor {
       return { indexed: false, skipped: true, chunks: [] };
     }
 
+    const maxBytes = this.maxFileSizeBytes(file.path);
+    if (maxBytes !== undefined && file.size !== undefined && file.size > maxBytes) {
+      this.options.logger?.logIndexingFile({
+        path: file.path,
+        outcome: "skipped",
+        reason: "file-too-large",
+        modifiedTime: file.modifiedTime,
+        extractor: extractor.constructor.name,
+        errorDetails: { size: file.size, maxBytes },
+      });
+      return { indexed: false, skipped: true, chunks: [] };
+    }
+
     if (!shouldIndexFile(this.options.snapshots, file)) {
       this.options.logger?.logIndexingFile({
         path: file.path,
@@ -179,6 +192,11 @@ export class FileProcessor {
       !INTERNAL_EXCLUDE_GLOBS.some((glob) => vaultPathMatchesGlob(path, glob)) &&
       !this.options.excludeGlobs.some((glob) => isPathExcluded(path, glob))
     );
+  }
+
+  private maxFileSizeBytes(path: string): number | undefined {
+    const extension = path.match(/\.([^./]+)$/)?.[1]?.toLowerCase();
+    return extension ? this.options.maxFileSizeBytesByExtension?.[extension] : undefined;
   }
 
   private logPerformance(event: IndexingPerformanceLogEvent): void {

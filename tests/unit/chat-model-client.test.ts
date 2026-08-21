@@ -54,6 +54,56 @@ describe("ChatModelClient", () => {
       parameters: { type: "object", properties: {} },
     },
   };
+
+  it("preserves the caller's abort reason when the OpenAI SDK wraps cancellation", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled by user", "AbortError");
+    const fetchMock = vi.fn(async () => {
+      controller.abort(reason);
+      throw new DOMException("The request was aborted.", "AbortError");
+    });
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "https://api.example.test/v1",
+      fetch: fetchMock,
+    });
+    const stream = client.streamChat({
+      model: "chat-model",
+      messages: [{ role: "user", content: "Hello" }],
+      signal: controller.signal,
+    });
+
+    await expect(stream[Symbol.asyncIterator]().next()).rejects.toBe(reason);
+  });
+
+  it("does not report completion when OpenAI streaming ends because the caller aborted", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled while streaming", "AbortError");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(streamController) {
+            controller.abort(reason);
+            streamController.error(new DOMException("The request was aborted.", "AbortError"));
+          },
+        }),
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const client = new ChatModelClient({
+      provider: "lmStudio",
+      baseUrl: "https://api.example.test/v1",
+      fetch: fetchMock,
+    });
+    const stream = client.streamChat({
+      model: "chat-model",
+      messages: [{ role: "user", content: "Hello" }],
+      signal: controller.signal,
+    });
+
+    await expect(stream[Symbol.asyncIterator]().next()).rejects.toBe(reason);
+  });
+
   it("lists LM Studio model ids", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

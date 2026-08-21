@@ -132,4 +132,33 @@ describe("IndexRunModal", () => {
       metadata: { chatModelProfileId: "chat", force: true },
     });
   });
+
+  it("requires a second explicit action before rebuilding on mobile", () => {
+    const onSubmit = vi.fn();
+    const modal = new IndexRunModal(new App() as unknown as ObsidianApp, {
+      t,
+      profile: {
+        ...DEFAULT_INDEX_PROFILE,
+        embeddingModelProfileId: "embedding-a",
+        lastIndexedAt: "2026-08-01T00:00:00.000Z",
+      },
+      hasMetadata: false,
+      embeddingModels: [embedding("embedding-a")],
+      chatModels: [chat],
+      defaultChatModelProfileId: chat.id,
+      isMobile: true,
+      onSubmit,
+    });
+    modal.open();
+
+    button(modal.contentEl, "Rebuild").click();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(modal.contentEl.textContent).toContain("Tap rebuild again to confirm");
+
+    button(modal.contentEl, "Rebuild").click();
+    expect(onSubmit).toHaveBeenCalledWith({
+      mode: "rebuild",
+      embedding: { embeddingModelProfileId: "embedding-a" },
+    });
+  });
 });

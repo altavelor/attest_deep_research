@@ -29,4 +29,23 @@ describe("reasoning visibility probe", () => {
     expect(requests[0]).toMatchObject({ maxTokens: 128 });
     expect(requests[0]).not.toHaveProperty("tools");
   });
+
+  it("propagates cancellation even when the provider ignores the signal", async () => {
+    const controller = new AbortController();
+    const provider: ChatModelProvider = {
+      listModels: async () => ["m"],
+      async *streamChat() {
+        controller.abort();
+        yield {
+          content: "answer",
+          isComplete: true,
+          events: [{ type: "complete", stopReason: "complete" }],
+        };
+      },
+    };
+
+    await expect(
+      probeReasoningVisibility({ provider, model: "m", signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
 });

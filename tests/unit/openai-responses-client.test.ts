@@ -26,6 +26,27 @@ const tool = {
 };
 
 describe("OpenAiResponsesClient", () => {
+  it("preserves the caller's abort reason", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled by user", "AbortError");
+    const fetchMock = vi.fn(async () => {
+      controller.abort(reason);
+      throw new DOMException("The request was aborted.", "AbortError");
+    });
+    const client = new OpenAiResponsesClient({
+      baseUrl: "https://api.openai.com/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.runRound({
+        model: "gpt-5",
+        messages: [{ role: "user", content: "Hello" }],
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason);
+  });
+
   it("maps native Responses payload and parses ordered text", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       streamResponse([
