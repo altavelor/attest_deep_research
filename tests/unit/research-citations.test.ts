@@ -3,12 +3,27 @@ import {
   citationOccurrencesFromText,
   citationIdsFromText,
   normalizeCitationTokens,
+  removeUnknownCitationTokens,
 } from "@application/use-cases/research/strategies/citations";
 
 describe("citationIdsFromText", () => {
   it("extracts bracketed tokens verbatim", () => {
     const ids = citationIdsFromText("Claim [web:abc] and [doc:1] cite [web:abc].");
     expect([...ids].sort()).toEqual(["doc:1", "web:abc"]);
+  });
+
+  it("ignores tokens used only by Markdown code, links, images, and references", () => {
+    const text = [
+      "Real [source-real]. Code `[source-code]` and [source-link](https://example.com).",
+      "![source-image](image.png) [guide][source-reference].",
+      "",
+      "[source-reference]: https://example.com/guide",
+      "```text",
+      "[source-fenced]",
+      "```",
+    ].join("\n");
+
+    expect([...citationIdsFromText(text, new Set(["source-real"]))]).toEqual(["source-real"]);
   });
 });
 
@@ -18,6 +33,31 @@ describe("citationOccurrencesFromText", () => {
       { label: "source-a", index: 6 },
       { label: "source-a", index: 23 },
     ]);
+  });
+});
+
+describe("removeUnknownCitationTokens", () => {
+  it("removes invented handles without damaging Markdown constructs", () => {
+    const text =
+      "Unknown [invented-source]. [documentation](https://example.com) ![illustration](image.png) [reference][target].\n\n[target]: https://example.com";
+    expect(removeUnknownCitationTokens(text, new Set())).toBe(
+      "Unknown . [documentation](https://example.com) ![illustration](image.png) [reference][target].\n\n[target]: https://example.com",
+    );
+  });
+
+  it("preserves citation-shaped text inside inline and fenced code", () => {
+    const text = "Use `[invented-source]`.\n\n```text\n[invented-source]\n```";
+    expect(removeUnknownCitationTokens(text, new Set())).toBe(text);
+    expect(normalizeCitationTokens(text, new Map()).ids.size).toBe(0);
+  });
+
+  it("does not collapse repeated known citation ids inside inline and fenced code", () => {
+    const text =
+      "Use `[web:hash-openai][web:hash-openai]`.\n\n```text\n[web:hash-openai][web:hash-openai]\n```";
+    const normalized = normalizeCitationTokens(text, new Map());
+
+    expect(normalized.text).toBe(text);
+    expect(normalized.collapsedOccurrences).toBe(0);
   });
 });
 
@@ -136,13 +176,25 @@ describe("normalizeCitationTokens", () => {
     expect(webReferences).toEqual([{ id: "web-ref-1", url: "https://example.com/unseen" }]);
   });
 
-  it("leaves malformed url tokens untouched", () => {
-    const { text, ids, webReferences } = normalizeCitationTokens(
+  it("rejects malformed url tokens with diagnostic provenance", () => {
+    const { text, ids, webReferences, rejectedTokens } = normalizeCitationTokens(
       "bad [url:not a url] token",
       urlToEvidenceId,
     );
-    expect(text).toBe("bad [url:not a url] token");
+    expect(text).toBe("bad  token");
     expect(ids.size).toBe(0);
     expect(webReferences).toEqual([]);
+    expect(rejectedTokens).toEqual(["url:not a url"]);
+  });
+
+  it("reports a valid unregistered url rejected by strict mode", () => {
+    const normalized = normalizeCitationTokens(
+      "Unsupported [url:https://example.com/unseen].",
+      urlToEvidenceId,
+      { allowUnregisteredWebReferences: false },
+    );
+
+    expect(normalized.text).toBe("Unsupported .");
+    expect(normalized.rejectedTokens).toEqual(["url:https://example.com/unseen"]);
   });
 });

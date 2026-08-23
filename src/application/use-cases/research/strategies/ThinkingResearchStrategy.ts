@@ -2,7 +2,11 @@ import { formatCitation } from "@core/retrieval";
 import { ResearchAnswer } from "@core/answer";
 import { ContextDiagnostics, WebSourceSelectionDiagnostics } from "@core/diagnostics";
 import { RetrievedChunk, SourceReference } from "@core/model";
-import { estimateTextTokens, extractFollowUpQuestions } from "@core/research";
+import {
+  estimateTextTokens,
+  extractFollowUpQuestions,
+  normalizeCitationDensityWithDiagnostics,
+} from "@core/research";
 import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
@@ -24,9 +28,12 @@ import {
 } from "./ResearchStrategy";
 import {
   citationOccurrencesFromText,
+  citationIdsFromText,
   dedupeEvidence,
+  mergeCitationRemovalCounts,
   mergeCitations,
   normalizeCitationTokens,
+  removeUnknownCitationTokens,
   webUrlEvidenceIndex,
 } from "./citations";
 import { verifyCitations } from "./citationVerification";
@@ -172,6 +179,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       chatHistory: request.chatHistory,
       requiredTools: effectivePolicy.requiredTools,
       explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
+      conversationRegistry: request.conversationRegistry,
       attachedFiles: assembled?.attachments,
       toolContext: {
         coreVariant: searchMode === "none" ? "vault" : "research",
@@ -253,31 +261,51 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
     }
     const snapshot = created.evidence.snapshot();
     const explicitEvidence = [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence];
-    const evidence = dedupeEvidence([...explicitEvidence, ...snapshot.evidence]);
+    const registryEvidence = request.conversationRegistry?.relevantEvidence ?? [];
+    const evidence = dedupeEvidence([
+      ...explicitEvidence,
+      ...snapshot.evidence,
+      ...registryEvidence,
+    ]);
     const availableCitations = mergeCitations(
       explicitEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
-      [...snapshot.citations],
+      mergeCitations(
+        [...snapshot.citations],
+        registryEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
+      ),
     );
     const urlToEvidenceId = webUrlEvidenceIndex(evidence);
     const unverifiedCitations = result.ok
       ? verifyCitations(result.answerText, evidence, { urlToEvidenceId })
       : [];
     const normalized = result.ok
-      ? normalizeCitationTokens(result.answerText, urlToEvidenceId)
+      ? normalizeCitationTokens(result.answerText, urlToEvidenceId, {
+          allowUnregisteredWebReferences: false,
+        })
       : {
           text: "",
           ids: new Set<string>(),
           webReferences: [],
           collapsedOccurrences: 0,
           collapsedByLabel: {},
+          rejectedTokens: [],
         };
-    const { text: answerText, ids: citedIds, webReferences } = normalized;
+    const { webReferences } = normalized;
     const knownIds = new Set(evidence.map((chunk) => chunk.id));
     const webReferenceIds = new Set(webReferences.map((reference) => reference.id));
-    const unknownCitationIds = [...citedIds].filter(
-      (id) => !knownIds.has(id) && !webReferenceIds.has(id),
+    const density = normalizeCitationDensityWithDiagnostics(
+      removeUnknownCitationTokens(normalized.text, knownIds),
+      new Set([...knownIds, ...webReferenceIds]),
     );
-    const citationOccurrences = citationOccurrencesFromText(answerText);
+    const answerText = density.text;
+    const citedIds = citationIdsFromText(answerText, knownIds);
+    const unknownCitationIds = [
+      ...new Set([
+        ...[...normalized.ids].filter((id) => !knownIds.has(id) && !webReferenceIds.has(id)),
+        ...normalized.rejectedTokens,
+      ]),
+    ];
+    const citationOccurrences = citationOccurrencesFromText(answerText, knownIds);
     const citations = availableCitations.filter((citation) => citedIds.has(citation.id));
     const diagnostics =
       assembled?.diagnostics ??
@@ -290,8 +318,11 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       answerText,
       promptSourceIds: result.ok ? evidence.map((chunk) => chunk.id) : [],
       citationLabels: [...knownIds, ...webReferenceIds],
-      collapsedOccurrences: normalized.collapsedOccurrences,
-      collapsedByLabel: normalized.collapsedByLabel,
+      collapsedOccurrences: normalized.collapsedOccurrences + density.removedOccurrences,
+      collapsedByLabel: mergeCitationRemovalCounts(
+        normalized.collapsedByLabel,
+        density.removedByLabel,
+      ),
       verificationRan: result.ok,
       unknownCitationIds,
       unverifiedCitations,
@@ -363,7 +394,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       };
     }
     if (indexDescription) diagnostics.indexDescription = { ...indexDescription.diagnostics };
-    const answer: ResearchAnswer = {
+    const unfinalizedAnswer: ResearchAnswer = {
       question,
       answer: answerText,
       citations,
@@ -376,6 +407,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         : {}),
       createdAt: this.deps.now().toISOString(),
     };
+    const answer = result.ok
+      ? (request.finalizeAnswer?.(unfinalizedAnswer) ?? unfinalizedAnswer)
+      : unfinalizedAnswer;
     if (result.ok && this.deps.persistFinalAnswer) await this.deps.persistFinalAnswer(answer);
     return {
       result,

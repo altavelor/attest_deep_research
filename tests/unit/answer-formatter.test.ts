@@ -19,7 +19,8 @@ Use local models with citations [1].
 ## Citations
 
 1. [Research/local.md](Research/local.md)
-2. [Example](https://example.com/local)
+2. [Research/local.md](Research/local.md)
+3. [Example](https://example.com/local)
 
 ## Follow-up Questions
 
@@ -46,15 +47,14 @@ Use local models with citations [1].
     };
 
     const note = formatResearchAnswerNote(withWebReference);
-    expect(note).toContain("Local says X [1] and the web says Y [3].");
-    expect(note).toContain("3. [https://example.com/unseen](https://example.com/unseen)");
+    expect(note).toContain("Local says X [1] and the web says Y [4].");
+    expect(note).toContain("4. [https://example.com/unseen](https://example.com/unseen)");
   });
 
-  it("normalizes citation density before numbering without changing markdown links", () => {
+  it("numbers the canonical answer without applying a second density pass", () => {
     const repeated: ResearchAnswer = {
       ...answer(),
-      answer:
-        "First claim [local-1]. Second claim [local-1]. Read [guide](https://example.com/guide).",
+      answer: "First claim [local-1]. Second claim. Read [guide](https://example.com/guide).",
     };
 
     expect(formatResearchAnswerNote(repeated)).toContain(
@@ -66,14 +66,14 @@ Use local models with citations [1].
     const withReferenceLink: ResearchAnswer = {
       ...answer(),
       answer: [
-        "Read [guide][local-1]. Claim [local-duplicate][local-duplicate].",
+        "Read [guide][local-1]. Claim [local-duplicate].",
         "",
         "[local-1]: https://example.com/guide",
       ].join("\n"),
     };
 
     expect(formatResearchAnswerNote(withReferenceLink)).toContain(
-      ["Read [guide][local-1]. Claim [1].", "", "[local-1]: https://example.com/guide"].join("\n"),
+      ["Read [guide][local-1]. Claim [2].", "", "[local-1]: https://example.com/guide"].join("\n"),
     );
   });
 
@@ -92,6 +92,23 @@ Use local models with citations [1].
     expect(researchAnswerNotePath(answer())).toBe(
       "Attest/2026-05-16-how-should-i-use-local-models.md",
     );
+  });
+
+  it("keeps different revisions of the same source as separate numbered citations", () => {
+    const source = webSource("https://example.com/versioned");
+    const versioned: ResearchAnswer = {
+      ...answer(),
+      answer: "Old claim [source-1:revision-1]. New claim [source-1:revision-2].",
+      citations: [
+        { id: "source-1:revision-1", label: "Example v1", source },
+        { id: "source-1:revision-2", label: "Example v2", source },
+        { id: "source-1:revision-2", label: "Duplicate v2", source },
+      ],
+    };
+
+    const note = formatResearchAnswerNote(versioned);
+    expect(note).toContain("Old claim [1]. New claim [2].");
+    expect(note.match(/https:\/\/example\.com\/versioned/g)).toHaveLength(2);
   });
 });
 

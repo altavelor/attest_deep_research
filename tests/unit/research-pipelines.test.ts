@@ -544,6 +544,90 @@ describe("AnswerSynthesisService", () => {
     ]);
     expect(persisted).toEqual([expect.objectContaining({ question: "How?" })]);
   });
+
+  it("persists the density-normalized answer and only its cited sources", async () => {
+    const source = markdownSource("Research/local.md");
+    const service = new AnswerSynthesisService({
+      runToolLoop,
+      chatModel: new FakeChatModel([
+        { content: "One [local-1]. Two [local-1]. Three [local-1].", isComplete: true },
+      ]),
+      chatModelName: "qwen",
+      chatOptions: {},
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.synthesize({
+        question: "How?",
+        evidence: [retrieved("local-1", source, "Local evidence")],
+        citations: [citation("local-1", source), citation("unused", markdownSource("Unused.md"))],
+        evidenceLimit: 8,
+      }),
+    );
+    const complete = events.find((event) => event.type === "complete");
+
+    expect(complete).toMatchObject({
+      answer: {
+        answer: "One [local-1]. Two. Three.",
+        citations: [expect.objectContaining({ id: "local-1" })],
+      },
+    });
+  });
+
+  it("does not list evidence ids that appear only inside Markdown code", async () => {
+    const source = markdownSource("Research/local.md");
+    const answerText = "Use `[local-1]` as an example.\n\n```text\n[local-1]\n```";
+    const service = new AnswerSynthesisService({
+      runToolLoop,
+      chatModel: new FakeChatModel([{ content: answerText, isComplete: true }]),
+      chatModelName: "qwen",
+      chatOptions: {},
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.synthesize({
+        question: "How?",
+        evidence: [retrieved("local-1", source, "Local evidence")],
+        citations: [citation("local-1", source)],
+        evidenceLimit: 8,
+      }),
+    );
+    const complete = events.find((event) => event.type === "complete");
+
+    expect(complete).toMatchObject({
+      answer: { answer: answerText, citations: [] },
+    });
+  });
+
+  it("preserves repeated known ids used by Markdown references and reference images", async () => {
+    const source = markdownSource("Research/local.md");
+    const answerText = [
+      "Read [local-1][local-1] and view ![local-1][local-1].",
+      "",
+      "[local-1]: https://example.com/reference",
+    ].join("\n");
+    const service = new AnswerSynthesisService({
+      runToolLoop,
+      chatModel: new FakeChatModel([{ content: answerText, isComplete: true }]),
+      chatModelName: "qwen",
+      chatOptions: {},
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.synthesize({
+        question: "How?",
+        evidence: [retrieved("local-1", source, "Local evidence")],
+        citations: [citation("local-1", source)],
+        evidenceLimit: 8,
+      }),
+    );
+    const complete = events.find((event) => event.type === "complete");
+
+    expect(complete).toMatchObject({ answer: { answer: answerText, citations: [] } });
+  });
 });
 
 function tick(): Promise<void> {

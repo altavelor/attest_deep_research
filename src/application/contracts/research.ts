@@ -1,6 +1,7 @@
 import { RetrievalResult } from "./retrieval";
 import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchAnswer } from "@core/answer";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { ContextDiagnostics, ContextMode } from "@core/diagnostics";
 import { LanguageInventoryItem } from "@core/model";
 import { SourceReference } from "@core/model";
@@ -119,6 +120,8 @@ export interface ResearchRequest {
 
   forceSubAgent?: boolean;
   chatHistory?: ResearchChatHistoryMessage[];
+  conversationRegistry?: ConversationRegistryPromptView;
+  finalizeAnswer?: (answer: ResearchAnswer) => ResearchAnswer;
   signal?: AbortSignal;
 }
 

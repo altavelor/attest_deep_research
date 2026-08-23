@@ -261,6 +261,8 @@ export class ResearchService implements ConversationEngine {
           evidence: partialEvidence,
           citations: outcome.answer.citations ?? [],
           chatHistory: request.chatHistory,
+          conversationRegistry: request.conversationRegistry,
+          finalizeAnswer: request.finalizeAnswer,
           evidenceLimit: this.evidenceLimit,
           contextDiagnostics:
             request.includeContextDiagnostics === true ? outcome.diagnostics : undefined,

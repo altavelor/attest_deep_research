@@ -82,4 +82,22 @@ describe("verifyCitations", () => {
     expect(verifyCitations(good, evidence, { urlToEvidenceId })).toEqual([]);
     expect(verifyCitations(bad, evidence, { urlToEvidenceId })).toEqual(["w1"]);
   });
+
+  it("ignores evidence ids used only inside Markdown code, links, images, and references", () => {
+    const evidence = [
+      chunk("evidence-long-id", "The document discusses medieval crop rotation techniques."),
+    ];
+    const answer = [
+      "Unrelated quarterly revenue text `[evidence-long-id]`.",
+      "[evidence-long-id](https://example.com) ![evidence-long-id](image.png).",
+      "[guide][evidence-long-id].",
+      "",
+      "[evidence-long-id]: https://example.com/guide",
+      "```text",
+      "[evidence-long-id]",
+      "```",
+    ].join("\n");
+
+    expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
+  });
 });

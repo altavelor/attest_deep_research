@@ -1,4 +1,5 @@
 import { RetrievedChunk } from "@core/model";
+import { markdownBracketOccurrences } from "@core/research";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 const SHINGLE_SIZE = 3;
@@ -31,9 +32,10 @@ export function verifyCitations(
   const unverified = new Set<string>();
   const verified = new Set<string>();
 
-  for (const match of answerText.matchAll(/\[([^\]\n]{1,200})\]/g)) {
-    const token = match[1].trim();
-    options.onCitation?.({ label: token, index: match.index ?? 0 });
+  const evidenceIds = new Set(evidence.map((chunk) => chunk.id));
+  for (const occurrence of markdownBracketOccurrences(answerText, evidenceIds)) {
+    const token = occurrence.label;
+    options.onCitation?.({ label: token, index: occurrence.index });
     const evidenceId = resolveToken(token, options.urlToEvidenceId);
     if (!evidenceId) {
       continue;
@@ -43,8 +45,8 @@ export function verifyCitations(
       continue;
     }
 
-    const claimStart = Math.max(0, (match.index ?? 0) - CLAIM_WINDOW_CHARS);
-    const claim = answerText.slice(claimStart, match.index ?? 0);
+    const claimStart = Math.max(0, occurrence.index - CLAIM_WINDOW_CHARS);
+    const claim = answerText.slice(claimStart, occurrence.index);
     const claimShingles = shingles(claim);
     if (claimShingles.size < MIN_CLAIM_SHINGLES) {
       continue;

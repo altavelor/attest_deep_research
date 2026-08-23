@@ -3,10 +3,10 @@ import { linkifyUrlCitations } from "./urlCitations";
 import { AnswerWebReference, ResearchAnswer } from "@core/answer";
 import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
 import { Citation } from "@core/model";
-import { normalizeCitationDensity, replaceCitationTokens } from "@core/research";
+import { replaceCitationTokens } from "@core/research";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
-  const citations = dedupeCitationsBySource(answer.citations);
+  const citations = dedupeCitationsById(answer.citations);
   const webReferences = answer.webReferences ?? [];
   return [
     "# Attest Research",
@@ -38,29 +38,13 @@ function renderAnswerBody(
   dedupedCitations: Citation[],
   webReferences: readonly AnswerWebReference[],
 ): string {
-  const normalizedAnswer = normalizeCitationDensity(
-    answer.answer,
-    new Set([
-      ...answer.citations.map((citation) => citation.id),
-      ...webReferences.map((reference) => reference.id),
-    ]),
-  );
-  const numberByKey = new Map(
-    dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
-  );
-  const numberById = new Map<string, number>();
-  for (const citation of answer.citations) {
-    const number = numberByKey.get(citationSourceKey(citation));
-    if (number !== undefined) {
-      numberById.set(citation.id, number);
-    }
-  }
+  const numberById = new Map(dedupedCitations.map((citation, index) => [citation.id, index + 1]));
   webReferences.forEach((reference, index) => {
     numberById.set(reference.id, dedupedCitations.length + index + 1);
   });
 
   const numbered = replaceCitationTokens(
-    normalizedAnswer,
+    answer.answer,
     new Set(numberById.keys()),
     (label) => `[${numberById.get(label)}]`,
   );
@@ -175,40 +159,20 @@ function webReferenceLink(reference: AnswerWebReference): string {
   return destination ? `[${label}](${destination})` : label;
 }
 
-function dedupeCitationsBySource(citations: Citation[]): Citation[] {
+function dedupeCitationsById(citations: Citation[]): Citation[] {
   const seen = new Set<string>();
   const deduped: Citation[] = [];
 
   for (const citation of citations) {
-    const key = citationSourceKey(citation);
-
-    if (seen.has(key)) {
+    if (seen.has(citation.id)) {
       continue;
     }
 
-    seen.add(key);
+    seen.add(citation.id);
     deduped.push(citation);
   }
 
   return deduped;
-}
-
-function citationSourceKey(citation: Citation): string {
-  switch (citation.source.kind) {
-    case "markdown":
-      return [
-        "markdown",
-        citation.source.path,
-        citation.source.blockId ?? "",
-        citation.source.headingPath.join("/"),
-      ].join(":");
-    case "pdf":
-      return ["pdf", citation.source.path, citation.source.pageNumber].join(":");
-    case "document":
-      return ["document", citation.source.path, citation.source.format].join(":");
-    case "web":
-      return ["web", citation.source.url].join(":");
-  }
 }
 
 function followUpsMarkdown(answer: ResearchAnswer): string {

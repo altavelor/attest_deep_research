@@ -1,7 +1,12 @@
 import { AnswerWebReference, WEB_REFERENCE_ID_PREFIX } from "@core/answer";
 import { Citation } from "@core/model";
 import { RetrievedChunk } from "@core/model";
-import { CITATION_TOKEN_SOURCE, isCitationHandle } from "@core/research";
+import {
+  CITATION_TOKEN_SOURCE,
+  isCitationHandle,
+  isMarkdownCodeIndex,
+  markdownCodeRanges,
+} from "@core/research";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 export function mergeCitations(primary: Citation[], secondary: Citation[]): Citation[] {
@@ -18,6 +23,17 @@ export function mergeCitations(primary: Citation[], secondary: Citation[]): Cita
   return citations;
 }
 
+export function mergeCitationRemovalCounts(
+  primary: Readonly<Record<string, number>>,
+  secondary: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const merged = { ...primary };
+  for (const [label, count] of Object.entries(secondary)) {
+    merged[label] = (merged[label] ?? 0) + count;
+  }
+  return merged;
+}
+
 export function citationsForEvidence(
   evidence: RetrievedChunk[],
   citations: Citation[],
@@ -27,14 +43,35 @@ export function citationsForEvidence(
   return citations.filter((citation) => evidenceIds.has(citation.id));
 }
 
-export function citationIdsFromText(text: string): Set<string> {
-  return new Set(citationOccurrencesFromText(text).map((citation) => citation.label));
+export function citationIdsFromText(
+  text: string,
+  citationLabels?: ReadonlySet<string>,
+): Set<string> {
+  return new Set(
+    citationOccurrencesFromText(text, citationLabels).map((citation) => citation.label),
+  );
 }
 
-export function citationOccurrencesFromText(text: string): Array<{ label: string; index: number }> {
+export function citationOccurrencesFromText(
+  text: string,
+  citationLabels?: ReadonlySet<string>,
+): Array<{ label: string; index: number }> {
+  const codeRanges = markdownCodeRanges(text);
+  const protectedStarts = protectedMarkdownBracketStarts(text, citationLabels);
   return [...text.matchAll(/\[([^\]\n]{1,200})\]/g)]
-    .map((match) => ({ label: match[1].trim(), index: match.index ?? 0 }))
-    .filter((citation) => citation.label.length > 0);
+    .map((match) => ({
+      label: match[1].trim(),
+      index: match.index ?? 0,
+      end: (match.index ?? 0) + match[0].length,
+    }))
+    .filter(
+      (citation) =>
+        citation.label.length > 0 &&
+        !isMarkdownCodeIndex(citation.index, codeRanges) &&
+        !protectedStarts.has(citation.index) &&
+        markdownDestinationLength(text, citation.end) === 0,
+    )
+    .map(({ label, index }) => ({ label, index }));
 }
 
 export interface NormalizedCitationTokens {
@@ -46,6 +83,11 @@ export interface NormalizedCitationTokens {
   collapsedByLabel: Record<string, number>;
 
   webReferences: AnswerWebReference[];
+  rejectedTokens: string[];
+}
+
+export interface NormalizeCitationTokenOptions {
+  allowUnregisteredWebReferences?: boolean;
 }
 
 const CITATION_TOKEN = /\[([^\]\n]{1,200})\]/g;
@@ -62,9 +104,13 @@ const CITATION_TOKEN = /\[([^\]\n]{1,200})\]/g;
 export function normalizeCitationTokens(
   text: string,
   urlToEvidenceId: ReadonlyMap<string, string>,
+  options: NormalizeCitationTokenOptions = {},
 ): NormalizedCitationTokens {
   const ids = new Set<string>();
+  const rejectedTokens = new Set<string>();
   const webReferenceIdByUrl = new Map<string, string>();
+  const codeRanges = markdownCodeRanges(text);
+  const protectedStarts = protectedMarkdownBracketStarts(text);
 
   const resolveUrlToken = (url: string): string => {
     const evidenceId = urlToEvidenceId.get(url);
@@ -84,13 +130,24 @@ export function normalizeCitationTokens(
   for (const match of text.matchAll(CITATION_TOKEN)) {
     const start = match.index;
     if (start === undefined || start < copiedUpTo) continue;
+    if (isMarkdownCodeIndex(start, codeRanges) || protectedStarts.has(start)) continue;
     const token = match[1].trim();
     const destinationLength = markdownDestinationLength(text, start + match[0].length);
     let replacement: string;
     if (token.startsWith("url:")) {
       const validated = validatePublicWebUrl(token.slice("url:".length).trim());
-      if (!validated.ok) continue;
-      replacement = `[${resolveUrlToken(validated.url)}]`;
+      if (!validated.ok) {
+        rejectedTokens.add(token);
+        replacement = "";
+      } else if (
+        !urlToEvidenceId.has(validated.url) &&
+        options.allowUnregisteredWebReferences === false
+      ) {
+        rejectedTokens.add(token);
+        replacement = "";
+      } else {
+        replacement = `[${resolveUrlToken(validated.url)}]`;
+      }
     } else {
       if (!isCitationHandle(token) || destinationLength > 0) continue;
       ids.add(token);
@@ -101,14 +158,70 @@ export function normalizeCitationTokens(
   }
   rewritten += text.slice(copiedUpTo);
 
-  const collapsed = collapseAdjacentTokens(rewritten);
+  const collapsed = collapseAdjacentTokens(
+    rewritten,
+    markdownCodeRanges(rewritten),
+    protectedMarkdownBracketStarts(rewritten),
+  );
   return {
     text: collapsed.text,
     ids,
     collapsedOccurrences: collapsed.occurrences,
     collapsedByLabel: collapsed.byLabel,
     webReferences: [...webReferenceIdByUrl].map(([url, id]) => ({ id, url })),
+    rejectedTokens: [...rejectedTokens],
   };
+}
+
+/** Removes citation-looking tokens that cannot be resolved to a registered source. */
+export function removeUnknownCitationTokens(
+  text: string,
+  knownCitationIds: ReadonlySet<string>,
+): string {
+  const codeRanges = markdownCodeRanges(text);
+  return text.replace(CITATION_TOKEN, (whole, inner: string, start: number) => {
+    const token = inner.trim();
+    const end = start + whole.length;
+    const markdownProtected =
+      text[start - 1] === "!" ||
+      markdownDestinationLength(text, end) > 0 ||
+      text[end] === "[" ||
+      text[start - 1] === "]" ||
+      text.slice(end).match(/^[ \t]*:/u) !== null;
+    if (markdownProtected || isMarkdownCodeIndex(start, codeRanges)) return whole;
+    return isCitationHandle(token) && !knownCitationIds.has(token) ? "" : whole;
+  });
+}
+
+function protectedMarkdownBracketStarts(
+  text: string,
+  citationLabels?: ReadonlySet<string>,
+): Set<number> {
+  const protectedStarts = new Set<number>();
+  const definitions = new Set<string>();
+  for (const match of text.matchAll(/^ {0,3}\[([^\]\n]+)\]:[ \t]*\S+/gm)) {
+    definitions.add(normalizeReferenceId(match[1]));
+    protectedStarts.add((match.index ?? 0) + match[0].indexOf("["));
+  }
+  for (const match of text.matchAll(/!?\[([^\]\n]*)\]\[([^\]\n]*)\]/g)) {
+    const firstStart = (match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0);
+    const secondStart = text.indexOf("[", firstStart + 1);
+    const referenceId = normalizeReferenceId(match[2] || match[1]);
+    const secondLabel = match[2].trim();
+    const clearlyReference =
+      match[0].startsWith("!") ||
+      secondLabel.length === 0 ||
+      definitions.has(referenceId) ||
+      (citationLabels !== undefined && !citationLabels.has(secondLabel));
+    if (!clearlyReference) continue;
+    protectedStarts.add(firstStart);
+    if (secondStart >= 0) protectedStarts.add(secondStart);
+  }
+  return protectedStarts;
+}
+
+function normalizeReferenceId(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 /**
@@ -141,7 +254,11 @@ function markdownDestinationLength(text: string, index: number): number {
  * brackets, which is what a link and an evidence id for one source become once
  * both are normalized to the same token.
  */
-function collapseAdjacentTokens(text: string): {
+function collapseAdjacentTokens(
+  text: string,
+  codeRanges: ReturnType<typeof markdownCodeRanges>,
+  protectedStarts: ReadonlySet<number>,
+): {
   text: string;
   occurrences: number;
   byLabel: Record<string, number>;
@@ -151,7 +268,8 @@ function collapseAdjacentTokens(text: string): {
   return {
     text: text.replace(
       new RegExp(`(${CITATION_TOKEN_SOURCE})(?:[ \\t]*\\1)+`, "g"),
-      (whole, first: string) => {
+      (whole, first: string, _label: string, start: number) => {
+        if (isMarkdownCodeIndex(start, codeRanges) || protectedStarts.has(start)) return whole;
         const collapsedCount = Math.max(
           0,
           (whole.match(new RegExp(CITATION_TOKEN_SOURCE, "g")) ?? []).length - 1,
