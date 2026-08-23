@@ -243,6 +243,7 @@ export class ResearchQuestionController {
         ...(this.options.registerAnswerSources
           ? {
               finalizeAnswer: (answer: ResearchAnswer) => {
+                if (this.shouldStopRunning || this.activeRunId !== runId) return answer;
                 const assistantMessage = this.options
                   .getMessages()
                   .filter((message) => message.role === "assistant")

@@ -1,5 +1,9 @@
 import { RetrievedChunk } from "@core/model";
-import { markdownBracketOccurrences } from "@core/research";
+import {
+  isMarkdownCodeIndex,
+  markdownBracketOccurrences,
+  markdownCodeRanges,
+} from "@core/research";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 
 const SHINGLE_SIZE = 3;
@@ -33,7 +37,7 @@ export function verifyCitations(
   const verified = new Set<string>();
 
   const evidenceIds = new Set(evidence.map((chunk) => chunk.id));
-  for (const occurrence of markdownBracketOccurrences(answerText, evidenceIds)) {
+  for (const occurrence of citationOccurrences(answerText, evidenceIds)) {
     const token = occurrence.label;
     options.onCitation?.({ label: token, index: occurrence.index });
     const evidenceId = resolveToken(token, options.urlToEvidenceId);
@@ -61,6 +65,25 @@ export function verifyCitations(
   }
 
   return [...unverified];
+}
+
+/**
+ * Bracket tokens to verify. A `[url:…]` handle written as a Markdown link keeps
+ * its destination until normalization runs, so it is collected here as well.
+ */
+function citationOccurrences(
+  answerText: string,
+  evidenceIds: ReadonlySet<string>,
+): Array<{ label: string; index: number }> {
+  const occurrences = markdownBracketOccurrences(answerText, evidenceIds);
+  const seen = new Set(occurrences.map((occurrence) => occurrence.index));
+  const codeRanges = markdownCodeRanges(answerText);
+  for (const match of answerText.matchAll(/\[(url:[^\]\n]{1,200})\]\(/gu)) {
+    const index = match.index ?? 0;
+    if (seen.has(index) || isMarkdownCodeIndex(index, codeRanges)) continue;
+    occurrences.push({ label: match[1].trim(), index, length: match[0].length - 1 });
+  }
+  return occurrences.sort((left, right) => left.index - right.index);
 }
 
 function resolveToken(token: string, urlToEvidenceId: ReadonlyMap<string, string>): string | null {

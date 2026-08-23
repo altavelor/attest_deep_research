@@ -85,10 +85,7 @@ export function registerConversationEvidence(
 
   for (const [identityKey, chunks] of chunksByIdentity) {
     const first = chunks[0];
-    const contentHash = chunks
-      .map((chunk) => chunk.contentHash)
-      .sort()
-      .join("|");
+    const contentHash = revisionContentHash(chunks);
     const sourceIndex = sources.findIndex(
       (candidate) =>
         sourceIdentityKey(candidate.identity.kind, candidate.identity.canonicalKey) === identityKey,
@@ -116,11 +113,28 @@ export function registerConversationEvidence(
     }
 
     const source = sources[sourceIndex];
-    const existing = source.revisions.find(
-      (candidate) => candidate.status === "active" && candidate.contentHash === contentHash,
-    );
-    if (existing) {
-      for (const chunk of chunks) revisionIdByEvidenceId.set(chunk.id, existing.id);
+    const active = source.revisions.find((candidate) => candidate.status === "active");
+    if (active && (active.contentHash === contentHash || extendsRevision(active, chunks))) {
+      const known = new Set(active.chunks.map((chunk) => chunk.id));
+      const added = chunks.filter((chunk) => !known.has(chunk.id));
+      if (added.length > 0) {
+        const mergedChunks = [...active.chunks, ...added.map(cloneChunk)];
+        const merged: ConversationEvidenceRevision = {
+          ...active,
+          chunks: mergedChunks,
+          contentHash: revisionContentHash(mergedChunks),
+        };
+        const updatedSource = {
+          ...source,
+          revisions: source.revisions.map((candidate) =>
+            candidate === active ? merged : candidate,
+          ),
+        };
+        sources = sources.map((candidate, index) =>
+          index === sourceIndex ? updatedSource : candidate,
+        );
+      }
+      for (const chunk of chunks) revisionIdByEvidenceId.set(chunk.id, active.id);
       continue;
     }
 
@@ -176,13 +190,41 @@ export function recordConversationCitationUsages(
     const revisions = source.revisions.map((revision) => {
       const citationOffsets = offsetsByRevision.get(revision.id);
       if (!citationOffsets?.length) return revision;
-      return { ...revision, usages: [...revision.usages, { messageId, citationOffsets }] };
+      const usages = revision.usages.filter((usage) => usage.messageId !== messageId);
+      return { ...revision, usages: [...usages, { messageId, citationOffsets }] };
     });
     return revisions.every((revision, index) => revision === source.revisions[index])
       ? source
       : { ...source, revisions };
   });
   return { sources };
+}
+
+function revisionContentHash(chunks: readonly RetrievedChunk[]): string {
+  return chunks
+    .map((chunk) => chunk.contentHash)
+    .sort()
+    .join("|");
+}
+
+/**
+ * Tells a wider retrieval of unchanged content from a genuine content change. A
+ * retrieval that shares chunk ids with the active revision and reports the same
+ * hash for each of them extends that revision instead of superseding it.
+ */
+function extendsRevision(
+  active: ConversationEvidenceRevision,
+  chunks: readonly RetrievedChunk[],
+): boolean {
+  const hashById = new Map(active.chunks.map((chunk) => [chunk.id, chunk.contentHash]));
+  let shared = 0;
+  for (const chunk of chunks) {
+    const known = hashById.get(chunk.id);
+    if (known === undefined) continue;
+    if (known !== chunk.contentHash) return false;
+    shared += 1;
+  }
+  return shared > 0;
 }
 
 export function bindAnswerToConversationRegistry(
@@ -298,7 +340,8 @@ export function selectConversationRegistryPromptView(
   maximumCatalogCharacters = 6_000,
 ): ConversationRegistryPromptView {
   const queryTokens = wordTokens(question);
-  const candidates = boundedPromptCandidates(registry, question, queryTokens);
+  const mentionedIds = mentionedRegistryIds(question);
+  const candidates = boundedPromptCandidates(registry, mentionedIds, queryTokens);
   const selected = candidates
     .filter((candidate) => candidate.explicitRank > 0 || candidate.score > 0)
     .sort(
@@ -321,7 +364,7 @@ export function selectConversationRegistryPromptView(
 
   const { catalog, catalogText } = buildPromptCatalog(
     registry,
-    question,
+    mentionedIds,
     Math.max(0, maximumCatalogCharacters),
   );
 
@@ -340,7 +383,7 @@ export function selectConversationRegistryPromptView(
  */
 function boundedPromptCandidates(
   registry: ConversationSourceRegistry,
-  question: string,
+  mentionedIds: ReadonlySet<string>,
   queryTokens: readonly string[],
 ): Array<{
   source: ConversationSource;
@@ -357,10 +400,10 @@ function boundedPromptCandidates(
   let scored = 0;
   for (let sourceIndex = registry.sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
     const source = registry.sources[sourceIndex];
-    const sourceMentioned = mentionsRegistryId(question, source.id);
+    const sourceMentioned = mentionedIds.has(source.id);
     for (let index = source.revisions.length - 1; index >= 0; index -= 1) {
       const revision = source.revisions[index];
-      const explicitRank = mentionsRegistryId(question, revision.id) ? 2 : sourceMentioned ? 1 : 0;
+      const explicitRank = mentionedIds.has(revision.id) ? 2 : sourceMentioned ? 1 : 0;
       if (explicitRank === 0 && scored >= MAX_SCORED_REVISIONS) continue;
       const score = explicitRank > 0 ? 0 : relevanceScore(revision, queryTokens);
       if (explicitRank === 0) scored += 1;
@@ -372,13 +415,13 @@ function boundedPromptCandidates(
 
 function buildPromptCatalog(
   registry: ConversationSourceRegistry,
-  question: string,
+  mentionedIds: ReadonlySet<string>,
   maximumCharacters: number,
 ): { catalog: ConversationRegistryCatalogEntry[]; catalogText: string } {
   const explicitRevisionIds = new Set(
     registry.sources.flatMap((source) =>
       source.revisions
-        .filter((revision) => mentionsRegistryId(question, revision.id))
+        .filter((revision) => mentionedIds.has(revision.id))
         .map((revision) => revision.id),
     ),
   );
@@ -387,7 +430,7 @@ function buildPromptCatalog(
       source,
       index,
       explicit:
-        mentionsRegistryId(question, source.id) ||
+        mentionedIds.has(source.id) ||
         source.revisions.some((revision) => explicitRevisionIds.has(revision.id)),
     }))
     .sort(
@@ -399,12 +442,16 @@ function buildPromptCatalog(
 
   for (const { source, explicit } of orderedSources) {
     const separatorLength = sections.length === 0 ? 0 : 2;
-    const sourcePrefix = `[${source.id}] `;
+    const sourcePrefix = `[${promptSafeCatalogText(source.id)}] `;
     const sourceSuffix = ` (${source.identity.kind})`;
     const sourceBudget = maximumCharacters - usedCharacters - separatorLength;
     const requiredRevisionLength = source.revisions
       .filter((revision) => explicitRevisionIds.has(revision.id))
-      .reduce((total, revision) => total + 1 + `- ${revision.id}: ${revision.status}`.length, 0);
+      .reduce(
+        (total, revision) =>
+          total + 1 + `- ${promptSafeCatalogText(revision.id)}: ${revision.status}`.length,
+        0,
+      );
     if (sourceBudget < sourcePrefix.length + sourceSuffix.length && !explicit) continue;
     const title = truncateToLength(
       promptSafeCatalogText(source.title),
@@ -430,7 +477,7 @@ function buildPromptCatalog(
     let sectionLength = sourceLine.length;
     for (const [revisionIndex, revision] of revisions.entries()) {
       const required = explicitRevisionIds.has(revision.id);
-      const prefix = `- ${revision.id}: ${revision.status}`;
+      const prefix = `- ${promptSafeCatalogText(revision.id)}: ${revision.status}`;
       const available = maximumCharacters - usedCharacters - separatorLength - sectionLength - 1;
       if (available < prefix.length) {
         if (required) continue;
@@ -442,7 +489,8 @@ function buildPromptCatalog(
         .slice(revisionIndex + 1)
         .filter((candidate) => explicitRevisionIds.has(candidate.id))
         .reduce(
-          (total, candidate) => total + 1 + `- ${candidate.id}: ${candidate.status}`.length,
+          (total, candidate) =>
+            total + 1 + `- ${promptSafeCatalogText(candidate.id)}: ${candidate.status}`.length,
           0,
         );
       const suffix = truncateToLength(
@@ -488,15 +536,20 @@ function promptSafeCatalogText(value: string): string {
     .trim();
 }
 
-function mentionsRegistryId(text: string, id: string): boolean {
-  let index = text.indexOf(id);
-  while (index >= 0) {
-    const before = index === 0 ? "" : text[index - 1];
-    const after = text[index + id.length] ?? "";
-    if (!/[\p{L}\p{N}:-]/u.test(before) && !/[\p{L}\p{N}:-]/u.test(after)) return true;
-    index = text.indexOf(id, index + id.length);
+/**
+ * Collects the registry ids a question refers to in one pass, so selecting a
+ * prompt view costs one scan of the question instead of one scan per revision.
+ */
+function mentionedRegistryIds(text: string): Set<string> {
+  const mentioned = new Set<string>();
+  for (const match of text.matchAll(/source-\d+(?::revision-\d+)?/gu)) {
+    const start = match.index ?? 0;
+    const before = start === 0 ? "" : text[start - 1];
+    const after = text[start + match[0].length] ?? "";
+    if (/[\p{L}\p{N}:-]/u.test(before) || /[\p{L}\p{N}-]/u.test(after)) continue;
+    mentioned.add(match[0]);
   }
-  return false;
+  return mentioned;
 }
 
 export function canonicalSourceKey(source: SourceReference): string {

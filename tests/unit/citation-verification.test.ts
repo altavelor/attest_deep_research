@@ -37,6 +37,20 @@ describe("verifyCitations", () => {
     expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
   });
 
+  it("flags an unsupported url citation written as a Markdown link", () => {
+    const evidence = [
+      chunk("e1", "The document discusses medieval agricultural crop rotation techniques.", "web"),
+    ];
+    const answer =
+      "Quarterly revenue grew by forty percent driven by strong cloud subscription sales [url:https://example.com/e1](https://example.com/e1).";
+
+    expect(
+      verifyCitations(answer, evidence, {
+        urlToEvidenceId: new Map([["https://example.com/e1", "e1"]]),
+      }),
+    ).toEqual(["e1"]);
+  });
+
   it("flags a claim that does not lexically overlap the cited chunk", () => {
     const evidence = [
       chunk("e1", "The document discusses medieval agricultural crop rotation techniques."),

@@ -344,6 +344,69 @@ describe("conversation source registry", () => {
     expect(answer.evidence?.map((chunk) => chunk.id)).toEqual(["source-1:revision-1"]);
   });
 
+  it("extends the active revision when a later turn retrieves a different chunk subset", () => {
+    const first = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [pdfChunk("pdf:page-1", "Introduction", 1), pdfChunk("pdf:page-7", "Cited rule", 7)],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const second = registerConversationEvidence(
+      first.registry,
+      [pdfChunk("pdf:page-1", "Introduction", 1), pdfChunk("pdf:page-9", "Appendix", 9)],
+      "2026-08-22T00:00:00.000Z",
+    );
+
+    const source = second.registry.sources[0];
+    expect(source.revisions).toHaveLength(1);
+    expect(source.revisions[0].status).toBe("active");
+    expect(source.revisions[0].chunks.map((chunk) => chunk.id)).toEqual([
+      "pdf:page-1",
+      "pdf:page-7",
+      "pdf:page-9",
+    ]);
+    expect(second.revisionIdByEvidenceId.get("pdf:page-9")).toBe("source-1:revision-1");
+  });
+
+  it("still supersedes the active revision when a shared chunk's content changed", () => {
+    const first = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [pdfChunk("pdf:page-1", "Original", 1)],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const changed = { ...pdfChunk("pdf:page-1", "Rewritten", 1), contentHash: "handbook-v2" };
+    const second = registerConversationEvidence(
+      first.registry,
+      [changed],
+      "2026-08-22T00:00:00.000Z",
+    );
+
+    const source = second.registry.sources[0];
+    expect(source.revisions.map((revision) => revision.status)).toEqual(["superseded", "active"]);
+    expect(second.revisionIdByEvidenceId.get("pdf:page-1")).toBe("source-1:revision-2");
+  });
+
+  it("replaces the usage of a message that is recorded twice", () => {
+    const registered = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [webChunk("web:one", "Stored evidence")],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const once = recordConversationCitationUsages(
+      registered.registry,
+      "message-1",
+      "Claim [source-1:revision-1].",
+    );
+    const twice = recordConversationCitationUsages(
+      once,
+      "message-1",
+      "Claim [source-1:revision-1]. Again [source-1:revision-1].",
+    );
+
+    expect(twice.sources[0].revisions[0].usages).toEqual([
+      { messageId: "message-1", citationOffsets: [6, 35] },
+    ]);
+  });
+
   it("keeps the cited chunk's page in the bound evidence of a multi-chunk revision", () => {
     const registered = registerConversationEvidence(
       createConversationSourceRegistry(),

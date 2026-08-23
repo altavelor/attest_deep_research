@@ -89,7 +89,11 @@ export function parseSavedChat(value: unknown): SavedChat | null {
   if (!hasSavedChatBase(chat)) return null;
 
   if (chat.schemaVersion === CHAT_SCHEMA_VERSION) {
-    return isConversationSourceRegistry(chat.sourceRegistry) ? (chat as SavedChat) : null;
+    if (isConversationSourceRegistry(chat.sourceRegistry)) return chat as SavedChat;
+    return {
+      ...(chat as Omit<SavedChat, "sourceRegistry">),
+      sourceRegistry: createConversationSourceRegistry(),
+    };
   }
   if (chat.schemaVersion !== 2) return null;
 
@@ -115,6 +119,14 @@ function hasSavedChatBase(chat: Partial<SavedChat>): boolean {
   );
 }
 
+function isSourceId(value: unknown): boolean {
+  return typeof value === "string" && /^source-\d+$/u.test(value);
+}
+
+function isRevisionId(value: unknown, sourceId: string): boolean {
+  return typeof value === "string" && new RegExp(`^${sourceId}:revision-\\d+$`, "u").test(value);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -135,7 +147,7 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
     if (!isRecord(source)) return false;
     const identityKey = `${source.identity?.kind}:${source.identity?.canonicalKey}`;
     if (
-      !nonEmptyString(source.id) ||
+      !isSourceId(source.id) ||
       sourceIds.has(source.id) ||
       !nonEmptyString(source.title) ||
       !source.identity ||
@@ -153,8 +165,7 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
       if (!isRecord(revision)) return false;
       if (revision.status === "active") activeRevisionCount += 1;
       if (
-        !nonEmptyString(revision.id) ||
-        !revision.id.startsWith(`${source.id}:revision-`) ||
+        !isRevisionId(revision.id, source.id) ||
         revisionIds.has(revision.id) ||
         !nonEmptyString(revision.contentHash) ||
         !nonEmptyString(revision.capturedAt) ||

@@ -19,8 +19,7 @@ Use local models with citations [1].
 ## Citations
 
 1. [Research/local.md](Research/local.md)
-2. [Research/local.md](Research/local.md)
-3. [Example](https://example.com/local)
+2. [Example](https://example.com/local)
 
 ## Follow-up Questions
 
@@ -47,8 +46,8 @@ Use local models with citations [1].
     };
 
     const note = formatResearchAnswerNote(withWebReference);
-    expect(note).toContain("Local says X [1] and the web says Y [4].");
-    expect(note).toContain("4. [https://example.com/unseen](https://example.com/unseen)");
+    expect(note).toContain("Local says X [1] and the web says Y [3].");
+    expect(note).toContain("3. [https://example.com/unseen](https://example.com/unseen)");
   });
 
   it("numbers the canonical answer without applying a second density pass", () => {
@@ -73,7 +72,7 @@ Use local models with citations [1].
     };
 
     expect(formatResearchAnswerNote(withReferenceLink)).toContain(
-      ["Read [guide][local-1]. Claim [2].", "", "[local-1]: https://example.com/guide"].join("\n"),
+      ["Read [guide][local-1]. Claim [1].", "", "[local-1]: https://example.com/guide"].join("\n"),
     );
   });
 
@@ -109,6 +108,26 @@ Use local models with citations [1].
     const note = formatResearchAnswerNote(versioned);
     expect(note).toContain("Old claim [1]. New claim [2].");
     expect(note.split("https://example.com/versioned").length - 1).toBe(2);
+  });
+  it("degrades an unsafe web citation label and destination instead of emitting a foreign link", () => {
+    const hostile: ResearchAnswer = {
+      ...answer(),
+      answer: "Claim [web-hostile].",
+      citations: [
+        {
+          id: "web-hostile",
+          label: "Report",
+          source: {
+            ...webSource("https://example.com/report"),
+            title: "Report](https://evil.example/phish) cover",
+          },
+        },
+      ],
+    };
+
+    const note = formatResearchAnswerNote(hostile);
+    expect(note).not.toMatch(/[^\\]\]\(https:\/\/evil/u);
+    expect(note).toContain("](https://example.com/report)");
   });
 });
 

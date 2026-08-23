@@ -1,12 +1,13 @@
-import { formatCitationLink } from "./citationLinks";
+import { citationTarget } from "./citationLinks";
 import { linkifyUrlCitations } from "./urlCitations";
 import { AnswerWebReference, ResearchAnswer } from "@core/answer";
 import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
-import { Citation } from "@core/model";
-import { replaceCitationTokens } from "@core/research";
+import { Citation, SourceReference } from "@core/model";
+import { formatCitation } from "@core/retrieval";
+import { normalizeCitationDensity, replaceCitationTokens } from "@core/research";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
-  const citations = dedupeCitationsById(answer.citations);
+  const citations = dedupeCitations(answer.citations);
   const webReferences = answer.webReferences ?? [];
   return [
     "# Attest Research",
@@ -38,13 +39,21 @@ function renderAnswerBody(
   dedupedCitations: Citation[],
   webReferences: readonly AnswerWebReference[],
 ): string {
-  const numberById = new Map(dedupedCitations.map((citation, index) => [citation.id, index + 1]));
+  const numberByKey = new Map(
+    dedupedCitations.map((citation, index) => [citationKey(citation), index + 1]),
+  );
+  const numberById = new Map<string, number>();
+  for (const citation of answer.citations) {
+    const number = numberByKey.get(citationKey(citation));
+    if (number !== undefined) numberById.set(citation.id, number);
+  }
   webReferences.forEach((reference, index) => {
     numberById.set(reference.id, dedupedCitations.length + index + 1);
   });
 
+  const normalizedAnswer = normalizeCitationDensity(answer.answer, new Set(numberById.keys()));
   const numbered = replaceCitationTokens(
-    answer.answer,
+    normalizedAnswer,
     new Set(numberById.keys()),
     (label) => `[${numberById.get(label)}]`,
   );
@@ -141,7 +150,7 @@ function citationsMarkdown(
   webReferences: readonly AnswerWebReference[],
 ): string {
   const entries = [
-    ...citations.map((citation) => formatCitationLink(citation.source)),
+    ...citations.map((citation) => citationLink(citation.source)),
     ...webReferences.map((reference) => webReferenceLink(reference)),
   ];
   if (entries.length === 0) {
@@ -149,6 +158,16 @@ function citationsMarkdown(
   }
 
   return entries.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
+}
+
+/**
+ * Renders a cited source. Titles and URLs come from fetched pages, so a label is
+ * escaped and a destination that could terminate the link degrades to plain text.
+ */
+function citationLink(source: SourceReference): string {
+  const label = escapeLinkText(formatCitation(source).label);
+  const destination = markdownLinkDestination(citationTarget(source));
+  return destination ? `[${label}](${destination})` : label;
 }
 
 /** Renders a cited page that produced no evidence; a URL that cannot be a safe
@@ -159,20 +178,44 @@ function webReferenceLink(reference: AnswerWebReference): string {
   return destination ? `[${label}](${destination})` : label;
 }
 
-function dedupeCitationsById(citations: Citation[]): Citation[] {
+function dedupeCitations(citations: Citation[]): Citation[] {
   const seen = new Set<string>();
   const deduped: Citation[] = [];
 
   for (const citation of citations) {
-    if (seen.has(citation.id)) {
+    const key = citationKey(citation);
+    if (seen.has(key)) {
       continue;
     }
 
-    seen.add(citation.id);
+    seen.add(key);
     deduped.push(citation);
   }
 
   return deduped;
+}
+
+/**
+ * Distinct revisions of one source stay separate entries, while several chunks
+ * of the same unbound source collapse into one numbered citation.
+ */
+function citationKey(citation: Citation): string {
+  if (/^source-\d+:revision-\d+$/u.test(citation.id)) return citation.id;
+  switch (citation.source.kind) {
+    case "markdown":
+      return [
+        "markdown",
+        citation.source.path,
+        citation.source.blockId ?? "",
+        citation.source.headingPath.join("/"),
+      ].join(":");
+    case "pdf":
+      return ["pdf", citation.source.path, citation.source.pageNumber].join(":");
+    case "document":
+      return ["document", citation.source.path, citation.source.format].join(":");
+    case "web":
+      return ["web", citation.source.url].join(":");
+  }
 }
 
 function followUpsMarkdown(answer: ResearchAnswer): string {

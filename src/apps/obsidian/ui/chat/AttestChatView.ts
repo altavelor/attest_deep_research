@@ -133,6 +133,7 @@ export class AttestChatView extends ItemView {
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
+  private highlightTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: AttestChatViewServices) {
     super(leaf);
@@ -307,6 +308,10 @@ export class AttestChatView extends ItemView {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
     }
+    if (this.highlightTimer !== null) {
+      window.clearTimeout(this.highlightTimer);
+      this.highlightTimer = null;
+    }
     this.citationPopover.close();
     this.diagnosticModal.close();
     this.savedChatsPopover.close();
@@ -415,9 +420,14 @@ export class AttestChatView extends ItemView {
     const messageEl = Array.from(
       this.transcriptEl?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [],
     ).find((element) => element.dataset.messageId === messageId);
-    messageEl?.scrollIntoView({ block: "center", behavior: "smooth" });
-    messageEl?.addClass("is-highlighted");
-    if (messageEl) window.setTimeout(() => messageEl.removeClass("is-highlighted"), 1_500);
+    if (!messageEl) return;
+    messageEl.scrollIntoView({ block: "center", behavior: "smooth" });
+    messageEl.addClass("is-highlighted");
+    if (this.highlightTimer !== null) window.clearTimeout(this.highlightTimer);
+    this.highlightTimer = window.setTimeout(() => {
+      this.highlightTimer = null;
+      messageEl.removeClass("is-highlighted");
+    }, 1_500);
   }
 
   private openContextPicker(): void {
