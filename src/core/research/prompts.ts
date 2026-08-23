@@ -3,6 +3,7 @@ import { RetrievedChunk } from "@core/model/source";
 import { sourceLabel } from "@core/retrieval/citations";
 import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 
 export const RESEARCH_SYSTEM_PROMPT =
   "You are Attest, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
@@ -110,6 +111,7 @@ export interface BuildResearchPromptOptions {
   graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
   webEvidence?: RetrievedChunk[];
+  conversationRegistry?: ConversationRegistryPromptView;
   retrievalDiagnostics?: string;
   maxEvidenceItems: number;
 
@@ -128,14 +130,18 @@ const CHAT_MESSAGE_OVERHEAD_TOKENS = 4;
 const CHAT_REQUEST_OVERHEAD_TOKENS = 8;
 
 export function buildResearchPrompt(options: BuildResearchPromptOptions): string {
-  const labeled = labelResearchEvidence(options);
+  const labeled = labelResearchEvidence({
+    ...options,
+    conversationEvidence: options.conversationRegistry?.relevantEvidence,
+  });
   const explicitEvidence = labeled.explicit.map(formatEvidenceItem).join("\n\n");
   const graphEvidence = labeled.graph.map(formatEvidenceItem).join("\n\n");
   const retrievedEvidence = labeled.retrieved.map(formatEvidenceItem).join("\n\n");
   const webEvidence = labeled.web.map(formatEvidenceItem).join("\n\n");
+  const conversationEvidence = labeled.conversation.map(formatEvidenceItem).join("\n\n");
   const history = formatChatHistory(options.chatHistory ?? []);
   const hasEvidence = Boolean(
-    explicitEvidence || graphEvidence || retrievedEvidence || webEvidence,
+    explicitEvidence || graphEvidence || retrievedEvidence || webEvidence || conversationEvidence,
   );
 
   const attachmentManifest = buildAttachmentManifestSection(options.attachedFiles ?? [], {
@@ -172,10 +178,20 @@ export function buildResearchPrompt(options: BuildResearchPromptOptions): string
       : "Retrieved evidence: No relevant evidence was found.",
     "",
     webEvidence ? `Web evidence:\n${webEvidence}` : "Web evidence: None.",
+    "",
+    `Conversation source registry:\n${formatConversationRegistry(options.conversationRegistry)}`,
+    "",
+    conversationEvidence
+      ? `Relevant evidence from the conversation registry:\n${conversationEvidence}`
+      : "Relevant evidence from the conversation registry: None.",
     ...(options.retrievalDiagnostics
       ? ["", `Retrieval diagnostics:\n${options.retrievalDiagnostics}`]
       : []),
   ].join("\n");
+}
+
+function formatConversationRegistry(view: ConversationRegistryPromptView | undefined): string {
+  return view?.catalogText || "None.";
 }
 
 export function estimateResearchRequestTokens(

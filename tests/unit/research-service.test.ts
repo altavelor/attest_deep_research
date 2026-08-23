@@ -242,7 +242,7 @@ describe("ResearchService", () => {
     expect(chatModel.requests[0]).not.toHaveProperty("toolChoice");
   });
 
-  it("records positive, collapsed, unknown and web-reference citation diagnostics for Instant", async () => {
+  it("records normalized, unknown and web-reference citation diagnostics for Instant", async () => {
     const source = markdownSource("Research/source.md");
     const retriever = new FakeRetriever({
       chunks: [retrieved("local-source-1", source, "Evidence supports the answer.")],
@@ -278,27 +278,70 @@ describe("ResearchService", () => {
     if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
 
     expect(completion.answer).toMatchObject({
-      answer:
-        "Evidence [local-source-1][local-source-1], unknown [missing-source], web [url:https://example.com/unseen].",
+      answer: "Evidence [local-source-1], unknown , web .",
       citations: [{ id: "local-source-1" }],
       contextDiagnostics: {
         answer: {
           citations: {
-            occurrences: 3,
-            uniqueLabels: 2,
-            per100Words: 27.27,
+            occurrences: 1,
+            uniqueLabels: 1,
+            per100Words: 16.67,
             sentenceCoverage: 100,
-            maxLabelsPerSentence: 2,
-            byLabel: { "local-source-1": 2, "web-ref-1": 1 },
+            maxLabelsPerSentence: 1,
+            byLabel: { "local-source-1": 1 },
             uncitedPromptSourceIds: [],
             collapsedOccurrences: 1,
             verificationRan: true,
-            unknownCitationIds: ["missing-source"],
+            unknownCitationIds: ["missing-source", "url:https://example.com/unseen"],
           },
         },
       },
     });
     expect(completion.answer).not.toHaveProperty("webReferences");
+  });
+
+  it("rewrites only prose prompt labels and ignores labels inside Markdown syntax", async () => {
+    const source = markdownSource("Research/source.md");
+    const retriever = new FakeRetriever({
+      chunks: [retrieved("local-source-1", source, "Evidence supports the answer.")],
+      citations: [citation("local-source-1", source, "Research/source.md")],
+      usedFallback: false,
+    });
+    const modelText = [
+      "Supported [S1]. Code `[S1]` and `[S9]`.",
+      "[S1](https://example.com) ![S1](image.png) [guide][S1].",
+      "",
+      "[S1]: https://example.com/guide",
+      "```text",
+      "[S1] [S9]",
+      "```",
+    ].join("\n");
+    const service = new ResearchService({
+      toolsetFactory: createResearchToolRegistry,
+      runToolLoop,
+      modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
+      retriever,
+      chatModel: new FakeChatModel([{ content: modelText, isComplete: true }]),
+      chatModelName: "qwen",
+      now: fixedNow,
+    });
+
+    const events = await collectAsync(
+      service.answer({
+        question: "Use the evidence",
+        mode: "instant",
+        searchMode: "indexOnly",
+        includeContextDiagnostics: true,
+      }),
+    );
+    const completion = events.at(-1);
+    if (completion?.type !== "complete") throw new Error("The Instant run did not complete.");
+
+    expect(completion.answer.answer).toBe(
+      modelText.replace("Supported [S1].", "Supported [local-source-1]."),
+    );
+    expect(completion.answer.citations.map(({ id }) => id)).toEqual(["local-source-1"]);
+    expect(completion.answer.contextDiagnostics?.answer?.citations.unknownCitationIds).toEqual([]);
   });
 
   it("suppresses the optional tool loop when Instant is selected", async () => {
@@ -460,7 +503,7 @@ describe("ResearchService", () => {
       type: "complete",
       answer: {
         answer: "Thinking answer [idx-1]",
-        citations: [],
+        citations: [{ id: "idx-1" }],
         contextDiagnostics: {
           executionStrategy: "thinking",
           thinking: { requiredTools: [] },
@@ -732,7 +775,7 @@ describe("ResearchService", () => {
     });
 
     expect(complete.answer.evidence?.map((chunk) => chunk.id)).toContain("idx-1");
-    expect(complete.answer.citations).toEqual([]);
+    expect(complete.answer.citations).toEqual([expect.objectContaining({ id: "idx-1" })]);
   });
 
   it.each([

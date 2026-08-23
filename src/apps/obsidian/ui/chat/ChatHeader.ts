@@ -10,6 +10,7 @@ export interface ChatHeaderOptions {
   t: Translate;
   onPanelChange(panel: AttestPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
+  onOpenSources(): void;
   onNewChat(): void;
 }
 
@@ -33,6 +34,12 @@ export function renderChatWindowActions(
     label: options.t("chat.action.history"),
     disabled: false,
     onClick: () => options.onOpenHistory(historyButton),
+  });
+  createHeaderIconButton(actions, {
+    icon: "book-open",
+    label: options.t("chat.action.sources"),
+    disabled: false,
+    onClick: options.onOpenSources,
   });
   createHeaderIconButton(actions, {
     icon: "message-square-plus",

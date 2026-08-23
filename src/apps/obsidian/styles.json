@@ -13,5 +13,6 @@
   "src/apps/obsidian/ui/chat/artifacts/artifacts.css",
   "src/apps/obsidian/ui/index/index-search.css",
   "src/apps/obsidian/ui/chat/context/document-picker.css",
+  "src/apps/obsidian/ui/chat/sources/chat-sources.css",
   "src/apps/obsidian/ui/mobile.css"
 ]

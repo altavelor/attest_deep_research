@@ -246,7 +246,7 @@ describe("ThinkingResearchStrategy failure paths", () => {
     expect(outcome).toEqual({ kind: "completed" });
     expect(events.find((event) => event.type === "complete")).toMatchObject({
       answer: {
-        answer: "The source says this [missing-source].",
+        answer: "The source says this .",
         citations: [],
         contextDiagnostics: {
           thinking: { unknownCitationIds: ["missing-source"] },
@@ -314,9 +314,9 @@ describe("ThinkingResearchStrategy failure paths", () => {
         contextDiagnostics: {
           answer: {
             citations: {
-              occurrences: 2,
+              occurrences: 1,
               uniqueLabels: 1,
-              byLabel: { "active-1": 2 },
+              byLabel: { "active-1": 1 },
               uncitedPromptSourceIds: [],
               collapsedOccurrences: 1,
               verificationRan: true,
@@ -405,7 +405,7 @@ describe("ThinkingResearchStrategy citation normalization", () => {
     );
   });
 
-  it("records a cited page without evidence as a web reference, not as evidence", async () => {
+  it("removes a cited page when its content was not registered as evidence", async () => {
     const modelRound = answering(
       "Costs $2.50 [url:https://openai.com/pricing] but see [url:https://example.com/unseen].",
     );
@@ -415,14 +415,19 @@ describe("ThinkingResearchStrategy citation normalization", () => {
     const complete = events.find((event) => event.type === "complete");
     expect(complete).toMatchObject({
       answer: {
-        answer: "Costs $2.50 [c1] but see [web-ref-1].",
+        answer: "Costs $2.50 [c1] but see .",
         citations: [{ id: "c1" }],
-        webReferences: [{ id: "web-ref-1", url: "https://example.com/unseen" }],
       },
     });
     if (complete?.type !== "complete") throw new Error("no completion");
     expect(complete.answer.evidence?.map((chunk) => chunk.id)).toEqual(["c1"]);
     expect(complete.answer.citations.map((citation) => citation.id)).toEqual(["c1"]);
+    expect(complete.answer.contextDiagnostics?.thinking?.unknownCitationIds).toEqual([
+      "url:https://example.com/unseen",
+    ]);
+    expect(complete.answer.contextDiagnostics?.answer?.citations.unknownCitationIds).toEqual([
+      "url:https://example.com/unseen",
+    ]);
   });
 });
 

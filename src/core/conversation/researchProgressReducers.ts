@@ -1,5 +1,6 @@
 import { ResearchMode } from "@core/research/researchMode";
 import { AssistantResearchProgress, ChainItem, ChatDisplayMessage } from "./model";
+import { createMessageId } from "./messageIds";
 
 /**
  * Create the placeholder assistant message for a run. The research mode is
@@ -11,7 +12,12 @@ export function startAssistantProgress(
   mode: ResearchMode,
 ): ChatDisplayMessage[] {
   const createdAt = new Date().toISOString();
-  const assistant: ChatDisplayMessage = { role: "assistant", content: "", createdAt };
+  const assistant: ChatDisplayMessage = {
+    id: createMessageId(),
+    role: "assistant",
+    content: "",
+    createdAt,
+  };
   return [
     ...messages,
     {
@@ -300,7 +306,12 @@ function lastAssistant(messages: ChatDisplayMessage[]): {
   return last?.role === "assistant"
     ? { assistant: last, existed: true }
     : {
-        assistant: { role: "assistant", content: "", createdAt: new Date().toISOString() },
+        assistant: {
+          id: createMessageId(),
+          role: "assistant",
+          content: "",
+          createdAt: new Date().toISOString(),
+        },
         existed: false,
       };
 }

@@ -432,6 +432,36 @@ describe("ResearchQuestionController cancellation", () => {
     expect(harness.messages().at(-1)?.researchProgress?.checkpoints[0]?.status).toBe("interrupted");
   });
 
+  it("does not register answer sources for a run that was stopped before completing", async () => {
+    const gate = deferred();
+    const registered: string[] = [];
+    let harness: Harness;
+    harness = createHarness(
+      async function* events() {
+        yield { type: "delta", content: "Partial" };
+        await gate.promise;
+        harness.requests[0]?.finalizeAnswer?.(answerFor("Done"));
+        yield { type: "complete", answer: answerFor("Done") };
+      },
+      {
+        registerAnswerSources: (answer, messageId) => {
+          registered.push(messageId);
+          return answer;
+        },
+      },
+    );
+
+    const run = harness.controller.submitQuestion();
+    await flushMicrotasks();
+    harness.controller.stopRunningQuestion();
+    gate.resolve();
+    await flushMicrotasks();
+    await advanceTime(100);
+    await run;
+
+    expect(registered).toEqual([]);
+  });
+
   it("ignores a stop request when nothing is running", async () => {
     const harness = createHarness(async function* events() {
       yield { type: "complete", answer: answerFor("Done") };

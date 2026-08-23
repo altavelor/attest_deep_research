@@ -106,6 +106,7 @@ describe("chat rendering helpers", () => {
 
     expect(messages).toEqual([
       {
+        id: expect.any(String),
         role: "user",
         content: "Summarize this",
         contextPaths: ["Docs/one.md", "Docs/two.pdf"],
@@ -363,10 +364,10 @@ describe("chat rendering helpers", () => {
 
     expect(second).toEqual([
       {
+        id: expect.any(String),
         role: "assistant",
         content: "First second.",
         createdAt: expect.any(String),
-        evidence: undefined,
       },
     ]);
   });
@@ -550,6 +551,7 @@ describe("chat rendering helpers", () => {
 
     expect(third).toEqual([
       {
+        id: expect.any(String),
         role: "assistant",
         content: "",
         createdAt: expect.any(String),

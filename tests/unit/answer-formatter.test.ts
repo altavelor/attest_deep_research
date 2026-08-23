@@ -50,11 +50,10 @@ Use local models with citations [1].
     expect(note).toContain("3. [https://example.com/unseen](https://example.com/unseen)");
   });
 
-  it("normalizes citation density before numbering without changing markdown links", () => {
+  it("numbers the canonical answer without applying a second density pass", () => {
     const repeated: ResearchAnswer = {
       ...answer(),
-      answer:
-        "First claim [local-1]. Second claim [local-1]. Read [guide](https://example.com/guide).",
+      answer: "First claim [local-1]. Second claim. Read [guide](https://example.com/guide).",
     };
 
     expect(formatResearchAnswerNote(repeated)).toContain(
@@ -66,7 +65,7 @@ Use local models with citations [1].
     const withReferenceLink: ResearchAnswer = {
       ...answer(),
       answer: [
-        "Read [guide][local-1]. Claim [local-duplicate][local-duplicate].",
+        "Read [guide][local-1]. Claim [local-duplicate].",
         "",
         "[local-1]: https://example.com/guide",
       ].join("\n"),
@@ -93,6 +92,79 @@ Use local models with citations [1].
       "Attest/2026-05-16-how-should-i-use-local-models.md",
     );
   });
+
+  it("keeps different revisions of the same source as separate numbered citations", () => {
+    const source = webSource("https://example.com/versioned");
+    const versioned: ResearchAnswer = {
+      ...answer(),
+      answer: "Old claim [source-1:revision-1]. New claim [source-1:revision-2].",
+      citations: [
+        { id: "source-1:revision-1", label: "Example v1", source },
+        { id: "source-1:revision-2", label: "Example v2", source },
+        { id: "source-1:revision-2", label: "Duplicate v2", source },
+      ],
+    };
+
+    const note = formatResearchAnswerNote(versioned);
+    expect(note).toContain("Old claim [1]. New claim [2].");
+    expect(note.split("https://example.com/versioned").length - 1).toBe(2);
+  });
+  it("degrades an unsafe web citation label and destination instead of emitting a foreign link", () => {
+    const hostile: ResearchAnswer = {
+      ...answer(),
+      answer: "Claim [web-hostile].",
+      citations: [
+        {
+          id: "web-hostile",
+          label: "Report",
+          source: {
+            ...webSource("https://example.com/report"),
+            title: "Report](https://evil.example/phish) cover",
+          },
+        },
+      ],
+    };
+
+    const note = formatResearchAnswerNote(hostile);
+    expect(note).not.toMatch(/[^\\]\]\(https:\/\/evil/u);
+    expect(note).toContain("](https://example.com/report)");
+  });
+});
+
+it("keeps vault paths with spaces and parentheses clickable in the bibliography", () => {
+  const spaced: ResearchAnswer = {
+    ...answer(),
+    answer: "Note says X [note-1]. Handbook says Y [pdf-1].",
+    citations: [
+      {
+        id: "note-1",
+        label: "Meeting Notes/2026 Q1 (draft).md",
+        source: {
+          id: "note-1",
+          kind: "markdown",
+          title: "Meeting Notes/2026 Q1 (draft).md",
+          path: "Meeting Notes/2026 Q1 (draft).md",
+          headingPath: [],
+          blockId: "ab12",
+        },
+      },
+      {
+        id: "pdf-1",
+        label: "Library/Annual Report.pdf",
+        source: {
+          id: "pdf-1",
+          kind: "pdf",
+          title: "Annual Report",
+          path: "Library/Annual Report.pdf",
+          pageNumber: 7,
+        },
+      },
+    ],
+  };
+
+  const note = formatResearchAnswerNote(spaced);
+  expect(note).toContain("(<Meeting Notes/2026 Q1 (draft).md#^ab12>)");
+  expect(note).toContain("(<Library/Annual Report.pdf#page=7>)");
 });
 
 function answer(): ResearchAnswer {

@@ -58,6 +58,15 @@ import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
 import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
 import { ChatComposerController } from "./ChatComposerController";
+import { ChatSourcesModal } from "./sources/ChatSourcesModal";
+import {
+  ConversationSourceRegistry,
+  bindAnswerToConversationRegistry,
+  createConversationSourceRegistry,
+  recordConversationCitationUsages,
+  registerConversationEvidence,
+  selectConversationRegistryPromptView,
+} from "@core/chat/sourceRegistry";
 
 export const ATTEST_CHAT_VIEW_TYPE = "attest-chat";
 
@@ -110,6 +119,7 @@ export class AttestChatView extends ItemView {
   private readonly indexSearch: IndexSearchController;
   private messages: ChatDisplayMessage[] = [];
   private lastAnswer: ResearchAnswer | null = null;
+  private sourceRegistry: ConversationSourceRegistry = createConversationSourceRegistry();
   private attachedContextPaths: string[] = [];
   private currentChatSettings: SavedChatSettings;
   private currentResearchMode: ResearchMode = "instant";
@@ -123,6 +133,7 @@ export class AttestChatView extends ItemView {
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
+  private highlightTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: AttestChatViewServices) {
     super(leaf);
@@ -224,6 +235,26 @@ export class AttestChatView extends ItemView {
           this.attachedContextPaths,
           this.app.vault.getFiles().map((file) => file.path),
         ),
+      getConversationRegistryPromptView: (question) =>
+        selectConversationRegistryPromptView(this.sourceRegistry, question),
+      registerAnswerSources: (answer, messageId) => {
+        const registered = registerConversationEvidence(
+          this.sourceRegistry,
+          answer.evidence ?? [],
+          answer.createdAt,
+        );
+        const boundAnswer = bindAnswerToConversationRegistry(
+          answer,
+          registered.registry,
+          registered.revisionIdByEvidenceId,
+        );
+        this.sourceRegistry = recordConversationCitationUsages(
+          registered.registry,
+          messageId,
+          boundAnswer.answer,
+        );
+        return boundAnswer;
+      },
       clearContextPaths: () => {
         this.attachedContextPaths = [];
         this.composer.renderAttachedContext();
@@ -276,6 +307,10 @@ export class AttestChatView extends ItemView {
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
+    }
+    if (this.highlightTimer !== null) {
+      window.clearTimeout(this.highlightTimer);
+      this.highlightTimer = null;
     }
     this.citationPopover.close();
     this.diagnosticModal.close();
@@ -345,6 +380,7 @@ export class AttestChatView extends ItemView {
       onOpenHistory: (anchorEl) => {
         void this.toggleHistoryPopover(anchorEl);
       },
+      onOpenSources: () => this.openSourcesModal(),
       onNewChat: () => {
         void this.startNewChat();
       },
@@ -355,6 +391,7 @@ export class AttestChatView extends ItemView {
     await this.saveCurrentChat();
     this.messages = [];
     this.lastAnswer = null;
+    this.sourceRegistry = createConversationSourceRegistry();
     this.attachedContextPaths = [];
     this.currentChatSettings = createDefaultChatSettings(this.services);
     this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
@@ -363,6 +400,34 @@ export class AttestChatView extends ItemView {
     this.closeHistoryPopover();
     await this.savedChatSession.refresh();
     this.render();
+  }
+
+  private openSourcesModal(targetRevisionId?: string): void {
+    new ChatSourcesModal(
+      this.app,
+      this.sourceRegistry,
+      this.t,
+      () => this.services.getTranslator().direction,
+      {
+        targetRevisionId,
+        onNavigateMessage: (messageId) => this.navigateToMessage(messageId),
+        onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
+      },
+    ).open();
+  }
+
+  private navigateToMessage(messageId: string): void {
+    const messageEl = Array.from(
+      this.transcriptEl?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [],
+    ).find((element) => element.dataset.messageId === messageId);
+    if (!messageEl) return;
+    messageEl.scrollIntoView({ block: "center", behavior: "smooth" });
+    messageEl.addClass("is-highlighted");
+    if (this.highlightTimer !== null) window.clearTimeout(this.highlightTimer);
+    this.highlightTimer = window.setTimeout(() => {
+      this.highlightTimer = null;
+      messageEl.removeClass("is-highlighted");
+    }, 1_500);
   }
 
   private openContextPicker(): void {
@@ -431,6 +496,7 @@ export class AttestChatView extends ItemView {
       onOpenCitationPopover: (anchorEl, ref) => this.citationPopover.open(anchorEl, ref),
       onScheduleCitationPopoverClose: (key) => this.citationPopover.scheduleClose(key),
       onScrollCitationBlockIntoView: (key) => this.citationPopover.scrollBlockIntoView(key),
+      onOpenRegistryRevision: (revisionId) => this.openSourcesModal(revisionId),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       onOpenToolOutput: (item) => void this.openToolOutput(item),
       onHighlightCitation: (key, highlighted) =>
@@ -528,6 +594,7 @@ export class AttestChatView extends ItemView {
 
     this.messages = chat.messages;
     this.lastAnswer = chat.lastAnswer;
+    this.sourceRegistry = chat.sourceRegistry;
     this.attachedContextPaths = [...chat.attachedContextPaths];
     this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
     this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
@@ -556,6 +623,7 @@ export class AttestChatView extends ItemView {
         : stripContextDiagnostics(this.lastAnswer),
       attachedContextPaths: this.attachedContextPaths,
       chatSettings: this.currentChatSettings,
+      sourceRegistry: this.sourceRegistry,
     };
   }
 

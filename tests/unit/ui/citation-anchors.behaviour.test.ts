@@ -104,6 +104,20 @@ describe("inline citation anchors", () => {
     expect(container.querySelector("p")?.textContent).toBe("GPT-4o costs $2.50 per 1M [1].");
   });
 
+  it("opens the targeted registry revision when a bound inline citation is clicked", () => {
+    const revisionId = "source-1:revision-1";
+    const openRevision = vi.fn();
+    container.createEl("p", { text: `Claim [${revisionId}].` });
+    renderInlineCitationAnchors(
+      container,
+      buildCitationRefs([webChunk(revisionId, "https://example.com", "Claim evidence")]),
+      { ...transcriptOptions, onOpenRegistryRevision: openRevision },
+    );
+
+    container.querySelector<HTMLButtonElement>(".attest-chat__citation-anchor")?.click();
+    expect(openRevision).toHaveBeenCalledWith(revisionId);
+  });
+
   it("linkifies url handles while streaming but leaves the final answer text alone", async () => {
     const streaming: ChatDisplayMessage = {
       role: "assistant",
@@ -230,9 +244,9 @@ describe("answer status dot", () => {
     expect(container.querySelector(".attest-chat__answer-status-dot")).toBeNull();
   });
 
-  it("normalizes finalized citation density before rendering markdown", () => {
+  it("renders the finalized canonical citation text without another density pass", () => {
     const finalized = message({
-      content: `First claim [${EVIDENCE_ID}]. Second claim [${EVIDENCE_ID}].`,
+      content: `First claim [${EVIDENCE_ID}]. Second claim.`,
     });
 
     renderAssistantMessageContent(container, finalized, renderOptions);

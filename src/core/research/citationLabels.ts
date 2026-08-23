@@ -1,9 +1,9 @@
 import { RetrievedChunk } from "@core/model/source";
+import { markdownBracketOccurrences } from "./answerAnalysis";
 
 export const CITATION_LABEL_PREFIX = "S";
 
 const LABEL_TOKEN = new RegExp(`^${CITATION_LABEL_PREFIX}\\d+$`, "i");
-const BRACKET_TOKEN = /\[([^\]\n]{1,200})\]/g;
 
 export interface LabeledChunk {
   label: string;
@@ -15,6 +15,7 @@ export interface LabeledResearchEvidence {
   graph: LabeledChunk[];
   retrieved: LabeledChunk[];
   web: LabeledChunk[];
+  conversation: LabeledChunk[];
 
   byLabel: Map<string, string>;
 }
@@ -25,6 +26,7 @@ export interface EvidenceSectionsInput {
   graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
   webEvidence?: RetrievedChunk[];
+  conversationEvidence?: RetrievedChunk[];
   maxEvidenceItems: number;
 }
 
@@ -61,6 +63,7 @@ export function labelResearchEvidence(input: EvidenceSectionsInput): LabeledRese
     graph: assign(input.graphEvidence ?? []),
     retrieved: assign(input.retrievedEvidence ?? input.evidence),
     web: assign(input.webEvidence ?? []),
+    conversation: assign(input.conversationEvidence ?? []),
     byLabel,
   };
 }
@@ -85,13 +88,16 @@ export function rewriteCitationLabels(
   const citedChunkIds = new Set<string>();
   const unknownLabels = new Set<string>();
 
-  const rewritten = text.replace(BRACKET_TOKEN, (whole, inner: string) => {
-    const tokens = inner
+  const occurrences = markdownBracketOccurrences(text, new Set(byLabel.keys()));
+  let rewritten = "";
+  let copiedUpTo = 0;
+  for (const occurrence of occurrences) {
+    const tokens = occurrence.label
       .split(/[,\s]+/)
       .map((token) => token.trim())
       .filter(Boolean);
     if (tokens.length === 0 || !tokens.every((token) => LABEL_TOKEN.test(token))) {
-      return whole;
+      continue;
     }
 
     const ids: string[] = [];
@@ -105,8 +111,11 @@ export function rewriteCitationLabels(
       }
     }
 
-    return ids.map((id) => `[${id}]`).join("");
-  });
+    rewritten += text.slice(copiedUpTo, occurrence.index);
+    rewritten += ids.map((id) => `[${id}]`).join("");
+    copiedUpTo = occurrence.index + occurrence.length;
+  }
+  rewritten += text.slice(copiedUpTo);
 
   return { text: rewritten, citedChunkIds, unknownLabels: [...unknownLabels] };
 }

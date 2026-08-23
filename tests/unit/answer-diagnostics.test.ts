@@ -29,7 +29,7 @@ describe("buildAnswerDiagnostics", () => {
     });
   });
 
-  it("counts repeated labels and collapsed citations", () => {
+  it("counts visible labels separately from collapsed citations", () => {
     const result = buildAnswerDiagnostics({
       answerText: "One claim [a]. Another claim [a].",
       promptSourceIds: ["a", "b"],
@@ -45,11 +45,11 @@ describe("buildAnswerDiagnostics", () => {
       ],
     });
     expect(result.citations).toMatchObject({
-      occurrences: 4,
+      occurrences: 2,
       uniqueLabels: 1,
       sentenceCoverage: 100,
       maxLabelsPerSentence: 1,
-      byLabel: { a: 4 },
+      byLabel: { a: 2 },
       uncitedPromptSourceIds: ["b"],
       collapsedOccurrences: 2,
     });

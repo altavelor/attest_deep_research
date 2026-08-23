@@ -2,6 +2,12 @@ export interface CitationDensityOptions {
   maxLabelsPerSentence?: number;
 }
 
+export interface CitationDensityResult {
+  text: string;
+  removedOccurrences: number;
+  removedByLabel: Record<string, number>;
+}
+
 interface CitationOccurrence {
   start: number;
   end: number;
@@ -20,10 +26,18 @@ export function normalizeCitationDensity(
   citationLabels: ReadonlySet<string>,
   options: CitationDensityOptions = {},
 ): string {
-  if (citationLabels.size === 0) return text;
+  return normalizeCitationDensityWithDiagnostics(text, citationLabels, options).text;
+}
+
+export function normalizeCitationDensityWithDiagnostics(
+  text: string,
+  citationLabels: ReadonlySet<string>,
+  options: CitationDensityOptions = {},
+): CitationDensityResult {
+  if (citationLabels.size === 0) return unchangedDensityResult(text);
 
   const occurrences = citationOccurrences(text, citationLabels);
-  if (occurrences.length < 2) return text;
+  if (occurrences.length < 2) return unchangedDensityResult(text);
 
   const remainingByLabel = occurrenceCounts(occurrences);
   collapseCitationGroups(text, occurrences, remainingByLabel);
@@ -34,8 +48,21 @@ export function normalizeCitationDensity(
   );
   collapseAdjacentSentenceRepeats(occurrences, remainingByLabel);
 
-  if (!occurrences.some((occurrence) => occurrence.removed)) return text;
-  return removeOccurrences(text, occurrences);
+  const removed = occurrences.filter((occurrence) => occurrence.removed);
+  if (removed.length === 0) return unchangedDensityResult(text);
+  const removedByLabel: Record<string, number> = {};
+  for (const occurrence of removed) {
+    removedByLabel[occurrence.label] = (removedByLabel[occurrence.label] ?? 0) + 1;
+  }
+  return {
+    text: removeOccurrences(text, occurrences),
+    removedOccurrences: removed.length,
+    removedByLabel,
+  };
+}
+
+function unchangedDensityResult(text: string): CitationDensityResult {
+  return { text, removedOccurrences: 0, removedByLabel: {} };
 }
 
 export function replaceCitationTokens(
@@ -62,6 +89,7 @@ function citationOccurrences(
 ): CitationOccurrence[] {
   const paragraphBreaks = [...text.matchAll(PARAGRAPH_BREAK)];
   const protectedMarkdownStarts = protectedMarkdownBracketStarts(text, citationLabels);
+  const codeRanges = markdownCodeRanges(text);
   const occurrences: CitationOccurrence[] = [];
   let paragraph = 0;
   let paragraphStart = 0;
@@ -72,6 +100,7 @@ function citationOccurrences(
     const label = match[1].trim();
     if (
       !citationLabels.has(label) ||
+      isMarkdownCodeIndex(start, codeRanges) ||
       protectedMarkdownStarts.has(start) ||
       isInlineMarkdownLink(text, start + match[0].length)
     )
@@ -235,3 +264,4 @@ function removeOccurrences(text: string, occurrences: readonly CitationOccurrenc
   }
   return result + text.slice(copiedUpTo);
 }
+import { isMarkdownCodeIndex, markdownCodeRanges } from "./citationTokens";

@@ -1,6 +1,7 @@
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model/source";
+import { createMessageId } from "./messageIds";
 
 import { ChatDisplayMessage } from "./model";
 
@@ -35,6 +36,7 @@ export function nextUserMessage(
   return [
     ...messages,
     {
+      id: createMessageId(),
       role: "user",
       content,
       createdAt: new Date().toISOString(),
@@ -53,7 +55,15 @@ export function nextAssistantMessage(
       ...messages.slice(0, -1),
       { ...last, role: "assistant", content: `${last.content}${delta}`, createdAt: last.createdAt },
     ];
-  return [...messages, { role: "assistant", content: delta, createdAt: new Date().toISOString() }];
+  return [
+    ...messages,
+    {
+      id: createMessageId(),
+      role: "assistant",
+      content: delta,
+      createdAt: new Date().toISOString(),
+    },
+  ];
 }
 
 export function resetLastAssistantContent(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {

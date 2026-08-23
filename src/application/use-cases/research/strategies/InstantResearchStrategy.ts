@@ -241,6 +241,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
       graphEvidence: planned.graphEvidence,
       retrievedEvidence: planned.retrievedEvidence,
       webEvidence: planned.webEvidence,
+      conversationRegistry: request.conversationRegistry,
+      finalizeAnswer: request.finalizeAnswer,
       citations,
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit,

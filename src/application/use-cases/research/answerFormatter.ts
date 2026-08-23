@@ -1,12 +1,13 @@
-import { formatCitationLink } from "./citationLinks";
+import { citationTarget } from "./citationLinks";
 import { linkifyUrlCitations } from "./urlCitations";
 import { AnswerWebReference, ResearchAnswer } from "@core/answer";
 import { chartDataTable, sanitizeAnswerArtifacts, type AnswerImage } from "@core/media";
-import { Citation } from "@core/model";
+import { Citation, SourceReference } from "@core/model";
+import { formatCitation } from "@core/retrieval";
 import { normalizeCitationDensity, replaceCitationTokens } from "@core/research";
 
 export function formatResearchAnswerNote(answer: ResearchAnswer): string {
-  const citations = dedupeCitationsBySource(answer.citations);
+  const citations = dedupeCitations(answer.citations);
   const webReferences = answer.webReferences ?? [];
   return [
     "# Attest Research",
@@ -38,27 +39,19 @@ function renderAnswerBody(
   dedupedCitations: Citation[],
   webReferences: readonly AnswerWebReference[],
 ): string {
-  const normalizedAnswer = normalizeCitationDensity(
-    answer.answer,
-    new Set([
-      ...answer.citations.map((citation) => citation.id),
-      ...webReferences.map((reference) => reference.id),
-    ]),
-  );
   const numberByKey = new Map(
-    dedupedCitations.map((citation, index) => [citationSourceKey(citation), index + 1]),
+    dedupedCitations.map((citation, index) => [citationKey(citation), index + 1]),
   );
   const numberById = new Map<string, number>();
   for (const citation of answer.citations) {
-    const number = numberByKey.get(citationSourceKey(citation));
-    if (number !== undefined) {
-      numberById.set(citation.id, number);
-    }
+    const number = numberByKey.get(citationKey(citation));
+    if (number !== undefined) numberById.set(citation.id, number);
   }
   webReferences.forEach((reference, index) => {
     numberById.set(reference.id, dedupedCitations.length + index + 1);
   });
 
+  const normalizedAnswer = normalizeCitationDensity(answer.answer, new Set(numberById.keys()));
   const numbered = replaceCitationTokens(
     normalizedAnswer,
     new Set(numberById.keys()),
@@ -157,7 +150,7 @@ function citationsMarkdown(
   webReferences: readonly AnswerWebReference[],
 ): string {
   const entries = [
-    ...citations.map((citation) => formatCitationLink(citation.source)),
+    ...citations.map((citation) => citationLink(citation.source)),
     ...webReferences.map((reference) => webReferenceLink(reference)),
   ];
   if (entries.length === 0) {
@@ -165,6 +158,28 @@ function citationsMarkdown(
   }
 
   return entries.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
+}
+
+/**
+ * Renders a cited source. Titles and URLs come from fetched pages, so a label is
+ * escaped and a destination that could terminate the link degrades to plain text.
+ */
+function citationLink(source: SourceReference): string {
+  const label = escapeLinkText(formatCitation(source).label);
+  const target = citationTarget(source);
+  const destination =
+    source.kind === "web" ? markdownLinkDestination(target) : vaultLinkDestination(target);
+  return destination ? `[${label}](${destination})` : label;
+}
+
+/**
+ * Link destination for a vault path. Spaces and parentheses are ordinary in
+ * note and PDF names, so such a path is wrapped in angle brackets instead of
+ * being percent-encoded, which Obsidian would not resolve.
+ */
+function vaultLinkDestination(target: string): string | undefined {
+  if (/[<>\r\n]/.test(target)) return undefined;
+  return /[\s()\\]/.test(target) ? `<${target}>` : target;
 }
 
 /** Renders a cited page that produced no evidence; a URL that cannot be a safe
@@ -175,13 +190,12 @@ function webReferenceLink(reference: AnswerWebReference): string {
   return destination ? `[${label}](${destination})` : label;
 }
 
-function dedupeCitationsBySource(citations: Citation[]): Citation[] {
+function dedupeCitations(citations: Citation[]): Citation[] {
   const seen = new Set<string>();
   const deduped: Citation[] = [];
 
   for (const citation of citations) {
-    const key = citationSourceKey(citation);
-
+    const key = citationKey(citation);
     if (seen.has(key)) {
       continue;
     }
@@ -193,7 +207,12 @@ function dedupeCitationsBySource(citations: Citation[]): Citation[] {
   return deduped;
 }
 
-function citationSourceKey(citation: Citation): string {
+/**
+ * Distinct revisions of one source stay separate entries, while several chunks
+ * of the same unbound source collapse into one numbered citation.
+ */
+function citationKey(citation: Citation): string {
+  if (/^source-\d+:revision-\d+$/u.test(citation.id)) return citation.id;
   switch (citation.source.kind) {
     case "markdown":
       return [

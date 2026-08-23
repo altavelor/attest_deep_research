@@ -74,7 +74,7 @@ const summary: SavedChatSummary = {
 };
 
 const savedChat: SavedChat = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   id: summary.id,
   title: summary.title,
   createdAt: summary.updatedAt,
@@ -83,6 +83,7 @@ const savedChat: SavedChat = {
   lastAnswer: null,
   attachedContextPaths: [],
   chatSettings: { chatModelProfileId: "model", indexProfileId: "index", searchMode: "indexOnly" },
+  sourceRegistry: { sources: [] },
 };
 
 function createServices(overrides: Partial<AttestChatViewServices> = {}) {
@@ -475,7 +476,7 @@ describe("saved chats from the chat view", () => {
       );
     });
 
-    view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[1]?.click();
+    view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
     await vi.waitFor(() => {
       expect(saveChat).toHaveBeenCalledWith(
         expect.objectContaining({ id: savedChat.id, createdAt: savedChat.createdAt }),

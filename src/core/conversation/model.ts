@@ -11,6 +11,7 @@ export interface ConversationCompactionSummary {
 }
 
 export interface ChatDisplayMessage {
+  id?: string;
   role: "user" | "assistant";
   kind?: "message" | "compact-summary";
   content: string;

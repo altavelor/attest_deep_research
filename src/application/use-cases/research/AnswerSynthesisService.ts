@@ -1,11 +1,15 @@
 import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { buildAnswerDiagnostics } from "./strategies/answerDiagnostics";
 import { verifyCitations } from "./strategies/citationVerification";
 import {
   citationOccurrencesFromText,
   citationIdsFromText,
+  mergeCitationRemovalCounts,
+  mergeCitations,
   normalizeCitationTokens,
+  removeUnknownCitationTokens,
   webUrlEvidenceIndex,
 } from "./strategies/citations";
 import {
@@ -25,8 +29,10 @@ import {
   buildResearchSystemPrompt,
   labelResearchEvidence,
   rewriteCitationLabels,
+  normalizeCitationDensityWithDiagnostics,
   ResearchChatHistoryMessage,
 } from "@core/research";
+import { formatCitation } from "@core/retrieval";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "@application/research/toolPorts";
@@ -58,6 +64,8 @@ export interface AnswerSynthesisInput {
   graphEvidence?: RetrievedChunk[];
   retrievedEvidence?: RetrievedChunk[];
   webEvidence?: RetrievedChunk[];
+  conversationRegistry?: ConversationRegistryPromptView;
+  finalizeAnswer?: (answer: ResearchAnswer) => ResearchAnswer;
   citations: Citation[];
   contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
@@ -119,6 +127,7 @@ export class AnswerSynthesisService {
       graphEvidence: input.graphEvidence,
       retrievedEvidence: input.retrievedEvidence,
       webEvidence: input.webEvidence,
+      conversationRegistry: input.conversationRegistry,
       maxEvidenceItems: input.evidenceLimit,
       retrievalDiagnostics: input.retrievalDiagnostics,
     };
@@ -260,9 +269,24 @@ export class AnswerSynthesisService {
 
     const { byLabel } = labelResearchEvidence(promptOptions);
     const rewrite = rewriteCitationLabels(answerText, byLabel);
-    answerText = rewrite.text;
-    const citedIds = citationIdsFromText(answerText);
-    const citations = input.citations.filter((citation) => citedIds.has(citation.id));
+    const registryEvidence = input.conversationRegistry?.relevantEvidence ?? [];
+    const citationEvidence = [...input.evidence, ...registryEvidence];
+    const urlToEvidenceId = webUrlEvidenceIndex(citationEvidence);
+    const normalized = normalizeCitationTokens(rewrite.text, urlToEvidenceId, {
+      allowUnregisteredWebReferences: false,
+    });
+    const knownCitationIds = new Set(citationEvidence.map((chunk) => chunk.id));
+    const webReferenceIds = new Set(normalized.webReferences.map((reference) => reference.id));
+    const density = normalizeCitationDensityWithDiagnostics(
+      removeUnknownCitationTokens(normalized.text, knownCitationIds),
+      new Set([...knownCitationIds, ...webReferenceIds]),
+    );
+    answerText = density.text;
+    const citedIds = citationIdsFromText(answerText, knownCitationIds);
+    const citations = mergeCitations(
+      input.citations,
+      citationEvidence.map((chunk) => ({ ...formatCitation(chunk.source), id: chunk.id })),
+    ).filter((citation) => citedIds.has(citation.id));
 
     let contextDiagnostics = appendToolDiagnostics(input.contextDiagnostics, toolDiagnostics);
     if (contextDiagnostics && rewrite.unknownLabels.length > 0) {
@@ -277,26 +301,31 @@ export class AnswerSynthesisService {
       };
     }
     if (contextDiagnostics) {
-      const urlToEvidenceId = webUrlEvidenceIndex(input.evidence);
-      const unverifiedCitations = verifyCitations(answerText, input.evidence, {
+      const unverifiedCitations = verifyCitations(answerText, citationEvidence, {
         urlToEvidenceId,
       });
-      const normalized = normalizeCitationTokens(answerText, urlToEvidenceId);
-      const knownCitationIds = new Set(input.evidence.map((chunk) => chunk.id));
-      const webReferenceIds = new Set(normalized.webReferences.map((reference) => reference.id));
       const normalizedUnknownIds = [...normalized.ids].filter(
         (id) => !knownCitationIds.has(id) && !webReferenceIds.has(id),
       );
-      const unknownCitationIds = [...new Set([...rewrite.unknownLabels, ...normalizedUnknownIds])];
-      const citationOccurrences = citationOccurrencesFromText(normalized.text);
+      const unknownCitationIds = [
+        ...new Set([
+          ...rewrite.unknownLabels,
+          ...normalizedUnknownIds,
+          ...normalized.rejectedTokens,
+        ]),
+      ];
+      const citationOccurrences = citationOccurrencesFromText(answerText, knownCitationIds);
       contextDiagnostics = {
         ...contextDiagnostics,
         answer: buildAnswerDiagnostics({
-          answerText: normalized.text,
-          promptSourceIds: input.evidence.map((chunk) => chunk.id),
+          answerText,
+          promptSourceIds: citationEvidence.map((chunk) => chunk.id),
           citationLabels: [...knownCitationIds, ...webReferenceIds],
-          collapsedOccurrences: normalized.collapsedOccurrences,
-          collapsedByLabel: normalized.collapsedByLabel,
+          collapsedOccurrences: normalized.collapsedOccurrences + density.removedOccurrences,
+          collapsedByLabel: mergeCitationRemovalCounts(
+            normalized.collapsedByLabel,
+            density.removedByLabel,
+          ),
           verificationRan: true,
           unknownCitationIds,
           unverifiedCitations,
@@ -304,11 +333,12 @@ export class AnswerSynthesisService {
         }),
       };
     }
-    const finalAnswer: ResearchAnswer = {
+    const unfinalizedAnswer: ResearchAnswer = {
       question: input.question,
       answer: answerText,
       citations,
       evidence: input.evidence,
+      ...(normalized.webReferences.length > 0 ? { webReferences: normalized.webReferences } : {}),
       ...(contextDiagnostics ? { contextDiagnostics } : {}),
       followUpQuestions: extractFollowUpQuestions(answerText),
       createdAt: this.now().toISOString(),
@@ -316,6 +346,7 @@ export class AnswerSynthesisService {
         ? { isFallback: true as const, fallbackReason: input.fallback.reason }
         : {}),
     };
+    const finalAnswer = input.finalizeAnswer?.(unfinalizedAnswer) ?? unfinalizedAnswer;
 
     if (this.persistFinalAnswer) {
       await this.persistFinalAnswer(finalAnswer);
@@ -337,6 +368,7 @@ export class AnswerSynthesisService {
       graphEvidence: input.graphEvidence,
       retrievedEvidence: input.retrievedEvidence,
       webEvidence: input.webEvidence,
+      conversationRegistry: input.conversationRegistry,
       maxEvidenceItems: input.evidenceLimit,
       retrievalDiagnostics: input.retrievalDiagnostics,
       reservedOutputTokens: this.chatOptions.maxTokens,

@@ -3,8 +3,15 @@ import { ResearchAnswer } from "@core/answer";
 import { ResearchSearchMode } from "@core/research/searchMode";
 import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
+import {
+  canonicalSourceKey,
+  ConversationEvidenceRevision,
+  ConversationSource,
+  ConversationSourceRegistry,
+  createConversationSourceRegistry,
+} from "./sourceRegistry";
 
-export const CHAT_SCHEMA_VERSION = 2;
+export const CHAT_SCHEMA_VERSION = 3;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
 
 export interface SavedChatSettings {
@@ -17,7 +24,7 @@ export interface SavedChatSettings {
 }
 
 export interface SavedChat {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: string;
   title: string;
   createdAt: string;
@@ -26,6 +33,7 @@ export interface SavedChat {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
+  sourceRegistry: ConversationSourceRegistry;
 
   isFavorite?: boolean;
 }
@@ -46,6 +54,7 @@ export interface SaveChatInput {
   lastAnswer: ResearchAnswer | null;
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
+  sourceRegistry?: ConversationSourceRegistry;
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
@@ -69,14 +78,35 @@ export function isSafeChatId(id: string): boolean {
 }
 
 export function isSavedChat(value: unknown): value is SavedChat {
+  return parseSavedChat(value) !== null;
+}
+
+/** Converts the legacy v2 wire format into the current in-memory chat shape. */
+export function parseSavedChat(value: unknown): SavedChat | null {
   if (!value || typeof value !== "object") {
-    return false;
+    return null;
   }
 
-  const chat = value as Partial<SavedChat>;
+  const chat = value as Partial<SavedChat> & { schemaVersion?: unknown };
+  if (!hasSavedChatBase(chat)) return null;
 
+  if (chat.schemaVersion === CHAT_SCHEMA_VERSION) {
+    return {
+      ...(chat as Omit<SavedChat, "sourceRegistry">),
+      sourceRegistry: sanitizeConversationSourceRegistry(chat.sourceRegistry),
+    };
+  }
+  if (chat.schemaVersion !== 2) return null;
+
+  return {
+    ...(chat as Omit<SavedChat, "schemaVersion" | "sourceRegistry">),
+    schemaVersion: CHAT_SCHEMA_VERSION,
+    sourceRegistry: createConversationSourceRegistry(),
+  };
+}
+
+function hasSavedChatBase(chat: Partial<SavedChat>): boolean {
   return (
-    chat.schemaVersion === CHAT_SCHEMA_VERSION &&
     typeof chat.id === "string" &&
     isSafeChatId(chat.id) &&
     typeof chat.title === "string" &&
@@ -87,6 +117,146 @@ export function isSavedChat(value: unknown): value is SavedChat {
     (chat.isFavorite === undefined || typeof chat.isFavorite === "boolean") &&
     (chat.lastAnswer === null || typeof chat.lastAnswer === "object") &&
     isSavedChatSettings(chat.chatSettings)
+  );
+}
+
+function isSourceId(value: unknown): boolean {
+  return typeof value === "string" && /^source-\d+$/u.test(value);
+}
+
+function isRevisionId(value: unknown, sourceId: string): boolean {
+  return typeof value === "string" && new RegExp(`^${sourceId}:revision-\\d+$`, "u").test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Salvages the persisted registry: sources and revisions that do not satisfy the
+ * schema are dropped, the rest are kept. Chat messages must never be lost
+ * because a derived registry entry is malformed.
+ */
+function sanitizeConversationSourceRegistry(value: unknown): ConversationSourceRegistry {
+  if (!isRecord(value) || !Array.isArray(value.sources)) return createConversationSourceRegistry();
+  const sourceIds = new Set<string>();
+  const revisionIds = new Set<string>();
+  const identities = new Set<string>();
+  const sources: ConversationSource[] = [];
+
+  for (const candidate of value.sources) {
+    if (!isRecord(candidate)) continue;
+    const source = candidate as unknown as ConversationSource;
+    const identityKey = `${source.identity?.kind}:${source.identity?.canonicalKey}`;
+    if (
+      !isSourceId(source.id) ||
+      sourceIds.has(source.id) ||
+      !nonEmptyString(source.title) ||
+      !source.identity ||
+      !isSourceKind(source.identity.kind) ||
+      !nonEmptyString(source.identity.canonicalKey) ||
+      identities.has(identityKey) ||
+      !Array.isArray(source.revisions)
+    ) {
+      continue;
+    }
+
+    let hasActiveRevision = false;
+    const revisions: ConversationEvidenceRevision[] = [];
+    for (const revisionCandidate of source.revisions) {
+      if (!isRecord(revisionCandidate)) continue;
+      const revision = revisionCandidate as unknown as ConversationEvidenceRevision;
+      if (
+        !isRevisionId(revision.id, source.id) ||
+        revisionIds.has(revision.id) ||
+        !nonEmptyString(revision.contentHash) ||
+        !nonEmptyString(revision.capturedAt) ||
+        !isRevisionStatus(revision.status) ||
+        !Array.isArray(revision.chunks) ||
+        revision.chunks.length === 0 ||
+        !revision.chunks.every(
+          (chunk) =>
+            isRetrievedChunk(chunk) &&
+            chunk.source.kind === source.identity.kind &&
+            canonicalSourceKey(chunk.source) === source.identity.canonicalKey,
+        ) ||
+        !Array.isArray(revision.usages) ||
+        !revision.usages.every(isRevisionUsage) ||
+        (revision.status === "active" && hasActiveRevision)
+      ) {
+        continue;
+      }
+      if (revision.status === "active") hasActiveRevision = true;
+      revisionIds.add(revision.id);
+      revisions.push(revision);
+    }
+
+    if (revisions.length === 0) continue;
+    sourceIds.add(source.id);
+    identities.add(identityKey);
+    sources.push({ ...source, revisions });
+  }
+
+  return { sources };
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isSourceKind(value: unknown): boolean {
+  return value === "markdown" || value === "pdf" || value === "document" || value === "web";
+}
+
+function isRevisionStatus(value: unknown): boolean {
+  return value === "active" || value === "superseded" || value === "unavailable";
+}
+
+function isRevisionUsage(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const usage = value as { messageId?: unknown; citationOffsets?: unknown };
+  return (
+    nonEmptyString(usage.messageId) &&
+    Array.isArray(usage.citationOffsets) &&
+    usage.citationOffsets.every((offset) => Number.isSafeInteger(offset) && (offset as number) >= 0)
+  );
+}
+
+function isRetrievedChunk(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const chunk = value as Record<string, unknown>;
+  return (
+    nonEmptyString(chunk.id) &&
+    typeof chunk.text === "string" &&
+    nonEmptyString(chunk.contentHash) &&
+    typeof chunk.score === "number" &&
+    Number.isFinite(chunk.score) &&
+    isSourceReference(chunk.source)
+  );
+}
+
+function isSourceReference(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Record<string, unknown>;
+  if (!nonEmptyString(source.id) || !nonEmptyString(source.title) || !isSourceKind(source.kind)) {
+    return false;
+  }
+  if (source.kind === "web") {
+    return (
+      nonEmptyString(source.url) &&
+      typeof source.snippet === "string" &&
+      typeof source.retrievedAt === "string" &&
+      typeof source.wasContentFetched === "boolean"
+    );
+  }
+  if (!nonEmptyString(source.path)) return false;
+  if (source.kind === "markdown") return Array.isArray(source.headingPath);
+  if (source.kind === "pdf") return Number.isSafeInteger(source.pageNumber);
+  return (
+    source.format === "fb2" ||
+    source.format === "epub" ||
+    source.format === "txt" ||
+    source.format === "docx"
   );
 }
 
