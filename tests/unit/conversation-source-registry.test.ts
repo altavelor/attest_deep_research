@@ -872,6 +872,43 @@ describe("conversation source registry", () => {
     expect(chunkReads).toBeLessThanOrEqual(200);
   });
 
+  it("touches a bounded number of sources when selecting a prompt view", () => {
+    let sourceReads = 0;
+    const sources = new Proxy(
+      Array.from({ length: 5_000 }, (_, index) => ({
+        id: `source-${index + 1}`,
+        identity: { kind: "web" as const, canonicalKey: `https://example.com/${index + 1}` },
+        title: `Source ${index + 1}`,
+        revisions: [
+          {
+            id: `source-${index + 1}:revision-1`,
+            contentHash: `hash-${index + 1}`,
+            capturedAt: "2026-08-21T00:00:00.000Z",
+            status: "active" as const,
+            usages: [],
+            chunks: [webChunk(`chunk-${index + 1}`, "syrniki need eggs")],
+          },
+        ],
+      })),
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string" && /^\d+$/u.test(property)) sourceReads += 1;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    const view = selectConversationRegistryPromptView(
+      { sources },
+      "How many eggs, see source-1:revision-1?",
+      3,
+    );
+
+    expect(sourceReads).toBeLessThanOrEqual(1_024);
+    expect(view.relevantEvidence[0].id).toBe("source-1:revision-1");
+    expect(view.catalogText).toContain("[source-1]");
+  });
+
   it("bounds scoring work and still selects an explicitly mentioned old revision", () => {
     let scoredRevisions = 0;
     const sources = Array.from({ length: 1_000 }, (_, index) => ({

@@ -16,6 +16,9 @@ const MAX_RELEVANCE_CHARACTERS_PER_REVISION = 4_096;
 const MIN_REVISION_SEARCH_SLOT_CHARACTERS = 64;
 const MAX_SCANNED_CHUNKS_PER_REVISION = 64;
 const MAX_SCORED_REVISIONS = 256;
+const MAX_SCANNED_SOURCES = 256;
+const MAX_SCANNED_REVISIONS = 1_024;
+const MAX_EXPLICIT_SOURCE_REVISIONS = 16;
 
 export interface ConversationSourceRegistry {
   sources: ConversationSource[];
@@ -345,7 +348,8 @@ export function selectConversationRegistryPromptView(
 ): ConversationRegistryPromptView {
   const queryTokens = wordTokens(question);
   const mentionedIds = mentionedRegistryIds(question);
-  const candidates = boundedPromptCandidates(registry, mentionedIds, queryTokens);
+  const scope = promptScope(registry, mentionedIds);
+  const candidates = boundedPromptCandidates(scope, mentionedIds, queryTokens);
   const selected = candidates
     .filter((candidate) => candidate.explicitRank > 0 || candidate.score > 0)
     .sort(
@@ -367,7 +371,7 @@ export function selectConversationRegistryPromptView(
   }
 
   const { catalog, catalogText } = buildPromptCatalog(
-    registry,
+    scope,
     mentionedIds,
     Math.max(0, maximumCatalogCharacters),
   );
@@ -380,13 +384,84 @@ export function selectConversationRegistryPromptView(
 }
 
 /**
+ * The bounded slice of the registry a single question may look at: the newest
+ * sources and revisions within fixed limits, plus the sources a question names
+ * explicitly. Every later pass walks this slice, never the whole registry.
+ */
+function promptScope(
+  registry: ConversationSourceRegistry,
+  mentionedIds: ReadonlySet<string>,
+): ConversationSource[] {
+  const scope = new Map<string, { index: number; source: ConversationSource }>();
+  let revisionBudget = MAX_SCANNED_REVISIONS;
+
+  for (
+    let index = registry.sources.length - 1;
+    index >= 0 && scope.size < MAX_SCANNED_SOURCES && revisionBudget > 0;
+    index -= 1
+  ) {
+    const source = registry.sources[index];
+    const revisions = newestRevisions(source, revisionBudget);
+    revisionBudget -= revisions.length;
+    scope.set(source.id, {
+      index,
+      source: revisions.length === source.revisions.length ? source : { ...source, revisions },
+    });
+  }
+
+  for (const id of mentionedIds) {
+    const separator = id.indexOf(":");
+    const sourceId = separator === -1 ? id : id.slice(0, separator);
+    if (scope.has(sourceId)) continue;
+    const found = findSourceById(registry, sourceId);
+    if (!found) continue;
+    const named = found.source.revisions.filter((revision) => mentionedIds.has(revision.id));
+    const revisions = [
+      ...named,
+      ...newestRevisions(found.source, MAX_EXPLICIT_SOURCE_REVISIONS).filter(
+        (revision) => !named.includes(revision),
+      ),
+    ];
+    scope.set(sourceId, { index: found.index, source: { ...found.source, revisions } });
+  }
+
+  return [...scope.values()]
+    .sort((left, right) => left.index - right.index)
+    .map(({ source }) => source);
+}
+
+/**
+ * Locates a source by its generated id. Ids are assigned in creation order, so
+ * the matching position is probed first and a full scan stays a fallback for a
+ * registry whose numbering has gaps.
+ */
+function findSourceById(
+  registry: ConversationSourceRegistry,
+  sourceId: string,
+): { index: number; source: ConversationSource } | undefined {
+  const sequence = Number(sourceId.slice("source-".length));
+  const probed = Number.isSafeInteger(sequence) ? registry.sources[sequence - 1] : undefined;
+  if (probed?.id === sourceId) return { index: sequence - 1, source: probed };
+  const index = registry.sources.findIndex((candidate) => candidate.id === sourceId);
+  return index === -1 ? undefined : { index, source: registry.sources[index] };
+}
+
+function newestRevisions(
+  source: ConversationSource,
+  maximumRevisions: number,
+): ConversationEvidenceRevision[] {
+  if (source.revisions.length <= maximumRevisions) return source.revisions;
+  return source.revisions.slice(source.revisions.length - maximumRevisions);
+}
+
+/**
  * Collects prompt candidates newest first and scores at most
  * MAX_SCORED_REVISIONS of them, so submitting a question costs bounded work no
  * matter how many revisions the chat accumulated. Explicitly mentioned sources
  * and revisions are always kept.
  */
 function boundedPromptCandidates(
-  registry: ConversationSourceRegistry,
+  scope: readonly ConversationSource[],
   mentionedIds: ReadonlySet<string>,
   queryTokens: readonly string[],
 ): Array<{
@@ -402,8 +477,8 @@ function boundedPromptCandidates(
     explicitRank: number;
   }> = [];
   let scored = 0;
-  for (let sourceIndex = registry.sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-    const source = registry.sources[sourceIndex];
+  for (let sourceIndex = scope.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+    const source = scope[sourceIndex];
     const sourceMentioned = mentionedIds.has(source.id);
     for (let index = source.revisions.length - 1; index >= 0; index -= 1) {
       const revision = source.revisions[index];
@@ -418,18 +493,18 @@ function boundedPromptCandidates(
 }
 
 function buildPromptCatalog(
-  registry: ConversationSourceRegistry,
+  scope: readonly ConversationSource[],
   mentionedIds: ReadonlySet<string>,
   maximumCharacters: number,
 ): { catalog: ConversationRegistryCatalogEntry[]; catalogText: string } {
   const explicitRevisionIds = new Set(
-    registry.sources.flatMap((source) =>
+    scope.flatMap((source) =>
       source.revisions
         .filter((revision) => mentionedIds.has(revision.id))
         .map((revision) => revision.id),
     ),
   );
-  const orderedSources = registry.sources
+  const orderedSources = scope
     .map((source, index) => ({
       source,
       index,
@@ -456,7 +531,10 @@ function buildPromptCatalog(
           total + 1 + `- ${promptSafeCatalogText(revision.id)}: ${revision.status}`.length,
         0,
       );
-    if (sourceBudget < sourcePrefix.length + sourceSuffix.length && !explicit) continue;
+    if (sourceBudget < sourcePrefix.length + sourceSuffix.length && !explicit) {
+      if (explicitRevisionIds.size === 0 && !mentionedIds.size) break;
+      continue;
+    }
     const title = truncateToLength(
       promptSafeCatalogText(source.title),
       Math.max(
