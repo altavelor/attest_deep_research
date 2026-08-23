@@ -57,10 +57,15 @@
   overflow-wrap: anywhere;
 }
 
-.attest-chat-sources-modal__usages button {
+.attest-chat-sources-modal__usages button,
+.attest-chat-sources-modal__open-source {
   width: fit-content;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.attest-chat-sources-modal__open-source {
+  justify-self: start;
 }
 
 .attest-chat-sources-modal__load-more.is-hidden,
@@ -80,7 +85,8 @@
     resize: vertical;
   }
 
-  .attest-chat-sources-modal__usages button {
+  .attest-chat-sources-modal__usages button,
+  .attest-chat-sources-modal__open-source {
     width: 100%;
     min-height: 44px;
   }
