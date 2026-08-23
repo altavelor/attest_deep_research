@@ -1,12 +1,12 @@
-import { RetrievedChunk, SourceKind, SourceReference } from "@core/model/source";
+import type { RetrievedChunk, SourceKind, SourceReference } from "@core/model";
 import type { ResearchAnswer } from "@core/answer";
 import type { AnswerDiagnostics } from "@core/diagnostics";
-import { normalizeCitationDensityWithDiagnostics } from "@core/research/citationDensity";
 import {
   analyzeAnswerText,
   markdownCitationOccurrences,
+  normalizeCitationDensityWithDiagnostics,
   replaceMarkdownCitationTokens,
-} from "@core/research/answerAnalysis";
+} from "@core/research";
 
 export type ConversationSourceStatus = "active" | "superseded" | "unavailable";
 
@@ -14,6 +14,7 @@ const MAX_CATALOG_TITLE_CHARACTERS = 160;
 const MAX_CATALOG_TOPIC_CHARACTERS = 48;
 const MAX_RELEVANCE_CHARACTERS_PER_REVISION = 4_096;
 const MIN_REVISION_SEARCH_SLOT_CHARACTERS = 64;
+const MAX_SCANNED_CHUNKS_PER_REVISION = 64;
 
 export interface ConversationSourceRegistry {
   sources: ConversationSource[];
@@ -318,7 +319,7 @@ export function selectConversationRegistryPromptView(
   let remainingCharacters = Math.max(0, maximumEvidenceCharacters);
   for (const { revision } of selected) {
     if (remainingCharacters === 0) break;
-    const evidence = revisionAsEvidence(revision, remainingCharacters);
+    const evidence = revisionAsEvidence(revision, remainingCharacters, queryTokens);
     relevantEvidence.push(evidence);
     remainingCharacters -= evidence.text.length;
   }
@@ -531,11 +532,12 @@ function wordTokens(text: string): string[] {
 function revisionAsEvidence(
   revision: ConversationEvidenceRevision,
   maximumCharacters = Number.POSITIVE_INFINITY,
+  queryTokens: readonly string[] = [],
 ): RetrievedChunk {
   const first = revision.chunks[0];
   return {
     id: revision.id,
-    text: boundedText(revisionTextParts(revision), maximumCharacters, "\n\n"),
+    text: boundedText(revisionTextParts(revision, queryTokens), maximumCharacters, "\n\n"),
     contentHash: revision.contentHash,
     score: 1,
     source: { ...first.source, id: revision.id },
@@ -591,8 +593,47 @@ export function buildBoundedRevisionSearchText(
   return parts.join("");
 }
 
-function* revisionTextParts(revision: ConversationEvidenceRevision): Generator<string> {
-  for (const chunk of revision.chunks) yield chunk.text;
+function* revisionTextParts(
+  revision: ConversationEvidenceRevision,
+  queryTokens: readonly string[] = [],
+): Generator<string> {
+  const promoted = queryRelevantChunkIndexes(revision.chunks, queryTokens);
+  for (const index of promoted) yield revision.chunks[index].text;
+  for (let index = 0; index < revision.chunks.length; index += 1) {
+    if (!promoted.includes(index)) yield revision.chunks[index].text;
+  }
+}
+
+/**
+ * Samples a bounded number of a revision's chunks and returns the indexes whose
+ * text matches the question, most matches first. A bounded evidence budget then
+ * carries the matching passages instead of only the leading ones.
+ */
+function queryRelevantChunkIndexes(
+  chunks: readonly RetrievedChunk[],
+  queryTokens: readonly string[],
+): number[] {
+  if (queryTokens.length === 0 || chunks.length < 2) return [];
+  const slotCount = Math.min(chunks.length, MAX_SCANNED_CHUNKS_PER_REVISION);
+  const scored: Array<{ index: number; matches: number }> = [];
+  const scanned = new Set<number>();
+  for (let slot = 0; slot < slotCount; slot += 1) {
+    const index = Math.round((slot * (chunks.length - 1)) / (slotCount - 1));
+    if (scanned.has(index)) continue;
+    scanned.add(index);
+    const matches = chunkMatchCount(chunks[index], queryTokens);
+    if (matches > 0) scored.push({ index, matches });
+  }
+  return scored
+    .sort((left, right) => right.matches - left.matches || left.index - right.index)
+    .map(({ index }) => index);
+}
+
+function chunkMatchCount(chunk: RetrievedChunk, queryTokens: readonly string[]): number {
+  const searchable = `${chunk.source.title} ${chunk.text}`
+    .slice(0, MAX_RELEVANCE_CHARACTERS_PER_REVISION)
+    .toLowerCase();
+  return queryTokens.reduce((score, token) => score + (searchable.includes(token) ? 1 : 0), 0);
 }
 
 function boundedText(

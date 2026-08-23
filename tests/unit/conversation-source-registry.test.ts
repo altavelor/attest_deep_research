@@ -185,6 +185,32 @@ describe("conversation source registry", () => {
     expect(view.relevantEvidence[0].text).toContain("eggs");
   });
 
+  it("keeps the matching chunk of a revision when the evidence budget is bounded", () => {
+    const registered = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [
+        webChunk("web:lead", "a".repeat(400), "recipe-v1", "https://example.com/recipe"),
+        webChunk(
+          "web:match",
+          "Syrniki need four eggs per kilogram of curd.",
+          "recipe-v1",
+          "https://example.com/recipe",
+        ),
+      ],
+      "2026-08-21T00:00:00.000Z",
+    );
+
+    const view = selectConversationRegistryPromptView(
+      registered.registry,
+      "How many eggs for syrniki?",
+      6,
+      200,
+    );
+
+    expect(view.relevantEvidence).toHaveLength(1);
+    expect(view.relevantEvidence[0].text).toContain("eggs");
+  });
+
   it("bounds the catalog separately while retaining an explicitly requested revision", () => {
     let registry = createConversationSourceRegistry();
     for (let index = 1; index <= 12; index += 1) {
@@ -680,7 +706,7 @@ describe("conversation source registry", () => {
     const view = selectConversationRegistryPromptView(registry, "late-needle", 1, 40, 500);
 
     expect(view.relevantEvidence.map((chunk) => chunk.id)).toEqual(["source-1:revision-1"]);
-    expect(chunkReads).toBeLessThanOrEqual(150);
+    expect(chunkReads).toBeLessThanOrEqual(200);
   });
 
   it("uses copy-on-write and retains references for untouched immutable registry branches", () => {

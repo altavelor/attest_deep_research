@@ -193,6 +193,11 @@ export function removeUnknownCitationTokens(
   });
 }
 
+/**
+ * Marks bracket runs that belong to Markdown syntax rather than prose citations.
+ * A reference-style link is protected unless its reference part is itself a
+ * citation the caller recognizes, so `[handle][ref]` keeps both brackets intact.
+ */
 function protectedMarkdownBracketStarts(
   text: string,
   citationLabels?: ReadonlySet<string>,
@@ -208,11 +213,14 @@ function protectedMarkdownBracketStarts(
     const secondStart = text.indexOf("[", firstStart + 1);
     const referenceId = normalizeReferenceId(match[2] || match[1]);
     const secondLabel = match[2].trim();
+    const referenceIsCitation = citationLabels
+      ? citationLabels.has(secondLabel)
+      : isCitationHandle(secondLabel) || secondLabel.startsWith("url:");
     const clearlyReference =
       match[0].startsWith("!") ||
       secondLabel.length === 0 ||
       definitions.has(referenceId) ||
-      (citationLabels !== undefined && !citationLabels.has(secondLabel));
+      !referenceIsCitation;
     if (!clearlyReference) continue;
     protectedStarts.add(firstStart);
     if (secondStart >= 0) protectedStarts.add(secondStart);

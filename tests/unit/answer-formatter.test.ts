@@ -108,7 +108,7 @@ Use local models with citations [1].
 
     const note = formatResearchAnswerNote(versioned);
     expect(note).toContain("Old claim [1]. New claim [2].");
-    expect(note.match(/https:\/\/example\.com\/versioned/g)).toHaveLength(2);
+    expect(note.split("https://example.com/versioned").length - 1).toBe(2);
   });
 });
 

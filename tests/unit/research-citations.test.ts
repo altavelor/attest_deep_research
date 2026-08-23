@@ -117,6 +117,15 @@ describe("normalizeCitationTokens", () => {
     expect([...ids].sort()).toEqual(["web:a", "web:b"]);
   });
 
+  it("leaves a reference-style link whose definition is missing untouched", () => {
+    const { text, ids } = normalizeCitationTokens(
+      "Claim [source-1:revision-1][ref] holds.",
+      urlToEvidenceId,
+    );
+    expect(text).toBe("Claim [source-1:revision-1][ref] holds.");
+    expect([...ids]).toEqual([]);
+  });
+
   it("turns a cited page without evidence into a numbered web reference", () => {
     const { text, ids, webReferences } = normalizeCitationTokens(
       "per [url:https://example.com/unseen] and again [url:https://example.com/unseen]",

@@ -3,7 +3,7 @@ import { RetrievedChunk } from "@core/model/source";
 import { sourceLabel } from "@core/retrieval/citations";
 import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { labelResearchEvidence, LabeledChunk } from "./citationLabels";
-import { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 
 export const RESEARCH_SYSTEM_PROMPT =
   "You are Attest, a local-first Obsidian research assistant. Use provided evidence when available; otherwise use general knowledge for self-contained questions. When a claim needs external or up-to-date facts and a search tool is available to you, call it before answering instead of guessing; if you have no evidence for a claim, state it as general knowledge without a citation.";
