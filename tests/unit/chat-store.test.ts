@@ -470,6 +470,69 @@ describe("FileChatStore", () => {
     ]);
   });
 
+  it("keeps the valid sources of a partially damaged registry", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/partial-registry.json`,
+      JSON.stringify({
+        schemaVersion: 3,
+        id: "partial-registry",
+        title: "Partial registry",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+        sourceRegistry: {
+          sources: [
+            null,
+            {
+              id: "source-1",
+              title: "Source source-1",
+              identity: { kind: "web", canonicalKey: "https://example.com/kept" },
+              revisions: [
+                {
+                  id: "source-1:revision-1",
+                  contentHash: "hash",
+                  capturedAt: "2026-06-10T10:00:00.000Z",
+                  status: "active",
+                  usages: [],
+                  chunks: [
+                    {
+                      id: "chunk-1",
+                      text: "Evidence",
+                      contentHash: "hash",
+                      score: 1,
+                      source: {
+                        id: "chunk-1",
+                        kind: "web",
+                        title: "Source",
+                        url: "https://example.com/kept",
+                        snippet: "",
+                        retrievedAt: "2026-06-10T10:00:00.000Z",
+                        wasContentFetched: true,
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "source-2",
+              title: "Broken",
+              identity: { kind: "web", canonicalKey: "https://example.com/broken" },
+              revisions: [{ id: "source-2:revision-1", chunks: [] }],
+            },
+          ],
+        },
+      }),
+    );
+
+    const loaded = await store.loadChat("partial-registry");
+    expect(loaded?.sourceRegistry.sources.map((source) => source.id)).toEqual(["source-1"]);
+  });
+
   it("drops a registry whose source id is not a generated identifier", async () => {
     const store = new FileChatStore({ fileSystem, folder });
     await fileSystem.writeText(

@@ -131,6 +131,42 @@ Use local models with citations [1].
   });
 });
 
+it("keeps vault paths with spaces and parentheses clickable in the bibliography", () => {
+  const spaced: ResearchAnswer = {
+    ...answer(),
+    answer: "Note says X [note-1]. Handbook says Y [pdf-1].",
+    citations: [
+      {
+        id: "note-1",
+        label: "Meeting Notes/2026 Q1 (draft).md",
+        source: {
+          id: "note-1",
+          kind: "markdown",
+          title: "Meeting Notes/2026 Q1 (draft).md",
+          path: "Meeting Notes/2026 Q1 (draft).md",
+          headingPath: [],
+          blockId: "ab12",
+        },
+      },
+      {
+        id: "pdf-1",
+        label: "Library/Annual Report.pdf",
+        source: {
+          id: "pdf-1",
+          kind: "pdf",
+          title: "Annual Report",
+          path: "Library/Annual Report.pdf",
+          pageNumber: 7,
+        },
+      },
+    ],
+  };
+
+  const note = formatResearchAnswerNote(spaced);
+  expect(note).toContain("(<Meeting Notes/2026 Q1 (draft).md#^ab12>)");
+  expect(note).toContain("(<Library/Annual Report.pdf#page=7>)");
+});
+
 function answer(): ResearchAnswer {
   return {
     question: "How should I use local models?",

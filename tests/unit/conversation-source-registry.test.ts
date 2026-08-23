@@ -364,7 +364,35 @@ describe("conversation source registry", () => {
       "pdf:page-7",
       "pdf:page-9",
     ]);
+    expect(source.revisions[0].contentHash).toBe("handbook|handbook|handbook");
     expect(second.revisionIdByEvidenceId.get("pdf:page-9")).toBe("source-1:revision-1");
+  });
+
+  it("never extends a revision an answer has already cited", () => {
+    const first = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [pdfChunk("pdf:page-1", "Introduction", 1)],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const cited = recordConversationCitationUsages(
+      first.registry,
+      "message-1",
+      "Claim [source-1:revision-1].",
+    );
+    const second = registerConversationEvidence(
+      cited,
+      [pdfChunk("pdf:page-1", "Introduction", 1), pdfChunk("pdf:page-9", "Appendix", 9)],
+      "2026-08-22T00:00:00.000Z",
+    );
+
+    const source = second.registry.sources[0];
+    expect(source.revisions.map((revision) => revision.id)).toEqual([
+      "source-1:revision-1",
+      "source-1:revision-2",
+    ]);
+    expect(source.revisions[0].chunks.map((chunk) => chunk.id)).toEqual(["pdf:page-1"]);
+    expect(source.revisions[0].usages).toEqual([{ messageId: "message-1", citationOffsets: [6] }]);
+    expect(second.revisionIdByEvidenceId.get("pdf:page-9")).toBe("source-1:revision-2");
   });
 
   it("still supersedes the active revision when a shared chunk's content changed", () => {

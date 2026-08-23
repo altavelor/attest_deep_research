@@ -166,8 +166,20 @@ function citationsMarkdown(
  */
 function citationLink(source: SourceReference): string {
   const label = escapeLinkText(formatCitation(source).label);
-  const destination = markdownLinkDestination(citationTarget(source));
+  const target = citationTarget(source);
+  const destination =
+    source.kind === "web" ? markdownLinkDestination(target) : vaultLinkDestination(target);
   return destination ? `[${label}](${destination})` : label;
+}
+
+/**
+ * Link destination for a vault path. Spaces and parentheses are ordinary in
+ * note and PDF names, so such a path is wrapped in angle brackets instead of
+ * being percent-encoded, which Obsidian would not resolve.
+ */
+function vaultLinkDestination(target: string): string | undefined {
+  if (/[<>\r\n]/.test(target)) return undefined;
+  return /[\s()]/.test(target) ? `<${target}>` : target;
 }
 
 /** Renders a cited page that produced no evidence; a URL that cannot be a safe

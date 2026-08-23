@@ -114,9 +114,13 @@ export function registerConversationEvidence(
 
     const source = sources[sourceIndex];
     const active = source.revisions.find((candidate) => candidate.status === "active");
-    if (active && (active.contentHash === contentHash || extendsRevision(active, chunks))) {
+    const extendable =
+      active !== undefined &&
+      active.usages.length === 0 &&
+      (active.contentHash === contentHash || extendsRevision(active, chunks));
+    if (active && (active.contentHash === contentHash || extendable)) {
       const known = new Set(active.chunks.map((chunk) => chunk.id));
-      const added = chunks.filter((chunk) => !known.has(chunk.id));
+      const added = extendable ? chunks.filter((chunk) => !known.has(chunk.id)) : [];
       if (added.length > 0) {
         const mergedChunks = [...active.chunks, ...added.map(cloneChunk)];
         const merged: ConversationEvidenceRevision = {
@@ -210,7 +214,8 @@ function revisionContentHash(chunks: readonly RetrievedChunk[]): string {
 /**
  * Tells a wider retrieval of unchanged content from a genuine content change. A
  * retrieval that shares chunk ids with the active revision and reports the same
- * hash for each of them extends that revision instead of superseding it.
+ * hash for each of them extends that revision, which stays possible only while
+ * no answer has cited it.
  */
 function extendsRevision(
   active: ConversationEvidenceRevision,

@@ -5,6 +5,8 @@ import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
 import {
   canonicalSourceKey,
+  ConversationEvidenceRevision,
+  ConversationSource,
   ConversationSourceRegistry,
   createConversationSourceRegistry,
 } from "./sourceRegistry";
@@ -89,10 +91,9 @@ export function parseSavedChat(value: unknown): SavedChat | null {
   if (!hasSavedChatBase(chat)) return null;
 
   if (chat.schemaVersion === CHAT_SCHEMA_VERSION) {
-    if (isConversationSourceRegistry(chat.sourceRegistry)) return chat as SavedChat;
     return {
       ...(chat as Omit<SavedChat, "sourceRegistry">),
-      sourceRegistry: createConversationSourceRegistry(),
+      sourceRegistry: sanitizeConversationSourceRegistry(chat.sourceRegistry),
     };
   }
   if (chat.schemaVersion !== 2) return null;
@@ -131,20 +132,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isConversationSourceRegistry(value: unknown): value is ConversationSourceRegistry {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !Array.isArray((value as { sources?: unknown }).sources)
-  ) {
-    return false;
-  }
-  const registry = value as ConversationSourceRegistry;
+/**
+ * Salvages the persisted registry: sources and revisions that do not satisfy the
+ * schema are dropped, the rest are kept. Chat messages must never be lost
+ * because a derived registry entry is malformed.
+ */
+function sanitizeConversationSourceRegistry(value: unknown): ConversationSourceRegistry {
+  if (!isRecord(value) || !Array.isArray(value.sources)) return createConversationSourceRegistry();
   const sourceIds = new Set<string>();
   const revisionIds = new Set<string>();
   const identities = new Set<string>();
-  return registry.sources.every((source) => {
-    if (!isRecord(source)) return false;
+  const sources: ConversationSource[] = [];
+
+  for (const candidate of value.sources) {
+    if (!isRecord(candidate)) continue;
+    const source = candidate as unknown as ConversationSource;
     const identityKey = `${source.identity?.kind}:${source.identity?.canonicalKey}`;
     if (
       !isSourceId(source.id) ||
@@ -156,14 +158,14 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
       identities.has(identityKey) ||
       !Array.isArray(source.revisions)
     ) {
-      return false;
+      continue;
     }
-    sourceIds.add(source.id);
-    identities.add(identityKey);
-    let activeRevisionCount = 0;
-    return source.revisions.every((revision) => {
-      if (!isRecord(revision)) return false;
-      if (revision.status === "active") activeRevisionCount += 1;
+
+    let hasActiveRevision = false;
+    const revisions: ConversationEvidenceRevision[] = [];
+    for (const revisionCandidate of source.revisions) {
+      if (!isRecord(revisionCandidate)) continue;
+      const revision = revisionCandidate as unknown as ConversationEvidenceRevision;
       if (
         !isRevisionId(revision.id, source.id) ||
         revisionIds.has(revision.id) ||
@@ -180,14 +182,22 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
         ) ||
         !Array.isArray(revision.usages) ||
         !revision.usages.every(isRevisionUsage) ||
-        activeRevisionCount > 1
+        (revision.status === "active" && hasActiveRevision)
       ) {
-        return false;
+        continue;
       }
+      if (revision.status === "active") hasActiveRevision = true;
       revisionIds.add(revision.id);
-      return true;
-    });
-  });
+      revisions.push(revision);
+    }
+
+    if (revisions.length === 0) continue;
+    sourceIds.add(source.id);
+    identities.add(identityKey);
+    sources.push({ ...source, revisions });
+  }
+
+  return { sources };
 }
 
 function nonEmptyString(value: unknown): value is string {
@@ -195,7 +205,7 @@ function nonEmptyString(value: unknown): value is string {
 }
 
 function isSourceKind(value: unknown): boolean {
-  return value === "web" || value === "markdown" || value === "pdf" || value === "document";
+  return value === "markdown" || value === "pdf" || value === "document" || value === "web";
 }
 
 function isRevisionStatus(value: unknown): boolean {
