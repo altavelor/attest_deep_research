@@ -23,7 +23,13 @@ export function renderInlineCitationAnchors(
     button.addEventListener("mouseleave", () => options.onScheduleCitationPopoverClose(ref.key));
     button.addEventListener("focus", () => options.onOpenCitationPopover(button, ref));
     button.addEventListener("blur", () => options.onScheduleCitationPopoverClose(ref.key));
-    button.addEventListener("click", () => options.onScrollCitationBlockIntoView(ref.key));
+    button.addEventListener("click", () => {
+      if (/^source-\d+:revision-\d+$/u.test(ref.chunk.id) && options.onOpenRegistryRevision) {
+        options.onOpenRegistryRevision(ref.chunk.id);
+      } else {
+        options.onScrollCitationBlockIntoView(ref.key);
+      }
+    });
     return button;
   };
   const replacementCount = replaceCitationTextNodes(containerEl, refByChunkId, createAnchor);

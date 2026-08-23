@@ -40,6 +40,7 @@ export interface ChatTranscriptOptions {
   onOpenCitationPopover(anchorEl: HTMLElement, ref: ChatCitationRef): void;
   onScheduleCitationPopoverClose(key: string): void;
   onScrollCitationBlockIntoView(key: string): void;
+  onOpenRegistryRevision?(revisionId: string): void;
   onOpenChunk(chunk: RetrievedChunk): void;
   onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
   onHighlightCitation(key: string, highlighted: boolean): void;
@@ -79,6 +80,7 @@ function renderMessage(
 ): void {
   const messageEl = transcriptEl.createDiv({
     cls: `attest-chat__message attest-chat__message--${message.role}`,
+    attr: message.id ? { "data-message-id": message.id } : undefined,
   });
   renderMessageHeader(messageEl, message, index, options);
   const contentEl = messageEl.createDiv({

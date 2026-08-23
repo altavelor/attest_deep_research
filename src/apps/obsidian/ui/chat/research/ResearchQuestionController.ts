@@ -12,6 +12,7 @@ import type { ResearchMode } from "@core/research";
 import type { ContextMode } from "@core/diagnostics";
 import { toUserMessage } from "@core/errors";
 import { ResearchAnswer } from "@core/answer";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { ChatDisplayMessage } from "@core/conversation";
 import type { Translate } from "@adapters/i18n";
 import {
@@ -56,6 +57,8 @@ export interface ResearchQuestionControllerOptions {
   shouldIncludeActiveFileContext(): boolean;
   shouldIncludeContextDiagnostics(): boolean;
   getContextPaths(): string[];
+  getConversationRegistryPromptView?(question: string): ConversationRegistryPromptView;
+  registerAnswerSources?(answer: ResearchAnswer, messageId: string): ResearchAnswer;
   clearContextPaths(): void;
   getSearchUnavailableMessage(): string | null;
   setEditingMessageIndex(index: number | null): void;
@@ -230,6 +233,26 @@ export class ResearchQuestionController {
         includeActiveFile: this.options.shouldIncludeActiveFileContext(),
         includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
         chatHistory: chatHistoryForPrompt(options.chatHistory),
+        ...(this.options.getConversationRegistryPromptView
+          ? {
+              conversationRegistry: this.options.getConversationRegistryPromptView(
+                cleanedQuestion || question,
+              ),
+            }
+          : {}),
+        ...(this.options.registerAnswerSources
+          ? {
+              finalizeAnswer: (answer: ResearchAnswer) => {
+                const assistantMessage = this.options
+                  .getMessages()
+                  .filter((message) => message.role === "assistant")
+                  .at(-1);
+                const messageId =
+                  assistantMessage?.id ?? assistantMessage?.createdAt ?? answer.createdAt;
+                return this.options.registerAnswerSources!(answer, messageId);
+              },
+            }
+          : {}),
         signal: this.activeAbortController.signal,
       })) {
         if (this.shouldStopRunning || this.activeRunId !== runId) {
@@ -383,17 +406,18 @@ export class ResearchQuestionController {
       if (this.activeRunId !== runId) return;
     }
     this.cancelActiveRender();
-    this.options.setLastAnswer(event.answer);
+    const finalAnswer = event.answer;
+    this.options.setLastAnswer(finalAnswer);
     this.options.setMessages(finalizeLastAssistantReasoning(this.options.getMessages()));
     this.options.setMessages(
       stampLastAssistantModel(this.options.getMessages(), this.options.getCurrentModelLabel()),
     );
     this.options.setMessages(
       attachAnswerDetailsToLastAssistantMessage(this.options.getMessages(), {
-        finalAnswer: event.answer,
-        ...event.answer,
-        ...(event.answer.isFallback
-          ? { isFallback: true as const, fallbackReason: event.answer.fallbackReason }
+        finalAnswer,
+        ...finalAnswer,
+        ...(finalAnswer.isFallback
+          ? { isFallback: true as const, fallbackReason: finalAnswer.fallbackReason }
           : {}),
       }),
     );
