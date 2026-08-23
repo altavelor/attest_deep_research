@@ -23,6 +23,7 @@ import {
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
 import { RetrievedChunk } from "@core/model/source";
+import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { sourceLabel } from "@core/retrieval/citations";
 import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { currentDateLine, ResearchChatHistoryMessage } from "./prompts";
@@ -39,6 +40,7 @@ export interface BuildThinkingResearchMessagesOptions {
   chatHistory?: ResearchChatHistoryMessage[];
   requiredTools: readonly string[];
   explicitEvidence?: RetrievedChunk[];
+  conversationRegistry?: ConversationRegistryPromptView;
 
   attachedFiles?: AttachedFileManifestEntry[];
   toolContext: ThinkingToolContext;
@@ -517,6 +519,23 @@ export function buildThinkingResearchMessages(
           ].join("\n"),
         ),
       ].join("\n\n"),
+    );
+  }
+
+  if (options.conversationRegistry?.catalog.length) {
+    systemSections.push(
+      [
+        "Conversation source registry. These stored revisions are available without rereading the source.",
+        sanitize(options.conversationRegistry.catalogText),
+        ...(options.conversationRegistry.relevantEvidence.length
+          ? [
+              "Relevant stored evidence (cite only its registered revision ID):",
+              ...options.conversationRegistry.relevantEvidence.map(
+                (chunk) => `[${sanitize(chunk.id)}] ${sanitize(chunk.text)}`,
+              ),
+            ]
+          : []),
+      ].join("\n"),
     );
   }
 

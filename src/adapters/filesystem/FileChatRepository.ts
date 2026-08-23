@@ -7,9 +7,10 @@ import {
   SavedChatSummary,
   inferChatTitle,
   isSafeChatId,
-  isSavedChat,
   normalizeTitle,
+  parseSavedChat,
 } from "@core/chat/savedChat";
+import { createConversationSourceRegistry } from "@core/chat/sourceRegistry";
 
 export interface FileChatRepositoryOptions {
   fileSystem: FileSystemPort;
@@ -92,6 +93,8 @@ export class FileChatRepository implements ChatRepository {
         lastAnswer: input.lastAnswer,
         attachedContextPaths: [...input.attachedContextPaths],
         chatSettings: input.chatSettings,
+        sourceRegistry:
+          input.sourceRegistry ?? existing?.sourceRegistry ?? createConversationSourceRegistry(),
         isFavorite: existing?.isFavorite === true,
       };
 
@@ -157,7 +160,7 @@ export class FileChatRepository implements ChatRepository {
 
     try {
       const parsed = JSON.parse(await this.fileSystem.readText(path)) as unknown;
-      return isSavedChat(parsed) ? parsed : null;
+      return parseSavedChat(parsed);
     } catch (error) {
       if (error instanceof SyntaxError) {
         return null;

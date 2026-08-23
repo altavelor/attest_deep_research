@@ -94,11 +94,12 @@ function saveInput(): Omit<SaveChatInput, "id" | "createdAt"> {
 function savedChat(input: SaveChatInput): SavedChat {
   return {
     ...input,
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: input.id ?? "chat-1",
     title: input.title ?? "Current chat",
     createdAt: input.createdAt ?? "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-02T00:00:00.000Z",
+    sourceRegistry: input.sourceRegistry ?? { sources: [] },
   };
 }
 

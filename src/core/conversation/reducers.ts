@@ -35,6 +35,7 @@ export function nextUserMessage(
   return [
     ...messages,
     {
+      id: createMessageId(),
       role: "user",
       content,
       createdAt: new Date().toISOString(),
@@ -53,7 +54,22 @@ export function nextAssistantMessage(
       ...messages.slice(0, -1),
       { ...last, role: "assistant", content: `${last.content}${delta}`, createdAt: last.createdAt },
     ];
-  return [...messages, { role: "assistant", content: delta, createdAt: new Date().toISOString() }];
+  return [
+    ...messages,
+    {
+      id: createMessageId(),
+      role: "assistant",
+      content: delta,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+let messageSequence = 0;
+
+function createMessageId(): string {
+  messageSequence += 1;
+  return `message-${Date.now().toString(36)}-${messageSequence.toString(36)}`;
 }
 
 export function resetLastAssistantContent(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {

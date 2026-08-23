@@ -66,6 +66,22 @@ describe("normalizeCitationDensity", () => {
     );
   });
 
+  it("leaves repeated known citation ids inside inline and fenced code unchanged", () => {
+    const answer = [
+      "Use `[source-a][source-a]` as an example.",
+      "",
+      "```text",
+      "[source-a][source-a]",
+      "```",
+      "",
+      "Claim [source-a][source-a].",
+    ].join("\n");
+
+    expect(normalizeCitationDensity(answer, new Set(["source-a"]))).toBe(
+      answer.replace("Claim [source-a][source-a].", "Claim [source-a]."),
+    );
+  });
+
   it("does not count a known label used as a Markdown reference id as a citation", () => {
     const labels = new Set(["source-a", "source-b"]);
     const answer = [

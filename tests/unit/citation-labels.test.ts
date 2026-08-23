@@ -89,4 +89,22 @@ describe("rewriteCitationLabels", () => {
     expect(result.text).toBe("See [note.md] and [chunk-aaaa].");
     expect(result.citedChunkIds.size).toBe(0);
   });
+
+  it("preserves labels inside Markdown code, links, images, and reference definitions", () => {
+    const text = [
+      "Claim [S1]. Code `[S1]` and unknown `[S9]`.",
+      "[S1](https://example.com) ![S1](image.png) [guide][S1].",
+      "",
+      "[S1]: https://example.com/guide",
+      "```text",
+      "[S1] [S9]",
+      "```",
+    ].join("\n");
+
+    const result = rewriteCitationLabels(text, byLabel);
+
+    expect(result.text).toBe(text.replace("Claim [S1].", "Claim [chunk-aaaa]."));
+    expect([...result.citedChunkIds]).toEqual(["chunk-aaaa"]);
+    expect(result.unknownLabels).toEqual([]);
+  });
 });

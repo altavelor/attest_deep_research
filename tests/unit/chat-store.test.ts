@@ -244,7 +244,11 @@ describe("FileChatStore", () => {
 
     await expect(fileSystem.exists(`${folder}/atomic.json.tmp`)).resolves.toBe(false);
     const raw = await fileSystem.readText(`${folder}/atomic.json`);
-    expect(JSON.parse(raw)).toMatchObject({ id: "atomic", schemaVersion: 2 });
+    expect(JSON.parse(raw)).toMatchObject({
+      id: "atomic",
+      schemaVersion: 3,
+      sourceRegistry: { sources: [] },
+    });
   });
 
   it("saves compact summary markers while counting only visible messages", async () => {
@@ -333,6 +337,126 @@ describe("FileChatStore", () => {
     expect(await store.listChats()).toEqual([
       expect.objectContaining({ id: "legacy", isFavorite: false }),
     ]);
+  });
+
+  it("loads a v2 chat into the v3 registry shape without losing its messages", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/v2.json`,
+      JSON.stringify({
+        schemaVersion: 2,
+        id: "v2",
+        title: "Old chat",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [
+          { role: "user", content: "Old question", createdAt: "2026-06-10T10:00:00.000Z" },
+        ],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+      }),
+    );
+
+    await expect(store.loadChat("v2")).resolves.toMatchObject({
+      schemaVersion: 3,
+      messages: [{ content: "Old question" }],
+      sourceRegistry: { sources: [] },
+    });
+  });
+
+  it("rejects a v3 chat whose persisted registry has malformed revision data", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/bad-registry.json`,
+      JSON.stringify({
+        schemaVersion: 3,
+        id: "bad-registry",
+        title: "Bad registry",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+        sourceRegistry: {
+          sources: [
+            {
+              id: "source-1",
+              title: "Broken",
+              identity: { kind: "web", canonicalKey: "https://example.com" },
+              revisions: [
+                {
+                  id: "source-1:revision-1",
+                  contentHash: "hash",
+                  capturedAt: "2026-06-10T10:00:00.000Z",
+                  status: "active",
+                  chunks: [{ id: "broken" }],
+                  usages: [{ messageId: "", citationOffsets: [-1] }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    await expect(store.loadChat("bad-registry")).resolves.toBeNull();
+  });
+
+  it("rejects a registry revision whose chunk belongs to a different canonical source", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/mismatched-registry.json`,
+      JSON.stringify({
+        schemaVersion: 3,
+        id: "mismatched-registry",
+        title: "Mismatched registry",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+        sourceRegistry: {
+          sources: [
+            {
+              id: "source-1",
+              title: "Expected",
+              identity: { kind: "web", canonicalKey: "https://example.com/expected" },
+              revisions: [
+                {
+                  id: "source-1:revision-1",
+                  contentHash: "hash",
+                  capturedAt: "2026-06-10T10:00:00.000Z",
+                  status: "active",
+                  usages: [],
+                  chunks: [
+                    {
+                      id: "chunk-1",
+                      text: "Evidence",
+                      contentHash: "hash",
+                      score: 1,
+                      source: {
+                        id: "web-1",
+                        kind: "web",
+                        title: "Other",
+                        url: "https://example.com/other",
+                        snippet: "",
+                        retrievedAt: "2026-06-10T10:00:00.000Z",
+                        wasContentFetched: true,
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    await expect(store.loadChat("mismatched-registry")).resolves.toBeNull();
   });
 
   it("rejects unsafe chat ids", async () => {
