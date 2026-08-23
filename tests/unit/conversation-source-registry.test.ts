@@ -368,6 +368,32 @@ describe("conversation source registry", () => {
     expect(second.revisionIdByEvidenceId.get("pdf:page-9")).toBe("source-1:revision-1");
   });
 
+  it("reuses a cited revision when a later turn retrieves a subset of its chunks", () => {
+    const first = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [pdfChunk("pdf:page-1", "Introduction", 1), pdfChunk("pdf:page-7", "Cited rule", 7)],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const cited = recordConversationCitationUsages(
+      first.registry,
+      "message-1",
+      "Claim [source-1:revision-1].",
+    );
+    const second = registerConversationEvidence(
+      cited,
+      [pdfChunk("pdf:page-1", "Introduction", 1)],
+      "2026-08-22T00:00:00.000Z",
+    );
+
+    const source = second.registry.sources[0];
+    expect(source.revisions).toHaveLength(1);
+    expect(source.revisions[0].chunks.map((chunk) => chunk.id)).toEqual([
+      "pdf:page-1",
+      "pdf:page-7",
+    ]);
+    expect(second.revisionIdByEvidenceId.get("pdf:page-1")).toBe("source-1:revision-1");
+  });
+
   it("never extends a revision an answer has already cited", () => {
     const first = registerConversationEvidence(
       createConversationSourceRegistry(),

@@ -179,7 +179,7 @@ function citationLink(source: SourceReference): string {
  */
 function vaultLinkDestination(target: string): string | undefined {
   if (/[<>\r\n]/.test(target)) return undefined;
-  return /[\s()]/.test(target) ? `<${target}>` : target;
+  return /[\s()\\]/.test(target) ? `<${target}>` : target;
 }
 
 /** Renders a cited page that produced no evidence; a URL that cannot be a safe

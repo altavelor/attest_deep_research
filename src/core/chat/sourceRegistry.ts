@@ -114,13 +114,12 @@ export function registerConversationEvidence(
 
     const source = sources[sourceIndex];
     const active = source.revisions.find((candidate) => candidate.status === "active");
-    const extendable =
+    const matchesActive =
       active !== undefined &&
-      active.usages.length === 0 &&
       (active.contentHash === contentHash || extendsRevision(active, chunks));
-    if (active && (active.contentHash === contentHash || extendable)) {
-      const known = new Set(active.chunks.map((chunk) => chunk.id));
-      const added = extendable ? chunks.filter((chunk) => !known.has(chunk.id)) : [];
+    const known = new Set(active?.chunks.map((chunk) => chunk.id) ?? []);
+    const added = matchesActive ? chunks.filter((chunk) => !known.has(chunk.id)) : [];
+    if (active && matchesActive && (added.length === 0 || active.usages.length === 0)) {
       if (added.length > 0) {
         const mergedChunks = [...active.chunks, ...added.map(cloneChunk)];
         const merged: ConversationEvidenceRevision = {
