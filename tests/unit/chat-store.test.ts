@@ -404,6 +404,59 @@ describe("FileChatStore", () => {
     await expect(store.loadChat("bad-registry")).resolves.toBeNull();
   });
 
+  it("skips a chat whose registry holds null sources or revisions instead of failing the listing", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    const base = {
+      schemaVersion: 3,
+      createdAt: "2026-06-10T10:00:00.000Z",
+      updatedAt: "2026-06-10T10:00:00.000Z",
+      messages: [],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
+    };
+    await fileSystem.writeText(
+      `${folder}/null-source.json`,
+      JSON.stringify({
+        ...base,
+        id: "null-source",
+        title: "Null source",
+        sourceRegistry: { sources: [null] },
+      }),
+    );
+    await fileSystem.writeText(
+      `${folder}/null-revision.json`,
+      JSON.stringify({
+        ...base,
+        id: "null-revision",
+        title: "Null revision",
+        sourceRegistry: {
+          sources: [
+            {
+              id: "source-1",
+              title: "Source",
+              identity: { kind: "web", canonicalKey: "https://example.com/expected" },
+              revisions: [null],
+            },
+          ],
+        },
+      }),
+    );
+    await fileSystem.writeText(
+      `${folder}/healthy.json`,
+      JSON.stringify({
+        ...base,
+        id: "healthy",
+        title: "Healthy",
+        sourceRegistry: { sources: [] },
+      }),
+    );
+
+    await expect(store.loadChat("null-source")).resolves.toBeNull();
+    await expect(store.loadChat("null-revision")).resolves.toBeNull();
+    expect((await store.listChats()).map((chat) => chat.id)).toEqual(["healthy"]);
+  });
+
   it("rejects a registry revision whose chunk belongs to a different canonical source", async () => {
     const store = new FileChatStore({ fileSystem, folder });
     await fileSystem.writeText(

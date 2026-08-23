@@ -551,6 +551,7 @@ describe("chat rendering helpers", () => {
 
     expect(third).toEqual([
       {
+        id: expect.any(String),
         role: "assistant",
         content: "",
         createdAt: expect.any(String),

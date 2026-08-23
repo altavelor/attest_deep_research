@@ -1,6 +1,7 @@
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model/source";
+import { createMessageId } from "./messageIds";
 
 import { ChatDisplayMessage } from "./model";
 
@@ -63,13 +64,6 @@ export function nextAssistantMessage(
       createdAt: new Date().toISOString(),
     },
   ];
-}
-
-let messageSequence = 0;
-
-function createMessageId(): string {
-  messageSequence += 1;
-  return `message-${Date.now().toString(36)}-${messageSequence.toString(36)}`;
 }
 
 export function resetLastAssistantContent(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {

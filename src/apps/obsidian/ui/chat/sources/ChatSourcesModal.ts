@@ -6,6 +6,7 @@ import type {
   ConversationSource,
   ConversationSourceRegistry,
 } from "@core/chat/sourceRegistry";
+import type { RetrievedChunk } from "@core/model";
 import { buildBoundedRevisionSearchText } from "@core/chat/sourceRegistry";
 
 export const CHAT_SOURCE_RENDER_BATCH = 50;
@@ -43,6 +44,7 @@ export class ChatSourcesModal extends Modal {
     private readonly options: {
       targetRevisionId?: string;
       onNavigateMessage(messageId: string): void;
+      onOpenChunk(chunk: RetrievedChunk): void;
     },
   ) {
     super(app);
@@ -100,6 +102,10 @@ export class ChatSourcesModal extends Modal {
             onNavigateMessage: (messageId) => {
               this.close();
               this.options.onNavigateMessage(messageId);
+            },
+            onOpenChunk: (chunk) => {
+              this.close();
+              this.options.onOpenChunk(chunk);
             },
           },
           Boolean(search.value),
@@ -317,7 +323,11 @@ function renderProjectionEntry(
   sourceNodes: Map<string, { details: HTMLDetailsElement; revisions: HTMLElement }>,
   entry: ChatSourceSearchProjection,
   t: Translate,
-  options: { targetRevisionId?: string; onNavigateMessage(messageId: string): void },
+  options: {
+    targetRevisionId?: string;
+    onNavigateMessage(messageId: string): void;
+    onOpenChunk(chunk: RetrievedChunk): void;
+  },
   searching: boolean,
 ): void {
   let sourceNode = sourceNodes.get(entry.source.id);
@@ -361,12 +371,30 @@ function renderProjectionEntry(
         topics: boundedDisplayText(entry.topics, MAX_DISPLAY_TOPICS_CHARACTERS) || "—",
       }),
     });
+    renderOpenSourceAction(revisionDetails, entry.revision, t, options.onOpenChunk);
     renderRevisionUsages(revisionDetails, entry.revision, t, options.onNavigateMessage);
   };
   revisionDetails.addEventListener("toggle", () => {
     if (revisionDetails.open) renderBody();
   });
   if (revisionDetails.open) renderBody();
+}
+
+/** Renders the action that opens the revision's underlying note, PDF, or page. */
+function renderOpenSourceAction(
+  revisionDetails: HTMLElement,
+  revision: ConversationEvidenceRevision,
+  t: Translate,
+  onOpenChunk: (chunk: RetrievedChunk) => void,
+): void {
+  const chunk = revision.chunks[0];
+  if (!chunk) return;
+  const button = revisionDetails.createEl("button", {
+    cls: "attest-chat-sources-modal__open-source",
+    text: t("chat.sources.openSource"),
+    attr: { type: "button", "aria-label": t("chat.sources.openSource") },
+  });
+  button.addEventListener("click", () => onOpenChunk(chunk));
 }
 
 function renderRevisionUsages(

@@ -19,6 +19,7 @@ export const chat: EnChatMessages = {
   "chat.sources.status.active": "актуальная ревизия",
   "chat.sources.status.superseded": "заменена",
   "chat.sources.status.unavailable": "недоступна",
+  "chat.sources.openSource": "Открыть источник",
 
   "chat.composer.placeholder": "Спросите по всему хранилищу",
   "chat.composer.question.aria": "Вопрос исследования",

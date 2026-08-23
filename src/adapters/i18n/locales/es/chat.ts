@@ -19,6 +19,7 @@ export const chat: EnChatMessages = {
   "chat.sources.status.active": "activa",
   "chat.sources.status.superseded": "sustituida",
   "chat.sources.status.unavailable": "no disponible",
+  "chat.sources.openSource": "Abrir la fuente",
 
   "chat.composer.placeholder": "Preguntar a toda la bóveda",
   "chat.composer.question.aria": "Pregunta de investigación",

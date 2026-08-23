@@ -19,6 +19,7 @@ export const chat: EnChatMessages = {
   "chat.sources.status.active": "当前",
   "chat.sources.status.superseded": "已替换",
   "chat.sources.status.unavailable": "不可用",
+  "chat.sources.openSource": "打开来源",
 
   "chat.composer.placeholder": "在整个仓库中提问",
   "chat.composer.question.aria": "研究问题",

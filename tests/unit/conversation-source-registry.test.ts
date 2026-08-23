@@ -34,6 +34,22 @@ function webChunk(
   };
 }
 
+function pdfChunk(id: string, text: string, pageNumber: number): RetrievedChunk {
+  return {
+    id,
+    text,
+    contentHash: "handbook",
+    score: 1,
+    source: {
+      id,
+      kind: "pdf",
+      title: "Handbook",
+      path: "Library/handbook.pdf",
+      pageNumber,
+    },
+  };
+}
+
 describe("conversation source registry", () => {
   it("creates an immutable replacement revision when a source's captured content changes", () => {
     const first = registerConversationEvidence(
@@ -326,6 +342,36 @@ describe("conversation source registry", () => {
     expect(answer.answer).toBe("Claim [source-1:revision-1].");
     expect(answer.citations.map((citation) => citation.id)).toEqual(["source-1:revision-1"]);
     expect(answer.evidence?.map((chunk) => chunk.id)).toEqual(["source-1:revision-1"]);
+  });
+
+  it("keeps the cited chunk's page in the bound evidence of a multi-chunk revision", () => {
+    const registered = registerConversationEvidence(
+      createConversationSourceRegistry(),
+      [pdfChunk("pdf:page-1", "Introduction", 1), pdfChunk("pdf:page-7", "Cited rule", 7)],
+      "2026-08-21T00:00:00.000Z",
+    );
+    const answer = bindAnswerToConversationRegistry(
+      {
+        question: "Q",
+        answer: "Claim [pdf:page-7].",
+        citations: [
+          {
+            id: "pdf:page-7",
+            label: "Handbook",
+            source: pdfChunk("pdf:page-7", "Cited rule", 7).source,
+          },
+        ],
+        evidence: [pdfChunk("pdf:page-7", "Cited rule", 7)],
+        followUpQuestions: [],
+        createdAt: "2026-08-21T00:00:00.000Z",
+      },
+      registered.registry,
+      registered.revisionIdByEvidenceId,
+    );
+
+    const boundSource = answer.evidence?.[0].source;
+    expect(boundSource).toMatchObject({ kind: "pdf", pageNumber: 7 });
+    expect(answer.citations[0].source).toMatchObject({ kind: "pdf", pageNumber: 7 });
   });
 
   it("keeps the full text of every bound evidence revision", () => {
@@ -707,6 +753,39 @@ describe("conversation source registry", () => {
 
     expect(view.relevantEvidence.map((chunk) => chunk.id)).toEqual(["source-1:revision-1"]);
     expect(chunkReads).toBeLessThanOrEqual(200);
+  });
+
+  it("bounds scoring work and still selects an explicitly mentioned old revision", () => {
+    let scoredRevisions = 0;
+    const sources = Array.from({ length: 1_000 }, (_, index) => ({
+      id: `source-${index + 1}`,
+      identity: { kind: "web" as const, canonicalKey: `https://example.com/${index + 1}` },
+      title: `Source ${index + 1}`,
+      revisions: [
+        {
+          id: `source-${index + 1}:revision-1`,
+          contentHash: `hash-${index + 1}`,
+          capturedAt: "2026-08-21T00:00:00.000Z",
+          status: "active" as const,
+          usages: [],
+          chunks: new Proxy([webChunk(`chunk-${index + 1}`, "syrniki need eggs")], {
+            get(target, property, receiver) {
+              if (typeof property === "string" && /^\d+$/u.test(property)) scoredRevisions += 1;
+              return Reflect.get(target, property, receiver);
+            },
+          }),
+        },
+      ],
+    }));
+
+    const view = selectConversationRegistryPromptView(
+      { sources },
+      "How many eggs, see source-1:revision-1?",
+      3,
+    );
+
+    expect(scoredRevisions).toBeLessThanOrEqual(512);
+    expect(view.relevantEvidence[0].id).toBe("source-1:revision-1");
   });
 
   it("uses copy-on-write and retains references for untouched immutable registry branches", () => {

@@ -406,6 +406,7 @@ export class AttestChatView extends ItemView {
       {
         targetRevisionId,
         onNavigateMessage: (messageId) => this.navigateToMessage(messageId),
+        onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       },
     ).open();
   }

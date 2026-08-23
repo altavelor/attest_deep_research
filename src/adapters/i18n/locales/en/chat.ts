@@ -17,6 +17,7 @@ export const chat = {
   "chat.sources.status.active": "active",
   "chat.sources.status.superseded": "superseded",
   "chat.sources.status.unavailable": "unavailable",
+  "chat.sources.openSource": "Open source",
 
   "chat.composer.placeholder": "Ask across your vault",
   "chat.composer.question.aria": "Research question",

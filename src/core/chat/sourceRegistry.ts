@@ -15,6 +15,7 @@ const MAX_CATALOG_TOPIC_CHARACTERS = 48;
 const MAX_RELEVANCE_CHARACTERS_PER_REVISION = 4_096;
 const MIN_REVISION_SEARCH_SLOT_CHARACTERS = 64;
 const MAX_SCANNED_CHUNKS_PER_REVISION = 64;
+const MAX_SCORED_REVISIONS = 256;
 
 export interface ConversationSourceRegistry {
   sources: ConversationSource[];
@@ -210,9 +211,14 @@ export function bindAnswerToConversationRegistry(
   }
 
   const evidence = [...citedRevisionIds]
-    .map((revisionId) => findRevision(registry, revisionId))
-    .filter((revision): revision is ConversationEvidenceRevision => revision !== undefined)
-    .map((revision) => revisionAsEvidence(revision));
+    .map((revisionId) => ({ revisionId, revision: findRevision(registry, revisionId) }))
+    .filter(
+      (entry): entry is { revisionId: string; revision: ConversationEvidenceRevision } =>
+        entry.revision !== undefined,
+    )
+    .map(({ revisionId, revision }) =>
+      revisionAsEvidence(revision, undefined, [], citationsByRevision.get(revisionId)?.source),
+    );
 
   const answerDiagnostics = answer.contextDiagnostics?.answer;
   const contextDiagnostics = answer.contextDiagnostics
@@ -292,18 +298,7 @@ export function selectConversationRegistryPromptView(
   maximumCatalogCharacters = 6_000,
 ): ConversationRegistryPromptView {
   const queryTokens = wordTokens(question);
-  const candidates = registry.sources.flatMap((source) =>
-    source.revisions.map((revision) => ({
-      source,
-      revision,
-      score: relevanceScore(revision, queryTokens),
-      explicitRank: mentionsRegistryId(question, revision.id)
-        ? 2
-        : mentionsRegistryId(question, source.id)
-          ? 1
-          : 0,
-    })),
-  );
+  const candidates = boundedPromptCandidates(registry, question, queryTokens);
   const selected = candidates
     .filter((candidate) => candidate.explicitRank > 0 || candidate.score > 0)
     .sort(
@@ -335,6 +330,44 @@ export function selectConversationRegistryPromptView(
     catalogText,
     relevantEvidence,
   };
+}
+
+/**
+ * Collects prompt candidates newest first and scores at most
+ * MAX_SCORED_REVISIONS of them, so submitting a question costs bounded work no
+ * matter how many revisions the chat accumulated. Explicitly mentioned sources
+ * and revisions are always kept.
+ */
+function boundedPromptCandidates(
+  registry: ConversationSourceRegistry,
+  question: string,
+  queryTokens: readonly string[],
+): Array<{
+  source: ConversationSource;
+  revision: ConversationEvidenceRevision;
+  score: number;
+  explicitRank: number;
+}> {
+  const candidates: Array<{
+    source: ConversationSource;
+    revision: ConversationEvidenceRevision;
+    score: number;
+    explicitRank: number;
+  }> = [];
+  let scored = 0;
+  for (let sourceIndex = registry.sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+    const source = registry.sources[sourceIndex];
+    const sourceMentioned = mentionsRegistryId(question, source.id);
+    for (let index = source.revisions.length - 1; index >= 0; index -= 1) {
+      const revision = source.revisions[index];
+      const explicitRank = mentionsRegistryId(question, revision.id) ? 2 : sourceMentioned ? 1 : 0;
+      if (explicitRank === 0 && scored >= MAX_SCORED_REVISIONS) continue;
+      const score = explicitRank > 0 ? 0 : relevanceScore(revision, queryTokens);
+      if (explicitRank === 0) scored += 1;
+      candidates.push({ source, revision, score, explicitRank });
+    }
+  }
+  return candidates;
 }
 
 function buildPromptCatalog(
@@ -529,18 +562,24 @@ function wordTokens(text: string): string[] {
   return [...new Set(text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [])];
 }
 
+/**
+ * Projects a revision as one evidence chunk. The cited chunk's location is kept
+ * when the caller knows it, so a claim citing a later PDF page or Markdown
+ * section still opens at that page or section instead of the first one.
+ */
 function revisionAsEvidence(
   revision: ConversationEvidenceRevision,
   maximumCharacters = Number.POSITIVE_INFINITY,
   queryTokens: readonly string[] = [],
+  citedSource?: SourceReference,
 ): RetrievedChunk {
-  const first = revision.chunks[0];
+  const source = citedSource ?? revision.chunks[0].source;
   return {
     id: revision.id,
     text: boundedText(revisionTextParts(revision, queryTokens), maximumCharacters, "\n\n"),
     contentHash: revision.contentHash,
     score: 1,
-    source: { ...first.source, id: revision.id },
+    source: { ...source, id: revision.id },
   };
 }
 

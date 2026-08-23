@@ -115,6 +115,10 @@ function hasSavedChatBase(chat: Partial<SavedChat>): boolean {
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isConversationSourceRegistry(value: unknown): value is ConversationSourceRegistry {
   if (
     !value ||
@@ -128,6 +132,7 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
   const revisionIds = new Set<string>();
   const identities = new Set<string>();
   return registry.sources.every((source) => {
+    if (!isRecord(source)) return false;
     const identityKey = `${source.identity?.kind}:${source.identity?.canonicalKey}`;
     if (
       !nonEmptyString(source.id) ||
@@ -145,6 +150,7 @@ function isConversationSourceRegistry(value: unknown): value is ConversationSour
     identities.add(identityKey);
     let activeRevisionCount = 0;
     return source.revisions.every((revision) => {
+      if (!isRecord(revision)) return false;
       if (revision.status === "active") activeRevisionCount += 1;
       if (
         !nonEmptyString(revision.id) ||

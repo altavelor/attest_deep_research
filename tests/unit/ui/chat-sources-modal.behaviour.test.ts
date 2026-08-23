@@ -122,7 +122,7 @@ describe("ChatSourcesModal", () => {
       laterChunkRegistry,
       createTranslator("en").t,
       () => "ltr",
-      { targetRevisionId: "source-1:revision-1", onNavigateMessage: vi.fn() },
+      { targetRevisionId: "source-1:revision-1", onNavigateMessage: vi.fn(), onOpenChunk: vi.fn() },
     );
     modal.open();
     expect(
@@ -170,7 +170,7 @@ describe("ChatSourcesModal", () => {
       largeRegistry,
       createTranslator("en").t,
       () => "ltr",
-      { onNavigateMessage: vi.fn() },
+      { onNavigateMessage: vi.fn(), onOpenChunk: vi.fn() },
     );
 
     modal.open();
@@ -203,7 +203,11 @@ describe("ChatSourcesModal", () => {
       registry,
       createTranslator("en").t,
       () => "rtl",
-      { targetRevisionId: "source-1:revision-1", onNavigateMessage: navigate },
+      {
+        targetRevisionId: "source-1:revision-1",
+        onNavigateMessage: navigate,
+        onOpenChunk: vi.fn(),
+      },
     );
     modal.open();
 
@@ -224,6 +228,28 @@ describe("ChatSourcesModal", () => {
     search.dispatchEvent(new Event("input"));
     vi.runAllTimers();
     expect(modal.contentEl.querySelector(".attest-chat-sources-modal__source")).toBeNull();
+  });
+
+  it("opens the underlying source of a revision from the modal", () => {
+    const openChunk = vi.fn();
+    const modal = new ChatSourcesModal(
+      new App() as unknown as ObsidianApp,
+      registry,
+      createTranslator("en").t,
+      () => "ltr",
+      {
+        targetRevisionId: "source-1:revision-1",
+        onNavigateMessage: vi.fn(),
+        onOpenChunk: openChunk,
+      },
+    );
+    modal.open();
+
+    modal.contentEl
+      .querySelector<HTMLButtonElement>(".attest-chat-sources-modal__open-source")!
+      .click();
+
+    expect(openChunk).toHaveBeenCalledWith(registry.sources[0].revisions[0].chunks[0]);
   });
 
   it("bounds projection work and incrementally renders a large registry after debounced search", () => {
@@ -277,7 +303,7 @@ describe("ChatSourcesModal", () => {
       largeRegistry,
       createTranslator("en").t,
       () => "ltr",
-      { targetRevisionId: "source-1:revision-1", onNavigateMessage: vi.fn() },
+      { targetRevisionId: "source-1:revision-1", onNavigateMessage: vi.fn(), onOpenChunk: vi.fn() },
     );
     modal.open();
     expect(modal.contentEl.querySelectorAll("[data-revision-id]")).toHaveLength(

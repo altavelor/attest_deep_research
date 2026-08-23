@@ -80,7 +80,7 @@ function renderMessage(
 ): void {
   const messageEl = transcriptEl.createDiv({
     cls: `attest-chat__message attest-chat__message--${message.role}`,
-    attr: message.id ? { "data-message-id": message.id } : undefined,
+    attr: { "data-message-id": message.id ?? message.createdAt },
   });
   renderMessageHeader(messageEl, message, index, options);
   const contentEl = messageEl.createDiv({
