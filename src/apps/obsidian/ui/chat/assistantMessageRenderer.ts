@@ -1,15 +1,12 @@
 import { MarkdownRenderer, setIcon } from "obsidian";
 
-import { shouldShowAnswerNoteActions } from "@core/conversation";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
 import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
 import type { Translate } from "@adapters/i18n";
-import { copyToClipboard } from "@apps/obsidian/ui/shared/clipboard";
 import { buildCitationRefs } from "./citations/CitationPopover";
 import { citationEvidence } from "./citations/citationEvidence";
 import { renderInlineCitationAnchors } from "./citationAnchorRenderer";
-import { messageDisplayContent } from "./conversationFormatting";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { RenderVersionTracker } from "./renderVersion";
 import {
@@ -91,7 +88,7 @@ function renderAssistantAnswer(
   const versionTracker = renderVersionsByAnswer.get(answerEl) ?? new RenderVersionTracker();
   renderVersionsByAnswer.set(answerEl, versionTracker);
   const renderVersion = versionTracker.next();
-  renderAssistantAnswerHeader(answerEl, message, options, hasWorkflow);
+  renderAssistantAnswerHeader(answerEl, message, hasWorkflow);
   void MarkdownRenderer.render(
     options.app,
     answerMarkdown(message),
@@ -126,69 +123,22 @@ function answerMarkdown(message: ChatDisplayMessage): string {
 
 /**
  * The status dot terminates the workflow timeline, so it is rendered only for a
- * message that has one; an Instant run shows no timeline and no dot.
+ * message that has one; an Instant run shows no timeline and no dot. The message
+ * actions live in the message header instead.
  */
 function renderAssistantAnswerHeader(
   answerEl: HTMLElement,
   message: ChatDisplayMessage,
-  options: ChatTranscriptOptions,
   hasWorkflow: boolean,
 ): void {
   const hasFinalAnswerText = messageMarkdownContent(message).trim().length > 0;
-  if (!hasFinalAnswerText && !shouldShowAnswerNoteActions(message)) return;
+  if (!hasWorkflow || !hasFinalAnswerText) return;
 
   const header = answerEl.createDiv({ cls: "attest-chat__answer-header" });
-  if (hasWorkflow) {
-    header.createSpan({
-      cls: "attest-chat__answer-status-dot",
-      attr: { "aria-hidden": "true" },
-    });
-  }
-  const actions = header.createDiv({ cls: "attest-chat__answer-actions" });
-  createMessageIconButton(
-    actions,
-    "copy",
-    options.t("chat.message.copy"),
-    "attest-chat__message-copy",
-    () => {
-      void copyToClipboard(messageDisplayContent(message), options.t);
-    },
-  );
-  if (shouldShowAnswerNoteActions(message)) {
-    createMessageIconButton(
-      actions,
-      "file-plus-2",
-      options.t("chat.answer.saveToNewNote"),
-      "attest-chat__message-save-answer",
-      () => options.onSaveAnswerToNewNote(message.answer!),
-    );
-    createMessageIconButton(
-      actions,
-      "file-input",
-      options.t("chat.answer.appendToActiveNote"),
-      "attest-chat__message-append-answer",
-      () => options.onAppendAnswerToActiveNote(message.answer!),
-    );
-  }
-}
-
-function createMessageIconButton(
-  containerEl: HTMLElement,
-  icon: string,
-  label: string,
-  className: string,
-  onClick: () => void,
-): HTMLButtonElement {
-  const button = containerEl.createEl("button", {
-    cls: className,
-    attr: { type: "button", "aria-label": label, title: label },
+  header.createSpan({
+    cls: "attest-chat__answer-status-dot",
+    attr: { "aria-hidden": "true" },
   });
-  setIcon(button, icon);
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onClick();
-  });
-  return button;
 }
 
 function renderFallbackBanner(containerEl: HTMLElement, t: Translate, reason?: string): void {

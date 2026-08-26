@@ -110,16 +110,6 @@
   box-shadow: 0 0 0 3px var(--background-secondary);
 }
 
-.attest-chat__answer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  margin-left: auto;
-  opacity: 0;
-  pointer-events: auto;
-  transition: opacity 120ms ease;
-}
-
 .attest-chat__message-copy,
 .attest-chat__message-edit,
 .attest-chat__message-save-answer,
@@ -133,10 +123,5 @@
 
 .attest-chat__message:focus-within .attest-chat__message-actions,
 .attest-chat__message:hover .attest-chat__message-actions {
-  opacity: 1;
-}
-
-.attest-chat__answer-content:focus-within .attest-chat__answer-actions,
-.attest-chat__answer-content:hover .attest-chat__answer-actions {
   opacity: 1;
 }

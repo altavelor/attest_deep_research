@@ -100,7 +100,6 @@
 
 @media (hover: none), (pointer: coarse) {
   .attest-chat__message-actions,
-  .attest-chat__answer-actions,
   .attest-chat__saved-actions,
   .attest-chat__citation-copy {
     opacity: 1;

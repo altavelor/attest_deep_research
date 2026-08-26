@@ -186,6 +186,47 @@ describe("ChatTranscript", () => {
     expect(onOpenDiagnosticReport).toHaveBeenCalledWith(diagnostics);
   });
 
+  it("adds the sources block and answer actions to the header when a streamed answer completes", () => {
+    const transcript = document.createElement("div");
+    const streaming = {
+      role: "assistant" as const,
+      content: "Partial",
+      createdAt: "2026-01-01T12:34:00.000Z",
+    };
+    const chunk = {
+      id: "chunk-1",
+      text: "Evidence text",
+      score: 1,
+      contentHash: "chunk-1",
+      source: { id: "chunk-1", kind: "note", title: "Plan.md", path: "Notes/Plan.md" },
+    } as never;
+    const completed = {
+      ...streaming,
+      content: "Final answer",
+      evidence: [chunk],
+      answer: {
+        question: "Question",
+        answer: "Final answer",
+        citations: [{ id: "chunk-1", label: "Plan.md" }],
+        followUpQuestions: [],
+        createdAt: "2026-01-01T12:34:00.000Z",
+      },
+    } as never;
+
+    renderChatTranscript(transcript, options({ messages: [streaming] }));
+    expect(transcript.querySelector(".attest-chat__citation-blocks")).toBeNull();
+    expect(transcript.querySelector(".attest-chat__message-save-answer")).toBeNull();
+
+    expect(patchActiveAssistantMessage(transcript, options({ messages: [completed] }))).toBe(true);
+
+    const header = transcript.querySelector(".attest-chat__message-header");
+    expect(transcript.querySelector(".attest-chat__citation-blocks")).not.toBeNull();
+    expect(header?.querySelector(".attest-chat__message-copy")).not.toBeNull();
+    expect(header?.querySelector(".attest-chat__message-save-answer")).not.toBeNull();
+    expect(header?.querySelector(".attest-chat__message-append-answer")).not.toBeNull();
+    expect(transcript.querySelectorAll(".attest-chat__message-actions")).toHaveLength(1);
+  });
+
   it("keeps readers at their position unless they are already near the transcript bottom", () => {
     const transcript = document.createElement("div");
     const message = { role: "user" as const, content: "Question", createdAt: "invalid" };
