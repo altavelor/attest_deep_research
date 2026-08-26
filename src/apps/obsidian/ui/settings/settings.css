@@ -641,7 +641,9 @@
   color: var(--text-error);
 }
 
+.attest-settings-profile-list__status.is-stale,
 .attest-settings-profile-list__status.is-reindex-required {
+  border-color: color-mix(in srgb, var(--text-warning) 45%, transparent);
   color: var(--text-warning);
 }
 
