@@ -14,6 +14,7 @@ import {
 import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 import { probeToolControlCapabilities, ToolCapabilityProbeResult } from "@adapters/settings";
 import { createToolCapabilitySettings } from "@adapters/settings";
+import { UNVERIFIED_EMBEDDING_SUSPENSION_REASON } from "@adapters/settings";
 import { capabilityCacheKey, ModelCapabilitySnapshot, unknownSnapshot } from "@adapters/settings";
 import { probeReasoningVisibility } from "@adapters/settings";
 import { ChatModelProfile, ServerProfile } from "@adapters/settings";
@@ -170,13 +171,13 @@ export class SettingsCapabilityProber {
         profile.capabilities.embeddings = verified;
         profile.capabilities.detectionSource = "probe";
         if (verified) {
-          if (profile.suspendedReason === "Embedding capability could not be verified.") {
+          if (profile.suspendedReason === UNVERIFIED_EMBEDDING_SUSPENSION_REASON) {
             profile.isSuspended = false;
             profile.suspendedReason = undefined;
           }
         } else {
           profile.isSuspended = true;
-          profile.suspendedReason = "Embedding capability could not be verified.";
+          profile.suspendedReason = UNVERIFIED_EMBEDDING_SUSPENSION_REASON;
         }
         profile.updatedAt = new Date().toISOString();
         await this.plugin.saveSettings();
