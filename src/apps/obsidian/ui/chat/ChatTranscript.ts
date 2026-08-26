@@ -1,7 +1,13 @@
 import { App, Component, setIcon } from "obsidian";
 
 import { ResearchAnswer } from "@core/answer";
-import { ChainItem, ChatDisplayMessage, shouldShowDiagnosticAction } from "@core/conversation";
+import {
+  ChainItem,
+  ChatDisplayMessage,
+  messageMarkdownContent,
+  shouldShowAnswerNoteActions,
+  shouldShowDiagnosticAction,
+} from "@core/conversation";
 import { ContextDiagnostics } from "@core/diagnostics";
 import type { DocumentImageResolver } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
@@ -117,11 +123,18 @@ function renderMessageHeader(
   renderHeaderActions(header, message, index, options);
 }
 
+/**
+ * The sources block trails the message content, so a re-render replaces the
+ * previous one in place and keeps its expanded state.
+ */
 function renderMessageCitationBlocks(
   messageEl: HTMLElement,
   message: ChatDisplayMessage,
   options: ChatTranscriptOptions,
 ): void {
+  const existing = messageEl.querySelector<HTMLDetailsElement>(".attest-chat__citation-blocks");
+  const wasOpen = existing?.open;
+  existing?.remove();
   const sourceEvidence = message.role === "assistant" ? citationEvidence(message) : [];
   if (sourceEvidence.length === 0) return;
   renderCitationBlocks(messageEl, buildCitationRefs(sourceEvidence), {
@@ -129,6 +142,8 @@ function renderMessageCitationBlocks(
     onOpenChunk: options.onOpenChunk,
     onHighlight: options.onHighlightCitation,
   });
+  const rendered = messageEl.querySelector<HTMLDetailsElement>(".attest-chat__citation-blocks");
+  if (rendered && wasOpen !== undefined) rendered.open = wasOpen;
 }
 
 function renderUserMessageContent(
@@ -170,6 +185,10 @@ function attachmentDisplayName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
+/**
+ * Every per-message action shares the header row: editing and copying for a
+ * question, and copying, note actions, and the diagnostic report for an answer.
+ */
 function renderHeaderActions(
   header: HTMLElement,
   message: ChatDisplayMessage,
@@ -179,14 +198,7 @@ function renderHeaderActions(
   let actions: HTMLElement | null = null;
   const ensureActions = (): HTMLElement =>
     (actions ??= header.createDiv({ cls: "attest-chat__message-actions" }));
-  if (message.role === "user") {
-    createMessageIconButton(
-      ensureActions(),
-      "pencil",
-      options.t("chat.message.edit"),
-      "attest-chat__message-edit",
-      () => options.onEditQuestion(index),
-    );
+  const createCopyButton = (): void => {
     createMessageIconButton(
       ensureActions(),
       "copy",
@@ -195,6 +207,34 @@ function renderHeaderActions(
       () => {
         void copyToClipboard(messageDisplayContent(message), options.t);
       },
+    );
+  };
+  if (message.role === "user") {
+    createMessageIconButton(
+      ensureActions(),
+      "pencil",
+      options.t("chat.message.edit"),
+      "attest-chat__message-edit",
+      () => options.onEditQuestion(index),
+    );
+    createCopyButton();
+  } else if (messageMarkdownContent(message).trim().length > 0) {
+    createCopyButton();
+  }
+  if (message.role === "assistant" && shouldShowAnswerNoteActions(message)) {
+    createMessageIconButton(
+      ensureActions(),
+      "file-plus-2",
+      options.t("chat.answer.saveToNewNote"),
+      "attest-chat__message-save-answer",
+      () => options.onSaveAnswerToNewNote(message.answer!),
+    );
+    createMessageIconButton(
+      ensureActions(),
+      "file-input",
+      options.t("chat.answer.appendToActiveNote"),
+      "attest-chat__message-append-answer",
+      () => options.onAppendAnswerToActiveNote(message.answer!),
     );
   }
   if (shouldShowDiagnosticAction(message, options.isDebugMode)) {
@@ -232,16 +272,36 @@ export function patchActiveAssistantMessage(
   options: ChatTranscriptOptions,
 ): boolean {
   const scroll = captureScrollAnchor(transcriptEl);
-  const message = [...options.messages]
-    .reverse()
-    .find((candidate) => candidate.kind !== "compact-summary");
+  const index = lastVisibleMessageIndex(options.messages);
+  const message = index >= 0 ? options.messages[index] : undefined;
   if (message?.role !== "assistant") return false;
   const messageElements = transcriptEl.querySelectorAll<HTMLElement>(".attest-chat__message");
   const messageEl = messageElements.item(messageElements.length - 1);
   if (!messageEl?.classList.contains("attest-chat__message--assistant")) return false;
   if (!patchAssistantMessageContent(messageEl, message, options)) return false;
+  patchMessageHeaderActions(messageEl, message, index, options);
+  renderMessageCitationBlocks(messageEl, message, options);
   applyScrollAnchor(transcriptEl, scroll);
   return true;
+}
+
+function lastVisibleMessageIndex(messages: ChatDisplayMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]!.kind !== "compact-summary") return index;
+  }
+  return -1;
+}
+
+function patchMessageHeaderActions(
+  messageEl: HTMLElement,
+  message: ChatDisplayMessage,
+  index: number,
+  options: ChatTranscriptOptions,
+): void {
+  const header = messageEl.querySelector<HTMLElement>(".attest-chat__message-header");
+  if (!header) return;
+  header.querySelector<HTMLElement>(".attest-chat__message-actions")?.remove();
+  renderHeaderActions(header, message, index, options);
 }
 
 const STICK_TO_BOTTOM_THRESHOLD_PX = 60;
