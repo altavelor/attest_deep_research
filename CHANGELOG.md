@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-27
+
+Mobile support, answers with images and charts, and a verifiable source registry.
+
+### Added
+
+- Obsidian Mobile support: the plugin no longer depends on Node APIs, and the index, chats
+  and extractors run through a vault-relative file-system port with browser-safe sha256 and
+  deflate helpers.
+- Localized Obsidian UI with per-locale text direction.
+- Answer artifacts: image galleries, charts and overflow-safe tables rendered in chat,
+  exported to saved notes and restored when a saved chat is reopened.
+- Image research: `search_images`, `present_image_gallery` and `present_chart` tools,
+  Wikimedia Commons and Openverse resources, and candidate ranking by relevance. Search
+  through general engines requires an explicit opt-in.
+- Document images: a versioned index writes a document-image manifest, extracts candidates
+  from vault documents and fetched pages, and includes images of documents read during a run.
+- Conversation-wide hierarchical citation registry that binds citations to source revisions,
+  with a sources popup and an export.
+- Vault skill registry with default skills, lazy selection, diagnostics and mention
+  autocomplete.
+- Saved chat favorites and a new-chat defaults settings section.
+- Streaming thinking timeline with fetch targets, animated site labels and reasoning trace
+  in chat history.
+- Per-answer diagnostics popover with a resizable report modal and answer citation
+  diagnostics.
+- Model capability discovery: provider metadata as evidence, role detection from
+  provider-specific listings, advertised tool controls, and the reasoning-effort list
+  advertised by OpenRouter.
+
+### Changed
+
+- The plugin is renamed from Ixplorer to Attest.
+- Research modes are renamed eager → Instant and agentic → Thinking, moved into core, and
+  exposed as a switch in chat.
+- Instant mode is faster: the dead retrieve port is gone and the critical path is
+  parallelized.
+- Web research selects sources by intent relevance under a phase deadline, with selection
+  tracing, parallel batch fetching and per-host throttling.
+- Thinking mode renders citations like Instant, streams the final answer, and runs
+  independent tool calls within a round in parallel.
+- Web citation handles render as short clickable links.
+- Settings, diagnostics, chat and composition modules are regrouped by responsibility;
+  legacy index configuration and the standalone diagnostic panel are removed.
+- Every message keeps its actions in one header row.
+
+### Fixed
+
+- A web-only research turn composes without a built index.
+- An incomplete rebuild no longer reports the current index version, and a newly built index
+  is marked as using the current layout.
+- Deleted chat session state is preserved, and interrupted replaces found through listing
+  are recovered; a backup is never deleted on a read path.
+- Model provider errors and the provider response behind a failed embedding request are
+  surfaced in chat.
+- Capability status is scoped to the edited model and probes are cancelled reliably.
+- Gallery object URLs are revoked on full transcript renders, and stale lightbox resolutions
+  are dropped after close or navigation.
+- PDF, EPUB and AVIF extraction handle flate rasters, spine-referenced images and AVIF
+  dimensions correctly.
+
+### Security
+
+- Untrusted page text: hardened HTML stripping and entity decoding, escaped backslashes,
+  quotes and image attribution, and no exponential backtracking in markdown cleanup.
+- Image and page fetching: non-public IPv6 hosts are blocked, oversized provider responses
+  are abandoned while reading, decoded images over the limit are rejected, and unsafe URLs
+  in persisted answer images are rejected.
+- Index manifest paths that escape the index folder are rejected, and the zlib checksum is
+  verified when inflating.
+- Secrets, embedded credential URLs and prefixed credential fields are redacted from logs
+  and diagnostics.
+
+### Known limitations
+
+- No OCR for scanned PDFs or image-only pages.
+- Web search fetches only the first result page of the configured provider.
+- Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of
+  this release.
+
 ## [0.1.0] - 2026-08-08
 
 First public release for Obsidian Desktop.
@@ -37,5 +117,6 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.1.0...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/altavelor/attest_deep_research/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/altavelor/attest_deep_research/releases/tag/0.1.0
