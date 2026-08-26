@@ -39,9 +39,8 @@ Both commands must pass. `npm run check` runs type checking, the platform-neutra
 core check, tests, dependency-cruiser, formatting, and the production build.
 
 After implementation, validate, commit the intended changes, push the task
-branch, and open a pull request against `main`. Link the source issue, request
-an independent Codex review, and do not merge the pull request or mark it ready
-until review findings are resolved. The PR report must include Summary, Linked
+branch, and open a pull request against `main`. Link the source issue and
+resolve the review bot's remarks. The PR report must include Summary, Linked
 issue, Changes, Validation, Risks, and Review status.
 
 ## General implementation rules

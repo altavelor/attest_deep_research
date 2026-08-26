@@ -1,7 +1,7 @@
 {
   "id": "attest",
   "name": "Attest: AI Deep Research",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.5.0",
   "description": "Chat with your notes: AI search across your vault that answers with citations you can open. Works with local models (Ollama, LM Studio) or cloud APIs. RAG, semantic search, deep research.",
   "author": "Ilya Burov",
