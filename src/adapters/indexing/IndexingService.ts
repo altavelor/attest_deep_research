@@ -147,6 +147,7 @@ export class IndexingService {
       this.fileProcessor.canProcessPath(file.path),
     );
     await this.writer.loadPersistedSnapshots();
+    const indexWasEmpty = this.snapshots.size === 0;
     this.progress.setTotalFiles(files.length);
     await this.writer.begin();
     this.writer.beginImageManifest(this.collectingDocumentImages ? "replace" : "merge");
@@ -165,6 +166,8 @@ export class IndexingService {
         });
         if (this.collectingDocumentImages && !this.isCompleteRun()) {
           this.writer.discardImageManifest();
+        } else if (!this.collectingDocumentImages && indexWasEmpty && this.isCompleteRun()) {
+          this.writer.promoteImageManifestToReplace();
         }
         this.progress.setPhase("writing");
         imageManifestWritten = await this.writer.commit();

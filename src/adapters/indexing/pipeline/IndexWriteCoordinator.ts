@@ -61,6 +61,16 @@ export class IndexWriteCoordinator {
     this.imageDocumentPaths.clear();
   }
 
+  /**
+   * Treats the collected rows as the complete manifest of the index. A run that
+   * covered every file of an index with no prior content leaves nothing to
+   * merge into, so its rows replace the manifest outright.
+   */
+  promoteImageManifestToReplace(): void {
+    if (this.imageManifest === undefined) return;
+    this.imageManifestMode = "replace";
+  }
+
   /** Drops a manifest that would be incomplete, so no version is persisted. */
   discardImageManifest(): void {
     this.imageManifest = undefined;

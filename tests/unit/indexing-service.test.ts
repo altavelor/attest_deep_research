@@ -14,6 +14,8 @@ import { AttestError } from "@core/errors";
 import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
+import { FileVectorIndexStore } from "@adapters/indexing";
+import { MemoryFileSystem } from "../helpers/memoryFileSystem";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {
@@ -801,8 +803,103 @@ describe("IndexingService image manifest", () => {
     expect(state.indexVersion).toBeUndefined();
   });
 
-  it("merges the touched documents and bumps no version on an incremental run", async () => {
+  it("earns the current version on a complete first run over an image-free vault", async () => {
     const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, "# Plain note")]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.manualReindex();
+
+    expect(state.failedFiles).toBe(0);
+    expect(indexStore.recordedScope).toEqual({ mode: "replace" });
+    expect(state.indexVersion).toBe(REQUIRED_INDEX_VERSION);
+  });
+
+  it("keeps a partial first run below the required index version", async () => {
+    const indexStore = new ImageManifestIndexStore();
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, noteWithImage),
+        file("Research/broken.md", 1, "boom"),
+      ]),
+      extractors: [new FailingExtractor(".md", "Research/broken.md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore,
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.manualReindex();
+
+    expect(state.failedFiles).toBe(1);
+    expect(indexStore.recordedScope).toEqual({
+      mode: "merge",
+      documentPaths: ["Research/a.md"],
+    });
+    expect(state.indexVersion).toBeUndefined();
+  });
+
+  it("leaves a file-backed index at the current version after a complete first run", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".attest/index";
+    const service = new IndexingService({
+      files: new FakeVaultFileProvider([file("Research/a.md", 1, "# Plain note")]),
+      extractors: [new FakeExtractor(".md")],
+      embeddings: new FakeEmbeddingProvider(),
+      indexStore: new FileVectorIndexStore({ fileSystem, folder, profileId: "default" }),
+      embeddingModel: "nomic",
+      includeFolders: ["Research"],
+      excludeGlobs: [],
+    });
+
+    const state = await service.manualReindex();
+
+    expect(state.indexVersion).toBe(REQUIRED_INDEX_VERSION);
+    const manifest = JSON.parse(await fileSystem.readText(`${folder}/manifest.json`));
+    expect(manifest.indexVersion).toBe(REQUIRED_INDEX_VERSION);
+    await expect(fileSystem.exists(`${folder}/images.jsonl`)).resolves.toBe(true);
+  });
+
+  it("leaves a file-backed legacy index below the required version on a later run", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const folder = ".attest/index";
+    const files = new FakeVaultFileProvider([file("Research/a.md", 1, "# Plain note")]);
+    const build = (): IndexingService =>
+      new IndexingService({
+        files,
+        extractors: [new FakeExtractor(".md")],
+        embeddings: new FakeEmbeddingProvider(),
+        indexStore: new FileVectorIndexStore({ fileSystem, folder, profileId: "default" }),
+        embeddingModel: "nomic",
+        includeFolders: ["Research"],
+        excludeGlobs: [],
+      });
+
+    await build().manualReindex();
+    const manifestPath = `${folder}/manifest.json`;
+    const manifest = JSON.parse(await fileSystem.readText(manifestPath));
+    delete manifest.indexVersion;
+    await fileSystem.writeText(manifestPath, JSON.stringify(manifest));
+    await fileSystem.remove(`${folder}/images.jsonl`);
+
+    const state = await build().manualReindex();
+
+    expect(state.indexVersion).toBeUndefined();
+    expect(JSON.parse(await fileSystem.readText(manifestPath)).indexVersion).toBeUndefined();
+  });
+
+  it("merges the touched documents and bumps no version on an incremental run", async () => {
+    const indexStore = new ImageManifestIndexStore([
+      { sourcePath: "Research/old.md", modifiedTime: 1, contentHash: "old" },
+    ]);
     const service = new IndexingService({
       files: new FakeVaultFileProvider([file("Research/a.md", 1, noteWithImage)]),
       extractors: [new FakeExtractor(".md")],
