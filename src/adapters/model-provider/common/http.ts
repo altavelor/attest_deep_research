@@ -107,8 +107,9 @@ export class ProviderHttpClient {
 
       const wrappedError = new AttestError({
         code: this.unavailableCode,
-        message: this.unavailableMessage,
+        message: transportFailureMessage(this.unavailableMessage, url, timedOut, error),
         cause: error,
+        details: { url: endpointLabel(url), ...(timedOut ? { timedOut: true } : {}) },
       });
       this.logger?.logError(wrappedError, logContext);
       throw wrappedError;
@@ -144,6 +145,34 @@ export class ProviderHttpClient {
       });
       throw wrappedError;
     }
+  }
+}
+
+/**
+ * Names the endpoint and the underlying transport failure so a request that
+ * never reached the provider is distinguishable from one the provider rejected.
+ */
+function transportFailureMessage(
+  fallback: string,
+  url: string,
+  timedOut: boolean,
+  cause: unknown,
+): string {
+  const reason = timedOut
+    ? "the request timed out"
+    : cause instanceof Error && cause.message.trim()
+      ? cause.message.trim()
+      : undefined;
+  return reason ? `${fallback} Could not reach ${endpointLabel(url)} (${reason}).` : fallback;
+}
+
+/** Drops any credentials a base URL may carry before the endpoint is shown. */
+function endpointLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
   }
 }
 

@@ -382,7 +382,8 @@ describe("model discovery", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      message: "fetch failed",
+      message:
+        "The model provider is unavailable. Could not reach http://localhost:1234/v1/models (fetch failed).",
       models: [],
     });
   });
