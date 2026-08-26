@@ -125,7 +125,7 @@ describe("index profile status in the Index column", () => {
         enrichment: enrichmentState({ status: "done" }),
       }),
     ).toMatchObject({
-      kind: "is-suspended",
+      kind: "is-stale",
       label: "Stale metadata",
     });
   });
@@ -171,6 +171,17 @@ describe("index profile status in the Index column", () => {
         enrichment: enrichmentState({ status: "done" }),
       }),
     ).toMatchObject({ kind: "is-suspended", label: "Error" });
+  });
+
+  it("separates a stale index from a blocking failure", () => {
+    expect(
+      resolveIndexStatusBadge({
+        t,
+        profile: { lastIndexedAt: "2026-07-03T10:20:30.000Z", indexVersion: 1 },
+        indexing: indexingState({ isStale: true }),
+        enrichment: enrichmentState({ status: "done" }),
+      }),
+    ).toMatchObject({ kind: "is-stale", label: "Stale index" });
   });
 
   it("shows pending pause and metadata stop actions until the underlying run settles", () => {

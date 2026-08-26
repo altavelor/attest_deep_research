@@ -41,6 +41,35 @@ describe("Attest errors", () => {
     expect(toUserMessage(error)).toBe("fetch failed");
   });
 
+  it("shows the provider error when an embedding request fails", () => {
+    const error = new AttestError({
+      code: "EMBEDDING_UNAVAILABLE",
+      message: "Provider returned HTTP 402.",
+      details: {
+        status: 402,
+        providerMessage: "Insufficient credits.",
+      },
+    });
+
+    expect(toUserMessage(error)).toBe("Provider returned HTTP 402: Insufficient credits.");
+  });
+
+  it("keeps a transport failure distinguishable from a provider rejection", () => {
+    const error = new AttestError({
+      code: "EMBEDDING_UNAVAILABLE",
+      message:
+        "The embedding provider is unavailable. Could not reach http://localhost:1234/v1/embeddings (fetch failed).",
+      cause: new TypeError("fetch failed"),
+    });
+
+    expect(toUserMessage(error)).toBe(
+      "The embedding provider is unavailable. Could not reach http://localhost:1234/v1/embeddings (fetch failed).",
+    );
+    expect(toUserMessage(new AttestError({ code: "EMBEDDING_UNAVAILABLE" }))).toBe(
+      "The embedding provider is unavailable.",
+    );
+  });
+
   it("does not expose internal error messages to users", () => {
     const error = new AttestError({
       code: "EXTRACTION_FAILED",

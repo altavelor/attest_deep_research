@@ -277,3 +277,230 @@ function currentSettings(overrides: Partial<AttestSettings> = {}): AttestSetting
     modelCapabilityCache: overrides.modelCapabilityCache ?? {},
   };
 }
+
+describe("index profile suspension", () => {
+  const timestamps = {
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T00:00:00.000Z",
+  };
+
+  function settingsWith(
+    embeddingModelProfileId: string,
+    overrides: Partial<AttestSettings> = {},
+  ): AttestSettings {
+    return readSettings(
+      currentSettings({
+        serverProfiles: [
+          {
+            id: "server-openrouter",
+            name: "OpenRouter",
+            apiFormat: "openai-compatible",
+            baseUrl: "https://openrouter.ai/api/v1",
+            ...timestamps,
+          },
+        ],
+        embeddingModelProfiles: [
+          {
+            id: "embedding-a",
+            name: "OpenRouter embeddings",
+            serverProfileId: "server-openrouter",
+            modelName: "openai/text-embedding-3-small",
+            ...timestamps,
+          },
+        ],
+        indexProfiles: [
+          createIndexProfile({
+            ...DEFAULT_SETTINGS.indexProfiles[0],
+            embeddingModelProfileId,
+            isSuspended: false,
+            suspendedReason: undefined,
+          }),
+        ],
+        ...overrides,
+      }),
+    );
+  }
+
+  it("keeps an index usable while its whole embedding chain resolves", () => {
+    expect(settingsWith("embedding-a").indexProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+    });
+  });
+
+  it("suspends an index whose embedding model profile was deleted", () => {
+    expect(settingsWith("embedding-removed").indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "The selected embedding model profile was deleted.",
+    });
+  });
+
+  it("suspends an index that never had an embedding model selected", () => {
+    expect(settingsWith("").indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Select an embedding model profile.",
+    });
+  });
+
+  it("suspends an index whose embedding model profile has no model name", () => {
+    const settings = settingsWith("embedding-a", {
+      embeddingModelProfiles: [
+        {
+          id: "embedding-a",
+          name: "OpenRouter embeddings",
+          serverProfileId: "server-openrouter",
+          modelName: "   ",
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "The embedding model profile has no model selected.",
+    });
+  });
+
+  it("suspends the server profile with an unusable base URL and everything downstream", () => {
+    const settings = settingsWith("embedding-a", {
+      serverProfiles: [
+        {
+          id: "server-openrouter",
+          name: "OpenRouter",
+          apiFormat: "openai-compatible",
+          baseUrl: "openrouter.ai/api/v1",
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.serverProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "The server profile has an invalid base URL.",
+    });
+    expect(settings.embeddingModelProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Server profile is suspended.",
+    });
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Server profile is suspended.",
+    });
+  });
+
+  it("releases the whole chain once an invalid base URL is corrected", () => {
+    const settings = settingsWith("embedding-a", {
+      serverProfiles: [
+        {
+          id: "server-openrouter",
+          name: "OpenRouter",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://openrouter.ai/api/v1",
+          isSuspended: true,
+          suspendedReason: "The server profile has an invalid base URL.",
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.serverProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+    });
+    expect(settings.embeddingModelProfiles[0]).toMatchObject({ isSuspended: false });
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+    });
+  });
+
+  it("keeps a manually suspended server profile suspended", () => {
+    const settings = settingsWith("embedding-a", {
+      serverProfiles: [
+        {
+          id: "server-openrouter",
+          name: "OpenRouter",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://openrouter.ai/api/v1",
+          isSuspended: true,
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.serverProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Server profile is suspended.",
+    });
+    expect(settings.indexProfiles[0]).toMatchObject({ isSuspended: true });
+  });
+
+  it("propagates the embedding profile's own reason when its server was deleted", () => {
+    const settings = settingsWith("embedding-a", { serverProfiles: [] });
+
+    expect(settings.embeddingModelProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Server profile was deleted.",
+    });
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Server profile was deleted.",
+    });
+  });
+
+  it("releases an unverified embedding verdict once its server profile is edited", () => {
+    const settings = settingsWith("embedding-a", {
+      serverProfiles: [
+        {
+          id: "server-openrouter",
+          name: "OpenRouter",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://openrouter.ai/api/v1",
+          createdAt: timestamps.createdAt,
+          updatedAt: "2026-06-02T00:00:00.000Z",
+        },
+      ],
+      embeddingModelProfiles: [
+        {
+          id: "embedding-a",
+          name: "OpenRouter embeddings",
+          serverProfileId: "server-openrouter",
+          modelName: "openai/text-embedding-3-small",
+          isSuspended: true,
+          suspendedReason: "Embedding capability could not be verified.",
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.embeddingModelProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+    });
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: false,
+      suspendedReason: undefined,
+    });
+  });
+
+  it("propagates an unverified embedding capability to the index", () => {
+    const settings = settingsWith("embedding-a", {
+      embeddingModelProfiles: [
+        {
+          id: "embedding-a",
+          name: "OpenRouter embeddings",
+          serverProfileId: "server-openrouter",
+          modelName: "openai/text-embedding-3-small",
+          isSuspended: true,
+          suspendedReason: "Embedding capability could not be verified.",
+          ...timestamps,
+        },
+      ],
+    });
+
+    expect(settings.indexProfiles[0]).toMatchObject({
+      isSuspended: true,
+      suspendedReason: "Embedding capability could not be verified.",
+    });
+  });
+});

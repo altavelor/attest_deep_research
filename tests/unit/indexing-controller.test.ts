@@ -1,4 +1,5 @@
 import { IndexingController } from "@adapters/indexing";
+import { AttestError } from "@core/errors";
 import { IndexingService, IndexingState } from "@adapters/indexing";
 
 describe("IndexingController", () => {
@@ -52,6 +53,28 @@ describe("IndexingController", () => {
     });
   });
 
+  it("surfaces the provider response behind a failed embedding request", async () => {
+    const service = new FakeIndexingService();
+    service.startError = new AttestError({
+      code: "EMBEDDING_UNAVAILABLE",
+      message: "Provider returned HTTP 402.",
+      details: { status: 402, providerMessage: "Insufficient credits." },
+    });
+    const controller = new IndexingController({
+      createService(onProgress) {
+        service.onProgress = onProgress;
+        return service as unknown as IndexingService;
+      },
+    });
+
+    await controller.start();
+
+    expect(controller.getState()).toMatchObject({
+      status: "error",
+      errorMessage: "Provider returned HTTP 402: Insufficient credits.",
+    });
+  });
+
   it("keeps an in-flight run paused until it reaches its rollback boundary before resuming", async () => {
     const service = new DelayedIndexingService();
     const controller = new IndexingController({
@@ -84,6 +107,7 @@ class FakeIndexingService {
   startCalls = 0;
   rebuildCalls = 0;
   failNextStart = false;
+  startError: unknown;
   private state: IndexingState = {
     status: "idle",
     scannedFiles: 0,
@@ -117,6 +141,12 @@ class FakeIndexingService {
       progress: 0.5,
     };
     this.onProgress?.(this.getState());
+
+    if (this.startError) {
+      const error = this.startError;
+      this.startError = undefined;
+      throw error;
+    }
 
     if (this.failNextStart) {
       this.failNextStart = false;

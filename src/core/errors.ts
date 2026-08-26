@@ -61,7 +61,11 @@ export function toUserMessage(error: unknown): string {
     if (error.code === "UNSUPPORTED_CAPABILITY" || error.code === "INVALID_SETTINGS") {
       return error.message;
     }
-    if (error.code === "MODEL_PROVIDER_UNAVAILABLE" || error.code === "MODEL_NOT_FOUND") {
+    if (
+      error.code === "MODEL_PROVIDER_UNAVAILABLE" ||
+      error.code === "MODEL_NOT_FOUND" ||
+      error.code === "EMBEDDING_UNAVAILABLE"
+    ) {
       return modelRequestUserMessage(error);
     }
     return USER_MESSAGES[error.code];
@@ -79,10 +83,9 @@ function modelRequestUserMessage(error: AttestError): string {
       : providerMessage;
   }
 
-  const causeMessage = errorMessage(error.cause);
-  if (causeMessage) return causeMessage;
+  if (error.message !== USER_MESSAGES[error.code]) return error.message;
 
-  return error.message !== USER_MESSAGES[error.code] ? error.message : USER_MESSAGES[error.code];
+  return errorMessage(error.cause) ?? USER_MESSAGES[error.code];
 }
 
 function detailMessage(value: unknown): string | undefined {

@@ -10,7 +10,7 @@ export interface IndexColumnStatus {
 }
 
 export interface IndexStatusBadge {
-  kind: "is-suspended" | "is-reindex-required";
+  kind: "is-suspended" | "is-stale" | "is-reindex-required";
   label: string;
   title: string;
 }
@@ -71,7 +71,7 @@ export function resolveIndexStatusBadge(options: {
 
   if (indexing.isStale || indexing.status === "stale") {
     return {
-      kind: "is-suspended",
+      kind: "is-stale",
       label: t("settings.indexStatus.stale.label"),
       title: t("settings.indexStatus.stale.title"),
     };
@@ -85,7 +85,7 @@ export function resolveIndexStatusBadge(options: {
     enrichment.status === "running" || pendingEnrichmentAction === "stopping";
   if (metadataStale && !metadataUpdating) {
     return {
-      kind: "is-suspended",
+      kind: "is-stale",
       label: t("settings.indexStatus.staleMetadata.label"),
       title: t("settings.indexStatus.staleMetadata.title"),
     };

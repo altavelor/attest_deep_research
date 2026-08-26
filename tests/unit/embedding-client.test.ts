@@ -126,6 +126,65 @@ describe("EmbeddingClient", () => {
     } satisfies Partial<AttestError>);
   });
 
+  it("names the endpoint and cause when the request never reaches the provider", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const client = new EmbeddingClient({
+      provider: "lmStudio",
+      baseUrl: "http://localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(client.embed({ model: "text-embedding", input: ["chunk"] })).rejects.toMatchObject(
+      {
+        code: "EMBEDDING_UNAVAILABLE",
+        message:
+          "The embedding provider is unavailable. Could not reach http://localhost:1234/v1/embeddings (fetch failed).",
+        details: { url: "http://localhost:1234/v1/embeddings" },
+      },
+    );
+  });
+
+  it("keeps credentials out of the endpoint it reports", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const client = new EmbeddingClient({
+      provider: "lmStudio",
+      baseUrl: "http://user:secret@localhost:1234/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(client.embed({ model: "text-embedding", input: ["chunk"] })).rejects.toMatchObject(
+      {
+        message:
+          "The embedding provider is unavailable. Could not reach http://localhost:1234/v1/embeddings (fetch failed).",
+        details: { url: "http://localhost:1234/v1/embeddings" },
+      },
+    );
+  });
+
+  it("reports the provider status separately from a transport failure", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "insufficient_credits", message: "Insufficient credits." } },
+          { status: 402 },
+        ),
+      );
+    const client = new EmbeddingClient({
+      provider: "lmStudio",
+      baseUrl: "https://openrouter.ai/api/v1",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.embed({ model: "openai/text-embedding-3-small", input: ["chunk"] }),
+    ).rejects.toMatchObject({
+      code: "EMBEDDING_UNAVAILABLE",
+      message: "Provider returned HTTP 402.",
+      details: { status: 402, providerMessage: "Insufficient credits." },
+    });
+  });
+
   it("maps missing embedding models to recoverable errors", async () => {
     const fetchMock = vi
       .fn()

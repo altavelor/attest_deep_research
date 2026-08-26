@@ -1,3 +1,4 @@
+import { isAttestError, toUserMessage } from "@core/errors";
 import { IndexingService, IndexingState } from "../IndexingService";
 
 export interface IndexingControllerOptions {
@@ -156,6 +157,8 @@ export class IndexingController {
 }
 
 function indexingErrorMessage(error: unknown): string {
+  if (isAttestError(error)) return toUserMessage(error);
+
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }

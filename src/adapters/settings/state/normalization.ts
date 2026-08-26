@@ -5,10 +5,14 @@ import {
   WebSourceActivation,
 } from "@core/web";
 import type { IndexProfile } from "@adapters/indexing";
-import { DEFAULT_DOWNLOAD_FOLDER } from "./constants";
+import {
+  DEFAULT_DOWNLOAD_FOLDER,
+  INVALID_BASE_URL_SUSPENSION_REASON,
+  UNVERIFIED_EMBEDDING_SUSPENSION_REASON,
+} from "./constants";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { AttestSettings } from "../types";
+import { AttestSettings, ServerProfile } from "../types";
 
 export function normalizeSettingsState(settings: AttestSettings): void {
   markInvalidProfilesSuspended(settings);
@@ -122,6 +126,16 @@ export function isProfileActive<T extends { isSuspended?: boolean }>(profile: T)
 
 function markInvalidProfilesSuspended(settings: AttestSettings): void {
   for (const server of settings.serverProfiles) {
+    if (!isReachableBaseUrl(server.baseUrl)) {
+      suspend(server, INVALID_BASE_URL_SUSPENSION_REASON);
+      continue;
+    }
+
+    if (server.suspendedReason === INVALID_BASE_URL_SUSPENSION_REASON) {
+      unsuspend(server);
+      continue;
+    }
+
     server.isSuspended = server.isSuspended === true;
     server.suspendedReason = server.isSuspended
       ? server.suspendedReason || "Server profile is suspended."
@@ -141,7 +155,7 @@ function markInvalidProfilesSuspended(settings: AttestSettings): void {
         profile.reasoning = { mode: "off", summary: "off" };
         profile.reasoningCapabilities = undefined;
       }
-      unsuspend(profile);
+      clearServerSuspension(profile, server);
     }
   }
 
@@ -154,9 +168,29 @@ function markInvalidProfilesSuspended(settings: AttestSettings): void {
     } else if (isProfileSuspended(server)) {
       suspend(profile, "Server profile is suspended.");
     } else {
-      unsuspend(profile);
+      clearServerSuspension(profile, server);
     }
   }
+}
+
+/**
+ * Lifts a suspension this pass owns while preserving a capability probe's
+ * verdict, so it is not silently dropped on the next settings load. The verdict
+ * is released once its server has been edited, letting a new probe decide.
+ */
+function clearServerSuspension(
+  profile: { isSuspended?: boolean; suspendedReason?: string; updatedAt: string },
+  server: ServerProfile,
+): void {
+  if (
+    profile.isSuspended &&
+    profile.suspendedReason === UNVERIFIED_EMBEDDING_SUSPENSION_REASON &&
+    server.updatedAt <= profile.updatedAt
+  ) {
+    return;
+  }
+
+  unsuspend(profile);
 }
 
 function normalizeActiveEmbeddingModel(settings: AttestSettings): void {
@@ -174,19 +208,55 @@ function normalizeActiveEmbeddingModel(settings: AttestSettings): void {
 function normalizeIndexProfiles(settings: AttestSettings): void {
   for (const profile of settings.indexProfiles) {
     normalizeIndexProfileNumbers(profile);
-    const embedding = profile.embeddingModelProfileId
-      ? settings.embeddingModelProfiles.find(
-          (candidate) => candidate.id === profile.embeddingModelProfileId,
-        )
-      : undefined;
+    const reason = embeddingChainSuspensionReason(settings, profile.embeddingModelProfileId);
 
-    if (!embedding) {
-      suspend(profile, "Select an embedding model profile.");
-    } else if (isProfileSuspended(embedding)) {
-      suspend(profile, "Embedding model profile is suspended.");
+    if (reason) {
+      suspend(profile, reason);
     } else {
       unsuspend(profile);
     }
+  }
+}
+
+/**
+ * Reports why an index cannot embed: a missing selection, a deleted or
+ * suspended embedding model profile, or a server profile it can no longer
+ * reach. Returns undefined when the whole chain is usable.
+ */
+function embeddingChainSuspensionReason(
+  settings: AttestSettings,
+  embeddingModelProfileId: string,
+): string | undefined {
+  if (!embeddingModelProfileId) {
+    return "Select an embedding model profile.";
+  }
+
+  const embedding = settings.embeddingModelProfiles.find(
+    (candidate) => candidate.id === embeddingModelProfileId,
+  );
+  if (!embedding) {
+    return "The selected embedding model profile was deleted.";
+  }
+  if (isProfileSuspended(embedding)) {
+    return embedding.suspendedReason ?? "Embedding model profile is suspended.";
+  }
+  if (!embedding.modelName.trim()) {
+    return "The embedding model profile has no model selected.";
+  }
+
+  if (!settings.serverProfiles.some((candidate) => candidate.id === embedding.serverProfileId)) {
+    return "Server profile was deleted.";
+  }
+
+  return undefined;
+}
+
+function isReachableBaseUrl(baseUrl: string): boolean {
+  try {
+    const { protocol } = new URL(baseUrl.trim());
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
   }
 }
 
