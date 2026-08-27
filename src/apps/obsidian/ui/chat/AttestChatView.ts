@@ -665,7 +665,11 @@ export class AttestChatView extends ItemView {
 
   private chatStatus(chatId: string): ChatSessionStatus {
     const summary = this.savedChatSession.savedChats.find((candidate) => candidate.id === chatId);
-    return summary ? this.sessions.rowStatus(summary) : this.sessions.status(chatId);
+    if (summary) return this.sessions.rowStatus(summary);
+    const session = this.sessions.getSessionByChatId(chatId);
+    return session
+      ? this.sessions.rowStatus({ id: chatId, unreadCompletion: session.unreadCompletion })
+      : "idle";
   }
 
   private stopChat(chatId: string): void {

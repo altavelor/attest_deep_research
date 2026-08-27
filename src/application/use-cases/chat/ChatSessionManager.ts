@@ -41,6 +41,10 @@ export interface ChatSessionManagerOptions {
   persistDiagnostics(): boolean;
 }
 
+export type ChatRowStatusInput = Pick<SavedChatSummary, "id" | "unreadCompletion"> & {
+  lastRun?: SavedChatRunState;
+};
+
 export interface ChatRunStartResult {
   started: boolean;
   error?: unknown;
@@ -170,11 +174,11 @@ export class ChatSessionManager {
    * the persisted last run otherwise. A completed run stops being announced
    * once the reader has opened that chat.
    */
-  rowStatus(summary: SavedChatSummary): ChatSessionStatus {
-    const session = this.getSessionByChatId(summary.id);
-    const status = session?.status ?? persistedStatus(summary.lastRun);
+  rowStatus(chat: ChatRowStatusInput): ChatSessionStatus {
+    const session = this.getSessionByChatId(chat.id);
+    const status = session?.status ?? persistedStatus(chat.lastRun);
     if (status !== "completed") return status;
-    return (session ? session.unreadCompletion : summary.unreadCompletion) ? "completed" : "idle";
+    return (session ? session.unreadCompletion : chat.unreadCompletion) ? "completed" : "idle";
   }
 
   /** Merges live session statuses over persisted summaries for the toolbar badges. */

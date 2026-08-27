@@ -456,6 +456,24 @@ describe("chat session manager row status", () => {
     expect(manager.rowStatus(await summaryOf())).toBe("idle");
   });
 
+  it("applies the same rule to a chat that has no summary yet", async () => {
+    const gated = createGatedService();
+    const { manager } = createTestSessionManager({ createResearchService: gated.service });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+
+    const withoutSummary = { id: session.chatId!, unreadCompletion: false };
+    expect(manager.rowStatus(withoutSummary)).toBe("completed");
+
+    await manager.markViewed(session.sessionId);
+
+    expect(manager.rowStatus(withoutSummary)).toBe("idle");
+  });
+
   it("keeps failed and interrupted markers regardless of unread state", async () => {
     const gated = createGatedService();
     const { manager, repository } = createTestSessionManager({
