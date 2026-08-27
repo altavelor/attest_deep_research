@@ -74,7 +74,6 @@ function createHarness(
     logError: (error) => logged.push(error),
   });
   const state = manager.createSession({ ...settings, ...overrides.chatSettings });
-  manager.select(state.sessionId);
   manager.subscribe((change) => changes.push(change));
 
   return {
@@ -377,7 +376,6 @@ describe("chat session runtime failures", () => {
     });
     vi.spyOn(repository, "saveChat").mockRejectedValue(failure);
     const state = manager.createSession(settings);
-    manager.select(state.sessionId);
 
     const result = await manager.start(state.sessionId, {
       question: "Question?",

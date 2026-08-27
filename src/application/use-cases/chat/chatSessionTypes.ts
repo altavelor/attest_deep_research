@@ -38,6 +38,8 @@ export interface ChatSessionChange {
 
 export type ChatSessionListener = (change: ChatSessionChange) => void;
 
+export type ChatSessionViewProbe = () => string | null;
+
 export interface ChatRunRequest {
   question: string;
   chatHistory: ChatDisplayMessage[];

@@ -11,53 +11,57 @@ import type { Translate } from "@adapters/i18n";
 import { Notice } from "obsidian";
 
 export interface ChatHistoryCompactorOptions {
-  getMessages(): ChatDisplayMessage[];
-  setMessages(messages: ChatDisplayMessage[]): void;
-  getContextLimitTokens(): number | undefined;
-  getReservedOutputTokens(): number | undefined;
-  createResearchService(): ResearchService;
-  saveCurrentChat(): Promise<void>;
+  getMessages(sessionId: string): ChatDisplayMessage[];
+  setMessages(sessionId: string, messages: ChatDisplayMessage[]): void;
+  getContextLimitTokens(sessionId: string): number | undefined;
+  getReservedOutputTokens(sessionId: string): number | undefined;
+  createResearchService(sessionId: string): ResearchService;
+  saveCurrentChat(sessionId: string): Promise<void>;
+  isSessionDisplayed(sessionId: string): boolean;
   setProgressStatus(message: string | null): void;
   renderMessages(): void;
   t: Translate;
 }
 
-/** Coordinates context-driven chat-history compaction and its user-visible status. */
+/**
+ * Coordinates context-driven chat-history compaction and its user-visible
+ * status. Every step is bound to the session that started it, so switching
+ * chats mid-compaction cannot rewrite the newly selected chat.
+ */
 export class ChatHistoryCompactor {
   constructor(private readonly options: ChatHistoryCompactorOptions) {}
 
-  async compactIfNeeded(question: string): Promise<boolean> {
+  async compactIfNeeded(sessionId: string, question: string): Promise<boolean> {
     if (
       !shouldCompactForContext({
         question,
-        messages: this.options.getMessages(),
-        contextLimitTokens: this.options.getContextLimitTokens(),
-        reservedOutputTokens: this.options.getReservedOutputTokens(),
+        messages: this.options.getMessages(sessionId),
+        contextLimitTokens: this.options.getContextLimitTokens(sessionId),
+        reservedOutputTokens: this.options.getReservedOutputTokens(sessionId),
       })
     ) {
       return false;
     }
 
-    return this.compactHistory({ automatic: true });
+    return this.compactHistory(sessionId, { automatic: true });
   }
 
-  async compactHistory(options: { automatic: boolean }): Promise<boolean> {
-    const messages = this.options.getMessages();
+  async compactHistory(sessionId: string, options: { automatic: boolean }): Promise<boolean> {
+    const messages = this.options.getMessages(sessionId);
     const compactable = compactableMessages(messages);
 
     if (compactable.length === 0) {
       const message = this.options.t("chat.compact.nothingToCompact");
-      this.options.setProgressStatus(message);
-      new Notice(message);
+      this.report(sessionId, message);
       return false;
     }
 
     const status = options.automatic
       ? this.options.t("chat.compact.automaticStatus")
       : this.options.t("chat.compact.manualStatus");
-    this.options.setProgressStatus(status);
+    this.setProgressStatus(sessionId, status);
     if (options.automatic) {
-      this.options.setMessages([
+      this.options.setMessages(sessionId, [
         ...messages,
         {
           role: "assistant",
@@ -65,38 +69,49 @@ export class ChatHistoryCompactor {
           createdAt: new Date().toISOString(),
         },
       ]);
-      this.options.renderMessages();
-      await this.options.saveCurrentChat();
+      this.renderMessages(sessionId);
+      await this.options.saveCurrentChat(sessionId);
     }
 
     try {
       const sourceMessages = options.automatic
-        ? compactableMessages(this.options.getMessages())
+        ? compactableMessages(this.options.getMessages(sessionId))
         : compactable;
       const summary = await this.options
-        .createResearchService()
+        .createResearchService(sessionId)
         .summarizeChatHistoryForCompaction(
           sourceMessages,
-          compactionSummaryFromMessages(this.options.getMessages()),
+          compactionSummaryFromMessages(this.options.getMessages(sessionId)),
         );
-      const result = compactChatMessages(this.options.getMessages(), { summary });
+      const result = compactChatMessages(this.options.getMessages(sessionId), { summary });
 
       if (!result.changed) {
         return false;
       }
 
-      this.options.setMessages(result.messages);
-      await this.options.saveCurrentChat();
-      this.options.renderMessages();
-      const done = this.options.t("chat.compact.done", { count: result.compactedCount });
-      this.options.setProgressStatus(done);
-      new Notice(done);
+      this.options.setMessages(sessionId, result.messages);
+      await this.options.saveCurrentChat(sessionId);
+      this.renderMessages(sessionId);
+      this.report(sessionId, this.options.t("chat.compact.done", { count: result.compactedCount }));
       return true;
     } catch (error) {
-      const message = toUserMessage(error);
-      this.options.setProgressStatus(message);
-      new Notice(message);
+      this.report(sessionId, toUserMessage(error));
       return false;
     }
+  }
+
+  private report(sessionId: string, message: string): void {
+    this.setProgressStatus(sessionId, message);
+    new Notice(message);
+  }
+
+  private setProgressStatus(sessionId: string, message: string | null): void {
+    if (!this.options.isSessionDisplayed(sessionId)) return;
+    this.options.setProgressStatus(message);
+  }
+
+  private renderMessages(sessionId: string): void {
+    if (!this.options.isSessionDisplayed(sessionId)) return;
+    this.options.renderMessages();
   }
 }

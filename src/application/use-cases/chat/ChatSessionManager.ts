@@ -33,6 +33,7 @@ import type {
   ChatSessionEnvironment,
   ChatSessionListener,
   ChatSessionState,
+  ChatSessionViewProbe,
 } from "./chatSessionTypes";
 
 export interface ChatSessionManagerOptions {
@@ -63,8 +64,8 @@ export class ChatSessionManager {
   private readonly slots = new Map<string, string>();
   private readonly starting = new Set<string>();
   private queue: string[] = [];
-  private selectedSessionId: string | null = null;
-  private attachedViews = 0;
+  private readonly views = new Set<ChatSessionViewProbe>();
+  private lastDisplayedSessionId: string | null = null;
   private sequence = 0;
   private disposed = false;
 
@@ -77,12 +78,25 @@ export class ChatSessionManager {
     };
   }
 
-  attachView(): void {
-    this.attachedViews += 1;
+  /**
+   * Registers a view and returns its detach function. The probe reports which
+   * session that view is displaying, so selection stays owned by each view.
+   */
+  attachView(probe: ChatSessionViewProbe): () => void {
+    this.views.add(probe);
+    return () => {
+      this.views.delete(probe);
+    };
   }
 
-  detachView(): void {
-    this.attachedViews = Math.max(0, this.attachedViews - 1);
+  /** Records what a view is showing so a reopened tab resumes the same chat. */
+  noteDisplayed(sessionId: string): void {
+    this.lastDisplayedSessionId = sessionId;
+  }
+
+  get resumableSessionId(): string | null {
+    const sessionId = this.lastDisplayedSessionId;
+    return sessionId !== null && this.sessions.has(sessionId) ? sessionId : null;
   }
 
   listSessions(): ChatSessionState[] {
@@ -95,14 +109,6 @@ export class ChatSessionManager {
 
   getSessionByChatId(chatId: string): ChatSessionState | undefined {
     return this.listSessions().find((state) => state.chatId === chatId);
-  }
-
-  get selectedSession(): ChatSessionState | undefined {
-    return this.selectedSessionId ? this.getSession(this.selectedSessionId) : undefined;
-  }
-
-  select(sessionId: string | null): void {
-    this.selectedSessionId = sessionId;
   }
 
   createSession(chatSettings: SavedChatSettings): ChatSessionState {
@@ -134,7 +140,6 @@ export class ChatSessionManager {
     if (!state || state.chatId !== null || isNonTerminalChatSessionStatus(state.status)) return;
     if (this.starting.has(sessionId)) return;
     this.sessions.delete(sessionId);
-    if (this.selectedSessionId === sessionId) this.selectedSessionId = null;
   }
 
   update(
@@ -212,7 +217,6 @@ export class ChatSessionManager {
     }
     const session = this.getSessionByChatId(chatId);
     if (session) this.sessions.delete(session.sessionId);
-    if (session && this.selectedSessionId === session.sessionId) this.selectedSessionId = null;
     await this.options.repository.deleteChat(chatId);
   }
 
@@ -395,8 +399,16 @@ export class ChatSessionManager {
     this.executions.clear();
     this.listeners.clear();
     this.sessions.clear();
-    this.selectedSessionId = null;
+    this.views.clear();
+    this.lastDisplayedSessionId = null;
     return Promise.allSettled(writes).then(() => undefined);
+  }
+
+  private isDisplayed(sessionId: string): boolean {
+    for (const probe of this.views) {
+      if (probe() === sessionId) return true;
+    }
+    return false;
   }
 
   private launch(sessionId: string): void {
@@ -427,7 +439,7 @@ export class ChatSessionManager {
 
     if (result.outcome === "completed") {
       state.status = "completed";
-      state.unreadCompletion = !(this.attachedViews > 0 && this.selectedSessionId === sessionId);
+      state.unreadCompletion = !this.isDisplayed(sessionId);
     } else if (result.outcome === "failed") {
       state.status = "failed";
       failure = result.error;

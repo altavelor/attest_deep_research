@@ -252,7 +252,6 @@ describe("Attest chat session ownership", () => {
       chatModelProfileId: "model",
       searchMode: "indexOnly",
     });
-    manager.select(session.sessionId);
     await first.detach();
     expect(manager.getSession(session.sessionId)).toBe(session);
 

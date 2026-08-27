@@ -135,6 +135,15 @@ async function ask(view: AttestChatView, question: string): Promise<void> {
   await settle();
 }
 
+function submitWithoutSettling(view: AttestChatView, question: string): void {
+  const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input");
+  input!.value = question;
+  input!.dispatchEvent(new Event("input", { bubbles: true }));
+  view.contentEl
+    .querySelector<HTMLFormElement>(".attest-chat__form")!
+    .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+}
+
 function newChat(view: AttestChatView): void {
   view.contentEl.querySelector<HTMLButtonElement>('[aria-label^="New chat"]')?.click();
 }
@@ -222,11 +231,11 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const backgroundSession = harness.manager.selectedSession!;
+    const backgroundSession = view.displayedSession!;
     newChat(view);
     await settle();
     await ask(view, "Second question");
-    const selectedSession = harness.manager.selectedSession!;
+    const selectedSession = view.displayedSession!;
 
     const popover = await openHistory(view);
     rowFor(popover, "First question")
@@ -237,7 +246,7 @@ describe("background chat sessions", () => {
 
     expect(backgroundSession.status).toBe("interrupted");
     expect(selectedSession.status).toBe("running");
-    expect(harness.manager.selectedSession).toBe(selectedSession);
+    expect(view.displayedSession).toBe(selectedSession);
     expect(harness.requests[1].signal?.aborted).toBe(false);
 
     await leaf.detach();
@@ -308,7 +317,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const completedSession = harness.manager.selectedSession!;
+    const completedSession = view.displayedSession!;
     newChat(view);
     await settle();
     await ask(view, "Second question");
@@ -336,7 +345,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const session = harness.manager.selectedSession!;
+    const session = view.displayedSession!;
     harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });
     harness.gates[0].end();
     await settle();
@@ -348,7 +357,6 @@ describe("background chat sessions", () => {
       ".attest-chat__saved-action--delete",
     )!;
 
-    harness.manager.select(session.sessionId);
     await harness.manager.start(session.sessionId, {
       question: "Second question",
       chatHistory: [],
@@ -375,7 +383,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const first = await openLeaf(harness.app);
     await ask(first.view, "First question");
-    const session = harness.manager.selectedSession!;
+    const session = first.view.displayedSession!;
 
     await first.leaf.detach();
     harness.gates[0].emit({ type: "delta", content: "Streamed while closed" });
@@ -395,7 +403,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const session = harness.manager.selectedSession!;
+    const session = view.displayedSession!;
     await leaf.detach();
 
     harness.gates[0].emit({ type: "complete", answer: answerFor("Done in the background") });
@@ -412,14 +420,14 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const running = harness.manager.selectedSession!;
+    const running = view.displayedSession!;
 
     newChat(view);
     await settle();
 
     expect(running.status).toBe("running");
     expect(harness.requests[0].signal?.aborted).toBe(false);
-    expect(harness.manager.selectedSession).not.toBe(running);
+    expect(view.displayedSession).not.toBe(running);
     expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
 
     const summaries: SavedChatSummary[] = await harness.repository.listChats();
@@ -457,7 +465,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "First question");
-    const firstSession = harness.manager.selectedSession!;
+    const firstSession = view.displayedSession!;
     harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });
     harness.gates[0].end();
     await settle();
@@ -478,7 +486,7 @@ describe("background chat sessions", () => {
       .click();
     await settle();
 
-    expect(harness.manager.selectedSession).toBe(firstSession);
+    expect(view.displayedSession).toBe(firstSession);
     expect(view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input")!.value).toBe(
       "unsent thought",
     );
@@ -490,7 +498,7 @@ describe("background chat sessions", () => {
     const harness = createHarness();
     const { leaf, view } = await openLeaf(harness.app);
     await ask(view, "Failing question");
-    const session = harness.manager.selectedSession!;
+    const session = view.displayedSession!;
 
     harness.gates[0].emit({ type: "delta", content: "Partial" });
     await settle();
@@ -551,5 +559,64 @@ describe("background chat sessions", () => {
     ).toContain("Background question:");
 
     await leaf.detach();
+  });
+  it("starts a submission in the chat it came from when New Chat lands mid-save", async () => {
+    const harness = createHarness();
+    const { leaf, view } = await openLeaf(harness.app);
+    await ask(view, "First question");
+    harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    harness.gates[0].end();
+    await settle();
+    const origin = view.displayedSession!;
+
+    let releaseSave = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    const saveChat = harness.repository.saveChat.bind(harness.repository);
+    vi.spyOn(harness.repository, "saveChat").mockImplementationOnce(async (input) => {
+      await held;
+      return saveChat(input);
+    });
+
+    submitWithoutSettling(view, "Second question");
+    await Promise.resolve();
+    newChat(view);
+    await settle();
+    releaseSave();
+    await settle();
+
+    expect(harness.requests[1]?.question).toBe("Second question");
+    expect(origin.status).toBe("running");
+    expect(view.displayedSession!.sessionId).not.toBe(origin.sessionId);
+    expect(view.displayedSession!.messages).toEqual([]);
+
+    await leaf.detach();
+  });
+
+  it("keeps each leaf on its own chat when another leaf switches away", async () => {
+    const harness = createHarness();
+    const first = await openLeaf(harness.app);
+    await ask(first.view, "First question");
+    harness.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    harness.gates[0].end();
+    await settle();
+    const firstSession = first.view.displayedSession!;
+
+    const second = await openLeaf(harness.app);
+    await settle();
+    newChat(second.view);
+    await settle();
+
+    expect(first.view.displayedSession).toBe(firstSession);
+    expect(second.view.displayedSession).not.toBe(firstSession);
+
+    await ask(first.view, "Follow-up question");
+
+    expect(firstSession.status).toBe("running");
+    expect(second.view.displayedSession!.messages).toEqual([]);
+
+    await first.leaf.detach();
+    await second.leaf.detach();
   });
 });

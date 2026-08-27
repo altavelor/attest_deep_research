@@ -404,8 +404,7 @@ describe("chat session manager persistence", () => {
     const gated = createGatedService();
     const { manager } = createTestSessionManager({ createResearchService: gated.service });
     const session = newSession(manager);
-    manager.select(session.sessionId);
-    manager.attachView();
+    manager.attachView(() => session.sessionId);
     await manager.start(session.sessionId, request("Question?"));
     await settle();
 
@@ -537,6 +536,7 @@ describe("chat session manager deletion guard", () => {
     await manager.deleteChat(chatId);
     expect(await repository.loadChat(chatId)).toBeNull();
   });
+
 });
 
 describe("chat session manager deletion guard for queued and stopping chats", () => {
@@ -724,7 +724,6 @@ describe("chat session manager lifecycle", () => {
       repository: repository.repository,
     });
     const session = newSession(manager);
-    manager.select(session.sessionId);
 
     repository.holdNextSave();
     const start = manager.start(session.sessionId, request("Question?"));

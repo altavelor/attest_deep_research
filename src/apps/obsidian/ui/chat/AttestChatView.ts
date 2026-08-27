@@ -115,6 +115,8 @@ export class AttestChatView extends ItemView {
   private activePanel: AttestPanel = "chat";
   private editingMessageIndex: number | null = null;
   private unsubscribeSessions: (() => void) | null = null;
+  private detachSessionView: (() => void) | null = null;
+  private selectedSessionId: string | null = null;
   private toolbarEl: HTMLElement | null = null;
 
   private transcriptEl: HTMLElement | null = null;
@@ -191,39 +193,45 @@ export class AttestChatView extends ItemView {
       onUpdateResearchMode: (mode) => void this.updateResearchMode(mode),
     });
     this.researchController = new ResearchQuestionController({
+      getSessionId: () => this.session.sessionId,
+      isSessionDisplayed: (sessionId) => this.isSessionDisplayed(sessionId),
       getQuestionInput: () => this.composer.getQuestionInput(),
       clearQuestionInput: () => this.composer.clearQuestionInput(),
-      getMessages: () => this.messages,
-      setMessages: (messages) => {
-        this.messages = messages;
+      getMessages: (sessionId) => this.settingsOwner(sessionId).messages,
+      setMessages: (sessionId, messages) => {
+        this.sessions.update(sessionId, { messages });
       },
       getModelInputValue: () => this.composer.getModel(),
-      getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
-      getCurrentModelLabel: () => this.getCurrentChatModelLabel(),
-      getContextLimitTokens: () => this.getContextLimitTokens(),
-      getReservedOutputTokens: () => this.getReservedOutputTokens(),
+      getCurrentModel: (sessionId) => this.settingsOf(sessionId).chatModelProfileId,
+      getCurrentModelLabel: (sessionId) => this.getCurrentChatModelLabel(sessionId),
+      getContextLimitTokens: (sessionId) => this.getContextLimitTokens(sessionId),
+      getReservedOutputTokens: (sessionId) => this.getReservedOutputTokens(sessionId),
       isRunning: () => this.isRunning,
-      updateChatModel: (model) => this.updateChatModel(model),
-      saveCurrentChat: () => this.saveCurrentChat(),
-      createResearchService: () =>
-        this.services.createResearchService(
-          this.currentChatSettings.chatModelProfileId,
-          this.currentChatSettings.indexProfileId,
-          this.getSearchMode(),
-        ),
-      startRun: (request) => this.startRun(request),
+      updateChatModel: (sessionId, model) => this.updateChatModel(model, sessionId),
+      saveCurrentChat: (sessionId) => this.saveCurrentChat(sessionId),
+      createResearchService: (sessionId) => {
+        const chatSettings = this.settingsOf(sessionId);
+        return this.services.createResearchService(
+          chatSettings.chatModelProfileId,
+          chatSettings.indexProfileId,
+          this.isSessionDisplayed(sessionId)
+            ? this.getSearchMode()
+            : (chatSettings.searchMode ?? this.getSearchMode()),
+        );
+      },
+      startRun: (sessionId, request) => this.startRun(sessionId, request),
       stopRun: () => this.stopChatSession(this.session.sessionId),
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
-      getContextPaths: () =>
+      getContextPaths: (sessionId) =>
         expandAttachedContextPaths(
-          this.attachedContextPaths,
+          this.settingsOwner(sessionId).attachedContextPaths,
           this.app.vault.getFiles().map((file) => file.path),
         ),
-      clearContextPaths: () => {
-        this.attachedContextPaths = [];
-        this.composer.renderAttachedContext();
+      clearContextPaths: (sessionId) => {
+        this.sessions.update(sessionId, { attachedContextPaths: [] });
+        if (this.isSessionDisplayed(sessionId)) this.composer.renderAttachedContext();
       },
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
@@ -248,13 +256,38 @@ export class AttestChatView extends ItemView {
     return this.services.sessions;
   }
 
-  /** The selected runtime session, created on demand for a fresh empty chat. */
+  /**
+   * The session this view displays, created on demand for a fresh empty chat.
+   * Selection belongs to the view, so a second leaf never redirects this one.
+   */
   private get session(): ChatSessionState {
-    const selected = this.sessions.selectedSession;
+    const selected = this.displayedSession;
     if (selected) return selected;
     const created = this.sessions.createSession(createDefaultChatSettings(this.services));
-    this.sessions.select(created.sessionId);
+    this.selectSession(created.sessionId);
     return created;
+  }
+
+  private isSessionDisplayed(sessionId: string): boolean {
+    return this.selectedSessionId === sessionId;
+  }
+
+  /** Session state for a scoped operation, falling back to the displayed chat. */
+  private settingsOwner(sessionId: string): ChatSessionState {
+    return this.sessions.getSession(sessionId) ?? this.session;
+  }
+
+  private settingsOf(sessionId: string): SavedChatSettings {
+    return this.settingsOwner(sessionId).chatSettings;
+  }
+
+  private selectSession(sessionId: string): void {
+    this.selectedSessionId = sessionId;
+    this.sessions.noteDisplayed(sessionId);
+  }
+
+  get displayedSession(): ChatSessionState | undefined {
+    return this.selectedSessionId ? this.sessions.getSession(this.selectedSessionId) : undefined;
   }
 
   private get messages(): ChatDisplayMessage[] {
@@ -318,7 +351,8 @@ export class AttestChatView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    this.sessions.attachView();
+    this.selectedSessionId = this.sessions.resumableSessionId;
+    this.detachSessionView = this.sessions.attachView(() => this.selectedSessionId);
     this.unsubscribeSessions = this.sessions.subscribe((change) => this.onSessionChange(change));
     await this.savedChatSession.refresh();
     this.render();
@@ -332,7 +366,8 @@ export class AttestChatView extends ItemView {
   async onClose(): Promise<void> {
     this.unsubscribeSessions?.();
     this.unsubscribeSessions = null;
-    this.sessions.detachView();
+    this.detachSessionView?.();
+    this.detachSessionView = null;
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
@@ -432,7 +467,7 @@ export class AttestChatView extends ItemView {
     await this.saveCurrentChat();
     const previous = this.session;
     const created = this.sessions.createSession(createDefaultChatSettings(this.services));
-    this.sessions.select(created.sessionId);
+    this.selectSession(created.sessionId);
     if (previous.sessionId !== created.sessionId) {
       this.sessions.discardSession(previous.sessionId);
     }
@@ -651,9 +686,9 @@ export class AttestChatView extends ItemView {
         chat,
         resolveChatSettings(this.services, chat.chatSettings),
       );
-      this.sessions.select(adopted.sessionId);
+      this.selectSession(adopted.sessionId);
     } else {
-      this.sessions.select(existing.sessionId);
+      this.selectSession(existing.sessionId);
     }
 
     this.editingMessageIndex = null;
@@ -684,8 +719,8 @@ export class AttestChatView extends ItemView {
     }
   }
 
-  private async startRun(request: ChatRunRequest): Promise<ChatRunStartResult> {
-    const result = await this.sessions.start(this.session.sessionId, request);
+  private async startRun(sessionId: string, request: ChatRunRequest): Promise<ChatRunStartResult> {
+    const result = await this.sessions.start(sessionId, request);
     if (result.started) {
       await this.savedChatSession.refresh();
       this.renderToolbarActions();
@@ -763,21 +798,25 @@ export class AttestChatView extends ItemView {
     }
   }
 
-  private async saveCurrentChat(): Promise<void> {
-    await this.sessions.save(this.session.sessionId);
+  private async saveCurrentChat(sessionId: string = this.session.sessionId): Promise<void> {
+    await this.sessions.save(sessionId);
   }
 
-  private async updateChatModel(model: string): Promise<void> {
+  private async updateChatModel(
+    model: string,
+    sessionId: string = this.session.sessionId,
+  ): Promise<void> {
     const normalizedModel =
       model.trim() || createDefaultChatSettings(this.services).chatModelProfileId;
-    this.currentChatSettings = {
-      ...this.currentChatSettings,
-      chatModelProfileId: normalizedModel,
-    };
-    if (this.composer.getModel() !== this.currentChatSettings.chatModelProfileId) {
-      this.composer.setModel(this.currentChatSettings.chatModelProfileId);
+    this.sessions.update(sessionId, {
+      chatSettings: { ...this.settingsOf(sessionId), chatModelProfileId: normalizedModel },
+    });
+    const displayed = this.isSessionDisplayed(sessionId);
+    if (displayed && this.composer.getModel() !== normalizedModel) {
+      this.composer.setModel(normalizedModel);
     }
-    await this.saveCurrentChat();
+    await this.saveCurrentChat(sessionId);
+    if (!displayed) return;
     this.renderMessages();
     this.composer.updateSubmitAvailability();
   }
@@ -864,24 +903,30 @@ export class AttestChatView extends ItemView {
     });
   }
 
-  private getContextLimitTokens(): number | undefined {
-    return this.getCurrentChatModelProfile()?.contextLength;
+  private getContextLimitTokens(sessionId?: string): number | undefined {
+    return this.getCurrentChatModelProfile(sessionId)?.contextLength;
   }
 
-  private getReservedOutputTokens(): number | undefined {
-    return this.getCurrentChatModelProfile()?.maxTokens;
+  private getReservedOutputTokens(sessionId?: string): number | undefined {
+    return this.getCurrentChatModelProfile(sessionId)?.maxTokens;
   }
 
-  private getCurrentChatModelProfile(): ChatModelSelectOption | undefined {
+  private getCurrentChatModelProfile(sessionId?: string): ChatModelSelectOption | undefined {
+    const chatModelProfileId =
+      sessionId === undefined
+        ? this.currentChatSettings.chatModelProfileId
+        : this.settingsOf(sessionId).chatModelProfileId;
     return this.services
       .getChatModelProfiles()
-      .find((profile) => profile.id === this.currentChatSettings.chatModelProfileId);
+      .find((profile) => profile.id === chatModelProfileId);
   }
 
-  private getCurrentChatModelLabel(): string {
+  private getCurrentChatModelLabel(sessionId?: string): string {
     return chatModelProfileLabel(
       this.services.getChatModelProfiles(),
-      this.currentChatSettings.chatModelProfileId,
+      sessionId === undefined
+        ? this.currentChatSettings.chatModelProfileId
+        : this.settingsOf(sessionId).chatModelProfileId,
     );
   }
 

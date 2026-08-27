@@ -31,12 +31,14 @@ function createHarness(overrides: Partial<ResearchQuestionControllerOptions> = {
   const harness = { stops: 0 } as Harness;
 
   const options: ResearchQuestionControllerOptions = {
+    getSessionId: () => "session-1",
+    isSessionDisplayed: () => true,
     getQuestionInput: () => questionInput,
     clearQuestionInput: () => {
       questionInput = "";
     },
     getMessages: () => messages,
-    setMessages: (next) => {
+    setMessages: (_sessionId, next) => {
       messages = next;
     },
     getModelInputValue: () => "",
@@ -48,7 +50,7 @@ function createHarness(overrides: Partial<ResearchQuestionControllerOptions> = {
     updateChatModel: async () => {},
     saveCurrentChat: async () => {},
     createResearchService: () => ({}) as unknown as ResearchService,
-    startRun: async (request): Promise<ChatRunStartResult> => {
+    startRun: async (_sessionId, request): Promise<ChatRunStartResult> => {
       requests.push(request);
       running = true;
       return { started: true };
@@ -177,7 +179,7 @@ describe("ResearchQuestionController submission", () => {
     ];
     const harness = createHarness({
       getMessages: () => messages,
-      setMessages: (next) => {
+      setMessages: (_sessionId, next) => {
         messages.splice(0, messages.length, ...next);
       },
     });
