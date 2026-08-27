@@ -124,10 +124,15 @@ export class ChatSessionManager {
     return state;
   }
 
-  /** Drops an idle, never-persisted session so abandoned drafts do not pile up. */
+  /**
+   * Drops an idle, never-persisted session so abandoned drafts do not pile up.
+   * A session whose run-start save is still in flight is kept: it is about to
+   * own a persisted chat and a live run.
+   */
   discardSession(sessionId: string): void {
     const state = this.getSession(sessionId);
     if (!state || state.chatId !== null || isNonTerminalChatSessionStatus(state.status)) return;
+    if (this.starting.has(sessionId)) return;
     this.sessions.delete(sessionId);
     if (this.selectedSessionId === sessionId) this.selectedSessionId = null;
   }

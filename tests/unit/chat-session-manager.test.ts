@@ -716,6 +716,31 @@ describe("chat session manager lifecycle", () => {
     );
   });
 
+  it("keeps a session whose first save is still in flight when New Chat discards it", async () => {
+    const gated = createGatedService();
+    const repository = createUnorderedRepository();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      repository: repository.repository,
+    });
+    const session = newSession(manager);
+    manager.select(session.sessionId);
+
+    repository.holdNextSave();
+    const start = manager.start(session.sessionId, request("Question?"));
+    await settle();
+
+    manager.discardSession(session.sessionId);
+    repository.releaseHeldSave();
+    await start;
+    await settle();
+
+    expect(manager.getSession(session.sessionId)).toBe(session);
+    expect(session.status).toBe("running");
+    expect(session.chatId).not.toBeNull();
+    expect(gated.serviceCalls).toBe(1);
+  });
+
   it("rejects new runs after dispose", async () => {
     const gated = createGatedService();
     const { manager } = createTestSessionManager({ createResearchService: gated.service });
