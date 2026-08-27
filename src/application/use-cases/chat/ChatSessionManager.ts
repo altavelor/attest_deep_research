@@ -215,9 +215,9 @@ export class ChatSessionManager {
     if (!this.canDeleteChat(chatId)) {
       throw new Error(`Chat ${chatId} is running and cannot be deleted.`);
     }
+    await this.options.repository.deleteChat(chatId);
     const session = this.getSessionByChatId(chatId);
     if (session) this.sessions.delete(session.sessionId);
-    await this.options.repository.deleteChat(chatId);
   }
 
   /** Clears the unread-completion marker of a chat the user is now looking at. */

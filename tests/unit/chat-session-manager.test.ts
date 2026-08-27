@@ -537,6 +537,25 @@ describe("chat session manager deletion guard", () => {
     expect(await repository.loadChat(chatId)).toBeNull();
   });
 
+  it("keeps the session and its chat when the repository refuses the deletion", async () => {
+    const gated = createGatedService();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: gated.service,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    const chatId = session.chatId!;
+    vi.spyOn(repository, "deleteChat").mockRejectedValue(new Error("Vault is read-only."));
+
+    await expect(manager.deleteChat(chatId)).rejects.toThrow("Vault is read-only.");
+
+    expect(manager.getSessionByChatId(chatId)).toBe(session);
+    expect(manager.listSessions()).toContain(session);
+  });
 });
 
 describe("chat session manager deletion guard for queued and stopping chats", () => {
