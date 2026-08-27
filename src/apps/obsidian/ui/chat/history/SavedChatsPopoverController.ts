@@ -1,4 +1,5 @@
 import { SavedChatSummary } from "@core/chat/savedChat";
+import type { ChatSessionStatus } from "@core/chat/chatSession";
 import type { Translate } from "@adapters/i18n";
 import { positionSavedChatsPopover, renderSavedChatsPopoverContent } from "./SavedChatsPanel";
 import { SavedChatListTab } from "./savedChatListState";
@@ -12,6 +13,8 @@ export interface SavedChatsPopoverControllerOptions {
   onRenameChat(id: string, title: string): void;
   onToggleFavorite(id: string): void;
   onDeleteChat(id: string): void;
+  getChatStatus(id: string): ChatSessionStatus;
+  onStopChat(id: string): void;
   refreshSavedChats(): Promise<void>;
 }
 
@@ -63,6 +66,8 @@ export class SavedChatsPopoverController {
       onRenameChat: this.options.onRenameChat,
       onToggleFavorite: this.options.onToggleFavorite,
       onDeleteChat: this.options.onDeleteChat,
+      getChatStatus: this.options.getChatStatus,
+      onStopChat: this.options.onStopChat,
     });
   }
 

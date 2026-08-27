@@ -23,6 +23,8 @@ export interface ChatComposerControllerOptions {
   getResearchMode(): ResearchMode;
   getAttachedContextPaths(): string[];
   isRunning(): boolean;
+  getDraft(): string;
+  onDraftChange(draft: string): void;
   getContextWindowUsage(): ContextWindowUsage | null;
   getSearchUnavailableMessage(): string | null;
   t: Translate;
@@ -44,7 +46,7 @@ export class ChatComposerController {
   constructor(private readonly options: ChatComposerControllerOptions) {}
 
   render(containerEl: HTMLElement): void {
-    const draft = this.getQuestionInput();
+    const draft = this.options.getDraft();
     this.refs = renderChatComposer(containerEl, {
       settings: this.options.getSettings(),
       availableModels: this.options.getAvailableModels(),
@@ -54,7 +56,10 @@ export class ChatComposerController {
       t: this.options.t,
       onSubmit: this.options.onSubmit,
       onStop: this.options.onStop,
-      onQuestionInput: () => this.updateSubmitAvailability(),
+      onQuestionInput: () => {
+        this.options.onDraftChange(this.getQuestionInput());
+        this.updateSubmitAvailability();
+      },
       onOpenContextPicker: this.options.onOpenContextPicker,
       onUpdateModel: this.options.onUpdateModel,
       onUpdateIndex: this.options.onUpdateIndex,

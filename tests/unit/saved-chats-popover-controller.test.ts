@@ -33,6 +33,8 @@ function controller() {
     onRenameChat: vi.fn(),
     onToggleFavorite: vi.fn(),
     onDeleteChat: vi.fn(),
+    getChatStatus: () => "idle" as const,
+    onStopChat: vi.fn(),
     refreshSavedChats,
   });
   return { instance, host, refreshSavedChats };

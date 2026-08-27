@@ -1,12 +1,15 @@
 import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
+import type { ChatHistoryActivity } from "@core/chat/chatSession";
+import { chatHistoryActivityLabel, renderChatHistoryActivity } from "./history/savedChatStatus";
 
 export type AttestPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
   activePanel: AttestPanel;
   isDebugMode: boolean;
+  historyActivity: ChatHistoryActivity;
   t: Translate;
   onPanelChange(panel: AttestPanel): void;
   onOpenHistory(anchorEl: HTMLElement): void;
@@ -31,10 +34,15 @@ export function renderChatWindowActions(
   const actions = containerEl.createDiv({ cls: "attest-chat__window-actions" });
   const historyButton = createHeaderIconButton(actions, {
     icon: "history",
-    label: options.t("chat.action.history"),
+    label: chatHistoryActivityLabel(
+      options.t("chat.action.history"),
+      options.historyActivity,
+      options.t,
+    ),
     disabled: false,
     onClick: () => options.onOpenHistory(historyButton),
   });
+  renderChatHistoryActivity(historyButton, options.historyActivity);
   createHeaderIconButton(actions, {
     icon: "book-open",
     label: options.t("chat.action.sources"),

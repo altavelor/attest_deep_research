@@ -64,9 +64,44 @@
 }
 
 .attest-chat__icon-button {
+  position: relative;
   width: 2rem;
   height: 2rem;
   padding: 0;
+}
+
+.attest-chat__history-activity {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.attest-chat__history-activity-spinner {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.1rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  border: 2px solid var(--interactive-accent);
+  border-top-color: transparent;
+  animation: attest-session-spin 900ms linear infinite;
+}
+
+.attest-chat__history-activity-dot {
+  position: absolute;
+  right: 0.1rem;
+  bottom: 0.1rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--background-modifier-border-hover);
+  background: var(--color-green);
+}
+
+.attest-chat__history-activity-spinner.is-hidden,
+.attest-chat__history-activity-dot.is-hidden {
+  display: none;
 }
 
 .attest-chat__toolbar {

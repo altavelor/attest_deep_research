@@ -4,6 +4,7 @@ import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
+import { renderChatWindowActions } from "@apps/obsidian/ui/chat/ChatHeader";
 import {
   renderSavedChatsEmptyState,
   renderSavedChatsPopoverContent,
@@ -15,6 +16,7 @@ import {
 import { AdvancedSettingsSection } from "@apps/obsidian/ui/settings/AdvancedSettingsSection";
 import { RetrievalSettingsSection } from "@apps/obsidian/ui/settings/RetrievalSettingsSection";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
+import type { ChatSessionStatus } from "@core/chat/chatSession";
 import type { RetrievedChunk } from "@core/model";
 import { createContainer } from "./domHarness";
 import { markdownSource, retrieved } from "./factories";
@@ -124,6 +126,7 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
       updatedAt: "2026-01-01T00:00:00.000Z",
       messageCount: 4,
       isFavorite: true,
+      unreadCompletion: false,
     },
     {
       id: "b",
@@ -131,8 +134,10 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
       updatedAt: "2026-01-02T00:00:00.000Z",
       messageCount: 2,
       isFavorite: false,
+      unreadCompletion: true,
     },
   ];
+  const getChatStatus = (id: string): ChatSessionStatus => (id === "a" ? "running" : "completed");
   renderSavedChatsEmptyState(host.createDiv(), {
     savedChats,
     t,
@@ -141,6 +146,8 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
     onToggleFavorite: () => {},
     onRenameChat: () => {},
     onDeleteChat: () => {},
+    getChatStatus,
+    onStopChat: () => {},
   });
   for (const activeTab of ["history", "favorites"] as const) {
     renderSavedChatsPopoverContent(host.createDiv({ cls: "attest-chat__history-popover" }), {
@@ -155,8 +162,20 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
       onToggleFavorite: () => {},
       onRenameChat: () => {},
       onDeleteChat: () => {},
+      getChatStatus,
+      onStopChat: () => {},
     });
   }
+  renderChatWindowActions(host.createDiv({ cls: "attest-chat__toolbar" }), {
+    activePanel: "chat",
+    isDebugMode: true,
+    historyActivity: { runningCount: 2, unreadCompletedCount: 1 },
+    t,
+    onPanelChange: () => {},
+    onOpenHistory: () => {},
+    onOpenSources: () => {},
+    onNewChat: () => {},
+  });
 }
 
 function renderSettingsSurfaces(host: HTMLElement): void {

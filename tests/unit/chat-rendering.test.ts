@@ -710,6 +710,7 @@ describe("chat rendering helpers", () => {
         updatedAt: "2026-06-10T10:00:00Z",
         messageCount: 1,
         isFavorite: true,
+        unreadCompletion: false,
       },
       {
         id: "history",
@@ -717,6 +718,7 @@ describe("chat rendering helpers", () => {
         updatedAt: "2026-06-10T09:00:00Z",
         messageCount: 1,
         isFavorite: false,
+        unreadCompletion: false,
       },
     ];
 

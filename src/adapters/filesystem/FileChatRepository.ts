@@ -11,6 +11,7 @@ import {
   parseSavedChat,
 } from "@core/chat/savedChat";
 import { createConversationSourceRegistry } from "@core/chat/sourceRegistry";
+import type { SavedChatRunState } from "@core/chat/chatSession";
 
 export interface FileChatRepositoryOptions {
   fileSystem: FileSystemPort;
@@ -63,6 +64,8 @@ export class FileChatRepository implements ChatRepository {
         updatedAt: chat.updatedAt,
         messageCount: chat.messages.filter((message) => message.kind !== "compact-summary").length,
         isFavorite: chat.isFavorite === true,
+        unreadCompletion: chat.unreadCompletion === true,
+        ...(chat.lastRun ? { lastRun: chat.lastRun } : {}),
       });
     }
 
@@ -83,19 +86,22 @@ export class FileChatRepository implements ChatRepository {
       const now = this.now().toISOString();
       const existing = await this.readChatFile(id);
       const createdAt = input.createdAt ?? existing?.createdAt ?? now;
+      const lastRun = input.lastRun ?? existing?.lastRun;
       const chat: SavedChat = {
         schemaVersion: CHAT_SCHEMA_VERSION,
         id,
         title: normalizeTitle(input.title ?? inferChatTitle(input.messages)),
         createdAt,
-        updatedAt: now,
+        updatedAt: input.updatedAt ?? now,
         messages: input.messages,
         lastAnswer: input.lastAnswer,
         attachedContextPaths: [...input.attachedContextPaths],
         chatSettings: input.chatSettings,
         sourceRegistry:
           input.sourceRegistry ?? existing?.sourceRegistry ?? createConversationSourceRegistry(),
+        unreadCompletion: input.unreadCompletion ?? existing?.unreadCompletion ?? false,
         isFavorite: existing?.isFavorite === true,
+        ...(lastRun ? { lastRun } : {}),
       };
 
       await this.writeJsonAtomically(this.chatPath(id), chat);
@@ -139,6 +145,14 @@ export class FileChatRepository implements ChatRepository {
     });
   }
 
+  async setChatUnreadCompletion(id: string, unreadCompletion: boolean): Promise<SavedChat | null> {
+    return this.patchChat(id, (existing) => ({ ...existing, unreadCompletion }));
+  }
+
+  async setChatRunState(id: string, lastRun: SavedChatRunState): Promise<SavedChat | null> {
+    return this.patchChat(id, (existing) => ({ ...existing, lastRun }));
+  }
+
   async deleteChat(id: string): Promise<void> {
     assertSafeChatId(id);
 
@@ -148,6 +162,26 @@ export class FileChatRepository implements ChatRepository {
       if (await this.fileSystem.exists(path)) {
         await this.fileSystem.remove(path);
       }
+    });
+  }
+
+  /** Rewrites chat metadata without touching `updatedAt`, so history order stays stable. */
+  private async patchChat(
+    id: string,
+    patch: (existing: SavedChat) => SavedChat,
+  ): Promise<SavedChat | null> {
+    assertSafeChatId(id);
+    return this.mutateChat(id, async () => {
+      await this.fileSystem.createFolder(this.folder);
+      const existing = await this.readChatFile(id);
+
+      if (!existing) {
+        return null;
+      }
+
+      const chat = patch(existing);
+      await this.writeJsonAtomically(this.chatPath(id), chat);
+      return chat;
     });
   }
 

@@ -18,6 +18,7 @@ const chat = (id: string, title: string, favorite = false): SavedChatSummary => 
   updatedAt: "2026-08-10T00:00:00.000Z",
   messageCount: 1,
   isFavorite: favorite,
+  unreadCompletion: false,
 });
 
 describe("SavedChatsPanel", () => {

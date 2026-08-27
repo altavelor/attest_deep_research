@@ -24,6 +24,7 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../helpers/domHarness";
+import { createTestSessionManager } from "../../helpers/chatSessions";
 
 const searchWeb: ChainItem = {
   kind: "tool-call",
@@ -71,10 +72,11 @@ const summary: SavedChatSummary = {
   updatedAt: "2026-01-01T00:00:00.000Z",
   messageCount: 2,
   isFavorite: false,
+  unreadCompletion: false,
 };
 
 const savedChat: SavedChat = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   id: summary.id,
   title: summary.title,
   createdAt: summary.updatedAt,
@@ -84,9 +86,21 @@ const savedChat: SavedChat = {
   attachedContextPaths: [],
   chatSettings: { chatModelProfileId: "model", indexProfileId: "index", searchMode: "indexOnly" },
   sourceRegistry: { sources: [] },
+  unreadCompletion: false,
 };
 
 function createServices(overrides: Partial<AttestChatViewServices> = {}) {
+  const partial = { ...overrides };
+  const sessions =
+    partial.sessions ??
+    createTestSessionManager({
+      createResearchService: (settings) =>
+        services.createResearchService(
+          settings.chatModelProfileId,
+          settings.indexProfileId,
+          settings.searchMode,
+        ),
+    }).manager;
   const services: AttestChatViewServices = {
     createResearchService: () => {
       throw new Error("The test must not start a research run.");
@@ -103,16 +117,15 @@ function createServices(overrides: Partial<AttestChatViewServices> = {}) {
     getIndexSearchEmbedderWarning: () => undefined,
     openIndexSettings: () => {},
     searchIndex: async () => ({ chunks: [] }),
+    sessions,
     listSavedChats: async () => [summary],
     loadSavedChat: async () => savedChat,
-    saveChat: async () => savedChat,
     renameSavedChat: async () => {},
     setSavedChatFavorite: async () => {},
-    deleteSavedChat: async () => {},
     getTranslator: () => createTranslator("en"),
     isDebugMode: () => true,
     shouldIncludeActiveFileContext: () => false,
-    ...overrides,
+    ...partial,
   };
   return services;
 }
@@ -277,7 +290,7 @@ describe("chat view transcript disposal", () => {
     await leaf.detach();
   });
 
-  it("aborts an active research request when the view closes", async () => {
+  it("keeps an active research request alive when the view closes", async () => {
     let request: ResearchRequest | undefined;
     const { view, leaf } = await openView({
       createResearchService: () =>
@@ -307,7 +320,7 @@ describe("chat view transcript disposal", () => {
     await leaf.detach();
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
 
-    expect(request?.signal?.aborted).toBe(true);
+    expect(request?.signal?.aborted).toBe(false);
     expect(takeNotices()).toEqual([]);
   });
 });
@@ -416,7 +429,9 @@ describe("saved chats from the chat view", () => {
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
     await vi.waitFor(() => expect(loadSavedChat).toHaveBeenCalledWith(summary.id));
-    expect(takeNotices().map((notice) => notice.message)).toEqual(["Saved chat was not found."]);
+    await vi.waitFor(() => {
+      expect(takeNotices().map((notice) => notice.message)).toEqual(["Saved chat was not found."]);
+    });
     expect(listSavedChats).toHaveBeenCalledTimes(2);
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();
     await leaf.detach();
@@ -425,11 +440,12 @@ describe("saved chats from the chat view", () => {
   it("updates saved chats through the history popover", async () => {
     const setSavedChatFavorite = vi.fn(async () => {});
     const renameSavedChat = vi.fn(async () => {});
-    const deleteSavedChat = vi.fn(async () => {});
+    const { manager, repository } = createTestSessionManager();
+    const deleteSavedChat = vi.spyOn(repository, "deleteChat");
     const { view, leaf } = await openView({
       setSavedChatFavorite,
       renameSavedChat,
-      deleteSavedChat,
+      sessions: manager,
     });
 
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[0]?.click();
@@ -460,14 +476,10 @@ describe("saved chats from the chat view", () => {
     await leaf.detach();
   });
 
-  it("saves the current conversation before starting a clean chat", async () => {
-    const saveChat = vi.fn(async (input) => ({
-      ...savedChat,
-      ...input,
-      id: input.id ?? "new-chat",
-      createdAt: input.createdAt ?? savedChat.createdAt,
-    }));
-    const { view, leaf } = await openView({ saveChat });
+  it("saves the loaded conversation before starting a clean chat", async () => {
+    const { manager, repository } = createTestSessionManager();
+    const saveChat = vi.spyOn(repository, "saveChat");
+    const { view, leaf } = await openView({ sessions: manager });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
     await vi.waitFor(() => {
@@ -478,9 +490,7 @@ describe("saved chats from the chat view", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
     await vi.waitFor(() => {
-      expect(saveChat).toHaveBeenCalledWith(
-        expect.objectContaining({ id: savedChat.id, createdAt: savedChat.createdAt }),
-      );
+      expect(saveChat).toHaveBeenCalledWith(expect.objectContaining({ id: savedChat.id }));
       expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
     });
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();

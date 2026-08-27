@@ -1,72 +1,34 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ResearchQuestionController } from "@apps/obsidian/ui/chat/research/ResearchQuestionController";
 import type { ResearchQuestionControllerOptions } from "@apps/obsidian/ui/chat/research/ResearchQuestionController";
-import type { ResearchService, ResearchStreamEvent } from "@application/use-cases/research";
-import type { ResearchRequest } from "@application/contracts/research";
-import type { ResearchAnswer } from "@core/answer";
-import { AttestError } from "@core/errors";
+import type { ChatRunRequest, ChatRunStartResult } from "@application/use-cases/chat";
+import type { ResearchService } from "@application/use-cases/research";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createTranslator } from "@adapters/i18n";
-import {
-  advanceTime,
-  flushAnimationFrames,
-  restoreDomTimers,
-  useDomFakeTimers,
-} from "../../helpers/domHarness";
+import { takeNotices } from "../../stubs/obsidian";
+import { resetDom, restoreDomTimers, useDomFakeTimers } from "../../helpers/domHarness";
 
 const t = createTranslator("en").t;
-
-interface RenderLogEntry {
-  call: "renderMessages" | "renderActiveMessage" | "renderAnswerDetails";
-  content: string;
-  checkpoints: string[];
-}
 
 interface Harness {
   controller: ResearchQuestionController;
   messages: () => ChatDisplayMessage[];
-  renderLog: RenderLogEntry[];
-  lifecycleLog: string[];
-  lastAnswer: () => ResearchAnswer | null;
-  requests: ResearchRequest[];
+  requests: ChatRunRequest[];
   statuses: (string | null)[];
+  stops: number;
+  questionInput: () => string;
 }
 
-function answerFor(text: string): ResearchAnswer {
-  return {
-    question: "Question?",
-    answer: text,
-    citations: [],
-    followUpQuestions: [],
-    createdAt: "2026-01-01T00:00:00.000Z",
-  };
-}
-
-function createHarness(
-  makeEvents: () => AsyncIterable<ResearchStreamEvent>,
-  overrides: Partial<ResearchQuestionControllerOptions> = {},
-): Harness {
+function createHarness(overrides: Partial<ResearchQuestionControllerOptions> = {}): Harness {
   let messages: ChatDisplayMessage[] = [];
-  let lastAnswer: ResearchAnswer | null = null;
   let questionInput = "Question?";
-  const renderLog: RenderLogEntry[] = [];
-  const lifecycleLog: string[] = [];
+  let running = false;
+  const requests: ChatRunRequest[] = [];
   const statuses: (string | null)[] = [];
-  const requests: ResearchRequest[] = [];
-
-  const snapshot = (call: RenderLogEntry["call"]): void => {
-    const last = messages.at(-1);
-    renderLog.push({
-      call,
-      content: last?.content ?? "",
-      checkpoints: (last?.researchProgress?.checkpoints ?? []).map(
-        (checkpoint) => `${checkpoint.id}:${checkpoint.status}`,
-      ),
-    });
-  };
+  const harness = { stops: 0 } as Harness;
 
   const options: ResearchQuestionControllerOptions = {
     getQuestionInput: () => questionInput,
@@ -77,29 +39,23 @@ function createHarness(
     setMessages: (next) => {
       messages = next;
     },
-    getLastAnswer: () => lastAnswer,
-    setLastAnswer: (answer) => {
-      lastAnswer = answer;
-    },
     getModelInputValue: () => "",
     getCurrentModel: () => "model-id",
     getCurrentModelLabel: () => "Model Label",
     getContextLimitTokens: () => undefined,
     getReservedOutputTokens: () => undefined,
+    isRunning: () => running,
     updateChatModel: async () => {},
-    saveCurrentChat: async () => {
-      lifecycleLog.push("save");
+    saveCurrentChat: async () => {},
+    createResearchService: () => ({}) as unknown as ResearchService,
+    startRun: async (request): Promise<ChatRunStartResult> => {
+      requests.push(request);
+      running = true;
+      return { started: true };
     },
-    createResearchService: () =>
-      ({
-        answer: (request: ResearchRequest) => {
-          requests.push(request);
-          return makeEvents();
-        },
-      }) as unknown as ResearchService,
-    getSearchMode: () => "indexOnly",
-    getResearchMode: () => "instant",
-    getContextMode: () => "include",
+    stopRun: () => {
+      harness.stops += 1;
+    },
     getActiveFilePath: () => undefined,
     shouldIncludeActiveFileContext: () => false,
     shouldIncludeContextDiagnostics: () => false,
@@ -110,403 +66,149 @@ function createHarness(
     setProgressStatus: (message) => {
       statuses.push(message);
     },
-    setFormRunning: (running) => {
-      lifecycleLog.push(`form:${running}`);
-    },
-    setRunningState: (running) => {
-      lifecycleLog.push(`running:${running}`);
-    },
-    renderMessages: () => snapshot("renderMessages"),
-    renderActiveMessage: () => snapshot("renderActiveMessage"),
-    renderAnswerDetails: () => snapshot("renderAnswerDetails"),
+    renderMessages: () => {},
     t,
     ...overrides,
   };
 
-  return {
+  Object.assign(harness, {
     controller: new ResearchQuestionController(options),
     messages: () => messages,
-    renderLog,
-    lifecycleLog,
-    lastAnswer: () => lastAnswer,
     requests,
     statuses,
-  };
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = (): void => {};
-  const promise = new Promise<void>((res) => {
-    resolve = () => res();
+    questionInput: () => questionInput,
   });
-  return { promise, resolve };
-}
-
-async function flushMicrotasks(): Promise<void> {
-  for (let index = 0; index < 20; index += 1) {
-    await Promise.resolve();
-  }
+  return harness;
 }
 
 beforeEach(() => {
   useDomFakeTimers();
+  takeNotices();
 });
 
 afterEach(() => {
   restoreDomTimers();
+  resetDom();
 });
 
-describe("ResearchQuestionController streaming order", () => {
-  it("promotes the checkpoint before the answer reset clears the streamed draft", async () => {
-    const harness = createHarness(async function* events() {
-      yield { type: "delta", content: "Partial" };
-      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Draft" };
-      yield { type: "checkpoint-complete", checkpointId: "c1", round: 1 };
-      yield { type: "checkpoint-promote", checkpointId: "c1", round: 1 };
-      yield { type: "answer-reset" };
-      yield { type: "delta", content: "Final" };
-      yield { type: "complete", answer: answerFor("Final") };
+describe("ResearchQuestionController submission", () => {
+  it("hands the question and its capture-time context to the session manager", async () => {
+    const harness = createHarness({
+      getContextPaths: () => ["notes/a.md"],
+      getActiveFilePath: () => "notes/open.md",
+      shouldIncludeActiveFileContext: () => true,
     });
 
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
+    await harness.controller.submitQuestion();
 
-    const streamRenders = harness.renderLog.slice(2);
-    expect(streamRenders.slice(0, 2)).toEqual([
-      { call: "renderActiveMessage", content: "Partial", checkpoints: ["c1:finalizing"] },
-      { call: "renderMessages", content: "", checkpoints: ["c1:finalizing"] },
-    ]);
-    expect(harness.messages().at(-1)?.researchProgress?.chain).toContainEqual({
-      kind: "checkpoint",
-      id: "c1",
-      round: 1,
-      content: "Draft",
-      status: "complete",
-    });
-    expect(harness.messages().at(-1)?.content).toBe("Final");
-    expect(harness.lastAnswer()?.answer).toBe("Final");
-  });
-
-  it("shows a streaming round as the provisional body and demotes it when it is not final", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Looking around" };
-      await gate.promise;
-      yield { type: "checkpoint-complete", checkpointId: "c1", round: 1 };
-      yield { type: "checkpoint-delta", checkpointId: "c2", round: 2, content: "The answer" };
-      yield { type: "checkpoint-promote", checkpointId: "c2", round: 2 };
-      yield { type: "complete", answer: answerFor("The answer, cited") };
-    });
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    expect(harness.renderLog.at(-1)).toMatchObject({
-      call: "renderActiveMessage",
-      content: "Looking around",
-    });
-
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    const bodies = harness.renderLog.slice(2).map((entry) => entry.content);
-    expect(bodies).toContain("Looking around");
-    expect(bodies).toContain("The answer");
-    expect(harness.messages().at(-1)?.content).toBe("The answer, cited");
-    expect(harness.messages().at(-1)?.researchProgress?.chain).toEqual([
-      { kind: "checkpoint", id: "c1", round: 1, content: "Looking around", status: "complete" },
-    ]);
-  });
-
-  it("drops the animation frame queued by a delta when the checkpoint is promoted", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Draft" };
-      yield { type: "delta", content: "Partial" };
-      yield { type: "checkpoint-promote", checkpointId: "c1", round: 1 };
-      await gate.promise;
-      yield { type: "complete", answer: answerFor("Final") };
-    });
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    const rendersBeforeFrames = harness.renderLog.length;
-    await advanceTime(200);
-
-    expect(harness.renderLog.length).toBe(rendersBeforeFrames);
-    expect(harness.renderLog.at(-1)).toEqual({
-      call: "renderActiveMessage",
-      content: "DraftPartial",
-      checkpoints: ["c1:finalizing"],
-    });
-
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-  });
-
-  it("holds the finalizing frame before applying the completed answer", async () => {
-    const harness = createHarness(async function* events() {
-      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Draft" };
-      yield { type: "checkpoint-promote", checkpointId: "c1", round: 1 };
-      yield { type: "complete", answer: answerFor("Final answer") };
-    });
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-
-    expect(harness.lastAnswer()).toBeNull();
-    expect(harness.controller.isRunning()).toBe(true);
-
-    await flushAnimationFrames();
-    await flushMicrotasks();
-    await run;
-
-    expect(harness.lastAnswer()?.answer).toBe("Final answer");
-    expect(harness.messages().at(-1)?.content).toBe("Final answer");
-    expect(harness.messages().at(-1)?.modelName).toBe("Model Label");
-  });
-
-  it("applies a completed answer without delay when no checkpoint is finalizing", async () => {
-    const harness = createHarness(async function* events() {
-      yield { type: "delta", content: "Final answer" };
-      yield { type: "complete", answer: answerFor("Final answer") };
-    });
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-
-    expect(harness.lastAnswer()?.answer).toBe("Final answer");
-
-    await advanceTime(100);
-    await run;
-  });
-});
-
-describe("ResearchQuestionController research mode", () => {
-  it("records the selected mode on the progress it creates", async () => {
-    const harness = createHarness(
-      async function* events() {
-        yield { type: "complete", answer: answerFor("Done") };
+    expect(harness.requests).toEqual([
+      {
+        question: "Question?",
+        chatHistory: [],
+        appendQuestion: true,
+        contextPaths: ["notes/a.md"],
+        activeFilePath: "notes/open.md",
+        includeActiveFile: true,
+        includeContextDiagnostics: false,
+        modelLabel: "Model Label",
       },
-      { getResearchMode: () => "thinking" },
+    ]);
+    expect(harness.questionInput()).toBe("");
+  });
+
+  it("does not submit twice while a run is active", async () => {
+    const harness = createHarness();
+
+    await harness.controller.submitQuestion();
+    await harness.controller.submitQuestion();
+
+    expect(harness.requests).toHaveLength(1);
+  });
+
+  it("keeps the question and reports the failure when the run cannot start", async () => {
+    const harness = createHarness({
+      startRun: async () => ({ started: false, error: new Error("disk full") }),
+    });
+
+    await harness.controller.submitQuestion();
+
+    expect(harness.questionInput()).toBe("Question?");
+    expect(harness.statuses.at(-1)).toBe("The chat could not be saved, so the run did not start.");
+    expect(takeNotices().map((notice) => notice.message)).toContain(
+      "The chat could not be saved, so the run did not start.",
     );
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.requests[0]?.mode).toBe("thinking");
-    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("thinking");
   });
 
-  it("marks an Instant run so the transcript can skip the workflow block", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      await gate.promise;
-      yield { type: "complete", answer: answerFor("Done") };
+  it("refuses to start when search is unavailable", async () => {
+    const harness = createHarness({
+      getSearchUnavailableMessage: () => "Index this profile first.",
     });
 
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
+    await harness.controller.submitQuestion();
 
-    expect(harness.messages().at(-1)?.researchProgress).toMatchObject({
-      phase: "streaming",
-      mode: "instant",
-    });
-
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("instant");
+    expect(harness.requests).toEqual([]);
   });
 
-  it("uses Thinking mode for an explicit sub-agent directive", async () => {
-    const harness = createHarness(
-      async function* events() {
-        yield { type: "complete", answer: answerFor("Done") };
+  it("rejects a question that cannot fit the context window", async () => {
+    const harness = createHarness({
+      getContextLimitTokens: () => 1,
+      getQuestionInput: () => "A very long question that will never fit into a single token.",
+    });
+
+    await harness.controller.submitQuestion();
+
+    expect(harness.requests).toEqual([]);
+    expect(harness.statuses.at(-1)).toBe(
+      "The current chat is too long for the selected model context window.",
+    );
+  });
+
+  it("forwards a stop request to the session manager", () => {
+    const harness = createHarness();
+
+    harness.controller.stopRunningQuestion();
+
+    expect(harness.stops).toBe(1);
+  });
+
+  it("rewrites an edited question in place and reruns it without appending", async () => {
+    const messages: ChatDisplayMessage[] = [
+      { role: "user", content: "Old question", createdAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    const harness = createHarness({
+      getMessages: () => messages,
+      setMessages: (next) => {
+        messages.splice(0, messages.length, ...next);
       },
-      { getQuestionInput: () => "@run_subagent Compare the notes" },
-    );
+    });
 
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
+    await harness.controller.submitEditedQuestion(0, "New question");
 
+    expect(messages[0]?.content).toBe("New question");
     expect(harness.requests[0]).toMatchObject({
-      mode: "thinking",
-      forceSubAgent: true,
-      question: "Compare the notes",
+      question: "New question",
+      appendQuestion: false,
     });
-    expect(harness.messages().at(-1)?.researchProgress?.mode).toBe("thinking");
   });
 });
 
-describe("ResearchQuestionController cancellation", () => {
-  it("does not mutate or render after a disposed run producer ignores abort", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      yield { type: "delta", content: "Partial" };
-      await gate.promise;
-      yield { type: "delta", content: " late" };
-    });
+describe("ResearchQuestionController compaction", () => {
+  it("reports that there is nothing to compact", async () => {
+    const harness = createHarness({ getQuestionInput: () => "/compact" });
 
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    harness.controller.dispose();
-    const messagesAfterDispose = structuredClone(harness.messages());
-    const renderCountAfterDispose = harness.renderLog.length;
-    const lifecycleAfterDispose = [...harness.lifecycleLog];
-    const statusesAfterDispose = [...harness.statuses];
+    await harness.controller.submitQuestion();
 
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.requests[0]?.signal?.aborted).toBe(true);
-    expect(harness.messages()).toEqual(messagesAfterDispose);
-    expect(harness.renderLog).toHaveLength(renderCountAfterDispose);
-    expect(harness.lifecycleLog).toEqual(lifecycleAfterDispose);
-    expect(harness.statuses).toEqual(statusesAfterDispose);
-    expect(harness.controller.isRunning()).toBe(false);
+    expect(harness.requests).toEqual([]);
+    expect(harness.statuses.at(-1)).toBe("There is not enough older chat history to compact.");
   });
+});
 
-  it("aborts the request and marks the answer interrupted mid-stream", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      yield { type: "delta", content: "Partial" };
-      await gate.promise;
-      yield { type: "delta", content: " ignored" };
-      yield { type: "complete", answer: answerFor("never") };
-    });
+describe("ResearchQuestionController running state", () => {
+  it("mirrors the manager's running state", () => {
+    const running = vi.fn(() => true);
+    const harness = createHarness({ isRunning: running });
 
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
     expect(harness.controller.isRunning()).toBe(true);
-
-    harness.controller.stopRunningQuestion();
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    const signal = harness.requests[0]?.signal;
-    expect(signal?.aborted).toBe(true);
-    expect((signal?.reason as DOMException | undefined)?.name).toBe("AbortError");
-    expect(harness.messages().at(-1)?.content).toBe("Partial");
-    expect(harness.messages().at(-1)?.researchProgress?.phase).toBe("interrupted");
-    expect(harness.lastAnswer()).toBeNull();
-    expect(harness.controller.isRunning()).toBe(false);
-    expect(harness.lifecycleLog.at(-1)).toBe("form:false");
-    expect(harness.statuses.at(-1)).toBeNull();
-  });
-
-  it("keeps a promoted checkpoint draft as the visible answer after cancellation", async () => {
-    const gate = deferred();
-    const harness = createHarness(async function* events() {
-      yield { type: "checkpoint-delta", checkpointId: "c1", round: 1, content: "Draft body" };
-      yield { type: "checkpoint-promote", checkpointId: "c1", round: 1 };
-      await gate.promise;
-      yield { type: "complete", answer: answerFor("never") };
-    });
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    harness.controller.stopRunningQuestion();
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.messages().at(-1)?.content).toBe("Draft body");
-    expect(harness.messages().at(-1)?.researchProgress?.checkpoints[0]?.status).toBe("interrupted");
-  });
-
-  it("does not register answer sources for a run that was stopped before completing", async () => {
-    const gate = deferred();
-    const registered: string[] = [];
-    let harness: Harness;
-    harness = createHarness(
-      async function* events() {
-        yield { type: "delta", content: "Partial" };
-        await gate.promise;
-        harness.requests[0]?.finalizeAnswer?.(answerFor("Done"));
-        yield { type: "complete", answer: answerFor("Done") };
-      },
-      {
-        registerAnswerSources: (answer, messageId) => {
-          registered.push(messageId);
-          return answer;
-        },
-      },
-    );
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    harness.controller.stopRunningQuestion();
-    gate.resolve();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(registered).toEqual([]);
-  });
-
-  it("ignores a stop request when nothing is running", async () => {
-    const harness = createHarness(async function* events() {
-      yield { type: "complete", answer: answerFor("Done") };
-    });
-
-    harness.controller.stopRunningQuestion();
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.messages().at(-1)?.content).toBe("Done");
-    expect(harness.requests[0]?.signal?.aborted).toBe(false);
-  });
-});
-
-describe("ResearchQuestionController failure reporting", () => {
-  it("shows the settings error and logs it when the research service cannot be built", async () => {
-    const logged: unknown[] = [];
-    const failure = new AttestError({
-      code: "INVALID_SETTINGS",
-      message: "Index this profile before using it in chat or search.",
-    });
-    const harness = createHarness(
-      async function* events() {
-        yield { type: "complete", answer: answerFor("never") };
-      },
-      {
-        createResearchService: () => {
-          throw failure;
-        },
-        logError: (error) => {
-          logged.push(error);
-        },
-      },
-    );
-
-    const run = harness.controller.submitQuestion();
-    await flushMicrotasks();
-    await advanceTime(100);
-    await run;
-
-    expect(harness.messages().at(-1)?.content).toBe(
-      "Index this profile before using it in chat or search.",
-    );
-    expect(logged).toEqual([failure]);
+    expect(running).toHaveBeenCalled();
   });
 });

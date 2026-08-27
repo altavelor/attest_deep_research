@@ -225,3 +225,79 @@ describe("Attest vault warm-up caches", () => {
     expect(app.vault.listenerCount("rename")).toBe(0);
   });
 });
+
+describe("Attest chat session ownership", () => {
+  let app: App;
+  let plugin: AttestPlugin;
+
+  beforeEach(async () => {
+    createContainer();
+    app = new App();
+    plugin = createPlugin(app);
+    await plugin.onload();
+  });
+
+  afterEach(async () => {
+    restoreDomTimers();
+    resetDom();
+  });
+
+  it("keeps one manager across chat leaves and disposes it on unload", async () => {
+    const manager = plugin.chatSessions;
+    const first = await openChatLeaf(app);
+    const second = await openChatLeaf(app);
+
+    expect(plugin.chatSessions).toBe(manager);
+    const session = manager.createSession({
+      chatModelProfileId: "model",
+      searchMode: "indexOnly",
+    });
+    manager.select(session.sessionId);
+    await first.detach();
+    expect(manager.getSession(session.sessionId)).toBe(session);
+
+    await second.detach();
+    plugin.unload();
+
+    expect(manager.listSessions()).toEqual([]);
+  });
+
+  it("normalizes a stale persisted run before any chat view can observe it", async () => {
+    const staleChat = {
+      schemaVersion: 4,
+      id: "stale-chat",
+      title: "Interrupted by a crash",
+      createdAt: "2026-06-01T09:00:00.000Z",
+      updatedAt: "2026-06-01T10:00:00.000Z",
+      messages: [{ role: "user", content: "Question?", createdAt: "2026-06-01T10:00:00.000Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: { chatModelProfileId: "model", searchMode: "indexOnly" },
+      sourceRegistry: { sources: [] },
+      unreadCompletion: false,
+      lastRun: { runId: "run-1", startedAt: "2026-06-01T10:00:00.000Z", status: "running" },
+    };
+    const adapter = app.vault.adapter as {
+      mkdir(path: string): Promise<void>;
+      write(path: string, data: string): Promise<void>;
+      read(path: string): Promise<string>;
+    };
+    await adapter.mkdir(".attest/chats");
+    await adapter.write(".attest/chats/stale-chat.json", `${JSON.stringify(staleChat, null, 2)}\n`);
+
+    const recovered = createPlugin(app);
+    await recovered.onload();
+
+    const raw = JSON.parse(await adapter.read(".attest/chats/stale-chat.json")) as {
+      updatedAt: string;
+      lastRun: { status: string; interruptionReason: string };
+    };
+    expect(raw.lastRun).toMatchObject({
+      status: "interrupted",
+      interruptionReason: "crash-recovery",
+    });
+    expect(raw.updatedAt).toBe("2026-06-01T10:00:00.000Z");
+    expect(recovered.chatSessions.status("stale-chat")).toBe("idle");
+    recovered.unload();
+  });
+});
