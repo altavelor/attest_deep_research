@@ -2,6 +2,16 @@ import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
   "command.openChat": "فتح محادثة Attest",
+  "command.askCurrentNote": "اسأل Attest عن الملاحظة الحالية",
+  "command.askSelectedText": "اسأل Attest عن النص المحدد",
+  "command.findRelatedNotes": "العثور على ملاحظات ذات صلة",
+  "command.updateIndex": "تحديث فهرس Attest",
+  "command.summarizeCurrentNote": "تلخيص الملاحظة الحالية",
+  "command.prompt.selectedText": "اطرح سؤالاً عن هذا النص المحدد:\n\n{selection}\n\nالسؤال:",
+  "command.prompt.relatedNotes":
+    "ابحث في الخزنة عن ملاحظات مرتبطة بهذه الملاحظة ارتباطاً ذا معنى. اشرح كل علاقة واستشهد بالملاحظات ذات الصلة.",
+  "command.prompt.summarizeNote":
+    "لخّص هذه الملاحظة بإيجاز. احتفظ بالادعاءات والقرارات والأسئلة المفتوحة الرئيسية واستشهد بالأقسام ذات الصلة.",
 
   "chat.tab.chat": "المحادثة",
   "chat.tab.indexSearch": "بحث الفهرس",

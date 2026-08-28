@@ -51,6 +51,7 @@ export class Workspace {
   activeFile: TFile | null = null;
   readonly openedLinks: { target: string; sourcePath: string }[] = [];
   readonly revealedLeaves: WorkspaceLeaf[] = [];
+  rightLeafRequests = 0;
   private readonly leaves: WorkspaceLeaf[] = [];
   private readonly viewFactories = new Map<string, (leaf: WorkspaceLeaf) => View>();
 
@@ -73,6 +74,7 @@ export class Workspace {
   }
 
   getRightLeaf(_split: boolean): WorkspaceLeaf {
+    this.rightLeafRequests += 1;
     return this.createLeaf();
   }
 

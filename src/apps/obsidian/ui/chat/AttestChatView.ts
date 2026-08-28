@@ -67,6 +67,13 @@ export const ATTEST_CHAT_VIEW_TYPE = "attest-chat";
 
 export type { IndexSearchOptions, IndexSearchResult };
 
+export interface AttestChatCommandAction {
+  contextPaths: readonly string[];
+  question?: string;
+  searchMode?: ResearchSearchMode;
+  submit: boolean;
+}
+
 export interface AttestChatViewServices {
   createResearchService(
     chatModelProfileId?: string,
@@ -126,6 +133,7 @@ export class AttestChatView extends ItemView {
   private activeMessageRenderFrame: number | null = null;
   private finalizingRenderFrame: number | null = null;
   private highlightTimer: number | null = null;
+  private commandActionQueue: Promise<void> = Promise.resolve();
 
   constructor(leaf: WorkspaceLeaf, services: AttestChatViewServices) {
     super(leaf);
@@ -386,11 +394,52 @@ export class AttestChatView extends ItemView {
     if (this.transcriptEl) {
       disposeChatTranscript(this.transcriptEl);
     }
+    this.toolbarEl = null;
     this.contentEl.empty();
   }
 
   redisplay(): void {
     this.render();
+  }
+
+  runCommand(action: AttestChatCommandAction): Promise<void> {
+    const run = this.commandActionQueue.then(() => this.executeCommand(action));
+    this.commandActionQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async executeCommand(action: AttestChatCommandAction): Promise<void> {
+    if (this.isRunning) await this.startNewChat();
+
+    if (this.activePanel !== "chat") {
+      this.activePanel = "chat";
+      this.render();
+    }
+
+    this.attachedContextPaths = Array.from(
+      new Set([
+        ...this.attachedContextPaths,
+        ...action.contextPaths.filter((path) => isContextDocumentPath(path)),
+      ]),
+    );
+    this.composer.renderAttachedContext();
+
+    if (action.searchMode) {
+      await this.updateSearchMode(action.searchMode);
+      this.composer.setSearchMode(action.searchMode);
+    }
+
+    if (action.question !== undefined) {
+      this.composer.setQuestionInput(action.question);
+    } else {
+      this.composer.focusQuestionInput();
+    }
+
+    if (action.submit) {
+      await this.researchController.submitQuestion();
+    } else {
+      await this.saveCurrentChat();
+    }
   }
 
   private render(): void {
@@ -399,6 +448,7 @@ export class AttestChatView extends ItemView {
       disposeChatTranscript(this.transcriptEl);
     }
     this.contentEl.empty();
+    this.toolbarEl = null;
     this.contentEl.addClass("attest-chat-view");
     this.contentEl.setAttr("dir", this.services.getTranslator().direction);
     if (!this.services.isDebugMode()) {
@@ -446,6 +496,11 @@ export class AttestChatView extends ItemView {
   private headerOptions(): Parameters<typeof renderPanelTabs>[1] {
     return {
       activePanel: this.activePanel,
+      hasCompletedAnswer:
+        this.lastAnswer !== null ||
+        this.messages.some(
+          (message) => message.role === "assistant" && message.answer !== undefined,
+        ),
       isDebugMode: this.services.isDebugMode(),
       historyActivity: this.sessions.activity(this.savedChatSession.savedChats),
       t: this.t,
@@ -591,6 +646,7 @@ export class AttestChatView extends ItemView {
   }
 
   private renderAnswerDetails(): void {
+    this.renderToolbarActions();
     this.renderFollowUps(this.lastAnswer?.followUpQuestions ?? []);
   }
 

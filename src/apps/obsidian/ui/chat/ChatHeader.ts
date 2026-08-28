@@ -8,6 +8,7 @@ export type AttestPanel = "chat" | "indexSearch";
 
 export interface ChatHeaderOptions {
   activePanel: AttestPanel;
+  hasCompletedAnswer: boolean;
   isDebugMode: boolean;
   historyActivity: ChatHistoryActivity;
   t: Translate;
@@ -43,12 +44,14 @@ export function renderChatWindowActions(
     onClick: () => options.onOpenHistory(historyButton),
   });
   renderChatHistoryActivity(historyButton, options.historyActivity);
-  createHeaderIconButton(actions, {
-    icon: "book-open",
-    label: options.t("chat.action.sources"),
-    disabled: false,
-    onClick: options.onOpenSources,
-  });
+  if (options.hasCompletedAnswer) {
+    createHeaderIconButton(actions, {
+      icon: "book-open",
+      label: options.t("chat.action.sources"),
+      disabled: false,
+      onClick: options.onOpenSources,
+    });
+  }
   createHeaderIconButton(actions, {
     icon: "message-square-plus",
     label: options.t("chat.action.newChat"),

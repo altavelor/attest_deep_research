@@ -2,6 +2,17 @@ import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
   "command.openChat": "Abrir el chat de Attest",
+  "command.askCurrentNote": "Preguntar a Attest sobre la nota actual",
+  "command.askSelectedText": "Preguntar a Attest sobre el texto seleccionado",
+  "command.findRelatedNotes": "Buscar notas relacionadas",
+  "command.updateIndex": "Actualizar el índice de Attest",
+  "command.summarizeCurrentNote": "Resumir la nota actual",
+  "command.prompt.selectedText":
+    "Haz una pregunta sobre este texto seleccionado:\n\n{selection}\n\nPregunta:",
+  "command.prompt.relatedNotes":
+    "Busca en mi bóveda notas relacionadas de forma significativa con esta nota. Explica cada relación y cita las notas relacionadas.",
+  "command.prompt.summarizeNote":
+    "Resume esta nota de forma concisa. Conserva sus afirmaciones, decisiones y preguntas abiertas principales y cita las secciones relevantes.",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Búsqueda en el índice",

@@ -98,6 +98,10 @@ export class ChatComposerController {
     this.refs.textareaEl.focus();
   }
 
+  focusQuestionInput(): void {
+    this.refs?.textareaEl.focus();
+  }
+
   getModel(): string {
     return this.refs?.controls.getModel() ?? "";
   }
@@ -108,6 +112,11 @@ export class ChatComposerController {
 
   getSearchMode(): ResearchSearchMode {
     return this.refs?.controls.getSearchMode() ?? "indexOnly";
+  }
+
+  setSearchMode(mode: ResearchSearchMode): void {
+    this.refs?.controls.setSearchMode(mode);
+    this.updateSubmitAvailability();
   }
 
   getContextMode(): ContextMode {

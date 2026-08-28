@@ -30,7 +30,11 @@ import type { FileSystemPort } from "@application/ports";
 import { ObsidianContextFileProvider } from "@adapters/obsidian/ObsidianContextFileProvider";
 import { VaultFileSystem } from "@adapters/obsidian/VaultFileSystem";
 import { VaultWarmCaches } from "./composition/VaultWarmCaches";
-import { ATTEST_CHAT_VIEW_TYPE, AttestChatView } from "./ui/chat/AttestChatView";
+import {
+  ATTEST_CHAT_VIEW_TYPE,
+  AttestChatView,
+  type AttestChatCommandAction,
+} from "./ui/chat/AttestChatView";
 import { refreshIndexDescriptionAfterRun } from "@adapters/indexing";
 import {
   CompositionContext,
@@ -53,6 +57,7 @@ import {
   resolveIndexProfileForUse,
 } from "./composition/profileResolvers";
 import { MobileIndexingLifecycle } from "./indexing/MobileIndexingLifecycle";
+import { ATTEST_COMMAND_IDS, registerAttestCommands } from "./commands";
 import { createChatSessionManager } from "./composition/chatSessionFactory";
 import type { ChatSessionManager } from "@application/use-cases/chat";
 
@@ -130,6 +135,8 @@ export default class AttestPlugin extends Plugin {
   private warmCaches?: VaultWarmCaches;
   private vaultFileSystem?: FileSystemPort;
   private mobileIndexingLifecycle?: MobileIndexingLifecycle;
+  private ribbonIcon?: HTMLElement;
+  private chatActivation?: Promise<AttestChatView>;
 
   /** Opens the plugin's settings tab; used by in-chat notices that link to it. */
   openSettingsTab(): void {
@@ -255,6 +262,13 @@ export default class AttestPlugin extends Plugin {
         }),
     );
     this.registerCommands();
+    this.ribbonIcon = this.addRibbonIcon(
+      "bot-message-square",
+      this.translate("command.openChat"),
+      () => {
+        void this.activateChatView().catch((error) => new Notice(toUserMessage(error)));
+      },
+    );
     this.addSettingTab(new AttestSettingTab(this.app, this));
   }
 
@@ -265,6 +279,7 @@ export default class AttestPlugin extends Plugin {
     this.mobileIndexingLifecycle = undefined;
     this.warmCaches?.dispose();
     this.warmCaches = undefined;
+    this.ribbonIcon = undefined;
   }
 
   /**
@@ -300,8 +315,11 @@ export default class AttestPlugin extends Plugin {
    */
   applyUiLanguage(): void {
     this.rebindTranslator();
-    this.removeCommand("open-attest-chat");
+    for (const commandId of ATTEST_COMMAND_IDS) this.removeCommand(commandId);
     this.registerCommands();
+    const ribbonLabel = this.translate("command.openChat");
+    this.ribbonIcon?.setAttr("aria-label", ribbonLabel);
+    this.ribbonIcon?.setAttr("title", ribbonLabel);
   }
 
   getTranslator(): UiTranslator {
@@ -315,13 +333,14 @@ export default class AttestPlugin extends Plugin {
   }
 
   private registerCommands(): void {
-    this.addCommand({
-      id: "open-attest-chat",
-      name: this.translate("command.openChat"),
-      icon: "bot-message-square",
-      callback: () => {
-        void this.activateChatView();
+    registerAttestCommands({
+      addCommand: (command) => this.addCommand(command),
+      t: this.translate,
+      openChat: async () => {
+        await this.activateChatView();
       },
+      runChatCommand: (action) => this.runChatCommand(action),
+      updateActiveIndex: () => this.updateActiveIndex(),
     });
   }
 
@@ -406,17 +425,41 @@ export default class AttestPlugin extends Plugin {
     }
   }
 
-  async activateChatView(): Promise<void> {
+  async activateChatView(): Promise<AttestChatView> {
+    if (!this.chatActivation) {
+      this.chatActivation = this.activateChatViewOnce().finally(() => {
+        this.chatActivation = undefined;
+      });
+    }
+    return this.chatActivation;
+  }
+
+  private async activateChatViewOnce(): Promise<AttestChatView> {
     const existingLeaf = this.app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)[0];
     const leaf =
       existingLeaf ?? this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(true);
 
-    await leaf.setViewState({
-      type: ATTEST_CHAT_VIEW_TYPE,
-      active: true,
-    });
+    if (!existingLeaf) {
+      await leaf.setViewState({
+        type: ATTEST_CHAT_VIEW_TYPE,
+        active: true,
+      });
+    }
     await this.app.workspace.revealLeaf(leaf);
     this.warmVaultCaches();
+    if (!(leaf.view instanceof AttestChatView)) {
+      throw new Error("Attest chat view could not be activated.");
+    }
+    return leaf.view;
+  }
+
+  private async runChatCommand(action: AttestChatCommandAction): Promise<void> {
+    const view = await this.activateChatView();
+    await view.runCommand(action);
+  }
+
+  private async updateActiveIndex(): Promise<void> {
+    await this.indexing.start(getActiveIndexProfile(this.settings).id);
   }
 
   /** Pull question-independent inputs off the critical path of the first turn. */
