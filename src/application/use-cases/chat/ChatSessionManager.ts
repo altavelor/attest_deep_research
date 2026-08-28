@@ -5,6 +5,7 @@ import type { SavedChatSummary } from "@core/chat/savedChat";
 import {
   chatHistoryActivity,
   isNonTerminalChatSessionStatus,
+  MAX_CONCURRENT_CHAT_SESSIONS,
   nextRunStatus,
   normalizeStaleRunState,
   type ChatHistoryActivity,
@@ -294,6 +295,7 @@ export class ChatSessionManager {
 
     if (status === "queued") {
       this.queue.push(sessionId);
+      void this.promoteNext();
       return { started: true };
     }
 
@@ -506,7 +508,7 @@ export class ChatSessionManager {
   }
 
   private async promoteNext(): Promise<void> {
-    if (this.disposed) return;
+    if (this.disposed || this.slots.size >= MAX_CONCURRENT_CHAT_SESSIONS) return;
     const sessionId = this.queue.shift();
     if (!sessionId) return;
     const runtime = this.sessions.get(sessionId);

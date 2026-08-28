@@ -735,6 +735,39 @@ describe("chat session manager lifecycle", () => {
     );
   });
 
+  it("runs a queued session as soon as a slot frees while its save is in flight", async () => {
+    const gated = createGatedService();
+    const repository = createUnorderedRepository();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      repository: repository.repository,
+    });
+    const running: ChatSessionState[] = [];
+    for (let index = 0; index < MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
+      const session = newSession(manager);
+      running.push(session);
+      await manager.start(session.sessionId, request(`Question ${index}?`));
+    }
+    await settle();
+
+    const delayed = newSession(manager);
+    repository.holdNextSave();
+    const start = manager.start(delayed.sessionId, request("Delayed question?"));
+    await settle();
+
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    expect(running[0].status).toBe("completed");
+
+    repository.releaseHeldSave();
+    await start;
+    await settle();
+
+    expect(delayed.status).toBe("running");
+    expect(gated.serviceCalls).toBe(MAX_CONCURRENT_CHAT_SESSIONS + 1);
+  });
+
   it("keeps a session whose first save is still in flight when New Chat discards it", async () => {
     const gated = createGatedService();
     const repository = createUnorderedRepository();
