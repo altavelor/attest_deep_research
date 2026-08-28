@@ -53,6 +53,8 @@ import {
   resolveIndexProfileForUse,
 } from "./composition/profileResolvers";
 import { MobileIndexingLifecycle } from "./indexing/MobileIndexingLifecycle";
+import { createChatSessionManager } from "./composition/chatSessionFactory";
+import type { ChatSessionManager } from "@application/use-cases/chat";
 
 export default class AttestPlugin extends Plugin {
   readonly defaultSettings = DEFAULT_SETTINGS;
@@ -124,6 +126,7 @@ export default class AttestPlugin extends Plugin {
 
   readonly webSourceHealth = new WebSourceHealthTracker();
 
+  private chatSessionManager?: ChatSessionManager;
   private warmCaches?: VaultWarmCaches;
   private vaultFileSystem?: FileSystemPort;
   private mobileIndexingLifecycle?: MobileIndexingLifecycle;
@@ -154,8 +157,21 @@ export default class AttestPlugin extends Plugin {
     };
   }
 
+  /** Chat sessions outlive every chat view, so the plugin owns their manager. */
+  get chatSessions(): ChatSessionManager {
+    this.chatSessionManager ??= createChatSessionManager({
+      repository: this.createChatStore(),
+      createResearchService: (chatModelProfileId, indexProfileId, searchMode) =>
+        createResearchService(this.composition, chatModelProfileId, indexProfileId, searchMode),
+      persistDiagnostics: () => this.settings.debugMode,
+      logError: (error) => this.logger.logError(error, { url: "chat:session" }),
+    });
+    return this.chatSessionManager;
+  }
+
   async onload(): Promise<void> {
     await this.loadSettings();
+    await this.recoverStaleChatRuns();
     this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
     if (Platform.isMobile) {
       this.mobileIndexingLifecycle = new MobileIndexingLifecycle({
@@ -222,16 +238,15 @@ export default class AttestPlugin extends Plugin {
               contentHash,
             ),
           searchIndex: (options) => this.searchIndex(options),
+          sessions: this.chatSessions,
           listSavedChats: () => this.createChatStore().listChats(),
           loadSavedChat: (id) => this.createChatStore().loadChat(id),
-          saveChat: (input) => this.createChatStore().saveChat(input),
           renameSavedChat: async (id, title) => {
             await this.createChatStore().renameChat(id, title);
           },
           setSavedChatFavorite: async (id, isFavorite) => {
             await this.createChatStore().setChatFavorite(id, isFavorite);
           },
-          deleteSavedChat: (id) => this.createChatStore().deleteChat(id),
           getTranslator: () => this.translator,
           logError: (error) => this.composition.logger.logError(error, { url: "chat:research" }),
           isDebugMode: () => this.settings.debugMode,
@@ -244,10 +259,25 @@ export default class AttestPlugin extends Plugin {
   }
 
   onunload(): void {
+    void this.chatSessionManager?.dispose();
+    this.chatSessionManager = undefined;
     this.mobileIndexingLifecycle?.dispose();
     this.mobileIndexingLifecycle = undefined;
     this.warmCaches?.dispose();
     this.warmCaches = undefined;
+  }
+
+  /**
+   * Startup recovery. Stale queued, running, or stopping runs left by an
+   * abnormal shutdown become interrupted before any view or run can observe
+   * them; a failure here must not block plugin load.
+   */
+  private async recoverStaleChatRuns(): Promise<void> {
+    try {
+      await this.chatSessions.normalizeStaleChats();
+    } catch (error) {
+      this.logger.logError(error, { url: "chat:recovery" });
+    }
   }
 
   /** Warm-up caches exist for the plugin's lifetime; factories run only after onload. */

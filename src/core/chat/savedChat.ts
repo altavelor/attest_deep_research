@@ -3,6 +3,7 @@ import { ResearchAnswer } from "@core/answer";
 import { ResearchSearchMode } from "@core/research/searchMode";
 import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
+import { parseSavedChatRunState, type SavedChatRunState } from "./chatSession";
 import {
   canonicalSourceKey,
   ConversationEvidenceRevision,
@@ -11,7 +12,7 @@ import {
   createConversationSourceRegistry,
 } from "./sourceRegistry";
 
-export const CHAT_SCHEMA_VERSION = 3;
+export const CHAT_SCHEMA_VERSION = 4;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
 
 export interface SavedChatSettings {
@@ -24,7 +25,7 @@ export interface SavedChatSettings {
 }
 
 export interface SavedChat {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: string;
   title: string;
   createdAt: string;
@@ -34,8 +35,10 @@ export interface SavedChat {
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
   sourceRegistry: ConversationSourceRegistry;
+  unreadCompletion: boolean;
 
   isFavorite?: boolean;
+  lastRun?: SavedChatRunState;
 }
 
 export interface SavedChatSummary {
@@ -44,6 +47,8 @@ export interface SavedChatSummary {
   updatedAt: string;
   messageCount: number;
   isFavorite: boolean;
+  unreadCompletion: boolean;
+  lastRun?: SavedChatRunState;
 }
 
 export interface SaveChatInput {
@@ -55,6 +60,9 @@ export interface SaveChatInput {
   attachedContextPaths: string[];
   chatSettings: SavedChatSettings;
   sourceRegistry?: ConversationSourceRegistry;
+  unreadCompletion?: boolean;
+  lastRun?: SavedChatRunState;
+  updatedAt?: string;
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
@@ -81,27 +89,48 @@ export function isSavedChat(value: unknown): value is SavedChat {
   return parseSavedChat(value) !== null;
 }
 
-/** Converts the legacy v2 wire format into the current in-memory chat shape. */
+/**
+ * Accepts saved-chat wire formats v2, v3, and v4 and returns the v4 in-memory
+ * shape. Older schemas gain `unreadCompletion: false` and no run metadata;
+ * malformed optional v4 run metadata is discarded rather than failing the chat.
+ */
 export function parseSavedChat(value: unknown): SavedChat | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
-  const chat = value as Partial<SavedChat> & { schemaVersion?: unknown };
+  const chat = value as Partial<SavedChat>;
+  const schemaVersion = (value as { schemaVersion?: unknown }).schemaVersion;
   if (!hasSavedChatBase(chat)) return null;
-
-  if (chat.schemaVersion === CHAT_SCHEMA_VERSION) {
-    return {
-      ...(chat as Omit<SavedChat, "sourceRegistry">),
-      sourceRegistry: sanitizeConversationSourceRegistry(chat.sourceRegistry),
-    };
+  if (schemaVersion !== 2 && schemaVersion !== 3 && schemaVersion !== 4) {
+    return null;
   }
-  if (chat.schemaVersion !== 2) return null;
+
+  const isCurrent = schemaVersion === CHAT_SCHEMA_VERSION;
+  const lastRun = isCurrent
+    ? parseSavedChatRunState((value as { lastRun?: unknown }).lastRun)
+    : undefined;
+
+  const {
+    schemaVersion: _schemaVersion,
+    sourceRegistry: _sourceRegistry,
+    unreadCompletion: _unreadCompletion,
+    lastRun: _lastRun,
+    ...rest
+  } = chat;
 
   return {
-    ...(chat as Omit<SavedChat, "schemaVersion" | "sourceRegistry">),
+    ...(rest as Omit<
+      SavedChat,
+      "schemaVersion" | "sourceRegistry" | "unreadCompletion" | "lastRun"
+    >),
     schemaVersion: CHAT_SCHEMA_VERSION,
-    sourceRegistry: createConversationSourceRegistry(),
+    sourceRegistry:
+      schemaVersion === 2
+        ? createConversationSourceRegistry()
+        : sanitizeConversationSourceRegistry(chat.sourceRegistry),
+    unreadCompletion: isCurrent && chat.unreadCompletion === true,
+    ...(lastRun ? { lastRun } : {}),
   };
 }
 

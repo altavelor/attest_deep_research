@@ -91,6 +91,7 @@ describe("FileChatStore", () => {
         updatedAt: "2026-06-10T10:05:00.000Z",
         messageCount: 1,
         isFavorite: false,
+        unreadCompletion: false,
       },
       {
         id: "chat-fixed",
@@ -98,6 +99,7 @@ describe("FileChatStore", () => {
         updatedAt: "2026-06-10T10:00:00.000Z",
         messageCount: 1,
         isFavorite: false,
+        unreadCompletion: false,
       },
     ]);
   });
@@ -246,7 +248,7 @@ describe("FileChatStore", () => {
     const raw = await fileSystem.readText(`${folder}/atomic.json`);
     expect(JSON.parse(raw)).toMatchObject({
       id: "atomic",
-      schemaVersion: 3,
+      schemaVersion: 4,
       sourceRegistry: { sources: [] },
     });
   });
@@ -339,7 +341,7 @@ describe("FileChatStore", () => {
     ]);
   });
 
-  it("loads a v2 chat into the v3 registry shape without losing its messages", async () => {
+  it("loads a v2 chat into the v4 shape without losing its messages", async () => {
     const store = new FileChatStore({ fileSystem, folder });
     await fileSystem.writeText(
       `${folder}/v2.json`,
@@ -359,10 +361,136 @@ describe("FileChatStore", () => {
     );
 
     await expect(store.loadChat("v2")).resolves.toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       messages: [{ content: "Old question" }],
       sourceRegistry: { sources: [] },
+      unreadCompletion: false,
     });
+  });
+
+  it("keeps v4 completion visibility and run metadata across a load", async () => {
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "v4" });
+
+    await store.saveChat({
+      messages: [{ role: "user", content: "Question?", createdAt: "2026-06-10T10:00:00.000Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
+      unreadCompletion: true,
+      lastRun: {
+        runId: "run-1",
+        startedAt: "2026-06-10T10:00:00.000Z",
+        completedAt: "2026-06-10T10:01:00.000Z",
+        status: "completed",
+      },
+    });
+
+    expect(await store.loadChat("v4")).toMatchObject({
+      schemaVersion: 4,
+      unreadCompletion: true,
+      lastRun: { runId: "run-1", status: "completed" },
+    });
+    expect(await store.listChats()).toEqual([
+      expect.objectContaining({
+        id: "v4",
+        unreadCompletion: true,
+        lastRun: expect.objectContaining({ status: "completed" }),
+      }),
+    ]);
+  });
+
+  it("loads a v3 chat as unread-free v4 without losing its registry", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/v3.json`,
+      JSON.stringify({
+        schemaVersion: 3,
+        id: "v3",
+        title: "Third schema",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [{ role: "user", content: "Kept", createdAt: "2026-06-10T10:00:00.000Z" }],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+        sourceRegistry: { sources: [] },
+        unreadCompletion: true,
+      }),
+    );
+
+    expect(await store.loadChat("v3")).toMatchObject({
+      schemaVersion: 4,
+      id: "v3",
+      messages: [{ content: "Kept" }],
+      unreadCompletion: false,
+    });
+    expect((await store.loadChat("v3"))?.lastRun).toBeUndefined();
+  });
+
+  it("discards malformed v4 run metadata without dropping the chat", async () => {
+    const store = new FileChatStore({ fileSystem, folder });
+    await fileSystem.writeText(
+      `${folder}/broken-run.json`,
+      JSON.stringify({
+        schemaVersion: 4,
+        id: "broken-run",
+        title: "Broken run",
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        messages: [{ role: "user", content: "Kept", createdAt: "2026-06-10T10:00:00.000Z" }],
+        lastAnswer: null,
+        attachedContextPaths: [],
+        chatSettings: CHAT_SETTINGS,
+        sourceRegistry: { sources: [] },
+        unreadCompletion: "yes",
+        lastRun: { runId: 42, status: "running" },
+      }),
+    );
+
+    expect(await store.loadChat("broken-run")).toMatchObject({
+      id: "broken-run",
+      messages: [{ content: "Kept" }],
+      unreadCompletion: false,
+    });
+    expect((await store.loadChat("broken-run"))?.lastRun).toBeUndefined();
+  });
+
+  it("rewrites completion visibility and run state without touching updatedAt", async () => {
+    const store = new FileChatStore({
+      fileSystem,
+      folder,
+      now: () => new Date("2026-06-10T10:00:00.000Z"),
+      createId: () => "metadata",
+    });
+    await store.saveChat({
+      messages: [{ role: "user", content: "Question?", createdAt: "2026-06-10T10:00:00.000Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: CHAT_SETTINGS,
+      unreadCompletion: true,
+    });
+
+    await store.setChatUnreadCompletion("metadata", false);
+    await store.setChatRunState("metadata", {
+      runId: "run-2",
+      startedAt: "2026-06-10T10:00:00.000Z",
+      status: "interrupted",
+      interruptionReason: "crash-recovery",
+    });
+
+    expect(await store.loadChat("metadata")).toMatchObject({
+      updatedAt: "2026-06-10T10:00:00.000Z",
+      unreadCompletion: false,
+      lastRun: { runId: "run-2", interruptionReason: "crash-recovery" },
+    });
+    await expect(store.setChatUnreadCompletion("missing", false)).resolves.toBeNull();
+    await expect(
+      store.setChatRunState("missing", {
+        runId: "run-3",
+        startedAt: "2026-06-10T10:00:00.000Z",
+        status: "completed",
+      }),
+    ).resolves.toBeNull();
   });
 
   it("drops a malformed persisted registry while keeping the chat's messages", async () => {

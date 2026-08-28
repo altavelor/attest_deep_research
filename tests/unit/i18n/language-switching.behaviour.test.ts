@@ -17,6 +17,7 @@ import { createTranslator } from "@adapters/i18n";
 import type { UiTranslator } from "@adapters/i18n";
 import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
 import { ContextDocumentPickerModal } from "@apps/obsidian/ui/chat/context/ContextDocumentPickerModal";
+import { createTestSessionManager } from "../../helpers/chatSessions";
 
 const PROBE_KEY = "chat.composer.placeholder";
 
@@ -37,14 +38,11 @@ function createServices(getTranslator: () => UiTranslator): AttestChatViewServic
     getIndexSearchEmbedderWarning: () => undefined,
     openIndexSettings: () => {},
     searchIndex: async () => ({ chunks: [] }),
+    sessions: createTestSessionManager().manager,
     listSavedChats: async () => [],
     loadSavedChat: async () => null,
-    saveChat: async () => {
-      throw new Error("The test must not save a chat.");
-    },
     renameSavedChat: async () => {},
     setSavedChatFavorite: async () => {},
-    deleteSavedChat: async () => {},
     getTranslator,
     isDebugMode: () => false,
     shouldIncludeActiveFileContext: () => false,

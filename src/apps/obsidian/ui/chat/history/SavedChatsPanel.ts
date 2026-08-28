@@ -1,7 +1,10 @@
 import { setIcon } from "obsidian";
 
 import { SavedChatSummary } from "@core/chat/savedChat";
+import type { ChatSessionStatus } from "@core/chat/chatSession";
+import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
 import type { Translate } from "@adapters/i18n";
+import { renderSavedChatStatus } from "./savedChatStatus";
 import {
   filterSavedChatsByTab,
   SavedChatListTab,
@@ -12,6 +15,8 @@ export interface SavedChatRowActions {
   onRenameChat?(id: string, title: string): void | Promise<void>;
   onDeleteChat?(id: string): void | Promise<void>;
   onToggleFavorite?(id: string): void | Promise<void>;
+  getChatStatus?(id: string): ChatSessionStatus;
+  onStopChat?(id: string): void;
 }
 
 export interface SavedChatsEmptyStateOptions extends SavedChatRowActions {
@@ -196,7 +201,16 @@ function renderSavedChatRow(
   meta.createSpan({ text: formatRelativeTime(chat.updatedAt, options.t) });
   button.addEventListener("click", () => options.onOpenChat(chat.id));
 
-  if (options.onRenameChat || options.onDeleteChat || options.onToggleFavorite) {
+  const status = options.getChatStatus?.(chat.id) ?? "idle";
+  renderSavedChatStatus(row, {
+    status,
+    title: chat.title,
+    t: options.t,
+    ...(options.onStopChat ? { onStopChat: () => options.onStopChat!(chat.id) } : {}),
+  });
+
+  const canDelete = options.onDeleteChat && !isNonTerminalChatSessionStatus(status);
+  if (options.onRenameChat || canDelete || options.onToggleFavorite) {
     const actions = row.createDiv({
       cls: `attest-chat__saved-actions${chat.isFavorite ? " has-favorite" : ""}`,
     });
@@ -238,7 +252,7 @@ function renderSavedChatRow(
       });
     }
 
-    if (options.onDeleteChat) {
+    if (canDelete) {
       const deleteButton = actions.createEl("button", {
         cls: "attest-chat__saved-action attest-chat__saved-action--delete",
         attr: {

@@ -1,17 +1,21 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 
-import {
-  SaveChatInput,
-  SavedChat,
-  SavedChatSettings,
-  SavedChatSummary,
-  inferChatTitle,
-} from "@core/chat/savedChat";
+import { SavedChat, SavedChatSettings, SavedChatSummary } from "@core/chat/savedChat";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
+import type {
+  ChatRunRequest,
+  ChatRunStartResult,
+  ChatSessionChange,
+  ChatSessionManager,
+  ChatSessionState,
+} from "@application/use-cases/chat";
+import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
+import type { ChatSessionStatus } from "@core/chat/chatSession";
 import type { ResearchSearchMode } from "@application/use-cases/research";
 import { ResearchAnswer } from "@core/answer";
 import { Citation } from "@core/model";
+import { toUserMessage } from "@core/errors";
 import { RetrievedChunk } from "@core/model";
 import { AnswerNoteWriter } from "./research/AnswerNoteWriter";
 import { ToolOutputViewer } from "./toolOutputViewer";
@@ -45,28 +49,19 @@ import {
   chatModelProfileLabel,
   createDefaultChatSettings,
   resolveChatSettings,
-  stripContextDiagnostics,
 } from "./chatViewHelpers";
 import type { DocumentImageResolver } from "@application/ports";
 import type { Translate, UiTranslator } from "@adapters/i18n";
 import { legacyIndexImageNotice, searchUnavailableMessage } from "./chatViewStatus";
 import { contextWindowUsage } from "./contextWindowUsage";
 import { ChatDisplayMessage } from "@core/conversation";
-import { stripMessageDiagnostics } from "@core/conversation";
 import { citationTarget } from "./conversationFormatting";
 import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
 import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
 import { ChatComposerController } from "./ChatComposerController";
 import { ChatSourcesModal } from "./sources/ChatSourcesModal";
-import {
-  ConversationSourceRegistry,
-  bindAnswerToConversationRegistry,
-  createConversationSourceRegistry,
-  recordConversationCitationUsages,
-  registerConversationEvidence,
-  selectConversationRegistryPromptView,
-} from "@core/chat/sourceRegistry";
+import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 
 export const ATTEST_CHAT_VIEW_TYPE = "attest-chat";
 
@@ -94,12 +89,11 @@ export interface AttestChatViewServices {
 
   resolveDocumentImage?: DocumentImageResolver["resolve"];
   searchIndex(options: IndexSearchOptions): Promise<IndexSearchResult>;
+  sessions: ChatSessionManager;
   listSavedChats(): Promise<SavedChatSummary[]>;
   loadSavedChat(id: string): Promise<SavedChat | null>;
-  saveChat(input: SaveChatInput): Promise<SavedChat>;
   renameSavedChat(id: string, title: string): Promise<void>;
   setSavedChatFavorite(id: string, isFavorite: boolean): Promise<void>;
-  deleteSavedChat(id: string): Promise<void>;
   getTranslator(): UiTranslator;
   logError?(error: unknown): void;
   isDebugMode(): boolean;
@@ -117,22 +111,20 @@ export class AttestChatView extends ItemView {
   private readonly toolOutputViewer: ToolOutputViewer;
   private readonly researchController: ResearchQuestionController;
   private readonly indexSearch: IndexSearchController;
-  private messages: ChatDisplayMessage[] = [];
-  private lastAnswer: ResearchAnswer | null = null;
-  private sourceRegistry: ConversationSourceRegistry = createConversationSourceRegistry();
-  private attachedContextPaths: string[] = [];
-  private currentChatSettings: SavedChatSettings;
-  private currentResearchMode: ResearchMode = "instant";
   private readonly savedChatSession: SavedChatSessionController;
   private activePanel: AttestPanel = "chat";
-  private isRunning = false;
   private editingMessageIndex: number | null = null;
+  private unsubscribeSessions: (() => void) | null = null;
+  private detachSessionView: (() => void) | null = null;
+  private selectedSessionId: string | null = null;
+  private toolbarEl: HTMLElement | null = null;
 
   private transcriptEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
   private activeMessageRenderFrame: number | null = null;
+  private finalizingRenderFrame: number | null = null;
   private highlightTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, services: AttestChatViewServices) {
@@ -153,21 +145,20 @@ export class AttestChatView extends ItemView {
     this.savedChatSession = new SavedChatSessionController({
       listSavedChats: () => this.services.listSavedChats(),
       loadSavedChat: (id) => this.services.loadSavedChat(id),
-      saveChat: (input) => this.services.saveChat(input),
       renameSavedChat: (id, title) => this.services.renameSavedChat(id, title),
       setSavedChatFavorite: (id, isFavorite) => this.services.setSavedChatFavorite(id, isFavorite),
-      deleteSavedChat: (id) => this.services.deleteSavedChat(id),
-      createSaveInput: () => this.createCurrentChatSaveInput(),
     });
     this.savedChatsPopover = new SavedChatsPopoverController({
       hostEl: this.contentEl,
       getSavedChats: () => this.savedChatSession.savedChats,
-      getCurrentChatId: () => this.savedChatSession.currentChatId,
+      getCurrentChatId: () => this.session.chatId,
       t: this.t,
       onOpenChat: (id) => void this.loadSavedChat(id),
       onRenameChat: (id, title) => void this.renameSavedChat(id, title),
       onToggleFavorite: (id) => void this.toggleSavedChatFavorite(id),
       onDeleteChat: (id) => void this.deleteSavedChat(id),
+      getChatStatus: (id) => this.chatStatus(id),
+      onStopChat: (id) => this.stopChat(id),
       refreshSavedChats: () => this.savedChatSession.refresh(),
     });
     this.composer = new ChatComposerController({
@@ -183,6 +174,8 @@ export class AttestChatView extends ItemView {
       getResearchMode: () => this.currentResearchMode,
       getAttachedContextPaths: () => this.attachedContextPaths,
       isRunning: () => this.isRunning,
+      getDraft: () => this.session.draft,
+      onDraftChange: (draft) => this.sessions.update(this.session.sessionId, { draft }),
       getContextWindowUsage: () => this.getContextWindowUsage(),
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       t: this.t,
@@ -200,77 +193,52 @@ export class AttestChatView extends ItemView {
       onUpdateResearchMode: (mode) => void this.updateResearchMode(mode),
     });
     this.researchController = new ResearchQuestionController({
+      getSessionId: () => this.session.sessionId,
+      isSessionDisplayed: (sessionId) => this.isSessionDisplayed(sessionId),
       getQuestionInput: () => this.composer.getQuestionInput(),
       clearQuestionInput: () => this.composer.clearQuestionInput(),
-      getMessages: () => this.messages,
-      setMessages: (messages) => {
-        this.messages = messages;
-      },
-      getLastAnswer: () => this.lastAnswer,
-      setLastAnswer: (answer) => {
-        this.lastAnswer = answer;
+      getMessages: (sessionId) => this.settingsOwner(sessionId).messages,
+      setMessages: (sessionId, messages) => {
+        this.sessions.update(sessionId, { messages });
       },
       getModelInputValue: () => this.composer.getModel(),
-      getCurrentModel: () => this.currentChatSettings.chatModelProfileId,
-      getCurrentModelLabel: () => this.getCurrentChatModelLabel(),
-      getContextLimitTokens: () => this.getContextLimitTokens(),
-      getReservedOutputTokens: () => this.getReservedOutputTokens(),
-      updateChatModel: (model) => this.updateChatModel(model),
-      saveCurrentChat: () => this.saveCurrentChat(),
-      createResearchService: () =>
-        this.services.createResearchService(
-          this.currentChatSettings.chatModelProfileId,
-          this.currentChatSettings.indexProfileId,
-          this.getSearchMode(),
-        ),
-      logError: (error) => this.services.logError?.(error),
-      getSearchMode: () => this.getSearchMode(),
-      getResearchMode: () => this.currentResearchMode,
-      getContextMode: () => this.currentChatSettings.contextMode ?? "include",
+      getCurrentModel: (sessionId) => this.settingsOf(sessionId).chatModelProfileId,
+      getCurrentModelLabel: (sessionId) => this.getCurrentChatModelLabel(sessionId),
+      getContextLimitTokens: (sessionId) => this.getContextLimitTokens(sessionId),
+      getReservedOutputTokens: (sessionId) => this.getReservedOutputTokens(sessionId),
+      isRunning: () => this.isRunning,
+      updateChatModel: (sessionId, model) => this.updateChatModel(model, sessionId),
+      saveCurrentChat: (sessionId) => this.saveCurrentChat(sessionId),
+      createResearchService: (sessionId) => {
+        const chatSettings = this.settingsOf(sessionId);
+        return this.services.createResearchService(
+          chatSettings.chatModelProfileId,
+          chatSettings.indexProfileId,
+          this.isSessionDisplayed(sessionId)
+            ? this.getSearchMode()
+            : (chatSettings.searchMode ?? this.getSearchMode()),
+        );
+      },
+      startRun: (sessionId, request) => this.startRun(sessionId, request),
+      stopRun: () => this.stopChatSession(this.session.sessionId),
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       shouldIncludeContextDiagnostics: () => this.services.isDebugMode(),
-      getContextPaths: () =>
+      getContextPaths: (sessionId) =>
         expandAttachedContextPaths(
-          this.attachedContextPaths,
+          this.settingsOwner(sessionId).attachedContextPaths,
           this.app.vault.getFiles().map((file) => file.path),
         ),
-      getConversationRegistryPromptView: (question) =>
-        selectConversationRegistryPromptView(this.sourceRegistry, question),
-      registerAnswerSources: (answer, messageId) => {
-        const registered = registerConversationEvidence(
-          this.sourceRegistry,
-          answer.evidence ?? [],
-          answer.createdAt,
-        );
-        const boundAnswer = bindAnswerToConversationRegistry(
-          answer,
-          registered.registry,
-          registered.revisionIdByEvidenceId,
-        );
-        this.sourceRegistry = recordConversationCitationUsages(
-          registered.registry,
-          messageId,
-          boundAnswer.answer,
-        );
-        return boundAnswer;
-      },
-      clearContextPaths: () => {
-        this.attachedContextPaths = [];
-        this.composer.renderAttachedContext();
+      clearContextPaths: (sessionId) => {
+        this.sessions.update(sessionId, { attachedContextPaths: [] });
+        if (this.isSessionDisplayed(sessionId)) this.composer.renderAttachedContext();
       },
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       setEditingMessageIndex: (index) => {
         this.editingMessageIndex = index;
       },
       setProgressStatus: (message) => this.composer.setProgressStatus(message),
-      setFormRunning: (running) => this.composer.setFormRunning(running),
-      setRunningState: (running) => {
-        this.isRunning = running;
-      },
       renderMessages: () => this.renderMessages(),
-      renderActiveMessage: () => this.scheduleActiveMessageRender(),
-      renderAnswerDetails: () => this.renderAnswerDetails(),
       t: this.t,
     });
     this.indexSearch = new IndexSearchController({
@@ -282,7 +250,92 @@ export class AttestChatView extends ItemView {
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       t: this.t,
     });
-    this.currentChatSettings = createDefaultChatSettings(this.services);
+  }
+
+  private get sessions(): ChatSessionManager {
+    return this.services.sessions;
+  }
+
+  /**
+   * The session this view displays, created on demand for a fresh empty chat.
+   * Selection belongs to the view, so a second leaf never redirects this one.
+   */
+  private get session(): ChatSessionState {
+    const selected = this.displayedSession;
+    if (selected) return selected;
+    const created = this.sessions.createSession(createDefaultChatSettings(this.services));
+    this.selectSession(created.sessionId);
+    return created;
+  }
+
+  private isSessionDisplayed(sessionId: string): boolean {
+    return this.selectedSessionId === sessionId;
+  }
+
+  /** Session state for a scoped operation, falling back to the displayed chat. */
+  private settingsOwner(sessionId: string): ChatSessionState {
+    return this.sessions.getSession(sessionId) ?? this.session;
+  }
+
+  private settingsOf(sessionId: string): SavedChatSettings {
+    return this.settingsOwner(sessionId).chatSettings;
+  }
+
+  private selectSession(sessionId: string): void {
+    this.selectedSessionId = sessionId;
+    this.sessions.noteDisplayed(sessionId);
+  }
+
+  get displayedSession(): ChatSessionState | undefined {
+    return this.selectedSessionId ? this.sessions.getSession(this.selectedSessionId) : undefined;
+  }
+
+  private get messages(): ChatDisplayMessage[] {
+    return this.session.messages;
+  }
+
+  private set messages(messages: ChatDisplayMessage[]) {
+    this.sessions.update(this.session.sessionId, { messages });
+  }
+
+  private get lastAnswer(): ResearchAnswer | null {
+    return this.session.lastAnswer;
+  }
+
+  private set lastAnswer(lastAnswer: ResearchAnswer | null) {
+    this.sessions.update(this.session.sessionId, { lastAnswer });
+  }
+
+  private get sourceRegistry(): ConversationSourceRegistry {
+    return this.session.sourceRegistry;
+  }
+
+  private set sourceRegistry(sourceRegistry: ConversationSourceRegistry) {
+    this.sessions.update(this.session.sessionId, { sourceRegistry });
+  }
+
+  private get attachedContextPaths(): string[] {
+    return this.session.attachedContextPaths;
+  }
+
+  private set attachedContextPaths(attachedContextPaths: string[]) {
+    this.sessions.update(this.session.sessionId, { attachedContextPaths });
+  }
+
+  private get currentChatSettings(): SavedChatSettings {
+    return this.session.chatSettings;
+  }
+
+  private set currentChatSettings(chatSettings: SavedChatSettings) {
+    this.sessions.update(this.session.sessionId, { chatSettings });
+  }
+
+  private get currentResearchMode(): ResearchMode {
+    return this.currentChatSettings.researchMode ?? "instant";
+  }
+
+  private get isRunning(): boolean {
+    return isNonTerminalChatSessionStatus(this.session.status);
   }
 
   getViewType(): string {
@@ -298,15 +351,30 @@ export class AttestChatView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.selectedSessionId = this.sessions.resumableSessionId;
+    this.detachSessionView = this.sessions.attachView(() => this.selectedSessionId);
+    this.unsubscribeSessions = this.sessions.subscribe((change) => this.onSessionChange(change));
     await this.savedChatSession.refresh();
     this.render();
+    void this.sessions.markViewed(this.session.sessionId);
   }
 
+  /**
+   * Detaches presentation only. Runtime sessions belong to the plugin, so
+   * closing the tab must never cancel a run or drop session state.
+   */
   async onClose(): Promise<void> {
-    this.researchController.dispose();
+    this.unsubscribeSessions?.();
+    this.unsubscribeSessions = null;
+    this.detachSessionView?.();
+    this.detachSessionView = null;
     if (this.activeMessageRenderFrame !== null) {
       window.cancelAnimationFrame(this.activeMessageRenderFrame);
       this.activeMessageRenderFrame = null;
+    }
+    if (this.finalizingRenderFrame !== null) {
+      window.cancelAnimationFrame(this.finalizingRenderFrame);
+      this.finalizingRenderFrame = null;
     }
     if (this.highlightTimer !== null) {
       window.clearTimeout(this.highlightTimer);
@@ -345,8 +413,8 @@ export class AttestChatView extends ItemView {
     const chatPanel = root.createDiv({
       cls: `attest-chat__panel${this.activePanel === "chat" ? "" : " is-hidden"}`,
     });
-    const chatToolbar = chatPanel.createDiv({ cls: "attest-chat__toolbar" });
-    renderChatWindowActions(chatToolbar, this.headerOptions());
+    this.toolbarEl = chatPanel.createDiv({ cls: "attest-chat__toolbar" });
+    renderChatWindowActions(this.toolbarEl, this.headerOptions());
 
     this.transcriptEl = chatPanel.createDiv({
       cls: "attest-chat__transcript",
@@ -366,12 +434,20 @@ export class AttestChatView extends ItemView {
     }
     this.renderMessages();
     this.renderAnswerDetails();
+    this.composer.setProgressStatus(this.session.progressLabel);
+  }
+
+  private renderToolbarActions(): void {
+    if (!this.toolbarEl) return;
+    this.toolbarEl.empty();
+    renderChatWindowActions(this.toolbarEl, this.headerOptions());
   }
 
   private headerOptions(): Parameters<typeof renderPanelTabs>[1] {
     return {
       activePanel: this.activePanel,
       isDebugMode: this.services.isDebugMode(),
+      historyActivity: this.sessions.activity(this.savedChatSession.savedChats),
       t: this.t,
       onPanelChange: (panel) => {
         this.activePanel = this.services.isDebugMode() ? panel : "chat";
@@ -389,13 +465,12 @@ export class AttestChatView extends ItemView {
 
   private async startNewChat(): Promise<void> {
     await this.saveCurrentChat();
-    this.messages = [];
-    this.lastAnswer = null;
-    this.sourceRegistry = createConversationSourceRegistry();
-    this.attachedContextPaths = [];
-    this.currentChatSettings = createDefaultChatSettings(this.services);
-    this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
-    this.savedChatSession.clearCurrent();
+    const previous = this.session;
+    const created = this.sessions.createSession(createDefaultChatSettings(this.services));
+    this.selectSession(created.sessionId);
+    if (previous.sessionId !== created.sessionId) {
+      this.sessions.discardSession(previous.sessionId);
+    }
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
     await this.savedChatSession.refresh();
@@ -463,9 +538,14 @@ export class AttestChatView extends ItemView {
   }
 
   private scheduleActiveMessageRender(): void {
-    if (this.activeMessageRenderFrame !== null) return;
+    const sessionId = this.session.sessionId;
+    if (this.activeMessageRenderFrame !== null) {
+      this.sessions.recordRender(sessionId, "coalesced");
+      return;
+    }
     this.activeMessageRenderFrame = window.requestAnimationFrame(() => {
       this.activeMessageRenderFrame = null;
+      this.sessions.recordRender(sessionId, "markdown");
       if (
         !this.transcriptEl ||
         !patchActiveAssistantMessage(this.transcriptEl, this.transcriptOptions())
@@ -523,6 +603,8 @@ export class AttestChatView extends ItemView {
       onRenameChat: (id, title) => this.renameSavedChat(id, title),
       onToggleFavorite: (id) => this.toggleSavedChatFavorite(id),
       onDeleteChat: (id) => this.deleteSavedChat(id),
+      getChatStatus: (id) => this.chatStatus(id),
+      onStopChat: (id) => this.stopChat(id),
     });
   }
 
@@ -555,13 +637,34 @@ export class AttestChatView extends ItemView {
   }
 
   private async deleteSavedChat(id: string): Promise<void> {
-    await this.savedChatSession.delete(id);
+    if (!this.sessions.canDeleteChat(id)) {
+      new Notice(this.t("chat.session.deleteBlocked"));
+      return;
+    }
+
+    try {
+      await this.sessions.deleteChat(id);
+    } catch (error) {
+      new Notice(
+        this.sessions.canDeleteChat(id)
+          ? toUserMessage(error)
+          : this.t("chat.session.deleteBlocked"),
+      );
+      this.refreshSavedChatsDisplay();
+      return;
+    }
+
+    await this.savedChatSession.refresh();
+    this.refreshSavedChatsDisplay();
+    new Notice(this.t("chat.notice.chatDeleted"));
+  }
+
+  private refreshSavedChatsDisplay(): void {
     if (this.savedChatsPopover.isOpen()) {
       this.savedChatsPopover.render();
     } else {
       this.render();
     }
-    new Notice(this.t("chat.notice.chatDeleted"));
   }
 
   private async toggleSavedChatFavorite(id: string): Promise<void> {
@@ -583,61 +686,152 @@ export class AttestChatView extends ItemView {
   }
 
   private async loadSavedChat(id: string): Promise<void> {
-    const chat = await this.savedChatSession.load(id);
+    const existing = this.sessions.getSessionByChatId(id);
+    if (!existing) {
+      const chat = await this.savedChatSession.load(id);
 
-    if (!chat) {
-      new Notice(this.t("chat.notice.savedChatNotFound"));
-      await this.savedChatSession.refresh();
-      this.render();
-      return;
+      if (!chat) {
+        new Notice(this.t("chat.notice.savedChatNotFound"));
+        await this.savedChatSession.refresh();
+        this.render();
+        return;
+      }
+
+      const adopted = this.sessions.adoptChat(
+        chat,
+        resolveChatSettings(this.services, chat.chatSettings),
+      );
+      this.selectSession(adopted.sessionId);
+    } else {
+      this.selectSession(existing.sessionId);
     }
 
-    this.messages = chat.messages;
-    this.lastAnswer = chat.lastAnswer;
-    this.sourceRegistry = chat.sourceRegistry;
-    this.attachedContextPaths = [...chat.attachedContextPaths];
-    this.currentChatSettings = resolveChatSettings(this.services, chat.chatSettings);
-    this.currentResearchMode = this.currentChatSettings.researchMode ?? "instant";
     this.editingMessageIndex = null;
     this.closeHistoryPopover();
+    await this.sessions.markViewed(this.session.sessionId);
     await this.savedChatSession.refresh();
     this.render();
   }
 
-  private async saveCurrentChat(): Promise<void> {
-    await this.savedChatSession.saveCurrent();
+  private chatStatus(chatId: string): ChatSessionStatus {
+    const summary = this.savedChatSession.savedChats.find((candidate) => candidate.id === chatId);
+    if (summary) return this.sessions.rowStatus(summary);
+    const session = this.sessions.getSessionByChatId(chatId);
+    return session
+      ? this.sessions.rowStatus({ id: chatId, unreadCompletion: session.unreadCompletion })
+      : "idle";
   }
 
-  private createCurrentChatSaveInput(): Omit<SaveChatInput, "id" | "createdAt"> | null {
-    if (this.messages.length === 0) {
-      return null;
+  private stopChat(chatId: string): void {
+    const session = this.sessions.getSessionByChatId(chatId);
+    if (session) this.stopChatSession(session.sessionId);
+  }
+
+  private stopChatSession(sessionId: string): void {
+    this.sessions.stop(sessionId);
+    if (this.session.sessionId === sessionId) {
+      this.composer.setStopping();
+    }
+  }
+
+  private async startRun(sessionId: string, request: ChatRunRequest): Promise<ChatRunStartResult> {
+    const result = await this.sessions.start(sessionId, request);
+    if (result.started) {
+      await this.savedChatSession.refresh();
+      this.renderToolbarActions();
+    }
+    return result;
+  }
+
+  /**
+   * Applies a session update: the selected chat re-renders, a background chat
+   * only refreshes the chat list and the toolbar indicators.
+   */
+  private onSessionChange(change: ChatSessionChange): void {
+    if (change.kind === "error") {
+      new Notice(this.failureMessage(change));
+      return;
     }
 
-    return {
-      title: inferChatTitle(this.messages),
-      messages: this.services.isDebugMode()
-        ? this.messages
-        : stripMessageDiagnostics(this.messages),
-      lastAnswer: this.services.isDebugMode()
-        ? this.lastAnswer
-        : stripContextDiagnostics(this.lastAnswer),
-      attachedContextPaths: this.attachedContextPaths,
-      chatSettings: this.currentChatSettings,
-      sourceRegistry: this.sourceRegistry,
-    };
+    if (change.sessionId !== this.session.sessionId) {
+      if (change.kind === "status") void this.refreshChatActivity();
+      return;
+    }
+
+    if (change.kind === "active-message") {
+      this.scheduleActiveMessageRender();
+      return;
+    }
+    if (change.kind === "progress") {
+      this.composer.setProgressStatus(this.session.progressLabel);
+      return;
+    }
+    if (change.kind === "answer") {
+      this.renderAnswerDetails();
+      return;
+    }
+    if (change.kind === "messages") {
+      this.renderMessagesAfterFinalizingFrame();
+      return;
+    }
+    this.composer.setFormRunning(this.isRunning);
+    this.composer.setProgressStatus(this.session.progressLabel);
+    void this.refreshChatActivity();
   }
 
-  private async updateChatModel(model: string): Promise<void> {
+  /**
+   * Holds one animation frame while a finalizing checkpoint is on screen so the
+   * final answer does not replace it in the same frame it appeared.
+   */
+  private renderMessagesAfterFinalizingFrame(): void {
+    const finalizing = this.transcriptEl?.querySelector(".attest-chat__workflow-node--finalizing");
+    if (!finalizing || this.finalizingRenderFrame !== null) {
+      this.renderMessages();
+      return;
+    }
+    this.finalizingRenderFrame = window.requestAnimationFrame(() => {
+      this.finalizingRenderFrame = null;
+      this.renderMessages();
+    });
+  }
+
+  /** Names the chat when the failure belongs to a session the reader is not viewing. */
+  private failureMessage(change: ChatSessionChange): string {
+    const message = toUserMessage(change.error);
+    if (change.sessionId === this.session.sessionId) return message;
+    const title = this.savedChatSession.savedChats.find(
+      (summary) => summary.id === change.chatId,
+    )?.title;
+    return title ? `${title}: ${message}` : message;
+  }
+
+  private async refreshChatActivity(): Promise<void> {
+    await this.savedChatSession.refresh();
+    this.renderToolbarActions();
+    if (this.savedChatsPopover.isOpen()) {
+      this.savedChatsPopover.render();
+    }
+  }
+
+  private async saveCurrentChat(sessionId: string = this.session.sessionId): Promise<void> {
+    await this.sessions.save(sessionId);
+  }
+
+  private async updateChatModel(
+    model: string,
+    sessionId: string = this.session.sessionId,
+  ): Promise<void> {
     const normalizedModel =
       model.trim() || createDefaultChatSettings(this.services).chatModelProfileId;
-    this.currentChatSettings = {
-      ...this.currentChatSettings,
-      chatModelProfileId: normalizedModel,
-    };
-    if (this.composer.getModel() !== this.currentChatSettings.chatModelProfileId) {
-      this.composer.setModel(this.currentChatSettings.chatModelProfileId);
+    this.sessions.update(sessionId, {
+      chatSettings: { ...this.settingsOf(sessionId), chatModelProfileId: normalizedModel },
+    });
+    const displayed = this.isSessionDisplayed(sessionId);
+    if (displayed && this.composer.getModel() !== normalizedModel) {
+      this.composer.setModel(normalizedModel);
     }
-    await this.saveCurrentChat();
+    await this.saveCurrentChat(sessionId);
+    if (!displayed) return;
     this.renderMessages();
     this.composer.updateSubmitAvailability();
   }
@@ -695,7 +889,6 @@ export class AttestChatView extends ItemView {
 
   private async updateResearchMode(mode: ResearchMode): Promise<void> {
     const researchMode = mode === "thinking" ? "thinking" : "instant";
-    this.currentResearchMode = researchMode;
     this.currentChatSettings = { ...this.currentChatSettings, researchMode };
     await this.saveCurrentChat();
   }
@@ -725,24 +918,30 @@ export class AttestChatView extends ItemView {
     });
   }
 
-  private getContextLimitTokens(): number | undefined {
-    return this.getCurrentChatModelProfile()?.contextLength;
+  private getContextLimitTokens(sessionId?: string): number | undefined {
+    return this.getCurrentChatModelProfile(sessionId)?.contextLength;
   }
 
-  private getReservedOutputTokens(): number | undefined {
-    return this.getCurrentChatModelProfile()?.maxTokens;
+  private getReservedOutputTokens(sessionId?: string): number | undefined {
+    return this.getCurrentChatModelProfile(sessionId)?.maxTokens;
   }
 
-  private getCurrentChatModelProfile(): ChatModelSelectOption | undefined {
+  private getCurrentChatModelProfile(sessionId?: string): ChatModelSelectOption | undefined {
+    const chatModelProfileId =
+      sessionId === undefined
+        ? this.currentChatSettings.chatModelProfileId
+        : this.settingsOf(sessionId).chatModelProfileId;
     return this.services
       .getChatModelProfiles()
-      .find((profile) => profile.id === this.currentChatSettings.chatModelProfileId);
+      .find((profile) => profile.id === chatModelProfileId);
   }
 
-  private getCurrentChatModelLabel(): string {
+  private getCurrentChatModelLabel(sessionId?: string): string {
     return chatModelProfileLabel(
       this.services.getChatModelProfiles(),
-      this.currentChatSettings.chatModelProfileId,
+      sessionId === undefined
+        ? this.currentChatSettings.chatModelProfileId
+        : this.settingsOf(sessionId).chatModelProfileId,
     );
   }
 

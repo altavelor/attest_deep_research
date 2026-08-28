@@ -34,6 +34,7 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     attachedContextPaths: [] as string[],
     searchUnavailableMessage: null as string | null,
     contextWindowUsage: null as ContextWindowUsage | null,
+    draft: "",
   };
 
   const controller = new ChatComposerController({
@@ -43,6 +44,10 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
       { id: "model-b", name: "Model B" },
     ],
     getAvailableIndexes: () => [{ id: "index-a", name: "Index A", isIndexed: true }],
+    getDraft: () => state.draft,
+    onDraftChange: (draft) => {
+      state.draft = draft;
+    },
     getContextFilePaths: () => ["Notes/One.md"],
     getResearchMode: () => "instant",
     getAttachedContextPaths: () => state.attachedContextPaths,

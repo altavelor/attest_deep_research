@@ -11,7 +11,7 @@ function message(role: "user" | "assistant", content: string): ChatDisplayMessag
 
 function harness(messages: ChatDisplayMessage[]) {
   let current = messages;
-  const setMessages = vi.fn((next: ChatDisplayMessage[]) => {
+  const setMessages = vi.fn((_sessionId: string, next: ChatDisplayMessage[]) => {
     current = next;
   });
   const saveCurrentChat = vi.fn().mockResolvedValue(undefined);
@@ -30,6 +30,7 @@ function harness(messages: ChatDisplayMessage[]) {
     getReservedOutputTokens: () => 10,
     createResearchService: () => ({ summarizeChatHistoryForCompaction }) as never,
     saveCurrentChat,
+    isSessionDisplayed: () => true,
     setProgressStatus,
     renderMessages,
     t: ((key: string) => key) as never,
@@ -52,7 +53,9 @@ describe("ChatHistoryCompactor", () => {
     takeNotices();
     const state = harness([message("user", "Only the current question")]);
 
-    await expect(state.compactor.compactHistory({ automatic: false })).resolves.toBe(false);
+    await expect(state.compactor.compactHistory("session-1", { automatic: false })).resolves.toBe(
+      false,
+    );
 
     expect(state.summarizeChatHistoryForCompaction).not.toHaveBeenCalled();
     expect(state.setProgressStatus).toHaveBeenCalledWith("chat.compact.nothingToCompact");
@@ -70,7 +73,9 @@ describe("ChatHistoryCompactor", () => {
       message("user", "Current question"),
     ]);
 
-    await expect(state.compactor.compactHistory({ automatic: true })).resolves.toBe(true);
+    await expect(state.compactor.compactHistory("session-1", { automatic: true })).resolves.toBe(
+      true,
+    );
 
     expect(state.saveCurrentChat).toHaveBeenCalledTimes(2);
     expect(state.renderMessages).toHaveBeenCalledTimes(2);
@@ -92,7 +97,9 @@ describe("ChatHistoryCompactor", () => {
       new AttestError({ code: "MODEL_PROVIDER_UNAVAILABLE", cause: new Error("offline") }),
     );
 
-    await expect(state.compactor.compactHistory({ automatic: false })).resolves.toBe(false);
+    await expect(state.compactor.compactHistory("session-1", { automatic: false })).resolves.toBe(
+      false,
+    );
 
     expect(state.messages).toEqual(original);
     expect(state.saveCurrentChat).not.toHaveBeenCalled();
