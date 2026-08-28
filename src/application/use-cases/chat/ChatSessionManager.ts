@@ -65,6 +65,7 @@ export class ChatSessionManager {
   private readonly slots = new Map<string, string>();
   private readonly starting = new Set<string>();
   private readonly startRequests = new Map<string, Promise<ChatRunStartResult>>();
+  private readonly saveRequests = new Map<string, Promise<void>>();
   private readonly deleting = new Set<string>();
   private queue: string[] = [];
   private readonly views = new Set<ChatSessionViewProbe>();
@@ -164,11 +165,28 @@ export class ChatSessionManager {
     Object.assign(state, patch);
   }
 
-  /** Persists everything except run lifecycle; never runs while a run is active. */
+  /**
+   * Persists everything except run lifecycle. It stands down while the same
+   * chat is starting a run or being deleted, so an ordinary save can neither
+   * roll back a run-start snapshot nor recreate a deleted chat.
+   */
   async save(sessionId: string): Promise<void> {
+    const saveRequest = this.persistSession(sessionId);
+    this.saveRequests.set(sessionId, saveRequest);
+    try {
+      await saveRequest;
+    } finally {
+      if (this.saveRequests.get(sessionId) === saveRequest) {
+        this.saveRequests.delete(sessionId);
+      }
+    }
+  }
+
+  private async persistSession(sessionId: string): Promise<void> {
     const state = this.getSession(sessionId);
     if (!state || state.messages.length === 0) return;
-    if (isNonTerminalChatSessionStatus(state.status)) return;
+    if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) return;
+    if (state.chatId !== null && this.deleting.has(state.chatId)) return;
     const saved = await this.options.repository.saveChat(this.saveInput(state));
     state.chatId = saved.id;
   }
@@ -223,8 +241,7 @@ export class ChatSessionManager {
    * and blocks a start from resurrecting the file while the deletion runs.
    */
   async deleteChat(chatId: string): Promise<void> {
-    const pendingStart = this.pendingStartFor(chatId);
-    if (pendingStart) await pendingStart.catch(() => undefined);
+    await this.awaitPendingWrites(chatId);
     if (!this.canDeleteChat(chatId)) {
       throw new Error(`Chat ${chatId} is running and cannot be deleted.`);
     }
@@ -239,9 +256,13 @@ export class ChatSessionManager {
     if (session) this.sessions.delete(session.sessionId);
   }
 
-  private pendingStartFor(chatId: string): Promise<ChatRunStartResult> | undefined {
+  private async awaitPendingWrites(chatId: string): Promise<void> {
     const session = this.getSessionByChatId(chatId);
-    return session ? this.startRequests.get(session.sessionId) : undefined;
+    if (!session) return;
+    await Promise.allSettled([
+      this.startRequests.get(session.sessionId),
+      this.saveRequests.get(session.sessionId),
+    ]);
   }
 
   /** Clears the unread-completion marker of a chat the user is now looking at. */
@@ -436,6 +457,7 @@ export class ChatSessionManager {
     this.slots.clear();
     this.starting.clear();
     this.startRequests.clear();
+    this.saveRequests.clear();
     this.deleting.clear();
     this.pending.clear();
     this.executions.clear();

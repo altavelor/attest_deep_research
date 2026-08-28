@@ -537,6 +537,64 @@ describe("chat session manager deletion guard", () => {
     expect(await repository.loadChat(chatId)).toBeNull();
   });
 
+  it("skips an ordinary save while the run-start save of the same chat is in flight", async () => {
+    const gated = createGatedService();
+    const repository = createUnorderedRepository();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      repository: repository.repository,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+
+    repository.holdNextSave();
+    const start = manager.start(session.sessionId, request("Follow-up?"));
+    await settle();
+    const saveChat = vi.spyOn(repository.repository, "saveChat");
+
+    await manager.save(session.sessionId);
+
+    expect(saveChat).not.toHaveBeenCalled();
+
+    repository.releaseHeldSave();
+    await start;
+    await settle();
+    expect(session.status).toBe("running");
+  });
+
+  it("waits for an ordinary save to land before deleting the chat", async () => {
+    const gated = createGatedService();
+    const repository = createUnorderedRepository();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      repository: repository.repository,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    const chatId = session.chatId!;
+
+    repository.holdNextSave();
+    const save = manager.save(session.sessionId);
+    await settle();
+    const deletion = manager.deleteChat(chatId);
+    await settle();
+    repository.releaseHeldSave();
+    await save;
+    await deletion;
+    await settle();
+
+    expect(await repository.repository.loadChat(chatId)).toBeNull();
+    expect(manager.getSessionByChatId(chatId)).toBeUndefined();
+  });
+
   it("refuses a deletion that races the run-start save of the same chat", async () => {
     const gated = createGatedService();
     const repository = createUnorderedRepository();
