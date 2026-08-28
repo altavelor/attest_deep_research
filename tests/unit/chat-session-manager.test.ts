@@ -537,6 +537,72 @@ describe("chat session manager deletion guard", () => {
     expect(await repository.loadChat(chatId)).toBeNull();
   });
 
+  it("refuses a deletion that races the run-start save of the same chat", async () => {
+    const gated = createGatedService();
+    const repository = createUnorderedRepository();
+    const { manager } = createTestSessionManager({
+      createResearchService: gated.service,
+      repository: repository.repository,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    const chatId = session.chatId!;
+
+    repository.holdNextSave();
+    const start = manager.start(session.sessionId, request("Follow-up?"));
+    await settle();
+
+    const deletion = manager.deleteChat(chatId);
+    repository.releaseHeldSave();
+
+    await expect(deletion).rejects.toThrow();
+    await expect(start).resolves.toMatchObject({ started: true });
+    await settle();
+
+    expect(session.status).toBe("running");
+    expect(await repository.repository.loadChat(chatId)).not.toBeNull();
+    expect(manager.getSessionByChatId(chatId)).toBe(session);
+  });
+
+  it("refuses a run start that races an in-flight deletion of its chat", async () => {
+    const gated = createGatedService();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: gated.service,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
+    gated.gates[0].end();
+    await settle();
+    const chatId = session.chatId!;
+
+    let releaseDelete = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    const deleteChat = repository.deleteChat.bind(repository);
+    vi.spyOn(repository, "deleteChat").mockImplementationOnce(async (id) => {
+      await held;
+      await deleteChat(id);
+    });
+
+    const deletion = manager.deleteChat(chatId);
+    await settle();
+    const start = await manager.start(session.sessionId, request("Follow-up?"));
+    releaseDelete();
+    await deletion;
+    await settle();
+
+    expect(start.started).toBe(false);
+    expect(gated.serviceCalls).toBe(1);
+    expect(await repository.loadChat(chatId)).toBeNull();
+  });
+
   it("keeps the session and its chat when the repository refuses the deletion", async () => {
     const gated = createGatedService();
     const { manager, repository } = createTestSessionManager({

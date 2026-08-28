@@ -64,6 +64,8 @@ export class ChatSessionManager {
   private readonly listeners = new Set<ChatSessionListener>();
   private readonly slots = new Map<string, string>();
   private readonly starting = new Set<string>();
+  private readonly startRequests = new Map<string, Promise<ChatRunStartResult>>();
+  private readonly deleting = new Set<string>();
   private queue: string[] = [];
   private readonly views = new Set<ChatSessionViewProbe>();
   private lastDisplayedSessionId: string | null = null;
@@ -209,16 +211,37 @@ export class ChatSessionManager {
   }
 
   canDeleteChat(chatId: string): boolean {
+    if (this.deleting.has(chatId)) return false;
+    const session = this.getSessionByChatId(chatId);
+    if (session && this.starting.has(session.sessionId)) return false;
     return !isNonTerminalChatSessionStatus(this.status(chatId));
   }
 
+  /**
+   * Deletes a chat, never concurrently with a run start on the same chat. It
+   * waits for a start already in flight, refuses once that run owns the chat,
+   * and blocks a start from resurrecting the file while the deletion runs.
+   */
   async deleteChat(chatId: string): Promise<void> {
+    const pendingStart = this.pendingStartFor(chatId);
+    if (pendingStart) await pendingStart.catch(() => undefined);
     if (!this.canDeleteChat(chatId)) {
       throw new Error(`Chat ${chatId} is running and cannot be deleted.`);
     }
-    await this.options.repository.deleteChat(chatId);
+
+    this.deleting.add(chatId);
+    try {
+      await this.options.repository.deleteChat(chatId);
+    } finally {
+      this.deleting.delete(chatId);
+    }
     const session = this.getSessionByChatId(chatId);
     if (session) this.sessions.delete(session.sessionId);
+  }
+
+  private pendingStartFor(chatId: string): Promise<ChatRunStartResult> | undefined {
+    const session = this.getSessionByChatId(chatId);
+    return session ? this.startRequests.get(session.sessionId) : undefined;
   }
 
   /** Clears the unread-completion marker of a chat the user is now looking at. */
@@ -238,10 +261,25 @@ export class ChatSessionManager {
    * returns a durable chat id.
    */
   async start(sessionId: string, request: ChatRunRequest): Promise<ChatRunStartResult> {
+    const startRequest = this.beginRun(sessionId, request);
+    this.startRequests.set(sessionId, startRequest);
+    try {
+      return await startRequest;
+    } finally {
+      if (this.startRequests.get(sessionId) === startRequest) {
+        this.startRequests.delete(sessionId);
+      }
+    }
+  }
+
+  private async beginRun(sessionId: string, request: ChatRunRequest): Promise<ChatRunStartResult> {
     const runtime = this.sessions.get(sessionId);
     if (this.disposed || !runtime) return { started: false };
     const state = runtime.state;
     if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) {
+      return { started: false };
+    }
+    if (state.chatId !== null && this.deleting.has(state.chatId)) {
       return { started: false };
     }
 
@@ -274,7 +312,7 @@ export class ChatSessionManager {
     }
 
     this.starting.delete(sessionId);
-    if (this.disposed || !this.sessions.has(sessionId)) {
+    if (this.disposed || !this.sessions.has(sessionId) || this.deleting.has(state.chatId)) {
       this.releaseSlot(sessionId, runId);
       return { started: false };
     }
@@ -397,6 +435,8 @@ export class ChatSessionManager {
 
     this.slots.clear();
     this.starting.clear();
+    this.startRequests.clear();
+    this.deleting.clear();
     this.pending.clear();
     this.executions.clear();
     this.listeners.clear();

@@ -642,14 +642,29 @@ export class AttestChatView extends ItemView {
       return;
     }
 
-    await this.sessions.deleteChat(id);
+    try {
+      await this.sessions.deleteChat(id);
+    } catch (error) {
+      new Notice(
+        this.sessions.canDeleteChat(id)
+          ? toUserMessage(error)
+          : this.t("chat.session.deleteBlocked"),
+      );
+      this.refreshSavedChatsDisplay();
+      return;
+    }
+
     await this.savedChatSession.refresh();
+    this.refreshSavedChatsDisplay();
+    new Notice(this.t("chat.notice.chatDeleted"));
+  }
+
+  private refreshSavedChatsDisplay(): void {
     if (this.savedChatsPopover.isOpen()) {
       this.savedChatsPopover.render();
     } else {
       this.render();
     }
-    new Notice(this.t("chat.notice.chatDeleted"));
   }
 
   private async toggleSavedChatFavorite(id: string): Promise<void> {
