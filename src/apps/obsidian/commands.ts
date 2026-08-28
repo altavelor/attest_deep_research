@@ -3,7 +3,7 @@ import type { Command, Editor, MarkdownFileInfo } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
 import { toUserMessage } from "@core/errors";
-import type { AttestChatCommandAction } from "./ui/chat/AttestChatView";
+import type { AttestChatCommandAction } from "@apps/obsidian/ui/chat";
 
 export const ATTEST_COMMAND_IDS = [
   "open-attest-chat",
