@@ -1,8 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App, ItemView, WorkspaceLeaf } from "../../stubs/obsidian";
-import type { Plugin as StubPlugin } from "../../stubs/obsidian";
+import { App, ItemView, TFile, WorkspaceLeaf, takeNotices } from "../../stubs/obsidian";
+import type {
+  Command as StubCommand,
+  Editor as StubEditor,
+  MarkdownFileInfo as StubMarkdownFileInfo,
+  Plugin as StubPlugin,
+} from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import AttestPlugin from "@apps/obsidian/main";
@@ -35,6 +40,22 @@ function createPlugin(app: App): AttestPlugin {
 
 function asStubPlugin(plugin: AttestPlugin): StubPlugin {
   return plugin as unknown as StubPlugin;
+}
+
+function registeredCommand(plugin: AttestPlugin, id: string): StubCommand {
+  const command = asStubPlugin(plugin).commands.find((candidate) => candidate.id === id);
+  if (!command) throw new Error(`Command ${id} is not registered.`);
+  return command;
+}
+
+function markdownContext(
+  path: string,
+  selection = "",
+): { editor: StubEditor; context: StubMarkdownFileInfo } {
+  return {
+    editor: { getSelection: () => selection },
+    context: { file: new TFile(path) },
+  };
 }
 
 function markerOf(view: { contentEl: HTMLElement }, name: string): HTMLElement {
@@ -101,8 +122,140 @@ describe("Attest plugin lifecycle", () => {
 
     plugin.applyUiLanguage();
 
-    expect(asStubPlugin(plugin).commands).toEqual([
-      expect.objectContaining({ id: "open-attest-chat", name: "Открыть чат Attest" }),
+    expect(asStubPlugin(plugin).commands.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: "open-attest-chat", name: "Открыть чат Attest" },
+      { id: "ask-current-note", name: "Спросить Attest о текущей заметке" },
+      { id: "ask-selected-text", name: "Спросить Attest о выделенном тексте" },
+      { id: "find-related-notes", name: "Найти связанные заметки" },
+      { id: "update-index", name: "Обновить индекс Attest" },
+      { id: "summarize-current-note", name: "Суммировать текущую заметку" },
+    ]);
+  });
+
+  it("registers the Attest action commands", () => {
+    expect(asStubPlugin(plugin).commands.map((command) => command.id)).toEqual([
+      "open-attest-chat",
+      "ask-current-note",
+      "ask-selected-text",
+      "find-related-notes",
+      "update-index",
+      "summarize-current-note",
+    ]);
+  });
+
+  it("hides note actions outside a Markdown editor", () => {
+    const { editor, context } = markdownContext("Documents/Reference.pdf", "selection");
+
+    for (const id of [
+      "ask-current-note",
+      "ask-selected-text",
+      "find-related-notes",
+      "summarize-current-note",
+    ]) {
+      expect(registeredCommand(plugin, id).editorCheckCallback?.(true, editor, context)).toBe(
+        false,
+      );
+    }
+  });
+
+  it("opens the right-sidebar chat from the ribbon", async () => {
+    const [ribbon] = asStubPlugin(plugin).ribbonIcons;
+
+    expect(ribbon?.getAttribute("aria-label")).toBe("Open Attest chat");
+    ribbon?.click();
+
+    await vi.waitFor(() => {
+      expect(app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)).toHaveLength(1);
+    });
+    expect(app.workspace.rightLeafRequests).toBe(1);
+  });
+
+  it("prepares the active note for an Attest question", async () => {
+    const leaf = await openChatLeaf(app);
+    const runCommand = vi.fn(async () => {});
+    (leaf.view as unknown as { runCommand: typeof runCommand }).runCommand = runCommand;
+    const command = registeredCommand(plugin, "ask-current-note");
+    const { editor, context } = markdownContext("Notes/Current.md");
+
+    expect(command.editorCheckCallback?.(true, editor, context)).toBe(true);
+    command.editorCheckCallback?.(false, editor, context);
+
+    await vi.waitFor(() => {
+      expect(runCommand).toHaveBeenCalledWith({
+        contextPaths: ["Notes/Current.md"],
+        submit: false,
+      });
+    });
+  });
+
+  it("requires a non-empty selection and prepares it as editable quoted context", async () => {
+    const leaf = await openChatLeaf(app);
+    const runCommand = vi.fn(async () => {});
+    (leaf.view as unknown as { runCommand: typeof runCommand }).runCommand = runCommand;
+    const command = registeredCommand(plugin, "ask-selected-text");
+    const empty = markdownContext("Notes/Current.md", "   ");
+    const selected = markdownContext("Notes/Current.md", "First line\nSecond line");
+
+    expect(command.editorCheckCallback?.(true, empty.editor, empty.context)).toBe(false);
+    expect(command.editorCheckCallback?.(true, selected.editor, selected.context)).toBe(true);
+    command.editorCheckCallback?.(false, selected.editor, selected.context);
+
+    await vi.waitFor(() => expect(runCommand).toHaveBeenCalledOnce());
+    expect(runCommand).toHaveBeenCalledWith({
+      contextPaths: ["Notes/Current.md"],
+      question: expect.stringContaining("> First line\n> Second line"),
+      submit: false,
+    });
+  });
+
+  it("submits related-note and summary actions with explicit source scopes", async () => {
+    const leaf = await openChatLeaf(app);
+    const runCommand = vi.fn(async () => {});
+    (leaf.view as unknown as { runCommand: typeof runCommand }).runCommand = runCommand;
+    const { editor, context } = markdownContext("Notes/Current.md");
+
+    registeredCommand(plugin, "find-related-notes").editorCheckCallback?.(false, editor, context);
+    registeredCommand(plugin, "summarize-current-note").editorCheckCallback?.(
+      false,
+      editor,
+      context,
+    );
+
+    await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2));
+    expect(runCommand).toHaveBeenNthCalledWith(1, {
+      contextPaths: ["Notes/Current.md"],
+      question: expect.any(String),
+      searchMode: "indexOnly",
+      submit: true,
+    });
+    expect(runCommand).toHaveBeenNthCalledWith(2, {
+      contextPaths: ["Notes/Current.md"],
+      question: expect.any(String),
+      searchMode: "none",
+      submit: true,
+    });
+  });
+
+  it("starts an incremental update for the active index profile", async () => {
+    const profileId = plugin.settings.indexProfiles[0].id;
+    const start = vi
+      .spyOn(plugin.indexing, "start")
+      .mockResolvedValue(plugin.indexing.getState(profileId));
+
+    registeredCommand(plugin, "update-index").callback?.();
+
+    await vi.waitFor(() => expect(start).toHaveBeenCalledWith(profileId));
+  });
+
+  it("reports an index-update rejection instead of leaking it", async () => {
+    const start = vi.spyOn(plugin.indexing, "start").mockRejectedValue(new Error("Index is busy"));
+
+    registeredCommand(plugin, "update-index").callback?.();
+
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    expect(takeNotices().map((notice) => notice.message)).toEqual([
+      "Something went wrong in Attest.",
     ]);
   });
 
@@ -130,6 +283,17 @@ describe("Attest plugin lifecycle", () => {
     const [chatLeaf] = app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE);
     expect(chatLeaf?.view?.getViewType()).toBe(ATTEST_CHAT_VIEW_TYPE);
     expect(app.workspace.revealedLeaves).toEqual([chatLeaf]);
+  });
+
+  it("coalesces concurrent requests to open the chat", async () => {
+    const [first, second] = await Promise.all([
+      plugin.activateChatView(),
+      plugin.activateChatView(),
+    ]);
+
+    expect(first).toBe(second);
+    expect(app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)).toHaveLength(1);
+    expect(app.workspace.rightLeafRequests).toBe(1);
   });
 
   it("opens a chat and warms index data when its embedding profile is configured", async () => {
@@ -186,12 +350,14 @@ describe("Attest plugin lifecycle", () => {
       "open-attest-chat",
     );
     expect(asStubPlugin(plugin).settingTabs).toHaveLength(1);
+    expect(asStubPlugin(plugin).ribbonIcons).toHaveLength(1);
 
     plugin.unload();
 
     expect(app.workspace.getViewFactory(ATTEST_CHAT_VIEW_TYPE)).toBeUndefined();
     expect(asStubPlugin(plugin).commands).toHaveLength(0);
     expect(asStubPlugin(plugin).settingTabs).toHaveLength(0);
+    expect(asStubPlugin(plugin).ribbonIcons).toHaveLength(0);
     expect(asStubPlugin(plugin).registrationCount()).toBe(0);
     await expect(openChatLeaf(app)).rejects.toThrow(/No view registered/);
   });

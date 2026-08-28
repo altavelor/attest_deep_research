@@ -2,6 +2,16 @@ import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
   "command.openChat": "打开 Attest 聊天",
+  "command.askCurrentNote": "向 Attest 询问当前笔记",
+  "command.askSelectedText": "向 Attest 询问所选文本",
+  "command.findRelatedNotes": "查找相关笔记",
+  "command.updateIndex": "更新 Attest 索引",
+  "command.summarizeCurrentNote": "总结当前笔记",
+  "command.prompt.selectedText": "询问有关以下所选文本的问题：\n\n{selection}\n\n问题：",
+  "command.prompt.relatedNotes":
+    "在我的库中查找与此笔记有实质关联的笔记。解释每项关联并引用相关笔记。",
+  "command.prompt.summarizeNote":
+    "简要总结此笔记。保留主要论点、决定和未解决的问题，并引用相关章节。",
 
   "chat.tab.chat": "聊天",
   "chat.tab.indexSearch": "索引搜索",

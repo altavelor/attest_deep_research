@@ -168,6 +168,7 @@ function renderSavedChatSurfaces(host: HTMLElement): void {
   }
   renderChatWindowActions(host.createDiv({ cls: "attest-chat__toolbar" }), {
     activePanel: "chat",
+    hasCompletedAnswer: true,
     isDebugMode: true,
     historyActivity: { runningCount: 2, unreadCompletedCount: 1 },
     t,

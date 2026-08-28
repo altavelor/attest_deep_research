@@ -2,6 +2,17 @@ import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
   "command.openChat": "Открыть чат Attest",
+  "command.askCurrentNote": "Спросить Attest о текущей заметке",
+  "command.askSelectedText": "Спросить Attest о выделенном тексте",
+  "command.findRelatedNotes": "Найти связанные заметки",
+  "command.updateIndex": "Обновить индекс Attest",
+  "command.summarizeCurrentNote": "Суммировать текущую заметку",
+  "command.prompt.selectedText":
+    "Задайте вопрос об этом выделенном фрагменте:\n\n{selection}\n\nВопрос:",
+  "command.prompt.relatedNotes":
+    "Найди в моём хранилище заметки, содержательно связанные с этой заметкой. Объясни каждую связь и приведи ссылки на связанные заметки.",
+  "command.prompt.summarizeNote":
+    "Кратко суммируй эту заметку. Сохрани основные тезисы, решения и открытые вопросы и приведи ссылки на соответствующие разделы.",
 
   "chat.tab.chat": "Чат",
   "chat.tab.indexSearch": "Поиск по индексу",

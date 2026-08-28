@@ -1,5 +1,16 @@
 export const chat = {
   "command.openChat": "Open Attest chat",
+  "command.askCurrentNote": "Ask Attest about current note",
+  "command.askSelectedText": "Ask Attest about selected text",
+  "command.findRelatedNotes": "Find related notes",
+  "command.updateIndex": "Update Attest index",
+  "command.summarizeCurrentNote": "Summarize current note",
+  "command.prompt.selectedText":
+    "Ask a question about this selected text:\n\n{selection}\n\nQuestion:",
+  "command.prompt.relatedNotes":
+    "Find notes in my vault that are meaningfully related to this note. Explain each relationship and cite the related notes.",
+  "command.prompt.summarizeNote":
+    "Summarize this note concisely. Preserve its main claims, decisions, and open questions, and cite the relevant sections.",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Index search",

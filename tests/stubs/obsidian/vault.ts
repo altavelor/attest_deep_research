@@ -4,9 +4,13 @@ export class TAbstractFile {
 
 export class TFile extends TAbstractFile {
   stat: { size: number; mtime: number; ctime: number };
+  extension: string;
 
-  constructor(path: string, stat: { size?: number; mtime?: number } = {}) {
+  constructor(path = "", stat: { size?: number; mtime?: number } = {}) {
     super(path);
+    const name = path.split("/").at(-1) ?? "";
+    const dot = name.lastIndexOf(".");
+    this.extension = dot >= 0 ? name.slice(dot + 1) : "";
     this.stat = { size: stat.size ?? 0, mtime: stat.mtime ?? 0, ctime: 0 };
   }
 }

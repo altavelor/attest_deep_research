@@ -31,6 +31,7 @@ export interface ComposerControls {
   getModel(): string;
   setModel(id: string): void;
   getSearchMode(): ResearchSearchMode;
+  setSearchMode(mode: ResearchSearchMode): void;
   getResearchMode(): ResearchMode;
   getIndexProfileId(): string;
   setIndexProfileId(id: string): void;
@@ -304,6 +305,10 @@ export function renderChatComposer(
       syncResearchModeAvailability();
     },
     getSearchMode: () => currentSearchMode,
+    setSearchMode: (mode) => {
+      currentSearchMode = mode;
+      sourcesModeDropdown.setValue(mode);
+    },
     getResearchMode: () => currentResearchMode,
     getIndexProfileId: () => currentIndexId,
     setIndexProfileId: (id) => {

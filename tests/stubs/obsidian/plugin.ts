@@ -1,6 +1,7 @@
 import { Component } from "./component";
 import type { App, WorkspaceLeaf } from "./workspace";
 import type { View } from "./view";
+import type { TFile } from "./vault";
 
 export interface PluginManifest {
   id: string;
@@ -13,6 +14,21 @@ export interface Command {
   name: string;
   icon?: string;
   callback?: () => unknown;
+  checkCallback?: (checking: boolean) => boolean | void;
+  editorCallback?: (editor: Editor, context: MarkdownFileInfo) => unknown;
+  editorCheckCallback?: (
+    checking: boolean,
+    editor: Editor,
+    context: MarkdownFileInfo,
+  ) => boolean | void;
+}
+
+export interface Editor {
+  getSelection(): string;
+}
+
+export interface MarkdownFileInfo {
+  file: TFile | null;
 }
 
 export class PluginSettingTab {
@@ -33,6 +49,7 @@ export class PluginSettingTab {
  */
 export class Plugin extends Component {
   readonly commands: Command[] = [];
+  readonly ribbonIcons: HTMLElement[] = [];
   readonly settingTabs: PluginSettingTab[] = [];
   private data: unknown = null;
 
@@ -64,6 +81,25 @@ export class Plugin extends Component {
   removeCommand(commandId: string): void {
     const index = this.commands.findIndex((command) => command.id === commandId);
     if (index >= 0) this.commands.splice(index, 1);
+  }
+
+  addRibbonIcon(
+    icon: string,
+    title: string,
+    callback: (event: MouseEvent) => unknown,
+  ): HTMLElement {
+    const button = document.createElement("button");
+    button.dataset.icon = icon;
+    button.setAttribute("aria-label", title);
+    button.setAttribute("title", title);
+    button.addEventListener("click", callback);
+    this.ribbonIcons.push(button);
+    this.register(() => {
+      button.removeEventListener("click", callback);
+      const index = this.ribbonIcons.indexOf(button);
+      if (index >= 0) this.ribbonIcons.splice(index, 1);
+    });
+    return button;
   }
 
   addSettingTab(tab: PluginSettingTab): void {

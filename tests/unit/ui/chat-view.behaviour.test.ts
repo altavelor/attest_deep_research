@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, View, WorkspaceLeaf, takeNotices } from "../../stubs/obsidian";
+import { App, TFile, View, WorkspaceLeaf, takeNotices } from "../../stubs/obsidian";
 import type { WorkspaceLeaf as ObsidianWorkspaceLeaf } from "obsidian";
 
 import {
@@ -16,6 +16,7 @@ import type { SavedChat, SavedChatSummary } from "@core/chat/savedChat";
 import type { Citation } from "@core/model";
 import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchService } from "@application/use-cases/research";
+import type { ResearchAnswer } from "@core/answer";
 import {
   advanceTime,
   installObsidianDomHelpers,
@@ -87,6 +88,14 @@ const savedChat: SavedChat = {
   chatSettings: { chatModelProfileId: "model", indexProfileId: "index", searchMode: "indexOnly" },
   sourceRegistry: { sources: [] },
   unreadCompletion: false,
+};
+
+const completedAnswer: ResearchAnswer = {
+  question: "What matters?",
+  answer: "The completed answer",
+  citations: [],
+  followUpQuestions: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 function createServices(overrides: Partial<AttestChatViewServices> = {}) {
@@ -245,6 +254,275 @@ describe("chat view panel selection", () => {
       indexHidden: null,
       selectedTabs: [],
     });
+    await leaf.detach();
+  });
+});
+
+describe("conversation sources action", () => {
+  function sourcesButton(view: AttestChatView): HTMLButtonElement | null {
+    return view.contentEl.querySelector<HTMLButtonElement>('[aria-label="Conversation sources"]');
+  }
+
+  it("does not render before the chat has a completed answer", async () => {
+    const { view, leaf } = await openView();
+
+    expect(sourcesButton(view)).toBeNull();
+    await leaf.detach();
+  });
+
+  it("appears as soon as the first answer completes", async () => {
+    const { view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: async function* answer() {
+            yield { type: "complete" as const, answer: completedAnswer };
+          },
+        }) as unknown as ResearchService,
+    });
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input")!;
+    input.value = completedAnswer.question;
+    input.dispatchEvent(new Event("input"));
+
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+
+    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+    await leaf.detach();
+  });
+
+  it("restores the action for a saved chat and hides it again for a new chat", async () => {
+    const completedChat: SavedChat = {
+      ...savedChat,
+      messages: [
+        ...savedChat.messages,
+        {
+          role: "assistant",
+          content: completedAnswer.answer,
+          createdAt: completedAnswer.createdAt,
+          answer: completedAnswer,
+        },
+      ],
+      lastAnswer: completedAnswer,
+    };
+    const { view, leaf } = await openView({ loadSavedChat: async () => completedChat });
+
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
+    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+
+    view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
+    await vi.waitFor(() => expect(sourcesButton(view)).toBeNull());
+    await leaf.detach();
+  });
+
+  it("stays hidden when a turn is interrupted before producing an answer", async () => {
+    const pending = new Promise<void>(() => {});
+    const { view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: async function* answer() {
+            yield { type: "delta" as const, content: "Partial" };
+            await pending;
+          },
+        }) as unknown as ResearchService,
+    });
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input")!;
+    input.value = "Question";
+    input.dispatchEvent(new Event("input"));
+
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+
+    await vi.waitFor(() => expect(view.contentEl.textContent).toContain("Partial"));
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+    await vi.waitFor(() =>
+      expect(
+        view.contentEl.querySelector(".attest-chat__message")?.getAttribute("data-status"),
+      ).not.toBe("streaming"),
+    );
+    expect(sourcesButton(view)).toBeNull();
+    await leaf.detach();
+  });
+
+  it("stays hidden when the first turn fails", async () => {
+    const { view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: async function* answer() {
+            throw new Error("failed");
+          },
+        }) as unknown as ResearchService,
+    });
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input")!;
+    input.value = "Question";
+    input.dispatchEvent(new Event("input"));
+
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+
+    await vi.waitFor(() => expect(takeNotices()).toHaveLength(1));
+    expect(sourcesButton(view)).toBeNull();
+    await leaf.detach();
+  });
+
+  it("remains visible during a later turn after one answer completed", async () => {
+    const pending = new Promise<void>(() => {});
+    let turn = 0;
+    const { view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: async function* answer() {
+            turn += 1;
+            if (turn === 1) {
+              yield { type: "complete" as const, answer: completedAnswer };
+              return;
+            }
+            await pending;
+          },
+        }) as unknown as ResearchService,
+    });
+    const input = view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input")!;
+    input.value = "First";
+    input.dispatchEvent(new Event("input"));
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+
+    input.value = "Second";
+    input.dispatchEvent(new Event("input"));
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
+
+    await vi.waitFor(() => expect(turn).toBe(2));
+    expect(sourcesButton(view)).not.toBeNull();
+    await leaf.detach();
+  });
+
+  it("stays hidden for a saved chat without a completed answer", async () => {
+    const { view, leaf } = await openView({ loadSavedChat: async () => savedChat });
+
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
+
+    await vi.waitFor(() =>
+      expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
+        "Find sources",
+      ),
+    );
+    expect(sourcesButton(view)).toBeNull();
+    await leaf.detach();
+  });
+});
+
+describe("chat command actions", () => {
+  it("attaches the active note and focuses the composer without submitting", async () => {
+    const { app, view, leaf } = await openView();
+    app.vault.setFiles([new TFile("Notes/Current.md")]);
+
+    await view.runCommand({ contextPaths: ["Notes/Current.md"], submit: false });
+
+    expect(view.contentEl.querySelector(".attest-chat__attachment")?.getAttribute("title")).toBe(
+      "Notes/Current.md",
+    );
+    expect(document.activeElement).toBe(
+      view.contentEl.querySelector<HTMLTextAreaElement>(".attest-chat__input"),
+    );
+    await leaf.detach();
+  });
+
+  it("submits a prepared command with its explicit context and search mode", async () => {
+    let request: ResearchRequest | undefined;
+    const { app, view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: (nextRequest: ResearchRequest) => {
+            request = nextRequest;
+            return (async function* answer() {
+              yield { type: "complete" as const, answer: completedAnswer };
+            })();
+          },
+        }) as unknown as ResearchService,
+    });
+    app.vault.setFiles([new TFile("Notes/Current.md")]);
+
+    await view.runCommand({
+      contextPaths: ["Notes/Current.md"],
+      question: "Find related notes",
+      searchMode: "indexOnly",
+      submit: true,
+    });
+
+    expect(request).toMatchObject({
+      question: "Find related notes",
+      searchMode: "indexOnly",
+      contextPaths: ["Notes/Current.md"],
+    });
+    await leaf.detach();
+  });
+
+  it("persists attached command context for an existing saved chat", async () => {
+    const { manager: sessions, repository } = createTestSessionManager();
+    const saveChat = vi.spyOn(repository, "saveChat");
+    const { app, view, leaf } = await openView({ sessions });
+    app.vault.setFiles([new TFile("Notes/Current.md")]);
+    view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
+    await vi.waitFor(() =>
+      expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
+        "Find sources",
+      ),
+    );
+
+    await view.runCommand({ contextPaths: ["Notes/Current.md"], submit: false });
+
+    expect(saveChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: savedChat.id,
+        attachedContextPaths: ["Notes/Current.md"],
+      }),
+    );
+    await leaf.detach();
+  });
+
+  it("serializes concurrent command actions without mixing their request state", async () => {
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const requests: ResearchRequest[] = [];
+    const { app, view, leaf } = await openView({
+      createResearchService: () =>
+        ({
+          answer: (request: ResearchRequest) => {
+            requests.push(request);
+            return (async function* answer() {
+              if (requests.length === 1) await firstGate;
+              yield { type: "complete" as const, answer: completedAnswer };
+            })();
+          },
+        }) as unknown as ResearchService,
+    });
+    app.vault.setFiles([new TFile("Notes/First.md"), new TFile("Notes/Second.md")]);
+
+    const first = view.runCommand({
+      contextPaths: ["Notes/First.md"],
+      question: "Find related notes",
+      searchMode: "indexOnly",
+      submit: true,
+    });
+    const second = view.runCommand({
+      contextPaths: ["Notes/Second.md"],
+      question: "Summarize note",
+      searchMode: "none",
+      submit: true,
+    });
+
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[0]).toMatchObject({
+      question: "Find related notes",
+      searchMode: "indexOnly",
+      contextPaths: ["Notes/First.md"],
+    });
+    expect(requests[1]).toMatchObject({
+      question: "Summarize note",
+      searchMode: "none",
+      contextPaths: ["Notes/Second.md"],
+    });
+
+    releaseFirst();
+    await Promise.all([first, second]);
     await leaf.detach();
   });
 });

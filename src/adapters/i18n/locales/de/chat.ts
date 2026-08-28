@@ -2,6 +2,17 @@ import type { EnChatMessages } from "../en/chat";
 
 export const chat: EnChatMessages = {
   "command.openChat": "Attest-Chat öffnen",
+  "command.askCurrentNote": "Attest zur aktuellen Notiz fragen",
+  "command.askSelectedText": "Attest zum ausgewählten Text fragen",
+  "command.findRelatedNotes": "Verwandte Notizen finden",
+  "command.updateIndex": "Attest-Index aktualisieren",
+  "command.summarizeCurrentNote": "Aktuelle Notiz zusammenfassen",
+  "command.prompt.selectedText":
+    "Stelle eine Frage zu diesem ausgewählten Text:\n\n{selection}\n\nFrage:",
+  "command.prompt.relatedNotes":
+    "Finde in meinem Vault inhaltlich verwandte Notizen. Erkläre jede Verbindung und zitiere die verwandten Notizen.",
+  "command.prompt.summarizeNote":
+    "Fasse diese Notiz kurz zusammen. Bewahre die wichtigsten Aussagen, Entscheidungen und offenen Fragen und zitiere die relevanten Abschnitte.",
 
   "chat.tab.chat": "Chat",
   "chat.tab.indexSearch": "Index-Suche",
