@@ -213,4 +213,59 @@ describe("ResearchQuestionController running state", () => {
     expect(harness.controller.isRunning()).toBe(true);
     expect(running).toHaveBeenCalled();
   });
+  it("finishes a compacted submission in the chat it was captured from", async () => {
+    let sessionId = "session-a";
+    let questionInput = "First question";
+    const messages: Record<string, ChatDisplayMessage[]> = {
+      "session-a": Array.from({ length: 8 }, (_, index) => ({
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: "Long history entry. ".repeat(60),
+        createdAt: `2026-01-01T00:00:0${index}.000Z`,
+      })),
+      "session-b": [],
+    };
+    let releaseSummary = (): void => {};
+    const summarized = new Promise<void>((resolve) => {
+      releaseSummary = resolve;
+    });
+    const startedIn: string[] = [];
+
+    const harness = createHarness({
+      getSessionId: () => sessionId,
+      getQuestionInput: () => questionInput,
+      getMessages: (id) => messages[id] ?? [],
+      setMessages: (id, next) => {
+        messages[id] = next;
+      },
+      getContextLimitTokens: () => 2000,
+      createResearchService: () =>
+        ({
+          summarizeChatHistoryForCompaction: async () => {
+            await summarized;
+            return {
+              userGoals: ["Keep the decision"],
+              decisions: [],
+              unresolvedQuestions: [],
+              citedSourcesAlreadyUsed: [],
+            };
+          },
+        }) as unknown as ResearchService,
+      startRun: async (id, request): Promise<ChatRunStartResult> => {
+        startedIn.push(id);
+        harness.requests.push(request);
+        return { started: true };
+      },
+    });
+
+    const submission = harness.controller.submitQuestion();
+    await Promise.resolve();
+    sessionId = "session-b";
+    questionInput = "Unsent draft of the other chat";
+    releaseSummary();
+    await submission;
+
+    expect(startedIn).toEqual(["session-a"]);
+    expect(harness.requests.map((request) => request.question)).toEqual(["First question"]);
+    expect(messages["session-b"]).toEqual([]);
+  });
 });

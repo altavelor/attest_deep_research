@@ -75,9 +75,22 @@ export class ResearchQuestionController {
       return;
     }
 
+    await this.runCapturedQuestion(sessionId, question, model);
+  }
+
+  /**
+   * Runs one captured question, retrying after a compaction. The captured
+   * session, question, and model are reused so a chat switch during a slow
+   * compaction cannot submit the newly selected chat's draft instead.
+   */
+  private async runCapturedQuestion(
+    sessionId: string,
+    question: string,
+    model: string,
+  ): Promise<void> {
     const chatHistory = this.options.getMessages(sessionId);
     if (await this.historyCompactor.compactIfNeeded(sessionId, question)) {
-      return this.submitQuestion();
+      return this.runCapturedQuestion(sessionId, question, model);
     }
 
     if (this.rejectIfContextWindowExceeded(sessionId, question, chatHistory)) {
