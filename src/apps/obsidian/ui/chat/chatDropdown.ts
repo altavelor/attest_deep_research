@@ -48,7 +48,7 @@ export function createMenuDropdown(
 
   buttonEl.addEventListener("click", () => {
     if (buttonEl.disabled) return;
-    const menu = prepareMenu(new Menu());
+    const menu = prepareMenu(new Menu(), config.menuCls);
     for (const item of config.items) {
       const reason = disabledReasons.get(item.id);
       menu.addItem((entry) => {
@@ -98,15 +98,26 @@ export function showDropdownMenu(buttonEl: HTMLElement, configure: (menu: Menu) 
   decorateShownMenu(menu);
 }
 
-function prepareMenu(menu: Menu): Menu {
+/**
+ * Styles the menu before it is placed. The width caps live in these classes, so
+ * adding them after the menu is shown lets it be positioned against its
+ * unconstrained width and land away from the button that opened it.
+ */
+function prepareMenu(menu: Menu, extraCls?: string): Menu {
   menu.setUseNativeMenu(false);
+  decorateMenuEl((menu as unknown as { dom?: HTMLElement }).dom, extraCls);
   return menu;
 }
 
 function decorateShownMenu(menu: Menu, extraCls?: string): void {
-  const menuEl =
+  decorateMenuEl(
     (menu as unknown as { dom?: HTMLElement }).dom ??
-    (Array.from(document.querySelectorAll(".menu")).pop() as HTMLElement | undefined);
+      (Array.from(document.querySelectorAll(".menu")).pop() as HTMLElement | undefined),
+    extraCls,
+  );
+}
+
+function decorateMenuEl(menuEl: HTMLElement | undefined, extraCls?: string): void {
   menuEl?.addClass(MENU_CLASS);
   if (extraCls) {
     menuEl?.addClass(extraCls);
