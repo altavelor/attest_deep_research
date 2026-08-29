@@ -41,7 +41,7 @@ export function createResearchToolRegistry(
 
   if (options.noteTools) {
     options.noteTools.setCitationProvider(() => evidence.snapshot().citations);
-    sources.register(new AttachmentSource({ tools: createNoteTools(options.noteTools) }));
+    sources.register(new AttachmentSource({ tools: createNoteTools(options.noteTools, evidence) }));
   }
 
   if (

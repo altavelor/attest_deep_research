@@ -9,6 +9,8 @@ import {
   UPDATE_NOTE_TOOL,
 } from "@core/agent";
 import { NoteToolService } from "@application/research";
+import { EvidenceRegistry } from "@application/sources";
+import { SourceReference } from "@core/model";
 import { bool, defineTool, enumOf, FieldSchema, num, str, text } from "@application/sources/tools";
 
 export const NOTE_PERMISSIONS = {
@@ -27,14 +29,23 @@ interface NoteToolSpec {
   requires(permissions: ToolPermissions): boolean;
 }
 
+interface NoteToolDeps {
+  service: NoteToolService;
+  evidence?: EvidenceRegistry;
+}
+
+type NoteEvidenceTool = "read_note" | "get_active_note";
+
+const EVIDENCE_TOOLS = new Set<string>([READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL]);
+
 /** Shared thin delegation: hand the call to the service and adapt its DTO. */
 async function runNoteTool(
-  service: NoteToolService,
+  deps: NoteToolDeps,
   name: string,
   input: Record<string, unknown>,
   context: ToolContext,
 ): Promise<ToolExecution<unknown>> {
-  const execution = await service.execute({ id: context.callId, name, arguments: input });
+  const execution = await deps.service.execute({ id: context.callId, name, arguments: input });
 
   let value: unknown;
   try {
@@ -51,23 +62,58 @@ async function runNoteTool(
     return toolFailure(reason, `Note tool ${name} failed.`, false, hint ? { hint } : undefined);
   }
 
+  if (deps.evidence && EVIDENCE_TOOLS.has(name)) {
+    registerReadChunks(deps.evidence, name as NoteEvidenceTool, value, context.callId);
+  }
+
   return { ok: true, value, diagnostic: execution.diagnostic };
 }
 
-function defineNoteTool(spec: NoteToolSpec): new (service: NoteToolService) => Tool {
-  return defineTool<NoteToolService, Record<string, unknown>, unknown>({
+/**
+ * Registers the chunks a note read returned so their `evidenceId` becomes a citable
+ * token. Silently skips a payload that does not carry well-formed chunks: the result
+ * is parsed from a tool DTO and must never fail the call.
+ */
+function registerReadChunks(
+  evidence: EvidenceRegistry,
+  tool: NoteEvidenceTool,
+  value: unknown,
+  callId: string,
+): void {
+  if (typeof value !== "object" || value === null) return;
+  const payload = value as Record<string, unknown>;
+  if (payload.ok !== true || !Array.isArray(payload.chunks)) return;
+
+  for (const entry of payload.chunks) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const chunk = entry as Record<string, unknown>;
+    const evidenceId = chunk.id;
+    const source = chunk.evidenceSource;
+    const content = chunk.text;
+    if (typeof evidenceId !== "string" || !evidenceId) continue;
+    if (typeof content !== "string") continue;
+    if (typeof source !== "object" || source === null) continue;
+    evidence.registerNoteEvidence(
+      { evidenceId, source: source as SourceReference, content },
+      { callId, tool },
+    );
+  }
+}
+
+function defineNoteTool(spec: NoteToolSpec): new (deps: NoteToolDeps) => Tool {
+  return defineTool<NoteToolDeps, Record<string, unknown>, unknown>({
     name: spec.name,
     description: spec.description,
     schema: spec.schema,
     requires: spec.requires,
-    execute: (service, input, context) => runNoteTool(service, spec.name, input, context),
+    execute: (deps, input, context) => runNoteTool(deps, spec.name, input, context),
   });
 }
 
 const ReadNoteTool = defineNoteTool({
   name: READ_NOTE_TOOL,
   description:
-    "Read the raw content of a vault note by path. For editing only — returned text is NOT citable evidence. To search authoritative sources, use search_index or search_web instead.",
+    "Read the raw content of a vault note by path. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. Navigation results from search_notes and list_notes are not evidence.",
   schema: {
     path: str(MAX_PATH_CHARS, { required: true, description: "Vault-relative file path." }),
     maxChars: num({
@@ -105,7 +151,7 @@ const ListNotesTool = defineNoteTool({
 const GetActiveNoteTool = defineNoteTool({
   name: GET_ACTIVE_NOTE_TOOL,
   description:
-    "Return the currently open Obsidian file path and its raw content. For editing only — not citable evidence. The active note content is already provided as attached context at the start of this conversation.",
+    "Return the currently open Obsidian file path and its raw content. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. The active note content is already provided as attached context at the start of this conversation.",
   schema: {},
   requires: (p) => p.has(NOTE_PERMISSIONS.active),
 });
@@ -153,7 +199,7 @@ const DeleteNoteTool = defineNoteTool({
   requires: (p) => p.has(NOTE_PERMISSIONS.mutate),
 });
 
-const NOTE_TOOLS: ReadonlyArray<new (service: NoteToolService) => Tool> = [
+const NOTE_TOOLS: ReadonlyArray<new (deps: NoteToolDeps) => Tool> = [
   ReadNoteTool,
   SearchNotesTool,
   ListNotesTool,
@@ -163,7 +209,12 @@ const NOTE_TOOLS: ReadonlyArray<new (service: NoteToolService) => Tool> = [
   DeleteNoteTool,
 ];
 
-/** Build the note tools bound to a service. Gating is per-tool via `requires`. */
-export function createNoteTools(service: NoteToolService): Tool[] {
-  return NOTE_TOOLS.map((NoteTool) => new NoteTool(service));
+/**
+ * Build the note tools bound to a service. Gating is per-tool via `requires`. When an
+ * evidence registry is supplied, note reads register their chunks so the model may
+ * cite them by `evidenceId`.
+ */
+export function createNoteTools(service: NoteToolService, evidence?: EvidenceRegistry): Tool[] {
+  const deps: NoteToolDeps = { service, ...(evidence ? { evidence } : {}) };
+  return NOTE_TOOLS.map((NoteTool) => new NoteTool(deps));
 }
