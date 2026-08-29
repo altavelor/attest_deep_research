@@ -170,6 +170,39 @@ describe("forced synthesis with note mutations available", () => {
 });
 
 describe("search call budget", () => {
+  it("reserves the budget while collecting parallel calls from one round", async () => {
+    const search = emptySearch();
+    const provider = new ScriptedProvider([
+      [
+        {
+          content: "",
+          isComplete: true,
+          toolCalls: [
+            { id: "1", name: "search_web", arguments: { query: "a" } },
+            { id: "2", name: "search_web", arguments: { query: "b" } },
+          ],
+        },
+      ],
+      [{ content: "final", isComplete: true }],
+    ]);
+
+    const result = await new ThinkingResearchRunner({
+      modelRound: new ChatCompletionsRoundAdapter(provider),
+      model: "m",
+      messages: [],
+      tools: new ToolManager([search.handler]),
+      policy: OPEN_POLICY,
+      maxSearchCalls: 1,
+    }).run();
+
+    expect(search.execute).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ id: "2", reason: "search-budget-exhausted" }),
+    );
+  });
+
   it("rejects search calls beyond the budget without executing them", async () => {
     const search = emptySearch();
     const onToolCall = vi.fn();
