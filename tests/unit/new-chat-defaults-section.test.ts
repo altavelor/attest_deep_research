@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
+import { DEFAULT_SETTINGS, cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type { AttestSettings } from "@adapters/settings";
 import { createTranslator } from "@adapters/i18n";
 import { NewChatDefaultsSection } from "@apps/obsidian/ui/settings/NewChatDefaultsSection";
@@ -17,7 +17,7 @@ const t = createTranslator("en").t;
 function settings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
-    indexProfiles: [cloneIndexProfile(DEFAULT_SETTINGS.indexProfiles[0])],
+    indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
   };
 }
 

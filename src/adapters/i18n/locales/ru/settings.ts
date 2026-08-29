@@ -11,6 +11,11 @@ export const settings: EnSettingsMessages = {
   "settings.tab.quickStart.steps":
     "1. Добавьте сервер → 2. Добавьте чат-модель → 3. (необязательно) Добавьте индекс",
   "settings.tab.gateHint": "Сначала добавьте профиль чат-модели",
+  "settings.tab.setup.name": "Мастер настройки",
+  "settings.tab.setup.rerunDesc":
+    "Открывает мастер с текущими настройками и обновляет созданные им профили.",
+  "settings.tab.setup.rerunAction": "Пройти настройку заново",
+  "settings.tab.setup.action": "Запустить настройку",
 
   "settings.advanced.debugMode.name": "Режим отладки",
   "settings.advanced.debugMode.desc":

@@ -11,6 +11,7 @@ import type {
 import type { App as ObsidianApp } from "obsidian";
 
 import AttestPlugin from "@apps/obsidian/main";
+import { cloneIndexProfile, DEFAULT_INDEX_PROFILE, DEFAULT_SETTINGS } from "@adapters/settings";
 import { ATTEST_CHAT_VIEW_TYPE } from "@apps/obsidian/ui/chat/AttestChatView";
 import { createContainer, resetDom, restoreDomTimers } from "../../helpers/domHarness";
 
@@ -127,6 +128,7 @@ describe("Attest plugin lifecycle", () => {
       { id: "ask-current-note", name: "Спросить Attest о текущей заметке" },
       { id: "ask-selected-text", name: "Спросить Attest о выделенном тексте" },
       { id: "find-related-notes", name: "Найти связанные заметки" },
+      { id: "run-setup", name: "Запустить первоначальную настройку" },
       { id: "update-index", name: "Обновить индекс Attest" },
       { id: "summarize-current-note", name: "Суммировать текущую заметку" },
     ]);
@@ -138,6 +140,7 @@ describe("Attest plugin lifecycle", () => {
       "ask-current-note",
       "ask-selected-text",
       "find-related-notes",
+      "run-setup",
       "update-index",
       "summarize-current-note",
     ]);
@@ -237,6 +240,7 @@ describe("Attest plugin lifecycle", () => {
   });
 
   it("starts an incremental update for the active index profile", async () => {
+    plugin.settings.indexProfiles = [cloneIndexProfile(DEFAULT_INDEX_PROFILE)];
     const profileId = plugin.settings.indexProfiles[0].id;
     const start = vi
       .spyOn(plugin.indexing, "start")
@@ -260,6 +264,7 @@ describe("Attest plugin lifecycle", () => {
   });
 
   it("marks the resolved index profile stale when no default index is configured", () => {
+    plugin.settings.indexProfiles = [cloneIndexProfile(DEFAULT_INDEX_PROFILE)];
     const markStale = vi.spyOn(plugin.indexing, "markStale");
     expect(plugin.settings.newChatDefaults.indexProfileId).toBe("");
 
@@ -464,5 +469,158 @@ describe("Attest chat session ownership", () => {
     expect(raw.updatedAt).toBe("2026-06-01T10:00:00.000Z");
     expect(recovered.chatSessions.status("stale-chat")).toBe("idle");
     recovered.unload();
+  });
+});
+
+describe("Attest first-run wizard", () => {
+  let app: App;
+  let plugin: AttestPlugin;
+
+  beforeEach(() => {
+    createContainer();
+    app = new App();
+    plugin = createPlugin(app);
+  });
+
+  afterEach(() => {
+    plugin.unload();
+    restoreDomTimers();
+    resetDom();
+  });
+
+  function wizardEl(): HTMLElement | null {
+    return document.querySelector(".attest-onboarding");
+  }
+
+  it("opens once the layout is ready in a vault that was never configured", async () => {
+    await plugin.onload();
+
+    expect(wizardEl()).not.toBeNull();
+  });
+
+  it("leaves an already configured vault alone", async () => {
+    await asStubPlugin(plugin).saveData({
+      ...DEFAULT_SETTINGS,
+      serverProfiles: [
+        {
+          id: "server-1",
+          name: "OpenAI",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://api.openai.com/v1",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    await plugin.onload();
+
+    expect(wizardEl()).toBeNull();
+  });
+
+  it("does not come back after it was finished or skipped", async () => {
+    await asStubPlugin(plugin).saveData({ ...DEFAULT_SETTINGS, onboardingCompleted: true });
+
+    await plugin.onload();
+
+    expect(wizardEl()).toBeNull();
+  });
+
+  it("records the skip so the next launch stays quiet", async () => {
+    await plugin.onload();
+
+    const skip = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".attest-onboarding button"),
+    ).find((button) => button.textContent === "Skip, configure manually");
+    skip?.click();
+
+    await vi.waitFor(() => expect(plugin.settings.onboardingCompleted).toBe(true));
+    expect(wizardEl()).toBeNull();
+  });
+
+  it("can be reopened on demand from the setup command", async () => {
+    await asStubPlugin(plugin).saveData({ ...DEFAULT_SETTINGS, onboardingCompleted: true });
+    await plugin.onload();
+
+    registeredCommand(plugin, "run-setup").callback?.();
+
+    expect(wizardEl()).not.toBeNull();
+  });
+
+  it("keeps a single setup wizard when the command is invoked twice", async () => {
+    await asStubPlugin(plugin).saveData({ ...DEFAULT_SETTINGS, onboardingCompleted: true });
+    await plugin.onload();
+
+    registeredCommand(plugin, "run-setup").callback?.();
+    registeredCommand(plugin, "run-setup").callback?.();
+
+    expect(document.querySelectorAll(".attest-onboarding")).toHaveLength(1);
+  });
+
+  it("tells the caller when the wizard closed, so settings can refresh behind it", async () => {
+    await asStubPlugin(plugin).saveData({ ...DEFAULT_SETTINGS, onboardingCompleted: true });
+    await plugin.onload();
+    const closed = vi.fn();
+
+    plugin.openOnboarding(closed);
+    expect(closed).not.toHaveBeenCalled();
+    const skip = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".attest-onboarding button"),
+    ).find((candidate) => candidate.textContent === "Skip, configure manually");
+    skip?.click();
+
+    await vi.waitFor(() => expect(closed).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not commit skipped settings after unload while persistence is pending", async () => {
+    let release: (() => void) | undefined;
+    vi.spyOn(asStubPlugin(plugin), "saveData").mockImplementation(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    await plugin.onload();
+    const skip = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".attest-onboarding button"),
+    ).find((candidate) => candidate.textContent === "Skip, configure manually");
+
+    skip?.click();
+    plugin.unload();
+    release?.();
+    await Promise.resolve();
+
+    expect(plugin.settings.onboardingCompleted).toBe(false);
+  });
+
+  it("does not commit completed settings after unload while persistence is pending", async () => {
+    let release: (() => void) | undefined;
+    vi.spyOn(asStubPlugin(plugin), "saveData").mockImplementation(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const complete = plugin as unknown as {
+      completeOnboarding(result: {
+        scope: "webOnly";
+        chat: {
+          server: { name: string; apiFormat: "openai-compatible"; baseUrl: string };
+          modelName: string;
+        };
+      }): Promise<unknown>;
+    };
+    const pending = complete.completeOnboarding({
+      scope: "webOnly",
+      chat: {
+        server: {
+          name: "OpenAI",
+          apiFormat: "openai-compatible",
+          baseUrl: "https://api.openai.com/v1",
+        },
+        modelName: "gpt-4.1-mini",
+      },
+    });
+
+    plugin.unload();
+    release?.();
+    await pending;
+
+    expect(plugin.settings.serverProfiles).toHaveLength(0);
+    expect(plugin.settings.onboardingCompleted).toBe(false);
   });
 });

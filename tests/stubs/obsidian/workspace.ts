@@ -52,10 +52,16 @@ export class Workspace {
   readonly openedLinks: { target: string; sourcePath: string }[] = [];
   readonly revealedLeaves: WorkspaceLeaf[] = [];
   rightLeafRequests = 0;
+  readonly layoutReadyCallbacks: (() => void)[] = [];
   private readonly leaves: WorkspaceLeaf[] = [];
   private readonly viewFactories = new Map<string, (leaf: WorkspaceLeaf) => View>();
 
   constructor(public readonly app: App) {}
+
+  onLayoutReady(callback: () => void): void {
+    this.layoutReadyCallbacks.push(callback);
+    callback();
+  }
 
   registerViewFactory(type: string, factory: (leaf: WorkspaceLeaf) => View): void {
     this.viewFactories.set(type, factory);

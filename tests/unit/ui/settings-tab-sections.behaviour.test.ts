@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
-import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
+import { DEFAULT_SETTINGS, cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type { ChatModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
 import { AttestSettingTab } from "@apps/obsidian/ui/SettingsTab";
 import AttestPluginClass from "@apps/obsidian/main";
@@ -52,7 +52,7 @@ function chatProfile(): ChatModelProfile {
 function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
-    indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
+    indexProfiles: [DEFAULT_INDEX_PROFILE].map(cloneIndexProfile),
     embeddingModelProfiles: [],
     serverProfiles: [serverProfile()],
     chatModelProfiles: [chatProfile()],
@@ -97,6 +97,41 @@ describe("settings tab sections", () => {
     restoreDomTimers();
     resetDom();
     vi.restoreAllMocks();
+  });
+
+  it("lets open chat views pick up a settings change while they stay open", async () => {
+    const tab = createTab();
+    const plugin = (tab as unknown as { plugin: AttestPlugin }).plugin;
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue(undefined);
+    const refreshed = vi.spyOn(plugin, "refreshChatViews").mockImplementation(() => {});
+    const setting = Array.from(tab.containerEl.querySelectorAll(".setting-item")).find(
+      (item) => item.firstElementChild?.textContent?.trim() === "Use linked notes",
+    );
+    const toggle = setting?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+
+    toggle?.click();
+    await vi.waitFor(() => expect(refreshed).toHaveBeenCalled());
+
+    expect(toggle).toBeDefined();
+    expect(refreshed).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers the wizard again once the vault is configured", () => {
+    const tab = createTab();
+    const plugin = (tab as unknown as { plugin: AttestPlugin }).plugin;
+    const opened = vi.spyOn(plugin, "openOnboarding").mockImplementation(() => {});
+    tab.display();
+    const names = settingNames(tab.containerEl);
+    expect(names).toContain("Setup wizard");
+
+    const rerun = Array.from(tab.containerEl.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Run setup again",
+    );
+    rerun?.click();
+
+    expect(rerun).toBeDefined();
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(typeof opened.mock.calls[0][0]).toBe("function");
   });
 
   it("renders the retrieval, search, and web controls the tab owns", () => {

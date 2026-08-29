@@ -7,20 +7,27 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "@adapters/indexing";
+import { DUCKDUCKGO_DESCRIPTOR, WebSourceProfile } from "@core/web";
 import {
   DEFAULT_DOWNLOAD_FOLDER,
   DEFAULT_INDEX_FOLDER,
   DEFAULT_INDEX_PROFILE_ID,
+  DEFAULT_INDEX_PROFILE_NAME,
   DEFAULT_PROFILE_TIMESTAMP,
 } from "./constants";
 import { DEFAULT_NEW_CHAT_DEFAULTS } from "./newChatDefaults";
 import { DEFAULT_UI_LANGUAGE } from "./uiLanguage";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
-import { AttestSettings } from "../types";
+import { AttestSettings, OnboardingProfileIds } from "../types";
 
+/**
+ * Template for a newly created index profile. A vault gets no index profile
+ * until the user asks for one, so this is a starting point for the wizard and
+ * the settings screens, never a profile that exists on its own.
+ */
 export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   id: DEFAULT_INDEX_PROFILE_ID,
-  name: "Default index",
+  name: DEFAULT_INDEX_PROFILE_NAME,
   mode: "wholeVault",
   indexFolder: DEFAULT_INDEX_FOLDER,
   includeFolders: ["/"],
@@ -44,15 +51,27 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   updatedAt: DEFAULT_PROFILE_TIMESTAMP,
 };
 
+export const DEFAULT_WEB_SOURCES: readonly WebSourceProfile[] = [
+  { sourceId: DUCKDUCKGO_DESCRIPTOR.id, activation: "auto", credentials: {} },
+];
+
+export const EMPTY_ONBOARDING_PROFILE_IDS: OnboardingProfileIds = {
+  chatServerProfileId: "",
+  chatModelProfileId: "",
+  embeddingServerProfileId: "",
+  embeddingModelProfileId: "",
+  indexProfileId: "",
+};
+
 export const DEFAULT_SETTINGS: AttestSettings = {
   serverProfiles: [],
   chatModelProfiles: [],
   embeddingModelProfiles: [],
   activeEmbeddingModelProfileId: "",
-  indexProfiles: [cloneIndexProfile(DEFAULT_INDEX_PROFILE)],
+  indexProfiles: [],
   includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
   excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
-  webSources: [],
+  webSources: DEFAULT_WEB_SOURCES.map(cloneWebSourceProfile),
   newChatDefaults: { ...DEFAULT_NEW_CHAT_DEFAULTS },
   uiLanguage: DEFAULT_UI_LANGUAGE,
   useLinkedNotes: true,
@@ -63,8 +82,23 @@ export const DEFAULT_SETTINGS: AttestSettings = {
   expandSearchQuery: true,
   downloadFolder: DEFAULT_DOWNLOAD_FOLDER,
   debugMode: false,
+  onboardingCompleted: false,
+  onboardingProfileIds: { ...EMPTY_ONBOARDING_PROFILE_IDS },
   modelCapabilityCache: {},
 };
+
+/**
+ * Copies a stored web-source entry without sharing its credentials object.
+ * Saved data is untrusted, so a malformed entry is passed through untouched and
+ * left for `normalizeSettingsState` to drop.
+ */
+export function cloneWebSourceProfile(profile: WebSourceProfile): WebSourceProfile {
+  if (typeof profile !== "object" || profile === null) {
+    return profile;
+  }
+
+  return { ...profile, credentials: { ...profile.credentials } };
+}
 
 export function createIndexProfile(
   values: Partial<IndexProfile> &
@@ -74,7 +108,7 @@ export function createIndexProfile(
     ...cloneIndexProfile(DEFAULT_INDEX_PROFILE),
     ...values,
     id: values.id ?? DEFAULT_INDEX_PROFILE_ID,
-    name: values.name ?? "Default index",
+    name: values.name ?? DEFAULT_INDEX_PROFILE_NAME,
     mode: values.mode ?? "wholeVault",
     indexFolder: normalizeVaultFolder(values.indexFolder),
     includeFolders: [...values.includeFolders],

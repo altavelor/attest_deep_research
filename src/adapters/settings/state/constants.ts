@@ -7,3 +7,5 @@ export const MAX_PROFILE_NAME_LENGTH = 30;
 export const DEFAULT_PROFILE_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 export const UNVERIFIED_EMBEDDING_SUSPENSION_REASON = "Embedding capability could not be verified.";
 export const INVALID_BASE_URL_SUSPENSION_REASON = "The server profile has an invalid base URL.";
+
+export const DEFAULT_INDEX_PROFILE_NAME = "Default index";

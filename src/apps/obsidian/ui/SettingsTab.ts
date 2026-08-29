@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, setIcon } from "obsidian";
+import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
 
 import type AttestPlugin from "@apps/obsidian/main";
 import { DiscoveredModel, normalizeSettingsState } from "@adapters/settings";
@@ -56,6 +56,7 @@ export class AttestSettingTab extends PluginSettingTab {
 
     renderCategoryHeading(this.containerEl, this.plugin.translate("settings.tab.heading"));
     this.renderQuickStart(this.containerEl);
+    this.renderSetupEntry(this.containerEl);
     new ModelProfilesSection({
       app: this.app,
       t: this.plugin.translate,
@@ -63,14 +64,14 @@ export class AttestSettingTab extends PluginSettingTab {
       settings: this.plugin.settings,
       fetchedModelsByServerId: this.fetchedModelsByServerId,
       prober: this.prober,
-      saveSettings: () => this.plugin.saveSettings(),
+      saveSettings: () => this.saveSettings(),
       requestRedisplay: () => this.display(),
     }).render(this.containerEl);
     this.indexProfiles.render(this.gateHost(this.containerEl));
     new NewChatDefaultsSection({
       t: this.plugin.translate,
       settings: this.plugin.settings,
-      saveSettings: () => this.plugin.saveSettings(),
+      saveSettings: () => this.saveSettings(),
       requestRedisplay: () => this.display(),
     }).render(this.gateHost(this.containerEl));
     new RetrievalSettingsSection({
@@ -80,7 +81,7 @@ export class AttestSettingTab extends PluginSettingTab {
       settings: this.plugin.settings,
       webSourceHealth: this.plugin.webSourceHealth,
       hasActiveChatModel: this.hasActiveChatModel(),
-      saveSettings: () => this.plugin.saveSettings(),
+      saveSettings: () => this.saveSettings(),
       requestRedisplay: () => this.display(),
     }).render(this.containerEl);
     this.renderLanguageSettings(this.containerEl);
@@ -103,8 +104,35 @@ export class AttestSettingTab extends PluginSettingTab {
     this.indexProfiles.dispose();
   }
 
+  /**
+   * Saves and lets open chat views pick the change up. The composer builds its
+   * model and index lists once, so without this a profile added while a chat is
+   * open stays missing from its menus.
+   */
+  private async saveSettings(): Promise<void> {
+    await this.plugin.saveSettings();
+    this.plugin.refreshChatViews();
+  }
+
   private hasActiveChatModel(): boolean {
     return this.plugin.settings.chatModelProfiles.some((profile) => !profile.isSuspended);
+  }
+
+  /**
+   * Offers the wizard from settings. A configured vault gets the re-run row,
+   * which reopens the wizard on the profiles it created and updates them
+   * instead of adding a second set.
+   */
+  private renderSetupEntry(containerEl: HTMLElement): void {
+    if (this.plugin.settings.serverProfiles.length === 0) return;
+    new Setting(containerEl)
+      .setName(this.plugin.translate("settings.tab.setup.name"))
+      .setDesc(this.plugin.translate("settings.tab.setup.rerunDesc"))
+      .addButton((button) =>
+        button
+          .setButtonText(this.plugin.translate("settings.tab.setup.rerunAction"))
+          .onClick(() => this.plugin.openOnboarding(() => this.display())),
+      );
   }
 
   private renderQuickStart(containerEl: HTMLElement): void {
@@ -120,6 +148,11 @@ export class AttestSettingTab extends PluginSettingTab {
       cls: "attest-settings__quickstart-steps",
       text: this.plugin.translate("settings.tab.quickStart.steps"),
     });
+    const action = body.createEl("button", {
+      cls: "mod-cta attest-settings__quickstart-action",
+      text: this.plugin.translate("settings.tab.setup.action"),
+    });
+    action.addEventListener("click", () => this.plugin.openOnboarding(() => this.display()));
   }
 
   private gateHost(containerEl: HTMLElement): HTMLElement {
@@ -141,7 +174,7 @@ export class AttestSettingTab extends PluginSettingTab {
       setLanguage: (value) => {
         this.plugin.settings.uiLanguage = value;
       },
-      saveSettings: () => this.plugin.saveSettings(),
+      saveSettings: () => this.saveSettings(),
       applyLanguage: () => this.plugin.applyUiLanguage(),
       requestRedisplay: () => this.display(),
       refreshChatViews: () => this.plugin.refreshChatViews(),
@@ -155,7 +188,7 @@ export class AttestSettingTab extends PluginSettingTab {
       setDebugMode: (value) => {
         this.plugin.settings.debugMode = value;
       },
-      saveSettings: () => this.plugin.saveSettings(),
+      saveSettings: () => this.saveSettings(),
       refreshChatViews: () => this.plugin.refreshChatViews(),
     }).render(containerEl);
   }

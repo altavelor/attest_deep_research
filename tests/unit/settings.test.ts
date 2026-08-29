@@ -1,4 +1,9 @@
-import { DEFAULT_SETTINGS, cloneIndexProfile, createIndexProfile } from "@adapters/settings";
+import {
+  DEFAULT_SETTINGS,
+  cloneIndexProfile,
+  createIndexProfile,
+  DEFAULT_INDEX_PROFILE,
+} from "@adapters/settings";
 import { readSettings } from "@adapters/settings";
 import {
   formatListInput,
@@ -242,7 +247,7 @@ describe("Attest settings", () => {
     expect(resolveChatModelProfile(settings, "chat-a")?.id).toBe("chat-a");
     expect(
       isIndexProfileSelectable({
-        ...DEFAULT_SETTINGS.indexProfiles[0],
+        ...DEFAULT_INDEX_PROFILE,
         isSuspended: false,
         lastIndexedAt: "2026-06-14T10:00:00.000Z",
       }),
@@ -264,14 +269,7 @@ function currentSettings(overrides: Partial<AttestSettings> = {}): AttestSetting
     chatModelProfiles: overrides.chatModelProfiles?.map((profile) => ({ ...profile })) ?? [],
     embeddingModelProfiles:
       overrides.embeddingModelProfiles?.map((profile) => ({ ...profile })) ?? [],
-    indexProfiles: overrides.indexProfiles?.map(cloneIndexProfile) ?? [
-      createIndexProfile({
-        ...DEFAULT_SETTINGS.indexProfiles[0],
-        isSuspended: false,
-        suspendedReason: undefined,
-        embeddingModelProfileId: "",
-      }),
-    ],
+    indexProfiles: overrides.indexProfiles?.map(cloneIndexProfile) ?? [],
     includeFolders: overrides.includeFolders ?? [...DEFAULT_SETTINGS.includeFolders],
     excludeGlobs: overrides.excludeGlobs ?? [...DEFAULT_SETTINGS.excludeGlobs],
     modelCapabilityCache: overrides.modelCapabilityCache ?? {},
@@ -310,7 +308,7 @@ describe("index profile suspension", () => {
         ],
         indexProfiles: [
           createIndexProfile({
-            ...DEFAULT_SETTINGS.indexProfiles[0],
+            ...DEFAULT_INDEX_PROFILE,
             embeddingModelProfileId,
             isSuspended: false,
             suspendedReason: undefined,

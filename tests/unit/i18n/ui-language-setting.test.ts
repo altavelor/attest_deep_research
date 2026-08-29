@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS, readSettings, readUiLanguage } from "@adapters/settings";
+import {
+  DEFAULT_SETTINGS,
+  readSettings,
+  readUiLanguage,
+  DEFAULT_INDEX_PROFILE,
+} from "@adapters/settings";
 
 function savedSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ...DEFAULT_SETTINGS,
-    indexProfiles: DEFAULT_SETTINGS.indexProfiles.map((profile) => ({ ...profile })),
+    indexProfiles: [DEFAULT_INDEX_PROFILE].map((profile) => ({ ...profile })),
     ...overrides,
   };
 }

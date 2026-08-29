@@ -189,8 +189,11 @@ export class Setting {
     this.settingEl = containerEl.appendChild(document.createElement("div"));
     this.settingEl.className = "setting-item";
     this.nameEl = this.settingEl.appendChild(document.createElement("div"));
+    this.nameEl.className = "setting-item-name";
     this.descEl = this.settingEl.appendChild(document.createElement("div"));
+    this.descEl.className = "setting-item-description";
     this.controlEl = this.settingEl.appendChild(document.createElement("div"));
+    this.controlEl.className = "setting-item-control";
   }
 
   setName(name: string): this {

@@ -12,6 +12,7 @@ export const ATTEST_COMMAND_IDS = [
   "find-related-notes",
   "update-index",
   "summarize-current-note",
+  "run-setup",
 ] as const;
 
 export interface AttestCommandHost {
@@ -20,6 +21,7 @@ export interface AttestCommandHost {
   openChat(): Promise<void>;
   runChatCommand(action: AttestChatCommandAction): Promise<void>;
   updateActiveIndex(): Promise<void>;
+  runSetup(): void;
 }
 
 export function registerAttestCommands(host: AttestCommandHost): void {
@@ -68,6 +70,12 @@ export function registerAttestCommands(host: AttestCommandHost): void {
       }),
     }),
   );
+  host.addCommand({
+    id: "run-setup",
+    name: host.t("command.runSetup"),
+    icon: "wand-sparkles",
+    callback: () => host.runSetup(),
+  });
   host.addCommand({
     id: "update-index",
     name: host.t("command.updateIndex"),

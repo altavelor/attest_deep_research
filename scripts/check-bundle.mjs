@@ -35,7 +35,7 @@ const FORBIDDEN_MODULES = [
 ];
 
 const bundlePath = resolve(process.env.ATTEST_OUTPUT_DIR ?? "dist", "main.js");
-const maxBundleBytes = Number(process.env.ATTEST_MAX_BUNDLE_BYTES ?? 3_600_000);
+const maxBundleBytes = Number(process.env.ATTEST_MAX_BUNDLE_BYTES ?? 3_750_000);
 
 let bundle;
 try {
