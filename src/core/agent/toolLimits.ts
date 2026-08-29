@@ -1,0 +1,5 @@
+export const INDEX_SEARCH_RESULT_LIMIT = 5;
+export const INDEX_SEARCH_QUERY_CHARS = 240;
+
+export const INDEX_URL_PAGE_LIMIT = 100;
+export const URL_CHECK_BATCH_LIMIT = 100;

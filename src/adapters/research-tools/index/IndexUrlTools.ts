@@ -11,7 +11,12 @@ import {
   ToolParseResult as ResearchToolParseResult,
   toolFailure,
 } from "@core/agent";
-import { CHECK_URLS_TOOL, LIST_INDEX_URLS_TOOL } from "@core/agent";
+import {
+  CHECK_URLS_TOOL,
+  INDEX_URL_PAGE_LIMIT,
+  LIST_INDEX_URLS_TOOL,
+  URL_CHECK_BATCH_LIMIT,
+} from "@core/agent";
 
 interface ListIndexUrlsInput {
   cursor?: string;
@@ -45,10 +50,10 @@ export interface ListIndexUrlsToolOptions {
 }
 
 const DEFAULT_LIMIT = 25;
-const MAX_LIMIT = 100;
+const MAX_LIMIT = INDEX_URL_PAGE_LIMIT;
 const MAX_CURSOR_CHARS = 200;
 const MAX_SOURCE_PATH_CHARS = 500;
-const MAX_URLS_PER_CHECK = 100;
+const MAX_URLS_PER_CHECK = URL_CHECK_BATCH_LIMIT;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MIN_TIMEOUT_MS = 1_000;
 const MAX_TIMEOUT_MS = 30_000;
