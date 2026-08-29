@@ -46,5 +46,5 @@ export function buildSubAgentFraming(options: SubAgentFramingOptions = {}): stri
 }
 
 function escapeResourceLabels(value: string): string {
-  return value.replace(/<\/?resource-labels/gi, (match) => match.replace("<", "\\u003c"));
+  return value.replaceAll("&", "\\u0026").replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
 }
