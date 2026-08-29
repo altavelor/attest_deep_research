@@ -55,6 +55,10 @@ export const settingsProfiles = {
 
   "settings.serverModal.editTitle": "Edit server profile",
   "settings.serverModal.addTitle": "Add server profile",
+  "settings.serverModal.preset.name": "Provider",
+  "settings.serverModal.preset.desc":
+    "Fills the base URL and API format for a known provider. Choose Custom for any other endpoint.",
+  "settings.serverModal.preset.custom": "Custom",
   "settings.serverModal.name.name": "Name",
   "settings.serverModal.name.desc":
     "Human-readable name shown in settings and model selectors. Max {max} characters.",

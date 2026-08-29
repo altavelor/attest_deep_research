@@ -10,11 +10,30 @@ import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
 
 const t = createTranslator("en").t;
 
-function inputFor(container: HTMLElement, name: string): HTMLInputElement {
-  const setting = Array.from(container.querySelectorAll(".setting-item")).find(
+function settingFor(container: HTMLElement, name: string): HTMLElement {
+  return Array.from(container.querySelectorAll<HTMLElement>(".setting-item")).find(
     (item) => item.firstElementChild?.textContent === name,
-  );
-  return setting!.querySelector<HTMLInputElement>("input")!;
+  )!;
+}
+
+function inputFor(container: HTMLElement, name: string): HTMLInputElement {
+  return settingFor(container, name).querySelector<HTMLInputElement>("input")!;
+}
+
+function selectFor(container: HTMLElement, name: string): HTMLSelectElement {
+  return settingFor(container, name).querySelector<HTMLSelectElement>("select")!;
+}
+
+function choose(container: HTMLElement, name: string, value: string): void {
+  const select = selectFor(container, name);
+  select.value = value;
+  select.dispatchEvent(new Event("change"));
+}
+
+function type(container: HTMLElement, name: string, value: string): void {
+  const input = inputFor(container, name);
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
 }
 
 function save(container: HTMLElement): void {
@@ -47,9 +66,7 @@ describe("ServerProfileModal", () => {
       input.value = value;
       input.dispatchEvent(new Event("input"));
     }
-    const format = modal.contentEl.querySelector<HTMLSelectElement>("select")!;
-    format.value = "anthropic";
-    format.dispatchEvent(new Event("change"));
+    choose(modal.contentEl, "API format", "anthropic");
     save(modal.contentEl);
 
     await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -59,6 +76,141 @@ describe("ServerProfileModal", () => {
         apiFormat: "anthropic",
         baseUrl: "https://api.example.test/v1",
         apiKey: "secret",
+      }),
+    );
+  });
+
+  it("fills the endpoint from a provider preset and suggests its name", async () => {
+    const onSave = vi.fn(async () => {});
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      onSave,
+    });
+    modal.open();
+    choose(modal.contentEl, "Provider", "anthropic");
+
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("https://api.anthropic.com/v1");
+    expect(selectFor(modal.contentEl, "API format").value).toBe("anthropic");
+    expect(inputFor(modal.contentEl, "Name").value).toBe("Anthropic");
+
+    save(modal.contentEl);
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Anthropic",
+        apiFormat: "anthropic",
+        baseUrl: "https://api.anthropic.com/v1",
+      }),
+    );
+  });
+
+  it("keeps a name the user already typed and applies the local Ollama preset", () => {
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+    type(modal.contentEl, "Name", "My box");
+    choose(modal.contentEl, "Provider", "ollama");
+
+    expect(inputFor(modal.contentEl, "Name").value).toBe("My box");
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("http://localhost:11434");
+    expect(selectFor(modal.contentEl, "API format").value).toBe("ollama");
+  });
+
+  it("leaves every field untouched when Custom is selected", () => {
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+    type(modal.contentEl, "Base URL", "https://self.hosted.test/v1");
+    choose(modal.contentEl, "Provider", "custom");
+
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("https://self.hosted.test/v1");
+    expect(inputFor(modal.contentEl, "Name").value).toBe("");
+  });
+
+  it("reopens a saved profile with its provider preselected, and unknown URLs as custom", () => {
+    const openWith = (baseUrl: string): HTMLElement => {
+      const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+        t,
+        profiles: [],
+        profile: {
+          id: "p",
+          name: "Saved",
+          apiFormat: "openai-compatible",
+          baseUrl,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        onSave: vi.fn(async () => {}),
+      });
+      modal.open();
+      return modal.contentEl;
+    };
+
+    expect(selectFor(openWith("https://api.groq.com/openai/v1/"), "Provider").value).toBe("groq");
+    expect(selectFor(openWith("https://self.hosted.test/v1"), "Provider").value).toBe("custom");
+  });
+
+  it("still fills fields after the modal is closed and reopened", () => {
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+    modal.close();
+    modal.open();
+    choose(modal.contentEl, "Provider", "groq");
+
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("https://api.groq.com/openai/v1");
+    expect(selectFor(modal.contentEl, "API format").value).toBe("openai-compatible");
+    expect(inputFor(modal.contentEl, "Name").value).toBe("Groq");
+  });
+
+  it("replaces a name that came from the previously chosen preset", () => {
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      onSave: vi.fn(async () => {}),
+    });
+    modal.open();
+    choose(modal.contentEl, "Provider", "openai");
+    choose(modal.contentEl, "Provider", "groq");
+
+    expect(inputFor(modal.contentEl, "Name").value).toBe("Groq");
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("https://api.groq.com/openai/v1");
+  });
+
+  it("switches the endpoint of a saved profile while keeping its own name", async () => {
+    const onSave = vi.fn(async () => {});
+    const modal = new ServerProfileModal(new App() as unknown as ObsidianApp, {
+      t,
+      profiles: [],
+      profile: {
+        id: "p",
+        name: "Work key",
+        apiFormat: "openai-compatible",
+        baseUrl: "https://api.openai.com/v1",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      onSave,
+    });
+    modal.open();
+    choose(modal.contentEl, "Provider", "groq");
+    save(modal.contentEl);
+
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Work key",
+        baseUrl: "https://api.groq.com/openai/v1",
       }),
     );
   });

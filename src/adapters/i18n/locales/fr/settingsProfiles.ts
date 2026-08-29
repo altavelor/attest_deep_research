@@ -59,6 +59,10 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.serverModal.editTitle": "Modifier le profil de serveur",
   "settings.serverModal.addTitle": "Ajouter un profil de serveur",
+  "settings.serverModal.preset.name": "Fournisseur",
+  "settings.serverModal.preset.desc":
+    "Remplit l'URL de base et le format d'API d'un fournisseur connu. Choisissez Personnalisé pour tout autre point de terminaison.",
+  "settings.serverModal.preset.custom": "Personnalisé",
   "settings.serverModal.name.name": "Nom",
   "settings.serverModal.name.desc":
     "Nom lisible affiché dans les paramètres et les sélecteurs de modèle. {max} caractères maximum.",

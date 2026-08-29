@@ -58,6 +58,10 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.serverModal.editTitle": "Изменить профиль сервера",
   "settings.serverModal.addTitle": "Добавить профиль сервера",
+  "settings.serverModal.preset.name": "Провайдер",
+  "settings.serverModal.preset.desc":
+    "Подставляет базовый URL и формат API известного провайдера. Для любого другого адреса выберите «Свой».",
+  "settings.serverModal.preset.custom": "Свой",
   "settings.serverModal.name.name": "Имя",
   "settings.serverModal.name.desc":
     "Понятное имя, которое показывается в настройках и списках моделей. Не более {max} символов.",
