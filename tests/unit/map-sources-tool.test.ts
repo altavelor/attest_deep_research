@@ -4,6 +4,7 @@ import { MapSourcesTool } from "@adapters/research-tools/map-sources/MapSourcesT
 import { executeTool } from "@core/agent";
 import type { MapSources } from "@application/use-cases/map-sources";
 import type { EvidenceRegistry } from "@application/sources";
+import type { SubAgentTelemetry } from "@application/research";
 
 function execute(
   mapper: Pick<MapSources, "run">,
@@ -109,5 +110,51 @@ describe("MapSourcesTool", () => {
       error: { code: "invalid-input" },
     });
     expect(mapper.run).not.toHaveBeenCalled();
+  });
+  it("reports sub-agent telemetry in the mapSources namespace, not in the tool value", async () => {
+    const telemetry: SubAgentTelemetry = {
+      runId: "run-a",
+      durationMs: 40,
+      loopDurationMs: 40,
+      rounds: 2,
+      maxRounds: 6,
+      hitRoundLimit: false,
+      toolCalls: 1,
+      duplicateToolCalls: 0,
+      searchCalls: 1,
+      maxSearches: 8,
+      searchBudgetRejections: 0,
+      usedSynthesisFallback: false,
+      answerChars: 16,
+      usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0 },
+    };
+    const mapper = {
+      run: vi.fn().mockResolvedValue({
+        question: "q",
+        rows: [
+          {
+            sourcePath: "Notes/one.md",
+            ok: true,
+            stance: "supports",
+            keyFindings: [],
+            evidenceIds: [],
+            snapshot: { evidence: [] },
+          },
+        ],
+        diagnostics: {
+          selection: "explicit",
+          requested: 1,
+          completed: 1,
+          failed: 0,
+          subAgents: [telemetry],
+        },
+      }),
+    };
+
+    const result = await execute(mapper as unknown as Pick<MapSources, "run">);
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostic).toEqual({ mapSources: [telemetry] });
+    expect(JSON.stringify(result.ok ? result.value : {})).not.toContain("runId");
   });
 });

@@ -94,6 +94,8 @@ export const MapSourcesTool = defineTool<
       mergeRowEvidence(deps.evidence, row, context.callId);
     }
 
+    const { selection, requested, completed, failed, subAgents } = result.diagnostics;
+    const telemetry = Array.isArray(subAgents) ? subAgents : [];
     return {
       ok: true,
       value: {
@@ -106,8 +108,9 @@ export const MapSourcesTool = defineTool<
           evidenceIds: row.evidenceIds,
           ...(row.error ? { error: row.error } : {}),
         })),
-        diagnostics: result.diagnostics,
+        diagnostics: { selection, requested, completed, failed },
       },
+      ...(telemetry.length > 0 ? { diagnostic: { mapSources: telemetry } } : {}),
     };
   },
 });

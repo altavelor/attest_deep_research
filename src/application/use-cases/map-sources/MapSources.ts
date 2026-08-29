@@ -1,6 +1,10 @@
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
-import type { SubAgentPort, ResearchToolsetOptions } from "@application/research";
+import type {
+  SubAgentPort,
+  ResearchToolsetOptions,
+  SubAgentTelemetry,
+} from "@application/research";
 import { buildSourceTask, citedEvidenceIds, parseSourceAnswer } from "./mapSourcesParse";
 import { MapSourceRow, MapSourcesProgress, MapSourcesResult } from "./types";
 
@@ -53,18 +57,20 @@ export class MapSources {
 
     const total = selection.sourcePaths.length;
     const rows = new Array<MapSourceRow>(total);
+    const telemetry = new Array<SubAgentTelemetry | undefined>(total);
     const limiter = new Limiter(this.deps.maxParallel ?? DEFAULT_MAX_PARALLEL);
 
     await Promise.all(
       selection.sourcePaths.map((sourcePath, index) =>
         limiter.run(async () => {
           input.onProgress?.({ type: "source-start", sourcePath, index, total });
-          const row = await this.mapOne(input, sourcePath);
-          rows[index] = row;
+          const mapped = await this.mapOne(input, sourcePath);
+          rows[index] = mapped.row;
+          telemetry[index] = mapped.telemetry;
           input.onProgress?.({
             type: "source-done",
             sourcePath,
-            ok: row.ok,
+            ok: mapped.row.ok,
             index,
             total,
           });
@@ -81,11 +87,15 @@ export class MapSources {
         requested: total,
         completed,
         failed: total - completed,
+        subAgents: telemetry.filter((entry): entry is SubAgentTelemetry => entry !== undefined),
       },
     };
   }
 
-  private async mapOne(input: MapSourcesInput, sourcePath: string): Promise<MapSourceRow> {
+  private async mapOne(
+    input: MapSourcesInput,
+    sourcePath: string,
+  ): Promise<{ row: MapSourceRow; telemetry?: SubAgentTelemetry }> {
     try {
       const result = await this.deps.runner.run({
         task: buildSourceTask(input.question, sourcePath),
@@ -98,24 +108,29 @@ export class MapSources {
       });
       const parsed = parseSourceAnswer(result.answerText);
       return {
-        sourcePath,
-        ok: true,
-        stance: parsed.stance,
-        keyFindings: parsed.keyFindings,
-        evidenceIds: citedEvidenceIds(result.answerText, result.snapshot),
-        answer: result.answerText,
-        snapshot: result.snapshot,
+        row: {
+          sourcePath,
+          ok: true,
+          stance: parsed.stance,
+          keyFindings: parsed.keyFindings,
+          evidenceIds: citedEvidenceIds(result.answerText, result.snapshot),
+          answer: result.answerText,
+          snapshot: result.snapshot,
+        },
+        ...(result.telemetry ? { telemetry: result.telemetry } : {}),
       };
     } catch (error) {
       return {
-        sourcePath,
-        ok: false,
-        stance: "unclear",
-        keyFindings: [],
-        evidenceIds: [],
-        answer: "",
-        error: error instanceof Error ? error.message : String(error),
-        snapshot: { evidence: [], citations: [], provenance: [] },
+        row: {
+          sourcePath,
+          ok: false,
+          stance: "unclear",
+          keyFindings: [],
+          evidenceIds: [],
+          answer: "",
+          error: error instanceof Error ? error.message : String(error),
+          snapshot: { evidence: [], citations: [], provenance: [] },
+        },
       };
     }
   }

@@ -1,6 +1,6 @@
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
-import { ResearchToolsetOptions, SubAgentPort } from "@application/research";
+import { ResearchToolsetOptions, SubAgentPort, SubAgentTelemetry } from "@application/research";
 import { EvidenceRegistry, isWebResultCapacityError } from "@application/sources";
 import { defineTool, int, str, strArray } from "@application/sources/tools";
 
@@ -134,6 +134,7 @@ export const SubAgentTool = defineTool<
   },
   parse: parseSubAgentInput,
   execute: async (deps, input, context) => {
+    const startedAt = Date.now();
     let run;
     try {
       run = await deps.runner.run({
@@ -145,7 +146,15 @@ export const SubAgentTool = defineTool<
         onEvent: (event) => context.emit(event),
       });
     } catch {
-      return toolFailure("sub-agent-failed", "Sub-agent session failed.", true);
+      return {
+        ...toolFailure("sub-agent-failed", "Sub-agent session failed.", true),
+        diagnostic: {
+          ...exceptionTelemetry(context.callId, Date.now() - startedAt),
+          sourceCount: 0,
+          droppedSourceCount: 0,
+          evidenceBudgetExhausted: false,
+        },
+      };
     }
 
     const allowedHosts = (input.resources ?? [])
@@ -222,9 +231,36 @@ export const SubAgentTool = defineTool<
         droppedSourceCount,
         evidenceBudgetExhausted,
       },
+      diagnostic: {
+        ...(run.telemetry ?? {}),
+        sourceCount,
+        droppedSourceCount,
+        evidenceBudgetExhausted,
+      },
     };
   },
 });
+
+/** Telemetry for a sub-agent that threw before it could report its own counters. */
+function exceptionTelemetry(runId: string, durationMs: number): SubAgentTelemetry {
+  return {
+    runId,
+    durationMs,
+    loopDurationMs: durationMs,
+    rounds: 0,
+    maxRounds: 0,
+    hitRoundLimit: false,
+    failureReason: "tool-exception",
+    toolCalls: 0,
+    duplicateToolCalls: 0,
+    searchCalls: 0,
+    maxSearches: 0,
+    searchBudgetRejections: 0,
+    usedSynthesisFallback: false,
+    answerChars: 0,
+    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+  };
+}
 
 function redactDroppedCitations(answer: string, tokens: readonly string[]): string {
   return [...new Set(tokens)].reduce(

@@ -4,7 +4,12 @@ import {
   citedEvidenceIds,
   parseSourceAnswer,
 } from "@application/use-cases/map-sources";
-import type { SubAgentPort, SubAgentRunInput, SubAgentRunResult } from "@application/research";
+import type {
+  SubAgentPort,
+  SubAgentRunInput,
+  SubAgentRunResult,
+  SubAgentTelemetry,
+} from "@application/research";
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
@@ -21,6 +26,25 @@ function chunk(id: string, path: string): RetrievedChunk {
 
 function snapshot(chunks: RetrievedChunk[]): ResearchEvidenceSnapshot {
   return { evidence: chunks, citations: [], provenance: [] };
+}
+
+function telemetryOf(runId: string): SubAgentTelemetry {
+  return {
+    runId,
+    durationMs: 40,
+    loopDurationMs: 40,
+    rounds: 2,
+    maxRounds: 6,
+    hitRoundLimit: false,
+    toolCalls: 1,
+    duplicateToolCalls: 0,
+    searchCalls: 1,
+    maxSearches: 8,
+    searchBudgetRejections: 0,
+    usedSynthesisFallback: false,
+    answerChars: 16,
+    usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0 },
+  };
 }
 
 const emptyContext = {
@@ -171,5 +195,28 @@ describe("MapSources fan-out", () => {
       sourcePaths: ["a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"],
     });
     expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it("collects one telemetry record per mapped document", async () => {
+    const runner: SubAgentPort = {
+      run: async (input): Promise<SubAgentRunResult> => {
+        const path = /"([^"]+\.pdf)"/.exec(input.task)?.[1] ?? "?";
+        return {
+          answerText: "STANCE: SUPPORTS",
+          snapshot: snapshot([]),
+          telemetry: telemetryOf(`run-${path}`),
+        };
+      },
+    };
+    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+
+    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
+    const result = await mapper.run({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] });
+
+    expect(result.diagnostics.subAgents).toHaveLength(2);
+    expect(result.diagnostics.subAgents?.map((entry) => entry.runId).sort()).toEqual([
+      "run-a.pdf",
+      "run-b.pdf",
+    ]);
   });
 });

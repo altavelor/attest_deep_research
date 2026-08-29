@@ -1,4 +1,5 @@
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type { SubAgentTelemetry } from "@application/research/subAgentPort";
 
 export type MapSourceStance = "supports" | "opposes" | "mixed" | "not_addressed" | "unclear";
 
@@ -31,6 +32,8 @@ export interface MapSourcesDiagnostics {
   requested: number;
   completed: number;
   failed: number;
+
+  subAgents?: SubAgentTelemetry[];
 }
 
 export interface MapSourcesResult {

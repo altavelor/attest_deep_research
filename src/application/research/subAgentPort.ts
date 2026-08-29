@@ -1,5 +1,6 @@
 import type { ToolEvent } from "@core/agent";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type { ThinkingFallbackReason } from "@application/use-cases/research/ThinkingResearchRunner";
 
 import type { ResearchToolsetOptions } from "./toolPorts";
 
@@ -16,10 +17,32 @@ export interface SubAgentRunInput {
   onEvent?: (event: ToolEvent) => void;
 }
 
+export type SubAgentFailureReason = ThinkingFallbackReason | "tool-exception";
+
+export interface SubAgentTelemetry {
+  runId: string;
+  durationMs: number;
+  loopDurationMs: number;
+  rounds: number;
+  maxRounds: number;
+  hitRoundLimit: boolean;
+  failureReason?: SubAgentFailureReason;
+  toolCalls: number;
+  duplicateToolCalls: number;
+  searchCalls: number;
+  maxSearches: number;
+  searchBudgetRejections: number;
+  usedSynthesisFallback: boolean;
+  answerChars: number;
+  usage: SubAgentUsage;
+}
+
 export interface SubAgentRunResult {
   answerText: string;
 
   snapshot: ResearchEvidenceSnapshot;
+
+  telemetry?: SubAgentTelemetry;
 }
 
 export interface SubAgentPort {
