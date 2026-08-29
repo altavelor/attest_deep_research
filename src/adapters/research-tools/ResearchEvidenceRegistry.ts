@@ -8,6 +8,7 @@ import {
   RegisteredWebResult,
   ResearchEvidenceSnapshot,
   WebHandleEntry,
+  WebResultCapacityError,
 } from "@application/sources";
 import { validatePublicWebUrl } from "@application/sources";
 
@@ -109,7 +110,7 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     }
 
     if (this.handles.size >= this.maxWebResults) {
-      throw new Error("Web result registry capacity exceeded.");
+      throw new WebResultCapacityError(this.maxWebResults);
     }
 
     const evidenceId = `web:${stableId(canonicalUrl)}`;

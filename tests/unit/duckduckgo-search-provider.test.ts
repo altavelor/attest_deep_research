@@ -1,4 +1,5 @@
 import { DuckDuckGoSearchProvider } from "@adapters/web";
+import { WebPageFetcher } from "@adapters/web/WebPageFetcher";
 
 function htmlResponse(body: string, init?: ResponseInit): Response {
   return new Response(body, {
@@ -369,7 +370,7 @@ describe("DuckDuckGoSearchProvider", () => {
     );
   });
 
-  it("distinguishes URL, HTTP, content-type, size, and timeout failures", async () => {
+  it("distinguishes URL, HTTP, content-type, and timeout failures, and truncates by size", async () => {
     const privateProvider = new DuckDuckGoSearchProvider({
       minRequestIntervalMs: 0,
       fetch: vi.fn(),
@@ -403,14 +404,11 @@ describe("DuckDuckGoSearchProvider", () => {
 
     const largeProvider = new DuckDuckGoSearchProvider({
       minRequestIntervalMs: 0,
-      fetch: vi.fn().mockResolvedValue(htmlResponse("x".repeat(20))),
+      fetch: vi.fn().mockResolvedValue(htmlResponse("lead text " + "x".repeat(200))),
     });
     await expect(
       largeProvider.fetchPage("https://example.com", { maxResponseBytes: 10 }),
-    ).resolves.toMatchObject({
-      ok: false,
-      error: { code: "web-fetch-response-too-large", retryable: false },
-    });
+    ).resolves.toMatchObject({ ok: true, truncated: true });
 
     const timeoutProvider = new DuckDuckGoSearchProvider({
       minRequestIntervalMs: 0,
@@ -662,5 +660,43 @@ describe("DuckDuckGoSearchProvider cancellation", () => {
 
     await expect(provider.search("local models", { signal: controller.signal })).rejects.toThrow();
     expect(hanging.aborted()).toBe(true);
+  });
+});
+
+describe("DuckDuckGoSearchProvider download ceilings", () => {
+  it("bounds each search-result page read well below the single-page ceiling", async () => {
+    const seen: Array<number | undefined> = [];
+    const fetchSpy = vi
+      .spyOn(WebPageFetcher.prototype, "fetch")
+      .mockImplementation(async (_url, options) => {
+        seen.push(options.maxResponseBytes);
+        return {
+          ok: false as const,
+          result: {
+            ok: false as const,
+            error: { code: "web-fetch-network", message: "stub", retryable: false },
+          },
+        };
+      });
+
+    try {
+      const provider = new DuckDuckGoSearchProvider({
+        minRequestIntervalMs: 0,
+        fetch: vi.fn().mockResolvedValue(
+          htmlResponse(`
+          <a href="https://example.com/research" class="result__a">Example research</a>
+          <a class="result__snippet">Snippet text</a>
+        `),
+        ),
+        now: fixedNow,
+      });
+
+      await provider.search("local models", { limit: 1, maxFetches: 1 });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+
+    expect(seen).toContain(1_048_576);
+    expect(seen.every((bytes) => bytes !== undefined && bytes <= 1_048_576)).toBe(true);
   });
 });

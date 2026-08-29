@@ -8,7 +8,9 @@ export interface SubAgentRunInput {
 
   toolContext?: ResearchToolsetOptions;
 
-  budget?: { maxRounds?: number; maxResultChars?: number };
+  budget?: { maxRounds?: number; maxResultChars?: number; maxSearches?: number };
+
+  resources?: readonly string[];
   signal?: AbortSignal;
 
   onEvent?: (event: ToolEvent) => void;
@@ -41,6 +43,7 @@ export type SubAgentLogEvent =
       model: string;
       maxRounds: number;
       maxResultChars: number;
+      maxSearches?: number;
       reasoning?: { enabled: boolean; effort?: string };
     }
   | { type: "tool-call"; round: number; name: string; label: string }

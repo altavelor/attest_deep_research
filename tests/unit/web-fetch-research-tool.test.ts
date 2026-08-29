@@ -2,6 +2,7 @@ import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvide
 import { executeTool } from "@core/agent";
 import { WebFetchResearchTool } from "@adapters/research-tools/web/WebFetchResearchTool";
 import { SearchProvider } from "@application/ports";
+import { fetchRegisteredWebPage } from "@adapters/research-tools/web/fetchRegisteredWebPage";
 
 describe("WebFetchResearchTool", () => {
   it("rejects unknown and cross-registry handles before network access", async () => {
@@ -163,4 +164,126 @@ describe("WebFetchResearchTool", () => {
       },
     });
   });
+});
+
+describe("WebFetchResearchTool download budget", () => {
+  it("passes a smaller per-page byte ceiling as the batch grows", async () => {
+    async function ceilingFor(pageCount: number): Promise<number | undefined> {
+      const seen: Array<number | undefined> = [];
+      const fetchPage: SearchProvider["fetchPage"] = async (url, options) => {
+        seen.push(options?.maxResponseBytes);
+        return {
+          ok: true as const,
+          url,
+          finalUrl: url,
+          content: "text",
+          contentType: "text/html",
+          bytes: 10,
+          truncated: false,
+          redirects: [],
+        };
+      };
+      const provider: SearchProvider = { search: vi.fn(), fetchPage };
+      let handle = 0;
+      const evidence = new ResearchEvidenceRegistry({
+        createHandle: () => `handle-${(handle += 1)}`,
+      });
+      const resultIds = Array.from(
+        { length: pageCount },
+        (_, index) =>
+          evidence.registerWebResult(
+            { url: `https://example.com/page-${index}`, title: "t", snippet: "s", rank: index + 1 },
+            { callId: "search", query: "q" },
+          ).resultId,
+      );
+      const tool = new WebFetchResearchTool({ provider, evidence });
+
+      await executeTool(tool, { id: "fetch", name: "fetch_web_page", arguments: { resultIds } });
+
+      return seen[0];
+    }
+
+    expect(await ceilingFor(1)).toBe(4_194_304);
+    expect(await ceilingFor(8)).toBe(1_310_720);
+  });
+});
+
+describe("WebFetchResearchTool cancellation", () => {
+  it("passes the abort signal to every fetch and does not upgrade evidence after cancellation", async () => {
+    const controller = new AbortController();
+    const seenSignals: Array<AbortSignal | undefined> = [];
+    const provider: SearchProvider = {
+      search: vi.fn(),
+      fetchPage: vi.fn(async (url, options) => {
+        seenSignals.push(options?.signal);
+        controller.abort();
+        return {
+          ok: true as const,
+          url,
+          finalUrl: url,
+          content: "late content",
+          contentType: "text/html",
+          bytes: 12,
+          truncated: false,
+          redirects: [],
+        };
+      }),
+    };
+    const evidence = new ResearchEvidenceRegistry();
+    const resultId = evidence.registerWebResult(
+      { url: "https://example.com/page", title: "t", snippet: "s", rank: 1 },
+      { callId: "search", query: "q" },
+    ).resultId;
+    const tool = new WebFetchResearchTool({ provider, evidence });
+
+    const execution = await executeTool(
+      tool,
+      { id: "fetch", name: "fetch_web_page", arguments: { resultIds: [resultId] } },
+      { signal: controller.signal },
+    );
+
+    expect(seenSignals).toEqual([controller.signal]);
+    expect(execution).toMatchObject({
+      ok: true,
+      value: { pages: [{ ok: false, error: { code: "web-fetch-cancelled" } }] },
+    });
+    expect(evidence.snapshot().evidence[0]?.source).toMatchObject({ wasContentFetched: false });
+  });
+
+  it.each(["throws", "returns failure"])(
+    "classifies cancellation before a provider that %s",
+    async (behavior) => {
+      const controller = new AbortController();
+      const evidence = new ResearchEvidenceRegistry();
+      const resultId = evidence.registerWebResult(
+        { url: "https://example.com/page", title: "t", snippet: "s", rank: 1 },
+        { callId: "search", query: "q" },
+      ).resultId;
+      const provider: SearchProvider = {
+        search: vi.fn(),
+        fetchPage: vi.fn(async () => {
+          controller.abort();
+          if (behavior === "throws") throw new DOMException("aborted", "AbortError");
+          return {
+            ok: false as const,
+            error: { code: "web-fetch-timeout", message: "timeout", retryable: true },
+          };
+        }),
+      };
+
+      const execution = await fetchRegisteredWebPage(
+        { provider, evidence },
+        resultId,
+        "fetch",
+        undefined,
+        undefined,
+        controller.signal,
+      );
+
+      expect(execution).toMatchObject({
+        ok: false,
+        error: { code: "web-fetch-cancelled", retryable: false },
+      });
+    },
+  );
 });

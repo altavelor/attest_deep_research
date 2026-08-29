@@ -25,7 +25,18 @@ export function serializeExecution(execution: ResearchToolExecution<unknown>): C
 }
 
 export function normalizedCallKey(call: Pick<ChatToolCall, "name" | "arguments">): string {
-  return `${call.name}:${stableJson(call.arguments)}`;
+  return `${call.name}:${stableJson(canonicalArguments(call))}`;
+}
+
+function canonicalArguments(
+  call: Pick<ChatToolCall, "name" | "arguments">,
+): Record<string, unknown> {
+  const args = call.arguments;
+  if (call.name !== "search_web" || typeof args.query !== "string" || args.queries !== undefined) {
+    return args;
+  }
+  const { query, ...rest } = args;
+  return { ...rest, queries: [query] };
 }
 
 export function extractEvidenceIds(result: string): string[] {

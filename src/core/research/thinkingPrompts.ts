@@ -22,6 +22,7 @@ import {
   PRESENT_IMAGE_GALLERY_TOOL,
   WEB_SEARCH_TOOL,
 } from "@core/agent/toolNames";
+import { MAX_WEB_QUERIES_PER_CALL, MAX_WEB_RESULT_LIMIT } from "@core/web/queryPlanning";
 import { RetrievedChunk } from "@core/model/source";
 import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { sourceLabel } from "@core/retrieval/citations";
@@ -80,7 +81,8 @@ const MUTATION_RULES = `
 - Call mutation tools only when the user explicitly requests a write action.
 - Prefer append or prepend over replace to avoid data loss.
 - Always verify the file exists (list_notes or read_note) before calling update_note.
-- On {ok:false, reason:"already-exists"}: retry create_note with overwrite:true, or use update_note.
+- On {ok:false, reason:"already-exists"}: read the existing note, then append/prepend safely,
+  choose a new path, or ask for explicit confirmation before replacing any content.
 - On {ok:false, reason:"not-found"}: call create_note first, then update_note if needed.
 - Never write to .attest/ paths.`.trimStart();
 
@@ -133,7 +135,10 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
     "- Never invent a URL or an evidenceId. Only cite URLs/ids that appear in tool results.",
   );
   if (web && index) {
-    citationLines.push("- Evidence from search_index and search_web has equal authority.");
+    citationLines.push(
+      "- Weigh each source by origin, freshness, and how directly it supports the claim; " +
+        "prefer primary official sources and fetched pages over snippets.",
+    );
   }
 
   const sections: string[] = [
@@ -164,8 +169,9 @@ const CORE_RESEARCH_SKILL = (tools: ToolSet) => {
       [
         `### Editing tools (${editTools.join(", ")})`,
         "- Use these only when the user explicitly asks to read, create, update, or delete vault notes.",
-        "- Results from editing tools are NOT evidence. Do not cite them. Do not use them to reason",
-        "  about the answer to the user's question.",
+        "- Content returned by read_note or get_active_note may inform the answer when the runtime",
+        "  registers it as evidence. Navigation results only locate notes, and mutation results",
+        "  prove only that an action succeeded — not that facts written into a note are true.",
       ].join("\n"),
     );
   }
@@ -195,7 +201,11 @@ const WEB_SKILL = (tools: ToolSet): string => {
     "### Strategy",
     "- Write focused queries (≤240 chars). Avoid vague queries — be specific.",
     "- Cite a web result by its `url` in the form `[url:<url>]`.",
-    "- `limit` controls how many results (max 5).",
+    `- \`limit\` controls how many results (max ${MAX_WEB_RESULT_LIMIT}). For a broad or ` +
+      "multi-faceted question raise it to 10-15 instead of running several similar searches.",
+    `- Batch searches: pass up to ${MAX_WEB_QUERIES_PER_CALL} distinct queries in one ` +
+      "search_web call via the `queries` array (they run as one call and return merged, " +
+      "deduplicated results) instead of one call per query. Use `query` only for a single search.",
   ];
   if (canFetch) {
     strategy.push(
@@ -220,6 +230,7 @@ const WEB_SKILL = (tools: ToolSet): string => {
     "- `title` — page title",
     "- `snippet` — short preview (may be truncated)",
     "- `rank` — position in search results (lower = higher priority)",
+    "- `query` — which of the submitted queries produced this result",
   ];
 
   return [

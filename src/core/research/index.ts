@@ -12,3 +12,4 @@ export * from "./GraphContext";
 export * from "./searchMode";
 export * from "./evidence-planner/EvidencePlanner";
 export * from "./subAgent/subAgentDirective";
+export * from "./subAgent/subAgentFraming";

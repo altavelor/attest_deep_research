@@ -29,6 +29,18 @@ export interface WebHandleEntry extends RegisteredWebResult {
   source: WebSourceReference;
 }
 
+/** Raised when a run has already registered as many web sources as its budget allows. */
+export class WebResultCapacityError extends Error {
+  constructor(readonly capacity: number) {
+    super(`Web result registry capacity exceeded (${capacity}).`);
+    this.name = "WebResultCapacityError";
+  }
+}
+
+export function isWebResultCapacityError(error: unknown): error is WebResultCapacityError {
+  return error instanceof WebResultCapacityError;
+}
+
 export interface EvidenceRegistry {
   registerIndexChunk(chunk: RetrievedChunk, provenance: { callId: string; query: string }): string;
   registerNoteEvidence(
