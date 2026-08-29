@@ -17,7 +17,8 @@
 }
 
 .attest-settings-websource-section__desc {
-  margin: 0 0 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
