@@ -50,6 +50,7 @@ export interface ChatComposerRefs {
   submitButtonEl: HTMLButtonElement;
   attachedContextEl: HTMLElement;
   controls: ComposerControls;
+  resizeQuestionInput(): void;
 }
 
 export interface ChatComposerOptions {
@@ -336,21 +337,32 @@ export function renderChatComposer(
     submitButtonEl,
     attachedContextEl,
     controls,
+    resizeQuestionInput,
   };
 }
 
+/**
+ * Grows the question field with its content. A composer built before its leaf
+ * has been laid out measures zero, so the height is left to the stylesheet
+ * until a real measurement arrives: pinning zero would hide the field with no
+ * way to click back into it.
+ */
 function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
   let minTextareaHeight = 0;
 
   return () => {
-    if (minTextareaHeight === 0) {
-      textareaEl.style.height = "auto";
-      minTextareaHeight = textareaEl.scrollHeight;
+    textareaEl.style.height = "auto";
+    const measuredHeight = textareaEl.scrollHeight;
+    if (measuredHeight <= 0) {
+      textareaEl.style.removeProperty("height");
+      return;
     }
 
-    textareaEl.style.height = "auto";
-    const nextHeight = Math.max(minTextareaHeight, textareaEl.scrollHeight);
-    textareaEl.style.height = `${nextHeight}px`;
+    if (minTextareaHeight === 0) {
+      minTextareaHeight = measuredHeight;
+    }
+
+    textareaEl.style.height = `${Math.max(minTextareaHeight, measuredHeight)}px`;
   };
 }
 

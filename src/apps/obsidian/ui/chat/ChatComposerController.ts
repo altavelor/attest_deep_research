@@ -79,6 +79,11 @@ export class ChatComposerController {
     return this.refs?.textareaEl.value ?? "";
   }
 
+  /** Re-measures the question field once the view has a real size. */
+  resizeQuestionInput(): void {
+    this.refs?.resizeQuestionInput();
+  }
+
   clearQuestionInput(): void {
     if (!this.refs) {
       return;

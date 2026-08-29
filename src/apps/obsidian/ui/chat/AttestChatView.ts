@@ -402,6 +402,11 @@ export class AttestChatView extends ItemView {
     this.render();
   }
 
+  /** The leaf reports its size only once it is laid out; the question field is sized from that. */
+  onResize(): void {
+    this.composer.resizeQuestionInput();
+  }
+
   runCommand(action: AttestChatCommandAction): Promise<void> {
     const run = this.commandActionQueue.then(() => this.executeCommand(action));
     this.commandActionQueue = run.catch(() => {});
