@@ -44,6 +44,8 @@ export interface ThinkingResearchRunnerOptions {
   maxParallelSubAgents?: number;
 
   maxParallelToolCalls?: number;
+
+  maxSearchCalls?: number;
   reasoning?: ModelRoundRequest["reasoning"];
   onDelta?(delta: ModelRoundDelta, round: number): void;
   onAnswerReset?(): void;
@@ -137,6 +139,9 @@ export class ThinkingResearchRunner {
       maxResultChars,
       maxParallelSubAgents: this.options.maxParallelSubAgents ?? DEFAULT_MAX_PARALLEL_SUB_AGENTS,
       maxParallelToolCalls: this.options.maxParallelToolCalls ?? DEFAULT_MAX_PARALLEL_TOOL_CALLS,
+      ...(this.options.maxSearchCalls !== undefined
+        ? { maxSearchCalls: this.options.maxSearchCalls }
+        : {}),
       onToolCall: this.options.onToolCall,
       onToolResult: this.options.onToolResult,
       onToolEvent: this.options.onToolEvent,
@@ -205,6 +210,7 @@ export class ThinkingResearchRunner {
           continuation,
           toolOutputs,
           round,
+          undefined,
         );
         continuation = response.continuation;
         reasoningItemCount += response.reasoningItemCount;
@@ -308,7 +314,10 @@ export class ThinkingResearchRunner {
             synthesisRequested = true;
             this.options.onRoundClassified?.(round, "intermediate");
             if (!continuation) {
-              messages.push({ role: "user", content: SYNTHESIS_NUDGE });
+              messages.push({
+                role: "user",
+                content: SYNTHESIS_NUDGE,
+              });
             }
           }
           continue;

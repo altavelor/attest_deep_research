@@ -2,7 +2,7 @@ import { validatePublicWebUrl } from "@application/sources";
 import { WebPageFetchFailure, WebPageFetchOptions } from "@application/ports";
 import { HostRequestThrottle } from "./HostRequestThrottle";
 
-const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576;
+const DEFAULT_MAX_RESPONSE_BYTES = 4_194_304;
 const DEFAULT_MAX_REDIRECTS = 5;
 
 export type RawPageResult =
@@ -12,6 +12,7 @@ export type RawPageResult =
       finalUrl: string;
       rawText: string;
       bytes: Uint8Array;
+      truncated: boolean;
       contentType: string;
       contentDisposition?: string;
       byteLength: number;
@@ -41,18 +42,27 @@ export class WebPageFetcher {
     this.defaultTimeoutMs = options.defaultTimeoutMs;
   }
 
+  /**
+   * Retrieves one page. `allowTruncation` opts into stopping at the byte ceiling
+   * and reporting `truncated`; callers that need the whole byte stream, such as
+   * document downloads, must leave it off so an oversized response still fails.
+   */
   fetch(
     url: string,
     options: WebPageFetchOptions,
     acceptContentType: (contentType: string) => boolean = isSupportedPageContentType,
+    allowTruncation = false,
   ): Promise<RawPageResult> {
-    return this.throttle.run(hostOf(url), () => this.fetchNow(url, options, acceptContentType));
+    return this.throttle.run(hostOf(url), () =>
+      this.fetchNow(url, options, acceptContentType, allowTruncation),
+    );
   }
 
   private async fetchNow(
     url: string,
     options: WebPageFetchOptions,
     acceptContentType: (contentType: string) => boolean,
+    allowTruncation: boolean,
   ): Promise<RawPageResult> {
     const initial = validatePublicWebUrl(url);
     if (!initial.ok) {
@@ -140,7 +150,7 @@ export class WebPageFetcher {
 
       let body: Awaited<ReturnType<typeof readBoundedBody>>;
       try {
-        body = await readBoundedBody(response, maxResponseBytes);
+        body = await readBoundedBody(response, maxResponseBytes, allowTruncation);
       } catch {
         return {
           ok: false,
@@ -155,8 +165,9 @@ export class WebPageFetcher {
         ok: true,
         url: initial.url,
         finalUrl: currentUrl,
-        rawText: new TextDecoder().decode(body.bytes),
+        rawText: decodeUtf8(body.bytes, body.truncated),
         bytes: body.bytes,
+        truncated: body.truncated,
         contentType,
         contentDisposition: response.headers.get("content-disposition") ?? undefined,
         byteLength: body.bytes.byteLength,
@@ -205,41 +216,12 @@ function isAbortError(error: unknown): boolean {
 function readBoundedBody(
   response: Response,
   maxBytes: number,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchFailure }> {
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    return Promise.resolve({
-      ok: false,
-      result: pageFailure(
-        "web-fetch-response-too-large",
-        "Page response exceeded the size limit.",
-        false,
-        { maxBytes },
-      ),
-    });
-  }
-
-  return readResponseStream(response, maxBytes);
-}
-
-async function readResponseStream(
-  response: Response,
-  maxBytes: number,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; result: WebPageFetchFailure }> {
-  if (!response.body) {
-    return { ok: true, bytes: new Uint8Array() };
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
-      return {
+  allowTruncation: boolean,
+): Promise<BoundedBodyResult> {
+  if (!allowTruncation) {
+    const contentLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      return Promise.resolve({
         ok: false,
         result: pageFailure(
           "web-fetch-response-too-large",
@@ -247,7 +229,52 @@ async function readResponseStream(
           false,
           { maxBytes },
         ),
-      };
+      });
+    }
+  }
+
+  return readResponseStream(response, maxBytes, allowTruncation);
+}
+
+/**
+ * Reads the body up to `maxBytes`. Text pages stop at the limit and report
+ * `truncated`, so a long article still yields its leading content; other types
+ * keep failing, because a partial binary document cannot be parsed.
+ */
+async function readResponseStream(
+  response: Response,
+  maxBytes: number,
+  allowTruncation: boolean,
+): Promise<BoundedBodyResult> {
+  if (!response.body) {
+    return { ok: true, bytes: new Uint8Array(), truncated: false };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      if (!allowTruncation) {
+        return {
+          ok: false,
+          result: pageFailure(
+            "web-fetch-response-too-large",
+            "Page response exceeded the size limit.",
+            false,
+            { maxBytes },
+          ),
+        };
+      }
+      chunks.push(value.subarray(0, value.byteLength - (total - maxBytes)));
+      total = maxBytes;
+      truncated = true;
+      break;
     }
     chunks.push(value);
   }
@@ -258,7 +285,18 @@ async function readResponseStream(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return { ok: true, bytes };
+  return { ok: true, bytes, truncated };
+}
+
+/**
+ * Decodes UTF-8 bytes, dropping a trailing multi-byte sequence that truncation
+ * cut in half so the text does not end in a replacement character.
+ */
+function decodeUtf8(bytes: Uint8Array, truncated: boolean): string {
+  if (!truncated) return new TextDecoder().decode(bytes);
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  const text = decoder.decode(bytes, { stream: true });
+  return text;
 }
 
 function pageFailure(
@@ -273,7 +311,10 @@ function pageFailure(
   };
 }
 
-function isSupportedPageContentType(contentType: string): boolean {
+type BoundedBodyResult =
+  { ok: true; bytes: Uint8Array; truncated: boolean } | { ok: false; result: WebPageFetchFailure };
+
+export function isSupportedPageContentType(contentType: string): boolean {
   return (
     contentType === "text/html" ||
     contentType === "application/xhtml+xml" ||

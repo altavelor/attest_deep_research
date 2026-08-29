@@ -33,6 +33,9 @@ export {
   mergeRankedResults,
   isWebQueryIntent,
   WEB_QUERY_INTENTS,
+  MAX_WEB_RESULT_LIMIT,
+  MAX_WEB_QUERIES_PER_CALL,
+  MAX_WEB_QUERY_CHARS,
 } from "./queryPlanning";
 export type { WebQueryIntent } from "./queryPlanning";
 

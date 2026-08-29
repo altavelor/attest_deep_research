@@ -19,10 +19,24 @@ export interface FetchWebPageOutput {
 
 export const DEFAULT_FETCH_OPTIONS = {
   timeoutMs: 30_000,
-  maxResponseBytes: 1_048_576,
+  maxResponseBytes: 4_194_304,
   maxContentChars: 16_000,
   maxRedirects: 5,
 } as const;
+
+const MIN_RESPONSE_BYTES = 1_048_576;
+
+const BATCH_RESPONSE_BYTES = 10_485_760;
+
+/**
+ * Per-page download ceiling for a batch of `pageCount` parallel fetches. One page
+ * may use the full budget; a large batch is trimmed so the bytes in flight stay
+ * bounded regardless of how many pages the model requested at once.
+ */
+export function responseBytesForBatch(pageCount: number): number {
+  const share = Math.floor(BATCH_RESPONSE_BYTES / Math.max(1, pageCount));
+  return Math.min(DEFAULT_FETCH_OPTIONS.maxResponseBytes, Math.max(MIN_RESPONSE_BYTES, share));
+}
 
 export interface FetchRegisteredWebPageDeps {
   provider: SearchProvider;
@@ -43,7 +57,12 @@ export async function fetchRegisteredWebPage(
   resultId: string,
   callId: string,
   maxContentChars: number = DEFAULT_FETCH_OPTIONS.maxContentChars,
+  maxResponseBytes: number = DEFAULT_FETCH_OPTIONS.maxResponseBytes,
+  signal?: AbortSignal,
 ): Promise<ToolExecution<FetchWebPageOutput>> {
+  if (signal?.aborted) {
+    return toolFailure("web-fetch-cancelled", "Page fetch was cancelled.", false);
+  }
   const registered = deps.evidence.resolveWebResult(resultId);
   if (!registered) {
     return toolFailure("unknown-web-result", "The web result is not registered for this answer.");
@@ -61,9 +80,16 @@ export async function fetchRegisteredWebPage(
     result = await deps.provider.fetchPage(safeUrl.url, {
       ...DEFAULT_FETCH_OPTIONS,
       maxContentChars,
+      maxResponseBytes,
+      ...(signal ? { signal } : {}),
     });
   } catch {
-    return toolFailure("web-fetch-failed", "Page fetch failed.", true);
+    return signal?.aborted
+      ? toolFailure("web-fetch-cancelled", "Page fetch was cancelled.", false)
+      : toolFailure("web-fetch-failed", "Page fetch failed.", true);
+  }
+  if (signal?.aborted) {
+    return toolFailure("web-fetch-cancelled", "Page fetch was cancelled.", false);
   }
   if (!result || typeof result !== "object" || typeof result.ok !== "boolean") {
     return toolFailure("web-fetch-invalid-response", "Page fetch returned an invalid response.");
@@ -71,7 +97,6 @@ export async function fetchRegisteredWebPage(
   if (!result.ok) {
     return result;
   }
-
   const finalUrl = validatePublicWebUrl(result.finalUrl);
   if (
     !finalUrl.ok ||

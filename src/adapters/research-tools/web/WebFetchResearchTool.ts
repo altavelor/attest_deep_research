@@ -3,7 +3,11 @@ import { EvidenceRegistry } from "@application/sources";
 import { ToolError, ToolParseResult, toolFailure } from "@core/agent";
 import { WEB_FETCH_TOOL } from "@core/agent";
 import { defineTool, strArray } from "@application/sources/tools";
-import { FetchWebPageOutput, fetchRegisteredWebPage } from "./fetchRegisteredWebPage";
+import {
+  FetchWebPageOutput,
+  fetchRegisteredWebPage,
+  responseBytesForBatch,
+} from "./fetchRegisteredWebPage";
 
 const MAX_RESULT_IDS = 10;
 const MAX_RESULT_ID_LENGTH = 200;
@@ -76,9 +80,17 @@ export const WebFetchResearchTool = defineTool<
   },
   parse: parseFetchWebPagesInput,
   execute: async (deps, input, context) => {
+    const maxResponseBytes = responseBytesForBatch(input.resultIds.length);
     const pages = await Promise.all(
       input.resultIds.map(async (resultId): Promise<FetchWebPageResult> => {
-        const fetched = await fetchRegisteredWebPage(deps, resultId, context.callId);
+        const fetched = await fetchRegisteredWebPage(
+          deps,
+          resultId,
+          context.callId,
+          undefined,
+          maxResponseBytes,
+          context.signal,
+        );
         return fetched.ok
           ? { ok: true, ...fetched.value }
           : { ok: false, resultId, error: fetched.error };

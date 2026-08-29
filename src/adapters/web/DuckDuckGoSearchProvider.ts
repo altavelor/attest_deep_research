@@ -17,7 +17,11 @@ import {
 } from "./DuckDuckGoParser";
 import { HostRequestThrottle } from "./HostRequestThrottle";
 import { extractPageImages } from "./images/pageImages";
-import { isDocumentContentType, WebPageFetcher } from "./WebPageFetcher";
+import {
+  isDocumentContentType,
+  isSupportedPageContentType,
+  WebPageFetcher,
+} from "./WebPageFetcher";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -47,6 +51,8 @@ const DEFAULT_RESULT_LIMIT = 5;
 const DEFAULT_MAX_FETCHES = 3;
 const HARD_RESULT_LIMIT = 50;
 const HARD_MAX_FETCHES = 15;
+
+const SEARCH_RESULT_MAX_RESPONSE_BYTES = 1_048_576;
 
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 700;
 const DEFAULT_MAX_SEARCH_RETRIES = 2;
@@ -170,7 +176,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   }
 
   async fetchPage(url: string, options: WebPageFetchOptions = {}): Promise<WebPageFetchResult> {
-    const raw = await this.pageFetcher.fetch(url, options);
+    const raw = await this.pageFetcher.fetch(url, options, isSupportedPageContentType, true);
     if (!raw.ok) {
       return raw.result;
     }
@@ -199,7 +205,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       content,
       contentType: raw.contentType,
       bytes: raw.byteLength,
-      truncated: extracted.length > maxContentChars,
+      truncated: raw.truncated || extracted.length > maxContentChars,
       redirects: raw.redirects,
       ...(raw.contentType === "text/plain"
         ? {}
@@ -211,7 +217,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     url: string,
     options: WebPageFetchOptions = {},
   ): Promise<WebPageMetadataResult> {
-    const raw = await this.pageFetcher.fetch(url, options);
+    const raw = await this.pageFetcher.fetch(url, options, isSupportedPageContentType, true);
     if (!raw.ok) {
       return raw.result;
     }
@@ -289,7 +295,12 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
     let raw: Awaited<ReturnType<WebPageFetcher["fetch"]>>;
 
     try {
-      raw = await this.pageFetcher.fetch(url, signal ? { signal } : {}, isSearchResultContentType);
+      raw = await this.pageFetcher.fetch(
+        url,
+        { maxResponseBytes: SEARCH_RESULT_MAX_RESPONSE_BYTES, ...(signal ? { signal } : {}) },
+        isSearchResultContentType,
+        true,
+      );
     } catch {
       return undefined;
     }

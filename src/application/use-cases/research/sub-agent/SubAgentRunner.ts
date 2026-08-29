@@ -1,6 +1,6 @@
 import { ChatMessage, ModelRoundProvider } from "@core/agent";
 import { ResearchExecutionPolicy } from "@core/research";
-import { buildThinkingResearchMessages } from "@core/research";
+import { buildSubAgentFraming, buildThinkingResearchMessages } from "@core/research";
 import { sourceLabel } from "@core/retrieval";
 import { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { SearchProvider } from "@application/ports/web";
@@ -31,11 +31,13 @@ export interface SubAgentRunnerDeps {
 
   maxRounds?: number;
   maxResultChars?: number;
+  maxSearches?: number;
 
   logger?: SubAgentLogger;
 }
 
 const DEFAULT_MAX_ROUNDS = 12;
+const DEFAULT_MAX_SEARCHES = 8;
 const DEFAULT_MAX_RESULT_CHARS = 30_000;
 const SYNTHESIS_EXCERPT_CHARS = 1_500;
 
@@ -48,17 +50,11 @@ const SUB_AGENT_POLICY: ResearchExecutionPolicy = Object.freeze({
   supportsSpecificChoice: false,
 });
 
-const SUB_AGENT_FRAMING =
-  "You are an autonomous sub-agent delegated a specific task by an orchestrating agent — " +
-  "there is no further user turn to come back to. Work the task end to end using the tools " +
-  "above, then produce one complete final answer (no tool calls) using the citation format " +
-  "already described. If something could not be established, say so explicitly.";
-
 export class SubAgentRunner implements SubAgentPort {
   constructor(private readonly deps: SubAgentRunnerDeps) {}
 
   async run(input: SubAgentRunInput): Promise<SubAgentRunResult> {
-    const toolsetOptions: ResearchToolsetOptions = input.toolContext ?? {
+    const baseToolsetOptions: ResearchToolsetOptions = input.toolContext ?? {
       availability: {
         searchMode: "webOnly",
         noteAccess: false,
@@ -69,6 +65,15 @@ export class SubAgentRunner implements SubAgentPort {
       },
       searchProvider: this.deps.searchProvider,
     };
+    const allowedHosts = domainResources(input.resources);
+    const toolsetOptions: ResearchToolsetOptions = {
+      ...baseToolsetOptions,
+      ...(baseToolsetOptions.searchProvider
+        ? {
+            searchProvider: restrictSearchProvider(baseToolsetOptions.searchProvider, allowedHosts),
+          }
+        : {}),
+    };
     const created = this.deps.toolsetFactory(toolsetOptions);
 
     const emit = input.onEvent;
@@ -77,6 +82,7 @@ export class SubAgentRunner implements SubAgentPort {
     const maxRounds = input.budget?.maxRounds ?? this.deps.maxRounds ?? DEFAULT_MAX_ROUNDS;
     const maxResultChars =
       input.budget?.maxResultChars ?? this.deps.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+    const maxSearches = input.budget?.maxSearches ?? this.deps.maxSearches ?? DEFAULT_MAX_SEARCHES;
 
     log({
       type: "session-start",
@@ -84,6 +90,7 @@ export class SubAgentRunner implements SubAgentPort {
       model: this.deps.model,
       maxRounds,
       maxResultChars,
+      maxSearches,
       reasoning: this.deps.reasoning
         ? { enabled: this.deps.reasoning.enabled, effort: this.deps.reasoning.effort }
         : undefined,
@@ -99,7 +106,13 @@ export class SubAgentRunner implements SubAgentPort {
         availableTools: created.tools.definitions().map((definition) => definition.function.name),
       },
     });
-    messages.splice(1, 0, { role: "system", content: SUB_AGENT_FRAMING });
+    messages.splice(1, 0, {
+      role: "system",
+      content: buildSubAgentFraming({
+        maxSearches,
+        ...(input.resources ? { resources: input.resources } : {}),
+      }),
+    });
 
     const result = await new ThinkingResearchRunner({
       modelRound: this.deps.modelRound,
@@ -113,6 +126,7 @@ export class SubAgentRunner implements SubAgentPort {
       signal: input.signal,
       maxRounds,
       maxResultChars,
+      maxSearchCalls: maxSearches,
       onToolCall: (id, name, label, round) => {
         log({ type: "tool-call", round, name, label });
         emit?.({ type: SUB_AGENT_PHASE, message: phaseForTool(name) });
@@ -222,6 +236,84 @@ export class SubAgentRunner implements SubAgentPort {
       return "";
     }
   }
+}
+
+const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
+
+function domainResources(resources: readonly string[] | undefined): string[] {
+  return (resources ?? [])
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => DOMAIN_RESOURCE.test(entry));
+}
+
+function hostAllowed(url: string, allowedHosts: readonly string[]): boolean {
+  if (allowedHosts.length === 0) return true;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  } catch {
+    return false;
+  }
+}
+
+function restrictSearchProvider(
+  provider: SearchProvider,
+  allowedHosts: readonly string[],
+): SearchProvider {
+  if (allowedHosts.length === 0) return provider;
+  return {
+    search: async (query, options) =>
+      (await provider.search(query, options)).filter((result) =>
+        hostAllowed(result.source.url, allowedHosts),
+      ),
+    ...(provider.fetchPage
+      ? {
+          fetchPage: async (url, options) => {
+            if (!hostAllowed(url, allowedHosts)) return restrictedPageFailure();
+            const result = await provider.fetchPage!(url, options);
+            return result.ok && !hostAllowed(result.finalUrl, allowedHosts)
+              ? restrictedPageFailure()
+              : result;
+          },
+        }
+      : {}),
+    ...(provider.fetchMetadata
+      ? {
+          fetchMetadata: async (url, options) => {
+            if (!hostAllowed(url, allowedHosts)) return restrictedPageFailure();
+            const result = await provider.fetchMetadata!(url, options);
+            return result.ok && !hostAllowed(result.finalUrl, allowedHosts)
+              ? restrictedPageFailure()
+              : result;
+          },
+        }
+      : {}),
+    ...(provider.fetchDocument
+      ? {
+          fetchDocument: async (url, options) => {
+            if (!hostAllowed(url, allowedHosts)) return restrictedPageFailure();
+            const result = await provider.fetchDocument!(url, options);
+            return result.ok && !hostAllowed(result.finalUrl, allowedHosts)
+              ? restrictedPageFailure()
+              : result;
+          },
+        }
+      : {}),
+    ...(provider.searchSourceLabels
+      ? { searchSourceLabels: (query, options) => provider.searchSourceLabels!(query, options) }
+      : {}),
+  };
+}
+
+function restrictedPageFailure() {
+  return {
+    ok: false as const,
+    error: {
+      code: "web-fetch-resource-restricted",
+      message: "Page is outside the sub-agent resource allow-list.",
+      retryable: false,
+    },
+  };
 }
 
 function phaseForTool(name: string): string {

@@ -12,6 +12,7 @@ export type {
   ResearchEvidenceSnapshot,
   WebHandleEntry,
 } from "./evidence";
+export { WebResultCapacityError, isWebResultCapacityError } from "./evidence";
 
 export { validatePublicWebUrl } from "./WebUrlPolicy";
 export type { WebUrlValidationResult } from "./WebUrlPolicy";

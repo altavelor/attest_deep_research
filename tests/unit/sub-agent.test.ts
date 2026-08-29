@@ -91,7 +91,7 @@ describe("SubAgentTool", () => {
       evidence,
     });
 
-    const result = await tool.execute({ task: "How fast is X?" }, toolContext());
+    const result = await tool.execute({ task: "How fast is X?", maxSearches: 8 }, toolContext());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -106,7 +106,7 @@ describe("SubAgentTool", () => {
     const evidence = new ResearchEvidenceRegistry();
     const tool = new SubAgentTool({ runner: stubRunner("Per [note-1].", snapshot), evidence });
 
-    const result = await tool.execute({ task: "Summarize X" }, toolContext());
+    const result = await tool.execute({ task: "Summarize X", maxSearches: 8 }, toolContext());
 
     expect(result.ok).toBe(true);
     expect(evidence.snapshot().evidence).toHaveLength(1);
@@ -121,7 +121,10 @@ describe("SubAgentTool", () => {
       evidence: new ResearchEvidenceRegistry(),
     });
 
-    await tool.execute({ task: "q" }, toolContext({ emit: (event) => events.push(event) }));
+    await tool.execute(
+      { task: "q", maxSearches: 8 },
+      toolContext({ emit: (event) => events.push(event) }),
+    );
 
     expect(events).toContainEqual({ type: "sub-agent-phase", message: "Searching…" });
   });

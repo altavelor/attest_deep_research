@@ -34,9 +34,11 @@ export class ToolManager {
     return handler !== undefined && this.permits(handler);
   }
 
-  definitions(): ChatToolDefinition[] {
+  /** Permitted tool definitions, optionally narrowed to an allow-list of names. */
+  definitions(allow?: readonly string[]): ChatToolDefinition[] {
     return Array.from(this.handlers.values())
       .filter((handler) => this.permits(handler))
+      .filter((handler) => allow === undefined || allow.includes(handler.definition.function.name))
       .map((handler) => handler.definition);
   }
 

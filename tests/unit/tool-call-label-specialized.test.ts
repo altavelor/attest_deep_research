@@ -1,6 +1,14 @@
 import { resolveResultSummary, toolCallChainLabel } from "@application/research/toolCallLabel";
 
 describe("specialized research tool call labels", () => {
+  it("labels a batched web search with its queries", () => {
+    expect(toolCallChainLabel("search_web", { queries: ["apple history", "microsoft"] })).toBe(
+      "apple history · microsoft",
+    );
+    expect(toolCallChainLabel("search_web", { query: "single" })).toBe("single");
+    expect(toolCallChainLabel("search_web", { queries: [7, ""] })).toBe("Search web");
+  });
+
   it("describes URL verification and delegated source mapping work", () => {
     const longTask = "x".repeat(70);
 

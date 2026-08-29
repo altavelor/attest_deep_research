@@ -52,6 +52,11 @@ describe("current date anchoring", () => {
 });
 
 describe("thinking research prompts", () => {
+  it("never recommends automatic overwrite for an existing note", () => {
+    const system = systemText({ availableTools: ["create_note", "update_note"] });
+    expect(system).not.toContain("retry create_note with overwrite:true");
+    expect(system).toContain("ask for explicit confirmation before replacing any content");
+  });
   it("contains trusted policy, bounded explicit context, history, and index description", () => {
     const messages = buildThinkingResearchMessages({
       question: "Question",
@@ -179,6 +184,14 @@ describe("thinking research prompts", () => {
     expect(system).toContain("fetch_web_page");
   });
 
+  it("states the real result limit and the query-batching rule in the Web skill", () => {
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
+    expect(system).toContain("`limit` controls how many results (max 15)");
+    expect(system).not.toContain("(max 5)");
+    expect(system).toContain("raise it to 10-15 instead of running several similar searches");
+    expect(system).toContain("pass up to 4 distinct queries in one search_web call");
+  });
+
   it("does not inject Web skill when web tools are absent", () => {
     const system = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
     expect(system).not.toContain("Using Web Search");
@@ -219,7 +232,8 @@ describe("thinking research prompts", () => {
     expect(system).toContain("create_note");
     expect(system).toContain("update_note");
     expect(system).toContain("delete_note");
-    expect(system).toContain("overwrite:true");
+    expect(system).not.toContain("retry create_note with overwrite:true");
+    expect(system).toContain("explicit confirmation before replacing any content");
   });
 
   it("excludes mutation rules when no mutation tool is present", () => {

@@ -16,10 +16,13 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
   switch (name) {
     case "search_index":
     case "search_notes":
-    case "search_web":
-      return typeof args.query === "string" && args.query
-        ? truncate(args.query)
-        : humanizeToolName(name);
+    case "search_web": {
+      if (typeof args.query === "string" && args.query) return truncate(args.query);
+      const queries = Array.isArray(args.queries)
+        ? args.queries.filter((entry): entry is string => typeof entry === "string" && !!entry)
+        : [];
+      return queries.length > 0 ? truncate(queries.join(" · ")) : humanizeToolName(name);
+    }
     case "fetch_web_page": {
       const count = Array.isArray(args.resultIds) ? args.resultIds.length : 0;
       return count > 1 ? `Fetching ${count} pages` : "Fetching page";

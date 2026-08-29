@@ -42,6 +42,7 @@ export async function collectThinkingModelRound(
   continuation?: ProviderContinuationState,
   toolOutputs?: ModelToolOutput[],
   round = 1,
+  allowedTools?: readonly string[],
 ): Promise<ThinkingModelRound> {
   let streamedText = false;
   let streamedReasoning = false;
@@ -53,7 +54,7 @@ export async function collectThinkingModelRound(
   const result = await modelRound.runRound({
     model: options.model,
     messages,
-    tools: options.tools.definitions(),
+    tools: options.tools.definitions(allowedTools),
     toolChoice,
     parallelToolCalls: options.policy.parallelToolCalls,
     temperature: options.temperature,
