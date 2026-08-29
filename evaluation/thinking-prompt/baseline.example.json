@@ -1,0 +1,33 @@
+{
+  "measuredAt": "1970-01-01T00:00:00.000Z",
+  "models": ["deepseek/deepseek-v4-flash-0731", "qwen/qwen3.8-2.4t-a95b"],
+  "modelVersions": {
+    "deepseek/deepseek-v4-flash-0731": "unmeasured",
+    "qwen/qwen3.8-2.4t-a95b": "unmeasured"
+  },
+  "casesHash": "sha256 of evaluation/thinking-prompt/cases.json",
+  "fixturesHash": "sha256 of evaluation/thinking-prompt/fixtures/",
+  "brevityRatioR": null,
+  "notes": "Template only. R stays null until a measurement shows the brevity rule firing; a ratio above 0.8 is not eligible for calibration.",
+  "cases": {
+    "separate-quick-notes": {
+      "aggregate": {
+        "completionRate": null,
+        "extraSideEffects": null,
+        "destructiveOverwrites": null,
+        "verifiedCitationRate": null,
+        "unknownCitationCount": null,
+        "rounds": null,
+        "subAgents": null,
+        "subAgentSearchShare": null,
+        "artifactSize": null
+      },
+      "repeats": {
+        "rounds": [],
+        "subAgents": [],
+        "subAgentSearchShare": [],
+        "artifactSize": []
+      }
+    }
+  }
+}
