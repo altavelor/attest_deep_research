@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { extractReadableText, parseDuckDuckGoResults } from "@adapters/web";
+import {
+  extractReadableText,
+  isDuckDuckGoChallengePage,
+  parseDuckDuckGoResults,
+} from "@adapters/web";
 
 describe("DuckDuckGoParser", () => {
   it("parses block result fixtures with decoded redirect urls and cleaned text", () => {
@@ -27,6 +31,17 @@ describe("DuckDuckGoParser", () => {
         snippet: "Legacy snippet with 'entity' text.",
       },
     ]);
+  });
+
+  it("recognises the anti-bot challenge page that parses to zero results", () => {
+    const challenge = fixture("duckduckgo-anomaly.html");
+
+    expect(parseDuckDuckGoResults(challenge)).toEqual([]);
+    expect(isDuckDuckGoChallengePage(challenge)).toBe(true);
+  });
+
+  it("does not treat a regular result page as a challenge", () => {
+    expect(isDuckDuckGoChallengePage(fixture("duckduckgo-results.html"))).toBe(false);
   });
 
   it("extracts readable text from fetched pages and removes ignored content", () => {

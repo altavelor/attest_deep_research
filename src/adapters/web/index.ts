@@ -7,6 +7,7 @@ export type { FetchUrlStatusCheckerOptions } from "./FetchUrlStatusChecker";
 export {
   extractPageMetadata,
   extractReadableText,
+  isDuckDuckGoChallengePage,
   parseDuckDuckGoResults,
 } from "./DuckDuckGoParser";
 export type { DuckDuckGoResult, PageMetadata } from "./DuckDuckGoParser";

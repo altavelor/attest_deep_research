@@ -19,6 +19,17 @@ export function parseDuckDuckGoResults(html: string): DuckDuckGoResult[] {
   return blockResults.length > 0 ? blockResults : parseLegacyDuckDuckGoResults(html);
 }
 
+const CHALLENGE_MARKERS = [/\banomaly\.js\b/i, /\banomaly-modal\b/i, /\bdeep_dark_challenge\b/i];
+
+/**
+ * Detect the DuckDuckGo anti-bot interstitial that is served instead of the
+ * result list. Such a page parses to zero results, which is indistinguishable
+ * from an empty query unless the caller recognises the challenge markers.
+ */
+export function isDuckDuckGoChallengePage(html: string): boolean {
+  return CHALLENGE_MARKERS.some((marker) => marker.test(html));
+}
+
 export interface PageMetadata {
   title?: string;
   description?: string;
