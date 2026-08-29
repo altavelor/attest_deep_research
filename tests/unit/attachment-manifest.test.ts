@@ -119,7 +119,9 @@ describe("prompt rendering", () => {
       maxEvidenceItems: 5,
     });
 
-    expect(prompt).toContain("Attached files (vault notes the user attached to this message):");
+    expect(prompt).toContain("Attached files (vault notes the user attached to this message)");
+    expect(prompt).toContain("<attached-files>");
+    expect(prompt).toContain("</attached-files>");
     expect(prompt).toContain("- notes/A.md — full content included");
     expect(prompt).toContain("Explicit context (content of the attached files listed above):");
     expect(prompt).toContain("read_note, update_note");
