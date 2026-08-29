@@ -202,14 +202,15 @@ export class ChatSessionManager {
 
   /**
    * Status a chat-list row should display: the live session when there is one,
-   * the persisted last run otherwise. A completed run stops being announced
-   * once the reader has opened that chat.
+   * the persisted last run otherwise. A completed or interrupted run announces
+   * itself only until that chat is opened; a failure keeps its marker, so a
+   * broken run stays findable in the list afterwards.
    */
   rowStatus(chat: ChatRowStatusInput): ChatSessionStatus {
     const session = this.getSessionByChatId(chat.id);
     const status = session?.status ?? persistedStatus(chat.lastRun);
-    if (status !== "completed") return status;
-    return (session ? session.unreadCompletion : chat.unreadCompletion) ? "completed" : "idle";
+    if (status !== "completed" && status !== "interrupted") return status;
+    return (session ? session.unreadCompletion : chat.unreadCompletion) ? status : "idle";
   }
 
   /** Merges live session statuses over persisted summaries for the toolbar badges. */
@@ -515,6 +516,7 @@ export class ChatSessionManager {
       state.status = "interrupted";
       state.interruptionReason = state.interruptionReason ?? "user";
       state.messages = interruptLastAssistantProgress(state.messages);
+      state.unreadCompletion = !this.isDisplayed(sessionId);
     }
 
     state.completedAt = completedAt;

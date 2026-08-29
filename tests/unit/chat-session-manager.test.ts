@@ -473,7 +473,7 @@ describe("chat session manager row status", () => {
     expect(manager.rowStatus(withoutSummary)).toBe("idle");
   });
 
-  it("keeps failed and interrupted markers regardless of unread state", async () => {
+  it("announces an interrupted run only until the chat is opened", async () => {
     const gated = createGatedService();
     const { manager, repository } = createTestSessionManager({
       createResearchService: gated.service,
@@ -485,9 +485,31 @@ describe("chat session manager row status", () => {
     gated.gates[0].end();
     await settle();
 
-    const summary = (await repository.listChats())[0];
-    expect(manager.rowStatus(summary)).toBe("interrupted");
-    expect(manager.rowStatus({ ...summary, unreadCompletion: false })).toBe("interrupted");
+    const summaryOf = async () => (await repository.listChats())[0];
+    expect(manager.rowStatus(await summaryOf())).toBe("interrupted");
+
+    await manager.markViewed(session.sessionId);
+
+    expect(manager.rowStatus(await summaryOf())).toBe("idle");
+  });
+
+  it("keeps a failed marker after the chat was opened", async () => {
+    const gated = createGatedService();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: gated.service,
+    });
+    const session = newSession(manager);
+    await manager.start(session.sessionId, request("Question?"));
+    await settle();
+    gated.gates[0].emit(null as never);
+    await settle();
+
+    const summaryOf = async () => (await repository.listChats())[0];
+    expect(manager.rowStatus(await summaryOf())).toBe("failed");
+
+    await manager.markViewed(session.sessionId);
+
+    expect(manager.rowStatus(await summaryOf())).toBe("failed");
   });
 
   it("reads a restored chat's row status from its persisted run", async () => {
