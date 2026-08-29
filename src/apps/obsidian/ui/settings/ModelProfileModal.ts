@@ -2,7 +2,11 @@ import { App, Modal, Notice, Setting } from "obsidian";
 
 import { DiscoveredModel } from "@adapters/settings";
 import { contextLengthInputAfterDiscovery } from "@adapters/settings";
-import { createToolCapabilitySettings, ToolCapabilitySettings } from "@adapters/settings";
+import {
+  advertisedToolCapabilities,
+  createToolCapabilitySettings,
+  ToolCapabilitySettings,
+} from "@adapters/settings";
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
 import { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 import { createProfileId, hasDuplicateProfileName, isValidProfileName } from "@adapters/settings";
@@ -415,19 +419,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
   }
 
   private applyDiscoveredTools(model: DiscoveredModel): void {
-    const calls =
-      model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
-    const controls = model.capabilitySnapshot?.toolControls;
-    const advertised = {
-      calls,
-      choiceRequired: calls && controls?.choiceRequired === true,
-      choiceSpecific: calls && controls?.choiceSpecific === true,
-      parallelCalls: calls && controls?.parallelCalls === true,
-    };
-    this.toolCapabilitySettings = {
-      formatDefault: advertised,
-      advertised,
-    };
+    this.toolCapabilitySettings = advertisedToolCapabilities(model);
   }
 
   /**
