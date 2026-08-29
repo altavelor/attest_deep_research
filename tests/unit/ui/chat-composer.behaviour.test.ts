@@ -2,6 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Menu } from "obsidian";
+
 import { createTranslator } from "@adapters/i18n";
 import { ChatComposerController } from "@apps/obsidian/ui/chat/ChatComposerController";
 import type { ChatComposerControllerOptions } from "@apps/obsidian/ui/chat/ChatComposerController";
@@ -293,5 +295,27 @@ describe("chat composer input events", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(composingEvent.defaultPrevented).toBe(false);
+  });
+
+  it("styles a dropdown menu before it is positioned", () => {
+    const harness = createComposer();
+    const classesWhenPlaced: string[] = [];
+    const show = Menu.prototype.showAtPosition;
+    vi.spyOn(Menu.prototype, "showAtPosition").mockImplementation(function (
+      this: Menu,
+      position: { x: number; y: number },
+    ) {
+      classesWhenPlaced.push((this as unknown as { dom: HTMLElement }).dom.className);
+      return show.call(this, position);
+    });
+
+    harness.modelButton().click();
+    container
+      .querySelector<HTMLButtonElement>("button.attest-chat__dropdown--research-mode")
+      ?.click();
+
+    expect(classesWhenPlaced).toHaveLength(2);
+    expect(classesWhenPlaced[0]).toContain("attest-chat__menu");
+    expect(classesWhenPlaced[1]).toContain("attest-chat__research-menu");
   });
 });

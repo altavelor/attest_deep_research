@@ -10,6 +10,11 @@ export const settings: EnSettingsMessages = {
   "settings.tab.quickStart.title": "بداية سريعة",
   "settings.tab.quickStart.steps": "1. أضف خادمًا → 2. أضف نموذج محادثة → 3. (اختياري) أضف فهرسًا",
   "settings.tab.gateHint": "أضف ملف نموذج محادثة أولًا",
+  "settings.tab.setup.name": "معالج الإعداد",
+  "settings.tab.setup.rerunDesc":
+    "يعيد فتح المعالج بإعداداتك الحالية ويحدّث الملفات الشخصية التي أنشأها.",
+  "settings.tab.setup.rerunAction": "إعادة تشغيل الإعداد",
+  "settings.tab.setup.action": "بدء الإعداد",
 
   "settings.advanced.debugMode.name": "وضع التصحيح",
   "settings.advanced.debugMode.desc": "تسجيل تفاصيل طلبات الإضافة واستجاباتها. تُحجب مفاتيح API.",

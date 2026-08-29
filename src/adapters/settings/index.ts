@@ -1,4 +1,5 @@
 export * from "./capabilities";
+export * from "./onboarding";
 export * from "./debugLogger";
 export * from "./discovery";
 export * from "./probes";

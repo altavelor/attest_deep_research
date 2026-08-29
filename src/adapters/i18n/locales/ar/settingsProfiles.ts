@@ -52,6 +52,10 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.serverModal.editTitle": "تحرير ملف الخادم",
   "settings.serverModal.addTitle": "إضافة ملف خادم",
+  "settings.serverModal.preset.name": "المزوّد",
+  "settings.serverModal.preset.desc":
+    "يملأ عنوان URL الأساسي وتنسيق واجهة البرمجة لمزوّد معروف. اختر «مخصص» لأي نقطة نهاية أخرى.",
+  "settings.serverModal.preset.custom": "مخصص",
   "settings.serverModal.name.name": "الاسم",
   "settings.serverModal.name.desc":
     "اسم مقروء يظهر في الإعدادات ومحددات النماذج. بحد أقصى {max} حرفًا.",

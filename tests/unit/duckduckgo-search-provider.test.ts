@@ -217,6 +217,23 @@ describe("DuckDuckGoSearchProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("fails with a blocked reason when DuckDuckGo serves the anti-bot challenge", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      htmlResponse(
+        `<html><body><div class="anomaly-modal__mask"></div>
+           <script src="/dist/anomaly.js?sv=html&amp;cc=sre"></script></body></html>`,
+        { status: 202 },
+      ),
+    );
+    const provider = new DuckDuckGoSearchProvider({ minRequestIntervalMs: 0, fetch: fetchMock });
+
+    await expect(provider.search("local models")).rejects.toMatchObject({
+      code: "WEB_SEARCH_FAILED",
+      details: { sourceId: "duckduckgo", reason: "blocked", status: 202 },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("calls fetch with the global receiver for browser compatibility", async () => {
     const fetchMock = vi.fn(function (this: unknown) {
       if (this !== globalThis) {

@@ -10,6 +10,10 @@ export const settings: EnSettingsMessages = {
   "settings.tab.quickStart.title": "快速开始",
   "settings.tab.quickStart.steps": "1. 添加服务器 → 2. 添加聊天模型 → 3.（可选）添加索引",
   "settings.tab.gateHint": "请先添加聊天模型配置",
+  "settings.tab.setup.name": "设置向导",
+  "settings.tab.setup.rerunDesc": "重新打开向导并填入当前设置，更新它此前创建的配置。",
+  "settings.tab.setup.rerunAction": "重新运行设置",
+  "settings.tab.setup.action": "运行设置",
 
   "settings.advanced.debugMode.name": "调试模式",
   "settings.advanced.debugMode.desc": "记录插件请求与响应详情。API 密钥会被隐去。",

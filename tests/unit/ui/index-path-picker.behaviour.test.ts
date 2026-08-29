@@ -183,4 +183,23 @@ describe("index path picker scroll position", () => {
       "notes/nested-5.md",
     ]);
   });
+
+  it("can restrict an index-location picker to one folder", () => {
+    const onSubmit = vi.fn();
+    const modal = new IndexPathPickerModal(vaultApp(), {
+      t,
+      selectedPaths: [],
+      foldersOnly: true,
+      singleSelection: true,
+      onSubmit,
+    });
+    modal.open();
+    const treeEl = modal.contentEl.querySelector<HTMLElement>(".attest-index-path-picker")!;
+
+    expect(treeEl.querySelector('input[aria-label="Select note-0.md"]')).toBeNull();
+    checkboxFor(treeEl, "notes").click();
+    modal.contentEl.querySelector<HTMLButtonElement>("button.mod-cta")!.click();
+
+    expect(onSubmit).toHaveBeenCalledWith(["notes"]);
+  });
 });

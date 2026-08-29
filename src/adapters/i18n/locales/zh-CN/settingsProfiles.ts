@@ -52,6 +52,10 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
 
   "settings.serverModal.editTitle": "编辑服务器配置",
   "settings.serverModal.addTitle": "添加服务器配置",
+  "settings.serverModal.preset.name": "提供方",
+  "settings.serverModal.preset.desc":
+    "为已知提供方填入基础 URL 和 API 格式。其他端点请选择“自定义”。",
+  "settings.serverModal.preset.custom": "自定义",
   "settings.serverModal.name.name": "名称",
   "settings.serverModal.name.desc": "显示在设置和模型选择器中的可读名称。最多 {max} 个字符。",
   "settings.serverModal.apiFormat.name": "API 格式",

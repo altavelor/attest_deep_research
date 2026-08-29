@@ -8,6 +8,7 @@ import {
   getActiveIndexProfile,
   normalizeSettingsState,
   readSettings,
+  DEFAULT_INDEX_PROFILE,
 } from "@adapters/settings";
 import type { ChatModelProfile, EmbeddingModelProfile, ServerProfile } from "@adapters/settings";
 
@@ -204,7 +205,7 @@ function baseSettings(): AttestSettings {
     embeddingModelProfiles: [embeddingProfile()],
     indexProfiles: [
       createIndexProfile({
-        ...cloneIndexProfile(DEFAULT_SETTINGS.indexProfiles[0]),
+        ...cloneIndexProfile(DEFAULT_INDEX_PROFILE),
         id: "index-a",
         name: "Index A",
         embeddingModelProfileId: "embedding",

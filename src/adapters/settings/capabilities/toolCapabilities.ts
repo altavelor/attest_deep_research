@@ -3,6 +3,7 @@ import {
   EffectiveToolCapabilities,
   ToolCapabilityLayer,
   ToolCapabilitySettings,
+  ToolControlSupport,
 } from "./contracts";
 import type { ToolCapabilityProbeAudit } from "@core/diagnostics";
 
@@ -24,6 +25,27 @@ export function createToolCapabilitySettings(calls = false): ToolCapabilitySetti
   return {
     formatDefault: { calls, choiceRequired: false, choiceSpecific: false, parallelCalls: false },
   };
+}
+
+/**
+ * Turns what the provider advertises for a model into tool-capability settings.
+ * The wizard and the model profile screen both create profiles from a
+ * discovered model, so they must read the same answer out of it.
+ */
+export function advertisedToolCapabilities(model: {
+  capabilities: { tools?: boolean };
+  capabilitySnapshot?: { tools?: string; toolControls?: ToolControlSupport };
+}): ToolCapabilitySettings {
+  const calls =
+    model.capabilitySnapshot?.tools === "supported" || model.capabilities.tools === true;
+  const controls = model.capabilitySnapshot?.toolControls;
+  const advertised = {
+    calls,
+    choiceRequired: calls && controls?.choiceRequired === true,
+    choiceSpecific: calls && controls?.choiceSpecific === true,
+    parallelCalls: calls && controls?.parallelCalls === true,
+  };
+  return { formatDefault: advertised, advertised };
 }
 
 export function resolveToolCapabilities(

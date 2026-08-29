@@ -12,6 +12,11 @@ export const settings: EnSettingsMessages = {
   "settings.tab.quickStart.steps":
     "1. Server hinzufügen → 2. Chat-Modell hinzufügen → 3. (optional) Index hinzufügen",
   "settings.tab.gateHint": "Zuerst ein Chat-Modell-Profil hinzufügen",
+  "settings.tab.setup.name": "Einrichtungsassistent",
+  "settings.tab.setup.rerunDesc":
+    "Öffnet den Assistenten mit der aktuellen Einrichtung und aktualisiert die von ihm erstellten Profile.",
+  "settings.tab.setup.rerunAction": "Einrichtung erneut ausführen",
+  "settings.tab.setup.action": "Einrichtung starten",
 
   "settings.advanced.debugMode.name": "Debug-Modus",
   "settings.advanced.debugMode.desc":

@@ -12,6 +12,7 @@ import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import {
   extractPageMetadata,
   extractReadableText,
+  isDuckDuckGoChallengePage,
   parseDuckDuckGoResults,
 } from "./DuckDuckGoParser";
 import { HostRequestThrottle } from "./HostRequestThrottle";
@@ -253,7 +254,16 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
       const response = await this.request(url.toString(), signal);
 
       if (response.ok) {
-        return response.text();
+        const html = await response.text();
+        if (isDuckDuckGoChallengePage(html)) {
+          throw new AttestError({
+            code: "WEB_SEARCH_FAILED",
+            message:
+              "DuckDuckGo served an anti-bot challenge instead of results. Enable another web source or retry later.",
+            details: { sourceId: "duckduckgo", reason: "blocked", status: response.status },
+          });
+        }
+        return html;
       }
 
       if (isRateLimited(response.status) && attempt < this.maxSearchRetries) {

@@ -58,6 +58,11 @@ import {
 } from "./composition/profileResolvers";
 import { MobileIndexingLifecycle } from "./indexing/MobileIndexingLifecycle";
 import { ATTEST_COMMAND_IDS, registerAttestCommands } from "./commands";
+import { OnboardingModal } from "./ui/onboarding";
+import { applyOnboardingResult, onboardingPrefill } from "@adapters/settings";
+import type { AppliedOnboarding, OnboardingResult } from "@adapters/settings";
+import { fetchAvailableModels, verifyEmbeddingCapability } from "@adapters/settings";
+import { resolveProviderFetch } from "./modelProviderRuntime";
 import { createChatSessionManager } from "./composition/chatSessionFactory";
 import type { ChatSessionManager } from "@application/use-cases/chat";
 
@@ -67,6 +72,8 @@ export default class AttestPlugin extends Plugin {
   readonly logger = new PluginDebugLogger({ getSettings: () => this.settings });
   private readonly pdfTextCache = new PdfTextCache();
   private translator: UiTranslator = createTranslator(DEFAULT_LOCALE);
+  private onboardingModal?: OnboardingModal;
+  private unloaded = false;
 
   /** Late-bound translator lookup so captured references never go stale. */
   readonly translate: Translate = (key, params) => this.translator.t(key, params);
@@ -177,6 +184,7 @@ export default class AttestPlugin extends Plugin {
   }
 
   async onload(): Promise<void> {
+    this.unloaded = false;
     await this.loadSettings();
     await this.recoverStaleChatRuns();
     this.warmCaches = new VaultWarmCaches(new ObsidianContextFileProvider(this.app.vault));
@@ -270,9 +278,103 @@ export default class AttestPlugin extends Plugin {
       },
     );
     this.addSettingTab(new AttestSettingTab(this.app, this));
+    this.app.workspace.onLayoutReady(() => this.openOnboardingOnFirstRun());
+  }
+
+  /**
+   * Shows the first-run wizard once, and only for a vault that has never had a
+   * server profile: an upgrade from a configured installation must not be
+   * interrupted by it.
+   */
+  private openOnboardingOnFirstRun(): void {
+    if (
+      this.unloaded ||
+      this.settings.onboardingCompleted ||
+      this.settings.serverProfiles.length > 0
+    ) {
+      return;
+    }
+
+    this.openOnboarding();
+  }
+
+  openOnboarding(onClosed?: () => void): void {
+    if (this.unloaded || this.onboardingModal) {
+      return;
+    }
+
+    const modal = new OnboardingModal(this.app, {
+      t: this.translate,
+      getDirection: () => this.translator.direction,
+      isMobile: Platform.isMobile,
+      prefill: onboardingPrefill(this.settings),
+      fetchModels: (server) =>
+        fetchAvailableModels(server, {
+          logger: this.logger,
+          fetch: resolveProviderFetch(server, "buffered", Platform.isMobile),
+        }),
+      verifyEmbedding: (server, modelName) =>
+        verifyEmbeddingCapability(server, modelName, {
+          logger: this.logger,
+          fetch: resolveProviderFetch(server, "buffered", Platform.isMobile),
+        }),
+      onComplete: (result) => this.completeOnboarding(result),
+      onStartIndexing: (indexProfileId, embeddingModelProfileId) => {
+        /*
+         * A first build, not an incremental pass: the index folder may still
+         * hold content from an earlier setup, and only a rebuild rewrites the
+         * image manifest that carries the index version. An incremental run
+         * over leftovers leaves the finished index flagged for reindexing.
+         */
+        void this.runIndexPlan(indexProfileId, {
+          mode: "rebuild",
+          embedding: { embeddingModelProfileId },
+        }).catch((error) => new Notice(toUserMessage(error)));
+      },
+      watchIndexing: (indexProfileId, listener) =>
+        this.indexing.subscribe(indexProfileId, listener),
+      onOpenChat: async () => {
+        await this.activateChatView();
+      },
+      onSkip: async () => {
+        const nextSettings = structuredClone(this.settings);
+        nextSettings.onboardingCompleted = true;
+        normalizeSettingsState(nextSettings);
+        await this.saveData(nextSettings);
+        if (this.unloaded) {
+          return;
+        }
+        this.settings = nextSettings;
+        this.openSettingsTab();
+      },
+    });
+    const close = modal.onClose.bind(modal);
+    modal.onClose = () => {
+      close();
+      if (this.onboardingModal === modal) {
+        this.onboardingModal = undefined;
+      }
+      onClosed?.();
+    };
+    this.onboardingModal = modal;
+    modal.open();
+  }
+
+  private async completeOnboarding(result: OnboardingResult): Promise<AppliedOnboarding> {
+    const nextSettings = structuredClone(this.settings);
+    const applied = applyOnboardingResult(nextSettings, result);
+    normalizeSettingsState(nextSettings);
+    await this.saveData(nextSettings);
+    if (!this.unloaded) {
+      this.settings = nextSettings;
+    }
+    return applied;
   }
 
   onunload(): void {
+    this.unloaded = true;
+    this.onboardingModal?.close();
+    this.onboardingModal = undefined;
     void this.chatSessionManager?.dispose();
     this.chatSessionManager = undefined;
     this.mobileIndexingLifecycle?.dispose();
@@ -341,6 +443,7 @@ export default class AttestPlugin extends Plugin {
       },
       runChatCommand: (action) => this.runChatCommand(action),
       updateActiveIndex: () => this.updateActiveIndex(),
+      runSetup: () => this.openOnboarding(),
     });
   }
 

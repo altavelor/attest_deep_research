@@ -10,6 +10,11 @@ export const settings = {
   "settings.tab.quickStart.steps":
     "1. Add a server → 2. Add a chat model → 3. (optional) Add an index",
   "settings.tab.gateHint": "Add a chat model profile first",
+  "settings.tab.setup.name": "Setup wizard",
+  "settings.tab.setup.rerunDesc":
+    "Reopens the wizard filled in with your current setup and updates the profiles it created.",
+  "settings.tab.setup.rerunAction": "Run setup again",
+  "settings.tab.setup.action": "Run setup",
 
   "settings.advanced.debugMode.name": "Debug mode",
   "settings.advanced.debugMode.desc":

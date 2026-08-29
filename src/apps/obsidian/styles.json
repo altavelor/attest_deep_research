@@ -2,6 +2,7 @@
   "src/apps/obsidian/ui/settings/settings.css",
   "src/apps/obsidian/ui/settings/web-sources.css",
   "src/apps/obsidian/ui/settings/profile-modal.css",
+  "src/apps/obsidian/ui/onboarding/onboarding.css",
   "src/apps/obsidian/ui/chat/chat-shell.css",
   "src/apps/obsidian/ui/chat/history/saved-chats.css",
   "src/apps/obsidian/ui/chat/chat-transcript.css",

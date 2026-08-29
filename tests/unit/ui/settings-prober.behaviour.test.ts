@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
-import { DEFAULT_SETTINGS, cloneIndexProfile, fetchAvailableModels } from "@adapters/settings";
+import {
+  DEFAULT_SETTINGS,
+  cloneIndexProfile,
+  fetchAvailableModels,
+  DEFAULT_INDEX_PROFILE,
+} from "@adapters/settings";
 import type { ChatModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
 import { PluginDebugLogger } from "@adapters/settings";
 import * as settingsApi from "@adapters/settings";
@@ -56,7 +61,7 @@ function chatProfile(): ChatModelProfile {
 function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
-    indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
+    indexProfiles: [DEFAULT_INDEX_PROFILE].map(cloneIndexProfile),
     embeddingModelProfiles: [],
     serverProfiles: [serverProfile()],
     chatModelProfiles: [chatProfile()],

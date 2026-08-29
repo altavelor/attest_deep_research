@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_SETTINGS, cloneIndexProfile } from "@adapters/settings";
+import { DEFAULT_SETTINGS, cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type {
   ChatModelProfile,
   AttestSettings,
@@ -98,7 +98,7 @@ function chatProfile(): ChatModelProfile {
 function createSettings(): AttestSettings {
   return {
     ...DEFAULT_SETTINGS,
-    indexProfiles: DEFAULT_SETTINGS.indexProfiles.map(cloneIndexProfile),
+    indexProfiles: [DEFAULT_INDEX_PROFILE].map(cloneIndexProfile),
     embeddingModelProfiles: [],
     serverProfiles: [serverProfile()],
     chatModelProfiles: [chatProfile()],

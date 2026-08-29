@@ -11,6 +11,11 @@ export const settings: EnSettingsMessages = {
   "settings.tab.quickStart.steps":
     "1. Añadir un servidor → 2. Añadir un modelo de chat → 3. (opcional) Añadir un índice",
   "settings.tab.gateHint": "Añadir primero un perfil de modelo de chat",
+  "settings.tab.setup.name": "Asistente de configuración",
+  "settings.tab.setup.rerunDesc":
+    "Vuelve a abrir el asistente con tu configuración actual y actualiza los perfiles que creó.",
+  "settings.tab.setup.rerunAction": "Volver a configurar",
+  "settings.tab.setup.action": "Iniciar configuración",
 
   "settings.advanced.debugMode.name": "Modo de depuración",
   "settings.advanced.debugMode.desc":

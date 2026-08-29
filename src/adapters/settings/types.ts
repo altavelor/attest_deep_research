@@ -98,6 +98,19 @@ export interface NewChatDefaults {
   includeActiveFileContext: boolean;
 }
 
+/**
+ * Identifies the profiles the first-run wizard created. A later run edits these
+ * rather than adding a second set, so re-running it reconfigures the vault
+ * instead of filling the settings screens with near-duplicates.
+ */
+export interface OnboardingProfileIds {
+  chatServerProfileId: string;
+  chatModelProfileId: string;
+  embeddingServerProfileId: string;
+  embeddingModelProfileId: string;
+  indexProfileId: string;
+}
+
 export interface AttestSettings {
   serverProfiles: ServerProfile[];
   chatModelProfiles: ChatModelProfile[];
@@ -117,5 +130,7 @@ export interface AttestSettings {
   expandSearchQuery: boolean;
   downloadFolder: string;
   debugMode: boolean;
+  onboardingCompleted: boolean;
+  onboardingProfileIds: OnboardingProfileIds;
   modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;
 }

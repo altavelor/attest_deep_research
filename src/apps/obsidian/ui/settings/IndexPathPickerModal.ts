@@ -9,6 +9,8 @@ export interface IndexPathPickerModalOptions {
   t: Translate;
   getDirection?(): TextDirection;
   selectedPaths: string[];
+  foldersOnly?: boolean;
+  singleSelection?: boolean;
   onSubmit(paths: string[]): void;
 }
 
@@ -179,6 +181,12 @@ export class IndexPathPickerModal extends Modal {
       return;
     }
 
+    if (this.options.singleSelection) {
+      this.selectedPaths.clear();
+      this.selectedPaths.add(path);
+      return;
+    }
+
     this.removeDescendants(path);
     this.selectedPaths.add(path);
   }
@@ -240,6 +248,10 @@ export class IndexPathPickerModal extends Modal {
 
     if (file instanceof TFolder) {
       return true;
+    }
+
+    if (this.options.foldersOnly) {
+      return false;
     }
 
     return file instanceof TFile && isSupportedIndexFile(file.path);

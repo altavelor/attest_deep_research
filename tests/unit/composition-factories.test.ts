@@ -16,7 +16,7 @@ vi.mock("@application/use-cases/research", async (importOriginal) => ({
   },
 }));
 
-import { DEFAULT_SETTINGS } from "@adapters/settings";
+import { DEFAULT_SETTINGS, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type { CompositionContext } from "@apps/obsidian/composition/factories";
 import { createResearchService, createSearchProvider } from "@apps/obsidian/composition/factories";
 import { createTranslator } from "@adapters/i18n";
@@ -82,7 +82,7 @@ describe("research service composition", () => {
       chatModelProfiles: [chatProfile],
       embeddingModelProfiles: indexed ? [embeddingProfile] : [],
       expandSearchQuery: true,
-      indexProfiles: DEFAULT_SETTINGS.indexProfiles.map((profile) => ({
+      indexProfiles: [DEFAULT_INDEX_PROFILE].map((profile) => ({
         ...profile,
         embeddingModelProfileId: "embedding",
         ...(indexed ? { isSuspended: false, lastIndexedAt: "2026-01-01T00:00:00.000Z" } : {}),

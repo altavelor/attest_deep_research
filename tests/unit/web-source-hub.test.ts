@@ -430,6 +430,58 @@ describe("web source settings queries", () => {
   });
 });
 
+describe("default web sources", () => {
+  it("enables DuckDuckGo on a clean install so no manual setup is needed", () => {
+    expect(DEFAULT_SETTINGS.webSources).toEqual([
+      { sourceId: "duckduckgo", activation: "auto", credentials: {} },
+    ]);
+    expect(readSettings(undefined).webSources).toEqual([
+      { sourceId: "duckduckgo", activation: "auto", credentials: {} },
+    ]);
+  });
+
+  it("keeps DuckDuckGo switched off when a saved configuration disabled it", () => {
+    const settings = readSettings({
+      ...DEFAULT_SETTINGS,
+      webSources: [{ sourceId: "duckduckgo", activation: "off", credentials: {} }],
+    });
+
+    expect(settings.webSources).toEqual([
+      { sourceId: "duckduckgo", activation: "off", credentials: {} },
+    ]);
+  });
+
+  it("does not add DuckDuckGo back to a saved configuration that omits it", () => {
+    const settings = readSettings({ ...DEFAULT_SETTINGS, webSources: [] });
+
+    expect(settings.webSources).toEqual([]);
+  });
+
+  it("hands out independent copies so saved credentials never leak into the defaults", () => {
+    const first = readSettings(undefined);
+    first.webSources[0]!.credentials.apiKey = "leaked";
+
+    expect(DEFAULT_SETTINGS.webSources[0]!.credentials).toEqual({});
+    expect(readSettings(undefined).webSources[0]!.credentials).toEqual({});
+  });
+
+  it("reads saved web sources without mutating the caller's own objects", () => {
+    const saved = {
+      ...DEFAULT_SETTINGS,
+      webSources: [{ sourceId: "brave", enabled: true, credentials: { apiKey: "k" } }],
+    };
+
+    const settings = readSettings(saved);
+    settings.webSources[0]!.credentials.apiKey = "rotated";
+
+    expect(saved.webSources[0]).toEqual({
+      sourceId: "brave",
+      enabled: true,
+      credentials: { apiKey: "k" },
+    });
+  });
+});
+
 describe("settings normalization for web sources", () => {
   it("backfills webSources for settings saved before the hub existed", () => {
     const legacy = { ...DEFAULT_SETTINGS, webSources: undefined } as unknown as Record<

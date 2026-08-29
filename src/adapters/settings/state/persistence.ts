@@ -1,8 +1,13 @@
-import { DEFAULT_SETTINGS, cloneIndexProfile } from "./defaults";
+import {
+  DEFAULT_SETTINGS,
+  EMPTY_ONBOARDING_PROFILE_IDS,
+  cloneIndexProfile,
+  cloneWebSourceProfile,
+} from "./defaults";
 import { readNewChatDefaults } from "./newChatDefaults";
 import { normalizeSettingsState } from "./normalization";
 import { readUiLanguage } from "./uiLanguage";
-import { AttestSettings } from "../types";
+import { AttestSettings, OnboardingProfileIds } from "../types";
 
 export function readSettings(savedData: unknown): AttestSettings {
   if (!isCurrentSettings(savedData)) {
@@ -20,6 +25,9 @@ function cloneSettings(settings: AttestSettings): AttestSettings {
     newChatDefaults: readNewChatDefaults(settings),
     uiLanguage: readUiLanguage(settings),
     serverProfiles: settings.serverProfiles.map((profile) => ({ ...profile })),
+    webSources: Array.isArray(settings.webSources)
+      ? settings.webSources.map(cloneWebSourceProfile)
+      : [],
     chatModelProfiles: settings.chatModelProfiles.map((profile) => ({
       ...profile,
       reasoning: { ...profile.reasoning },
@@ -96,7 +104,7 @@ function dropUnknownSettings(settings: AttestSettings): AttestSettings {
     activeEmbeddingModelProfileId: settings.activeEmbeddingModelProfileId,
     includeFolders: [...settings.includeFolders],
     excludeGlobs: [...settings.excludeGlobs],
-    webSources: settings.webSources.map((profile) => ({ ...profile })),
+    webSources: settings.webSources.map(cloneWebSourceProfile),
     newChatDefaults: readNewChatDefaults(settings),
     uiLanguage: readUiLanguage(settings),
     useLinkedNotes: settings.useLinkedNotes,
@@ -107,7 +115,31 @@ function dropUnknownSettings(settings: AttestSettings): AttestSettings {
     expandSearchQuery: settings.expandSearchQuery,
     downloadFolder: settings.downloadFolder,
     debugMode: settings.debugMode,
+    onboardingCompleted: settings.onboardingCompleted === true,
+    onboardingProfileIds: readOnboardingProfileIds(settings),
     modelCapabilityCache: { ...settings.modelCapabilityCache },
+  };
+}
+
+/**
+ * Reads the ids of the profiles the wizard created. Saved data is untrusted, so
+ * every field falls back to an empty id, which makes the next wizard run create
+ * a profile instead of editing one that may not exist.
+ */
+function readOnboardingProfileIds(settings: AttestSettings): OnboardingProfileIds {
+  const stored = (settings as Partial<AttestSettings>).onboardingProfileIds;
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+    return { ...EMPTY_ONBOARDING_PROFILE_IDS };
+  }
+
+  const ids = stored as Partial<OnboardingProfileIds>;
+  const readId = (value: unknown): string => (typeof value === "string" ? value : "");
+  return {
+    chatServerProfileId: readId(ids.chatServerProfileId),
+    chatModelProfileId: readId(ids.chatModelProfileId),
+    embeddingServerProfileId: readId(ids.embeddingServerProfileId),
+    embeddingModelProfileId: readId(ids.embeddingModelProfileId),
+    indexProfileId: readId(ids.indexProfileId),
   };
 }
 
