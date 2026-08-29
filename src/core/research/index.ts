@@ -5,6 +5,7 @@ export * from "./citationTokens";
 export * from "./answerAnalysis";
 export * from "./attachments";
 export * from "./thinkingPrompts";
+export * from "./thinking-prompt";
 export * from "./researchMode";
 export * from "./researchModeParameters";
 export * from "./ResearchExecutionPolicy";
