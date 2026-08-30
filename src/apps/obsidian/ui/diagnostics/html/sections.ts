@@ -1,5 +1,14 @@
-import { DiagnosticReportV3, Finding } from "@apps/obsidian/ui/diagnostics/report/types";
-import { summaryMetrics, webSourceSelectionHtml, webSourceSelectionsHtml } from "../report/format";
+import {
+  DiagnosticReportV3,
+  Finding,
+  ThinkingLoopSection,
+} from "@apps/obsidian/ui/diagnostics/report/types";
+import {
+  formatDuration,
+  summaryMetrics,
+  webSourceSelectionHtml,
+  webSourceSelectionsHtml,
+} from "../report/format";
 import {
   attr,
   badge,
@@ -276,6 +285,51 @@ function warningsBody(report: DiagnosticReportV3): string {
   );
 }
 
+/**
+ * Renders the run-level sub-agent summary, keeping sub-agents launched through
+ * map_sources in their own block. Absent telemetry renders nothing at all.
+ */
+function subAgentsBody(loop: ThinkingLoopSection | null): string {
+  if (!loop) return "";
+  let html = "";
+  if (loop.subAgents) {
+    const s = loop.subAgents;
+    html +=
+      sub("Sub-agents") +
+      dl([
+        ["Runs", h(s.count)],
+        [
+          "Total / slowest duration",
+          `${h(formatDuration(s.totalDurationMs))} / ${h(formatDuration(s.maxDurationMs))}`,
+        ],
+        [
+          "Round-limit hits / synthesis fallbacks",
+          `${h(s.roundLimitHits)} / ${h(s.synthesisFallbacks)}`,
+        ],
+        ["Search calls inside / at top level", `${h(s.searchCalls)} / ${h(s.topLevelSearchCalls)}`],
+        ["Sources imported / dropped", `${h(s.importedSources)} / ${h(s.droppedSources)}`],
+      ]);
+  }
+  if (loop.mapSources) {
+    const m = loop.mapSources;
+    html +=
+      sub("Sub-agents (map_sources)") +
+      dl([
+        ["Runs", h(m.count)],
+        [
+          "Total / slowest duration",
+          `${h(formatDuration(m.totalDurationMs))} / ${h(formatDuration(m.maxDurationMs))}`,
+        ],
+        [
+          "Round-limit hits / synthesis fallbacks",
+          `${h(m.roundLimitHits)} / ${h(m.synthesisFallbacks)}`,
+        ],
+        ["Search calls", h(m.searchCalls)],
+      ]);
+  }
+  return html;
+}
+
 export function renderInternals(report: DiagnosticReportV3): string {
   const { reasoning, answer } = report;
   let html = "";
@@ -307,6 +361,8 @@ export function renderInternals(report: DiagnosticReportV3): string {
       html += callout("warning", `<ul>${s.warnings.map((w) => `<li>${h(w)}</li>`).join("")}</ul>`);
     }
   }
+
+  html += subAgentsBody(reasoning.thinkingLoop);
 
   if (reasoning.attempts.length > 0) {
     const rows = reasoning.attempts
