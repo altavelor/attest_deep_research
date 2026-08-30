@@ -10,5 +10,11 @@ export function renderReadableDiagnosticReport(
   container.classList.toggle("dr-theme-dark", document.body.classList.contains("theme-dark"));
   container.classList.toggle("dr-theme-light", !document.body.classList.contains("theme-dark"));
   const modalOverrides = ".top-nav{display:none}.layout{width:auto;padding:0 4px 24px}";
-  shadow.innerHTML = `<style>${CSS}${modalOverrides}</style><div class="dr-root">${diagnosticReportBodyHtml(report)}</div>`;
+  shadow.replaceChildren();
+  const style = document.createElement("style");
+  style.textContent = CSS + modalOverrides;
+  const root = document.createElement("div");
+  root.className = "dr-root";
+  root.append(document.createRange().createContextualFragment(diagnosticReportBodyHtml(report)));
+  shadow.append(style, root);
 }

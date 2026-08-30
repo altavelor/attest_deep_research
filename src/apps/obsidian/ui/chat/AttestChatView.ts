@@ -930,8 +930,9 @@ export class AttestChatView extends ItemView {
     const message = profile?.isIndexed ? legacyIndexImageNotice(profile, this.t) : null;
     if (!message) return;
 
-    const notice = new Notice(`${message}\n`, 12_000);
-    const action = notice.messageEl.createEl("a", {
+    const content = document.createDocumentFragment();
+    content.append(`${message}\n`);
+    const action = content.createEl("a", {
       text: this.t("chat.notice.openIndexSettings"),
       href: "#",
       cls: "attest-chat__notice-action",
@@ -941,6 +942,7 @@ export class AttestChatView extends ItemView {
       this.services.openIndexSettings();
       notice.hide();
     });
+    const notice = new Notice(content, 12_000);
   }
 
   private async updateContextMode(contextMode: "include" | "filter"): Promise<void> {

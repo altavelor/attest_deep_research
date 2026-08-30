@@ -1,4 +1,4 @@
-import { App, TFile } from "obsidian";
+import { App, TFile, TFolder } from "obsidian";
 import { VaultWriter } from "@application/ports";
 
 export class ObsidianVaultWriter implements VaultWriter {
@@ -44,11 +44,11 @@ export class ObsidianVaultWriter implements VaultWriter {
 
   async trashFile(path: string): Promise<void> {
     const file = this.requireFile(path);
-    await this.app.vault.trash(file, true);
+    await this.app.fileManager.trashFile(file);
   }
 
   async ensureFolder(path: string): Promise<void> {
-    if (!path || this.app.vault.getFolderByPath(path)) {
+    if (!path || this.app.vault.getAbstractFileByPath(path) instanceof TFolder) {
       return;
     }
     await this.app.vault.createFolder(path);

@@ -109,6 +109,17 @@ export function installObsidianDomHelpers(): void {
     }
     this.setAttribute(name, value === true ? "" : String(value));
   };
+
+  proto.setCssStyles = function setCssStyles(
+    this: HTMLElement,
+    styles: Partial<CSSStyleDeclaration>,
+  ) {
+    Object.assign(this.style, styles);
+  };
+
+  proto.setCssProps = function setCssProps(this: HTMLElement, props: Record<string, string>) {
+    for (const [name, value] of Object.entries(props)) this.style.setProperty(name, value);
+  };
 }
 
 /** Creates a detached-from-previous-test container attached to document.body. */

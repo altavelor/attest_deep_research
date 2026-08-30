@@ -1,4 +1,4 @@
-import { App, Notice } from "obsidian";
+import { App, Notice, TFolder } from "obsidian";
 
 import {
   formatResearchAnswerAppendBlock,
@@ -37,7 +37,7 @@ export class AnswerNoteWriter {
   private async ensureFolder(path: string): Promise<void> {
     const folder = path.split("/").slice(0, -1).join("/");
 
-    if (!folder || this.app.vault.getFolderByPath(folder)) {
+    if (!folder || this.app.vault.getAbstractFileByPath(folder) instanceof TFolder) {
       return;
     }
 

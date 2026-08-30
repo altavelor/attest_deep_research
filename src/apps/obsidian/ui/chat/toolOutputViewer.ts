@@ -1,4 +1,4 @@
-import { App, Notice, TFile } from "obsidian";
+import { App, Notice, TFile, TFolder } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
 
@@ -52,7 +52,7 @@ export class ToolOutputViewer {
 
   private async ensureFolder(path: string): Promise<void> {
     const folder = path.split("/").slice(0, -1).join("/");
-    if (!folder || this.app.vault.getFolderByPath(folder)) return;
+    if (!folder || this.app.vault.getAbstractFileByPath(folder) instanceof TFolder) return;
     await this.app.vault.createFolder(folder);
   }
 }

@@ -1,4 +1,5 @@
 import { ChatMessage, ChatModelProvider } from "@core/agent";
+import { splitSentences } from "@core/web/sentenceBoundaries";
 import { DocumentSummarizer, DocumentSummaryInput, SectionSummaryInput } from "@application/ports";
 
 export const SUMMARY_PROMPT_VERSION = 1;
@@ -91,7 +92,7 @@ export function parseDocumentSummary(
     } catch {}
   }
   const fallback = text.trim().slice(0, MAX_DOCUMENT_SUMMARY_CHARS);
-  const firstSentence = fallback.split(/(?<=[.!?])\s/)[0] ?? fallback;
+  const firstSentence = splitSentences(fallback)[0] ?? fallback;
   return {
     summary: fallback || `Summary unavailable for ${input.sourcePath}.`,
     oneLiner: (firstSentence || fallback).slice(0, MAX_ONE_LINER_CHARS),
