@@ -150,6 +150,69 @@ describe("note reads register citable evidence", () => {
     expect(evidence.snapshot().evidence).toEqual([]);
   });
 
+  it("redacts an identifier it could not register whatever type it arrived as", async () => {
+    const evidence = new ResearchEvidenceRegistry();
+    const service = {
+      execute: async () =>
+        ({
+          ok: true,
+          result: JSON.stringify({
+            ok: true,
+            evidenceId: 7,
+            chunks: [{ id: 1, text: "t", evidenceSource: { kind: "markdown" } }],
+          }),
+        }) as never,
+    } as unknown as NoteToolService;
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    const execution = await call(tools, READ_NOTE_TOOL, { path: "A.md" });
+
+    expect(execution.ok).toBe(true);
+    const value = execution.ok
+      ? (execution.value as { chunks: Array<Record<string, unknown>>; evidenceId?: unknown })
+      : { chunks: [] as Array<Record<string, unknown>> };
+    expect(value.chunks[0]).not.toHaveProperty("id");
+    expect(value.chunks[0].citable).toBe(false);
+    expect(value).not.toHaveProperty("evidenceId");
+  });
+
+  it("refuses a source that is missing the fields its own kind requires", async () => {
+    const evidence = new ResearchEvidenceRegistry();
+    const service = {
+      execute: async () =>
+        ({
+          ok: true,
+          result: JSON.stringify({
+            ok: true,
+            chunks: [
+              {
+                id: "chunk-1",
+                text: "t",
+                evidenceSource: { kind: "markdown", path: "A.md", headingPath: [] },
+              },
+            ],
+          }),
+        }) as never,
+    } as unknown as NoteToolService;
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    const execution = await call(tools, READ_NOTE_TOOL, { path: "A.md" });
+
+    expect(execution.ok).toBe(true);
+    expect(evidence.snapshot().evidence).toEqual([]);
+    const value = execution.ok
+      ? (execution.value as { chunks: Array<Record<string, unknown>> })
+      : { chunks: [] as Array<Record<string, unknown>> };
+    expect(value.chunks[0]).not.toHaveProperty("id");
+    expect(value.chunks[0].citable).toBe(false);
+  });
+
   it("does not let a later read overwrite an already registered chunk", async () => {
     const { evidence, tools } = harness();
     await call(tools, READ_NOTE_TOOL, { path: "Research/Caffeine.md" }, "call-1");

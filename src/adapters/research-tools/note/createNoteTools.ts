@@ -86,6 +86,39 @@ async function runNoteTool(
  * swallows a registry refusal: the value is parsed from a tool DTO and a defect in it
  * must never fail an otherwise successful read.
  */
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+/**
+ * Verifies a source carries every field its kind requires. A partially formed source
+ * still registers, but builds its citation label from absent fields, so the chunk it
+ * describes is better left uncitable than recorded with broken provenance.
+ */
+function isSourceReference(value: unknown): value is SourceReference {
+  if (typeof value !== "object" || value === null) return false;
+  const source = value as Record<string, unknown>;
+  if (typeof source.id !== "string" || !source.id) return false;
+  if (typeof source.title !== "string") return false;
+  switch (source.kind) {
+    case "markdown":
+      return typeof source.path === "string" && isStringArray(source.headingPath);
+    case "pdf":
+      return typeof source.path === "string" && typeof source.pageNumber === "number";
+    case "document":
+      return typeof source.path === "string" && typeof source.format === "string";
+    case "web":
+      return (
+        typeof source.url === "string" &&
+        typeof source.snippet === "string" &&
+        typeof source.retrievedAt === "string" &&
+        typeof source.wasContentFetched === "boolean"
+      );
+    default:
+      return false;
+  }
+}
+
 function registerReadChunks(
   evidence: EvidenceRegistry,
   budget: { remainingChars: number; charged: Set<string> },
@@ -106,15 +139,11 @@ function registerReadChunks(
     const content = chunk.text;
     if (typeof evidenceId !== "string" || !evidenceId) continue;
     if (typeof content !== "string") continue;
-    if (typeof source !== "object" || source === null) continue;
-    if (typeof (source as Record<string, unknown>).kind !== "string") continue;
+    if (!isSourceReference(source)) continue;
     const charged = budget.charged.has(evidenceId);
     if (!charged && content.length > budget.remainingChars) continue;
     try {
-      evidence.registerNoteEvidence(
-        { evidenceId, source: source as SourceReference, content },
-        { callId, tool },
-      );
+      evidence.registerNoteEvidence({ evidenceId, source, content }, { callId, tool });
       if (!charged) {
         budget.remainingChars -= content.length;
         budget.charged.add(evidenceId);
@@ -132,6 +161,10 @@ function registerReadChunks(
  * offers the model a token it cannot cite. Citing an unregistered id would have the
  * citation silently removed from the answer, leaving the claim unsourced.
  */
+function isRegistered(id: unknown, registered: ReadonlySet<string>): boolean {
+  return typeof id === "string" && registered.has(id);
+}
+
 function redactUnregisteredIds(value: unknown, registered: ReadonlySet<string>): void {
   if (typeof value !== "object" || value === null) return;
   const payload = value as Record<string, unknown>;
@@ -140,13 +173,13 @@ function redactUnregisteredIds(value: unknown, registered: ReadonlySet<string>):
   for (const entry of payload.chunks) {
     if (typeof entry !== "object" || entry === null) continue;
     const chunk = entry as Record<string, unknown>;
-    if (typeof chunk.id === "string" && !registered.has(chunk.id)) {
+    if (chunk.id !== undefined && !isRegistered(chunk.id, registered)) {
       delete chunk.id;
       delete chunk.evidenceSource;
       chunk.citable = false;
     }
   }
-  if (typeof payload.evidenceId === "string" && !registered.has(payload.evidenceId)) {
+  if (payload.evidenceId !== undefined && !isRegistered(payload.evidenceId, registered)) {
     delete payload.evidenceId;
   }
 }
