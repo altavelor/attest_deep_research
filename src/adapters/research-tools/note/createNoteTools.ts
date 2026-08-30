@@ -32,14 +32,14 @@ interface NoteToolSpec {
 interface NoteToolDeps {
   service: NoteToolService;
   evidence?: EvidenceRegistry;
-  registeredChunks?: { count: number };
+  evidenceBudget?: { remainingChars: number };
 }
 
 type NoteEvidenceTool = "read_note" | "get_active_note";
 
 const EVIDENCE_TOOLS = new Set<string>([READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL]);
 
-const MAX_REGISTERED_NOTE_CHUNKS = 60;
+const MAX_REGISTERED_NOTE_EVIDENCE_CHARS = 96_000;
 
 /** Shared thin delegation: hand the call to the service and adapt its DTO. */
 async function runNoteTool(
@@ -65,14 +65,15 @@ async function runNoteTool(
     return toolFailure(reason, `Note tool ${name} failed.`, false, hint ? { hint } : undefined);
   }
 
-  if (deps.evidence && deps.registeredChunks && EVIDENCE_TOOLS.has(name)) {
-    registerReadChunks(
+  if (deps.evidence && deps.evidenceBudget && EVIDENCE_TOOLS.has(name)) {
+    const registered = registerReadChunks(
       deps.evidence,
-      deps.registeredChunks,
+      deps.evidenceBudget,
       name as NoteEvidenceTool,
       value,
       context.callId,
     );
+    redactUnregisteredIds(value, registered);
   }
 
   return { ok: true, value, diagnostic: execution.diagnostic };
@@ -80,23 +81,24 @@ async function runNoteTool(
 
 /**
  * Registers the chunks a note read returned so their `evidenceId` becomes a citable
- * token, up to a per-run ceiling. Skips any payload that is not a well-formed chunk and
+ * token, while the run's character budget for note evidence lasts. Returns the ids that
+ * were actually registered. Skips any payload that is not a well-formed chunk and
  * swallows a registry refusal: the value is parsed from a tool DTO and a defect in it
  * must never fail an otherwise successful read.
  */
 function registerReadChunks(
   evidence: EvidenceRegistry,
-  budget: { count: number },
+  budget: { remainingChars: number },
   tool: NoteEvidenceTool,
   value: unknown,
   callId: string,
-): void {
-  if (typeof value !== "object" || value === null) return;
+): Set<string> {
+  const registered = new Set<string>();
+  if (typeof value !== "object" || value === null) return registered;
   const payload = value as Record<string, unknown>;
-  if (payload.ok !== true || !Array.isArray(payload.chunks)) return;
+  if (payload.ok !== true || !Array.isArray(payload.chunks)) return registered;
 
   for (const entry of payload.chunks) {
-    if (budget.count >= MAX_REGISTERED_NOTE_CHUNKS) return;
     if (typeof entry !== "object" || entry === null) continue;
     const chunk = entry as Record<string, unknown>;
     const evidenceId = chunk.id;
@@ -106,15 +108,41 @@ function registerReadChunks(
     if (typeof content !== "string") continue;
     if (typeof source !== "object" || source === null) continue;
     if (typeof (source as Record<string, unknown>).kind !== "string") continue;
+    if (content.length > budget.remainingChars) continue;
     try {
       evidence.registerNoteEvidence(
         { evidenceId, source: source as SourceReference, content },
         { callId, tool },
       );
-      budget.count += 1;
+      budget.remainingChars -= content.length;
+      registered.add(evidenceId);
     } catch {
-      return;
+      continue;
     }
+  }
+  return registered;
+}
+
+/**
+ * Strips the identifier from every chunk that was not registered, so the result never
+ * offers the model a token it cannot cite. Citing an unregistered id would have the
+ * citation silently removed from the answer, leaving the claim unsourced.
+ */
+function redactUnregisteredIds(value: unknown, registered: ReadonlySet<string>): void {
+  if (typeof value !== "object" || value === null) return;
+  const payload = value as Record<string, unknown>;
+  if (!Array.isArray(payload.chunks)) return;
+
+  for (const entry of payload.chunks) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const chunk = entry as Record<string, unknown>;
+    if (typeof chunk.id === "string" && !registered.has(chunk.id)) {
+      delete chunk.id;
+      chunk.citable = false;
+    }
+  }
+  if (typeof payload.evidenceId === "string" && !registered.has(payload.evidenceId)) {
+    delete payload.evidenceId;
   }
 }
 
@@ -229,13 +257,15 @@ const NOTE_TOOLS: ReadonlyArray<new (deps: NoteToolDeps) => Tool> = [
 
 /**
  * Build the note tools bound to a service. Gating is per-tool via `requires`. When an
- * evidence registry is supplied, note reads register their chunks so the model may
- * cite them by `evidenceId`.
+ * evidence registry is supplied, note reads register their chunks so the model may cite
+ * them by `evidenceId`, within a character budget shared by the direct reads of one run.
  */
 export function createNoteTools(service: NoteToolService, evidence?: EvidenceRegistry): Tool[] {
   const deps: NoteToolDeps = {
     service,
-    ...(evidence ? { evidence, registeredChunks: { count: 0 } } : {}),
+    ...(evidence
+      ? { evidence, evidenceBudget: { remainingChars: MAX_REGISTERED_NOTE_EVIDENCE_CHARS } }
+      : {}),
   };
   return NOTE_TOOLS.map((NoteTool) => new NoteTool(deps));
 }

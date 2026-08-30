@@ -161,19 +161,74 @@ describe("note reads register citable evidence", () => {
     expect(after[0].text).toBe(first.text);
   });
 
-  it("stops registering once the per-run chunk ceiling is reached", async () => {
+  it("never advertises an id it could not register once the budget is spent", async () => {
     const evidence = new ResearchEvidenceRegistry();
-    let call = 0;
+    let round = 0;
     const service = {
       execute: async () => {
-        call += 1;
+        round += 1;
         return {
           ok: true,
           result: JSON.stringify({
             ok: true,
-            chunks: Array.from({ length: 40 }, (_, index) => ({
-              id: `c-${call}-${index}`,
-              text: "content",
+            path: "A.md",
+            evidenceId: `c-${round}-0`,
+            chunks: Array.from({ length: 20 }, (_, index) => ({
+              id: `c-${round}-${index}`,
+              text: "x".repeat(4_000),
+              evidenceSource: {
+                id: "s",
+                kind: "markdown",
+                title: "A",
+                path: "A.md",
+                headingPath: [],
+              },
+            })),
+          }),
+        } as never;
+      },
+    } as unknown as NoteToolService;
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    const advertised: string[] = [];
+    for (const id of ["a", "b", "c"]) {
+      const execution = await tools.execute({
+        id,
+        name: READ_NOTE_TOOL,
+        arguments: { path: "A.md" },
+      });
+      expect(execution.ok).toBe(true);
+      const value = execution.ok
+        ? (execution.value as { evidenceId?: string; chunks: Array<{ id?: string }> })
+        : null;
+      for (const chunk of value?.chunks ?? []) {
+        if (chunk.id !== undefined) advertised.push(chunk.id);
+      }
+      if (value?.evidenceId !== undefined) advertised.push(value.evidenceId);
+    }
+
+    const registered = new Set(evidence.snapshot().evidence.map((chunk) => chunk.id));
+    expect(registered.size).toBeGreaterThan(0);
+    expect(advertised.length).toBeGreaterThan(0);
+    expect(advertised.filter((id) => !registered.has(id))).toEqual([]);
+  });
+
+  it("stops registering once the run's evidence budget is spent", async () => {
+    const evidence = new ResearchEvidenceRegistry();
+    let round = 0;
+    const service = {
+      execute: async () => {
+        round += 1;
+        return {
+          ok: true,
+          result: JSON.stringify({
+            ok: true,
+            chunks: Array.from({ length: 20 }, (_, index) => ({
+              id: `c-${round}-${index}`,
+              text: "x".repeat(4_000),
               evidenceSource: {
                 id: "s",
                 kind: "markdown",
@@ -192,15 +247,13 @@ describe("note reads register citable evidence", () => {
     );
 
     for (const id of ["a", "b", "c"]) {
-      const execution = await tools.execute({
-        id,
-        name: READ_NOTE_TOOL,
-        arguments: { path: "A.md" },
-      });
-      expect(execution.ok).toBe(true);
+      await tools.execute({ id, name: READ_NOTE_TOOL, arguments: { path: "A.md" } });
     }
-    expect(evidence.snapshot().evidence.length).toBeLessThanOrEqual(60);
-    expect(evidence.snapshot().evidence.length).toBeGreaterThan(0);
+    const registeredChars = evidence
+      .snapshot()
+      .evidence.reduce((total, chunk) => total + chunk.text.length, 0);
+    expect(registeredChars).toBeLessThanOrEqual(96_000);
+    expect(evidence.snapshot().evidence.length).toBe(24);
   });
 
   it("works without a registry, leaving the tool result unchanged", async () => {
