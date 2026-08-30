@@ -1,4 +1,4 @@
-# Attest: AI Deep Research
+# Attest AI Deep Research
 
 [![Release](https://img.shields.io/github/v/release/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
 [![Downloads](https://img.shields.io/github/downloads/altavelor/attest_deep_research/total?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
