@@ -709,4 +709,23 @@ describe("SubAgentTool telemetry", () => {
     });
     expect(result.diagnostic?.durationMs).toBeGreaterThan(0);
   });
+
+  it("reports a cancelled run as cancelled, not as a tool exception", async () => {
+    const controller = new AbortController();
+    const runner: SubAgentPort = {
+      run: async () => {
+        controller.abort();
+        throw new Error("aborted");
+      },
+    };
+    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+
+    const result = await tool.execute(
+      { task: "What is X?", maxSearches: 8 },
+      toolContext({ signal: controller.signal }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostic).toMatchObject({ failureReason: "cancelled" });
+  });
 });

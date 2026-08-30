@@ -149,7 +149,11 @@ export const SubAgentTool = defineTool<
       return {
         ...toolFailure("sub-agent-failed", "Sub-agent session failed.", true),
         diagnostic: {
-          ...exceptionTelemetry(context.callId, Date.now() - startedAt),
+          ...exceptionTelemetry(
+            context.callId,
+            Date.now() - startedAt,
+            context.signal?.aborted === true,
+          ),
           sourceCount: 0,
           droppedSourceCount: 0,
           evidenceBudgetExhausted: false,
@@ -241,8 +245,15 @@ export const SubAgentTool = defineTool<
   },
 });
 
-/** Telemetry for a sub-agent that threw before it could report its own counters. */
-function exceptionTelemetry(runId: string, durationMs: number): SubAgentTelemetry {
+/**
+ * Telemetry for a sub-agent that threw before it could report its own counters. A run the
+ * user cancelled is reported as cancelled, so it does not inflate the failure count.
+ */
+function exceptionTelemetry(
+  runId: string,
+  durationMs: number,
+  aborted: boolean,
+): SubAgentTelemetry {
   return {
     runId,
     durationMs,
@@ -250,7 +261,7 @@ function exceptionTelemetry(runId: string, durationMs: number): SubAgentTelemetr
     rounds: 0,
     maxRounds: 0,
     hitRoundLimit: false,
-    failureReason: "tool-exception",
+    failureReason: aborted ? "cancelled" : "tool-exception",
     toolCalls: 0,
     duplicateToolCalls: 0,
     searchCalls: 0,
