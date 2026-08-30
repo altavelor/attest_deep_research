@@ -1,6 +1,6 @@
 {
   "name": "attest",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Open-source Obsidian plugin for cited AI deep research across your vault and the web.",
   "private": true,
   "main": "main.js",

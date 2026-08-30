@@ -9,7 +9,7 @@ describe("Obsidian review compliance", () => {
     const versions = JSON.parse(read("versions.json")) as Record<string, string>;
 
     expect(manifest.minAppVersion).toBe("1.8.7");
-    expect(versions["0.4.4"]).toBe("1.8.7");
+    expect(versions["0.4.5"]).toBe("1.8.7");
   });
 
   it("uses Obsidian APIs for the active language and configuration directory", () => {
