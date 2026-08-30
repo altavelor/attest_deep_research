@@ -152,7 +152,7 @@ describe("prompt rendering", () => {
         question: "q",
         requiredTools: [],
         attachedFiles: [{ path: "notes/Huge.md", coverage: "reference" }],
-        toolContext: { coreVariant: "research", availableTools },
+        toolContext: { availableTools },
       })[0].content;
 
     const withTools = build(["search_web", "read_note"]);

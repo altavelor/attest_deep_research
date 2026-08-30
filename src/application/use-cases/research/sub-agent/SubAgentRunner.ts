@@ -106,7 +106,6 @@ export class SubAgentRunner implements SubAgentPort {
       question: input.task,
       requiredTools: [],
       toolContext: {
-        coreVariant: "research",
         availableTools: created.tools.definitions().map((definition) => definition.function.name),
         parallelToolCalls: SUB_AGENT_POLICY.parallelToolCalls,
       },

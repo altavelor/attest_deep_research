@@ -80,12 +80,11 @@ function registryFor(searchMode: ResearchSearchMode) {
   });
 }
 
-function optionsFor(searchMode: ResearchSearchMode, available: string[]) {
+function optionsFor(available: string[]) {
   return {
     question: WIDEST_QUESTION,
     requiredTools: [],
     toolContext: {
-      coreVariant: (searchMode === "none" ? "vault" : "research") as "vault" | "research",
       availableTools: available,
       indexDescription: "Some indexed material",
       parallelToolCalls: true,
@@ -96,7 +95,7 @@ function optionsFor(searchMode: ResearchSearchMode, available: string[]) {
 function promptFor(searchMode: ResearchSearchMode): { text: string; available: string[] } {
   const created = registryFor(searchMode);
   const available = created.tools.definitions().map((d) => d.function.name);
-  const messages = buildThinkingResearchMessages(optionsFor(searchMode, available));
+  const messages = buildThinkingResearchMessages(optionsFor(available));
   const text = messages.map((m) => m.content).join("\n");
   return { text: stripAvailabilityRule(text), available };
 }
@@ -128,7 +127,7 @@ describe("thinking prompt ↔ tool registry drift guard", () => {
     ({ searchMode }) => {
       const created = registryFor(searchMode);
       const available = new Set(created.tools.definitions().map((d) => d.function.name));
-      const sections = buildThinkingPromptSections(optionsFor(searchMode, [...available]));
+      const sections = buildThinkingPromptSections(optionsFor([...available]));
       for (const section of sections.filter((entry) => entry.enabled)) {
         for (const tool of section.referencedTools) {
           expect(
@@ -142,7 +141,7 @@ describe("thinking prompt ↔ tool registry drift guard", () => {
 
   it("reports a section that names a tool the profile does not register", () => {
     const { available } = promptFor("indexOnly");
-    const sections = buildThinkingPromptSections(optionsFor("indexOnly", available));
+    const sections = buildThinkingPromptSections(optionsFor(available));
     const result = assemblePromptSections(
       [
         ...sections,
@@ -196,7 +195,7 @@ describe("numeric limit drift guard", () => {
   it.each(PROFILES)("writes no number that is not a schema constant ($name)", ({ searchMode }) => {
     const created = registryFor(searchMode);
     const available = created.tools.definitions().map((d) => d.function.name);
-    const system = buildThinkingResearchMessages(optionsFor(searchMode, available))[0].content;
+    const system = buildThinkingResearchMessages(optionsFor(available))[0].content;
     expect(
       unexpectedNumerals(system),
       `unexpected numeric literals in the ${searchMode} prompt`,
@@ -206,7 +205,7 @@ describe("numeric limit drift guard", () => {
   it("catches a literal that drifted away from its schema constant", () => {
     const created = registryFor("webOnly");
     const available = created.tools.definitions().map((d) => d.function.name);
-    const system = buildThinkingResearchMessages(optionsFor("webOnly", available))[0].content;
+    const system = buildThinkingResearchMessages(optionsFor(available))[0].content;
     const drifted = system.replace(
       `\`limit\` returns up to ${MAX_WEB_RESULT_LIMIT} results`,
       "`limit` returns up to 7 results",
@@ -257,7 +256,7 @@ describe("parallel capability plumbing", () => {
     const messages = buildThinkingResearchMessages({
       question: "Q",
       requiredTools: [],
-      toolContext: { coreVariant: "research", availableTools: [] },
+      toolContext: { availableTools: [] },
     });
     expect(messages[0].content).toContain("Issue one tool call at a time");
   });

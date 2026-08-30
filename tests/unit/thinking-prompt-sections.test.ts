@@ -81,7 +81,6 @@ function sectionsFor(profile: (typeof PROFILES)[number], question = WORST_CASE_Q
     question,
     requiredTools: [],
     toolContext: {
-      coreVariant: profile.variant,
       availableTools: profile.tools,
       indexDescription: "Indexed material",
       parallelToolCalls: true,
@@ -200,7 +199,7 @@ describe("prompt section validation", () => {
     buildThinkingResearchMessages({
       question: "Q",
       requiredTools: [],
-      toolContext: { coreVariant: "research", availableTools: [] },
+      toolContext: { availableTools: [] },
       onAssemblyIssue: (issue) => issues.push(`${issue.sectionId}:${issue.code}`),
     });
     expect(issues).toEqual([]);
@@ -224,7 +223,6 @@ describe("prompt section validation", () => {
           },
         ],
         toolContext: {
-          coreVariant: profile.variant,
           availableTools: profile.tools,
           indexDescription: payload,
           parallelToolCalls: true,
@@ -271,7 +269,6 @@ describe("static prompt token budget", () => {
       question: WORST_CASE_QUESTION,
       requiredTools: [],
       toolContext: {
-        coreVariant: profile.variant,
         availableTools: profile.tools,
         parallelToolCalls: true,
       },
@@ -292,7 +289,6 @@ describe("static prompt token budget", () => {
         question: WORST_CASE_QUESTION,
         requiredTools: [],
         toolContext: {
-          coreVariant: profile.variant,
           availableTools: profile.tools,
           indexDescription,
           parallelToolCalls: true,

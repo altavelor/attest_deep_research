@@ -183,7 +183,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       conversationRegistry: request.conversationRegistry,
       attachedFiles: assembled?.attachments,
       toolContext: {
-        coreVariant: searchMode === "none" ? "vault" : "research",
         availableTools: created.tools.definitions().map((d) => d.function.name),
         indexDescription: indexDescription?.text,
         parallelToolCalls: effectivePolicy.parallelToolCalls,

@@ -55,7 +55,7 @@ describe("prompt attribute sanitization", () => {
     const messages = buildThinkingResearchMessages({
       question: "q",
       requiredTools: [],
-      toolContext: { coreVariant: "research", availableTools: [] },
+      toolContext: { availableTools: [] },
       explicitEvidence: [
         {
           id: "c\" injected='1",

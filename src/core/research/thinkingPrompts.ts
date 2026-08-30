@@ -73,7 +73,6 @@ import {
 } from "./thinking-prompt/promptWorkflows";
 
 export interface ThinkingToolContext {
-  coreVariant: "vault" | "research";
   availableTools: readonly string[];
   indexDescription?: string;
 
