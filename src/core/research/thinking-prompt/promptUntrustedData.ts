@@ -27,9 +27,11 @@ export function buildConversationRegistrySection(registry: ConversationRegistryP
     ...(registry.relevantEvidence.length
       ? [
           "Relevant stored evidence (cite only its registered revision ID):",
-          ...registry.relevantEvidence.map(
-            (chunk) => `[${sanitizeUntrusted(chunk.id)}] ${sanitizeUntrusted(chunk.text)}`,
-          ),
+          ...registry.relevantEvidence.flatMap((chunk) => [
+            `<stored-evidence id="${sanitizeUntrusted(chunk.id)}">`,
+            `[${sanitizeUntrusted(chunk.id)}] ${sanitizeUntrusted(chunk.text)}`,
+            "</stored-evidence>",
+          ]),
         ]
       : []),
   ].join("\n");
