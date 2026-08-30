@@ -3,7 +3,7 @@
   "name": "Attest AI Deep Research",
   "version": "0.4.4",
   "minAppVersion": "1.8.7",
-  "description": "Chat with your notes: AI search across your vault that answers with citations you can open. Works with local models (Ollama, LM Studio) or cloud APIs. RAG, semantic search, deep research.",
+  "description": "Deep research across your Obsidian vault and the web, with verifiable citations you can open. Use local models (Ollama, LM Studio) or cloud APIs for semantic search, web search, and cited answers.",
   "author": "Ilya Burov",
   "authorUrl": "https://github.com/altavelor",
   "fundingUrl": {

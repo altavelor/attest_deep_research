@@ -6,17 +6,18 @@
 [![License](https://img.shields.io/github/license/altavelor/attest_deep_research?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/stargazers)
 
-**Answers from your notes, backed by sources you can open.**
+**Cited deep research across your notes and the web.**
 
-Attest turns your vault into something you can ask questions of. Instead of searching for the note
-that might hold the answer, you ask in plain language — “What did we decide about pricing?” — and
-get a written answer built from your own notes, where every claim is attested by the note, heading,
-or document page it came from. One click takes you to the source.
+Attest turns your vault and optional web sources into something you can ask questions of. Instead
+of searching for the note or page that might hold the answer, you ask in plain language and get a
+written response where every claim is attested by the note, heading, document page, or web source
+it came from. One click takes you to the source.
 
 You choose which folders it may read, and which AI model answers: a model running on your own
-machine, or a cloud service you already use. Nothing leaves your vault unless you ask it to.
+machine, or a cloud service you already use. Web search is optional and runs only when the selected
+research scope allows it. Nothing leaves your vault unless you ask it to.
 
-> **Obsidian 1.5.0+ on desktop and mobile · cloud AI on iOS and Android**
+> **Obsidian 1.8.7+ on desktop and mobile · cloud AI on iOS and Android**
 
 ![Attest showing a cited answer alongside the note it created](references/plugin_preview.png)
 

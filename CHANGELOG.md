@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Community Plugins description now highlights cited web search alongside vault research.
+- Settings are exposed to Obsidian's searchable settings API while retaining the legacy settings
+  renderer for supported older releases.
+
+### Fixed
+
+- Remaining automated review findings for platform globals, timers, callback binding, unsafe
+  values, redundant assertions and malformed-input fallbacks.
+
 ## [0.4.4] - 2026-08-30
 
 ### Fixed
