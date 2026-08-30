@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "../../stubs/obsidian";
+import { App, Setting } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
+import type { SettingGroup } from "obsidian";
 
 import { DEFAULT_SETTINGS, cloneIndexProfile, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type { ChatModelProfile, AttestSettings, ServerProfile } from "@adapters/settings";
@@ -142,6 +143,32 @@ describe("settings tab sections", () => {
     expect(names).toContain("Expand search query");
     expect(names).toContain("Use web for freshness questions");
     expect(names).toContain("Debug mode");
+  });
+
+  it("exposes searchable definitions that render the complete settings UI", () => {
+    const tab = createTab();
+    const [rawDefinition] = tab.getSettingDefinitions();
+    const definition = rawDefinition as
+      | {
+          name: string;
+          aliases?: string[];
+          render: (setting: import("obsidian").Setting, group: SettingGroup) => void | (() => void);
+        }
+      | undefined;
+
+    expect(definition?.name).toBe("Attest");
+    expect(definition?.aliases).toContain("web search");
+    if (!definition) throw new Error("Expected render definition");
+
+    const host = document.createElement("div");
+    const cleanup = definition.render(
+      new Setting(host) as unknown as import("obsidian").Setting,
+      {} as SettingGroup,
+    );
+
+    expect(settingNames(host)).toContain("Use web for freshness questions");
+    expect(cleanup).toBeTypeOf("function");
+    cleanup?.();
   });
 
   it("keeps the scroll offset when a section asks for a redisplay", () => {
