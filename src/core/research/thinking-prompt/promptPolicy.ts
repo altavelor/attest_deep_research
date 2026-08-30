@@ -133,17 +133,16 @@ export const SOURCE_SELECTION_POLICY = `
 /** Level four: what a citation has to support, and where citations may not go. */
 export function buildCitationPolicy(capabilities: PromptCapabilities): string {
   const lines = ["## Citing"];
-  if (capabilities.web && capabilities.index) {
-    lines.push(
-      "- Cite a web source by URL as `[url:https://example.com/page]`, an index or note result by " +
-        "its `evidenceId` as `[evidenceId]`. Always in square brackets.",
-    );
-  } else if (capabilities.web) {
+  if (capabilities.web) {
     lines.push(
       "- Cite a web source by URL as `[url:https://example.com/page]`, always in square brackets.",
     );
-  } else {
-    lines.push("- Cite a result by its `evidenceId` as `[evidenceId]`, always in square brackets.");
+  }
+  if (capabilities.index || capabilities.noteRead) {
+    lines.push(
+      "- Cite every other result by the identifier its own tool returned for the supporting " +
+        "chunk, always in square brackets.",
+    );
   }
   lines.push(
     "- Put the citation at the claim, not at the end. It must support the whole atomic statement " +

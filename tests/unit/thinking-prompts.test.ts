@@ -168,11 +168,19 @@ describe("evidence and citation policy", () => {
 
   it("advertises only the citation formats the profile can produce", () => {
     const indexOnly = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
-    expect(indexOnly).toContain("Cite a result by its `evidenceId`");
+    expect(indexOnly).toContain("the identifier its own tool returned for the supporting");
     expect(indexOnly).not.toContain("[url:https://example.com/page]");
 
     const webOnly = systemText({ availableTools: [WEB_SEARCH_TOOL] });
     expect(webOnly).toContain("[url:https://example.com/page]");
+  });
+
+  it("does not name a result field the note tools do not carry", () => {
+    for (const tools of [[READ_NOTE_TOOL], [READ_NOTE_TOOL, WEB_SEARCH_TOOL]]) {
+      const system = systemText({ availableTools: tools });
+      expect(system).not.toContain("by its `evidenceId`");
+      expect(system).toContain("the identifier its own tool returned for the supporting");
+    }
   });
 });
 
