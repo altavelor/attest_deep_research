@@ -44,7 +44,7 @@ export class ObsidianVaultWriter implements VaultWriter {
 
   async trashFile(path: string): Promise<void> {
     const file = this.requireFile(path);
-    await this.app.vault.trash(file, true);
+    await this.app.fileManager.trashFile(file);
   }
 
   async ensureFolder(path: string): Promise<void> {

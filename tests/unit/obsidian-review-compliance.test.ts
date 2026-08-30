@@ -4,6 +4,14 @@ import { resolve } from "node:path";
 const read = (path: string): string => readFileSync(resolve(path), "utf8");
 
 describe("Obsidian review compliance", () => {
+  it("declares the minimum version required by the reviewed Obsidian APIs", () => {
+    const manifest = JSON.parse(read("manifest.json")) as { minAppVersion: string };
+    const versions = JSON.parse(read("versions.json")) as Record<string, string>;
+
+    expect(manifest.minAppVersion).toBe("1.6.6");
+    expect(versions["0.4.4"]).toBe("1.6.6");
+  });
+
   it("does not use regex lookbehind in shipped source", () => {
     const files = [
       "src/adapters/indexing/metadata/LlmDocumentSummarizer.ts",
@@ -24,8 +32,7 @@ describe("Obsidian review compliance", () => {
       "src/apps/obsidian/ui/chat/research/AnswerNoteWriter.ts",
       "src/apps/obsidian/ui/chat/toolOutputViewer.ts",
     ];
-    const unsupportedApi =
-      /\.getFolderByPath\(|\.removeCommand\(|\.revealLeaf\(|\.messageEl\b|\.fileManager\.trashFile\(/;
+    const unsupportedApi = /\.getFolderByPath\(|\.removeCommand\(|\.revealLeaf\(|\.messageEl\b/;
 
     for (const file of files) {
       expect(read(file), file).not.toMatch(unsupportedApi);

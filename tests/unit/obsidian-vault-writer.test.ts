@@ -14,6 +14,9 @@ function folder(path: string): TFolder {
 
 function app(existing: TFile | null = null): App {
   return {
+    fileManager: {
+      trashFile: vi.fn(async () => {}),
+    },
     vault: {
       getAbstractFileByPath: vi.fn(() => existing),
       modify: vi.fn(async () => {}),
@@ -22,7 +25,6 @@ function app(existing: TFile | null = null): App {
       createBinary: vi.fn(async () => {}),
       append: vi.fn(async () => {}),
       read: vi.fn(async () => "content"),
-      trash: vi.fn(async () => {}),
       createFolder: vi.fn(async () => {}),
     },
   } as unknown as App;
@@ -83,7 +85,7 @@ describe("ObsidianVaultWriter", () => {
     expect(fakeApp.vault.modify).toHaveBeenCalledWith(existing, "replacement");
     expect(fakeApp.vault.append).toHaveBeenCalledWith(existing, "\nnext");
     expect(fakeApp.vault.read).toHaveBeenCalledWith(existing);
-    expect(fakeApp.vault.trash).toHaveBeenCalledWith(existing, true);
+    expect(fakeApp.fileManager.trashFile).toHaveBeenCalledWith(existing);
     expect(fakeApp.vault.createFolder).not.toHaveBeenCalled();
   });
 });
