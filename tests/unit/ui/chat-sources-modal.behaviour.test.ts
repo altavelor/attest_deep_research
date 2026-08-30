@@ -250,6 +250,64 @@ describe("ChatSourcesModal", () => {
       .click();
 
     expect(openChunk).toHaveBeenCalledWith(registry.sources[0].revisions[0].chunks[0]);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity")).not.toBeNull();
+  });
+
+  it("renders local source identities as internal links that open the file", () => {
+    const localChunk = {
+      ...registry.sources[0].revisions[0].chunks[0],
+      source: {
+        id: "markdown-1",
+        kind: "markdown" as const,
+        title: "Mobile note",
+        path: "Notes/Mobile.md",
+        headingPath: ["Support"],
+      },
+    };
+    const localRegistry: ConversationSourceRegistry = {
+      sources: [
+        {
+          ...registry.sources[0],
+          identity: { kind: "markdown", canonicalKey: "Notes/Mobile.md" },
+          title: "Mobile note",
+          revisions: [{ ...registry.sources[0].revisions[0], chunks: [localChunk] }],
+        },
+      ],
+    };
+    const openChunk = vi.fn();
+    const modal = new ChatSourcesModal(
+      new App() as unknown as ObsidianApp,
+      localRegistry,
+      createTranslator("en").t,
+      () => "ltr",
+      {
+        targetRevisionId: "source-1:revision-1",
+        onNavigateMessage: vi.fn(),
+        onOpenChunk: openChunk,
+      },
+    );
+
+    modal.open();
+
+    const link = modal.contentEl.querySelector<HTMLAnchorElement>(
+      ".attest-chat-sources-modal__identity a",
+    );
+    expect(link?.textContent).toBe("Notes/Mobile.md");
+    expect(link?.getAttribute("href")).toBe("Notes/Mobile.md");
+    expect(link?.getAttribute("data-href")).toBe("Notes/Mobile.md");
+    expect(link?.classList.contains("internal-link")).toBe(true);
+
+    link?.click();
+
+    expect(openChunk).toHaveBeenCalledWith(localChunk);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity a")).not.toBeNull();
+
+    modal.contentEl
+      .querySelector<HTMLButtonElement>(".attest-chat-sources-modal__open-source")!
+      .click();
+
+    expect(openChunk).toHaveBeenCalledTimes(2);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity a")).not.toBeNull();
   });
 
   it("renders web source identities as links opened in the default browser", () => {
