@@ -280,7 +280,11 @@ describe("ChatSourcesModal", () => {
       localRegistry,
       createTranslator("en").t,
       () => "ltr",
-      { onNavigateMessage: vi.fn(), onOpenChunk: openChunk },
+      {
+        targetRevisionId: "source-1:revision-1",
+        onNavigateMessage: vi.fn(),
+        onOpenChunk: openChunk,
+      },
     );
 
     modal.open();
@@ -296,6 +300,13 @@ describe("ChatSourcesModal", () => {
     link?.click();
 
     expect(openChunk).toHaveBeenCalledWith(localChunk);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity a")).not.toBeNull();
+
+    modal.contentEl
+      .querySelector<HTMLButtonElement>(".attest-chat-sources-modal__open-source")!
+      .click();
+
+    expect(openChunk).toHaveBeenCalledTimes(2);
     expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity a")).not.toBeNull();
   });
 
