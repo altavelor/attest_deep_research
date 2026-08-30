@@ -9,19 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2026-08-30
 
-Release metadata updated for the next release cycle.
-
-## [0.3.0] - 2026-08-30
-
-Background chat sessions, onboarding, research reliability, diagnostics and source navigation.
+Improved onboarding, research reliability, diagnostics and source navigation.
 
 ### Added
 
-- Plugin-owned background chat sessions that persist their state, recover stale runs after
-  restart and keep chat activity available independently of the active view.
-- Attest commands for opening chat, asking about the current note or selected text, finding
-  related notes, summarizing a note and updating the index, plus a ribbon action for opening
-  chat.
 - First-run setup wizard with localized onboarding and server presets, including readable
   model names for configured providers.
 - Citable note reads, per-call sub-agent telemetry and aggregated sub-agent summaries in
@@ -45,6 +36,18 @@ Background chat sessions, onboarding, research reliability, diagnostics and sour
 - The new-chat question field remains visible, composer controls use their final width, and
   interrupted chats are no longer all marked as interrupted in history.
 - Untrusted sub-agent labels and prompt sections are escaped and bounded before use.
+
+## [0.3.0] - 2026-08-29
+
+Background chat sessions and faster access from Obsidian.
+
+### Added
+
+- Plugin-owned background chat sessions that persist their state, recover stale runs after
+  restart and keep chat activity available independently of the active view.
+- Attest commands for opening chat, asking about the current note or selected text, finding
+  related notes, summarizing a note and updating the index, plus a ribbon action for opening
+  chat.
 
 ## [0.2.0] - 2026-08-27
 
