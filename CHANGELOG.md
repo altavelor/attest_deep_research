@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-30
+
+Release metadata updated for the next release cycle.
+
 ## [0.3.0] - 2026-08-30
 
 Background chat sessions, onboarding, research reliability, diagnostics and source navigation.
@@ -41,10 +45,6 @@ Background chat sessions, onboarding, research reliability, diagnostics and sour
 - The new-chat question field remains visible, composer controls use their final width, and
   interrupted chats are no longer all marked as interrupted in history.
 - Untrusted sub-agent labels and prompt sections are escaped and bounded before use.
-
-## [0.4.0] - 2026-08-30
-
-Release metadata updated for the next release cycle.
 
 ## [0.2.0] - 2026-08-27
 
