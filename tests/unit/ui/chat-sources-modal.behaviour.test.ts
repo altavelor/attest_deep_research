@@ -250,6 +250,7 @@ describe("ChatSourcesModal", () => {
       .click();
 
     expect(openChunk).toHaveBeenCalledWith(registry.sources[0].revisions[0].chunks[0]);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity")).not.toBeNull();
   });
 
   it("renders local source identities as internal links that open the file", () => {

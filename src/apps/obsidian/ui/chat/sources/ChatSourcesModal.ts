@@ -104,7 +104,7 @@ export class ChatSourcesModal extends Modal {
               this.options.onNavigateMessage(messageId);
             },
             onOpenChunk: (chunk) => {
-              this.close();
+              if (chunk.source.kind !== "web") this.close();
               this.options.onOpenChunk(chunk);
             },
             onOpenSourceLink: (chunk) => this.options.onOpenChunk(chunk),
