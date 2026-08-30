@@ -300,9 +300,16 @@ describe("note tool descriptions agree with the evidence policy", () => {
   it.each([READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL])(
     "names the field the chunk actually carries (%s)",
     async (toolName) => {
+      const { tools: registered } = harness("Research/Caffeine.md");
       const description =
+        registered.definitions().find((entry) => entry.function.name === toolName)?.function
+          .description ?? "";
+      const eagerDescription =
         NOTE_TOOL_DEFINITIONS.find((entry) => entry.function.name === toolName)?.function
           .description ?? "";
+      expect(description, "the thinking and instant descriptions have drifted apart").toBe(
+        eagerDescription,
+      );
       expect(description).not.toContain("`evidenceId` of the chunk");
       expect(description).toContain("`id` of the chunk");
       expect(description).toContain("top-level `evidenceId` names the first chunk only");
