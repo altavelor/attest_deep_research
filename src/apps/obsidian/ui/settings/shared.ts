@@ -126,18 +126,18 @@ function baseName(path: string): string {
 
 export function renderModalActions(
   containerEl: HTMLElement,
-  actions: { t: Translate; onCancel(): void; onSave(): void; saveLabel?: string },
+  actions: { t: Translate; onCancel: () => void; onSave: () => void; saveLabel?: string },
 ): void {
   new Setting(containerEl)
     .setClass("attest-profile-modal__actions")
     .addButton((button) =>
-      button.setButtonText(actions.t("common.cancel")).onClick(actions.onCancel),
+      button.setButtonText(actions.t("common.cancel")).onClick(() => actions.onCancel()),
     )
     .addButton((button) =>
       button
         .setCta()
         .setButtonText(actions.saveLabel ?? actions.t("common.save"))
-        .onClick(actions.onSave),
+        .onClick(() => actions.onSave()),
     );
 }
 
@@ -148,7 +148,7 @@ export function createIconButton(
     className?: string;
     label: string;
     disabled?: boolean;
-    onClick(): void;
+    onClick: () => void;
   },
 ): HTMLButtonElement {
   const button = containerEl.createEl("button", {
@@ -165,7 +165,7 @@ export function createIconButton(
   button.disabled = options.disabled === true;
   setIcon(button, options.icon);
   if (!button.disabled) {
-    button.addEventListener("click", options.onClick);
+    button.addEventListener("click", () => options.onClick());
   }
   return button;
 }

@@ -1,6 +1,6 @@
 import { WebPageFetchFailure } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
-import { fetchTransportOrUnavailable } from "@shared";
+import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface FetchHttpRuntime {
   fetch?: typeof fetch;
@@ -32,12 +32,12 @@ export async function requestText(
     typeof timeoutOverrideMs === "number" && timeoutOverrideMs > 0
       ? timeoutOverrideMs
       : (runtime.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = scheduleTimeout(() => controller.abort(), timeoutMs);
   const context = { url: spec.url, method: spec.method ?? "GET", headers: spec.headers ?? {} };
 
   try {
     runtime.logger?.logRequest(context);
-    const response = await fetchImpl.call(globalThis, spec.url, {
+    const response = await fetchImpl(spec.url, {
       method: context.method,
       headers: context.headers,
       ...(spec.body !== undefined ? { body: spec.body } : {}),
@@ -71,7 +71,7 @@ export async function requestText(
         : fetchFailure("web-fetch-network", "Page fetch failed.", true),
     };
   } finally {
-    clearTimeout(timeout);
+    timeout.cancel();
   }
 }
 

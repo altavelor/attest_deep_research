@@ -1,7 +1,7 @@
 import { AttestError, AttestErrorCode } from "@core/errors";
 import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
-import { fetchTransportOrUnavailable } from "@shared";
+import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface ProviderHttpClientOptions {
   apiFormat: ApiFormat;
@@ -45,7 +45,7 @@ export class ProviderHttpClient {
     externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
     if (externalSignal?.aborted) abortFromExternal();
     let timedOut = false;
-    const timeout = setTimeout(() => {
+    const timeout = scheduleTimeout(() => {
       timedOut = true;
       controller.abort(new DOMException("The provider request timed out.", "TimeoutError"));
     }, this.timeoutMs);
@@ -57,7 +57,8 @@ export class ProviderHttpClient {
     try {
       this.logger?.logRequest(logContext);
 
-      const response = await this.fetchImpl.call(globalThis, url, {
+      const fetchImpl = this.fetchImpl;
+      const response = await fetchImpl(url, {
         ...requestInit,
         signal: controller.signal,
       });
@@ -115,7 +116,7 @@ export class ProviderHttpClient {
       this.logger?.logError(wrappedError, logContext);
       throw wrappedError;
     } finally {
-      clearTimeout(timeout);
+      timeout.cancel();
       externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }

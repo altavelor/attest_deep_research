@@ -94,7 +94,7 @@ export function renderProfileListItem(
   createIconButton(actions.createSpan({ cls: "attest-settings-profile-list__action-slot" }), {
     icon: "pencil",
     label: t("settings.profileList.editAction"),
-    onClick: options.onEdit,
+    onClick: () => options.onEdit(),
   });
   createIconButton(actions.createSpan({ cls: "attest-settings-profile-list__action-slot" }), {
     icon: "trash",

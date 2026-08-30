@@ -9,7 +9,7 @@ import type { WebSourceActivation } from "@core/web";
 import { SearchProviderResult, WebSearchOptions, WebSearchSource } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { sanitizeParsedResults, WebSourceDefinition, WebSourceQueryInput } from "./types";
-import { fetchTransportOrUnavailable } from "@shared";
+import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface HttpWebSearchSourceOptions {
   activation?: WebSourceActivation;
@@ -131,7 +131,7 @@ export class HttpWebSearchSource implements WebSearchSource {
       typeof timeoutOverrideMs === "number" && timeoutOverrideMs > 0
         ? timeoutOverrideMs
         : this.timeoutMs;
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = scheduleTimeout(() => controller.abort(), timeoutMs);
     const abortFromCaller = (): void => controller.abort();
     if (signal?.aborted === true) {
       controller.abort();
@@ -146,7 +146,8 @@ export class HttpWebSearchSource implements WebSearchSource {
 
     try {
       this.logger?.logRequest(context);
-      const response = await this.fetchImpl.call(globalThis, request.url, {
+      const fetchImpl = this.fetchImpl;
+      const response = await fetchImpl(request.url, {
         method: context.method,
         headers: context.headers,
         ...(request.body !== undefined ? { body: request.body } : {}),
@@ -174,7 +175,7 @@ export class HttpWebSearchSource implements WebSearchSource {
       this.logger?.logError(wrapped, context);
       throw wrapped;
     } finally {
-      clearTimeout(timeout);
+      timeout.cancel();
       signal?.removeEventListener("abort", abortFromCaller);
     }
   }

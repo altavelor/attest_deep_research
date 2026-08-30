@@ -22,7 +22,7 @@ import {
   isSupportedPageContentType,
   WebPageFetcher,
 } from "./WebPageFetcher";
-import { fetchTransportOrUnavailable } from "@shared";
+import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -327,7 +327,8 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
 
       try {
         this.logger?.logRequest(context);
-        const response = await this.fetchImpl.call(globalThis, url, {
+        const fetchImpl = this.fetchImpl;
+        const response = await fetchImpl(url, {
           method: "GET",
           headers: context.headers,
           signal: abort.signal,
@@ -365,7 +366,8 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
 
     try {
       this.logger?.logRequest(context);
-      const response = await this.fetchImpl.call(globalThis, url, {
+      const fetchImpl = this.fetchImpl;
+      const response = await fetchImpl(url, {
         method: "GET",
         headers: context.headers,
         redirect: "manual",
@@ -393,7 +395,7 @@ function linkAbortSignal(
 ): { signal: AbortSignal; release: () => void } {
   const controller = new AbortController();
   const abort = () => controller.abort();
-  const timeout = setTimeout(abort, timeoutMs);
+  const timeout = scheduleTimeout(abort, timeoutMs);
 
   if (external?.aborted === true) {
     abort();
@@ -404,7 +406,7 @@ function linkAbortSignal(
   return {
     signal: controller.signal,
     release: () => {
-      clearTimeout(timeout);
+      timeout.cancel();
       external?.removeEventListener("abort", abort);
     },
   };
@@ -435,7 +437,7 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => scheduleTimeout(resolve, ms));
 }
 
 function isRateLimited(status: number): boolean {

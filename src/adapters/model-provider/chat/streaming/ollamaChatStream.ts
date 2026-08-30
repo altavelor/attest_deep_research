@@ -3,7 +3,6 @@ import type {
   ChatResponse as OllamaChatResponse,
   Message as OllamaMessage,
   Ollama,
-  Tool as OllamaTool,
 } from "ollama";
 
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
@@ -55,7 +54,7 @@ export async function* streamOllamaChat({
       model: request.model,
       messages: request.messages.map(mapOllamaMessage) as unknown as OllamaMessage[],
       stream: true,
-      ...(hasTools ? { tools: request.tools as unknown as OllamaTool[] } : {}),
+      ...(hasTools ? { tools: request.tools } : {}),
       ...(request.reasoningEnabled ? { think: ollamaThink(request.reasoningEffort) } : {}),
       ...(options ? { options } : {}),
     });

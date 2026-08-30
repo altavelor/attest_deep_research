@@ -70,7 +70,7 @@ function renderCartesian(svg: SVGSVGElement, chart: ChartArtifact): void {
         class: "attest-chart__line",
         points: seriesPolyline(series, scale),
         fill: "none",
-        "stroke-dasharray": SERIES_DASHES[seriesIndex % SERIES_DASHES.length]!,
+        "stroke-dasharray": SERIES_DASHES[seriesIndex % SERIES_DASHES.length],
       });
       line.setAttribute("stroke-width", "2");
     }
@@ -198,7 +198,7 @@ function renderMarkers(
 }
 
 function renderPie(svg: SVGSVGElement, chart: ChartArtifact): void {
-  const slices = pieSlices(chart.series[0]!);
+  const slices = pieSlices(chart.series[0]);
   slices.forEach((slice, index) => {
     const path = element(svg, "path", {
       class: `attest-chart__slice is-series-${index % 4}`,
@@ -213,7 +213,7 @@ function renderLegend(figure: HTMLElement, chart: ChartArtifact): void {
   const legend = figure.createEl("ul", { cls: "attest-chart__legend" });
   const items =
     chart.chartType === "pie"
-      ? chart.series[0]!.points.map((point) => String(point.x))
+      ? chart.series[0].points.map((point) => String(point.x))
       : chart.series.map((series) => series.name);
 
   items.forEach((label, index) => {

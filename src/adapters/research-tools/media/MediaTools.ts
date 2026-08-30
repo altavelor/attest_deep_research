@@ -100,7 +100,7 @@ export const ImageSearchTool = defineTool<ImageSearchDeps, SearchImagesInput, Se
       );
       let found = 0;
       settled.forEach((outcome, index) => {
-        const label = sources[index]!.descriptor.label;
+        const label = sources[index].descriptor.label;
         if (outcome.status !== "fulfilled") {
           if (!failedSources.includes(label)) failedSources.push(label);
           return;

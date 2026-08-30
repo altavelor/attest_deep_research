@@ -1,5 +1,5 @@
 export function h(value: unknown): string {
-  const str = String(value ?? "");
+  const str = primitiveString(value);
   return str.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
@@ -7,7 +7,13 @@ export function h(value: unknown): string {
 }
 
 export function attr(value: unknown): string {
-  return String(value ?? "").replace(/[^a-zA-Z0-9_-]/g, "-");
+  return primitiveString(value).replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function primitiveString(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : "";
 }
 
 export type BadgeVariant = "success" | "warning" | "danger" | "accent" | "neutral";

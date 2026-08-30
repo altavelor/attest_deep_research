@@ -4,7 +4,7 @@ import {
   UrlStatusCheckResult,
 } from "@application/contracts";
 import { validatePublicWebUrl } from "@application/sources";
-import { fetchTransportOrUnavailable } from "@shared";
+import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface FetchUrlStatusCheckerOptions {
   fetch?: typeof fetch;
@@ -31,7 +31,10 @@ async function checkWithConcurrency(
   options: { timeoutMs: number; signal: AbortSignal },
   concurrency: number,
 ): Promise<UrlStatusCheckResult[]> {
-  const results: UrlStatusCheckResult[] = new Array(urls.length);
+  const results: Array<UrlStatusCheckResult | undefined> = Array.from(
+    { length: urls.length },
+    () => undefined,
+  );
   let next = 0;
 
   async function worker(): Promise<void> {
@@ -57,19 +60,19 @@ async function checkUrl(
   }
 
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), options.timeoutMs);
+  const timeout = scheduleTimeout(() => controller.abort(), options.timeoutMs);
   const abort = () => controller.abort();
   options.signal.addEventListener("abort", abort, { once: true });
 
   try {
-    let response = await fetchImpl.call(globalThis, validated.url, {
+    let response = await fetchImpl(validated.url, {
       method: "HEAD",
       redirect: "follow",
       signal: controller.signal,
       headers: requestHeaders(),
     });
     if (response.status === 405) {
-      response = await fetchImpl.call(globalThis, validated.url, {
+      response = await fetchImpl(validated.url, {
         method: "GET",
         redirect: "follow",
         signal: controller.signal,
@@ -92,7 +95,7 @@ async function checkUrl(
       error: error instanceof Error ? error.name : "fetch-failed",
     };
   } finally {
-    globalThis.clearTimeout(timeout);
+    timeout.cancel();
     options.signal.removeEventListener("abort", abort);
   }
 }

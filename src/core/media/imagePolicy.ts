@@ -39,7 +39,7 @@ export function imageFormatFromMimeType(
   value: string | undefined,
 ): EligibleImageFormat | undefined {
   if (!value) return undefined;
-  return MIME_FORMATS[value.split(";")[0]!.trim().toLowerCase()];
+  return MIME_FORMATS[value.split(";")[0].trim().toLowerCase()];
 }
 
 export function imageFormatFromPath(value: string | undefined): EligibleImageFormat | undefined {
@@ -145,8 +145,8 @@ function isNonPublicIpv6(hostname: string): boolean {
   const [first, second] = groups as [number, number];
   const isZeroPrefix = groups.slice(0, 5).every((group) => group === 0);
   if (isZeroPrefix && (groups[5] === 0 || groups[5] === 0xffff)) {
-    const low = [groups[6]!, groups[7]!];
-    const octets = [low[0]! >> 8, low[0]! & 0xff, low[1]! >> 8, low[1]! & 0xff];
+    const low = [groups[6], groups[7]];
+    const octets = [low[0] >> 8, low[0] & 0xff, low[1] >> 8, low[1] & 0xff];
     if (groups[5] === 0 && groups[6] === 0 && groups[7] !== undefined && groups[7] <= 1) {
       return true;
     }
@@ -165,10 +165,10 @@ function parseIpv6(value: string): number[] | undefined {
   let text = value.toLowerCase().split("%")[0] ?? "";
   const dotted = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(text);
   if (dotted) {
-    const octets = dotted[1]!.split(".").map((part) => Number.parseInt(part, 10));
+    const octets = dotted[1].split(".").map((part) => Number.parseInt(part, 10));
     if (octets.some((octet) => !Number.isInteger(octet) || octet > 255)) return undefined;
-    const high = ((octets[0]! << 8) | octets[1]!).toString(16);
-    const low = ((octets[2]! << 8) | octets[3]!).toString(16);
+    const high = ((octets[0] << 8) | octets[1]).toString(16);
+    const low = ((octets[2] << 8) | octets[3]).toString(16);
     text = `${text.slice(0, dotted.index)}${high}:${low}`;
   }
 
@@ -203,7 +203,7 @@ export function isSafeVaultImagePath(path: string): boolean {
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     return false;
   }
-  return !segments[0]!.startsWith(".");
+  return !segments[0].startsWith(".");
 }
 
 /** Rejects spacers and tracking pixels when the source declares dimensions. */

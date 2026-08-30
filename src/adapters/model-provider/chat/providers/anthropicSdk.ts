@@ -34,7 +34,7 @@ export function createAnthropicClient(options: AnthropicClientOptions): Anthropi
 
   return new Anthropic({
     baseURL,
-    apiKey: hasApiKey ? (options.apiKey as string) : "missing",
+    apiKey: hasApiKey ? options.apiKey : "missing",
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
     timeout: options.timeoutMs ?? 30_000,
@@ -73,7 +73,7 @@ export function createLoggingFetch(
 
     options.logger?.logRequest(logContext);
 
-    const response = await baseFetch.call(globalThis, input, stripHeader ? effectiveInit : init);
+    const response = await baseFetch(input, stripHeader ? effectiveInit : init);
 
     options.logger?.logResponse({
       ...logContext,
@@ -82,7 +82,7 @@ export function createLoggingFetch(
     });
 
     return response;
-  } as typeof fetch;
+  };
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -126,7 +126,7 @@ export function translateAnthropicError(
   }
 
   if (error instanceof APIError) {
-    const status = error.status;
+    const status: unknown = error.status;
     const details = providerErrorDetails(error, translation.apiKey);
     if (status === 404) {
       return new AttestError({ code: "MODEL_NOT_FOUND", details: { status, ...details } });
@@ -147,10 +147,8 @@ export function translateAnthropicError(
   });
 }
 
-function providerErrorDetails(
-  error: APIError,
-  apiKey: string | undefined,
-): Record<string, unknown> {
+function providerErrorDetails(error: unknown, apiKey: string | undefined): Record<string, unknown> {
+  if (!isRecord(error)) return {};
   const code =
     isRecord(error.error) && typeof error.error.type === "string"
       ? error.error.type.slice(0, 100)

@@ -11,7 +11,7 @@ import { resolveAnswerImageSource } from "./imageSourceResolver";
 export interface GalleryRenderOptions {
   app: App;
   t: Translate;
-  getDirection?(): TextDirection;
+  getDirection?: () => TextDirection;
   documentImages?: DocumentImageResolver;
 }
 

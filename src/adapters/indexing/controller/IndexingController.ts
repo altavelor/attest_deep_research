@@ -2,7 +2,7 @@ import { isAttestError, toUserMessage } from "@core/errors";
 import { IndexingService, IndexingState } from "../IndexingService";
 
 export interface IndexingControllerOptions {
-  createService(onProgress: IndexingStateListener): IndexingService;
+  createService: (onProgress: IndexingStateListener) => IndexingService;
   measureIndexSize?: () => Promise<number | null>;
   onError?: (error: unknown) => void;
 }

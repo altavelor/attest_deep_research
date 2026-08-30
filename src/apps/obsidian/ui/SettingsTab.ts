@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
+import type { SettingDefinitionItem, SettingGroup } from "obsidian";
 
 import type AttestPlugin from "@apps/obsidian/main";
 import { DiscoveredModel, normalizeSettingsState } from "@adapters/settings";
@@ -28,9 +29,24 @@ export class AttestSettingTab extends PluginSettingTab {
     this.prober = new SettingsCapabilityProber({
       plugin: this.plugin,
       fetchedModelsByServerId: this.fetchedModelsByServerId,
-      requestRedisplay: () => this.display(),
+      requestRedisplay: () => this.redisplay(),
     });
-    this.indexProfiles = new IndexProfilesSection(this.app, this.plugin, () => this.display());
+    this.indexProfiles = new IndexProfilesSection(this.app, this.plugin, () => this.redisplay());
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: this.plugin.translate("settings.tab.heading"),
+        aliases: ["AI", "models", "semantic search", "web search", "retrieval", "indexing"],
+        render: (setting: Setting, _group: SettingGroup) => {
+          setting.settingEl.empty();
+          setting.settingEl.addClass("attest-settings-definition");
+          this.renderSettings(setting.settingEl);
+          return () => this.cleanupRenderedSettings();
+        },
+      },
+    ];
   }
 
   /**
@@ -39,24 +55,27 @@ export class AttestSettingTab extends PluginSettingTab {
    * toggle deep in the list throws the user back to the top of the settings.
    */
   display(): void {
+    this.renderSettings(this.containerEl);
+  }
+
+  private renderSettings(containerEl: HTMLElement): void {
     const scrollTop = this.containerEl.scrollTop;
-    this.unsubscribeCapabilityProbes?.();
+    this.cleanupRenderedSettings();
     this.unsubscribeCapabilityProbes = this.prober.subscribeAll(() => {
       if (this.redisplayTimer !== null) window.clearTimeout(this.redisplayTimer);
       this.redisplayTimer = window.setTimeout(() => {
         this.redisplayTimer = null;
-        this.display();
+        this.redisplay();
       }, 0);
     });
-    this.indexProfiles.dispose();
     normalizeSettingsState(this.plugin.settings);
-    this.containerEl.empty();
-    this.containerEl.addClass("attest-settings");
-    this.containerEl.setAttr("dir", this.plugin.getTranslator().direction);
+    containerEl.empty();
+    containerEl.addClass("attest-settings");
+    containerEl.setAttr("dir", this.plugin.getTranslator().direction);
 
-    renderCategoryHeading(this.containerEl, this.plugin.translate("settings.tab.heading"));
-    this.renderQuickStart(this.containerEl);
-    this.renderSetupEntry(this.containerEl);
+    renderCategoryHeading(containerEl, this.plugin.translate("settings.tab.heading"));
+    this.renderQuickStart(containerEl);
+    this.renderSetupEntry(containerEl);
     new ModelProfilesSection({
       app: this.app,
       t: this.plugin.translate,
@@ -65,15 +84,15 @@ export class AttestSettingTab extends PluginSettingTab {
       fetchedModelsByServerId: this.fetchedModelsByServerId,
       prober: this.prober,
       saveSettings: () => this.saveSettings(),
-      requestRedisplay: () => this.display(),
-    }).render(this.containerEl);
-    this.indexProfiles.render(this.gateHost(this.containerEl));
+      requestRedisplay: () => this.redisplay(),
+    }).render(containerEl);
+    this.indexProfiles.render(this.gateHost(containerEl));
     new NewChatDefaultsSection({
       t: this.plugin.translate,
       settings: this.plugin.settings,
       saveSettings: () => this.saveSettings(),
-      requestRedisplay: () => this.display(),
-    }).render(this.gateHost(this.containerEl));
+      requestRedisplay: () => this.redisplay(),
+    }).render(this.gateHost(containerEl));
     new RetrievalSettingsSection({
       app: this.app,
       t: this.plugin.translate,
@@ -82,10 +101,10 @@ export class AttestSettingTab extends PluginSettingTab {
       webSourceHealth: this.plugin.webSourceHealth,
       hasActiveChatModel: this.hasActiveChatModel(),
       saveSettings: () => this.saveSettings(),
-      requestRedisplay: () => this.display(),
-    }).render(this.containerEl);
-    this.renderLanguageSettings(this.containerEl);
-    this.renderAdvancedSettings(this.containerEl);
+      requestRedisplay: () => this.redisplay(),
+    }).render(containerEl);
+    this.renderLanguageSettings(containerEl);
+    this.renderAdvancedSettings(containerEl);
     this.containerEl.scrollTop = scrollTop;
 
     if (!this.metadataRefreshStarted) {
@@ -95,6 +114,10 @@ export class AttestSettingTab extends PluginSettingTab {
   }
 
   hide(): void {
+    this.cleanupRenderedSettings();
+  }
+
+  private cleanupRenderedSettings(): void {
     if (this.redisplayTimer !== null) {
       window.clearTimeout(this.redisplayTimer);
       this.redisplayTimer = null;
@@ -102,6 +125,12 @@ export class AttestSettingTab extends PluginSettingTab {
     this.unsubscribeCapabilityProbes?.();
     this.unsubscribeCapabilityProbes = null;
     this.indexProfiles.dispose();
+  }
+
+  private redisplay(): void {
+    const update = Reflect.get(this, "update");
+    const render = typeof update === "function" ? update : Reflect.get(this, "display");
+    if (typeof render === "function") Reflect.apply(render, this, []);
   }
 
   /**
@@ -131,7 +160,7 @@ export class AttestSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText(this.plugin.translate("settings.tab.setup.rerunAction"))
-          .onClick(() => this.plugin.openOnboarding(() => this.display())),
+          .onClick(() => this.plugin.openOnboarding(() => this.redisplay())),
       );
   }
 
@@ -152,7 +181,7 @@ export class AttestSettingTab extends PluginSettingTab {
       cls: "mod-cta attest-settings__quickstart-action",
       text: this.plugin.translate("settings.tab.setup.action"),
     });
-    action.addEventListener("click", () => this.plugin.openOnboarding(() => this.display()));
+    action.addEventListener("click", () => this.plugin.openOnboarding(() => this.redisplay()));
   }
 
   private gateHost(containerEl: HTMLElement): HTMLElement {
@@ -176,7 +205,7 @@ export class AttestSettingTab extends PluginSettingTab {
       },
       saveSettings: () => this.saveSettings(),
       applyLanguage: () => this.plugin.applyUiLanguage(),
-      requestRedisplay: () => this.display(),
+      requestRedisplay: () => this.redisplay(),
       refreshChatViews: () => this.plugin.refreshChatViews(),
     }).render(containerEl);
   }

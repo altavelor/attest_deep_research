@@ -19,12 +19,12 @@ import type { AttestSettings } from "@adapters/settings";
 export interface ModelProfilesSectionOptions {
   app: App;
   t: Translate;
-  getDirection?(): TextDirection;
+  getDirection?: () => TextDirection;
   settings: AttestSettings;
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
   prober: SettingsCapabilityProber;
-  saveSettings(): Promise<void>;
-  requestRedisplay(): void;
+  saveSettings: () => Promise<void>;
+  requestRedisplay: () => void;
 }
 
 /** Renders and manages server, chat-model, and embedding-model profiles. */

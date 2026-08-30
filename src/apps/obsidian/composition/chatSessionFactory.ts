@@ -6,13 +6,13 @@ import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry"
 
 export interface ChatSessionFactoryOptions {
   repository: ChatRepository;
-  createResearchService(
+  createResearchService: (
     chatModelProfileId?: string,
     indexProfileId?: string,
     searchMode?: ResearchSearchMode,
-  ): ResearchService;
-  persistDiagnostics(): boolean;
-  logError(error: unknown): void;
+  ) => ResearchService;
+  persistDiagnostics: () => boolean;
+  logError: (error: unknown) => void;
 }
 
 let runSequence = 0;

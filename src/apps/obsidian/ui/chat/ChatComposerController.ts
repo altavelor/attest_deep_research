@@ -17,29 +17,29 @@ import { contextWindowStatus } from "./chatViewStatus";
 import type { ContextWindowUsage } from "./contextWindowUsage";
 
 export interface ChatComposerControllerOptions {
-  getSettings(): SavedChatSettings;
-  getAvailableModels(): ChatModelSelectOption[];
-  getAvailableIndexes(): IndexProfileSelectOption[];
-  getContextFilePaths(): string[];
-  getResearchMode(): ResearchMode;
-  getAttachedContextPaths(): string[];
-  getActiveFilePath(): string | undefined;
-  shouldIncludeActiveFileContext(): boolean;
-  isRunning(): boolean;
-  getDraft(): string;
-  onDraftChange(draft: string): void;
-  getContextWindowUsage(): ContextWindowUsage | null;
-  getSearchUnavailableMessage(): string | null;
+  getSettings: () => SavedChatSettings;
+  getAvailableModels: () => ChatModelSelectOption[];
+  getAvailableIndexes: () => IndexProfileSelectOption[];
+  getContextFilePaths: () => string[];
+  getResearchMode: () => ResearchMode;
+  getAttachedContextPaths: () => string[];
+  getActiveFilePath: () => string | undefined;
+  shouldIncludeActiveFileContext: () => boolean;
+  isRunning: () => boolean;
+  getDraft: () => string;
+  onDraftChange: (draft: string) => void;
+  getContextWindowUsage: () => ContextWindowUsage | null;
+  getSearchUnavailableMessage: () => string | null;
   t: Translate;
-  onSubmit(): void;
-  onStop(): void;
-  onOpenContextPicker(): void;
-  onRemoveContextPath(path: string): void;
-  onUpdateModel(model: string): void;
-  onUpdateIndex(indexProfileId: string): void;
-  onUpdateContextMode(contextMode: ContextMode): void;
-  onUpdateSearchMode(searchMode: ResearchSearchMode): void;
-  onUpdateResearchMode(mode: ResearchMode): void;
+  onSubmit: () => void;
+  onStop: () => void;
+  onOpenContextPicker: () => void;
+  onRemoveContextPath: (path: string) => void;
+  onUpdateModel: (model: string) => void;
+  onUpdateIndex: (indexProfileId: string) => void;
+  onUpdateContextMode: (contextMode: ContextMode) => void;
+  onUpdateSearchMode: (searchMode: ResearchSearchMode) => void;
+  onUpdateResearchMode: (mode: ResearchMode) => void;
 }
 
 /** Owns chat-composer DOM references, rendering, and submit availability. */

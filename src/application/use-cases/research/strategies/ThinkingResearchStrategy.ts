@@ -130,7 +130,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             }));
           }
         }
-      } catch {}
+      } catch {
+        activeNoteEvidence = [];
+      }
     }
 
     const webSourceSelections: WebSourceSelectionDiagnostics[] = [];
@@ -455,9 +457,9 @@ function emitNestedSubAgentEvent(
     onEvent({
       type: "tool-call-start",
       parentId,
-      id: `${parentId}:${String(data.id ?? "")}`,
-      name: String(data.name ?? ""),
-      label: String(data.label ?? data.name ?? ""),
+      id: `${parentId}:${stringValue(data.id)}`,
+      name: stringValue(data.name),
+      label: stringValue(data.label) || stringValue(data.name),
       round: typeof data.round === "number" ? data.round : 0,
     });
     return;
@@ -466,12 +468,18 @@ function emitNestedSubAgentEvent(
     onEvent({
       type: "tool-call-end",
       parentId,
-      id: `${parentId}:${String(data.id ?? "")}`,
+      id: `${parentId}:${stringValue(data.id)}`,
       ok: data.ok === true,
       resolvedLabel: typeof data.resolvedLabel === "string" ? data.resolvedLabel : undefined,
       resultSummary: typeof data.resultSummary === "string" ? data.resultSummary : undefined,
     });
   }
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : "";
 }
 
 export function resolveThinkingMaxResultChars(input: {

@@ -37,19 +37,19 @@ const TITLE_MESSAGE_KEYS: Record<"edit" | "add", Record<"chat" | "embedding", Me
 
 export interface ModelProfileModalOptions<TProfile extends ModelProfile> {
   t: Translate;
-  getDirection?(): TextDirection;
+  getDirection?: () => TextDirection;
   kind: "chat" | "embedding";
   profile?: TProfile;
   servers: ServerProfile[];
   profiles: TProfile[];
   fetchedModelsByServerId: Map<string, DiscoveredModel[]>;
-  fetchModels(server: ServerProfile): Promise<DiscoveredModel[]>;
+  fetchModels: (server: ServerProfile) => Promise<DiscoveredModel[]>;
   fetchContextLength?: (server: ServerProfile, modelName: string) => Promise<number | undefined>;
-  onSave(profile: TProfile): Promise<void>;
-  onTest?(profile: TProfile): Promise<void>;
-  getCapabilityStatus?(profileId: string): CapabilityVerificationState;
-  subscribeCapabilityStatus?(listener: () => void): () => void;
-  resolveProfile?(profileId: string): TProfile | undefined;
+  onSave: (profile: TProfile) => Promise<void>;
+  onTest?: (profile: TProfile) => Promise<void>;
+  getCapabilityStatus?: (profileId: string) => CapabilityVerificationState;
+  subscribeCapabilityStatus?: (listener: () => void) => () => void;
+  resolveProfile?: (profileId: string) => TProfile | undefined;
 }
 
 export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {

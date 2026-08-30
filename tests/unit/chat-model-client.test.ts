@@ -126,11 +126,10 @@ describe("ChatModelClient", () => {
     );
   });
 
-  it("calls fetch with the global receiver for browser compatibility", async () => {
+  it("does not impose a receiver on an injected fetch transport", async () => {
+    let receiver: unknown = "not-called";
     const fetchMock = vi.fn(function (this: unknown) {
-      if (this !== globalThis) {
-        throw new TypeError("Illegal invocation");
-      }
+      receiver = this;
 
       return Promise.resolve(
         jsonResponse({
@@ -145,6 +144,7 @@ describe("ChatModelClient", () => {
     });
 
     await expect(client.listModels()).resolves.toEqual(["qwen3"]);
+    expect(receiver).toBeUndefined();
   });
 
   it("omits Authorization for OpenAI-compatible servers without an API key", async () => {

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-08-31
+
+### Changed
+
+- The Community Plugins description now highlights cited web search alongside vault research.
+- The manifest description no longer repeats the host application's name.
+- Settings are exposed to Obsidian's searchable settings API while retaining the legacy settings
+  renderer for supported older releases.
+
+### Fixed
+
+- Remaining automated review findings for platform globals, timers, callback binding, unsafe
+  values, redundant assertions and malformed-input fallbacks.
+
 ## [0.4.4] - 2026-08-30
 
 ### Fixed
@@ -190,7 +204,8 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.4...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.5...HEAD
+[0.4.5]: https://github.com/altavelor/attest_deep_research/compare/0.4.4...0.4.5
 [0.4.4]: https://github.com/altavelor/attest_deep_research/compare/0.4.3...0.4.4
 [0.4.3]: https://github.com/altavelor/attest_deep_research/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/altavelor/attest_deep_research/compare/0.3.0...0.4.2

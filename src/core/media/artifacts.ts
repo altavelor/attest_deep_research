@@ -109,7 +109,7 @@ export function isAnswerImage(value: unknown): value is AnswerImage {
 
 function isOptionalImageUrl(value: unknown): boolean {
   if (value === undefined) return true;
-  return isBoundedString(value, ARTIFACT_LIMITS.urlLength) && validateImageUrl(value as string).ok;
+  return isBoundedString(value, ARTIFACT_LIMITS.urlLength) && validateImageUrl(value).ok;
 }
 
 /** A vault-backed image may point at its document; anything else must be HTTPS. */
@@ -144,7 +144,7 @@ function isChartSeries(value: unknown): value is ChartSeries {
     value.points.length > 0 &&
     value.points.length <= ARTIFACT_LIMITS.chartPointsPerSeries &&
     value.points.every(isChartPoint) &&
-    hasUniqueCategories(value.points as ChartPoint[])
+    hasUniqueCategories(value.points)
   );
 }
 
@@ -188,7 +188,7 @@ export function isAnswerArtifact(value: unknown): value is AnswerArtifact {
       value.series.length > 0 &&
       value.series.length <= ARTIFACT_LIMITS.chartSeries &&
       value.series.every(isChartSeries) &&
-      (value.chartType !== "pie" || isDrawablePie(value.series as ChartSeries[]))
+      (value.chartType !== "pie" || isDrawablePie(value.series))
     );
   }
   return false;
@@ -200,7 +200,7 @@ export function isAnswerArtifact(value: unknown): value is AnswerArtifact {
  */
 export function isDrawablePie(series: readonly ChartSeries[]): boolean {
   if (series.length !== 1) return false;
-  const points = series[0]!.points;
+  const points = series[0].points;
   if (points.some((point) => point.y < 0)) return false;
   return points.reduce((total, point) => total + point.y, 0) > 0;
 }

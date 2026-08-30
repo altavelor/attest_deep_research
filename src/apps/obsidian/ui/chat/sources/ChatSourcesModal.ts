@@ -334,7 +334,9 @@ function renderProjectionEntry(
     details.createEl("summary", {
       text: `${boundedDisplayText(entry.source.title, MAX_DISPLAY_TITLE_CHARACTERS)} · ${entry.source.identity.kind}`,
     });
-    renderSourceIdentity(details, entry.source, entry.revision.chunks[0], options.onOpenChunk);
+    renderSourceIdentity(details, entry.source, entry.revision.chunks[0], (chunk) =>
+      options.onOpenChunk(chunk),
+    );
     sourceNode = {
       details,
       revisions: details.createDiv({ cls: "attest-chat-sources-modal__revision-list" }),
@@ -365,8 +367,12 @@ function renderProjectionEntry(
         topics: boundedDisplayText(entry.topics, MAX_DISPLAY_TOPICS_CHARACTERS) || "—",
       }),
     });
-    renderOpenSourceAction(revisionDetails, entry.revision, t, options.onOpenChunk);
-    renderRevisionUsages(revisionDetails, entry.revision, t, options.onNavigateMessage);
+    renderOpenSourceAction(revisionDetails, entry.revision, t, (chunk) =>
+      options.onOpenChunk(chunk),
+    );
+    renderRevisionUsages(revisionDetails, entry.revision, t, (messageIndex) =>
+      options.onNavigateMessage(messageIndex),
+    );
   };
   revisionDetails.addEventListener("toggle", () => {
     if (revisionDetails.open) renderBody();

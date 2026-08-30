@@ -46,8 +46,12 @@ export class FallbackModelRoundProvider implements ModelRoundProvider {
 function isClassifiedUnsupported(error: unknown): boolean {
   if (!isAttestError(error)) return false;
   if (error.code === "UNSUPPORTED_CAPABILITY") return true;
-  const providerCode = String(error.details?.providerCode ?? "").toLowerCase();
-  const providerMessage = String(error.details?.providerMessage ?? "").toLowerCase();
+  const providerCode =
+    typeof error.details?.providerCode === "string" ? error.details.providerCode.toLowerCase() : "";
+  const providerMessage =
+    typeof error.details?.providerMessage === "string"
+      ? error.details.providerMessage.toLowerCase()
+      : "";
   return (
     providerCode === "unsupported_parameter" ||
     /(?:unsupported|unknown) (?:endpoint|parameter|field).*(?:response|reasoning)/.test(

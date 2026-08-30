@@ -40,22 +40,19 @@ export function hasDecodableDimensions(data: Uint8Array, format: EligibleImageFo
 
 function u16(data: Uint8Array, offset: number): number | undefined {
   if (offset + 1 >= data.length) return undefined;
-  return (data[offset]! << 8) | data[offset + 1]!;
+  return (data[offset] << 8) | data[offset + 1];
 }
 
 function u32(data: Uint8Array, offset: number): number | undefined {
   if (offset + 3 >= data.length) return undefined;
   return (
-    data[offset]! * 0x1000000 +
-    (data[offset + 1]! << 16) +
-    (data[offset + 2]! << 8) +
-    data[offset + 3]!
+    data[offset] * 0x1000000 + (data[offset + 1] << 16) + (data[offset + 2] << 8) + data[offset + 3]
   );
 }
 
 function u16le(data: Uint8Array, offset: number): number | undefined {
   if (offset + 1 >= data.length) return undefined;
-  return data[offset]! | (data[offset + 1]! << 8);
+  return data[offset] | (data[offset + 1] << 8);
 }
 
 function readPngDimensions(data: Uint8Array): ImageDimensions | undefined {
@@ -84,7 +81,7 @@ function readJpegDimensions(data: Uint8Array): ImageDimensions | undefined {
       offset += 1;
       continue;
     }
-    const marker = data[offset + 1]!;
+    const marker = data[offset + 1];
     if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       offset += 2;
       continue;
@@ -110,7 +107,7 @@ function readWebpDimensions(data: Uint8Array): ImageDimensions | undefined {
   const isWebp = data[8] === 0x57 && data[9] === 0x45 && data[10] === 0x42 && data[11] === 0x50;
   if (!isRiff || !isWebp) return undefined;
 
-  const chunk = String.fromCharCode(data[12]!, data[13]!, data[14]!, data[15]!);
+  const chunk = String.fromCharCode(data[12], data[13], data[14], data[15]);
   if (chunk === "VP8 ") {
     const width = u16le(data, 26);
     const height = u16le(data, 28);
@@ -118,15 +115,15 @@ function readWebpDimensions(data: Uint8Array): ImageDimensions | undefined {
   }
   if (chunk === "VP8L") {
     if (data.length < 25) return undefined;
-    const bits = data[21]! | (data[22]! << 8) | (data[23]! << 16) | (data[24]! << 24);
+    const bits = data[21] | (data[22] << 8) | (data[23] << 16) | (data[24] << 24);
     const width = (bits & 0x3fff) + 1;
     const height = ((bits >> 14) & 0x3fff) + 1;
     return { width, height };
   }
   if (chunk === "VP8X") {
     if (data.length < 30) return undefined;
-    const width = 1 + (data[24]! | (data[25]! << 8) | (data[26]! << 16));
-    const height = 1 + (data[27]! | (data[28]! << 8) | (data[29]! << 16));
+    const width = 1 + (data[24] | (data[25] << 8) | (data[26] << 16));
+    const height = 1 + (data[27] | (data[28] << 8) | (data[29] << 16));
     return { width, height };
   }
   return undefined;
@@ -141,7 +138,7 @@ const MAX_ISOBMFF_SCAN_BYTES = 65_536;
  */
 function readAvifDimensions(data: Uint8Array): ImageDimensions | undefined {
   if (data.length < 16) return undefined;
-  const brand = String.fromCharCode(data[4]!, data[5]!, data[6]!, data[7]!);
+  const brand = String.fromCharCode(data[4], data[5], data[6], data[7]);
   if (brand !== "ftyp") return undefined;
   return findIspeBox(data, 0, Math.min(data.length, MAX_ISOBMFF_SCAN_BYTES), 0);
 }
@@ -159,10 +156,10 @@ function findIspeBox(
     const size = u32(data, offset);
     if (size === undefined) return undefined;
     const type = String.fromCharCode(
-      data[offset + 4]!,
-      data[offset + 5]!,
-      data[offset + 6]!,
-      data[offset + 7]!,
+      data[offset + 4],
+      data[offset + 5],
+      data[offset + 6],
+      data[offset + 7],
     );
     const boxEnd = size === 0 ? end : offset + size;
     if (size !== 0 && (size < 8 || boxEnd > end)) return undefined;

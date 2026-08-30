@@ -10,7 +10,6 @@ import {
   normalizeStaleRunState,
   type ChatHistoryActivity,
   type ChatSessionStatus,
-  type InterruptionReason,
   type SavedChatRunState,
 } from "@core/chat/chatSession";
 import {
@@ -553,7 +552,7 @@ export class ChatSessionManager {
       return {
         ...base,
         status: "interrupted",
-        interruptionReason: (state.interruptionReason ?? "user") as InterruptionReason,
+        interruptionReason: state.interruptionReason ?? "user",
       };
     }
     return { ...base, status: state.status === "failed" ? "failed" : "completed" };

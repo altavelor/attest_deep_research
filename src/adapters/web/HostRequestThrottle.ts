@@ -1,5 +1,7 @@
+import { scheduleTimeout } from "@shared";
+
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => scheduleTimeout(resolve, ms));
 }
 
 export interface HostRequestThrottleOptions {

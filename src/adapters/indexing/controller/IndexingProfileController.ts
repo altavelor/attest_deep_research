@@ -3,11 +3,11 @@ import { IndexingController, IndexingStateListener } from "./IndexingController"
 import { IndexingService, IndexingState } from "../IndexingService";
 
 export interface IndexingProfileControllerOptions {
-  getProfile(profileId: string): IndexProfile | undefined;
-  createService(profileId: string, onProgress: IndexingStateListener): IndexingService;
-  measureIndexSize?(profileId: string): Promise<number | null>;
-  onError?(error: unknown): void;
-  onComplete?(profileId: string, state: IndexingState): void | Promise<void>;
+  getProfile: (profileId: string) => IndexProfile | undefined;
+  createService: (profileId: string, onProgress: IndexingStateListener) => IndexingService;
+  measureIndexSize?: (profileId: string) => Promise<number | null>;
+  onError?: (error: unknown) => void;
+  onComplete?: (profileId: string, state: IndexingState) => void | Promise<void>;
 }
 
 export class IndexingProfileController {

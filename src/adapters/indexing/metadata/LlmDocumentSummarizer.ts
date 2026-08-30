@@ -79,8 +79,8 @@ export function parseDocumentSummary(
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+    const parsed = parseObject(text.slice(start, end + 1));
+    if (parsed) {
       const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
       const oneLiner = typeof parsed.oneLiner === "string" ? parsed.oneLiner.trim() : "";
       if (summary) {
@@ -89,7 +89,7 @@ export function parseDocumentSummary(
           oneLiner: (oneLiner || summary).slice(0, MAX_ONE_LINER_CHARS),
         };
       }
-    } catch {}
+    }
   }
   const fallback = text.trim().slice(0, MAX_DOCUMENT_SUMMARY_CHARS);
   const firstSentence = splitSentences(fallback)[0] ?? fallback;
@@ -97,4 +97,15 @@ export function parseDocumentSummary(
     summary: fallback || `Summary unavailable for ${input.sourcePath}.`,
     oneLiner: (firstSentence || fallback).slice(0, MAX_ONE_LINER_CHARS),
   };
+}
+
+function parseObject(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -1,3 +1,9 @@
+.setting-item.attest-settings-definition {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+
 .attest-root {
   display: flex;
   flex-direction: column;

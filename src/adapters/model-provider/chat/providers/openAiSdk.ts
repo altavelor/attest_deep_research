@@ -30,7 +30,7 @@ export function createOpenAiClient(options: OpenAiClientOptions): OpenAI {
 
   return new OpenAI({
     baseURL,
-    apiKey: hasApiKey ? (options.apiKey as string) : "lm-studio",
+    apiKey: hasApiKey ? options.apiKey : "lm-studio",
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
     timeout: options.timeoutMs ?? 30_000,
@@ -55,11 +55,7 @@ function createLoggingFetch(baseFetch: typeof fetch, options: LoggingFetchOption
 
     options.logger?.logRequest(logContext);
 
-    const response = await baseFetch.call(
-      globalThis,
-      input,
-      options.stripAuthorization ? effectiveInit : init,
-    );
+    const response = await baseFetch(input, options.stripAuthorization ? effectiveInit : init);
 
     options.logger?.logResponse({
       ...logContext,
@@ -68,7 +64,7 @@ function createLoggingFetch(baseFetch: typeof fetch, options: LoggingFetchOption
     });
 
     return response;
-  } as typeof fetch;
+  };
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -106,7 +102,7 @@ export function translateOpenAiError(
   if (error instanceof AttestError) return error;
 
   if (error instanceof APIError) {
-    const status = error.status;
+    const status: unknown = error.status;
     const details = providerErrorDetails(error, translation.apiKey);
     if (status === 404) {
       return new AttestError({
@@ -130,10 +126,8 @@ export function translateOpenAiError(
   });
 }
 
-function providerErrorDetails(
-  error: APIError,
-  apiKey: string | undefined,
-): Record<string, unknown> {
+function providerErrorDetails(error: unknown, apiKey: string | undefined): Record<string, unknown> {
+  if (!isRecord(error)) return {};
   const code = typeof error.code === "string" ? error.code.slice(0, 100) : undefined;
   const rawMessage =
     isRecord(error.error) && typeof error.error.message === "string"

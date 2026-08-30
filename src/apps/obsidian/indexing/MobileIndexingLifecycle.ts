@@ -6,10 +6,10 @@ export interface IndexingVisibilitySource {
 
 export interface MobileIndexingLifecycleOptions {
   visibility: IndexingVisibilitySource;
-  getBusyProfileId(): string | undefined;
-  getState(profileId: string): { status: string };
-  pause(profileId: string): void;
-  resume(profileId: string): void | Promise<unknown>;
+  getBusyProfileId: () => string | undefined;
+  getState: (profileId: string) => { status: string };
+  pause: (profileId: string) => void;
+  resume: (profileId: string) => void | Promise<unknown>;
 }
 
 /** Pauses mobile indexing while the app is hidden and resumes only the run it paused itself. */

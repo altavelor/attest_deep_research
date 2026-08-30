@@ -19,7 +19,7 @@ export interface WebSourceOptions {
 
   web?: ResearchModeWebParameters;
 
-  onSourceSelection?(diagnostics: WebSourceSelectionDiagnostics): void;
+  onSourceSelection?: (diagnostics: WebSourceSelectionDiagnostics) => void;
 }
 
 export class WebSource implements DataSource {

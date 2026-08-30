@@ -1,6 +1,6 @@
 import { isAttestError, AttestError } from "@core/errors";
 import { VaultFileSummary } from "@application/ports";
-import { positiveIntegerOrDefault } from "@shared";
+import { positiveIntegerOrDefault, scheduleTimeout } from "@shared";
 import type { IndexFailedSourceSnapshot } from "@application/ports";
 import type { ExtractedChunk } from "@core/model";
 import type { FileSnapshot } from "./pipeline/changeDetection";
@@ -321,7 +321,7 @@ function toPendingIndexedFile(
 }
 
 function defaultYieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => scheduleTimeout(resolve, 0));
 }
 
 function indexingErrorMessage(error: unknown): string {

@@ -49,10 +49,12 @@ export const stackExchangeDefinition: WebSourceDefinition = {
       const item = asRecord(entry);
       const answers = typeof item.answer_count === "number" ? item.answer_count : 0;
       const accepted = item.is_answered === true ? "accepted answer" : "no accepted answer";
+      const score =
+        typeof item.score === "number" || typeof item.score === "string" ? item.score : 0;
       return {
         title: decodeHtmlEntities(asString(item.title)),
         url: asString(item.link),
-        snippet: `${answers} answers · ${accepted} · score ${asString(String(item.score ?? 0))}`,
+        snippet: `${answers} answers · ${accepted} · score ${score}`,
       };
     }),
 };

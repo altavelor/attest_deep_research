@@ -60,15 +60,15 @@ export interface ChatComposerOptions {
   contextFilePaths: string[];
   researchMode: ResearchMode;
   t: Translate;
-  onSubmit(): void;
-  onStop(): void;
-  onQuestionInput?(): void;
-  onOpenContextPicker(): void;
-  onUpdateModel(model: string): void;
-  onUpdateIndex(indexProfileId: string): void;
-  onUpdateContextMode(contextMode: ContextMode): void;
-  onUpdateSearchMode(searchMode: ResearchSearchMode): void;
-  onUpdateResearchMode(mode: ResearchMode): void;
+  onSubmit: () => void;
+  onStop: () => void;
+  onQuestionInput?: () => void;
+  onOpenContextPicker: () => void;
+  onUpdateModel: (model: string) => void;
+  onUpdateIndex: (indexProfileId: string) => void;
+  onUpdateContextMode: (contextMode: ContextMode) => void;
+  onUpdateSearchMode: (searchMode: ResearchSearchMode) => void;
+  onUpdateResearchMode: (mode: ResearchMode) => void;
 }
 
 function searchModeItems(t: Translate): DropdownItem[] {
