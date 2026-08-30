@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const MUTATION_TOOLS = new Set(["create_note", "update_note", "delete_note"]);
@@ -270,11 +270,13 @@ export function sha256(text) {
 export function hashDirectory(directory) {
   const entries = [];
   const walk = (current, prefix) => {
-    for (const name of readdirSync(current).sort()) {
-      const full = join(current, name);
-      const relative = prefix ? `${prefix}/${name}` : name;
-      if (statSync(full).isDirectory()) walk(full, relative);
-      else entries.push(`${relative}:${sha256(readFileSync(full, "utf8"))}`);
+    const contents = readdirSync(current, { withFileTypes: true });
+    contents.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+    for (const entry of contents) {
+      const full = join(current, entry.name);
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(full, relative);
+      else if (entry.isFile()) entries.push(`${relative}:${sha256(readFileSync(full, "utf8"))}`);
     }
   };
   walk(directory, "");
