@@ -183,10 +183,11 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
     });
   }
 
-  const subAgentTelemetry =
-    thinking && (thinking.subAgents || thinking.mapSources)
-      ? { subAgents: thinking.subAgents, mapSources: thinking.mapSources }
-      : summarizeSubAgentTelemetry(tools);
+  const subAgentTelemetry = {
+    ...summarizeSubAgentTelemetry(tools),
+    ...(thinking?.subAgents ? { subAgents: thinking.subAgents } : {}),
+    ...(thinking?.mapSources ? { mapSources: thinking.mapSources } : {}),
+  };
 
   return {
     attempts: (d.attempts ?? []).map((a) => ({

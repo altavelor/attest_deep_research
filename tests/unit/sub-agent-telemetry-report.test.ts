@@ -266,6 +266,7 @@ describe("sub-agent telemetry in the diagnostic report", () => {
     expect(report.reasoning.thinkingLoop?.subAgents).toBeUndefined();
     expect(report.reasoning.thinkingLoop?.mapSources).toBeUndefined();
     expect(renderInternals(report)).not.toContain("Sub-agents");
+    expect(renderInternals(report)).not.toContain("Sub-agents (map_sources)");
   });
 
   it("renders both namespaces as separate blocks", () => {
@@ -294,9 +295,31 @@ describe("sub-agent telemetry in the diagnostic report", () => {
     );
 
     const html = renderInternals(report);
-    expect(html).toContain("Sub-agents");
-    expect(html).toContain("Sub-agents (map_sources)");
+    expect(html).toContain(">Sub-agents<");
+    expect(html).toContain(">Sub-agents (map_sources)<");
     expect(html).toContain("2.0 s");
     expect(html).toContain("700 ms");
+  });
+
+  it("renders the map_sources block alone when no sub-agent was launched directly", () => {
+    const report = buildDiagnosticReportV3(
+      diagnostics({
+        thinking: thinking(),
+        tools: [
+          {
+            id: "call-1",
+            name: "map_sources",
+            status: "success",
+            arguments: { question: "q" },
+            round: 1,
+            metadata: { mapSources: [telemetry({ runId: "map-1", durationMs: 700 })] },
+          },
+        ],
+      }),
+    );
+
+    const html = renderInternals(report);
+    expect(html).toContain("Sub-agents (map_sources)");
+    expect(html).not.toContain(">Sub-agents<");
   });
 });
