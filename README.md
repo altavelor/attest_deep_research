@@ -18,6 +18,24 @@ machine, or a cloud service you already use. Nothing leaves your vault unless yo
 
 > **Obsidian 1.5.0+ on desktop and mobile · cloud AI on iOS and Android**
 
+![Attest showing a cited answer alongside the note it created](references/plugin_preview.png)
+
+## Contents
+
+- [What you can do](#what-you-can-do)
+- [Installation](#installation)
+- [Quick start](#quick-start-ask-your-first-cited-question)
+- [Configuring providers](#configuring-providers)
+- [Indexing your vault](#indexing-your-vault)
+- [Research modes](#research-modes)
+- [Working with answers](#working-with-answers)
+- [Web search and privacy](#web-search-and-privacy)
+- [Compatibility and limitations](#compatibility-and-limitations)
+- [Diagnostics and troubleshooting](#diagnostics-and-troubleshooting)
+- [Help, development, and security](#help-development-and-security)
+- [Support the project](#support-the-project)
+- [License](#license)
+
 ## What you can do
 
 - **Ask across a whole set of notes at once** — pick the folders that matter and leave the rest out.
@@ -60,6 +78,8 @@ install it through **Settings → Community plugins**, then enable it and open
 
 If a step is unavailable, open the corresponding Settings section. Attest displays the status of
 each model and index profile.
+
+![Attest answering a question and opening its cited source](references/citation_source_demo.gif)
 
 ## Configuring providers
 
@@ -149,6 +169,8 @@ need a predictable short answer or when the model has not passed the capability 
 A multi-step mode for compatible models. It can search for additional sources and displays its
 progress in chat. If the model does not support the required capabilities, Attest explains why
 and falls back to Instant.
+
+![Attest using Thinking mode to search the web and create a cited note](references/thinking_web_demo.gif)
 
 ## Working with answers
 
