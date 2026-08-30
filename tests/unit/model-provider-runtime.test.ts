@@ -15,11 +15,12 @@ function server(apiFormat: ServerProfile["apiFormat"], baseUrl: string): ServerP
 }
 
 describe("model provider runtime", () => {
-  it("keeps direct fetch for mobile streaming and uses requestUrl for buffered calls", () => {
+  it("routes every mobile cloud request through requestUrl while desktop keeps direct fetch", () => {
     const cloud = server("openai-compatible", "https://api.example.test/v1");
 
-    expect(resolveProviderFetch(cloud, "streaming", true)).toBe(fetch);
+    expect(resolveProviderFetch(cloud, "streaming", true)).toBe(obsidianRequestFetch);
     expect(resolveProviderFetch(cloud, "buffered", true)).toBe(obsidianRequestFetch);
+    expect(resolveProviderFetch(cloud, "streaming", false)).toBe(fetch);
     expect(resolveProviderFetch(cloud, "buffered", false)).toBe(fetch);
   });
 
