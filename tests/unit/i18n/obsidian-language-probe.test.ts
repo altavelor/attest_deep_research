@@ -1,41 +1,23 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as Obsidian from "obsidian";
 
 import { readObsidianLanguage } from "@adapters/obsidian/ObsidianLanguageProbe";
 
 afterEach(() => {
   vi.restoreAllMocks();
-  window.localStorage.clear();
-  document.documentElement.removeAttribute("lang");
 });
 
 describe("Obsidian language probe", () => {
-  it("prefers the language Obsidian stored in local storage", () => {
-    window.localStorage.setItem("language", "ru");
-    document.documentElement.lang = "de";
+  it("reads the language through the supported Obsidian API", () => {
+    vi.spyOn(Obsidian, "getLanguage").mockReturnValue("ru");
 
     expect(readObsidianLanguage()).toBe("ru");
   });
 
-  it("falls back to the document language when local storage is empty", () => {
-    window.localStorage.setItem("language", "   ");
-    document.documentElement.lang = "fr";
-
-    expect(readObsidianLanguage()).toBe("fr");
-  });
-
-  it("survives a local storage that throws on access", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("access denied");
-    });
-    document.documentElement.lang = "es";
-
-    expect(readObsidianLanguage()).toBe("es");
-  });
-
-  it("reports no language when neither storage nor document declares one", () => {
-    vi.spyOn(window.navigator, "language", "get").mockReturnValue("");
+  it("reports no language when Obsidian returns an empty value", () => {
+    vi.spyOn(Obsidian, "getLanguage").mockReturnValue("   ");
 
     expect(readObsidianLanguage()).toBeUndefined();
   });

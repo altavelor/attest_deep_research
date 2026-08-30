@@ -24,3 +24,7 @@ export const Platform = {
   isSafari: false,
   resourcePathPrefix: "app://test/",
 };
+
+export function getLanguage(): string {
+  return "en";
+}

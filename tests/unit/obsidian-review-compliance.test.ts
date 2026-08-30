@@ -8,8 +8,19 @@ describe("Obsidian review compliance", () => {
     const manifest = JSON.parse(read("manifest.json")) as { minAppVersion: string };
     const versions = JSON.parse(read("versions.json")) as Record<string, string>;
 
-    expect(manifest.minAppVersion).toBe("1.6.6");
-    expect(versions["0.4.4"]).toBe("1.6.6");
+    expect(manifest.minAppVersion).toBe("1.8.7");
+    expect(versions["0.4.4"]).toBe("1.8.7");
+  });
+
+  it("uses Obsidian APIs for the active language and configuration directory", () => {
+    const defaults = read("src/adapters/settings/state/defaults.ts");
+    const indexingFactory = read("src/apps/obsidian/composition/indexingFactory.ts");
+    const languageProbe = read("src/adapters/obsidian/ObsidianLanguageProbe.ts");
+
+    expect(defaults).not.toContain(".obsidian");
+    expect(indexingFactory).toContain("ctx.app.vault.configDir");
+    expect(languageProbe).toContain("getLanguage");
+    expect(languageProbe).not.toMatch(/globalThis|localStorage/);
   });
 
   it("does not use regex lookbehind in shipped source", () => {

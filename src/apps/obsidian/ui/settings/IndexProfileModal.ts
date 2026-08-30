@@ -3,7 +3,11 @@ import { App, Modal, Notice, Setting } from "obsidian";
 import { IndexProfile } from "@adapters/indexing";
 import { parseNonNegativeInteger, parsePositiveInteger } from "@shared";
 import { MAX_PROFILE_NAME_LENGTH } from "@adapters/settings";
-import { DEFAULT_INDEX_PROFILE, createIndexProfile } from "@adapters/settings";
+import {
+  DEFAULT_INDEX_PROFILE,
+  createIndexProfile,
+  withVaultConfigExclusion,
+} from "@adapters/settings";
 import {
   createProfileId,
   hasDuplicateProfileName,
@@ -29,7 +33,7 @@ export class IndexProfileModal extends Modal {
   private name = this.options.profile?.name ?? "";
   private mode: IndexProfile["mode"] = this.options.profile?.mode ?? "wholeVault";
   private includeFolders = [...(this.options.profile?.includeFolders ?? [])];
-  private excludeGlobs = [...(this.options.profile?.excludeGlobs ?? [])];
+  private excludeGlobs: string[];
   private embeddingModelProfileId =
     this.options.profile?.embeddingModelProfileId ??
     this.resolveDefaultEmbeddingModelProfileId() ??
@@ -53,6 +57,10 @@ export class IndexProfileModal extends Modal {
     private readonly options: IndexProfileModalOptions,
   ) {
     super(app);
+    this.excludeGlobs = withVaultConfigExclusion(
+      this.options.profile?.excludeGlobs ?? DEFAULT_INDEX_PROFILE.excludeGlobs,
+      app.vault.configDir,
+    );
   }
 
   private resolveDefaultEmbeddingModelProfileId(): string | undefined {
