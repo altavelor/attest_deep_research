@@ -181,13 +181,19 @@ export class AttestChatView extends ItemView {
           .sort(),
       getResearchMode: () => this.currentResearchMode,
       getAttachedContextPaths: () => this.attachedContextPaths,
+      getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+      shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       isRunning: () => this.isRunning,
       getDraft: () => this.session.draft,
       onDraftChange: (draft) => this.sessions.update(this.session.sessionId, { draft }),
       getContextWindowUsage: () => this.getContextWindowUsage(),
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       t: this.t,
-      onSubmit: () => void this.researchController.submitQuestion(),
+      onSubmit: () => {
+        const activeFilePath = this.app.workspace.getActiveFile()?.path ?? null;
+        this.composer.renderAttachedContext(activeFilePath);
+        void this.researchController.submitQuestion(activeFilePath);
+      },
       onStop: () => {
         this.researchController.stopRunningQuestion();
         this.composer.setStopping();
@@ -441,7 +447,9 @@ export class AttestChatView extends ItemView {
     }
 
     if (action.submit) {
-      await this.researchController.submitQuestion();
+      const activeFilePath = this.app.workspace.getActiveFile()?.path ?? null;
+      this.composer.renderAttachedContext(activeFilePath);
+      await this.researchController.submitQuestion(activeFilePath);
     } else {
       await this.saveCurrentChat();
     }

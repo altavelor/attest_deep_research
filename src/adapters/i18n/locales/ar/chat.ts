@@ -68,6 +68,7 @@ export const chat: EnChatMessages = {
     "لا يدعم النموذج المحدد وضع الوكيل. شغّل اختبار القدرات في الإعدادات أو اختر نموذجًا يدعم وضع الوكيل.",
   "chat.composer.model.aria": "النموذج",
   "chat.composer.model.placeholder": "النموذج",
+  "chat.composer.attachment.activeFile": "الملف النشط (مضمّن تلقائيًا): {path}",
   "chat.composer.attachment.remove": "إزالة {path}",
   "chat.composer.submit.ask": "اسأل",
   "chat.composer.submit.stop": "أوقف الإجابة الحالية",

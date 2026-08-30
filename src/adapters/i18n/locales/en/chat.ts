@@ -67,6 +67,7 @@ export const chat = {
     "The selected model does not support Agent mode. Run the capability test in settings or pick an Agent-capable model.",
   "chat.composer.model.aria": "Model",
   "chat.composer.model.placeholder": "Model",
+  "chat.composer.attachment.activeFile": "Active file (included automatically): {path}",
   "chat.composer.attachment.remove": "Remove {path}",
   "chat.composer.submit.ask": "Ask",
   "chat.composer.submit.stop": "Stop the current answer",

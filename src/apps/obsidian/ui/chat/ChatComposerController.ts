@@ -5,6 +5,7 @@ import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ContextMode } from "@core/diagnostics";
 import type { ResearchMode } from "@core/research";
 import type { Translate } from "@adapters/i18n";
+import { isSupportedContextDocumentPath } from "@shared";
 import {
   ChatComposerRefs,
   ChatModelSelectOption,
@@ -22,6 +23,8 @@ export interface ChatComposerControllerOptions {
   getContextFilePaths(): string[];
   getResearchMode(): ResearchMode;
   getAttachedContextPaths(): string[];
+  getActiveFilePath(): string | undefined;
+  shouldIncludeActiveFileContext(): boolean;
   isRunning(): boolean;
   getDraft(): string;
   onDraftChange(draft: string): void;
@@ -167,19 +170,39 @@ export class ChatComposerController {
     setIcon(submitButtonEl, "loader");
   }
 
-  renderAttachedContext(): void {
+  renderAttachedContext(activeFilePath?: string | null): void {
     const refs = this.refs;
     if (!refs) {
       return;
     }
 
+    const activeFilePathForDisplay = this.activeFilePathForDisplay(activeFilePath);
+    const explicitlyAttachedPaths = this.options.getAttachedContextPaths();
+    const paths = [...explicitlyAttachedPaths];
+    if (activeFilePathForDisplay && !paths.includes(activeFilePathForDisplay)) {
+      paths.push(activeFilePathForDisplay);
+    }
+    const activeFileIsExplicitlyAttached =
+      activeFilePathForDisplay !== undefined &&
+      explicitlyAttachedPaths.includes(activeFilePathForDisplay);
     renderAttachedContext(
       refs.attachedContextEl,
-      this.options.getAttachedContextPaths(),
+      paths,
       this.options.onRemoveContextPath,
       this.options.t,
+      activeFileIsExplicitlyAttached ? undefined : activeFilePathForDisplay,
     );
-    refs.controls.setAttachmentsPresent(this.options.getAttachedContextPaths().length > 0);
+    refs.controls.setAttachmentsPresent(paths.length > 0);
+  }
+
+  private activeFilePathForDisplay(activeFilePath?: string | null): string | undefined {
+    if (!this.options.shouldIncludeActiveFileContext()) {
+      return undefined;
+    }
+
+    const candidate =
+      activeFilePath === undefined ? this.options.getActiveFilePath() : activeFilePath;
+    return candidate && isSupportedContextDocumentPath(candidate) ? candidate : undefined;
   }
 
   updateSubmitAvailability(): void {

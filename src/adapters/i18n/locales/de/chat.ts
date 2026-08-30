@@ -70,6 +70,7 @@ export const chat: EnChatMessages = {
     "Das ausgewählte Modell unterstützt den Agent-Modus nicht. Den Fähigkeitstest in den Einstellungen ausführen oder ein agentfähiges Modell wählen.",
   "chat.composer.model.aria": "Modell",
   "chat.composer.model.placeholder": "Modell",
+  "chat.composer.attachment.activeFile": "Aktive Datei (automatisch einbezogen): {path}",
   "chat.composer.attachment.remove": "{path} entfernen",
   "chat.composer.submit.ask": "Fragen",
   "chat.composer.submit.stop": "Aktuelle Antwort stoppen",

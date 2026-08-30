@@ -56,7 +56,12 @@ export class ResearchQuestionController {
     return this.options.isRunning();
   }
 
-  async submitQuestion(): Promise<void> {
+  async submitQuestion(activeFilePath?: string | null): Promise<void> {
+    const capturedActiveFilePath =
+      activeFilePath === undefined
+        ? this.options.getActiveFilePath()
+        : (activeFilePath ?? undefined);
+    const capturedIncludeActiveFile = this.options.shouldIncludeActiveFileContext();
     const sessionId = this.options.getSessionId();
     const question = this.options.getQuestionInput().trim();
     const model = this.options.getModelInputValue();
@@ -75,7 +80,13 @@ export class ResearchQuestionController {
       return;
     }
 
-    await this.runCapturedQuestion(sessionId, question, model);
+    await this.runCapturedQuestion(
+      sessionId,
+      question,
+      model,
+      capturedActiveFilePath,
+      capturedIncludeActiveFile,
+    );
   }
 
   /**
@@ -87,20 +98,35 @@ export class ResearchQuestionController {
     sessionId: string,
     question: string,
     model: string,
+    activeFilePath: string | undefined,
+    includeActiveFile: boolean,
   ): Promise<void> {
     const chatHistory = this.options.getMessages(sessionId);
     if (await this.historyCompactor.compactIfNeeded(sessionId, question)) {
-      return this.runCapturedQuestion(sessionId, question, model);
+      return this.runCapturedQuestion(
+        sessionId,
+        question,
+        model,
+        activeFilePath,
+        includeActiveFile,
+      );
     }
 
     if (this.rejectIfContextWindowExceeded(sessionId, question, chatHistory)) {
       return;
     }
 
-    await this.runQuestion(sessionId, question, model, { appendQuestion: true, chatHistory });
+    await this.runQuestion(sessionId, question, model, {
+      appendQuestion: true,
+      chatHistory,
+      activeFilePath,
+      includeActiveFile,
+    });
   }
 
   async submitEditedQuestion(index: number, value: string): Promise<void> {
+    const capturedActiveFilePath = this.options.getActiveFilePath();
+    const capturedIncludeActiveFile = this.options.shouldIncludeActiveFileContext();
     const sessionId = this.options.getSessionId();
     const question = value.trim();
     const model = this.options.getModelInputValue();
@@ -124,7 +150,12 @@ export class ResearchQuestionController {
     this.options.setEditingMessageIndex(null);
 
     if (hasAnswer) {
-      await this.runQuestion(sessionId, question, model, { appendQuestion: true, chatHistory });
+      await this.runQuestion(sessionId, question, model, {
+        appendQuestion: true,
+        chatHistory,
+        activeFilePath: capturedActiveFilePath,
+        includeActiveFile: capturedIncludeActiveFile,
+      });
       return;
     }
 
@@ -149,6 +180,8 @@ export class ResearchQuestionController {
       appendQuestion: false,
       chatHistory,
       contextPaths,
+      activeFilePath: capturedActiveFilePath,
+      includeActiveFile: capturedIncludeActiveFile,
     });
   }
 
@@ -164,6 +197,8 @@ export class ResearchQuestionController {
       appendQuestion: boolean;
       chatHistory: ChatDisplayMessage[];
       contextPaths?: string[];
+      activeFilePath: string | undefined;
+      includeActiveFile: boolean;
     },
   ): Promise<void> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
@@ -175,8 +210,8 @@ export class ResearchQuestionController {
       chatHistory: options.chatHistory,
       appendQuestion: options.appendQuestion,
       contextPaths,
-      activeFilePath: this.options.getActiveFilePath(),
-      includeActiveFile: this.options.shouldIncludeActiveFileContext(),
+      activeFilePath: options.activeFilePath,
+      includeActiveFile: options.includeActiveFile,
       includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
       modelLabel: this.options.getCurrentModelLabel(sessionId),
     });

@@ -53,6 +53,8 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     getContextFilePaths: () => ["Notes/One.md"],
     getResearchMode: () => "instant",
     getAttachedContextPaths: () => state.attachedContextPaths,
+    getActiveFilePath: () => undefined,
+    shouldIncludeActiveFileContext: () => false,
     isRunning: () => state.running,
     getContextWindowUsage: () => state.contextWindowUsage,
     getSearchUnavailableMessage: () => state.searchUnavailableMessage,
@@ -150,6 +152,66 @@ describe("chat composer redisplay", () => {
       (element) => element.textContent,
     );
     expect(names).toEqual(["One.md", "Folder"]);
+  });
+
+  it("shows the included active file as a non-removable attachment", () => {
+    createComposer({
+      getActiveFilePath: () => "Notes/Active.md",
+      shouldIncludeActiveFileContext: () => true,
+    });
+
+    const chip = container.querySelector<HTMLElement>(".attest-chat__attachment");
+    expect(chip?.classList.contains("attest-chat__attachment--active-file")).toBe(true);
+    expect(chip?.getAttribute("title")).toBe(
+      "Active file (included automatically): Notes/Active.md",
+    );
+    expect(
+      Array.from(
+        container.querySelectorAll(".attest-chat__attachment-name"),
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Active.md"]);
+    expect(container.querySelectorAll(".attest-chat__attachment button")).toHaveLength(0);
+    expect(
+      container
+        .querySelector(".attest-chat__dropdown--context-mode")
+        ?.parentElement?.classList.contains("is-hidden"),
+    ).toBe(false);
+  });
+
+  it("keeps a manually attached active file removable", () => {
+    const onRemoveContextPath = vi.fn();
+    createComposer({
+      getAttachedContextPaths: () => ["Notes/Active.md"],
+      getActiveFilePath: () => "Notes/Active.md",
+      shouldIncludeActiveFileContext: () => true,
+      onRemoveContextPath,
+    });
+
+    const removeButton = container.querySelector<HTMLButtonElement>(
+      ".attest-chat__attachment button",
+    );
+    const chip = container.querySelector<HTMLElement>(".attest-chat__attachment");
+    expect(chip?.classList.contains("attest-chat__attachment--active-file")).toBe(false);
+    expect(chip?.getAttribute("title")).toBe("Notes/Active.md");
+    expect(removeButton).not.toBeNull();
+    removeButton?.click();
+
+    expect(onRemoveContextPath).toHaveBeenCalledWith("Notes/Active.md");
+  });
+
+  it("does not show an unsupported active file as an attachment", () => {
+    createComposer({
+      getActiveFilePath: () => "Images/Active.png",
+      shouldIncludeActiveFileContext: () => true,
+    });
+
+    expect(container.querySelectorAll(".attest-chat__attachment-name")).toHaveLength(0);
+    expect(
+      container
+        .querySelector(".attest-chat__dropdown--context-mode")
+        ?.parentElement?.classList.contains("is-hidden"),
+    ).toBe(true);
   });
 });
 

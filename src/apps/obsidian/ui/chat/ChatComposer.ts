@@ -395,28 +395,38 @@ export function renderAttachedContext(
   paths: string[],
   onRemove: (path: string) => void,
   t: Translate,
+  activeFilePath?: string,
 ): void {
   containerEl.empty();
 
   for (const path of paths) {
     const isFolder = path.endsWith("/");
+    const isAutomaticActiveFile = path === activeFilePath;
     const chip = containerEl.createSpan({ cls: "attest-chat__attachment" });
-    chip.setAttr("title", path);
+    if (isAutomaticActiveFile) {
+      chip.addClass("attest-chat__attachment--active-file");
+    }
+    chip.setAttr(
+      "title",
+      isAutomaticActiveFile ? t("chat.composer.attachment.activeFile", { path }) : path,
+    );
     setIcon(
       chip.createSpan({ cls: "attest-chat__attachment-icon" }),
       isFolder ? "folder" : "file-text",
     );
     chip.createSpan({ cls: "attest-chat__attachment-name", text: attachmentDisplayName(path) });
-    const removeLabel = t("chat.composer.attachment.remove", { path });
-    const removeButton = chip.createEl("button", {
-      attr: {
-        type: "button",
-        "aria-label": removeLabel,
-        title: removeLabel,
-      },
-    });
-    setIcon(removeButton, "x");
-    removeButton.addEventListener("click", () => onRemove(path));
+    if (!isAutomaticActiveFile) {
+      const removeLabel = t("chat.composer.attachment.remove", { path });
+      const removeButton = chip.createEl("button", {
+        attr: {
+          type: "button",
+          "aria-label": removeLabel,
+          title: removeLabel,
+        },
+      });
+      setIcon(removeButton, "x");
+      removeButton.addEventListener("click", () => onRemove(path));
+    }
   }
 }
 
