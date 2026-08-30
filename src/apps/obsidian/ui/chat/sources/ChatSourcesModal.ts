@@ -107,6 +107,7 @@ export class ChatSourcesModal extends Modal {
               this.close();
               this.options.onOpenChunk(chunk);
             },
+            onOpenSourceLink: (chunk) => this.options.onOpenChunk(chunk),
           },
           Boolean(search.value),
         );
@@ -327,6 +328,7 @@ function renderProjectionEntry(
     targetRevisionId?: string;
     onNavigateMessage(messageId: string): void;
     onOpenChunk(chunk: RetrievedChunk): void;
+    onOpenSourceLink(chunk: RetrievedChunk): void;
   },
   searching: boolean,
 ): void {
@@ -337,7 +339,7 @@ function renderProjectionEntry(
     details.createEl("summary", {
       text: `${boundedDisplayText(entry.source.title, MAX_DISPLAY_TITLE_CHARACTERS)} · ${entry.source.identity.kind}`,
     });
-    renderSourceIdentity(details, entry.source, entry.revision.chunks[0], options.onOpenChunk);
+    renderSourceIdentity(details, entry.source, entry.revision.chunks[0], options.onOpenSourceLink);
     sourceNode = {
       details,
       revisions: details.createDiv({ cls: "attest-chat-sources-modal__revision-list" }),
@@ -381,7 +383,7 @@ function renderSourceIdentity(
   container: HTMLElement,
   source: ConversationSource,
   firstChunk: RetrievedChunk | undefined,
-  onOpenChunk: (chunk: RetrievedChunk) => void,
+  onOpenSourceLink: (chunk: RetrievedChunk) => void,
 ): void {
   const identity = container.createDiv({ cls: "attest-chat-sources-modal__identity" });
   const displayIdentity = boundedDisplayText(
@@ -405,7 +407,7 @@ function renderSourceIdentity(
     link.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      onOpenChunk(firstChunk);
+      onOpenSourceLink(firstChunk);
     });
     return;
   }

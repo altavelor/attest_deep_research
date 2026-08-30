@@ -295,6 +295,7 @@ describe("ChatSourcesModal", () => {
     link?.click();
 
     expect(openChunk).toHaveBeenCalledWith(localChunk);
+    expect(modal.contentEl.querySelector(".attest-chat-sources-modal__identity a")).not.toBeNull();
   });
 
   it("renders web source identities as links opened in the default browser", () => {
