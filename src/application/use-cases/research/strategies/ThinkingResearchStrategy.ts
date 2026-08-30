@@ -174,6 +174,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       request.forceSubAgent === true && created.tools.has(SUB_AGENT_TOOL)
         ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
         : policy;
+    const promptAssemblyIssues: string[] = [];
     const messages = buildThinkingResearchMessages({
       question,
       chatHistory: request.chatHistory,
@@ -182,9 +183,15 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       conversationRegistry: request.conversationRegistry,
       attachedFiles: assembled?.attachments,
       toolContext: {
-        coreVariant: searchMode === "none" ? "vault" : "research",
         availableTools: created.tools.definitions().map((d) => d.function.name),
         indexDescription: indexDescription?.text,
+        parallelToolCalls: effectivePolicy.parallelToolCalls,
+      },
+      onAssemblyIssue: (issue) => {
+        promptAssemblyIssues.push(
+          `Prompt section "${issue.sectionId}" reported ${issue.code} (${issue.detail}); ` +
+            `${issue.dropped ? "the section was dropped" : "the section was kept"}.`,
+        );
       },
     });
     const estimatedTokens =
@@ -342,6 +349,11 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       diagnostics.webSourceSelections = webSourceSelections;
       if (omittedWebSourceSelections > 0) {
         diagnostics.omittedWebSourceSelections = omittedWebSourceSelections;
+      }
+    }
+    for (const warning of promptAssemblyIssues) {
+      if (!diagnostics.warnings.includes(warning)) {
+        diagnostics.warnings.push(warning);
       }
     }
     const degradation = semanticDegradationWarning(

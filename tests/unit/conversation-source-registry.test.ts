@@ -269,7 +269,7 @@ describe("conversation source registry", () => {
       question: `Use ${explicitRevisionId}`,
       requiredTools: [],
       conversationRegistry: view,
-      toolContext: { coreVariant: "research", availableTools: [] },
+      toolContext: { availableTools: [] },
     })[0].content;
     expect(instantPrompt).toContain(`Conversation source registry:\n${view.catalogText}`);
     expect(thinkingSystemPrompt).toContain(view.catalogText);

@@ -1,7 +1,7 @@
 import { parseSubAgentDirective } from "@core/research";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
-import { SubAgentPort } from "@application/research";
+import { SubAgentPort, SubAgentTelemetry } from "@application/research";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
@@ -505,5 +505,227 @@ describe("createResearchToolRegistry run_subagent gating", () => {
       subAgentRunner: runner,
     });
     expect(created.tools.has("run_subagent")).toBe(true);
+  });
+});
+
+describe("SubAgentRunner telemetry", () => {
+  function searchCallRound(id: string) {
+    return {
+      items: [
+        {
+          type: "toolCall" as const,
+          call: { id, name: "search_web", arguments: { query: `q-${id}`, limit: 3 } },
+        },
+      ],
+      stopReason: "tool_calls" as const,
+    };
+  }
+
+  function textRound(text: string) {
+    return { items: [{ type: "text" as const, text }], stopReason: "complete" as const };
+  }
+
+  function scriptedRounds(
+    handler: (
+      request: ModelRoundRequest,
+      index: number,
+    ) => ModelRoundResult | Promise<ModelRoundResult>,
+  ): ModelRoundProvider {
+    let index = 0;
+    return {
+      async listModels() {
+        return ["m"];
+      },
+      async runRound(request: ModelRoundRequest) {
+        index += 1;
+        return handler(request, index);
+      },
+    };
+  }
+
+  function webResult(query: string) {
+    return {
+      source: webSource("https://e.com/x"),
+      extractedText: "benchmark text",
+      rank: 1,
+      query,
+    };
+  }
+
+  function runnerWith(modelRound: ModelRoundProvider, results = [webResult("q-1")]) {
+    return new SubAgentRunner({
+      toolsetFactory: createResearchToolRegistry,
+      searchProvider: new FakeSearchProvider(results),
+      modelRound,
+      model: "m",
+    });
+  }
+
+  it("reports the round limit as a closed failure reason", async () => {
+    const runner = runnerWith(
+      scriptedRounds((request, index) =>
+        request.toolChoice?.type === "none"
+          ? textRound("Synthesized.")
+          : searchCallRound(String(index)),
+      ),
+      [webResult("q-1"), webResult("q-2")],
+    );
+
+    const result = await runner.run({ task: "What is X?", budget: { maxRounds: 2 } });
+
+    expect(result.telemetry).toMatchObject({
+      hitRoundLimit: true,
+      failureReason: "model-round-limit-exceeded",
+      rounds: 2,
+      maxRounds: 2,
+      usedSynthesisFallback: true,
+    });
+    expect(result.telemetry?.runId).toMatch(/\S/);
+    expect(typeof result.telemetry?.usage.inputTokens).toBe("number");
+  });
+
+  it("splits performed search calls from calls the search budget refused", async () => {
+    const runner = runnerWith(
+      scriptedRounds((request, index) =>
+        request.toolChoice?.type === "none" || index > 2
+          ? textRound("Answer.")
+          : searchCallRound(String(index)),
+      ),
+      [webResult("q-1"), webResult("q-2")],
+    );
+
+    const result = await runner.run({ task: "What is X?", budget: { maxSearches: 1 } });
+
+    expect(result.answerText).toBe("Answer.");
+    expect(result.telemetry).toMatchObject({
+      searchCalls: 1,
+      maxSearches: 1,
+      searchBudgetRejections: 1,
+      hitRoundLimit: false,
+      toolCalls: 2,
+      usedSynthesisFallback: false,
+    });
+    expect(result.telemetry?.failureReason).toBeUndefined();
+  });
+
+  it("keeps the loop duration equal to the run duration without a synthesis pass", async () => {
+    const runner = runnerWith(scriptedRounds(() => textRound("Answer.")));
+
+    const result = await runner.run({ task: "What is X?" });
+
+    expect(result.telemetry?.usedSynthesisFallback).toBe(false);
+    expect(result.telemetry?.loopDurationMs).toBe(result.telemetry?.durationMs);
+    expect(result.telemetry?.answerChars).toBe("Answer.".length);
+  });
+
+  it("charges the synthesis pass to the run duration only", async () => {
+    const runner = runnerWith(
+      scriptedRounds(async (request, index) => {
+        if (request.toolChoice?.type === "none") {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return textRound("Synthesized from evidence.");
+        }
+        return index === 1 ? searchCallRound("1") : textRound("");
+      }),
+    );
+
+    const result = await runner.run({ task: "What is X?" });
+
+    expect(result.answerText).toBe("Synthesized from evidence.");
+    expect(result.telemetry?.usedSynthesisFallback).toBe(true);
+    expect(result.telemetry!.loopDurationMs).toBeLessThan(result.telemetry!.durationMs);
+  });
+});
+
+describe("SubAgentTool telemetry", () => {
+  const emptySnapshot = { evidence: [], citations: [], provenance: [] };
+
+  function telemetry(overrides: Partial<SubAgentTelemetry> = {}): SubAgentTelemetry {
+    return {
+      runId: "run-1",
+      durationMs: 120,
+      loopDurationMs: 100,
+      rounds: 3,
+      maxRounds: 12,
+      hitRoundLimit: false,
+      toolCalls: 4,
+      duplicateToolCalls: 1,
+      searchCalls: 2,
+      maxSearches: 8,
+      searchBudgetRejections: 0,
+      usedSynthesisFallback: false,
+      answerChars: 7,
+      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0 },
+      ...overrides,
+    };
+  }
+
+  it("returns one telemetry record in diagnostic, never in the model-visible value", async () => {
+    const runner: SubAgentPort = {
+      run: async () => ({ answerText: "Answer.", snapshot: emptySnapshot, telemetry: telemetry() }),
+    };
+    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+
+    const result = await tool.execute({ task: "What is X?", maxSearches: 8 }, toolContext());
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostic).toMatchObject({
+      runId: "run-1",
+      durationMs: 120,
+      loopDurationMs: 100,
+      searchCalls: 2,
+      sourceCount: 0,
+      droppedSourceCount: 0,
+      evidenceBudgetExhausted: false,
+    });
+    expect(JSON.stringify(result.ok ? result.value : {})).not.toContain("runId");
+  });
+
+  it("still reports one telemetry record when the runner throws", async () => {
+    const runner: SubAgentPort = {
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        throw new Error("sub-agent exploded");
+      },
+    };
+    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+
+    const result = await tool.execute({ task: "What is X?", maxSearches: 8 }, toolContext());
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostic).toMatchObject({
+      runId: "call-1",
+      failureReason: "tool-exception",
+      rounds: 0,
+      toolCalls: 0,
+      duplicateToolCalls: 0,
+      searchCalls: 0,
+      searchBudgetRejections: 0,
+      hitRoundLimit: false,
+      usedSynthesisFallback: false,
+      answerChars: 0,
+      sourceCount: 0,
+      usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    });
+    expect(result.diagnostic?.durationMs).toBeGreaterThan(0);
+  });
+
+  it("reports a cancelled run as cancelled, not as a tool exception", async () => {
+    const controller = new AbortController();
+    const runner: SubAgentPort = {
+      run: async () => {
+        controller.abort();
+        throw new Error("aborted");
+      },
+    };
+    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+
+    const result = await tool.execute(
+      { task: "What is X?", maxSearches: 8 },
+      toolContext({ signal: controller.signal }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostic).toMatchObject({ failureReason: "cancelled" });
   });
 });

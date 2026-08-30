@@ -4,6 +4,8 @@ export const MAX_WEB_QUERIES_PER_CALL = 4;
 
 export const MAX_WEB_QUERY_CHARS = 240;
 
+export const MAX_WEB_FETCH_RESULT_IDS = 10;
+
 export const WEB_QUERY_INTENTS = ["academic", "code", "news", "encyclopedic", "general"] as const;
 
 export type WebQueryIntent = (typeof WEB_QUERY_INTENTS)[number];

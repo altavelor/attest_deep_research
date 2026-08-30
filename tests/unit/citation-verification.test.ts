@@ -60,12 +60,40 @@ describe("verifyCitations", () => {
     expect(verifyCitations(answer, evidence, noUrls)).toEqual(["e1"]);
   });
 
-  it("does not flag an id when at least one occurrence is well-supported", () => {
+  it("flags an id with mixed occurrences even when a later one is well-supported", () => {
     const evidence = [
       chunk("e1", "Photosynthesis converts sunlight into chemical energy in plants."),
     ];
     const answer =
-      "Unrelated boilerplate sentence here [e1]. Photosynthesis converts sunlight into chemical energy [e1].";
+      "Quarterly revenue grew by forty percent driven by cloud subscription sales [e1]. Photosynthesis converts sunlight into chemical energy [e1].";
+    expect(verifyCitations(answer, evidence, noUrls)).toEqual(["e1"]);
+  });
+
+  it("flags an id whose first occurrence is supported and a later one is not", () => {
+    const evidence = [
+      chunk("e1", "Photosynthesis converts sunlight into chemical energy in plants."),
+    ];
+    const unrelated =
+      "Quarterly revenue grew by forty percent driven by cloud subscription sales, while " +
+      "operating margin widened after the reorganisation of the regional distribution network " +
+      "and the retirement of two legacy hardware lines during the reporting period";
+    const answer = `Photosynthesis converts sunlight into chemical energy [e1]. ${unrelated} [e1].`;
+    expect(unrelated.length).toBeGreaterThan(240);
+    expect(verifyCitations(answer, evidence, noUrls)).toEqual(["e1"]);
+  });
+
+  it("does not flag a well-supported id repeated across neighbouring claims", () => {
+    const evidence = [
+      chunk(
+        "e1",
+        "Photosynthesis converts sunlight into chemical energy in plants, and the same " +
+          "chloroplasts also release oxygen as a by-product of the reaction.",
+      ),
+    ];
+    const answer = [
+      "- Photosynthesis converts sunlight into chemical energy in plants [e1].",
+      "- The chloroplasts also release oxygen as a by-product of the reaction [e1].",
+    ].join("\n");
     expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
   });
 

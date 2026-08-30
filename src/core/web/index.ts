@@ -36,6 +36,7 @@ export {
   MAX_WEB_RESULT_LIMIT,
   MAX_WEB_QUERIES_PER_CALL,
   MAX_WEB_QUERY_CHARS,
+  MAX_WEB_FETCH_RESULT_IDS,
 } from "./queryPlanning";
 export type { WebQueryIntent } from "./queryPlanning";
 

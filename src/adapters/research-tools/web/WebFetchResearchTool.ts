@@ -1,3 +1,4 @@
+import { MAX_WEB_FETCH_RESULT_IDS } from "@core/web";
 import { SearchProvider } from "@application/ports";
 import { EvidenceRegistry } from "@application/sources";
 import { ToolError, ToolParseResult, toolFailure } from "@core/agent";
@@ -9,7 +10,7 @@ import {
   responseBytesForBatch,
 } from "./fetchRegisteredWebPage";
 
-const MAX_RESULT_IDS = 10;
+const MAX_RESULT_IDS = MAX_WEB_FETCH_RESULT_IDS;
 const MAX_RESULT_ID_LENGTH = 200;
 
 interface FetchWebPagesInput {

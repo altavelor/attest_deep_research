@@ -19,9 +19,10 @@ export interface CitationVerificationOptions {
 }
 
 /**
- * Returns the distinct evidence ids whose surrounding claim does not lexically
- * overlap the cited chunk. Only chunks present in `evidence` are checked; unknown
- * ids are handled separately (unknownCitationIds).
+ * Returns the distinct evidence ids for which at least one occurrence's surrounding
+ * claim does not lexically overlap the cited chunk. Aggregation is conservative: a
+ * label with mixed occurrences counts as unverified. Unknown ids are handled
+ * separately (unknownCitationIds).
  */
 export function verifyCitations(
   answerText: string,
@@ -34,7 +35,6 @@ export function verifyCitations(
   }
 
   const unverified = new Set<string>();
-  const verified = new Set<string>();
 
   const evidenceIds = new Set(evidence.map((chunk) => chunk.id));
   for (const occurrence of citationOccurrences(answerText, evidenceIds)) {
@@ -45,7 +45,7 @@ export function verifyCitations(
       continue;
     }
     const target = chunkShingles.get(evidenceId);
-    if (!target || verified.has(evidenceId)) {
+    if (!target) {
       continue;
     }
 
@@ -56,10 +56,7 @@ export function verifyCitations(
       continue;
     }
 
-    if (overlapRatio(claimShingles, target) >= OVERLAP_THRESHOLD) {
-      verified.add(evidenceId);
-      unverified.delete(evidenceId);
-    } else {
+    if (overlapRatio(claimShingles, target) < OVERLAP_THRESHOLD) {
       unverified.add(evidenceId);
     }
   }

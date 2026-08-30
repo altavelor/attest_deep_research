@@ -1,4 +1,5 @@
 import { ChatMessage, ModelRoundProvider } from "@core/agent";
+import type { ToolCallDiagnostic } from "@core/diagnostics";
 import { ResearchExecutionPolicy } from "@core/research";
 import { buildSubAgentFraming, buildThinkingResearchMessages } from "@core/research";
 import { sourceLabel } from "@core/retrieval";
@@ -14,8 +15,10 @@ import {
   SubAgentPort,
   SubAgentRunInput,
   SubAgentRunResult,
+  SubAgentTelemetry,
 } from "@application/research/subAgentPort";
 import { ThinkingResearchRunner } from "../ThinkingResearchRunner";
+import { searchTool } from "../thinkingToolExecution";
 import { looksLikeLeakedToolCall } from "./leakedToolCallMarkup";
 
 export interface SubAgentRunnerDeps {
@@ -40,6 +43,7 @@ const DEFAULT_MAX_ROUNDS = 12;
 const DEFAULT_MAX_SEARCHES = 8;
 const DEFAULT_MAX_RESULT_CHARS = 30_000;
 const SYNTHESIS_EXCERPT_CHARS = 1_500;
+const SEARCH_BUDGET_REJECTION = "search-budget-exhausted";
 
 const SUB_AGENT_POLICY: ResearchExecutionPolicy = Object.freeze({
   strategy: "thinking",
@@ -102,8 +106,8 @@ export class SubAgentRunner implements SubAgentPort {
       question: input.task,
       requiredTools: [],
       toolContext: {
-        coreVariant: "research",
         availableTools: created.tools.definitions().map((definition) => definition.function.name),
+        parallelToolCalls: SUB_AGENT_POLICY.parallelToolCalls,
       },
     });
     messages.splice(1, 0, {
@@ -141,11 +145,13 @@ export class SubAgentRunner implements SubAgentPort {
       },
     }).run();
 
+    const loopDurationMs = Date.now() - startedAt;
+    const failureReason = result.ok ? undefined : result.reason;
     let answerText = result.ok ? result.answerText : "";
     log({
       type: "loop-complete",
       ok: result.ok,
-      reason: result.ok ? undefined : result.reason,
+      reason: failureReason,
       rounds: result.rounds,
       totalCalls: result.totalCalls,
       duplicateCalls: result.duplicateCalls,
@@ -153,7 +159,7 @@ export class SubAgentRunner implements SubAgentPort {
       stopReasons: result.stopReasons,
       answerChars: answerText.length,
       usage: result.usage,
-      durationMs: Date.now() - startedAt,
+      durationMs: loopDurationMs,
     });
 
     const snapshot = created.evidence.snapshot();
@@ -164,14 +170,34 @@ export class SubAgentRunner implements SubAgentPort {
       answerText = await this.synthesizeFromEvidence(input, snapshot, log);
     }
 
+    const durationMs = usedSynthesisFallback ? Date.now() - startedAt : loopDurationMs;
     log({
       type: "session-complete",
       sourceCount: snapshot.evidence.length,
       usedSynthesisFallback,
-      durationMs: Date.now() - startedAt,
+      durationMs,
     });
 
-    return { answerText, snapshot };
+    const searches = countSearchCalls(result.diagnostics);
+    const telemetry: SubAgentTelemetry = {
+      runId: newRunId(),
+      durationMs,
+      loopDurationMs,
+      rounds: result.rounds,
+      maxRounds,
+      hitRoundLimit: failureReason === "model-round-limit-exceeded",
+      ...(failureReason ? { failureReason } : {}),
+      toolCalls: result.totalCalls,
+      duplicateToolCalls: result.duplicateCalls,
+      searchCalls: searches.performed,
+      maxSearches,
+      searchBudgetRejections: searches.rejected,
+      usedSynthesisFallback,
+      answerChars: answerText.length,
+      usage: result.usage,
+    };
+
+    return { answerText, snapshot, telemetry };
   }
 
   private async synthesizeFromEvidence(
@@ -236,6 +262,28 @@ export class SubAgentRunner implements SubAgentPort {
       return "";
     }
   }
+}
+
+/**
+ * Splits the search tool calls of one loop into calls that ran and calls the
+ * runtime refused because the search budget was already spent.
+ */
+function countSearchCalls(diagnostics: readonly ToolCallDiagnostic[]): {
+  performed: number;
+  rejected: number;
+} {
+  let performed = 0;
+  let rejected = 0;
+  for (const diagnostic of diagnostics) {
+    if (!searchTool(diagnostic.name)) continue;
+    if (diagnostic.reason === SEARCH_BUDGET_REJECTION) rejected += 1;
+    else performed += 1;
+  }
+  return { performed, rejected };
+}
+
+function newRunId(): string {
+  return `sub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
