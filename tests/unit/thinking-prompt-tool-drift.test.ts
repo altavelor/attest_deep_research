@@ -247,6 +247,12 @@ describe("parallel capability plumbing", () => {
     expect(sources.ThinkingResearchStrategy).toContain("diagnostics.warnings.push(warning)");
   });
 
+  it("forwards every assembly issue from the builder to its hook", () => {
+    const builder = readFileSync("src/core/research/thinkingPrompts.ts", "utf8");
+    expect(builder).toContain("for (const issue of assembled.issues)");
+    expect(builder).toContain("options.onAssemblyIssue?.(issue)");
+  });
+
   it("keeps the field optional so existing callers still compile", () => {
     const messages = buildThinkingResearchMessages({
       question: "Q",
