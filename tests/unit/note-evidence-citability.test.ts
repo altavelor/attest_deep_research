@@ -119,6 +119,90 @@ describe("note reads register citable evidence", () => {
     expect(evidence.snapshot().evidence).toEqual([]);
   });
 
+  it("survives a malformed chunk payload without failing the call", async () => {
+    const evidence = new ResearchEvidenceRegistry();
+    const service = {
+      execute: async () =>
+        ({
+          ok: true,
+          result: JSON.stringify({
+            ok: true,
+            chunks: [
+              null,
+              {},
+              { id: 1 },
+              { id: "a", text: 1 },
+              { id: "b", text: "t" },
+              { id: "c", text: "t", evidenceSource: {} },
+              { id: "d", text: "t", evidenceSource: { kind: 7 } },
+              { id: "e", text: "t", evidenceSource: [] },
+            ],
+          }),
+        }) as never,
+    } as unknown as NoteToolService;
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    const execution = await call(tools, READ_NOTE_TOOL, { path: "A.md" });
+    expect(execution.ok).toBe(true);
+    expect(evidence.snapshot().evidence).toEqual([]);
+  });
+
+  it("does not let a later read overwrite an already registered chunk", async () => {
+    const { evidence, tools } = harness();
+    await call(tools, READ_NOTE_TOOL, { path: "Research/Caffeine.md" }, "call-1");
+    const first = evidence.snapshot().evidence[0];
+    await call(tools, READ_NOTE_TOOL, { path: "Research/Caffeine.md" }, "call-9");
+
+    const after = evidence.snapshot().evidence.filter((chunk) => chunk.id === first.id);
+    expect(after).toHaveLength(1);
+    expect(after[0].text).toBe(first.text);
+  });
+
+  it("stops registering once the per-run chunk ceiling is reached", async () => {
+    const evidence = new ResearchEvidenceRegistry();
+    let call = 0;
+    const service = {
+      execute: async () => {
+        call += 1;
+        return {
+          ok: true,
+          result: JSON.stringify({
+            ok: true,
+            chunks: Array.from({ length: 40 }, (_, index) => ({
+              id: `c-${call}-${index}`,
+              text: "content",
+              evidenceSource: {
+                id: "s",
+                kind: "markdown",
+                title: "A",
+                path: "A.md",
+                headingPath: [],
+              },
+            })),
+          }),
+        } as never;
+      },
+    } as unknown as NoteToolService;
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    for (const id of ["a", "b", "c"]) {
+      const execution = await tools.execute({
+        id,
+        name: READ_NOTE_TOOL,
+        arguments: { path: "A.md" },
+      });
+      expect(execution.ok).toBe(true);
+    }
+    expect(evidence.snapshot().evidence.length).toBeLessThanOrEqual(60);
+    expect(evidence.snapshot().evidence.length).toBeGreaterThan(0);
+  });
+
   it("works without a registry, leaving the tool result unchanged", async () => {
     const service = new NoteToolService({
       files: new MemoryFiles(FILES),

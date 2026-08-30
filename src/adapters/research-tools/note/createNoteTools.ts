@@ -32,11 +32,14 @@ interface NoteToolSpec {
 interface NoteToolDeps {
   service: NoteToolService;
   evidence?: EvidenceRegistry;
+  registeredChunks?: { count: number };
 }
 
 type NoteEvidenceTool = "read_note" | "get_active_note";
 
 const EVIDENCE_TOOLS = new Set<string>([READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL]);
+
+const MAX_REGISTERED_NOTE_CHUNKS = 60;
 
 /** Shared thin delegation: hand the call to the service and adapt its DTO. */
 async function runNoteTool(
@@ -62,8 +65,14 @@ async function runNoteTool(
     return toolFailure(reason, `Note tool ${name} failed.`, false, hint ? { hint } : undefined);
   }
 
-  if (deps.evidence && EVIDENCE_TOOLS.has(name)) {
-    registerReadChunks(deps.evidence, name as NoteEvidenceTool, value, context.callId);
+  if (deps.evidence && deps.registeredChunks && EVIDENCE_TOOLS.has(name)) {
+    registerReadChunks(
+      deps.evidence,
+      deps.registeredChunks,
+      name as NoteEvidenceTool,
+      value,
+      context.callId,
+    );
   }
 
   return { ok: true, value, diagnostic: execution.diagnostic };
@@ -71,11 +80,13 @@ async function runNoteTool(
 
 /**
  * Registers the chunks a note read returned so their `evidenceId` becomes a citable
- * token. Silently skips a payload that does not carry well-formed chunks: the result
- * is parsed from a tool DTO and must never fail the call.
+ * token, up to a per-run ceiling. Skips any payload that is not a well-formed chunk and
+ * swallows a registry refusal: the value is parsed from a tool DTO and a defect in it
+ * must never fail an otherwise successful read.
  */
 function registerReadChunks(
   evidence: EvidenceRegistry,
+  budget: { count: number },
   tool: NoteEvidenceTool,
   value: unknown,
   callId: string,
@@ -85,6 +96,7 @@ function registerReadChunks(
   if (payload.ok !== true || !Array.isArray(payload.chunks)) return;
 
   for (const entry of payload.chunks) {
+    if (budget.count >= MAX_REGISTERED_NOTE_CHUNKS) return;
     if (typeof entry !== "object" || entry === null) continue;
     const chunk = entry as Record<string, unknown>;
     const evidenceId = chunk.id;
@@ -93,10 +105,16 @@ function registerReadChunks(
     if (typeof evidenceId !== "string" || !evidenceId) continue;
     if (typeof content !== "string") continue;
     if (typeof source !== "object" || source === null) continue;
-    evidence.registerNoteEvidence(
-      { evidenceId, source: source as SourceReference, content },
-      { callId, tool },
-    );
+    if (typeof (source as Record<string, unknown>).kind !== "string") continue;
+    try {
+      evidence.registerNoteEvidence(
+        { evidenceId, source: source as SourceReference, content },
+        { callId, tool },
+      );
+      budget.count += 1;
+    } catch {
+      return;
+    }
   }
 }
 
@@ -215,6 +233,9 @@ const NOTE_TOOLS: ReadonlyArray<new (deps: NoteToolDeps) => Tool> = [
  * cite them by `evidenceId`.
  */
 export function createNoteTools(service: NoteToolService, evidence?: EvidenceRegistry): Tool[] {
-  const deps: NoteToolDeps = { service, ...(evidence ? { evidence } : {}) };
+  const deps: NoteToolDeps = {
+    service,
+    ...(evidence ? { evidence, registeredChunks: { count: 0 } } : {}),
+  };
   return NOTE_TOOLS.map((NoteTool) => new NoteTool(deps));
 }
