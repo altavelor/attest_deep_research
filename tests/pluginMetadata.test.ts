@@ -27,6 +27,7 @@ describe("plugin metadata", () => {
     expect(manifest.version).toMatch(SEMVER);
     expect(manifest.minAppVersion).toMatch(SEMVER);
     expect(manifest.isDesktopOnly).toBe(false);
+    expect(manifest.authorUrl).toBe("https://github.com/altavelor");
   });
 
   it("keeps package.json and versions.json in sync with the manifest", () => {

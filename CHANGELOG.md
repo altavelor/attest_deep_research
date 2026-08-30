@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-08-30
+
+### Fixed
+
+- Obsidian review blockers for iOS regex compatibility, supported host APIs, safe DOM rendering
+  and CSS updates.
+- Release assets now receive build-provenance attestations, and unsupported ZIP bundles are no
+  longer attached to releases.
+- Plugin metadata links to the author's profile and consistently reports version 0.4.4.
+
 ## [0.4.3] - 2026-08-30
 
 ### Changed
