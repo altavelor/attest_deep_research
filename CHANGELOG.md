@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Mobile cloud providers no longer depend on browser CORS headers for chat, capability probes,
   model discovery or embeddings.
+- The open-chat command id no longer repeats the plugin id that Obsidian adds automatically.
 
 ## [0.4.2] - 2026-08-30
 

@@ -124,7 +124,7 @@ describe("Attest plugin lifecycle", () => {
     plugin.applyUiLanguage();
 
     expect(asStubPlugin(plugin).commands.map(({ id, name }) => ({ id, name }))).toEqual([
-      { id: "open-attest-chat", name: "Открыть чат Attest" },
+      { id: "open-chat", name: "Открыть чат Attest" },
       { id: "ask-current-note", name: "Спросить Attest о текущей заметке" },
       { id: "ask-selected-text", name: "Спросить Attest о выделенном тексте" },
       { id: "find-related-notes", name: "Найти связанные заметки" },
@@ -136,7 +136,7 @@ describe("Attest plugin lifecycle", () => {
 
   it("registers the Attest action commands", () => {
     expect(asStubPlugin(plugin).commands.map((command) => command.id)).toEqual([
-      "open-attest-chat",
+      "open-chat",
       "ask-current-note",
       "ask-selected-text",
       "find-related-notes",
@@ -144,6 +144,12 @@ describe("Attest plugin lifecycle", () => {
       "update-index",
       "summarize-current-note",
     ]);
+  });
+
+  it("does not repeat the plugin id in command ids", () => {
+    expect(asStubPlugin(plugin).commands.every((command) => !command.id.includes("attest"))).toBe(
+      true,
+    );
   });
 
   it("hides note actions outside a Markdown editor", () => {
@@ -351,9 +357,7 @@ describe("Attest plugin lifecycle", () => {
 
   it("releases the view type, command and settings tab registered on load", async () => {
     expect(app.workspace.getViewFactory(ATTEST_CHAT_VIEW_TYPE)).toBeDefined();
-    expect(asStubPlugin(plugin).commands.map((command) => command.id)).toContain(
-      "open-attest-chat",
-    );
+    expect(asStubPlugin(plugin).commands.map((command) => command.id)).toContain("open-chat");
     expect(asStubPlugin(plugin).settingTabs).toHaveLength(1);
     expect(asStubPlugin(plugin).ribbonIcons).toHaveLength(1);
 

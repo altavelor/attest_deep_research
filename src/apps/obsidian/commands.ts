@@ -6,7 +6,7 @@ import { toUserMessage } from "@core/errors";
 import type { AttestChatCommandAction } from "@apps/obsidian/ui/chat";
 
 export const ATTEST_COMMAND_IDS = [
-  "open-attest-chat",
+  "open-chat",
   "ask-current-note",
   "ask-selected-text",
   "find-related-notes",
@@ -26,7 +26,7 @@ export interface AttestCommandHost {
 
 export function registerAttestCommands(host: AttestCommandHost): void {
   host.addCommand({
-    id: "open-attest-chat",
+    id: "open-chat",
     name: host.t("command.openChat"),
     icon: "bot-message-square",
     callback: () => runSafely(() => host.openChat()),
