@@ -17,7 +17,7 @@ import {
   MAX_WEB_QUERIES_PER_CALL,
   MAX_WEB_QUERY_CHARS,
   MAX_WEB_RESULT_LIMIT,
-} from "@core/web/queryPlanning";
+} from "@core/web";
 import { PromptCapabilities, registered } from "./promptCapabilities";
 import { sanitizeUntrusted } from "./promptSection";
 

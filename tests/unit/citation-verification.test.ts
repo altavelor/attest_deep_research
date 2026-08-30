@@ -82,6 +82,21 @@ describe("verifyCitations", () => {
     expect(verifyCitations(answer, evidence, noUrls)).toEqual(["e1"]);
   });
 
+  it("does not flag a well-supported id repeated across neighbouring claims", () => {
+    const evidence = [
+      chunk(
+        "e1",
+        "Photosynthesis converts sunlight into chemical energy in plants, and the same " +
+          "chloroplasts also release oxygen as a by-product of the reaction.",
+      ),
+    ];
+    const answer = [
+      "- Photosynthesis converts sunlight into chemical energy in plants [e1].",
+      "- The chloroplasts also release oxygen as a by-product of the reaction [e1].",
+    ].join("\n");
+    expect(verifyCitations(answer, evidence, noUrls)).toEqual([]);
+  });
+
   it("ignores citations to unknown ids (handled as unknownCitationIds elsewhere)", () => {
     const answer = "Some claim with a dangling citation [missing].";
     expect(verifyCitations(answer, [], noUrls)).toEqual([]);

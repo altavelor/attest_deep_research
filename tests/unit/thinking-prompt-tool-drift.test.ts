@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { createResearchToolRegistry } from "@adapters/research-tools";
-import { buildThinkingPromptSections, buildThinkingResearchMessages } from "@core/research";
+import {
+  assemblePromptSections,
+  buildThinkingPromptSections,
+  buildThinkingResearchMessages,
+} from "@core/research";
 import {
   INDEX_SEARCH_QUERY_CHARS,
   INDEX_SEARCH_RESULT_LIMIT,
@@ -136,25 +140,28 @@ describe("thinking prompt ↔ tool registry drift guard", () => {
     },
   );
 
-  it("fails when a section names a tool the profile does not register", () => {
+  it("reports a section that names a tool the profile does not register", () => {
     const { available } = promptFor("indexOnly");
     const sections = buildThinkingPromptSections(optionsFor("indexOnly", available));
-    const injected = [
-      ...sections,
-      {
-        id: "invented",
-        priority: "workflow" as const,
-        enabled: true,
-        content: "## Invented\nuse ghost_tool",
-        referencedTools: ["ghost_tool"],
-      },
-    ];
-    const registered = new Set(available);
-    const offending = injected
-      .filter((section) => section.enabled)
-      .flatMap((section) => section.referencedTools)
-      .filter((tool) => !registered.has(tool));
-    expect(offending).toEqual(["ghost_tool"]);
+    const result = assemblePromptSections(
+      [
+        ...sections,
+        {
+          id: "invented",
+          priority: "workflow" as const,
+          enabled: true,
+          content: "## Invented\nuse ghost_tool",
+          referencedTools: ["ghost_tool"],
+        },
+      ],
+      { availableTools: new Set(available) },
+    );
+    expect(result.issues).toContainEqual({
+      sectionId: "invented",
+      code: "unregistered-tool",
+      detail: "ghost_tool",
+      dropped: false,
+    });
   });
 
   it("does not advertise web fetch in an index-only profile (the original regression)", () => {
@@ -180,21 +187,33 @@ describe("numeric limit drift guard", () => {
     ].map(String),
   );
 
+  function unexpectedNumerals(system: string): string[] {
+    const withoutDate = system.replace(/^Current date:.*$/m, "");
+    const numerals = [...withoutDate.matchAll(/\d+/g)].map((match) => match[0]);
+    return [...new Set(numerals)].filter((value) => !allowed.has(value));
+  }
+
   it.each(PROFILES)("writes no number that is not a schema constant ($name)", ({ searchMode }) => {
     const created = registryFor(searchMode);
     const available = created.tools.definitions().map((d) => d.function.name);
     const system = buildThinkingResearchMessages(optionsFor(searchMode, available))[0].content;
-    const withoutDate = system.replace(/^Current date:.*$/m, "");
-    const numerals = [...withoutDate.matchAll(/\d+/g)].map((match) => match[0]);
-    const unexpected = [...new Set(numerals)].filter((value) => !allowed.has(value));
-    expect(unexpected, `unexpected numeric literals in the ${searchMode} prompt`).toEqual([]);
+    expect(
+      unexpectedNumerals(system),
+      `unexpected numeric literals in the ${searchMode} prompt`,
+    ).toEqual([]);
   });
 
   it("catches a literal that drifted away from its schema constant", () => {
-    const allowedValues = new Set([String(MAX_WEB_RESULT_LIMIT)]);
-    const drifted = "`limit` controls how many results (max 5)";
-    const numerals = [...drifted.matchAll(/\d+/g)].map((match) => match[0]);
-    expect(numerals.some((value) => !allowedValues.has(value))).toBe(true);
+    const created = registryFor("webOnly");
+    const available = created.tools.definitions().map((d) => d.function.name);
+    const system = buildThinkingResearchMessages(optionsFor("webOnly", available))[0].content;
+    const drifted = system.replace(
+      `\`limit\` returns up to ${MAX_WEB_RESULT_LIMIT} results`,
+      "`limit` returns up to 7 results",
+    );
+    expect(drifted).not.toBe(system);
+    expect(unexpectedNumerals(drifted)).toEqual(["7"]);
+    expect(unexpectedNumerals(system)).toEqual([]);
   });
 });
 
