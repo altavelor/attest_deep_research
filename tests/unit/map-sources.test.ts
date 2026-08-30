@@ -246,4 +246,25 @@ describe("MapSources fan-out", () => {
     expect(failed?.runId).not.toBe("run-a.pdf");
     expect(failed?.rounds).toBe(0);
   });
+
+  it("reports a cancelled mapping as cancelled, not as a failure", async () => {
+    const controller = new AbortController();
+    const runner: SubAgentPort = {
+      run: async () => {
+        controller.abort();
+        throw new Error("aborted");
+      },
+    };
+    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+
+    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
+    const result = await mapper.run({
+      question: "q",
+      sourcePaths: ["a.pdf"],
+      signal: controller.signal,
+    });
+
+    expect(result.diagnostics.subAgents).toHaveLength(1);
+    expect(result.diagnostics.subAgents?.[0].failureReason).toBe("cancelled");
+  });
 });
