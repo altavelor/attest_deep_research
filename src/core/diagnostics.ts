@@ -293,6 +293,21 @@ export interface RoundPromptDeltaDiagnostic {
   messages: PromptDeltaMessageDiagnostic[];
 }
 
+export interface SubAgentGroupSummary {
+  count: number;
+  totalDurationMs: number;
+  maxDurationMs: number;
+  roundLimitHits: number;
+  synthesisFallbacks: number;
+  searchCalls: number;
+}
+
+export interface SubAgentRunSummary extends SubAgentGroupSummary {
+  topLevelSearchCalls: number;
+  importedSources: number;
+  droppedSources: number;
+}
+
 export interface ThinkingAttemptDiagnostics {
   policyReason: string;
   requiredTools: string[];
@@ -317,6 +332,10 @@ export interface ThinkingAttemptDiagnostics {
     maxResultChars: number;
     usedResultChars: number;
   };
+
+  subAgents?: SubAgentRunSummary;
+
+  mapSources?: SubAgentGroupSummary;
 }
 
 export interface IndexDescriptionPromptDiagnostics {

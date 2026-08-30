@@ -1,4 +1,5 @@
 import { ContextDiagnostics } from "@core/diagnostics";
+import { summarizeSubAgentTelemetry } from "@core/research";
 import {
   ThinkingLoopRound,
   AnswerSection,
@@ -182,6 +183,12 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
     });
   }
 
+  const subAgentTelemetry = {
+    ...summarizeSubAgentTelemetry(tools),
+    ...(thinking?.subAgents ? { subAgents: thinking.subAgents } : {}),
+    ...(thinking?.mapSources ? { mapSources: thinking.mapSources } : {}),
+  };
+
   return {
     attempts: (d.attempts ?? []).map((a) => ({
       attempt: a.attempt,
@@ -205,6 +212,8 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
           ...(thinking.fallbackReason ? { fallbackReason: thinking.fallbackReason } : {}),
           stopReasons: thinking.stopReasons ?? [],
           budgets: thinking.budgets ?? null,
+          ...(subAgentTelemetry.subAgents ? { subAgents: subAgentTelemetry.subAgents } : {}),
+          ...(subAgentTelemetry.mapSources ? { mapSources: subAgentTelemetry.mapSources } : {}),
           rounds,
         }
       : null,

@@ -19,6 +19,7 @@ import type { ResearchExecutionPolicy } from "@core/research";
 import { researchModeRetrievalParameters } from "@core/research";
 import { fixedNow } from "../helpers/factories";
 import type { SearchProvider } from "@application/ports";
+import type { SubAgentPort, SubAgentTelemetry } from "@application/research";
 import type { ContextDiagnostics } from "@core/diagnostics";
 
 const CAPABILITIES: ToolCallingCapabilities = {
@@ -428,6 +429,103 @@ describe("ThinkingResearchStrategy citation normalization", () => {
     expect(complete.answer.contextDiagnostics?.answer?.citations.unknownCitationIds).toEqual([
       "url:https://example.com/unseen",
     ]);
+  });
+});
+
+describe("ThinkingResearchStrategy sub-agent telemetry", () => {
+  function subAgentRunner(telemetry: SubAgentTelemetry | undefined): SubAgentPort {
+    return {
+      run: async () => ({
+        answerText: "Sub-agent answer.",
+        snapshot: { evidence: [], citations: [], provenance: [] },
+        ...(telemetry ? { telemetry } : {}),
+      }),
+    };
+  }
+
+  function telemetry(overrides: Partial<SubAgentTelemetry> = {}): SubAgentTelemetry {
+    return {
+      runId: "run-1",
+      durationMs: 1_000,
+      loopDurationMs: 900,
+      rounds: 3,
+      maxRounds: 12,
+      hitRoundLimit: false,
+      toolCalls: 4,
+      duplicateToolCalls: 0,
+      searchCalls: 2,
+      maxSearches: 8,
+      searchBudgetRejections: 0,
+      usedSynthesisFallback: false,
+      answerChars: 17,
+      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0 },
+      ...overrides,
+    };
+  }
+
+  function callingSubAgent(): ModelRoundProvider & { requests: ModelRoundRequest[] } {
+    return scriptedRounds((_request, index) =>
+      index === 1
+        ? {
+            items: [
+              {
+                type: "toolCall" as const,
+                call: {
+                  id: "sub-1",
+                  name: "run_subagent",
+                  arguments: { task: "check X", maxSearches: 2 },
+                },
+              },
+            ],
+            stopReason: "tool_calls" as const,
+          }
+        : { items: [{ type: "text" as const, text: "done" }], stopReason: "complete" as const },
+    );
+  }
+
+  async function runWithSubAgent(runner: SubAgentPort): Promise<ContextDiagnostics | undefined> {
+    const { events } = await drain(
+      strategy(callingSubAgent(), undefined, { subAgentRunner: runner }).execute(context()),
+    );
+    const complete = events.find((event) => event.type === "complete");
+    if (complete?.type !== "complete") throw new Error("no completion");
+    return complete.answer.contextDiagnostics;
+  }
+
+  it("summarizes the launched sub-agents in the thinking diagnostics", async () => {
+    const diagnostics = await runWithSubAgent(
+      subAgentRunner(telemetry({ durationMs: 1_200, searchCalls: 2, hitRoundLimit: true })),
+    );
+
+    expect(diagnostics?.thinking?.subAgents).toMatchObject({
+      count: 1,
+      totalDurationMs: 1_200,
+      maxDurationMs: 1_200,
+      roundLimitHits: 1,
+      searchCalls: 2,
+      topLevelSearchCalls: 0,
+      importedSources: 0,
+      droppedSources: 0,
+    });
+    expect(diagnostics?.thinking?.mapSources).toBeUndefined();
+  });
+
+  it("counts a sub-agent whose runner threw, with the duration it spent", async () => {
+    const diagnostics = await runWithSubAgent({
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        throw new Error("sub-agent exploded");
+      },
+    });
+
+    expect(diagnostics?.thinking?.subAgents?.count).toBe(1);
+    expect(diagnostics?.thinking?.subAgents?.totalDurationMs).toBeGreaterThan(0);
+  });
+
+  it("records no summary when the runner reported no telemetry", async () => {
+    const diagnostics = await runWithSubAgent(subAgentRunner(undefined));
+
+    expect(diagnostics?.thinking?.subAgents).toBeUndefined();
   });
 });
 

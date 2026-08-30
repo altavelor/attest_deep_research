@@ -14,3 +14,4 @@ export * from "./searchMode";
 export * from "./evidence-planner/EvidencePlanner";
 export * from "./subAgent/subAgentDirective";
 export * from "./subAgent/subAgentFraming";
+export * from "./subAgent/subAgentTelemetrySummary";

@@ -6,6 +6,7 @@ import {
   estimateTextTokens,
   extractFollowUpQuestions,
   normalizeCitationDensityWithDiagnostics,
+  summarizeSubAgentTelemetry,
 } from "@core/research";
 import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
@@ -375,6 +376,7 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         diagnostics.warnings.push(warning);
       }
     }
+    const subAgentTelemetry = summarizeSubAgentTelemetry(result.diagnostics);
     diagnostics.thinking = {
       policyReason: policy.reason,
       requiredTools: [...effectivePolicy.requiredTools],
@@ -394,6 +396,8 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       reasoningSegments: result.reasoningSegments,
       stopReasons: result.stopReasons,
       budgets: thinkingBudgets(result.totalResultChars, result.maxResultChars),
+      ...(subAgentTelemetry.subAgents ? { subAgents: subAgentTelemetry.subAgents } : {}),
+      ...(subAgentTelemetry.mapSources ? { mapSources: subAgentTelemetry.mapSources } : {}),
     };
     if (this.deps.reasoningDiagnostics) {
       diagnostics.reasoning = {

@@ -96,6 +96,7 @@ export class MapSources {
     input: MapSourcesInput,
     sourcePath: string,
   ): Promise<{ row: MapSourceRow; telemetry?: SubAgentTelemetry }> {
+    const startedAt = Date.now();
     try {
       const result = await this.deps.runner.run({
         task: buildSourceTask(input.question, sourcePath),
@@ -131,6 +132,7 @@ export class MapSources {
           error: error instanceof Error ? error.message : String(error),
           snapshot: { evidence: [], citations: [], provenance: [] },
         },
+        telemetry: exceptionTelemetry(Date.now() - startedAt, input.signal?.aborted === true),
       };
     }
   }
@@ -204,4 +206,29 @@ class Limiter {
       this.queue.shift()?.();
     }
   }
+}
+
+/**
+ * Telemetry for a mapped document whose sub-agent threw before reporting its own
+ * counters, so a failed mapping still counts as one launch. A run the caller
+ * cancelled is reported as cancelled rather than as a failure.
+ */
+function exceptionTelemetry(durationMs: number, aborted: boolean): SubAgentTelemetry {
+  return {
+    runId: `map-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    durationMs,
+    loopDurationMs: durationMs,
+    rounds: 0,
+    maxRounds: 0,
+    hitRoundLimit: false,
+    failureReason: aborted ? "cancelled" : "tool-exception",
+    toolCalls: 0,
+    duplicateToolCalls: 0,
+    searchCalls: 0,
+    maxSearches: 0,
+    searchBudgetRejections: 0,
+    usedSynthesisFallback: false,
+    answerChars: 0,
+    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+  };
 }

@@ -3,6 +3,8 @@ import { ChatToolChoice } from "@core/agent";
 import {
   ContextDiagnostics,
   RoundPromptDeltaDiagnostic,
+  SubAgentGroupSummary,
+  SubAgentRunSummary,
   ToolCallDiagnostic,
   WebSourceSelectionDiagnostics,
 } from "@core/diagnostics";
@@ -142,6 +144,26 @@ export interface ThinkingLoopRound {
   classification: "intermediate" | "final" | "discarded" | null;
 }
 
+export interface ThinkingLoopSection {
+  totalRounds: number;
+  totalCalls: number;
+  duplicateCalls: number;
+  satisfiedTools: string[];
+  repairedTools: string[];
+  fallbackReason?: string;
+  stopReasons: string[];
+  budgets: {
+    maxRounds: number;
+    maxResultChars: number;
+    usedResultChars: number;
+  } | null;
+
+  subAgents?: SubAgentRunSummary;
+
+  mapSources?: SubAgentGroupSummary;
+  rounds: ThinkingLoopRound[];
+}
+
 export interface ReasoningSection {
   attempts: Array<{
     attempt: number;
@@ -152,21 +174,7 @@ export interface ReasoningSection {
     fallbackDecision?: string;
   }>;
   stream: ContextDiagnostics["stream"] | null;
-  thinkingLoop: {
-    totalRounds: number;
-    totalCalls: number;
-    duplicateCalls: number;
-    satisfiedTools: string[];
-    repairedTools: string[];
-    fallbackReason?: string;
-    stopReasons: string[];
-    budgets: {
-      maxRounds: number;
-      maxResultChars: number;
-      usedResultChars: number;
-    } | null;
-    rounds: ThinkingLoopRound[];
-  } | null;
+  thinkingLoop: ThinkingLoopSection | null;
   tokens: { inputTokens: number; outputTokens: number; reasoningTokens: number };
   reasoningItemCount: number;
   continuationRounds: number;
