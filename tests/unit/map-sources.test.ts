@@ -219,4 +219,31 @@ describe("MapSources fan-out", () => {
       "run-b.pdf",
     ]);
   });
+
+  it("still records a launch for a document whose sub-agent threw", async () => {
+    const runner: SubAgentPort = {
+      run: async (input): Promise<SubAgentRunResult> => {
+        if (input.task.includes("b.pdf")) throw new Error("sub-agent exploded");
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        return {
+          answerText: "STANCE: SUPPORTS",
+          snapshot: snapshot([]),
+          telemetry: telemetryOf("run-a.pdf"),
+        };
+      },
+    };
+    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+
+    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
+    const result = await mapper.run({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] });
+
+    expect(result.diagnostics.failed).toBe(1);
+    expect(result.diagnostics.subAgents).toHaveLength(2);
+    const failed = result.diagnostics.subAgents?.find(
+      (entry) => entry.failureReason === "tool-exception",
+    );
+    expect(failed).toBeDefined();
+    expect(failed?.runId).not.toBe("run-a.pdf");
+    expect(failed?.rounds).toBe(0);
+  });
 });
