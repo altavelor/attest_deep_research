@@ -202,10 +202,17 @@ describe("note reads register citable evidence", () => {
       });
       expect(execution.ok).toBe(true);
       const value = execution.ok
-        ? (execution.value as { evidenceId?: string; chunks: Array<{ id?: string }> })
+        ? (execution.value as {
+            evidenceId?: string;
+            chunks: Array<{ id?: string; citable?: boolean; evidenceSource?: unknown }>;
+          })
         : null;
       for (const chunk of value?.chunks ?? []) {
         if (chunk.id !== undefined) advertised.push(chunk.id);
+        if (chunk.id === undefined) {
+          expect(chunk).not.toHaveProperty("evidenceSource");
+          expect(chunk.citable).toBe(false);
+        }
       }
       if (value?.evidenceId !== undefined) advertised.push(value.evidenceId);
     }
@@ -289,4 +296,31 @@ describe("note tool descriptions agree with the evidence policy", () => {
   it("keeps navigation results outside the evidence model", () => {
     expect(searchNotes?.function.description).toContain("NOT evidence");
   });
+
+  it.each([READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL])(
+    "names the field the chunk actually carries (%s)",
+    async (toolName) => {
+      const description =
+        NOTE_TOOL_DEFINITIONS.find((entry) => entry.function.name === toolName)?.function
+          .description ?? "";
+      expect(description).not.toContain("`evidenceId` of the chunk");
+      expect(description).toContain("`id` of the chunk");
+      expect(description).toContain("top-level `evidenceId` names the first chunk only");
+
+      const { tools } = harness("Research/Caffeine.md");
+      const execution = await call(
+        tools,
+        toolName,
+        toolName === READ_NOTE_TOOL ? { path: "Research/Caffeine.md" } : {},
+      );
+      const value = execution.ok
+        ? (execution.value as { chunks: Array<Record<string, unknown>> })
+        : null;
+      expect(value?.chunks.length).toBeGreaterThan(0);
+      for (const chunk of value?.chunks ?? []) {
+        expect(chunk).toHaveProperty("id");
+        expect(chunk).not.toHaveProperty("evidenceId");
+      }
+    },
+  );
 });

@@ -32,7 +32,7 @@ interface NoteToolSpec {
 interface NoteToolDeps {
   service: NoteToolService;
   evidence?: EvidenceRegistry;
-  evidenceBudget?: { remainingChars: number };
+  evidenceBudget?: { remainingChars: number; charged: Set<string> };
 }
 
 type NoteEvidenceTool = "read_note" | "get_active_note";
@@ -88,7 +88,7 @@ async function runNoteTool(
  */
 function registerReadChunks(
   evidence: EvidenceRegistry,
-  budget: { remainingChars: number },
+  budget: { remainingChars: number; charged: Set<string> },
   tool: NoteEvidenceTool,
   value: unknown,
   callId: string,
@@ -108,13 +108,17 @@ function registerReadChunks(
     if (typeof content !== "string") continue;
     if (typeof source !== "object" || source === null) continue;
     if (typeof (source as Record<string, unknown>).kind !== "string") continue;
-    if (content.length > budget.remainingChars) continue;
+    const charged = budget.charged.has(evidenceId);
+    if (!charged && content.length > budget.remainingChars) continue;
     try {
       evidence.registerNoteEvidence(
         { evidenceId, source: source as SourceReference, content },
         { callId, tool },
       );
-      budget.remainingChars -= content.length;
+      if (!charged) {
+        budget.remainingChars -= content.length;
+        budget.charged.add(evidenceId);
+      }
       registered.add(evidenceId);
     } catch {
       continue;
@@ -138,6 +142,7 @@ function redactUnregisteredIds(value: unknown, registered: ReadonlySet<string>):
     const chunk = entry as Record<string, unknown>;
     if (typeof chunk.id === "string" && !registered.has(chunk.id)) {
       delete chunk.id;
+      delete chunk.evidenceSource;
       chunk.citable = false;
     }
   }
@@ -159,7 +164,7 @@ function defineNoteTool(spec: NoteToolSpec): new (deps: NoteToolDeps) => Tool {
 const ReadNoteTool = defineNoteTool({
   name: READ_NOTE_TOOL,
   description:
-    "Read the raw content of a vault note by path. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. Navigation results from search_notes and list_notes are not evidence.",
+    "Read the raw content of a vault note by path. The returned chunks are registered evidence: cite a claim with the `id` of the chunk that supports it. The top-level `evidenceId` names the first chunk only, so do not reuse it for later chunks. A chunk with no `id` is context, not a citable source. Navigation results from search_notes and list_notes are not evidence.",
   schema: {
     path: str(MAX_PATH_CHARS, { required: true, description: "Vault-relative file path." }),
     maxChars: num({
@@ -197,7 +202,7 @@ const ListNotesTool = defineNoteTool({
 const GetActiveNoteTool = defineNoteTool({
   name: GET_ACTIVE_NOTE_TOOL,
   description:
-    "Return the currently open Obsidian file path and its raw content. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. The active note content is already provided as attached context at the start of this conversation.",
+    "Return the currently open Obsidian file path and its raw content. The returned chunks are registered evidence: cite a claim with the `id` of the chunk that supports it. The top-level `evidenceId` names the first chunk only, so do not reuse it for later chunks. The active note content is already provided as attached context at the start of this conversation.",
   schema: {},
   requires: (p) => p.has(NOTE_PERMISSIONS.active),
 });
@@ -264,7 +269,13 @@ export function createNoteTools(service: NoteToolService, evidence?: EvidenceReg
   const deps: NoteToolDeps = {
     service,
     ...(evidence
-      ? { evidence, evidenceBudget: { remainingChars: MAX_REGISTERED_NOTE_EVIDENCE_CHARS } }
+      ? {
+          evidence,
+          evidenceBudget: {
+            remainingChars: MAX_REGISTERED_NOTE_EVIDENCE_CHARS,
+            charged: new Set<string>(),
+          },
+        }
       : {}),
   };
   return NOTE_TOOLS.map((NoteTool) => new NoteTool(deps));

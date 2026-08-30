@@ -86,7 +86,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: READ_NOTE_TOOL,
       description:
-        "Read the raw content of a vault note by path. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. Navigation results from search_notes and list_notes are not evidence.",
+        "Read the raw content of a vault note by path. The returned chunks are registered evidence: cite a claim with the `id` of the chunk that supports it. The top-level `evidenceId` names the first chunk only, so do not reuse it for later chunks. A chunk with no `id` is context, not a citable source. Navigation results from search_notes and list_notes are not evidence.",
       parameters: {
         type: "object",
         properties: {
@@ -150,7 +150,7 @@ export const NOTE_TOOL_DEFINITIONS: ChatToolDefinition[] = [
     function: {
       name: GET_ACTIVE_NOTE_TOOL,
       description:
-        "Return the currently open Obsidian file path and its raw content. The returned chunks are registered evidence: cite them by the `evidenceId` of the chunk that supports the claim. The active note content is already provided as attached context at the start of this conversation.",
+        "Return the currently open Obsidian file path and its raw content. The returned chunks are registered evidence: cite a claim with the `id` of the chunk that supports it. The top-level `evidenceId` names the first chunk only, so do not reuse it for later chunks. The active note content is already provided as attached context at the start of this conversation.",
       parameters: {
         type: "object",
         properties: {},
