@@ -5,6 +5,7 @@ import { executeTool } from "@core/agent";
 import type { MapSources } from "@application/use-cases/map-sources";
 import type { EvidenceRegistry } from "@application/sources";
 import type { SubAgentTelemetry } from "@application/research";
+import { summarizeSubAgentTelemetry } from "@core/research";
 
 function execute(
   mapper: Pick<MapSources, "run">,
@@ -156,5 +157,18 @@ describe("MapSourcesTool", () => {
     expect(result.ok).toBe(true);
     expect(result.diagnostic).toEqual({ mapSources: [telemetry] });
     expect(JSON.stringify(result.ok ? result.value : {})).not.toContain("runId");
+
+    const summary = summarizeSubAgentTelemetry([
+      {
+        id: "map-call",
+        name: "map_sources",
+        status: "success",
+        arguments: {},
+        round: 1,
+        ...(result.diagnostic ? { metadata: result.diagnostic } : {}),
+      },
+    ]);
+    expect(summary.mapSources).toMatchObject({ count: 1, searchCalls: 1, maxDurationMs: 40 });
+    expect(summary.subAgents).toBeUndefined();
   });
 });
