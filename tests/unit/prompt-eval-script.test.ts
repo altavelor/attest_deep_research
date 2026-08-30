@@ -24,6 +24,11 @@ interface EvalModule {
   verifiedCitationRate(report: unknown): number | null;
   unknownCitationCount(report: unknown): number;
   subAgentTelemetry(report: unknown): { count: number; searchCalls: number; maxDurationMs: number };
+  mapSourcesTelemetry(report: unknown): {
+    count: number;
+    searchCalls: number;
+    maxDurationMs: number;
+  };
   subAgentSearchShare(report: unknown): number | null;
   artifactSize(report: unknown, options?: { artifactPathPrefix?: string }): number | null;
   noiseBand(values: readonly number[]): number;
@@ -208,6 +213,40 @@ describe("sub-agent aggregation", () => {
   it("is undefined when no search happened anywhere", () => {
     expect(evalModule.subAgentSearchShare(report([]))).toBeNull();
   });
+
+  it("keeps map_sources launches in their own namespace", () => {
+    const record = (runId: string, searchCalls: number, durationMs: number) => ({
+      runId,
+      searchCalls,
+      durationMs,
+    });
+    const calls = [
+      telemetry("run-1", 2, 900),
+      {
+        name: "map_sources",
+        status: "success" as const,
+        arguments: { question: "q" },
+        round: 1,
+        metadata: { mapSources: [record("map-1", 1, 300), record("map-2", 3, 800)] },
+      },
+      {
+        name: "map_sources",
+        status: "success" as const,
+        arguments: { question: "q" },
+        round: 1,
+        reason: "duplicate-result-reused",
+        metadata: { mapSources: [record("map-1", 1, 300), record("map-2", 3, 800)] },
+      },
+    ];
+
+    expect(evalModule.mapSourcesTelemetry(report(calls))).toMatchObject({
+      count: 2,
+      searchCalls: 4,
+      maxDurationMs: 800,
+    });
+    expect(evalModule.subAgentTelemetry(report(calls)).count).toBe(1);
+    expect(evalModule.subAgentSearchShare(report(calls))).toBe(1);
+  });
 });
 
 describe("artefact size", () => {
@@ -305,6 +344,35 @@ describe("end-to-end verdict", () => {
       evalModule.evaluate({ cases, runs, baseline: baselineFor({ completionRate: 1, rounds: 1 }) })
         .verdict,
     ).toBe("PASS");
+  });
+
+  it("reports map_sources sub-agents without ever judging them", () => {
+    const runs = [
+      {
+        caseId: "c1",
+        model: "m1",
+        report: report([
+          create("Notes/1.md"),
+          {
+            name: "map_sources",
+            status: "success" as const,
+            arguments: { question: "q" },
+            round: 1,
+            metadata: { mapSources: [{ runId: "map-1", durationMs: 300, searchCalls: 1 }] },
+          },
+        ]),
+      },
+    ];
+
+    const result = evalModule.evaluate({
+      cases,
+      runs,
+      baseline: baselineFor({ completionRate: 1, rounds: 1, mapSourceAgents: 0 }),
+    });
+
+    expect(result.byCase["m1 / c1"].mapSourceAgents).toBe(1);
+    expect(result.verdict).toBe("PASS");
+    expect(result.blocking).toEqual([]);
   });
 
   it("fails a run that created an artefact nobody asked for", () => {

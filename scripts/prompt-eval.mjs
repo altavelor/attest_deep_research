@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 
 const MUTATION_TOOLS = new Set(["create_note", "update_note", "delete_note"]);
 const SUB_AGENT_TOOL = "run_subagent";
+const MAP_SOURCES_TOOL = "map_sources";
 const SEARCH_TOOLS = new Set(["search_web", "search_index"]);
 const DUPLICATE_REASON = "duplicate-result-reused";
 
@@ -19,6 +20,8 @@ const METRIC_CLASSES = {
   subAgentSearchShare: "should-improve",
   artifactSize: "should-improve",
 };
+
+const REPORTED_METRICS = ["mapSourceAgents"];
 
 const NOISE_BAND_FACTOR = 1.5;
 const UNSPECIFIED_MODEL = "unspecified";
@@ -129,6 +132,33 @@ export function subAgentTelemetry(report) {
   };
 }
 
+/**
+ * Sub-agents launched through `map_sources`, aggregated in their own namespace. They are
+ * reported but never judged: mixing them into `subAgents` would make a run with fan-out
+ * mapping incomparable with one without it.
+ */
+export function mapSourcesTelemetry(report) {
+  const byRunId = new Map();
+  for (const call of toolCallsOf(report)) {
+    if (call.name !== MAP_SOURCES_TOOL) continue;
+    if (call.reason === DUPLICATE_REASON) continue;
+    const records = call.metadata?.mapSources;
+    if (!Array.isArray(records)) continue;
+    for (const record of records) {
+      const runId = record?.runId;
+      if (typeof runId !== "string") continue;
+      if (!byRunId.has(runId)) byRunId.set(runId, record);
+    }
+  }
+  const records = [...byRunId.values()];
+  return {
+    count: records.length,
+    searchCalls: records.reduce((total, entry) => total + (entry.searchCalls ?? 0), 0),
+    totalDurationMs: records.reduce((total, entry) => total + (entry.durationMs ?? 0), 0),
+    maxDurationMs: records.reduce((max, entry) => Math.max(max, entry.durationMs ?? 0), 0),
+  };
+}
+
 /** Search calls the orchestrator itself issued, excluding cache replays. */
 export function topLevelSearchCalls(report) {
   return toolCallsOf(report).filter(
@@ -180,6 +210,7 @@ export function metricsForReport(report, testCase) {
     rounds: rounds(report),
     subAgents: telemetry.count,
     subAgentSearchShare: subAgentSearchShare(report),
+    mapSourceAgents: mapSourcesTelemetry(report).count,
     artifactSize: artifactSize(report, testCase),
   };
 }
@@ -187,7 +218,7 @@ export function metricsForReport(report, testCase) {
 /** Collapses the repeats of one case into a single value per metric. */
 export function aggregateRepeats(metricsList) {
   const aggregate = {};
-  for (const name of Object.keys(METRIC_CLASSES)) {
+  for (const name of [...Object.keys(METRIC_CLASSES), ...REPORTED_METRICS]) {
     const values = metricsList
       .map((metrics) => metrics[name])
       .filter((value) => typeof value === "number");
@@ -401,7 +432,7 @@ export function evaluate({ cases, runs, baseline }) {
 }
 
 function formatTable(byCase) {
-  const names = Object.keys(METRIC_CLASSES);
+  const names = [...Object.keys(METRIC_CLASSES), ...REPORTED_METRICS];
   const header = ["case", ...names].join(" | ");
   const rows = Object.entries(byCase).map(([caseId, metrics]) =>
     [caseId, ...names.map((name) => (metrics[name] === null ? "—" : String(metrics[name])))].join(
