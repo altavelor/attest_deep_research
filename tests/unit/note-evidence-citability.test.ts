@@ -273,6 +273,36 @@ describe("note reads register citable evidence", () => {
 
     expect(execution.ok).toBe(true);
   });
+
+  it("keeps the read usable and uncitable when the registry rejects the chunk", async () => {
+    class RejectingRegistry extends ResearchEvidenceRegistry {
+      registerNoteEvidence(): never {
+        throw new Error("registry unavailable");
+      }
+    }
+    const evidence = new RejectingRegistry();
+    const service = new NoteToolService({
+      files: new MemoryFiles(FILES),
+      extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 0 })],
+    });
+    const tools = new ToolManager(
+      createNoteTools(service, evidence),
+      new Set([NOTE_PERMISSIONS.read]),
+    );
+
+    const execution = await call(tools, READ_NOTE_TOOL, { path: "Research/Caffeine.md" });
+
+    expect(execution.ok).toBe(true);
+    const value = execution.ok
+      ? (execution.value as { chunks: Array<Record<string, unknown>> })
+      : { chunks: [] };
+    expect(value.chunks.length).toBeGreaterThan(0);
+    expect(evidence.snapshot().evidence).toEqual([]);
+    for (const chunk of value.chunks) {
+      expect(chunk).not.toHaveProperty("id");
+      expect(chunk.citable).toBe(false);
+    }
+  });
 });
 
 describe("note tool descriptions agree with the evidence policy", () => {
