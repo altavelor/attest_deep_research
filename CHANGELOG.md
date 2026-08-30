@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-30
+
+Improved onboarding, research reliability, diagnostics and source navigation.
+
+### Added
+
+- First-run setup wizard with localized onboarding and server presets, including readable
+  model names for configured providers.
+- Citable note reads, per-call sub-agent telemetry and aggregated sub-agent summaries in
+  thinking diagnostics and reports.
+- Clickable source registry links for web pages and local vault files, plus active-file
+  attachments in chat.
+- Provider and web-source guides, prompt evaluation cases and README demonstrations.
+
+### Changed
+
+- Thinking prompts are organized as explicit policy sections with capability-aware parallel
+  calls, bounded tool results and bounded evidence.
+- Research tool orchestration, citation verification and cancellation/error reporting are
+  more defensive and preserve source provenance more reliably.
+- Web search recovers results from DuckDuckGo anomaly pages.
+
+### Fixed
+
+- Source registry remains open while opening web or local source links, and local links open
+  the corresponding vault files.
+- The new-chat question field remains visible, composer controls use their final width, and
+  interrupted chats are no longer all marked as interrupted in history.
+- Untrusted sub-agent labels and prompt sections are escaped and bounded before use.
+
+## [0.3.0] - 2026-08-29
+
+Background chat sessions and faster access from Obsidian.
+
+### Added
+
+- Plugin-owned background chat sessions that persist their state, recover stale runs after
+  restart and keep chat activity available independently of the active view.
+- Attest commands for opening chat, asking about the current note or selected text, finding
+  related notes, summarizing a note and updating the index, plus a ribbon action for opening
+  chat.
+
 ## [0.2.0] - 2026-08-27
 
 Mobile support, answers with images and charts, and a verifiable source registry.
@@ -117,6 +159,8 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.2.0...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/altavelor/attest_deep_research/compare/0.3.0...0.4.0
+[0.3.0]: https://github.com/altavelor/attest_deep_research/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/altavelor/attest_deep_research/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/altavelor/attest_deep_research/releases/tag/0.1.0
