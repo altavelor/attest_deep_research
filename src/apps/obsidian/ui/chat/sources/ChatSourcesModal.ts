@@ -337,10 +337,7 @@ function renderProjectionEntry(
     details.createEl("summary", {
       text: `${boundedDisplayText(entry.source.title, MAX_DISPLAY_TITLE_CHARACTERS)} · ${entry.source.identity.kind}`,
     });
-    details.createDiv({
-      cls: "attest-chat-sources-modal__identity",
-      text: boundedDisplayText(entry.source.identity.canonicalKey, MAX_DISPLAY_IDENTITY_CHARACTERS),
-    });
+    renderSourceIdentity(details, entry.source);
     sourceNode = {
       details,
       revisions: details.createDiv({ cls: "attest-chat-sources-modal__revision-list" }),
@@ -380,6 +377,26 @@ function renderProjectionEntry(
   if (revisionDetails.open) renderBody();
 }
 
+function renderSourceIdentity(container: HTMLElement, source: ConversationSource): void {
+  const identity = container.createDiv({ cls: "attest-chat-sources-modal__identity" });
+  const displayIdentity = boundedDisplayText(
+    source.identity.canonicalKey,
+    MAX_DISPLAY_IDENTITY_CHARACTERS,
+  );
+  const externalUrl =
+    source.identity.kind === "web" ? normalizeExternalUrl(source.identity.canonicalKey) : null;
+  if (!externalUrl) {
+    identity.setText(displayIdentity);
+    return;
+  }
+
+  identity.createEl("a", {
+    text: displayIdentity,
+    href: externalUrl,
+    attr: { target: "_blank", rel: "noopener noreferrer" },
+  });
+}
+
 /** Renders the action that opens the revision's underlying note, PDF, or page. */
 function renderOpenSourceAction(
   revisionDetails: HTMLElement,
@@ -395,6 +412,15 @@ function renderOpenSourceAction(
     attr: { type: "button", "aria-label": t("chat.sources.openSource") },
   });
   button.addEventListener("click", () => onOpenChunk(chunk));
+}
+
+function normalizeExternalUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function renderRevisionUsages(
