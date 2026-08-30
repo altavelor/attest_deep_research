@@ -181,13 +181,18 @@ export class AttestChatView extends ItemView {
           .sort(),
       getResearchMode: () => this.currentResearchMode,
       getAttachedContextPaths: () => this.attachedContextPaths,
+      getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
+      shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
       isRunning: () => this.isRunning,
       getDraft: () => this.session.draft,
       onDraftChange: (draft) => this.sessions.update(this.session.sessionId, { draft }),
       getContextWindowUsage: () => this.getContextWindowUsage(),
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       t: this.t,
-      onSubmit: () => void this.researchController.submitQuestion(),
+      onSubmit: () => {
+        this.composer.renderAttachedContext();
+        void this.researchController.submitQuestion();
+      },
       onStop: () => {
         this.researchController.stopRunningQuestion();
         this.composer.setStopping();

@@ -53,6 +53,8 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     getContextFilePaths: () => ["Notes/One.md"],
     getResearchMode: () => "instant",
     getAttachedContextPaths: () => state.attachedContextPaths,
+    getActiveFilePath: () => undefined,
+    shouldIncludeActiveFileContext: () => false,
     isRunning: () => state.running,
     getContextWindowUsage: () => state.contextWindowUsage,
     getSearchUnavailableMessage: () => state.searchUnavailableMessage,
@@ -150,6 +152,40 @@ describe("chat composer redisplay", () => {
       (element) => element.textContent,
     );
     expect(names).toEqual(["One.md", "Folder"]);
+  });
+
+  it("shows the included active file as a non-removable attachment", () => {
+    createComposer({
+      getActiveFilePath: () => "Notes/Active.md",
+      shouldIncludeActiveFileContext: () => true,
+    });
+
+    expect(
+      Array.from(
+        container.querySelectorAll(".attest-chat__attachment-name"),
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Active.md"]);
+    expect(container.querySelectorAll(".attest-chat__attachment button")).toHaveLength(0);
+    expect(
+      container
+        .querySelector(".attest-chat__dropdown--context-mode")
+        ?.parentElement?.classList.contains("is-hidden"),
+    ).toBe(false);
+  });
+
+  it("does not show an unsupported active file as an attachment", () => {
+    createComposer({
+      getActiveFilePath: () => "Images/Active.png",
+      shouldIncludeActiveFileContext: () => true,
+    });
+
+    expect(container.querySelectorAll(".attest-chat__attachment-name")).toHaveLength(0);
+    expect(
+      container
+        .querySelector(".attest-chat__dropdown--context-mode")
+        ?.parentElement?.classList.contains("is-hidden"),
+    ).toBe(true);
   });
 });
 

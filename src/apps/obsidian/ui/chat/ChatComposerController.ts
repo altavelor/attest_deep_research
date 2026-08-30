@@ -5,6 +5,7 @@ import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ContextMode } from "@core/diagnostics";
 import type { ResearchMode } from "@core/research";
 import type { Translate } from "@adapters/i18n";
+import { isSupportedContextDocumentPath } from "@shared";
 import {
   ChatComposerRefs,
   ChatModelSelectOption,
@@ -22,6 +23,8 @@ export interface ChatComposerControllerOptions {
   getContextFilePaths(): string[];
   getResearchMode(): ResearchMode;
   getAttachedContextPaths(): string[];
+  getActiveFilePath(): string | undefined;
+  shouldIncludeActiveFileContext(): boolean;
   isRunning(): boolean;
   getDraft(): string;
   onDraftChange(draft: string): void;
@@ -173,13 +176,30 @@ export class ChatComposerController {
       return;
     }
 
+    const activeFilePath = this.activeFilePathForDisplay();
+    const paths = [...this.options.getAttachedContextPaths()];
+    if (activeFilePath && !paths.includes(activeFilePath)) {
+      paths.push(activeFilePath);
+    }
     renderAttachedContext(
       refs.attachedContextEl,
-      this.options.getAttachedContextPaths(),
+      paths,
       this.options.onRemoveContextPath,
       this.options.t,
+      activeFilePath,
     );
-    refs.controls.setAttachmentsPresent(this.options.getAttachedContextPaths().length > 0);
+    refs.controls.setAttachmentsPresent(paths.length > 0);
+  }
+
+  private activeFilePathForDisplay(): string | undefined {
+    if (!this.options.shouldIncludeActiveFileContext()) {
+      return undefined;
+    }
+
+    const activeFilePath = this.options.getActiveFilePath();
+    return activeFilePath && isSupportedContextDocumentPath(activeFilePath)
+      ? activeFilePath
+      : undefined;
   }
 
   updateSubmitAvailability(): void {
