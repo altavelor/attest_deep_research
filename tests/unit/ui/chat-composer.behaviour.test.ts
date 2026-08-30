@@ -160,6 +160,11 @@ describe("chat composer redisplay", () => {
       shouldIncludeActiveFileContext: () => true,
     });
 
+    const chip = container.querySelector<HTMLElement>(".attest-chat__attachment");
+    expect(chip?.classList.contains("attest-chat__attachment--active-file")).toBe(true);
+    expect(chip?.getAttribute("title")).toBe(
+      "Active file (included automatically): Notes/Active.md",
+    );
     expect(
       Array.from(
         container.querySelectorAll(".attest-chat__attachment-name"),
@@ -186,6 +191,9 @@ describe("chat composer redisplay", () => {
     const removeButton = container.querySelector<HTMLButtonElement>(
       ".attest-chat__attachment button",
     );
+    const chip = container.querySelector<HTMLElement>(".attest-chat__attachment");
+    expect(chip?.classList.contains("attest-chat__attachment--active-file")).toBe(false);
+    expect(chip?.getAttribute("title")).toBe("Notes/Active.md");
     expect(removeButton).not.toBeNull();
     removeButton?.click();
 

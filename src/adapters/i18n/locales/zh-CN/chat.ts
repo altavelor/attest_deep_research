@@ -68,6 +68,7 @@ export const chat: EnChatMessages = {
     "所选模型不支持 Agent 模式。请在设置中运行能力测试，或改用支持 Agent 的模型。",
   "chat.composer.model.aria": "模型",
   "chat.composer.model.placeholder": "模型",
+  "chat.composer.attachment.activeFile": "当前文件（自动包含）：{path}",
   "chat.composer.attachment.remove": "移除 {path}",
   "chat.composer.submit.ask": "提问",
   "chat.composer.submit.stop": "停止当前回答",

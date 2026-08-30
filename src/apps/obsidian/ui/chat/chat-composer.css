@@ -322,6 +322,15 @@
   line-height: 1.2;
 }
 
+.attest-chat__attachment--active-file {
+  cursor: help;
+  opacity: 0.65;
+}
+
+.attest-chat__attachment--active-file:hover {
+  opacity: 0.85;
+}
+
 .attest-chat__attachment-icon {
   display: inline-flex;
   width: 1rem;
