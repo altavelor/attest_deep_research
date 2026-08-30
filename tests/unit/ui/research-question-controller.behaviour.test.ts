@@ -118,6 +118,26 @@ describe("ResearchQuestionController submission", () => {
     expect(harness.questionInput()).toBe("");
   });
 
+  it("keeps the active file snapshot when model selection is asynchronous", async () => {
+    let activeFilePath = "notes/old.md";
+    let includeActiveFile = true;
+    const harness = createHarness({
+      getActiveFilePath: () => activeFilePath,
+      shouldIncludeActiveFileContext: () => includeActiveFile,
+      updateChatModel: async () => {
+        activeFilePath = "notes/new.md";
+        includeActiveFile = false;
+      },
+    });
+
+    await harness.controller.submitQuestion();
+
+    expect(harness.requests[0]).toMatchObject({
+      activeFilePath: "notes/old.md",
+      includeActiveFile: true,
+    });
+  });
+
   it("does not submit twice while a run is active", async () => {
     const harness = createHarness();
 

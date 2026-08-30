@@ -174,6 +174,24 @@ describe("chat composer redisplay", () => {
     ).toBe(false);
   });
 
+  it("keeps a manually attached active file removable", () => {
+    const onRemoveContextPath = vi.fn();
+    createComposer({
+      getAttachedContextPaths: () => ["Notes/Active.md"],
+      getActiveFilePath: () => "Notes/Active.md",
+      shouldIncludeActiveFileContext: () => true,
+      onRemoveContextPath,
+    });
+
+    const removeButton = container.querySelector<HTMLButtonElement>(
+      ".attest-chat__attachment button",
+    );
+    expect(removeButton).not.toBeNull();
+    removeButton?.click();
+
+    expect(onRemoveContextPath).toHaveBeenCalledWith("Notes/Active.md");
+  });
+
   it("does not show an unsupported active file as an attachment", () => {
     createComposer({
       getActiveFilePath: () => "Images/Active.png",

@@ -170,36 +170,39 @@ export class ChatComposerController {
     setIcon(submitButtonEl, "loader");
   }
 
-  renderAttachedContext(): void {
+  renderAttachedContext(activeFilePath?: string | null): void {
     const refs = this.refs;
     if (!refs) {
       return;
     }
 
-    const activeFilePath = this.activeFilePathForDisplay();
-    const paths = [...this.options.getAttachedContextPaths()];
-    if (activeFilePath && !paths.includes(activeFilePath)) {
-      paths.push(activeFilePath);
+    const activeFilePathForDisplay = this.activeFilePathForDisplay(activeFilePath);
+    const explicitlyAttachedPaths = this.options.getAttachedContextPaths();
+    const paths = [...explicitlyAttachedPaths];
+    if (activeFilePathForDisplay && !paths.includes(activeFilePathForDisplay)) {
+      paths.push(activeFilePathForDisplay);
     }
+    const activeFileIsExplicitlyAttached =
+      activeFilePathForDisplay !== undefined &&
+      explicitlyAttachedPaths.includes(activeFilePathForDisplay);
     renderAttachedContext(
       refs.attachedContextEl,
       paths,
       this.options.onRemoveContextPath,
       this.options.t,
-      activeFilePath,
+      activeFileIsExplicitlyAttached ? undefined : activeFilePathForDisplay,
     );
     refs.controls.setAttachmentsPresent(paths.length > 0);
   }
 
-  private activeFilePathForDisplay(): string | undefined {
+  private activeFilePathForDisplay(activeFilePath?: string | null): string | undefined {
     if (!this.options.shouldIncludeActiveFileContext()) {
       return undefined;
     }
 
-    const activeFilePath = this.options.getActiveFilePath();
-    return activeFilePath && isSupportedContextDocumentPath(activeFilePath)
-      ? activeFilePath
-      : undefined;
+    const candidate =
+      activeFilePath === undefined ? this.options.getActiveFilePath() : activeFilePath;
+    return candidate && isSupportedContextDocumentPath(candidate) ? candidate : undefined;
   }
 
   updateSubmitAvailability(): void {

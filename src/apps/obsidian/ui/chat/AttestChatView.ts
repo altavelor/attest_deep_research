@@ -190,8 +190,9 @@ export class AttestChatView extends ItemView {
       getSearchUnavailableMessage: () => this.getSearchUnavailableMessage(),
       t: this.t,
       onSubmit: () => {
-        this.composer.renderAttachedContext();
-        void this.researchController.submitQuestion();
+        const activeFilePath = this.app.workspace.getActiveFile()?.path ?? null;
+        this.composer.renderAttachedContext(activeFilePath);
+        void this.researchController.submitQuestion(activeFilePath);
       },
       onStop: () => {
         this.researchController.stopRunningQuestion();
@@ -446,7 +447,9 @@ export class AttestChatView extends ItemView {
     }
 
     if (action.submit) {
-      await this.researchController.submitQuestion();
+      const activeFilePath = this.app.workspace.getActiveFile()?.path ?? null;
+      this.composer.renderAttachedContext(activeFilePath);
+      await this.researchController.submitQuestion(activeFilePath);
     } else {
       await this.saveCurrentChat();
     }
