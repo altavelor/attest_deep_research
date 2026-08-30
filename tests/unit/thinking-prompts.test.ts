@@ -107,6 +107,14 @@ describe("universal policy contract", () => {
     expect(system).toContain("source budget is finite and shared");
   });
 
+  it("names the cheap levers at the point of decision, not in a reference block", () => {
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
+    expect(system).toContain("batch independent queries into one call");
+    expect(system).toContain("route with `category`");
+    expect(system).toContain("bound time " + "with `recency`");
+    expect(system).toContain("pass several identifiers per fetch");
+  });
+
   it("states the source weighting policy in every profile that has a source", () => {
     for (const tools of [
       [INDEX_SEARCH_TOOL],
