@@ -6,12 +6,12 @@ export type ProviderRequestKind = "streaming" | "buffered";
 
 export function resolveProviderFetch(
   server: ServerProfile,
-  requestKind: ProviderRequestKind,
+  _requestKind: ProviderRequestKind,
   isMobile: boolean,
 ): typeof fetch {
   if (!isMobile) return fetch;
   if (isMobileLocalProvider(server)) return unavailableMobileLocalFetch;
-  return requestKind === "streaming" ? fetch : obsidianRequestFetch;
+  return obsidianRequestFetch;
 }
 
 export function isMobileLocalProvider(server: ServerProfile): boolean {

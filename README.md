@@ -1,4 +1,4 @@
-# Attest: AI Deep Research
+# Attest AI Deep Research
 
 [![Release](https://img.shields.io/github/v/release/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
 [![Downloads](https://img.shields.io/github/downloads/altavelor/attest_deep_research/total?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
@@ -112,10 +112,10 @@ Use the test button in the profile settings to check the connection before the f
 On iOS and Android, use a cloud provider endpoint. Ollama, LM Studio on localhost, and other
 loopback endpoints are unavailable from the phone and fail immediately with an explanatory error.
 
-Streaming chat and capability probes that generate model output use direct `fetch`, so the cloud
-endpoint must return appropriate CORS headers for the Obsidian app. Model discovery, metadata
-lookups, and embedding requests use Obsidian's buffered request path. If chat fails while model
-discovery succeeds, check the provider's CORS policy or use a compatible cloud endpoint.
+All model requests use Obsidian's request API on mobile, so cloud endpoints do not need browser
+CORS headers. Obsidian buffers the provider response before exposing it to the plugin, which means
+chat and capability probes show a waiting state and then render the response instead of displaying
+tokens progressively. Desktop model responses continue to stream as they arrive.
 
 ### Recognised providers
 
@@ -209,7 +209,7 @@ profile that must stay read-only.
 | Requirement  | Details                                                                                                    |
 | ------------ | ---------------------------------------------------------------------------------------------------------- |
 | Obsidian     | Obsidian 1.5.0 or later on desktop, iOS, or Android.                                                       |
-| Chat         | Desktop supports local or cloud models. Mobile requires a cloud endpoint; streaming requires CORS.         |
+| Chat         | Desktop supports local or cloud models. Mobile requires a cloud endpoint and buffers model responses.      |
 | Vault search | A configured embedding model and a completed index are required; desktop-built synced indexes are best.    |
 | Documents    | Markdown, TXT, PDF, EPUB, FB2, and DOCX are supported. Scanned PDFs without a text layer are not readable. |
 
@@ -235,8 +235,8 @@ An honest list of what Attest does not do, so you can judge it before installing
 - **Anthropic provides chat only.** It has no embedding endpoint, so vault search needs a second
   provider for the embedding profile.
 - **Local providers are unreachable from phones.** Ollama, LM Studio, and anything else on
-  localhost fail immediately on iOS and Android. Cloud chat additionally needs the endpoint to send
-  CORS headers for streaming.
+  localhost fail immediately on iOS and Android. Cloud responses are buffered before display, so
+  mobile chat does not show tokens progressively.
 - **Answers depend on the model you choose.** Citations point at real notes, but a weak model can
   still summarise them poorly. Thinking mode needs a model whose reasoning support is confirmed —
   from the provider's model metadata where it reports it, otherwise by running the capability test.

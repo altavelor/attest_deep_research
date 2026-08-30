@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-30
+
+### Changed
+
+- Plugin metadata uses the Community directory-compatible name `Attest AI Deep Research`.
+- Mobile cloud-model responses are buffered through Obsidian's request API before display.
+
+### Fixed
+
+- Mobile cloud providers no longer depend on browser CORS headers for chat, capability probes,
+  model discovery or embeddings.
+- The open-chat command id no longer repeats the plugin id that Obsidian adds automatically.
+
 ## [0.4.2] - 2026-08-30
 
 Improved onboarding, research reliability, diagnostics and source navigation.
@@ -159,7 +172,8 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.2...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.3...HEAD
+[0.4.3]: https://github.com/altavelor/attest_deep_research/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/altavelor/attest_deep_research/compare/0.3.0...0.4.2
 [0.3.0]: https://github.com/altavelor/attest_deep_research/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/altavelor/attest_deep_research/compare/0.1.0...0.2.0
