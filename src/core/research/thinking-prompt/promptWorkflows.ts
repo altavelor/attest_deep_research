@@ -163,6 +163,8 @@ export function buildCompileKnowledgeSection(capabilities: PromptCapabilities): 
     `- ${dedup} If one exists, ${UPDATE_NOTE_TOOL} to APPEND a section — never overwrite. A re-run ` +
       "extends the existing notes instead of duplicating them.",
     "- Link related notes with `[[wikilinks]]` so the set forms a graph.",
+    "- An explicit count or a single named artefact in the request wins over this shape: build " +
+      "exactly what was asked for and link what exists.",
   ].join("\n");
 }
 

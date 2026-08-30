@@ -53,7 +53,7 @@ const FIND_CONTRADICTIONS = [
 
 const SHOW_VISUALS = [
   /\bchart\b/,
-  /\bgraph\b/,
+  /(?<!knowledge\s)\bgraph\b/,
   /\bplot\b/,
   /\bdiagram\b/,
   /\bvisuali[sz]\w*\b/,
