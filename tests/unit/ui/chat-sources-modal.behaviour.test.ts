@@ -252,6 +252,56 @@ describe("ChatSourcesModal", () => {
     expect(openChunk).toHaveBeenCalledWith(registry.sources[0].revisions[0].chunks[0]);
   });
 
+  it("renders web source identities as links opened in the default browser", () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const modal = new ChatSourcesModal(
+      new App() as unknown as ObsidianApp,
+      registry,
+      createTranslator("en").t,
+      () => "ltr",
+      { onNavigateMessage: vi.fn(), onOpenChunk: vi.fn() },
+    );
+
+    modal.open();
+
+    const link = modal.contentEl.querySelector<HTMLAnchorElement>(
+      ".attest-chat-sources-modal__identity a",
+    );
+    expect(link?.textContent).toBe(registry.sources[0].identity.canonicalKey);
+    expect(link?.href).toBe(registry.sources[0].identity.canonicalKey);
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toBe("noopener noreferrer");
+
+    link?.click();
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an unsafe web source identity as text", () => {
+    const unsafeRegistry: ConversationSourceRegistry = {
+      sources: [
+        {
+          ...registry.sources[0],
+          identity: { kind: "web", canonicalKey: "javascript:alert(1)" },
+        },
+      ],
+    };
+    const modal = new ChatSourcesModal(
+      new App() as unknown as ObsidianApp,
+      unsafeRegistry,
+      createTranslator("en").t,
+      () => "ltr",
+      { onNavigateMessage: vi.fn(), onOpenChunk: vi.fn() },
+    );
+
+    modal.open();
+
+    const identity = modal.contentEl.querySelector<HTMLElement>(
+      ".attest-chat-sources-modal__identity",
+    );
+    expect(identity?.textContent).toBe("javascript:alert(1)");
+    expect(identity?.querySelector("a")).toBeNull();
+  });
+
   it("bounds projection work and incrementally renders a large registry after debounced search", () => {
     vi.useFakeTimers();
     const largeRegistry: ConversationSourceRegistry = {
