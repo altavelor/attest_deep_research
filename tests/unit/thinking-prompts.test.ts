@@ -230,6 +230,26 @@ describe("intent gating of workflow modules", () => {
     expect(system).toContain("Note mutation rules");
   });
 
+  it.each([
+    "Build a note for each company in the index",
+    "Build notes on these three papers",
+    "Synthesize my notes into one summary",
+    "Сделай отдельную заметку на каждую компанию",
+  ])("does not read %s as a request to build a knowledge graph", (question) => {
+    const system = systemText({ availableTools: knowledgeTools, question });
+    expect(system).not.toContain("Compiling corpus knowledge into notes");
+  });
+
+  it.each([
+    "Compile what the library says about transformers into Notes/X/",
+    "Build a knowledge base about diffusion models",
+    "Create a linked set of notes from the corpus",
+    "Скомпилируй базу знаний по трансформерам",
+  ])("reads %s as an explicit compile request", (question) => {
+    const system = systemText({ availableTools: knowledgeTools, question });
+    expect(system).toContain("Compiling corpus knowledge into notes");
+  });
+
   it("includes compile-knowledge only on an explicit compile request", () => {
     const system = systemText({
       availableTools: knowledgeTools,

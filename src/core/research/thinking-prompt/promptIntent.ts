@@ -14,14 +14,12 @@ export interface PromptIntent {
 const COMPILE_KNOWLEDGE = [
   /\bcompil\w*\b/,
   /\bknowledge\s+(base|graph|set)\b/,
-  /\bbuild\b[^.?!]{0,40}\bnotes?\b/,
-  /\bsynthesi[sz]\w*\b[^.?!]{0,40}\bnotes?\b/,
-  /\blinked\s+notes?\b/,
+  /\b(build|create)\b[^.?!]{0,40}\b(knowledge|wiki|zettelkasten)\w*\b/,
+  /\b(linked|connected|interlinked)\s+(set\s+of\s+)?notes?\b/,
   /\bzettelkasten\b/,
   /скомпилир\w*/,
-  /база\s+знаний/,
-  /базу\s+знаний/,
-  /связанн\w*\s+замет\w*/,
+  /баз[ауые]\s+знаний/,
+  /связанн\w*\s+(набор\w*\s+)?замет\w*/,
 ];
 
 const DOWNLOAD = [
