@@ -28,6 +28,12 @@ median across both would let a regression on one hide behind the other. A run wi
 every run and compared with the one recorded in the baseline; a fixture directory that
 cannot be read counts as a mismatch rather than a match.
 
+Every model in `cases.models`, every case and every declared repeat must be present in the
+runs directory. A missing run blocks as a `coverage` failure, so an empty or partial
+directory fails the gate instead of passing it silently. A must-not-degrade metric that
+the baseline measured but the current run did not blocks as well: a metric that vanished
+is not a metric that held.
+
 Exit code 0 means PASS, 1 means a blocking metric fired, 3 means the baseline is stale
 and must be re-measured before any comparison.
 

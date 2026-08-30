@@ -341,6 +341,41 @@ describe("end-to-end verdict", () => {
     expect(result.escalate).toContain("m1 / c1");
   });
 
+  it("fails when the runs directory covers none of the pinned matrix", () => {
+    const result = evalModule.evaluate({
+      cases: { ...cases, models: ["m1", "m2"] },
+      runs: [],
+      baseline: null,
+    });
+
+    expect(result.verdict).toBe("FAIL");
+    expect(result.blocking.map((entry) => entry.metricName)).toEqual(["coverage", "coverage"]);
+  });
+
+  it("fails when a case is short of the repeats it declares", () => {
+    const threeRepeats = { cases: [{ ...cases.cases[0], repeats: 3 }], models: ["m1"] };
+    const result = evalModule.evaluate({
+      cases: threeRepeats,
+      runs: [{ caseId: "c1", model: "m1", report: report([create("Notes/1.md")]) }],
+      baseline: null,
+    });
+
+    expect(result.verdict).toBe("FAIL");
+    expect(result.blocking.map((entry) => entry.caseId)).toContain("m1 / c1");
+  });
+
+  it("blocks a must-not-degrade metric that lost its measurement entirely", () => {
+    const runs = [{ caseId: "c1", model: "m1", report: report([create("Notes/1.md")]) }];
+    const result = evalModule.evaluate({
+      cases,
+      runs,
+      baseline: baselineFor({ completionRate: 1, verifiedCitationRate: 0.9 }),
+    });
+
+    expect(result.verdict).toBe("FAIL");
+    expect(result.blocking.map((entry) => entry.metricName)).toContain("verifiedCitationRate");
+  });
+
   it("keeps the two pinned models apart instead of taking one median across both", () => {
     const runs = [
       { caseId: "c1", model: "m1", report: report([create("Notes/1.md", "x".repeat(100))]) },

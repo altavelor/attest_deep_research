@@ -234,6 +234,16 @@ export function judge(caseId, metricName, current, baseline, band) {
       ? { caseId, metricName, klass, verdict: "block", detail: `${current} occurrence(s)` }
       : { caseId, metricName, klass, verdict: "pass" };
   }
+  if (klass === "must-not-degrade" && typeof baseline === "number" && typeof current !== "number") {
+    return {
+      caseId,
+      metricName,
+      klass,
+      verdict: "block",
+      escalate: true,
+      detail: `no measurement where the baseline recorded ${baseline}`,
+    };
+  }
   if (typeof current !== "number" || typeof baseline !== "number") {
     return { caseId, metricName, klass, verdict: "not-measured" };
   }
@@ -311,12 +321,39 @@ export function modelOf(run) {
 }
 
 /**
+ * Blocks on every pinned model, case and repeat the runs directory does not cover. Without
+ * it an absent run reads as an absent regression, and an empty directory would pass the
+ * gate it was supposed to fail.
+ */
+export function coverageGaps(cases, runs) {
+  const models = cases.models?.length ? cases.models : [...new Set(runs.map(modelOf))];
+  const gaps = [];
+  for (const model of models) {
+    for (const testCase of cases.cases) {
+      const required = testCase.repeats ?? 1;
+      const present = runs.filter(
+        (run) => modelOf(run) === model && run.caseId === testCase.id,
+      ).length;
+      if (present >= required) continue;
+      gaps.push({
+        caseId: `${model} / ${testCase.id}`,
+        metricName: "coverage",
+        klass: "must-be-zero",
+        verdict: "block",
+        detail: `${present} of ${required} runs present`,
+      });
+    }
+  }
+  return gaps;
+}
+
+/**
  * Judges every pinned model on its own. The pair is pinned because the models differ in
  * the capability the prompt is built around, so one median across both would let a
  * regression on one model hide behind the other.
  */
 export function evaluate({ cases, runs, baseline }) {
-  const results = [];
+  const results = coverageGaps(cases, runs);
   const byCase = new Map();
   const models = [...new Set(runs.map(modelOf))].sort();
 
