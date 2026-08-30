@@ -337,7 +337,7 @@ function renderProjectionEntry(
     details.createEl("summary", {
       text: `${boundedDisplayText(entry.source.title, MAX_DISPLAY_TITLE_CHARACTERS)} · ${entry.source.identity.kind}`,
     });
-    renderSourceIdentity(details, entry.source);
+    renderSourceIdentity(details, entry.source, entry.revision.chunks[0], options.onOpenChunk);
     sourceNode = {
       details,
       revisions: details.createDiv({ cls: "attest-chat-sources-modal__revision-list" }),
@@ -377,7 +377,12 @@ function renderProjectionEntry(
   if (revisionDetails.open) renderBody();
 }
 
-function renderSourceIdentity(container: HTMLElement, source: ConversationSource): void {
+function renderSourceIdentity(
+  container: HTMLElement,
+  source: ConversationSource,
+  firstChunk: RetrievedChunk | undefined,
+  onOpenChunk: (chunk: RetrievedChunk) => void,
+): void {
   const identity = container.createDiv({ cls: "attest-chat-sources-modal__identity" });
   const displayIdentity = boundedDisplayText(
     source.identity.canonicalKey,
@@ -386,7 +391,22 @@ function renderSourceIdentity(container: HTMLElement, source: ConversationSource
   const externalUrl =
     source.identity.kind === "web" ? normalizeExternalUrl(source.identity.canonicalKey) : null;
   if (!externalUrl) {
-    identity.setText(displayIdentity);
+    if (source.identity.kind === "web" || !firstChunk) {
+      identity.setText(displayIdentity);
+      return;
+    }
+
+    const link = identity.createEl("a", {
+      cls: "internal-link",
+      text: displayIdentity,
+      href: source.identity.canonicalKey,
+      attr: { "data-href": source.identity.canonicalKey },
+    });
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onOpenChunk(firstChunk);
+    });
     return;
   }
 
