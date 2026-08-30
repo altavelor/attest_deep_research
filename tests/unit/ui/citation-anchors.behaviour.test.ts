@@ -89,6 +89,29 @@ afterEach(() => {
 });
 
 describe("inline citation anchors", () => {
+  it("creates replacement nodes in the rendered container's popout document", () => {
+    const popoutDocument = document.implementation.createHTMLDocument("Popout");
+    const popoutContainer = popoutDocument.body.createDiv();
+    popoutContainer.createEl("p", { text: `Claim [${EVIDENCE_ID}].` });
+    const globalWalker = vi.spyOn(document, "createTreeWalker").mockImplementation(() => {
+      throw new Error("global document used");
+    });
+
+    try {
+      renderInlineCitationAnchors(
+        popoutContainer,
+        buildCitationRefs(citationEvidence(message())),
+        transcriptOptions,
+      );
+    } finally {
+      globalWalker.mockRestore();
+    }
+
+    const anchor = popoutContainer.querySelector(".attest-chat__citation-anchor");
+    expect(anchor?.ownerDocument).toBe(popoutDocument);
+    expect(popoutContainer.querySelector("p")?.textContent).toBe("Claim [1].");
+  });
+
   it("renders one anchor per resolved token and appends no fallback block", () => {
     container.createEl("p", { text: `GPT-4o costs $2.50 per 1M [${EVIDENCE_ID}].` });
 

@@ -4,6 +4,7 @@ import {
   UrlStatusCheckResult,
 } from "@application/contracts";
 import { validatePublicWebUrl } from "@application/sources";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface FetchUrlStatusCheckerOptions {
   fetch?: typeof fetch;
@@ -13,7 +14,7 @@ export class FetchUrlStatusChecker implements UrlStatusChecker {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: FetchUrlStatusCheckerOptions = {}) {
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
   }
 
   async checkUrls(

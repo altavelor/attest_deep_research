@@ -1,4 +1,5 @@
 import { AttestError } from "@core/errors";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export const IMAGE_SEARCH_DEFAULTS = {
   timeoutMs: 15_000,
@@ -23,7 +24,7 @@ export async function requestImageJson(
   options: ImageSourceHttpOptions,
   sourceId: string,
 ): Promise<unknown> {
-  const fetchImpl = options.fetch ?? fetch;
+  const fetchImpl = fetchTransportOrUnavailable(options.fetch);
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),

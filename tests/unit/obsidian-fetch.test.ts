@@ -95,4 +95,30 @@ describe("obsidianRequestFetch", () => {
 
     await expect(pending).rejects.toBe(reason);
   });
+
+  it("converts a non-Error abort reason into an AbortError", async () => {
+    requestUrl.mockReturnValue(new Promise(() => undefined));
+    const controller = new AbortController();
+    const pending = obsidianRequestFetch("https://api.example.test", {
+      signal: controller.signal,
+    });
+
+    controller.abort("cancelled");
+
+    await expect(pending).rejects.toMatchObject({
+      name: "AbortError",
+      message: "The request was aborted.",
+    });
+  });
+
+  it.each([undefined, new AbortController().signal])(
+    "normalizes non-Error request failures with signal %s",
+    async (signal) => {
+      requestUrl.mockRejectedValue("network failed");
+
+      await expect(obsidianRequestFetch("https://api.example.test", { signal })).rejects.toEqual(
+        expect.any(Error),
+      );
+    },
+  );
 });

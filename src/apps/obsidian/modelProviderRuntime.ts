@@ -1,15 +1,18 @@
 import type { ServerProfile } from "@adapters/settings";
 import { AttestError } from "@core/errors";
 import { obsidianRequestFetch } from "./obsidianFetch";
+import { nativeWindowFetch } from "./nativeFetch";
 
 export type ProviderRequestKind = "streaming" | "buffered";
 
 export function resolveProviderFetch(
   server: ServerProfile,
-  _requestKind: ProviderRequestKind,
+  requestKind: ProviderRequestKind,
   isMobile: boolean,
 ): typeof fetch {
-  if (!isMobile) return fetch;
+  if (!isMobile && requestKind === "streaming") {
+    return nativeWindowFetch;
+  }
   if (isMobileLocalProvider(server)) return unavailableMobileLocalFetch;
   return obsidianRequestFetch;
 }

@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { AttestError } from "@core/errors";
 import type { ServerProfile } from "@adapters/settings";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
@@ -15,13 +17,13 @@ function server(apiFormat: ServerProfile["apiFormat"], baseUrl: string): ServerP
 }
 
 describe("model provider runtime", () => {
-  it("routes every mobile cloud request through requestUrl while desktop keeps direct fetch", () => {
+  it("uses native fetch only for desktop streaming and requestUrl for buffered requests", () => {
     const cloud = server("openai-compatible", "https://api.example.test/v1");
 
     expect(resolveProviderFetch(cloud, "streaming", true)).toBe(obsidianRequestFetch);
     expect(resolveProviderFetch(cloud, "buffered", true)).toBe(obsidianRequestFetch);
-    expect(resolveProviderFetch(cloud, "streaming", false)).toBe(fetch);
-    expect(resolveProviderFetch(cloud, "buffered", false)).toBe(fetch);
+    expect(resolveProviderFetch(cloud, "streaming", false)).not.toBe(obsidianRequestFetch);
+    expect(resolveProviderFetch(cloud, "buffered", false)).toBe(obsidianRequestFetch);
   });
 
   it.each([

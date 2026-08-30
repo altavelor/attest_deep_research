@@ -9,6 +9,7 @@ import type { WebSourceActivation } from "@core/web";
 import { SearchProviderResult, WebSearchOptions, WebSearchSource } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { sanitizeParsedResults, WebSourceDefinition, WebSourceQueryInput } from "./types";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface HttpWebSearchSourceOptions {
   activation?: WebSourceActivation;
@@ -50,7 +51,7 @@ export class HttpWebSearchSource implements WebSearchSource {
     this.descriptor = definition.descriptor;
     this.activation = options.activation ?? "auto";
     this.credentials = options.credentials ?? {};
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.defaultResultLimit = options.defaultResultLimit ?? DEFAULT_RESULT_LIMIT;
     this.logger = options.logger;

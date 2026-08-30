@@ -12,6 +12,8 @@ export const obsidianRequestFetch: typeof fetch = async (input, init) => {
     headers: normalizeFetchHeaders(init?.headers),
     body: normalizeFetchBody(init?.body),
     throw: false,
+  }).catch((reason: unknown) => {
+    throw errorFrom(reason);
   });
 
   const response = signal ? await raceAbort(request, signal) : await request;
@@ -29,13 +31,17 @@ function raceAbort<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
+function errorFrom(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error("The Obsidian request failed.");
+}
+
 function abortError(): Error {
   const error = new Error("The request was aborted.");
   error.name = "AbortError";
   return error;
 }
 
-function abortReason(signal: AbortSignal): unknown {
+function abortReason(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : abortError();
 }
 

@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, Notice } from "obsidian";
 
 import {
   areCredentialsComplete,
@@ -13,6 +13,7 @@ import { getWebSourceProfile, upsertWebSourceProfile } from "@adapters/settings"
 import type { WebSourceIssue } from "@application/web";
 import type { MessageKey, Translate } from "@adapters/i18n";
 import type { TextDirection } from "@core/i18n";
+import { toUserMessage } from "@core/errors";
 import { createIconButton } from "./shared";
 import { WebSourceModal } from "./WebSourceModal";
 
@@ -59,6 +60,8 @@ const ISSUE_MESSAGE_KEYS: Record<WebSourceIssue["reason"], MessageKey> = {
  * problem).
  */
 export class WebSourcesSection {
+  private activationUpdate: Promise<void> = Promise.resolve();
+
   constructor(private readonly ctx: WebSourcesSectionContext) {}
 
   render(containerEl: HTMLElement): void {
@@ -194,16 +197,31 @@ export class WebSourcesSection {
       cls: `attest-settings-websource-lamp is-${state}${activation === "always" ? " is-always" : ""}`,
       attr: { type: "button", "aria-label": title, title },
     });
-    lamp.addEventListener("click", async () => {
-      const settings = this.ctx.getSettings();
-      const profile = getWebSourceProfile(settings, descriptor.id);
-      upsertWebSourceProfile(settings, {
-        ...profile,
-        activation: nextActivation(profile.activation),
+    lamp.addEventListener("click", () => {
+      this.activationUpdate = this.activationUpdate
+        .catch(() => undefined)
+        .then(() => this.toggleActivation(descriptor));
+      void this.activationUpdate.catch((error) => {
+        new Notice(toUserMessage(error));
       });
-      await this.ctx.saveSettings();
-      this.ctx.requestRedisplay();
     });
+  }
+
+  private async toggleActivation(descriptor: WebSourceDescriptor): Promise<void> {
+    const settings = this.ctx.getSettings();
+    const profile = getWebSourceProfile(settings, descriptor.id);
+    upsertWebSourceProfile(settings, {
+      ...profile,
+      activation: nextActivation(profile.activation),
+    });
+    try {
+      await this.ctx.saveSettings();
+    } catch (error) {
+      upsertWebSourceProfile(settings, profile);
+      this.ctx.requestRedisplay();
+      throw error;
+    }
+    this.ctx.requestRedisplay();
   }
 
   private openConfigModal(descriptor: WebSourceDescriptor): void {

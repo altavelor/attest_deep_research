@@ -282,10 +282,11 @@ function startInlineTitleEdit(
     return;
   }
 
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "attest-chat__saved-title-input";
-  input.value = chat.title;
+  const input = openButton.createEl("input", {
+    cls: "attest-chat__saved-title-input",
+    type: "text",
+    value: chat.title,
+  });
   input.maxLength = 200;
   titleEl.replaceWith(input);
 

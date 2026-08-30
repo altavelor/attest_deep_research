@@ -6,7 +6,7 @@ import type { TextDirection } from "@core/i18n";
 import { copyToClipboard } from "../shared/clipboard";
 import { buildDiagnosticReportV3 } from "./report/build";
 import { renderDiagnosticHtmlDocument } from "./html/document";
-import { downloadDiagnosticHtml } from "./download";
+import { browserDownloadEnvironment, downloadDiagnosticHtml } from "./download";
 import { renderReadableDiagnosticReport } from "./readable";
 
 export class DiagnosticReportModalController {
@@ -83,7 +83,11 @@ class DiagnosticReportModal extends Modal {
     });
     setIcon(downloadButton, "download");
     downloadButton.addEventListener("click", () => {
-      downloadDiagnosticHtml(renderDiagnosticHtmlDocument(report), report.stats.runId || undefined);
+      downloadDiagnosticHtml(
+        renderDiagnosticHtmlDocument(report),
+        report.stats.runId || undefined,
+        browserDownloadEnvironment(this.contentEl.ownerDocument),
+      );
     });
 
     const closeButton = this.modalEl.querySelector(".modal-close-button");

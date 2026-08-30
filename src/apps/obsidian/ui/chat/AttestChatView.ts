@@ -930,7 +930,9 @@ export class AttestChatView extends ItemView {
     const message = profile?.isIndexed ? legacyIndexImageNotice(profile, this.t) : null;
     if (!message) return;
 
-    const content = document.createDocumentFragment();
+    const content = (
+      this.contentEl.win as Window & { createFragment(): DocumentFragment }
+    ).createFragment();
     content.append(`${message}\n`);
     const action = content.createEl("a", {
       text: this.t("chat.notice.openIndexSettings"),
@@ -1083,11 +1085,10 @@ export function openExternalUrlWithAnchor(
   const normalizedUrl = normalizeExternalUrl(url);
   if (!normalizedUrl) return false;
 
-  const anchor = ownerDocument.createElement("a");
-  anchor.href = normalizedUrl;
-  anchor.target = "_blank";
-  anchor.rel = "noopener noreferrer";
-  ownerDocument.body.appendChild(anchor);
+  const anchor = ownerDocument.body.createEl("a", {
+    href: normalizedUrl,
+    attr: { target: "_blank", rel: "noopener noreferrer" },
+  });
   anchor.click();
   anchor.remove();
   return true;

@@ -107,6 +107,54 @@ describe("createResearchToolRegistry", () => {
     );
   });
 
+  it("uses the application-provided transport for document probes", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(undefined, {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        }),
+    );
+    const created = createResearchToolRegistry(
+      {
+        searchProvider: {
+          search: vi.fn().mockResolvedValue([]),
+          fetchDocument: vi.fn(),
+        },
+        vaultWriter: {
+          exists: vi.fn(),
+          createFile: vi.fn(),
+          createBinaryFile: vi.fn(),
+          modifyFile: vi.fn(),
+          appendFile: vi.fn(),
+          readFile: vi.fn(),
+          trashFile: vi.fn(),
+          ensureFolder: vi.fn(),
+        },
+        availability: {
+          searchMode: "webOnly",
+          noteAccess: false,
+          activeFileAccess: false,
+          noteMutationAccess: true,
+          retrieverAvailable: false,
+          webProviderAvailable: true,
+        },
+      },
+      { fetch: fetchImpl as unknown as typeof fetch },
+    );
+
+    await created.tools.execute({
+      id: "probe",
+      name: "probe_document_url",
+      arguments: { url: "https://example.com/paper.pdf" },
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://example.com/paper.pdf",
+      expect.objectContaining({ method: "HEAD" }),
+    );
+  });
+
   it("exposes URL inventory tools in index-only mode when index dependencies exist", () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),

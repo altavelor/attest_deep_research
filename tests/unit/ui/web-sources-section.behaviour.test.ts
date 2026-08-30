@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "../../stubs/obsidian";
+import { App, takeNotices } from "../../stubs/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { DEFAULT_SETTINGS } from "@adapters/settings";
@@ -27,8 +27,8 @@ function settingsWith(activation: WebSourceActivation): AttestSettings {
   };
 }
 
-function render(settings: AttestSettings) {
-  const saveSettings = vi.fn(async () => {});
+function render(settings: AttestSettings, save: () => Promise<void> = async () => {}) {
+  const saveSettings = vi.fn(save);
   const requestRedisplay = vi.fn();
   const section = new WebSourcesSection({
     app: new App() as unknown as ObsidianApp,
@@ -64,6 +64,7 @@ describe("WebSourcesSection activation lamp", () => {
   });
 
   afterEach(() => {
+    takeNotices();
     restoreDomTimers();
     resetDom();
     vi.restoreAllMocks();
@@ -94,6 +95,43 @@ describe("WebSourcesSection activation lamp", () => {
       lampFor(container, "duckduckgo").click();
       await vi.waitFor(() => expect(activationOf(settings)).toBe(expected));
     }
+  });
+
+  it("rolls back the activation and reports a failed save", async () => {
+    const settings = settingsWith("off");
+    const { container, requestRedisplay } = render(settings, async () => {
+      throw new Error("disk full");
+    });
+
+    lampFor(container, "duckduckgo").click();
+    await vi.waitFor(() => expect(requestRedisplay).toHaveBeenCalledTimes(1));
+
+    expect(activationOf(settings)).toBe("off");
+    expect(takeNotices()).toHaveLength(1);
+  });
+
+  it("serializes rapid activation changes so a failed save cannot restore stale state", async () => {
+    const settings = settingsWith("off");
+    let rejectFirst: ((reason: Error) => void) | undefined;
+    const save = vi
+      .fn<() => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const { container } = render(settings, save);
+    const lamp = lampFor(container, "duckduckgo");
+
+    lamp.click();
+    lamp.click();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    rejectFirst!(new Error("first save failed"));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+
+    expect(activationOf(settings)).toBe("auto");
   });
 
   it("marks each state distinctly and names the next one in the label", () => {

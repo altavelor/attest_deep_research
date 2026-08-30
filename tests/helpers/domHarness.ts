@@ -46,6 +46,17 @@ export function installObsidianDomHelpers(): void {
   const proto = Element.prototype as unknown as Record<string, unknown>;
   if (typeof proto.createEl === "function") return;
 
+  Object.defineProperty(Node.prototype, "win", {
+    configurable: true,
+    get(this: Node) {
+      const ownerDocument = this.ownerDocument ?? document;
+      const ownerWindow = ownerDocument.defaultView ?? window;
+      return Object.assign(Object.create(ownerWindow), {
+        createFragment: () => ownerDocument.createDocumentFragment(),
+      });
+    },
+  });
+
   const createEl: Creator = function createEl(this: Element, tag, init = {}, callback) {
     const el = this.ownerDocument.createElement(tag);
     applyInit(el, init);

@@ -10,7 +10,7 @@ export interface DownloadSourceOptions {
   writer: VaultWriter;
   defaultFolder: string;
   confirmation?: DownloadConfirmation;
-  fetchImpl?: typeof fetch;
+  fetchImpl: typeof fetch;
   available?: boolean;
 }
 
@@ -27,7 +27,7 @@ export class DownloadSource implements DataSource {
     this.writer = options.writer;
     this.defaultFolder = options.defaultFolder;
     this.confirmation = options.confirmation ?? AUTO_CONFIRM_DOWNLOAD;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl;
     this.descriptor = {
       id: "download",
       kind: "web",

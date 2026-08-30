@@ -1,4 +1,5 @@
 export * from "./concurrency";
+export * from "./fetchTransport";
 export * from "./guards";
 export * from "./inflate";
 export * from "./llmOutput";

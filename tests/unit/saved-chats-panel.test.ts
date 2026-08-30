@@ -129,6 +129,35 @@ describe("SavedChatsPanel", () => {
     expect(container.querySelector(".attest-chat__saved-title")?.textContent).toBe("Project notes");
   });
 
+  it("creates the inline title editor in the panel's popout document", () => {
+    const popoutDocument = document.implementation.createHTMLDocument("Popout");
+    const container = popoutDocument.body.createDiv();
+    renderSavedChatsPopoverContent(container, {
+      savedChats: [chat("one", "Project notes")],
+      currentChatId: null,
+      searchQuery: "",
+      activeTab: "history",
+      t,
+      onSearchQueryChange: vi.fn(),
+      onTabChange: vi.fn(),
+      onOpenChat: vi.fn(),
+      onRenameChat: vi.fn(),
+    });
+    const globalCreateElement = vi.spyOn(document, "createElement").mockImplementation(() => {
+      throw new Error("global document used");
+    });
+
+    try {
+      container.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[0]?.click();
+    } finally {
+      globalCreateElement.mockRestore();
+    }
+
+    expect(container.querySelector(".attest-chat__saved-title-input")?.ownerDocument).toBe(
+      popoutDocument,
+    );
+  });
+
   it("keeps the popover inside the host while positioning it below the anchor", () => {
     const host = document.createElement("div");
     const anchor = document.createElement("button");
