@@ -57,8 +57,7 @@ export function rankSectionsByQuery(
 
 /** Split collapsed text into windows of `sentencesPerSection` sentences. */
 export function splitIntoSections(text: string, sentencesPerSection: number): string[] {
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
+  const sentences = splitSentences(text)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 0);
 
@@ -89,3 +88,4 @@ function queryTerms(query: string): string[] {
   }
   return [...seen];
 }
+import { splitSentences } from "./sentenceBoundaries";

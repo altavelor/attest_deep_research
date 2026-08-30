@@ -4,6 +4,7 @@ import { Ollama } from "ollama";
 
 import { ApiFormat, ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 import { AttestError } from "@core/errors";
+import { fetchTransportOrUnavailable } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import {
@@ -52,7 +53,9 @@ export class ChatModelClient implements ChatModelProvider {
     } else if (this.provider === "ollama") {
       this.ollama = new Ollama({
         host: normalizeOllamaHost(options.baseUrl),
-        fetch: createLoggingFetch(options.fetch ?? fetch, { logger: options.logger }),
+        fetch: createLoggingFetch(fetchTransportOrUnavailable(options.fetch), {
+          logger: options.logger,
+        }),
       });
     }
   }

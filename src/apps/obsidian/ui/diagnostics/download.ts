@@ -20,16 +20,17 @@ export function downloadDiagnosticHtml(
   return filename;
 }
 
-function browserDownloadEnvironment(): DiagnosticDownloadEnvironment {
+export function browserDownloadEnvironment(
+  ownerDocument: Document = window.document,
+): DiagnosticDownloadEnvironment {
   return {
     createObjectUrl: (blob) => URL.createObjectURL(blob),
     revokeObjectUrl: (url) => URL.revokeObjectURL(url),
     trigger: (url, filename) => {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.hidden = true;
-      document.body.append(anchor);
+      const anchor = ownerDocument.body.createEl("a", {
+        href: url,
+        attr: { download: filename, hidden: true },
+      });
       anchor.click();
       anchor.remove();
     },

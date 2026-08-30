@@ -1,5 +1,6 @@
 import { WebPageFetchFailure } from "@application/ports";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface FetchHttpRuntime {
   fetch?: typeof fetch;
@@ -25,7 +26,7 @@ export async function requestText(
   runtime: FetchHttpRuntime,
   timeoutOverrideMs?: number,
 ): Promise<HttpTextResult> {
-  const fetchImpl = runtime.fetch ?? fetch;
+  const fetchImpl = fetchTransportOrUnavailable(runtime.fetch);
   const controller = new AbortController();
   const timeoutMs =
     typeof timeoutOverrideMs === "number" && timeoutOverrideMs > 0

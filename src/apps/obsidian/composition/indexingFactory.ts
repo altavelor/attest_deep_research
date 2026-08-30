@@ -20,7 +20,7 @@ import type { IndexingState } from "@adapters/indexing";
 import { EmbeddingClient } from "@adapters/model-provider";
 import { ObsidianVaultFileProvider } from "@adapters/obsidian/ObsidianVaultFileProvider";
 import { RetrievalService } from "@adapters/retrieval";
-import { EmbeddingModelProfile } from "@adapters/settings";
+import { EmbeddingModelProfile, withVaultConfigExclusion } from "@adapters/settings";
 import { resolveProviderFetch } from "@apps/obsidian/modelProviderRuntime";
 
 import { CompositionContext } from "./CompositionContext";
@@ -49,14 +49,16 @@ export function createIndexingService(
     ctx.translator.t,
     indexProfile.embeddingModelProfileId,
   );
+  const excludeGlobs = withVaultConfigExclusion(indexProfile.excludeGlobs, ctx.app.vault.configDir);
+  const scopedProfile = { ...indexProfile, excludeGlobs };
   return new IndexingService({
     files: new ObsidianVaultFileProvider(ctx.app.vault),
-    extractors: createExtractorsForProfile(ctx, indexProfile),
+    extractors: createExtractorsForProfile(ctx, scopedProfile),
     embeddings: createEmbeddingClientForProfile(ctx, embeddingProfile),
     indexStore: createVectorIndexStoreForProfile(ctx, indexProfile),
     embeddingModel: embeddingProfile.modelName,
     includeFolders: indexProfile.includeFolders,
-    excludeGlobs: indexProfile.excludeGlobs,
+    excludeGlobs,
     batchSize: effectiveEmbeddingBatchSize(indexProfile.embeddingBatchSize, ctx.isMobile === true),
     ...mobileIndexingOptions(ctx.isMobile === true),
     ...(mobileFileSizeLimits(ctx.isMobile === true)

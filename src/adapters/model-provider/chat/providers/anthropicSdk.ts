@@ -1,7 +1,7 @@
 import Anthropic, { APIError, APIUserAbortError } from "@anthropic-ai/sdk";
 
 import { AttestError, AttestErrorCode } from "@core/errors";
-import { isRecord } from "@shared";
+import { fetchTransportOrUnavailable, isRecord } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 
@@ -38,7 +38,7 @@ export function createAnthropicClient(options: AnthropicClientOptions): Anthropi
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
     timeout: options.timeoutMs ?? 30_000,
-    fetch: createLoggingFetch(options.fetch ?? fetch, {
+    fetch: createLoggingFetch(fetchTransportOrUnavailable(options.fetch), {
       logger: options.logger,
       ...(hasApiKey ? {} : { stripHeader: "x-api-key" }),
     }),

@@ -1,4 +1,5 @@
 import { Notice, Platform, Plugin } from "obsidian";
+import type { Command } from "obsidian";
 
 import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { PdfTextCache } from "@adapters/extractors";
@@ -57,7 +58,7 @@ import {
   resolveIndexProfileForUse,
 } from "./composition/profileResolvers";
 import { MobileIndexingLifecycle } from "./indexing/MobileIndexingLifecycle";
-import { ATTEST_COMMAND_IDS, registerAttestCommands } from "./commands";
+import { registerAttestCommands } from "./commands";
 import { OnboardingModal } from "./ui/onboarding";
 import { applyOnboardingResult, onboardingPrefill } from "@adapters/settings";
 import type { AppliedOnboarding, OnboardingResult } from "@adapters/settings";
@@ -74,6 +75,7 @@ export default class AttestPlugin extends Plugin {
   private translator: UiTranslator = createTranslator(DEFAULT_LOCALE);
   private onboardingModal?: OnboardingModal;
   private unloaded = false;
+  private readonly registeredCommands: Command[] = [];
 
   /** Late-bound translator lookup so captured references never go stale. */
   readonly translate: Translate = (key, params) => this.translator.t(key, params);
@@ -417,8 +419,7 @@ export default class AttestPlugin extends Plugin {
    */
   applyUiLanguage(): void {
     this.rebindTranslator();
-    for (const commandId of ATTEST_COMMAND_IDS) this.removeCommand(commandId);
-    this.registerCommands();
+    this.refreshCommandNames();
     const ribbonLabel = this.translate("command.openChat");
     this.ribbonIcon?.setAttr("aria-label", ribbonLabel);
     this.ribbonIcon?.setAttr("title", ribbonLabel);
@@ -436,7 +437,11 @@ export default class AttestPlugin extends Plugin {
 
   private registerCommands(): void {
     registerAttestCommands({
-      addCommand: (command) => this.addCommand(command),
+      addCommand: (command) => {
+        const registered = this.addCommand(command);
+        this.registeredCommands.push(registered);
+        return registered;
+      },
       t: this.translate,
       openChat: async () => {
         await this.activateChatView();
@@ -444,6 +449,22 @@ export default class AttestPlugin extends Plugin {
       runChatCommand: (action) => this.runChatCommand(action),
       updateActiveIndex: () => this.updateActiveIndex(),
       runSetup: () => this.openOnboarding(),
+    });
+  }
+
+  private refreshCommandNames(): void {
+    registerAttestCommands({
+      addCommand: (command) => {
+        const registered = this.registeredCommands.find(({ id }) => id === command.id);
+        if (!registered) throw new Error(`Command not registered: ${command.id}`);
+        registered.name = command.name;
+        return registered;
+      },
+      t: this.translate,
+      openChat: async () => {},
+      runChatCommand: async () => {},
+      updateActiveIndex: async () => {},
+      runSetup: () => {},
     });
   }
 
@@ -548,7 +569,7 @@ export default class AttestPlugin extends Plugin {
         active: true,
       });
     }
-    await this.app.workspace.revealLeaf(leaf);
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
     this.warmVaultCaches();
     if (!(leaf.view instanceof AttestChatView)) {
       throw new Error("Attest chat view could not be activated.");

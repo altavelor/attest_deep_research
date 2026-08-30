@@ -158,6 +158,7 @@ export interface VaultEventRef {
 }
 
 export class Vault {
+  configDir = ".obsidian";
   adapter: unknown = new MemoryDataAdapter();
   private files: TFile[] = [];
   private readonly listeners: VaultEventRef[] = [];

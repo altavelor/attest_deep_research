@@ -24,6 +24,7 @@ import {
 import { FetchUrlStatusChecker } from "@adapters/web";
 import { resolveIndexDescriptionForPrompt } from "@adapters/indexing";
 import { obsidianRequestFetch } from "@apps/obsidian/obsidianFetch";
+import { nativeWindowFetch } from "@apps/obsidian/nativeFetch";
 import {
   requireChatModelProfile,
   requireServerProfile,
@@ -126,7 +127,7 @@ export function createResearchService(
 
   return new ResearchService({
     retriever,
-    toolsetFactory: createResearchToolRegistry,
+    toolsetFactory: (options) => createResearchToolRegistry(options, { fetch: nativeWindowFetch }),
     modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
     runToolLoop,
     chatModel: createChatModelClient(ctx, chatServer, chatProfile),

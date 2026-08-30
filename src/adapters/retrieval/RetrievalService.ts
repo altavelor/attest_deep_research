@@ -22,6 +22,7 @@ import {
 import { sharedReferences } from "@application/use-cases/enrichment";
 import { groupClaims } from "@application/use-cases/claims";
 import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
+import { splitSentences } from "@core/web/sentenceBoundaries";
 import { mapWithConcurrency } from "@shared";
 import { EmbeddingProviderClient } from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
@@ -412,8 +413,7 @@ function purposeFromContext(context: string, url: string): string | null {
 }
 
 function nearestSentence(value: string): string {
-  const sentences = value
-    .split(/(?<=[.!?])\s+/)
+  const sentences = splitSentences(value)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
   if (sentences.length === 0) return value;

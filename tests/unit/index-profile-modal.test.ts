@@ -48,7 +48,9 @@ describe("IndexProfileModal", () => {
 
   it("uses an available default embedding model and saves normalized index settings", async () => {
     const onSave = vi.fn(async () => {});
-    const modal = new IndexProfileModal(new App() as unknown as ObsidianApp, {
+    const app = new App();
+    app.vault.configDir = ".config/obsidian";
+    const modal = new IndexProfileModal(app as unknown as ObsidianApp, {
       t,
       profiles: [],
       embeddingModels: [embeddingModel],
@@ -71,6 +73,7 @@ describe("IndexProfileModal", () => {
         name: "Research index",
         mode: "wholeVault",
         includeFolders: ["/"],
+        excludeGlobs: [".config/obsidian/**", ".trash/**", ".attest/**"],
         embeddingModelProfileId: "embedding",
         chunkSize: 200,
         chunkOverlap: 199,

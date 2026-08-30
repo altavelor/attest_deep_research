@@ -22,6 +22,7 @@ import {
   isSupportedPageContentType,
   WebPageFetcher,
 } from "./WebPageFetcher";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface DuckDuckGoSearchProviderOptions {
   fetch?: typeof fetch;
@@ -77,7 +78,7 @@ export class DuckDuckGoSearchProvider implements SearchProvider {
   private readonly pageFetcher: WebPageFetcher;
 
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
     this.searchUrl = options.searchUrl ?? DEFAULT_SEARCH_URL;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxExtractedTextLength =

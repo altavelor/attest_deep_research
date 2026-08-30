@@ -18,6 +18,7 @@ export interface DocumentProbeResult {
 }
 
 const DEFAULT_PROBE_TIMEOUT_MS = 15_000;
+const MAX_PROBE_REDIRECTS = 5;
 
 const PROBE_CONCURRENCY = 4;
 
@@ -59,24 +60,21 @@ export async function probeDocumentUrl(
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    let response = await fetchImpl.call(globalThis, validated.url, {
+    let { response, finalUrl } = await requestPublicUrl(fetchImpl, validated.url, {
       method: "HEAD",
-      redirect: "follow",
       signal: controller.signal,
       headers: probeHeaders(),
     });
     if (response.status === 405 || response.status === 501) {
-      response = await fetchImpl.call(globalThis, validated.url, {
+      ({ response, finalUrl } = await requestPublicUrl(fetchImpl, finalUrl, {
         method: "GET",
-        redirect: "follow",
         signal: controller.signal,
         headers: { ...probeHeaders(), Range: "bytes=0-0" },
-      });
+      }));
       await response.body?.cancel().catch(() => undefined);
     }
 
     const contentType = normalizeContentType(response.headers.get("content-type"));
-    const finalUrl = response.url || validated.url;
     const sizeBytes = parseContentLength(response.headers.get("content-length"));
     const downloadable = response.ok && isDownloadableContentType(contentType);
 
@@ -105,6 +103,36 @@ export async function probeDocumentUrl(
   } finally {
     globalThis.clearTimeout(timeout);
   }
+}
+
+async function requestPublicUrl(
+  fetchImpl: typeof fetch,
+  initialUrl: string,
+  init: RequestInit,
+): Promise<{ response: Response; finalUrl: string }> {
+  let currentUrl = initialUrl;
+  for (let redirects = 0; redirects <= MAX_PROBE_REDIRECTS; redirects += 1) {
+    const response = await fetchImpl(currentUrl, { ...init, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) {
+      const finalUrl = validatePublicWebUrl(response.url || currentUrl);
+      if (!finalUrl.ok) {
+        throw new Error("Unsafe final URL while probing a document.");
+      }
+      return { response, finalUrl: finalUrl.url };
+    }
+
+    const location = response.headers.get("location");
+    await response.body?.cancel().catch(() => undefined);
+    if (!location || redirects === MAX_PROBE_REDIRECTS) {
+      throw new Error("Unsafe or excessive redirect while probing a document URL.");
+    }
+    const redirected = validatePublicWebUrl(new URL(location, currentUrl).href);
+    if (!redirected.ok) {
+      throw new Error("Unsafe redirect while probing a document URL.");
+    }
+    currentUrl = redirected.url;
+  }
+  throw new Error("Excessive redirects while probing a document URL.");
 }
 
 function probeHeaders(): Record<string, string> {

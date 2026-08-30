@@ -12,11 +12,13 @@ export function renderInlineCitationAnchors(
     for (const chunkId of ref.chunkIds) refByChunkId.set(chunkId, ref);
   }
 
-  const createAnchor = (ref: ChatCitationRef): HTMLElement => {
-    const button = document.createElement("button");
-    button.className = "attest-chat__citation-anchor";
-    button.type = "button";
-    button.textContent = `[${ref.number}]`;
+  const createAnchor = (parent: Node, ref: ChatCitationRef): HTMLElement => {
+    const button = containerEl.createEl("button", {
+      cls: "attest-chat__citation-anchor",
+      text: `[${ref.number}]`,
+      attr: { type: "button" },
+    });
+    parent.appendChild(button);
     button.setAttr("aria-label", options.t("chat.citation.openSource", { number: ref.number }));
     button.dataset.citationKey = ref.key;
     button.addEventListener("mouseenter", () => options.onOpenCitationPopover(button, ref));
@@ -39,13 +41,15 @@ export function renderInlineCitationAnchors(
 function replaceCitationTextNodes(
   containerEl: HTMLElement,
   refByChunkId: Map<string, ChatCitationRef>,
-  createAnchor: (ref: ChatCitationRef) => HTMLElement,
+  createAnchor: (parent: Node, ref: ChatCitationRef) => HTMLElement,
 ): number {
-  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT);
+  const ownerDocument = containerEl.ownerDocument;
+  const showText = ownerDocument.defaultView?.NodeFilter.SHOW_TEXT ?? 4;
+  const walker = ownerDocument.createTreeWalker(containerEl, showText);
   const textNodes: Text[] = [];
   let replacementCount = 0;
   while (walker.nextNode()) {
-    if (walker.currentNode instanceof Text) textNodes.push(walker.currentNode);
+    if (walker.currentNode.nodeType === 3) textNodes.push(walker.currentNode as Text);
   }
 
   for (const textNode of textNodes) {
@@ -55,13 +59,15 @@ function replaceCitationTextNodes(
     if (parts === null) continue;
     replacementCount += countAnchors(parts);
 
-    const fragment = document.createDocumentFragment();
+    const fragment = (
+      containerEl.win as Window & { createFragment(): DocumentFragment }
+    ).createFragment();
     for (const part of parts) {
-      fragment.append(
-        part.kind === "anchor"
-          ? createAnchor(refByChunkId.get(part.chunkId)!)
-          : document.createTextNode(part.value),
-      );
+      if (part.kind === "anchor") {
+        createAnchor(fragment, refByChunkId.get(part.chunkId)!);
+      } else {
+        fragment.append(ownerDocument.createTextNode(part.value));
+      }
     }
     textNode.replaceWith(fragment);
   }
@@ -71,17 +77,17 @@ function replaceCitationTextNodes(
 function appendFallbackCitationAnchors(
   containerEl: HTMLElement,
   refs: ChatCitationRef[],
-  createAnchor: (ref: ChatCitationRef) => HTMLElement,
+  createAnchor: (parent: Node, ref: ChatCitationRef) => HTMLElement,
 ): void {
+  const ownerDocument = containerEl.ownerDocument;
   const targets = Array.from(containerEl.querySelectorAll<HTMLElement>("p, li")).filter((element) =>
     Boolean(element.textContent?.trim()),
   );
   const fallbackTarget = targets.at(-1) ?? containerEl;
   for (const ref of refs) {
-    (bestCitationTarget(targets, ref) ?? fallbackTarget).append(
-      document.createTextNode(" "),
-      createAnchor(ref),
-    );
+    const target = bestCitationTarget(targets, ref) ?? fallbackTarget;
+    target.append(ownerDocument.createTextNode(" "));
+    createAnchor(target, ref);
   }
 }
 

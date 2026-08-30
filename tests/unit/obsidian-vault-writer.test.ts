@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TFile } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 
 import { ObsidianVaultWriter } from "@adapters/obsidian/ObsidianVaultWriter";
 import type { App } from "obsidian";
@@ -8,8 +8,15 @@ function file(path: string): TFile {
   return Object.assign(new TFile(), { path });
 }
 
+function folder(path: string): TFolder {
+  return Object.assign(new TFolder(), { path });
+}
+
 function app(existing: TFile | null = null): App {
   return {
+    fileManager: {
+      trashFile: vi.fn(async () => {}),
+    },
     vault: {
       getAbstractFileByPath: vi.fn(() => existing),
       modify: vi.fn(async () => {}),
@@ -18,8 +25,6 @@ function app(existing: TFile | null = null): App {
       createBinary: vi.fn(async () => {}),
       append: vi.fn(async () => {}),
       read: vi.fn(async () => "content"),
-      trash: vi.fn(async () => {}),
-      getFolderByPath: vi.fn(() => null),
       createFolder: vi.fn(async () => {}),
     },
   } as unknown as App;
@@ -74,13 +79,13 @@ describe("ObsidianVaultWriter", () => {
     await expect(writer.readFile(existing.path)).resolves.toBe("content");
     await writer.trashFile(existing.path);
     await writer.ensureFolder("");
-    fakeApp.vault.getFolderByPath = vi.fn(() => ({ path: "Notes" })) as never;
+    fakeApp.vault.getAbstractFileByPath = vi.fn(() => folder("Notes")) as never;
     await writer.ensureFolder("Notes");
 
     expect(fakeApp.vault.modify).toHaveBeenCalledWith(existing, "replacement");
     expect(fakeApp.vault.append).toHaveBeenCalledWith(existing, "\nnext");
     expect(fakeApp.vault.read).toHaveBeenCalledWith(existing);
-    expect(fakeApp.vault.trash).toHaveBeenCalledWith(existing, true);
+    expect(fakeApp.fileManager.trashFile).toHaveBeenCalledWith(existing);
     expect(fakeApp.vault.createFolder).not.toHaveBeenCalled();
   });
 });

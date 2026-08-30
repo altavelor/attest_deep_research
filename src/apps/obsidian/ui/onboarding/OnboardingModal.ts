@@ -21,6 +21,7 @@ import type {
   OnboardingResult,
   ServerProfile,
 } from "@adapters/settings";
+import { withVaultConfigExclusion } from "@adapters/settings";
 import { toUserMessage } from "@core/errors";
 import { isMobileLocalProvider } from "@apps/obsidian/modelProviderRuntime";
 import type { IndexingState } from "@adapters/indexing";
@@ -62,24 +63,28 @@ export class OnboardingModal extends Modal {
   private indexingStarted = false;
   private bodyEl: HTMLElement | null = null;
   private footerEl: HTMLElement | null = null;
-  private readonly draft: OnboardingDraft = {
-    chat: createEndpointDraft(),
-    embeddingSameAsChat: true,
-    embedding: createEndpointDraft(),
-    embeddingVerified: false,
-    index: {
-      mode: "wholeVault",
-      indexFolder: DEFAULT_INDEX_PROFILE.indexFolder,
-      includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
-      excludeGlobs: [...DEFAULT_INDEX_PROFILE.excludeGlobs],
-    },
-  };
+  private readonly draft: OnboardingDraft;
 
   constructor(
     app: App,
     private readonly options: OnboardingModalOptions,
   ) {
     super(app);
+    this.draft = {
+      chat: createEndpointDraft(),
+      embeddingSameAsChat: true,
+      embedding: createEndpointDraft(),
+      embeddingVerified: false,
+      index: {
+        mode: "wholeVault",
+        indexFolder: DEFAULT_INDEX_PROFILE.indexFolder,
+        includeFolders: [...DEFAULT_INDEX_PROFILE.includeFolders],
+        excludeGlobs: withVaultConfigExclusion(
+          DEFAULT_INDEX_PROFILE.excludeGlobs,
+          app.vault.configDir,
+        ),
+      },
+    };
     this.applyPrefill(options.prefill);
   }
 
@@ -101,13 +106,17 @@ export class OnboardingModal extends Modal {
         mode: prefill.index.mode,
         indexFolder: prefill.index.indexFolder || DEFAULT_INDEX_PROFILE.indexFolder,
         includeFolders: [...prefill.index.includeFolders],
-        excludeGlobs: [...prefill.index.excludeGlobs],
+        excludeGlobs: withVaultConfigExclusion(
+          prefill.index.excludeGlobs,
+          this.app.vault.configDir,
+        ),
       };
     }
   }
 
   onOpen(): void {
     this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
+    this.modalEl.addClass("attest-profile-modal-host");
     this.contentEl.addClass("attest-profile-modal");
     this.contentEl.addClass("attest-onboarding");
     this.render();

@@ -232,6 +232,33 @@ describe("ProbeDocumentUrlTool", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("does not follow a public redirect into a private network", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(undefined, {
+          status: 302,
+          headers: { location: "http://127.0.0.1/private.pdf" },
+        }),
+    );
+    const tool = new ProbeDocumentUrlTool({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const execution = await executeTool(tool, {
+      id: "c",
+      name: "probe_document_url",
+      arguments: { url: "https://example.com/paper.pdf" },
+    });
+
+    expect(execution).toMatchObject({
+      ok: true,
+      value: { results: [{ downloadable: false, reason: "Error" }] },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://example.com/paper.pdf",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
   it("probes a batch of URLs in input order and de-duplicates", async () => {
     const fetchImpl = vi.fn(async (url: string) => ({
       ok: true,

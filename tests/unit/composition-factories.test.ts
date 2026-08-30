@@ -18,7 +18,11 @@ vi.mock("@application/use-cases/research", async (importOriginal) => ({
 
 import { DEFAULT_SETTINGS, DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import type { CompositionContext } from "@apps/obsidian/composition/factories";
-import { createResearchService, createSearchProvider } from "@apps/obsidian/composition/factories";
+import {
+  createIndexingService,
+  createResearchService,
+  createSearchProvider,
+} from "@apps/obsidian/composition/factories";
 import { createTranslator } from "@adapters/i18n";
 
 describe("composition factories", () => {
@@ -96,6 +100,7 @@ describe("research service composition", () => {
         logError: vi.fn(),
         logRequest: vi.fn(),
         logResponse: vi.fn(),
+        logIndexingFile: vi.fn(),
         logIndexingPerformance: vi.fn(),
       },
       translator: createTranslator("en"),
@@ -150,6 +155,31 @@ describe("research service composition", () => {
     expect(options.documentImageCandidates).toBeDefined();
     expect(options.indexDescription).toBeDefined();
     expect(options.contextAssembler).toBeDefined();
+  });
+
+  it("excludes the active vault configuration directory from indexing", async () => {
+    const ctx = createContext(true);
+    ctx.app.vault.configDir = ".config/obsidian";
+    const service = createIndexingService(ctx, DEFAULT_INDEX_PROFILE.id, vi.fn());
+    const fileProcessor = (
+      service as unknown as {
+        fileProcessor: {
+          process(file: {
+            path: string;
+            extension: string;
+            modifiedTime: number;
+          }): Promise<{ skipped: boolean }>;
+        };
+      }
+    ).fileProcessor;
+
+    await expect(
+      fileProcessor.process({
+        path: ".config/obsidian/plugins/example/README.md",
+        extension: "md",
+        modifiedTime: 1,
+      }),
+    ).resolves.toMatchObject({ skipped: true });
   });
 
   it("omits index-backed collaborators from a web-only turn but still reports index status", () => {

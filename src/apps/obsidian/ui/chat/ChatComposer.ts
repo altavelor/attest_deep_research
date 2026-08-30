@@ -351,10 +351,10 @@ function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
   let minTextareaHeight = 0;
 
   return () => {
-    textareaEl.style.height = "auto";
+    textareaEl.setCssStyles({ height: "auto" });
     const measuredHeight = textareaEl.scrollHeight;
     if (measuredHeight <= 0) {
-      textareaEl.style.removeProperty("height");
+      textareaEl.setCssStyles({ height: "" });
       return;
     }
 
@@ -362,7 +362,7 @@ function createTextareaAutoGrow(textareaEl: HTMLTextAreaElement): () => void {
       minTextareaHeight = measuredHeight;
     }
 
-    textareaEl.style.height = `${Math.max(minTextareaHeight, measuredHeight)}px`;
+    textareaEl.setCssStyles({ height: `${Math.max(minTextareaHeight, measuredHeight)}px` });
   };
 }
 

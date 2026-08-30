@@ -134,8 +134,8 @@ export class CitationPopoverController {
         ? topBelow
         : Math.max(gap, topAbove);
 
-    popoverEl.style.left = `${left}px`;
-    popoverEl.style.top = `${top}px`;
+    popoverEl.style.setProperty("--attest-popover-left", `${left}px`);
+    popoverEl.style.setProperty("--attest-popover-top", `${top}px`);
   }
 }
 

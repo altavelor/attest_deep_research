@@ -107,6 +107,10 @@ export class Workspace {
     this.revealedLeaves.push(leaf);
   }
 
+  setActiveLeaf(leaf: WorkspaceLeaf): void {
+    this.revealedLeaves.push(leaf);
+  }
+
   async openLinkText(target: string, sourcePath: string, _newLeaf?: boolean): Promise<void> {
     this.openedLinks.push({ target, sourcePath });
   }

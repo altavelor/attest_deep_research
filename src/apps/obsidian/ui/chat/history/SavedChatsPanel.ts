@@ -178,8 +178,8 @@ export function positionSavedChatsPopover(
   );
   const top = anchorRect.bottom - hostRect.top + gap;
 
-  popoverEl.style.left = `${left}px`;
-  popoverEl.style.top = `${top}px`;
+  popoverEl.style.setProperty("--attest-popover-left", `${left}px`);
+  popoverEl.style.setProperty("--attest-popover-top", `${top}px`);
 }
 
 function renderSavedChatRow(
@@ -282,10 +282,11 @@ function startInlineTitleEdit(
     return;
   }
 
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "attest-chat__saved-title-input";
-  input.value = chat.title;
+  const input = openButton.createEl("input", {
+    cls: "attest-chat__saved-title-input",
+    type: "text",
+    value: chat.title,
+  });
   input.maxLength = 200;
   titleEl.replaceWith(input);
 

@@ -46,6 +46,17 @@ export function installObsidianDomHelpers(): void {
   const proto = Element.prototype as unknown as Record<string, unknown>;
   if (typeof proto.createEl === "function") return;
 
+  Object.defineProperty(Node.prototype, "win", {
+    configurable: true,
+    get(this: Node) {
+      const ownerDocument = this.ownerDocument ?? document;
+      const ownerWindow = ownerDocument.defaultView ?? window;
+      return Object.assign(Object.create(ownerWindow), {
+        createFragment: () => ownerDocument.createDocumentFragment(),
+      });
+    },
+  });
+
   const createEl: Creator = function createEl(this: Element, tag, init = {}, callback) {
     const el = this.ownerDocument.createElement(tag);
     applyInit(el, init);
@@ -108,6 +119,17 @@ export function installObsidianDomHelpers(): void {
       return;
     }
     this.setAttribute(name, value === true ? "" : String(value));
+  };
+
+  proto.setCssStyles = function setCssStyles(
+    this: HTMLElement,
+    styles: Partial<CSSStyleDeclaration>,
+  ) {
+    Object.assign(this.style, styles);
+  };
+
+  proto.setCssProps = function setCssProps(this: HTMLElement, props: Record<string, string>) {
+    for (const [name, value] of Object.entries(props)) this.style.setProperty(name, value);
   };
 }
 

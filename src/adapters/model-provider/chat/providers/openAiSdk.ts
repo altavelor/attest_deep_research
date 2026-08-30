@@ -1,7 +1,7 @@
 import OpenAI, { APIError } from "openai";
 
 import { AttestError, AttestErrorCode } from "@core/errors";
-import { isRecord } from "@shared";
+import { fetchTransportOrUnavailable, isRecord } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { createLogContext, headersToRecord } from "../../common/http";
 
@@ -34,7 +34,7 @@ export function createOpenAiClient(options: OpenAiClientOptions): OpenAI {
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
     timeout: options.timeoutMs ?? 30_000,
-    fetch: createLoggingFetch(options.fetch ?? fetch, {
+    fetch: createLoggingFetch(fetchTransportOrUnavailable(options.fetch), {
       logger: options.logger,
       stripAuthorization: !hasApiKey,
     }),

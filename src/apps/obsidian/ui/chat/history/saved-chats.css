@@ -193,6 +193,8 @@
 
 .attest-chat__history-popover {
   position: absolute;
+  top: var(--attest-popover-top);
+  left: var(--attest-popover-left);
   z-index: 40;
   display: grid;
   width: min(36.4rem, calc(100% - 1rem));

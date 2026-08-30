@@ -1,4 +1,10 @@
-import { downloadDiagnosticHtml } from "@apps/obsidian/ui/diagnostics/download";
+// @vitest-environment happy-dom
+
+import {
+  browserDownloadEnvironment,
+  downloadDiagnosticHtml,
+} from "@apps/obsidian/ui/diagnostics/download";
+import { installObsidianDomHelpers } from "../helpers/domHarness";
 
 describe("diagnostic HTML download", () => {
   it("uses a sanitized filename and always revokes the object URL", () => {
@@ -37,5 +43,16 @@ describe("diagnostic HTML download", () => {
       }),
     ).toThrow("blocked");
     expect(revoke).toHaveBeenCalledWith("blob:failed");
+  });
+
+  it("creates the download anchor in the modal's popout document", () => {
+    installObsidianDomHelpers();
+    const popoutDocument = document.implementation.createHTMLDocument("Popout");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    browserDownloadEnvironment(popoutDocument).trigger("blob:report", "report.html");
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(popoutDocument.querySelector("a")).toBeNull();
   });
 });

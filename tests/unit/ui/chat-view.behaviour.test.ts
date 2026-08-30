@@ -673,12 +673,20 @@ describe("chat view citation navigation", () => {
 
   it("uses a temporary anchor only for validated HTTP(S) fallback URLs", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const popoutDocument = document.implementation.createHTMLDocument("Popout");
+    const globalCreateElement = vi.spyOn(document, "createElement").mockImplementation(() => {
+      throw new Error("global document used");
+    });
 
-    expect(openExternalUrlWithAnchor("https://example.com/source", document)).toBe(true);
-    expect(openExternalUrlWithAnchor("javascript:alert(1)", document)).toBe(false);
+    try {
+      expect(openExternalUrlWithAnchor("https://example.com/source", popoutDocument)).toBe(true);
+      expect(openExternalUrlWithAnchor("javascript:alert(1)", popoutDocument)).toBe(false);
+    } finally {
+      globalCreateElement.mockRestore();
+    }
 
     expect(click).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('a[href="https://example.com/source"]')).toBeNull();
+    expect(popoutDocument.querySelector('a[href="https://example.com/source"]')).toBeNull();
   });
 });
 

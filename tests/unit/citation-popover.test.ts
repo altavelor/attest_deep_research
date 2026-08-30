@@ -76,6 +76,8 @@ describe("CitationPopover", () => {
     controller.open(anchor, ref);
     const popover = host.querySelector<HTMLElement>(".attest-chat__citation-popover");
     expect(popover).not.toBeNull();
+    expect(popover!.style.getPropertyValue("--attest-popover-left")).toBe("8px");
+    expect(popover!.style.getPropertyValue("--attest-popover-top")).toBe("8px");
     expect(anchor.classList.contains("is-highlighted")).toBe(true);
     popover!.querySelector<HTMLElement>(".attest-chat__citation-popover-card")!.click();
     expect(onOpenChunk).toHaveBeenCalledWith(ref.chunk);

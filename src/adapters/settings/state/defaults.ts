@@ -31,7 +31,7 @@ export const DEFAULT_INDEX_PROFILE: IndexProfile = {
   mode: "wholeVault",
   indexFolder: DEFAULT_INDEX_FOLDER,
   includeFolders: ["/"],
-  excludeGlobs: [".obsidian/**", ".trash/**", ".attest/**"],
+  excludeGlobs: [".trash/**", ".attest/**"],
   embeddingModelProfileId: "",
   isSuspended: true,
   suspendedReason: "Select an embedding model profile.",

@@ -36,6 +36,7 @@ export class WebSourceModal extends Modal {
     const { contentEl } = this;
     const { descriptor, t } = this.options;
     contentEl.empty();
+    this.modalEl.addClass("attest-profile-modal-host");
     contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: t("settings.webSourceModal.title", { source: descriptor.label }),

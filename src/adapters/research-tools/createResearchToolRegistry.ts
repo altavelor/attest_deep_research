@@ -16,6 +16,7 @@ import { DownloadSource } from "./download/DownloadSource";
 import { DOWNLOAD_PERMISSIONS } from "./download/documentDownload";
 import { AnswerArtifactRegistry } from "./media/AnswerArtifactRegistry";
 import { MediaSource } from "./media/MediaSource";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface CreatedResearchToolRegistry extends ResearchToolset {
   evidence: ResearchEvidenceRegistry;
@@ -26,6 +27,7 @@ export interface CreatedResearchToolRegistry extends ResearchToolset {
 
 export function createResearchToolRegistry(
   options: ResearchToolsetOptions,
+  runtime?: { fetch: typeof fetch },
 ): CreatedResearchToolRegistry {
   const evidence = new ResearchEvidenceRegistry();
   const artifacts = new AnswerArtifactRegistry();
@@ -88,6 +90,7 @@ export function createResearchToolRegistry(
         provider: options.searchProvider,
         writer: options.vaultWriter,
         defaultFolder: options.downloadFolder ?? "",
+        fetchImpl: fetchTransportOrUnavailable(runtime?.fetch),
       }),
     );
   }

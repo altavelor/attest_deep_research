@@ -1,6 +1,7 @@
 import { AttestError, AttestErrorCode } from "@core/errors";
 import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
+import { fetchTransportOrUnavailable } from "@shared";
 
 export interface ProviderHttpClientOptions {
   apiFormat: ApiFormat;
@@ -26,7 +27,7 @@ export class ProviderHttpClient {
   constructor(options: ProviderHttpClientOptions) {
     this.baseUrl = normalizeProviderBaseUrl(options.apiFormat, options.baseUrl);
     this.apiKey = options.apiKey;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.logger = options.logger;
     this.unavailableCode = options.unavailableCode;

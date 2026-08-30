@@ -35,7 +35,7 @@
   .attest-chat__history-popover,
   .attest-chat__citation-popover {
     position: fixed;
-    inset: auto 0.5rem calc(0.5rem + env(safe-area-inset-bottom)) 0.5rem !important;
+    inset: auto 0.5rem calc(0.5rem + env(safe-area-inset-bottom)) 0.5rem;
     width: auto;
     max-height: calc(100dvh - 1rem);
     overflow-y: auto;
