@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const MUTATION_TOOLS = new Set(["create_note", "update_note", "delete_note"]);
 const SUB_AGENT_TOOL = "run_subagent";
@@ -21,6 +21,7 @@ const METRIC_CLASSES = {
 };
 
 const NOISE_BAND_FACTOR = 1.5;
+const UNSPECIFIED_MODEL = "unspecified";
 
 /** Every tool call the report recorded, in round order, cache replays included. */
 export function toolCallsOf(report) {
@@ -305,29 +306,46 @@ export function brevityRatio(brevityCase, controlCase) {
   return brevityCase / controlCase;
 }
 
+export function modelOf(run) {
+  return typeof run?.model === "string" && run.model ? run.model : UNSPECIFIED_MODEL;
+}
+
+/**
+ * Judges every pinned model on its own. The pair is pinned because the models differ in
+ * the capability the prompt is built around, so one median across both would let a
+ * regression on one model hide behind the other.
+ */
 export function evaluate({ cases, runs, baseline }) {
   const results = [];
   const byCase = new Map();
+  const models = [...new Set(runs.map(modelOf))].sort();
 
-  for (const testCase of cases.cases) {
-    const reports = runs.filter((run) => run.caseId === testCase.id).map((run) => run.report);
-    if (reports.length === 0) continue;
-    const perRepeat = reports.map((report) => metricsForReport(report, testCase));
-    const aggregate = aggregateRepeats(perRepeat);
-    byCase.set(testCase.id, aggregate);
+  for (const model of models) {
+    const modelRuns = runs.filter((run) => modelOf(run) === model);
+    const modelBaseline = baseline?.perModel?.[model];
+    for (const testCase of cases.cases) {
+      const reports = modelRuns
+        .filter((run) => run.caseId === testCase.id)
+        .map((run) => run.report);
+      if (reports.length === 0) continue;
+      const perRepeat = reports.map((report) => metricsForReport(report, testCase));
+      const aggregate = aggregateRepeats(perRepeat);
+      const key = `${model} / ${testCase.id}`;
+      byCase.set(key, aggregate);
 
-    const baselineCase = baseline?.cases?.[testCase.id];
-    for (const metricName of Object.keys(METRIC_CLASSES)) {
-      const band = noiseBand(baselineCase?.repeats?.[metricName] ?? []);
-      results.push(
-        judge(
-          testCase.id,
-          metricName,
-          aggregate[metricName],
-          baselineCase?.aggregate?.[metricName],
-          band,
-        ),
-      );
+      const baselineCase = modelBaseline?.cases?.[testCase.id];
+      for (const metricName of Object.keys(METRIC_CLASSES)) {
+        const band = noiseBand(baselineCase?.repeats?.[metricName] ?? []);
+        results.push(
+          judge(
+            key,
+            metricName,
+            aggregate[metricName],
+            baselineCase?.aggregate?.[metricName],
+            band,
+          ),
+        );
+      }
     }
   }
 
@@ -361,9 +379,9 @@ function loadJson(path) {
 }
 
 function main(argv) {
-  const [casesPath, runsDirectory, baselinePath] = argv;
+  const [casesPath, runsDirectory, baselinePath, fixturesPath] = argv;
   if (!casesPath || !runsDirectory) {
-    console.error("usage: prompt-eval.mjs <cases.json> <runs-dir> [baseline.json]");
+    console.error("usage: prompt-eval.mjs <cases.json> <runs-dir> [baseline.json] [fixtures-dir]");
     process.exitCode = 2;
     return;
   }
@@ -374,9 +392,18 @@ function main(argv) {
 
   const baseline = baselinePath ? loadJson(resolve(baselinePath)) : null;
   if (baseline) {
+    const fixturesDirectory = fixturesPath
+      ? resolve(fixturesPath)
+      : join(dirname(resolve(casesPath)), "fixtures");
+    let currentFixturesHash = null;
+    try {
+      currentFixturesHash = hashDirectory(fixturesDirectory);
+    } catch {
+      currentFixturesHash = null;
+    }
     const validity = baselineValidity(baseline, {
       casesHash: sha256(readFileSync(resolve(casesPath), "utf8")),
-      fixturesHash: baseline.fixturesHash,
+      fixturesHash: currentFixturesHash,
       models: cases.models,
     });
     if (!validity.valid) {

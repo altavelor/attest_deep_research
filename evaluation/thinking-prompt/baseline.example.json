@@ -8,25 +8,52 @@
   "casesHash": "sha256 of evaluation/thinking-prompt/cases.json",
   "fixturesHash": "sha256 of evaluation/thinking-prompt/fixtures/",
   "brevityRatioR": null,
-  "notes": "Template only. R stays null until a measurement shows the brevity rule firing; a ratio above 0.8 is not eligible for calibration.",
-  "cases": {
-    "separate-quick-notes": {
-      "aggregate": {
-        "completionRate": null,
-        "extraSideEffects": null,
-        "destructiveOverwrites": null,
-        "verifiedCitationRate": null,
-        "unknownCitationCount": null,
-        "rounds": null,
-        "subAgents": null,
-        "subAgentSearchShare": null,
-        "artifactSize": null
-      },
-      "repeats": {
-        "rounds": [],
-        "subAgents": [],
-        "subAgentSearchShare": [],
-        "artifactSize": []
+  "notes": "Template only. Each pinned model is measured and judged separately, because the pair is pinned for the capability difference between them. R stays null until a measurement shows the brevity rule firing; a ratio above 0.8 is not eligible for calibration.",
+  "perModel": {
+    "deepseek/deepseek-v4-flash-0731": {
+      "cases": {
+        "separate-quick-notes": {
+          "aggregate": {
+            "completionRate": null,
+            "extraSideEffects": null,
+            "destructiveOverwrites": null,
+            "verifiedCitationRate": null,
+            "unknownCitationCount": null,
+            "rounds": null,
+            "subAgents": null,
+            "subAgentSearchShare": null,
+            "artifactSize": null
+          },
+          "repeats": {
+            "rounds": [],
+            "subAgents": [],
+            "subAgentSearchShare": [],
+            "artifactSize": []
+          }
+        }
+      }
+    },
+    "qwen/qwen3.8-2.4t-a95b": {
+      "cases": {
+        "separate-quick-notes": {
+          "aggregate": {
+            "completionRate": null,
+            "extraSideEffects": null,
+            "destructiveOverwrites": null,
+            "verifiedCitationRate": null,
+            "unknownCitationCount": null,
+            "rounds": null,
+            "subAgents": null,
+            "subAgentSearchShare": null,
+            "artifactSize": null
+          },
+          "repeats": {
+            "rounds": [],
+            "subAgents": [],
+            "subAgentSearchShare": [],
+            "artifactSize": []
+          }
+        }
       }
     }
   }

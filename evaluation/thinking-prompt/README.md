@@ -15,12 +15,21 @@ Implements the release gate of §9.4 of
 ## Running
 
 ```bash
-node scripts/prompt-eval.mjs evaluation/thinking-prompt/cases.json <runs-dir> [baseline.json]
+node scripts/prompt-eval.mjs evaluation/thinking-prompt/cases.json <runs-dir> [baseline.json] [fixtures-dir]
 ```
 
-`<runs-dir>` holds one JSON diagnostic report per run, each carrying the `caseId` of the
-case it ran. Exit code 0 means PASS, 1 means a blocking metric fired, 3 means the
-baseline is stale and must be re-measured before any comparison.
+`<runs-dir>` holds one JSON file per run, shaped `{ "caseId": "...", "model": "...",
+"report": <diagnostic report> }`. Runs are grouped and judged by `(model, caseId)`: the
+model pair is pinned for the capability difference between its members, so a single
+median across both would let a regression on one hide behind the other. A run without a
+`model` is grouped under `unspecified`.
+
+`[fixtures-dir]` defaults to `fixtures/` beside `cases.json`. Its hash is recomputed on
+every run and compared with the one recorded in the baseline; a fixture directory that
+cannot be read counts as a mismatch rather than a match.
+
+Exit code 0 means PASS, 1 means a blocking metric fired, 3 means the baseline is stale
+and must be re-measured before any comparison.
 
 ## Metric classes
 

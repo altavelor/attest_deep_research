@@ -1,5 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 interface ToolCall {
@@ -40,6 +43,7 @@ interface EvalModule {
     verdict: string;
     blocking: Array<{ caseId: string; metricName: string }>;
     escalate: string[];
+    byCase: Record<string, Record<string, number | null>>;
   };
 }
 
@@ -289,32 +293,84 @@ describe("end-to-end verdict", () => {
     ],
   };
 
+  const baselineFor = (aggregate: Record<string, number>, models = ["m1"]) => ({
+    perModel: Object.fromEntries(
+      models.map((model) => [model, { cases: { c1: { aggregate, repeats: {} } } }]),
+    ),
+  });
+
   it("passes a run that matches its baseline", () => {
-    const runs = [{ caseId: "c1", report: report([create("Notes/1.md")]) }];
-    const baseline = {
-      cases: { c1: { aggregate: { completionRate: 1, rounds: 1 }, repeats: {} } },
-    };
-    expect(evalModule.evaluate({ cases, runs, baseline }).verdict).toBe("PASS");
+    const runs = [{ caseId: "c1", model: "m1", report: report([create("Notes/1.md")]) }];
+    expect(
+      evalModule.evaluate({ cases, runs, baseline: baselineFor({ completionRate: 1, rounds: 1 }) })
+        .verdict,
+    ).toBe("PASS");
   });
 
   it("fails a run that created an artefact nobody asked for", () => {
     const runs = [
-      { caseId: "c1", report: report([create("Notes/1.md"), create("Notes/Summary.md")]) },
+      {
+        caseId: "c1",
+        model: "m1",
+        report: report([create("Notes/1.md"), create("Notes/Summary.md")]),
+      },
     ];
-    const baseline = { cases: { c1: { aggregate: { completionRate: 1 }, repeats: {} } } };
-    const result = evalModule.evaluate({ cases, runs, baseline });
+    const result = evalModule.evaluate({
+      cases,
+      runs,
+      baseline: baselineFor({ completionRate: 1 }),
+    });
     expect(result.verdict).toBe("FAIL");
     expect(result.blocking.map((entry) => entry.metricName)).toContain("extraSideEffects");
   });
 
   it("fails and marks the case for escalation when completion rate drops", () => {
     const runs = [
-      { caseId: "c1", report: report([create("Notes/1.md", "b", { status: "failed" })]) },
+      {
+        caseId: "c1",
+        model: "m1",
+        report: report([create("Notes/1.md", "b", { status: "failed" })]),
+      },
     ];
-    const baseline = { cases: { c1: { aggregate: { completionRate: 1 }, repeats: {} } } };
-    const result = evalModule.evaluate({ cases, runs, baseline });
+    const result = evalModule.evaluate({
+      cases,
+      runs,
+      baseline: baselineFor({ completionRate: 1 }),
+    });
     expect(result.verdict).toBe("FAIL");
-    expect(result.escalate).toContain("c1");
+    expect(result.escalate).toContain("m1 / c1");
+  });
+
+  it("keeps the two pinned models apart instead of taking one median across both", () => {
+    const runs = [
+      { caseId: "c1", model: "m1", report: report([create("Notes/1.md", "x".repeat(100))]) },
+      { caseId: "c1", model: "m2", report: report([create("Notes/1.md", "x".repeat(900))]) },
+    ];
+    const result = evalModule.evaluate({ cases, runs, baseline: null });
+
+    expect(Object.keys(result.byCase).sort()).toEqual(["m1 / c1", "m2 / c1"]);
+    expect(result.byCase["m1 / c1"].artifactSize).toBe(100);
+    expect(result.byCase["m2 / c1"].artifactSize).toBe(900);
+  });
+
+  it("blocks on the one model that regressed while the other held", () => {
+    const runs = [
+      {
+        caseId: "c1",
+        model: "m1",
+        report: report([create("Notes/1.md", "b", { status: "failed" })]),
+      },
+      { caseId: "c1", model: "m2", report: report([create("Notes/1.md")]) },
+    ];
+    const result = evalModule.evaluate({
+      cases,
+      runs,
+      baseline: baselineFor({ completionRate: 1 }, ["m1", "m2"]),
+    });
+
+    expect(result.verdict).toBe("FAIL");
+    const blocked = result.blocking.filter((entry) => entry.metricName === "completionRate");
+    expect(blocked.map((entry) => entry.caseId)).toEqual(["m1 / c1"]);
   });
 });
 
@@ -346,5 +402,53 @@ describe("case set", () => {
   it("gives every case a unique id", () => {
     const ids = cases.cases.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("the command line refuses a baseline it cannot match to the fixtures", () => {
+  let directory: string;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "prompt-eval-"));
+  });
+
+  afterEach(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  function run(baseline: Record<string, unknown>): number {
+    const casesPath = join(directory, "cases.json");
+    const runsDirectory = join(directory, "runs");
+    const baselinePath = join(directory, "baseline.json");
+    const casesText = JSON.stringify({ models: ["m1"], cases: [{ id: "c1", repeats: 1 }] });
+    writeFileSync(casesPath, casesText);
+    writeFileSync(
+      baselinePath,
+      JSON.stringify({
+        casesHash: createHash("sha256").update(casesText).digest("hex"),
+        ...baseline,
+      }),
+    );
+    const runs = mkdtempSync(runsDirectory);
+    writeFileSync(
+      join(runs, "one.json"),
+      JSON.stringify({ caseId: "c1", model: "m1", report: {} }),
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [resolve("scripts/prompt-eval.mjs"), casesPath, runs, baselinePath],
+      { encoding: "utf8" },
+    );
+    return result.status ?? -1;
+  }
+
+  it("reports a stale baseline when the recorded fixtures cannot be hashed", () => {
+    const status = run({
+      models: ["m1"],
+      fixturesHash: "a-hash-of-fixtures-that-are-not-here",
+    });
+
+    expect(status).toBe(3);
   });
 });
