@@ -18,7 +18,7 @@ export class ObsidianVaultWriter implements VaultWriter {
   }
 
   async createBinaryFile(path: string, data: Uint8Array): Promise<void> {
-    const buffer = new Uint8Array(data).buffer as ArrayBuffer;
+    const buffer = new Uint8Array(data).buffer;
     const existing = this.app.vault.getAbstractFileByPath(path);
     if (existing instanceof TFile) {
       await this.app.vault.modifyBinary(existing, buffer);
@@ -44,7 +44,7 @@ export class ObsidianVaultWriter implements VaultWriter {
 
   async trashFile(path: string): Promise<void> {
     const file = this.requireFile(path);
-    await this.app.fileManager.trashFile(file);
+    await this.app.vault.trash(file, true);
   }
 
   async ensureFolder(path: string): Promise<void> {

@@ -24,7 +24,8 @@ describe("Obsidian review compliance", () => {
       "src/apps/obsidian/ui/chat/research/AnswerNoteWriter.ts",
       "src/apps/obsidian/ui/chat/toolOutputViewer.ts",
     ];
-    const unsupportedApi = /\.getFolderByPath\(|\.removeCommand\(|\.revealLeaf\(|\.messageEl\b/;
+    const unsupportedApi =
+      /\.getFolderByPath\(|\.removeCommand\(|\.revealLeaf\(|\.messageEl\b|\.fileManager\.trashFile\(/;
 
     for (const file of files) {
       expect(read(file), file).not.toMatch(unsupportedApi);
@@ -39,5 +40,8 @@ describe("Obsidian review compliance", () => {
     expect(composer).not.toMatch(/\.style\.(?:height|setProperty|removeProperty)/);
     expect(controller).not.toMatch(/\.style\.(?:height|setProperty|removeProperty)/);
     expect(readable).not.toMatch(/\.innerHTML\s*=/);
+    expect(readable).not.toContain("attachShadow");
+    expect(readable).not.toContain('createElement("style")');
+    expect(readable).not.toContain("createContextualFragment");
   });
 });

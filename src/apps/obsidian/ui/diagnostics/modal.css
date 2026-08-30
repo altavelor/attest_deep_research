@@ -86,6 +86,74 @@
   scrollbar-gutter: stable;
 }
 
+.attest-chat__diagnostic-readable .dr-root {
+  max-width: 60rem;
+  margin: 0 auto;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+.attest-chat__diagnostic-readable .dr-root > h2 {
+  margin: 0 0 0.5rem;
+}
+
+.attest-chat__diagnostic-readable .dr-question-text {
+  margin: 0 0 0.25rem;
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+
+.attest-chat__diagnostic-readable .dr-schema-version,
+.attest-chat__diagnostic-readable .dr-empty-value,
+.attest-chat__diagnostic-readable .dr-tree-field dt {
+  color: var(--text-muted);
+}
+
+.attest-chat__diagnostic-readable .dr-tree-group {
+  margin: 0.5rem 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+
+.attest-chat__diagnostic-readable .dr-tree-group > summary {
+  padding: 0.5rem 0.75rem;
+  background: var(--background-secondary);
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+}
+
+.attest-chat__diagnostic-readable .dr-tree-group-body {
+  padding: 0.5rem 0.75rem;
+}
+
+.attest-chat__diagnostic-readable .dr-tree-fields {
+  margin: 0;
+}
+
+.attest-chat__diagnostic-readable .dr-tree-field {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.attest-chat__diagnostic-readable .dr-tree-field:last-child {
+  border-bottom: 0;
+}
+
+.attest-chat__diagnostic-readable .dr-tree-field dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.attest-chat__diagnostic-readable .dr-tree-field-nested {
+  display: block;
+}
+
 .attest-chat__diagnostic-modal-report::-webkit-scrollbar {
   width: 12px;
   height: 12px;
