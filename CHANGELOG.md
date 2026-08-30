@@ -11,8 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Obsidian review blockers for iOS regex compatibility, supported host APIs, safe DOM rendering
-  and CSS updates.
+- Obsidian review blockers for iOS regex compatibility, supported host APIs, custom vault
+  configuration directories, deletion preferences and safe DOM rendering.
+- Popout-window rendering now uses the owning document for citations, saved-chat editing,
+  external links and diagnostic downloads.
+- Web-source activation updates are serialized, report persistence failures and roll back
+  unsuccessful changes.
+- Buffered provider requests use Obsidian's request API, while desktop streaming retains native
+  SSE and abort behavior; document probes validate redirects against private-network targets.
+- Plugin styles no longer rely on `!important`, `:has()`, multicolumn-associated properties or
+  partially supported `clip-path` shapes.
 - Release assets now receive build-provenance attestations, and unsupported ZIP bundles are no
   longer attached to releases.
 - Plugin metadata links to the author's profile and consistently reports version 0.4.4.
@@ -182,7 +190,8 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.3...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.4...HEAD
+[0.4.4]: https://github.com/altavelor/attest_deep_research/compare/0.4.3...0.4.4
 [0.4.3]: https://github.com/altavelor/attest_deep_research/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/altavelor/attest_deep_research/compare/0.3.0...0.4.2
 [0.3.0]: https://github.com/altavelor/attest_deep_research/compare/0.2.0...0.3.0
