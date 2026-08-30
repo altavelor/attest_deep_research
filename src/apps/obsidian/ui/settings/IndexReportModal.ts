@@ -35,6 +35,7 @@ export class IndexReportModal extends Modal {
     const { contentEl } = this;
     const { t } = this.options;
     contentEl.empty();
+    this.modalEl.addClass("attest-profile-modal-host");
     contentEl.addClass("attest-profile-modal");
     contentEl.createEl("h2", {
       text: t("settings.indexReport.title", { profile: this.options.profile.name }),

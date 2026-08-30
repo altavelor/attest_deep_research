@@ -116,6 +116,7 @@ export class OnboardingModal extends Modal {
 
   onOpen(): void {
     this.modalEl.setAttr("dir", this.options.getDirection?.() ?? "ltr");
+    this.modalEl.addClass("attest-profile-modal-host");
     this.contentEl.addClass("attest-profile-modal");
     this.contentEl.addClass("attest-onboarding");
     this.render();

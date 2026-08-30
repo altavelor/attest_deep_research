@@ -126,7 +126,7 @@
   color: var(--text-warning);
 }
 
-.modal:has(.attest-profile-modal) {
+.modal.attest-profile-modal-host {
   width: calc(var(--dialog-width, 30rem) + 20px);
   min-width: 20rem;
   max-width: calc(100vw - 2rem);
@@ -136,6 +136,6 @@
   overflow: auto;
 }
 
-.modal:has(.attest-profile-modal) .modal-content {
+.modal.attest-profile-modal-host .modal-content {
   max-height: none;
 }

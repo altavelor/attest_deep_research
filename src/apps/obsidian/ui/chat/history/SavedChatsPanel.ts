@@ -178,8 +178,8 @@ export function positionSavedChatsPopover(
   );
   const top = anchorRect.bottom - hostRect.top + gap;
 
-  popoverEl.style.left = `${left}px`;
-  popoverEl.style.top = `${top}px`;
+  popoverEl.style.setProperty("--attest-popover-left", `${left}px`);
+  popoverEl.style.setProperty("--attest-popover-top", `${top}px`);
 }
 
 function renderSavedChatRow(

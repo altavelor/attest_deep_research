@@ -18,23 +18,22 @@
   margin: 0.25rem 0 1.125rem;
 }
 
-.attest-profile-modal .setting-item.attest-onboarding__choice {
+.modal .modal-content.attest-profile-modal .setting-item.attest-onboarding__choice {
   display: grid;
   box-sizing: border-box;
   grid-template-columns: 1.125rem minmax(0, 1fr) auto;
   align-items: start;
-  column-gap: 0.75rem;
-  row-gap: 0;
+  gap: 0 0.75rem;
   width: 100%;
   max-width: 100%;
   /*
    * Themes load after plugin styles, so equal-specificity .setting-item rules
    * from the active theme would otherwise win over the card's own box.
    */
-  margin: 0 !important;
-  padding: 1rem !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  border-radius: 7px !important;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
   cursor: pointer;
 }
 
@@ -44,8 +43,8 @@
   border: 0;
 }
 
-.attest-profile-modal .setting-item.attest-onboarding__choice.is-selected {
-  border-color: var(--interactive-accent) !important;
+.modal .modal-content.attest-profile-modal .setting-item.attest-onboarding__choice.is-selected {
+  border-color: var(--interactive-accent);
   background: var(--background-modifier-hover);
 }
 
@@ -87,7 +86,9 @@
   white-space: nowrap;
 }
 
-.attest-onboarding__scope-checkbox {
+.modal
+  .modal-content.attest-profile-modal
+  input[type="checkbox"].attest-onboarding__scope-checkbox {
   position: static;
   display: block;
   box-sizing: border-box;
@@ -95,27 +96,33 @@
   width: 1.125rem;
   height: 1.125rem;
   min-width: 1.125rem;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 1.5px solid var(--background-modifier-border-hover) !important;
-  border-radius: 50% !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  appearance: none !important;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--background-modifier-border-hover);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
-  transform: none !important;
+  transform: none;
 }
 
-.attest-onboarding__scope-checkbox::before,
-.attest-onboarding__scope-checkbox::after {
-  content: none !important;
+.modal
+  .modal-content.attest-profile-modal
+  input[type="checkbox"].attest-onboarding__scope-checkbox::before,
+.modal
+  .modal-content.attest-profile-modal
+  input[type="checkbox"].attest-onboarding__scope-checkbox::after {
+  content: none;
 }
 
-.attest-onboarding__scope-checkbox:checked {
-  border-color: var(--interactive-accent) !important;
-  border-width: 0.3125rem !important;
-  background: transparent !important;
+.modal
+  .modal-content.attest-profile-modal
+  input[type="checkbox"].attest-onboarding__scope-checkbox:checked {
+  border-color: var(--interactive-accent);
+  border-width: 0.3125rem;
+  background: transparent;
 }
 
 .attest-onboarding__scope-checkbox:focus-visible {
@@ -378,21 +385,21 @@
   white-space: nowrap;
 }
 
-.attest-onboarding__selected-path-remove {
+.modal .modal-content.attest-profile-modal button.attest-onboarding__selected-path-remove {
   display: inline-flex;
   width: 1.125rem;
   height: 1.125rem;
   align-items: center;
   justify-content: center;
-  padding: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--text-muted);
   cursor: pointer;
   line-height: 1;
 }
 
-.attest-onboarding__selected-path-remove:hover {
+.modal .modal-content.attest-profile-modal button.attest-onboarding__selected-path-remove:hover {
   color: var(--text-normal);
 }

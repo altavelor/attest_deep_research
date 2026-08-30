@@ -175,8 +175,8 @@
   max-width: 150px;
 }
 
-.menu.attest-chat__menu .menu-item-title {
-  white-space: normal !important;
+.menu.attest-chat__menu .menu-item .menu-item-title {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 

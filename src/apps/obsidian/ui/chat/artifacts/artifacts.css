@@ -256,11 +256,19 @@
 }
 
 .attest-chart__legend-swatch.is-triangle {
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  width: 0;
+  height: 0;
+  border-right: 5px solid transparent;
+  border-bottom: 10px solid currentColor;
+  border-left: 5px solid transparent;
+  background: transparent;
 }
 
 .attest-chart__legend-swatch.is-diamond {
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  width: 7px;
+  height: 7px;
+  margin: 1.5px;
+  transform: rotate(45deg);
 }
 
 .attest-chart__legend-item.is-series-0 {

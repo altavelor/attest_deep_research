@@ -168,7 +168,7 @@ describe("SavedChatsPanel", () => {
 
     positionSavedChatsPopover(host, anchor, popover);
 
-    expect(popover.style.left).toBe("8px");
-    expect(popover.style.top).toBe("-62px");
+    expect(popover.style.getPropertyValue("--attest-popover-left")).toBe("8px");
+    expect(popover.style.getPropertyValue("--attest-popover-top")).toBe("-62px");
   });
 });
