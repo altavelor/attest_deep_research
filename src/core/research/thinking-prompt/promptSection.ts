@@ -43,9 +43,10 @@ const DELIMITED_TAGS = [
 ] as const;
 
 /**
- * Orders enabled sections by priority and validates them. Only `reference` sections
- * may be dropped on a defect; a defective `policy` or `workflow` section is reported
- * and kept, because removing guidance is worse than the defect it reports.
+ * Orders enabled sections by priority and validates them. A defective `policy` or
+ * `workflow` section is reported and kept, because removing guidance is worse than the
+ * defect it reports; a `reference` section is dropped instead, and so is an untrusted
+ * section whose delimiter does not close, since a broken boundary is not recoverable.
  */
 export function assemblePromptSections(
   sections: readonly PromptSection[],
@@ -58,7 +59,6 @@ export function assemblePromptSections(
   for (const section of sections) {
     if (!section.enabled) continue;
 
-    const dropped = section.priority === "reference";
     const defects: Array<{ code: PromptAssemblyIssueCode; detail: string }> = [];
     if (seen.has(section.id)) defects.push({ code: "duplicate-id", detail: section.id });
     if (section.content.trim().length === 0) {
@@ -74,15 +74,19 @@ export function assemblePromptSections(
         defects.push({ code: "unbalanced-delimiter", detail: tag });
       }
     }
+    const unusable = defects.some(
+      (defect) =>
+        defect.code === "duplicate-id" ||
+        defect.code === "empty-content" ||
+        (defect.code === "unbalanced-delimiter" && section.priority === "untrusted-data"),
+    );
+    const dropped = unusable || (defects.length > 0 && section.priority === "reference");
     for (const defect of defects) {
       issues.push({ sectionId: section.id, ...defect, dropped });
     }
 
-    const unusable = defects.some(
-      (defect) => defect.code === "duplicate-id" || defect.code === "empty-content",
-    );
     seen.add(section.id);
-    if (unusable || (defects.length > 0 && dropped)) continue;
+    if (dropped) continue;
     kept.push(section);
   }
 
@@ -111,6 +115,15 @@ function countOccurrences(haystack: string, needle: string): number {
     index = haystack.indexOf(needle, index + needle.length);
   }
   return count;
+}
+
+/**
+ * Escapes only the characters that can forge a delimiter tag. Use it for untrusted text
+ * the model must reproduce verbatim, such as a vault path: escaping quotes or ampersands
+ * there would corrupt an identifier the model is told to pass back unchanged.
+ */
+export function escapeDelimiterMarkup(value: string): string {
+  return value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Escapes the characters that let untrusted text close a delimiter or forge markup. */

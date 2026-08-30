@@ -191,28 +191,11 @@ describe("prompt section validation", () => {
       sectionId: "policy-a",
       code: "duplicate-id",
       detail: "policy-a",
-      dropped: false,
+      dropped: true,
     });
   });
 
-  it("reports an untrusted section that fails to close its delimiter", () => {
-    const broken: PromptSection = {
-      id: "index-description",
-      priority: "untrusted-data",
-      enabled: true,
-      content: "<index-description>\nunclosed",
-      referencedTools: [],
-    };
-    const result = assemblePromptSections([broken], { availableTools: new Set<string>() });
-    expect(result.issues).toContainEqual({
-      sectionId: "index-description",
-      code: "unbalanced-delimiter",
-      detail: "index-description",
-      dropped: false,
-    });
-  });
-
-  it("reports assembly issues to the caller's diagnostics hook", () => {
+  it("reports no issue for a well-formed profile", () => {
     const issues: string[] = [];
     buildThinkingResearchMessages({
       question: "Q",
@@ -221,6 +204,35 @@ describe("prompt section validation", () => {
       onAssemblyIssue: (issue) => issues.push(`${issue.sectionId}:${issue.code}`),
     });
     expect(issues).toEqual([]);
+  });
+
+  it("drops an untrusted section whose delimiter does not close", () => {
+    const broken: PromptSection = {
+      id: "index-description",
+      priority: "untrusted-data",
+      enabled: true,
+      content: "<index-description>\nunclosed",
+      referencedTools: [],
+    };
+    const result = assemblePromptSections([base, broken], {
+      availableTools: new Set<string>(),
+    });
+    expect(result.sections.map((section) => section.id)).toEqual(["policy-a"]);
+    expect(result.issues).toContainEqual({
+      sectionId: "index-description",
+      code: "unbalanced-delimiter",
+      detail: "index-description",
+      dropped: true,
+    });
+    expect(result.text).not.toContain("<index-description>");
+  });
+
+  it("marks a dropped section as dropped in the issue it reports", () => {
+    const result = assemblePromptSections([base, { ...base, content: "## A\nother" }], {
+      availableTools: new Set<string>(),
+    });
+    const duplicate = result.issues.find((issue) => issue.code === "duplicate-id");
+    expect(duplicate?.dropped).toBe(true);
   });
 });
 
@@ -236,7 +248,12 @@ describe("static prompt token budget", () => {
       },
     });
     const measured = measurePromptSize(messages[0].content);
-    expect(measured.tokens).toBeLessThanOrEqual(PROMPT_TOKEN_CEILINGS[profile.id]);
+    const ceiling = PROMPT_TOKEN_CEILINGS[profile.id];
+    expect(measured.tokens).toBeLessThanOrEqual(ceiling);
+    expect(
+      measured.tokens,
+      "the ceiling has drifted far above the measurement it guards; re-fix it",
+    ).toBeGreaterThan(ceiling * 0.7);
   });
 
   it("excludes the index description from the static measurement", () => {
