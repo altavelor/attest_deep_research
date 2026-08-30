@@ -29,7 +29,7 @@ export interface ChatModelClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
-  onReasoningObserved?(observation: { protocol: "chat-completions"; dialect: string }): void;
+  onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
 }
 
 export class ChatModelClient implements ChatModelProvider {

@@ -6,16 +6,16 @@ import { SavedChatListTab } from "./savedChatListState";
 
 export interface SavedChatsPopoverControllerOptions {
   hostEl: HTMLElement;
-  getSavedChats(): SavedChatSummary[];
-  getCurrentChatId(): string | null;
+  getSavedChats: () => SavedChatSummary[];
+  getCurrentChatId: () => string | null;
   t: Translate;
-  onOpenChat(id: string): void;
-  onRenameChat(id: string, title: string): void;
-  onToggleFavorite(id: string): void;
-  onDeleteChat(id: string): void;
-  getChatStatus(id: string): ChatSessionStatus;
-  onStopChat(id: string): void;
-  refreshSavedChats(): Promise<void>;
+  onOpenChat: (id: string) => void;
+  onRenameChat: (id: string, title: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onDeleteChat: (id: string) => void;
+  getChatStatus: (id: string) => ChatSessionStatus;
+  onStopChat: (id: string) => void;
+  refreshSavedChats: () => Promise<void>;
 }
 
 /** Owns the saved-chat popover DOM and its outside-pointer lifecycle. */

@@ -60,7 +60,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
     }
 
     this.console.debug("[Attest] Request", {
-      ...(redactSensitiveData(context) as RequestLogContext),
+      ...redactSensitiveData(context),
       settings: redactSensitiveData(settings),
     });
   }
@@ -73,7 +73,7 @@ export class PluginDebugLogger implements PluginRequestLogger, IndexingLogger, S
     }
 
     this.console.debug("[Attest] Response", {
-      ...(redactSensitiveData(context) as ResponseLogContext),
+      ...redactSensitiveData(context),
       settings: redactSensitiveData(settings),
     });
   }

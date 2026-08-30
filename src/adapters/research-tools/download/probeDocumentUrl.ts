@@ -1,4 +1,5 @@
 import { validatePublicWebUrl } from "@application/sources";
+import { scheduleTimeout } from "@shared";
 import {
   deriveFilename,
   isDownloadableContentType,
@@ -37,7 +38,7 @@ export async function probeDocumentUrls(
   const worker = async (): Promise<void> => {
     for (let index = next; index < rawUrls.length; index = next) {
       next += 1;
-      results[index] = await probeDocumentUrl(fetchImpl, rawUrls[index]!, timeoutMs);
+      results[index] = await probeDocumentUrl(fetchImpl, rawUrls[index], timeoutMs);
     }
   };
   const workers = Array.from({ length: Math.min(PROBE_CONCURRENCY, rawUrls.length) }, () =>
@@ -58,7 +59,7 @@ export async function probeDocumentUrl(
   }
 
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = scheduleTimeout(() => controller.abort(), timeoutMs);
   try {
     let { response, finalUrl } = await requestPublicUrl(fetchImpl, validated.url, {
       method: "HEAD",
@@ -101,7 +102,7 @@ export async function probeDocumentUrl(
       reason: error instanceof Error ? error.name : "fetch-failed",
     };
   } finally {
-    globalThis.clearTimeout(timeout);
+    timeout.cancel();
   }
 }
 

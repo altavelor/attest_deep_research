@@ -189,7 +189,7 @@ function defineNoteTool(spec: NoteToolSpec): new (deps: NoteToolDeps) => Tool {
     name: spec.name,
     description: spec.description,
     schema: spec.schema,
-    requires: spec.requires,
+    requires: (availability) => spec.requires(availability),
     execute: (deps, input, context) => runNoteTool(deps, spec.name, input, context),
   });
 }

@@ -26,9 +26,9 @@ export interface AgentLoopOptions {
   model: string;
   messages: ChatMessage[];
   tools: ChatToolDefinition[];
-  executeTool(
+  executeTool: (
     toolCall: ChatToolCall,
-  ): Promise<{ ok: boolean; result: string; diagnostic?: Record<string, unknown> }>;
+  ) => Promise<{ ok: boolean; result: string; diagnostic?: Record<string, unknown> }>;
   temperature?: number;
   maxTokens?: number;
   maxRounds?: number;
@@ -37,7 +37,7 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   reasoning?: ModelRoundRequest["reasoning"];
   labeler?: ToolLabeler;
-  onEvent?(event: AgentLoopEvent): void;
+  onEvent?: (event: AgentLoopEvent) => void;
 }
 
 export type AgentLoopEvent =

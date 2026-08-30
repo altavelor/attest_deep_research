@@ -46,7 +46,9 @@ export class JsonSidecarStore<T extends { sourcePath: string }> {
         if (this.isValid(parsed)) {
           items.push(parsed);
         }
-      } catch {}
+      } catch {
+        continue;
+      }
     }
     return items.sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }

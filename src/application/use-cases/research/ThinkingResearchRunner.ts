@@ -47,25 +47,25 @@ export interface ThinkingResearchRunnerOptions {
 
   maxSearchCalls?: number;
   reasoning?: ModelRoundRequest["reasoning"];
-  onDelta?(delta: ModelRoundDelta, round: number): void;
-  onAnswerReset?(): void;
-  onRoundClassified?(round: number, classification: "intermediate" | "final"): void;
-  onToolCall?(
+  onDelta?: (delta: ModelRoundDelta, round: number) => void;
+  onAnswerReset?: () => void;
+  onRoundClassified?: (round: number, classification: "intermediate" | "final") => void;
+  onToolCall?: (
     id: string,
     name: string,
     label: string,
     round: number,
     args?: Record<string, unknown>,
-  ): void;
-  onToolResult?(
+  ) => void;
+  onToolResult?: (
     id: string,
     ok: boolean,
     resolvedLabel?: string,
     resultSummary?: string,
     resultJson?: string,
-  ): void;
+  ) => void;
 
-  onToolEvent?(callId: string, event: ToolEvent): void;
+  onToolEvent?: (callId: string, event: ToolEvent) => void;
 }
 
 export type ThinkingResearchResult = ThinkingResearchSuccess | ThinkingResearchFailure;

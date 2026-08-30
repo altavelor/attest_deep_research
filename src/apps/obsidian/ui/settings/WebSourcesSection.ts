@@ -20,14 +20,14 @@ import { WebSourceModal } from "./WebSourceModal";
 export interface WebSourcesSectionContext {
   app: App;
   t: Translate;
-  getDirection?(): TextDirection;
-  getSettings(): AttestSettings;
-  saveSettings(): Promise<void>;
-  requestRedisplay(): void;
+  getDirection?: () => TextDirection;
+  getSettings: () => AttestSettings;
+  saveSettings: () => Promise<void>;
+  requestRedisplay: () => void;
 
-  getSourceIssue(sourceId: string): WebSourceIssue | undefined;
+  getSourceIssue: (sourceId: string) => WebSourceIssue | undefined;
 
-  resetSourceIssue(sourceId: string): void;
+  resetSourceIssue: (sourceId: string) => void;
 }
 
 const CATEGORY_MESSAGE_KEYS: Record<WebSourceCategory, MessageKey> = {

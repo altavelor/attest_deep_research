@@ -68,15 +68,15 @@ function undoPngPredictor(data: Uint8Array, spec: PdfRasterSpec): Uint8Array | u
 
   for (let row = 0; row < rows; row += 1) {
     const start = row * (rowBytes + 1);
-    const filter = data[start]!;
+    const filter = data[start];
     if (filter > 4) return undefined;
     const current = data.slice(start + 1, start + 1 + rowBytes);
 
     for (let index = 0; index < rowBytes; index += 1) {
-      const left = index >= pixelBytes ? current[index - pixelBytes]! : 0;
-      const up = previous[index]!;
-      const upLeft = index >= pixelBytes ? previous[index - pixelBytes]! : 0;
-      const raw = current[index]!;
+      const left = index >= pixelBytes ? current[index - pixelBytes] : 0;
+      const up = previous[index];
+      const upLeft = index >= pixelBytes ? previous[index - pixelBytes] : 0;
+      const raw = current[index];
       current[index] = unfilterByte(filter, raw, left, up, upLeft);
     }
     output.set(current, row * rowBytes);
@@ -177,7 +177,7 @@ const CRC_TABLE = (() => {
 function crc32(data: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of data) {
-    crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+    crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
   }
   return (crc ^ 0xffffffff) >>> 0;
 }

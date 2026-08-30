@@ -73,7 +73,7 @@ export function createResearchToolRegistry(
         artifacts,
         ...(options.web ? { web: options.web } : {}),
         ...(options.onWebSourceSelection
-          ? { onSourceSelection: options.onWebSourceSelection }
+          ? { onSourceSelection: (selection) => options.onWebSourceSelection?.(selection) }
           : {}),
       }),
     );

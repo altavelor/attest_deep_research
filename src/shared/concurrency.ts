@@ -14,7 +14,7 @@ export async function mapWithConcurrency<T, R>(
 
   const run = async (): Promise<void> => {
     for (let index = next++; index < items.length; index = next++) {
-      results[index] = await task(items[index]!, index);
+      results[index] = await task(items[index], index);
     }
   };
 

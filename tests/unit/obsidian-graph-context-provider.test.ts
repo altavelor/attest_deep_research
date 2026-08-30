@@ -114,6 +114,27 @@ describe("ObsidianGraphContextProvider", () => {
     expect(discovery.sourcePaths).toEqual([]);
   });
 
+  it("ignores non-string frontmatter aliases while resolving valid aliases", async () => {
+    const provider = graph(["Notes/Plan.md"].map(file), {
+      caches: {
+        "Notes/Plan.md": {
+          frontmatter: { aliases: [null, 42, { name: "invalid" }, "Project plan"] },
+        },
+      },
+    });
+
+    const discovery = await provider.discover(
+      request({
+        question: "Continue [[Project plan]]",
+        roots: [],
+        availablePaths: ["Notes/Plan.md"],
+        includeBacklinks: false,
+      }),
+    );
+
+    expect(discovery.diagnostics.rootPaths).toEqual(["Notes/Plan.md"]);
+  });
+
   it("records candidates dropped by the graph-size limit instead of expanding the context", async () => {
     const provider = graph(["Root.md", "First.md", "Second.md"].map(file), {
       caches: {

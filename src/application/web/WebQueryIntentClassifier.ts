@@ -1,5 +1,6 @@
 import { ChatModelProvider, ChatResponseChunk } from "@core/agent";
 import { classifyWebQuery, isWebQueryIntent, WEB_QUERY_INTENTS, WebQueryIntent } from "@core/web";
+import { ScheduledTimeout, scheduleTimeout } from "@shared";
 
 export type WebQueryIntentOrigin = "explicit" | "model" | "heuristic";
 
@@ -77,7 +78,7 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
       throw new Error("aborted");
     }
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ScheduledTimeout | undefined;
     let abortOuter: (() => void) | undefined;
     let stream: AsyncIterator<ChatResponseChunk> | undefined;
 
@@ -86,7 +87,7 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
         controller.abort();
         reject(new Error(reason));
       };
-      timer = setTimeout(
+      timer = scheduleTimeout(
         () => give("intent-classification-timeout"),
         this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       );
@@ -107,7 +108,7 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
     try {
       return await Promise.race([streamed, abandoned]);
     } finally {
-      clearTimeout(timer);
+      timer?.cancel();
       if (abortOuter) {
         signal?.removeEventListener("abort", abortOuter);
       }
@@ -121,19 +122,18 @@ export class ModelWebQueryIntentClassifier implements WebQueryIntentClassifier {
     signal: AbortSignal,
     adopt: (iterator: AsyncIterator<ChatResponseChunk>) => void,
   ): Promise<WebQueryIntent> {
-    const stream = this.options.chatModel
-      .streamChat({
-        model: this.options.model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: query },
-        ],
-        temperature: 0,
-        maxTokens: 32,
-        reasoningEnabled: false,
-        signal,
-      })
-      [Symbol.asyncIterator]();
+    const response = this.options.chatModel.streamChat({
+      model: this.options.model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: query },
+      ],
+      temperature: 0,
+      maxTokens: 32,
+      reasoningEnabled: false,
+      signal,
+    });
+    const stream = response[Symbol.asyncIterator]();
     adopt(stream);
 
     let content = "";

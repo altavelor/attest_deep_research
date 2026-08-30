@@ -10,17 +10,17 @@ import {
 } from "@core/agent";
 
 export class ToolManager {
-  private readonly handlers = new Map<string, Tool<any, any>>();
+  private readonly handlers = new Map<string, Tool<unknown, unknown>>();
   private readonly permissions?: ToolPermissions;
 
-  constructor(tools: Tool<any, any>[] = [], permissions?: ToolPermissions) {
+  constructor(tools: Tool<unknown, unknown>[] = [], permissions?: ToolPermissions) {
     this.permissions = permissions;
     for (const tool of tools) {
       this.register(tool);
     }
   }
 
-  register(tool: Tool<any, any>): void {
+  register(tool: Tool<unknown, unknown>): void {
     const name = tool.definition.function.name;
     if (this.handlers.has(name)) {
       throw new Error(`Duplicate tool: ${name}.`);
@@ -56,7 +56,7 @@ export class ToolManager {
     return executeTool(handler, call, context);
   }
 
-  private permits(tool: Tool<any, any>): boolean {
+  private permits(tool: Tool<unknown, unknown>): boolean {
     if (this.permissions === undefined || tool.requires === undefined) {
       return true;
     }

@@ -1,4 +1,5 @@
 import type { WebSourceDiagnostic, WebSourceSelectionDiagnostics } from "@core/diagnostics";
+import { ScheduledTimeout, scheduleTimeout } from "@shared";
 import {
   classifyWebQuery,
   detectQueryLanguage,
@@ -175,9 +176,9 @@ export class WebQueryPlanner implements SearchProvider {
       options.signal?.addEventListener("abort", abortOuter, { once: true });
     }
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ScheduledTimeout | undefined;
     const expiry = new Promise<ResolvedIntent>((resolve) => {
-      timer = setTimeout(() => {
+      timer = scheduleTimeout(() => {
         controller.abort();
         resolve({ intent: classifyWebQuery(query), origin: "heuristic", reason: "web-deadline" });
       }, budgetMs);
@@ -192,7 +193,7 @@ export class WebQueryPlanner implements SearchProvider {
     try {
       return await Promise.race([classified, expiry]);
     } finally {
-      clearTimeout(timer);
+      timer?.cancel();
       options.signal?.removeEventListener("abort", abortOuter);
       controller.abort();
     }
@@ -326,7 +327,7 @@ export class WebQueryPlanner implements SearchProvider {
     const deadlineReached = new Promise<void>((resolve) => {
       releaseDeadline = resolve;
     });
-    const timer = setTimeout(
+    const timer = scheduleTimeout(
       () => {
         expired = true;
         controller.abort();
@@ -379,7 +380,7 @@ export class WebQueryPlanner implements SearchProvider {
     try {
       await Promise.race([Promise.all(workers), deadlineReached]);
     } finally {
-      clearTimeout(timer);
+      timer.cancel();
       releaseDeadline();
       signal?.removeEventListener("abort", abortOuter);
       controller.abort();

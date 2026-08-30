@@ -16,7 +16,7 @@ export interface ChatCitationRef {
 export interface CitationPopoverControllerOptions {
   hostEl: HTMLElement;
   t: Translate;
-  onOpenChunk(chunk: RetrievedChunk): void;
+  onOpenChunk: (chunk: RetrievedChunk) => void;
 }
 
 export class CitationPopoverController {

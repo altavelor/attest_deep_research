@@ -12,10 +12,10 @@ export interface ChatHeaderOptions {
   isDebugMode: boolean;
   historyActivity: ChatHistoryActivity;
   t: Translate;
-  onPanelChange(panel: AttestPanel): void;
-  onOpenHistory(anchorEl: HTMLElement): void;
-  onOpenSources(): void;
-  onNewChat(): void;
+  onPanelChange: (panel: AttestPanel) => void;
+  onOpenHistory: (anchorEl: HTMLElement) => void;
+  onOpenSources: () => void;
+  onNewChat: () => void;
 }
 
 export function renderPanelTabs(containerEl: HTMLElement, options: ChatHeaderOptions): void {

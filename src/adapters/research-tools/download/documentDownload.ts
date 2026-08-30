@@ -120,12 +120,19 @@ function filenameFromContentDisposition(value: string | null | undefined): strin
   }
   const star = value.match(/filename\*=(?:UTF-8'')?([^;]+)/i)?.[1];
   if (star) {
-    try {
-      return decodeURIComponent(star.trim().replace(/^"|"$/g, ""));
-    } catch {}
+    const decoded = decodeUriComponent(star.trim().replace(/^"|"$/g, ""));
+    if (decoded !== undefined) return decoded;
   }
   const plain = value.match(/filename="?([^";]+)"?/i)?.[1];
   return plain?.trim();
+}
+
+function decodeUriComponent(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function lastPathSegment(url: string): string | undefined {

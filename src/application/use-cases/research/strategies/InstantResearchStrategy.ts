@@ -308,6 +308,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
 }
 
 async function* emptyRetrievalBranch(): AsyncGenerator<ResearchStreamEvent, RetrievalResult> {
+  yield* [] as ResearchStreamEvent[];
   return emptyRetrievalResult();
 }
 

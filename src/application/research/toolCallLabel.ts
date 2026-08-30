@@ -131,14 +131,13 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       const value = root.value as Record<string, unknown> | undefined;
       const chunks = value?.chunks;
       if (Array.isArray(chunks)) {
-        const totalChars = chunks.reduce((sum, chunk) => {
-          return (
-            sum +
-            (typeof (chunk as Record<string, unknown>).text === "string"
-              ? ((chunk as Record<string, unknown>).text as string).length
-              : 0)
-          );
-        }, 0);
+        let totalChars = 0;
+        for (let index = 0; index < chunks.length; index += 1) {
+          const chunk: unknown = chunks[index];
+          if (isRecord(chunk) && typeof chunk.text === "string") {
+            totalChars += chunk.text.length;
+          }
+        }
         if (totalChars > 0) return `~${(totalChars / 1024).toFixed(1)} kb`;
       }
       return undefined;
@@ -168,4 +167,8 @@ export function resolveResultSummary(name: string, resultJson: string): string |
   } catch {
     return undefined;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

@@ -172,12 +172,14 @@ export class PdfJsTextParser implements PdfPageTextParser {
   async parseDocument(data: ArrayBuffer): Promise<PdfParsedDocument> {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const pdfWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-    const workerGlobal = globalThis as typeof globalThis & {
-      pdfjsWorker?: { WorkerMessageHandler: unknown };
-    };
-    workerGlobal.pdfjsWorker = {
-      WorkerMessageHandler: pdfWorker.WorkerMessageHandler,
-    };
+    if (typeof window !== "undefined") {
+      const workerWindow = window as typeof window & {
+        pdfjsWorker?: { WorkerMessageHandler: unknown };
+      };
+      workerWindow.pdfjsWorker = {
+        WorkerMessageHandler: pdfWorker.WorkerMessageHandler,
+      };
+    }
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(data).slice(),
       useSystemFonts: true,

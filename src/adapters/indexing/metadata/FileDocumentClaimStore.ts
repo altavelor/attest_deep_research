@@ -56,7 +56,9 @@ export class FileDocumentClaimStore implements DocumentClaimStore {
         if (parsed) {
           items.push(parsed);
         }
-      } catch {}
+      } catch {
+        continue;
+      }
     }
     return items.sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
   }
@@ -98,11 +100,13 @@ export function parseClaimsFile(raw: string): SourceDocumentClaims | null {
   const claims: DocumentClaim[] = [];
   for (const line of lines.slice(1)) {
     try {
-      const claim = JSON.parse(line);
+      const claim: unknown = JSON.parse(line);
       if (isClaim(claim)) {
         claims.push(claim);
       }
-    } catch {}
+    } catch {
+      continue;
+    }
   }
   return {
     schemaVersion: 1,

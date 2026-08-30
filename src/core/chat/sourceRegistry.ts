@@ -648,7 +648,7 @@ export function canonicalSourceKey(source: SourceReference): string {
 }
 
 function cloneChunk(chunk: RetrievedChunk): RetrievedChunk {
-  return { ...chunk, source: { ...chunk.source } } as RetrievedChunk;
+  return { ...chunk, source: { ...chunk.source } };
 }
 
 function groupByIdentity(chunks: readonly RetrievedChunk[]): Map<string, RetrievedChunk[]> {

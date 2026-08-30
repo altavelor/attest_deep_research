@@ -2,13 +2,13 @@ export interface ChatProfileProbeTasks<TTools, TResponses, TReasoning = never> {
   probeTools?: () => Promise<TTools>;
   probeResponses?: () => Promise<TResponses>;
   probeReasoning?: () => Promise<TReasoning>;
-  onTools(result: TTools): void | Promise<void>;
-  onResponses(result: TResponses): void | Promise<void>;
+  onTools: (result: TTools) => void | Promise<void>;
+  onResponses: (result: TResponses) => void | Promise<void>;
   onReasoning?: (result: TReasoning) => void | Promise<void>;
-  onToolsError?(error: unknown): void;
-  onResponsesError?(error: unknown): void;
-  onReasoningError?(error: unknown): void;
-  onError?(error: unknown): void;
+  onToolsError?: (error: unknown) => void;
+  onResponsesError?: (error: unknown) => void;
+  onReasoningError?: (error: unknown) => void;
+  onError?: (error: unknown) => void;
 }
 
 export function startChatProfileProbes<TTools, TResponses, TReasoning = never>(

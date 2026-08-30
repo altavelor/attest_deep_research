@@ -9,12 +9,12 @@ import { renderCategoryHeading, renderSubcategoryHeading } from "./shared";
 export interface RetrievalSettingsSectionOptions {
   app: App;
   t: Translate;
-  getDirection?(): TextDirection;
+  getDirection?: () => TextDirection;
   settings: AttestSettings;
   webSourceHealth: WebSourceHealthTracker;
   hasActiveChatModel: boolean;
-  saveSettings(): Promise<void>;
-  requestRedisplay(): void;
+  saveSettings: () => Promise<void>;
+  requestRedisplay: () => void;
 }
 
 /** Renders all retrieval, graph-context, and web-source settings. */

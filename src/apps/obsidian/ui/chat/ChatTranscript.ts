@@ -39,20 +39,20 @@ export interface ChatTranscriptOptions {
   isDebugMode: boolean;
   t: Translate;
   locale?: LocaleCode;
-  getDirection?(): TextDirection;
-  renderEmptyState(containerEl: HTMLElement): void;
-  onEditQuestion(index: number): void;
-  onSubmitEditedQuestion(index: number, value: string): void;
-  onOpenCitationPopover(anchorEl: HTMLElement, ref: ChatCitationRef): void;
-  onScheduleCitationPopoverClose(key: string): void;
-  onScrollCitationBlockIntoView(key: string): void;
-  onOpenRegistryRevision?(revisionId: string): void;
-  onOpenChunk(chunk: RetrievedChunk): void;
-  onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
-  onHighlightCitation(key: string, highlighted: boolean): void;
-  onOpenDiagnosticReport(diagnostics: ContextDiagnostics): void;
-  onSaveAnswerToNewNote(answer: ResearchAnswer): void;
-  onAppendAnswerToActiveNote(answer: ResearchAnswer): void;
+  getDirection?: () => TextDirection;
+  renderEmptyState: (containerEl: HTMLElement) => void;
+  onEditQuestion: (index: number) => void;
+  onSubmitEditedQuestion: (index: number, value: string) => void;
+  onOpenCitationPopover: (anchorEl: HTMLElement, ref: ChatCitationRef) => void;
+  onScheduleCitationPopoverClose: (key: string) => void;
+  onScrollCitationBlockIntoView: (key: string) => void;
+  onOpenRegistryRevision?: (revisionId: string) => void;
+  onOpenChunk: (chunk: RetrievedChunk) => void;
+  onOpenToolOutput: (item: Extract<ChainItem, { kind: "tool-call" }>) => void;
+  onHighlightCitation: (key: string, highlighted: boolean) => void;
+  onOpenDiagnosticReport: (diagnostics: ContextDiagnostics) => void;
+  onSaveAnswerToNewNote: (answer: ResearchAnswer) => void;
+  onAppendAnswerToActiveNote: (answer: ResearchAnswer) => void;
 
   documentImages?: DocumentImageResolver;
 }
@@ -287,7 +287,7 @@ export function patchActiveAssistantMessage(
 
 function lastVisibleMessageIndex(messages: ChatDisplayMessage[]): number {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index]!.kind !== "compact-summary") return index;
+    if (messages[index].kind !== "compact-summary") return index;
   }
   return -1;
 }

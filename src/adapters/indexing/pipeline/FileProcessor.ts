@@ -114,7 +114,7 @@ export class FileProcessor {
     this.options.progress.setFileChunkProgress(file.path, 0, chunks.length);
 
     if (chunks.length === 0) {
-      const languages = detectTextLanguages(String(data));
+      const languages = detectTextLanguages(typeof data === "string" ? data : "");
       this.options.logger?.logIndexingFile({
         path: file.path,
         outcome: "skipped",

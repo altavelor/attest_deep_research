@@ -26,8 +26,8 @@ export function splitCitationText(
     if (match.index > lastIndex) {
       parts.push({ kind: "text", value: text.slice(lastIndex, match.index) });
     }
-    if (hasRef(match[1]!)) {
-      parts.push({ kind: "anchor", chunkId: match[1]! });
+    if (hasRef(match[1])) {
+      parts.push({ kind: "anchor", chunkId: match[1] });
     }
     lastIndex = match.index + match[0].length;
   }

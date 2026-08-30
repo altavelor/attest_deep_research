@@ -235,10 +235,10 @@ describe("DuckDuckGoSearchProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("calls fetch with the global receiver for browser compatibility", async () => {
+  it("calls the injected fetch transport without imposing a browser receiver", async () => {
     const fetchMock = vi.fn(function (this: unknown) {
-      if (this !== globalThis) {
-        throw new TypeError("Illegal invocation");
+      if (this !== undefined) {
+        throw new TypeError("Unexpected fetch receiver");
       }
 
       return Promise.resolve(htmlResponse("<html><body>No results</body></html>"));

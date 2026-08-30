@@ -8,7 +8,7 @@ import { textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
 interface AnthropicChatStreamOptions {
   anthropic: Anthropic;
   request: ChatRequest;
-  translateError(error: unknown): AttestError;
+  translateError: (error: unknown) => AttestError;
 }
 
 export async function* streamAnthropicChat({

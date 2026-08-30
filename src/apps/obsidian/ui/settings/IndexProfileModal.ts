@@ -21,12 +21,12 @@ import { renderModalActions } from "./shared";
 
 export interface IndexProfileModalOptions {
   t: Translate;
-  getDirection?(): TextDirection;
+  getDirection?: () => TextDirection;
   profile?: IndexProfile;
   profiles: IndexProfile[];
   embeddingModels: EmbeddingModelProfile[];
   defaultEmbeddingModelProfileId?: string;
-  onSave(profile: IndexProfile): Promise<void>;
+  onSave: (profile: IndexProfile) => Promise<void>;
 }
 
 export class IndexProfileModal extends Modal {

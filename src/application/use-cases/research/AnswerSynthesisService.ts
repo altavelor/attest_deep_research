@@ -114,7 +114,7 @@ export class AnswerSynthesisService {
     const systemPromptOptions = {
       indexDescription: input.indexDescription?.text,
       ...(toolLoopEnabled
-        ? { noteToolNames: this.noteTools!.definitions().map((def) => def.function.name) }
+        ? { noteToolNames: this.noteTools.definitions().map((def) => def.function.name) }
         : {}),
     };
     const promptOptions: BuildResearchPromptOptions = {

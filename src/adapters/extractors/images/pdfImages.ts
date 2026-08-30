@@ -105,15 +105,15 @@ function indexObjects(buffer: Uint8Array): PdfObject[] {
 
   while ((match = OBJECT_HEADER.exec(source)) !== null) {
     starts.push({
-      number: Number.parseInt(match[1]!, 10),
+      number: Number.parseInt(match[1], 10),
       headerEnd: match.index + match[0].length,
     });
     if (starts.length > 100_000) break;
   }
   for (let index = 0; index < starts.length; index += 1) {
     objects.push({
-      number: starts[index]!.number,
-      headerEnd: starts[index]!.headerEnd,
+      number: starts[index].number,
+      headerEnd: starts[index].headerEnd,
       end: starts[index + 1]?.headerEnd ?? buffer.length,
     });
   }
@@ -137,7 +137,7 @@ function mapObjectsToPages(buffer: Uint8Array, objects: PdfObject[]): Map<number
     OBJECT_REFERENCE.lastIndex = 0;
     let reference: RegExpExecArray | null;
     while ((reference = OBJECT_REFERENCE.exec(xobjects)) !== null) {
-      const target = Number.parseInt(reference[1]!, 10);
+      const target = Number.parseInt(reference[1], 10);
       if (!pageByObject.has(target)) pageByObject.set(target, pageNumber);
     }
   }
@@ -158,7 +158,7 @@ function readStream(buffer: Uint8Array, object: PdfObject): Uint8Array | undefin
 
 function dictNumber(header: string, key: string): number | undefined {
   const match = new RegExp(`/${key}\\s+(\\d+)`).exec(header);
-  const value = match ? Number.parseInt(match[1]!, 10) : Number.NaN;
+  const value = match ? Number.parseInt(match[1], 10) : Number.NaN;
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
@@ -170,7 +170,7 @@ function dictNumber(header: string, key: string): number | undefined {
 function rasterEncoding(header: string): "jpeg" | "flate" | undefined {
   if (/\/ImageMask\s+true/.test(header)) return undefined;
   if (/\/Filter\s*(\[\s*)?\/DCTDecode/.test(header)) return "jpeg";
-  if (!/\/Filter\s*(\[\s*)?\/FlateDecode\s*\]?[^\/]*(\/|>>)/.test(header)) return undefined;
+  if (!/\/Filter\s*(\[\s*)?\/FlateDecode\s*\]?[^/]*(\/|>>)/.test(header)) return undefined;
   if (/\/Filter\s*\[[^\]]*\/(DCT|JPX|CCITT|RunLength|LZW|AHx|A85|ASCII)/.test(header)) {
     return undefined;
   }

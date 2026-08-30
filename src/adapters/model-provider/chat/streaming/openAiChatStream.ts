@@ -12,8 +12,8 @@ import { parseTextToolCalls } from "./textToolCalls";
 interface OpenAiChatStreamOptions {
   openai: OpenAI;
   request: ChatRequest;
-  translateError(error: unknown): AttestError;
-  onReasoningObserved?(observation: { protocol: "chat-completions"; dialect: string }): void;
+  translateError: (error: unknown) => AttestError;
+  onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
 }
 
 export async function* streamOpenAiCompatibleChat({

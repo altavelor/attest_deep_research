@@ -358,9 +358,9 @@ export class ObsidianGraphContextProvider implements GraphContextProvider {
         continue;
       }
 
-      const aliases = this.metadataCache.getFileCache(file)?.frontmatter?.aliases;
+      const aliases: unknown = this.metadataCache.getFileCache(file)?.frontmatter?.aliases;
       const values = Array.isArray(aliases)
-        ? aliases
+        ? aliases.filter((alias): alias is string => typeof alias === "string")
         : typeof aliases === "string"
           ? [aliases]
           : [];

@@ -1,4 +1,5 @@
 import { DocumentSummarizer, SectionSummary } from "@application/ports";
+import { scheduleTimeout } from "@shared";
 import { SectionSummaryGroup } from "./SectionSummaryPlanner";
 
 export const DEFAULT_SECTION_SUMMARY_CONCURRENCY = 3;
@@ -15,7 +16,10 @@ export async function summarizeSectionGroups(options: {
   retryBackoffMs: number;
   onProgress?: (progress: { sectionIndex: number; sectionCount: number }) => void;
 }): Promise<SectionSummary[]> {
-  const results: Array<SectionSummary | undefined> = new Array(options.groups.length);
+  const results: Array<SectionSummary | undefined> = Array.from(
+    { length: options.groups.length },
+    () => undefined,
+  );
   let next = 0;
   let completed = 0;
   let active = 0;
@@ -131,5 +135,5 @@ function wait(ms: number): Promise<void> {
   if (ms <= 0) {
     return Promise.resolve();
   }
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => scheduleTimeout(resolve, ms));
 }

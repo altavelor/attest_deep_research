@@ -111,7 +111,7 @@ function parseSeries(
 function validatePie(chartType: ChartType, series: ChartSeries[]) {
   if (chartType !== "pie") return undefined;
   if (series.length !== 1) return fail("invalid-pie", "A pie chart accepts exactly one series.");
-  const points = series[0]!.points;
+  const points = series[0].points;
   if (points.some((point) => point.y < 0)) {
     return fail("invalid-pie", "Pie slices must not be negative.");
   }

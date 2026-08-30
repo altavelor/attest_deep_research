@@ -248,7 +248,9 @@ function renderSavedChatRow(
       setIcon(editButton, "pencil");
       editButton.addEventListener("click", (event) => {
         event.stopPropagation();
-        startInlineTitleEdit(button, title, chat, options.onRenameChat!);
+        startInlineTitleEdit(button, title, chat, (id, nextTitle) =>
+          options.onRenameChat?.(id, nextTitle),
+        );
       });
     }
 

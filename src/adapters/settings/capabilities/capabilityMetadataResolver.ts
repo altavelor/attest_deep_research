@@ -18,7 +18,9 @@ export async function resolveWithMetadataResolvers(
     try {
       const result = await resolver.resolve(metadata);
       if (result) return result;
-    } catch {}
+    } catch {
+      continue;
+    }
   }
   return undefined;
 }
