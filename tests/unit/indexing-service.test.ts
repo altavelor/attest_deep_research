@@ -143,9 +143,19 @@ describe("IndexingService", () => {
   it("embeds chunks with source path and heading context while storing clean chunk text", async () => {
     const embeddings = new FakeEmbeddingProvider();
     const indexStore = new FakeIndexStore();
+    const headless: Extractor = {
+      supports: (path) => path.endsWith(".txt"),
+      extract: async ({ path, data }) => {
+        const chunk = markdownChunk(path, path, String(data));
+        return [{ ...chunk, source: { ...chunk.source, headingPath: [] } }];
+      },
+    };
     const service = new IndexingService({
-      files: new FakeVaultFileProvider([file("Research/a.md", 1, "body text")]),
-      extractors: [new FakeExtractor(".md")],
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "body text"),
+        file("Research/b.txt", 1, "plain text"),
+      ]),
+      extractors: [new FakeExtractor(".md"), headless],
       embeddings,
       indexStore,
       embeddingModel: "nomic",
@@ -155,9 +165,14 @@ describe("IndexingService", () => {
 
     await service.manualReindex();
 
-    expect(embeddings.inputs[0]).toContain("File: Research/a.md");
-    expect(embeddings.inputs[0]).toContain("Heading:");
-    expect(indexStore.upserted[0].text).toBe("body text");
+    expect([...embeddings.inputs].sort()).toEqual([
+      "File: Research/a.md\nHeading: Test\nbody text",
+      "File: Research/b.txt\nplain text",
+    ]);
+    expect(indexStore.upserted.map((chunk) => chunk.text).sort()).toEqual([
+      "body text",
+      "plain text",
+    ]);
   });
 
   it("logs indexing decisions for indexed, skipped, empty, and failed files", async () => {

@@ -373,18 +373,20 @@ describe("background chat sessions", () => {
     await leaf.detach();
   });
 
-  it("keeps runs alive when the tab closes and shows their progress on reopen", async () => {
+  it("keeps a run alive when its tab closes while it starts and shows its progress on reopen", async () => {
     const harness = createHarness();
     const first = await openLeaf(harness.app);
-    await ask(first.view, "First question");
-    const session = first.view.displayedSession!;
+    submitWithoutSettling(first.view, "First question");
 
     await first.leaf.detach();
+    await settle();
     harness.gates[0].emit({ type: "delta", content: "Streamed while closed" });
     await settle();
 
     expect(harness.requests[0].signal?.aborted).toBe(false);
-    expect(session.status).toBe("running");
+    expect(
+      harness.manager.listSessions().filter((session) => session.status === "running"),
+    ).toHaveLength(1);
 
     const second = await openLeaf(harness.app);
     await settle();
