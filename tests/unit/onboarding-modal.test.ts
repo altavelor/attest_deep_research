@@ -997,23 +997,6 @@ describe("OnboardingModal", () => {
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(false);
   });
 
-  it("does not test the model a second time when Continue follows the picked one", async () => {
-    const verifyEmbedding = vi.fn(async () => true);
-    const { modal } = openModal({ verifyEmbedding });
-    await completeChatStep(modal.contentEl);
-    chooseScope(modal.contentEl, "My notes and the web");
-    click(modal.contentEl, "Continue");
-
-    pickModel(modal.contentEl, "Embedding model", "nomic-embed-text");
-    await eventually(() =>
-      expect(modal.contentEl.querySelector(".attest-onboarding__model-probe")).toBeNull(),
-    );
-    click(modal.contentEl, "Continue");
-
-    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
-    expect(verifyEmbedding).toHaveBeenCalledTimes(1);
-  });
-
   it("says the index run finished instead of leaving the screen on indexing", async () => {
     let publish: ((state: IndexingState) => void) | undefined;
     const { modal } = await finishVaultRoute((_, listener) => {

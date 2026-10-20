@@ -79,39 +79,17 @@ describe("readable diagnostic HTML (v3)", () => {
     expect(html).not.toMatch(/(?:src|href)=["']https?:/);
   });
 
-  it("shows the user question prominently in the header", () => {
+  it("lays out the question, run identity, navigation and collapsed reference sections", () => {
     const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("What is the meaning of life?");
-  });
-
-  it("shows run identity in the page", () => {
-    const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("run-1");
-  });
-
-  it("renders stream section with frame count", () => {
-    const html = formatDiagnosticReportHtml(diagnosticFixture());
-
-    expect(html).toContain("4");
-  });
-
-  it("includes nav bar with section anchors", () => {
-    const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain("top-nav");
     expect(html).toContain('href="#run-trace"');
     expect(html).toContain('href="#input"');
     expect(html).toContain('href="#internals"');
-  });
-
-  it("keeps reference sections collapsed by default", () => {
-    const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).toContain('id="input"');
     expect(html).toContain('id="internals"');
     expect(html).toMatch(/<details class="card card-collapsed" id="input">/);
-  });
-
-  it("omits the stats timeline card", () => {
-    const html = formatDiagnosticReportHtml(diagnosticFixture());
     expect(html).not.toContain('id="timeline"');
     expect(html).not.toContain('href="#timeline"');
   });

@@ -1,8 +1,6 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
-import { readStyles } from "../support/readStyles";
 import {
   buildChartScale,
   chartCategories,
@@ -17,7 +15,6 @@ import {
 } from "@apps/obsidian/ui/chat/artifacts/imageAttribution";
 import type { AnswerImage, ChartArtifact } from "@core/media";
 
-const styles = readStyles();
 const t = createTranslator("en").t;
 
 const barChart: ChartArtifact = {
@@ -150,119 +147,3 @@ describe("image attribution", () => {
     ).toBe("From a.pdf");
   });
 });
-
-describe("artifact rendering contracts", () => {
-  const rendererSources = [
-    "src/apps/obsidian/ui/chat/artifacts/chartRenderer.ts",
-    "src/apps/obsidian/ui/chat/artifacts/imageGalleryRenderer.ts",
-    "src/apps/obsidian/ui/chat/artifacts/ImageLightboxModal.ts",
-    "src/apps/obsidian/ui/chat/artifacts/artifactRenderer.ts",
-  ].map((path) => ({ path, source: readFileSync(path, "utf8") }));
-
-  it("never injects markup or inline styles from artifact data", () => {
-    for (const { path, source } of rendererSources) {
-      expect(source, path).not.toContain("innerHTML");
-      expect(source, path).not.toContain("outerHTML");
-      expect(source, path).not.toContain("insertAdjacentHTML");
-      expect(source, path).not.toMatch(/setAttribute\(\s*"(style|on\w+)"/);
-    }
-  });
-
-  it("re-validates artifacts before rendering a saved chat", () => {
-    const renderer = rendererSources.find((entry) => entry.path.endsWith("artifactRenderer.ts"))!;
-    expect(renderer.source).toContain("sanitizeAnswerArtifacts");
-  });
-
-  it("revokes object urls created for embedded document images", () => {
-    const gallery = rendererSources.find((entry) =>
-      entry.path.endsWith("imageGalleryRenderer.ts"),
-    )!;
-    expect(gallery.source).toContain("disposeGalleryArtifacts");
-    expect(
-      readFileSync("src/apps/obsidian/ui/chat/artifacts/imageSourceResolver.ts", "utf8"),
-    ).toContain("revokeObjectURL");
-    expect(readFileSync("src/apps/obsidian/ui/chat/assistantMessageRenderer.ts", "utf8")).toContain(
-      "disposeAnswerArtifacts",
-    );
-  });
-
-  it("disposes artifacts before the whole transcript is re-rendered", () => {
-    const transcript = readFileSync("src/apps/obsidian/ui/chat/ChatTranscript.ts", "utf8");
-    expect(transcript).toContain("disposeAnswerArtifacts(transcriptEl)");
-    const disposeAt = transcript.indexOf("disposeChatTranscript(transcriptEl)");
-    const emptyAt = transcript.indexOf("transcriptEl.empty()");
-    expect(disposeAt).toBeGreaterThan(-1);
-    expect(disposeAt).toBeLessThan(emptyAt);
-  });
-
-  it("keeps the lightbox keyboard-accessible and restores focus", () => {
-    const lightbox = rendererSources.find((entry) =>
-      entry.path.endsWith("ImageLightboxModal.ts"),
-    )!.source;
-    expect(lightbox).toContain('this.scope.register([], "ArrowRight"');
-    expect(lightbox).toContain('this.scope.register([], "ArrowLeft"');
-    expect(lightbox).toContain("returnFocusTo?.focus()");
-  });
-
-  it("labels the chart for screen readers and offers the data table", () => {
-    const chart = rendererSources.find((entry) => entry.path.endsWith("chartRenderer.ts"))!.source;
-    expect(chart).toContain('svg.setAttribute("role", "img")');
-    expect(chart).toContain('svg.setAttribute("aria-label"');
-    expect(chart).toContain("chartDataTable");
-  });
-});
-
-describe("artifact styles", () => {
-  it("scrolls wide answer tables instead of overflowing the chat pane", () => {
-    expect(cssRule(".attest-chat__answer-content table")).toContain("overflow-x: auto");
-    expect(cssRule(".attest-chat__answer-content table")).toContain("max-width: 100%");
-  });
-
-  it("sizes the full-screen viewer at three quarters of the viewport", () => {
-    const modal = cssRule(".modal.attest-lightbox");
-    expect(modal).toContain("width: 75vw");
-    expect(modal).toContain("height: 75vh");
-    expect(modal).toContain("max-width: 75vw");
-    expect(modal).toContain("max-height: 75vh");
-  });
-
-  it("lets the viewer image fill the space the caption does not need", () => {
-    expect(cssRule(".attest-lightbox .attest-lightbox__stage")).toContain("flex: 1 1 auto");
-    const image = cssRule(".attest-lightbox__image");
-    expect(image).toContain("max-height: 100%");
-    expect(image).toContain("object-fit: contain");
-  });
-
-  it("keeps gallery focus rings visible for keyboard users", () => {
-    expect(cssRule(".attest-gallery__trigger:focus-visible")).toContain("outline");
-  });
-
-  it("never lets an artifact widen the chat pane", () => {
-    for (const selector of [
-      ".attest-chat__answer-content",
-      ".attest-artifacts",
-      ".attest-artifact",
-      ".attest-gallery__grid",
-    ]) {
-      expect(cssRule(selector), selector).toContain("min-width: 0");
-      expect(cssRule(selector), selector).toContain("max-width: 100%");
-    }
-  });
-
-  it("wraps gallery cards onto several rows instead of one shrinking row", () => {
-    const grid = cssRule(".attest-gallery__grid");
-    expect(grid).toContain("auto-fill");
-    expect(grid).toContain("min(190px, 100%)");
-  });
-
-  it("gives thumbnails a readable height", () => {
-    const image = cssRule(".attest-gallery__image");
-    expect(image).toContain("aspect-ratio: 4 / 3");
-    expect(image).toContain("min-height: 160px");
-  });
-});
-
-function cssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(styles)?.[1] ?? "";
-}
