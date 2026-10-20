@@ -477,6 +477,22 @@ describe("createResearchToolRegistry run_subagent gating", () => {
     webProviderAvailable: true,
   };
 
+  it("exposes run_subagent when web or the index is the only read source", () => {
+    const webOnly = createResearchToolRegistry({
+      availability: webAvailability,
+      searchProvider: new FakeSearchProvider([]),
+      subAgentRunner: runner,
+    });
+    const indexOnly = createResearchToolRegistry({
+      availability: { ...webAvailability, searchMode: "indexOnly", retrieverAvailable: true },
+      retriever: { search: async () => ({ chunks: [], citations: [], usedFallback: false }) },
+      subAgentRunner: runner,
+    });
+
+    expect(webOnly.tools.has("run_subagent")).toBe(true);
+    expect(indexOnly.tools.has("run_subagent")).toBe(true);
+  });
+
   it("omits run_subagent in a fully empty profile (no web/index/notes)", () => {
     const created = createResearchToolRegistry({
       availability: { ...webAvailability, searchMode: "none", webProviderAvailable: false },
