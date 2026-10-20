@@ -2,7 +2,7 @@ import { afterEach, beforeEach } from "vitest";
 
 const CASE_LIMIT_MS: Record<string, number> = { unit: 100, scenario: 500 };
 
-let startedAt = 0;
+let startedCpu = process.cpuUsage();
 
 /** Returns the per-case limit of a Vitest project, failing loudly for a test outside tests/unit or tests/scenario. */
 function caseLimitMs(projectName: string | undefined): number {
@@ -16,15 +16,16 @@ function caseLimitMs(projectName: string | undefined): number {
 }
 
 beforeEach(() => {
-  startedAt = performance.now();
+  startedCpu = process.cpuUsage();
 });
 
 afterEach((context) => {
-  const elapsedMs = performance.now() - startedAt;
+  const used = process.cpuUsage(startedCpu);
+  const elapsedMs = (used.user + used.system) / 1000;
   const limitMs = caseLimitMs(context.task.file.projectName);
   if (elapsedMs > limitMs) {
     throw new Error(
-      `"${context.task.name}" took ${elapsedMs.toFixed(0)} ms, over the ${limitMs} ms ${context.task.file.projectName} limit. ` +
+      `"${context.task.name}" took ${elapsedMs.toFixed(0)} ms of CPU, over the ${limitMs} ms ${context.task.file.projectName} limit. ` +
         "Split the test or replace its heavy part with a fake from tests/support; never raise the limit.",
     );
   }

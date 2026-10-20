@@ -133,10 +133,11 @@ a regression test.
   fakes and helpers live in `tests/support/` and are never copied into test
   files; wait for async work with `settle()` or `eventually()` from
   `tests/support/async.ts`.
-- Time limits, enforced by `tests/support/timeLimits.ts` in every run: 0.1 s per
-  unit case and 0.5 s per scenario case, each including its own hooks;
-  `beforeAll` fixtures time out after 2 s. Over a limit, split the test or
-  replace its heavy part with a fake; never raise the limit.
+- Time limits, enforced by `tests/support/timeLimits.ts` in every run: 0.1 s of
+  worker CPU time per unit case and 0.5 s per scenario case, each including its
+  own hooks, so a loaded machine does not fail a light case; `beforeAll`
+  fixtures time out after 2 s. Over a limit, split the test or replace its heavy
+  part with a fake; never raise the limit.
 - Density: at most 0.2 cases per source branch, checked by `npm run test:coverage`
   through `scripts/test-density.mjs`. Every case covers a branch or kills a
   named mutant (boundary, set element, message text, failure code) that no
