@@ -8,7 +8,7 @@ import {
   renderFollowUps,
   type ChatTranscriptOptions,
 } from "@apps/obsidian/ui/chat/ChatTranscript";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 function options(overrides: Partial<ChatTranscriptOptions> = {}): ChatTranscriptOptions {
   return {

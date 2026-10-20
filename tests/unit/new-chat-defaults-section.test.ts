@@ -10,7 +10,7 @@ import {
   resetDom,
   restoreDomTimers,
   useDomFakeTimers,
-} from "../helpers/domHarness";
+} from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

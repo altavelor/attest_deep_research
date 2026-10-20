@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
-import { readStyles } from "../helpers/readStyles";
+import { readStyles } from "../support/readStyles";
 import {
   buildChartScale,
   chartCategories,

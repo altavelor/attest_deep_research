@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { TFile, takeNotices } from "../stubs/obsidian";
+import { TFile, takeNotices } from "../support/obsidian";
 import { ToolOutputViewer } from "@apps/obsidian/ui/chat/toolOutputViewer";
 
 function file(path: string): TFile {

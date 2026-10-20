@@ -7,7 +7,7 @@ import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
 import { AttestError } from "@core/errors";
 import type { SavedChatSettings } from "@core/chat/savedChat";
-import { createTestSessionManager } from "../helpers/chatSessions";
+import { createTestSessionManager } from "../support/chatSessions";
 
 const settings: SavedChatSettings = {
   chatModelProfileId: "model-id",

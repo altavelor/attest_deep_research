@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
 import { renderToolNode } from "@apps/obsidian/ui/chat/workflow/toolCallNodeRenderer";
-import { createContainer, installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

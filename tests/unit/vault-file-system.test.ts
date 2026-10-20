@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
-import { MemoryDataAdapter } from "../stubs/obsidian";
+import { MemoryDataAdapter } from "../support/obsidian";
 import { VaultFileSystem } from "@adapters/obsidian/VaultFileSystem";
 
 describe("VaultFileSystem", () => {

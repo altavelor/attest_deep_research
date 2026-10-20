@@ -5,9 +5,9 @@ import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
 import { VaultResearchPipeline } from "@application/use-cases/research/VaultResearchPipeline";
 import { WebResearchPipeline } from "@application/use-cases/research/WebResearchPipeline";
-import { collectAsync } from "../helpers/async";
-import { citation, fixedNow, markdownSource, retrieved, webSource } from "../helpers/factories";
-import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+import { collectAsync } from "../support/async";
+import { citation, fixedNow, markdownSource, retrieved, webSource } from "../support/factories";
+import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
 
 describe("VaultResearchPipeline", () => {
   it("expands vault query variants when language inventory is available", async () => {

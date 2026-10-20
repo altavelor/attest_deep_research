@@ -3,7 +3,7 @@ import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvide
 import { executeTool } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { ResearchRetriever } from "@application/contracts";
-import { markdownSource, retrieved } from "../helpers/factories";
+import { markdownSource, retrieved } from "../support/factories";
 
 describe("IndexResearchTool", () => {
   it("searches the selected retriever without web or query expansion and registers visible chunks", async () => {

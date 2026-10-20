@@ -4,7 +4,7 @@ import {
   browserDownloadEnvironment,
   downloadDiagnosticHtml,
 } from "@apps/obsidian/ui/diagnostics/download";
-import { installObsidianDomHelpers } from "../helpers/domHarness";
+import { installObsidianDomHelpers } from "../support/domHarness";
 
 describe("diagnostic HTML download", () => {
   it("uses a sanitized filename and always revokes the object URL", () => {

@@ -7,7 +7,7 @@ import {
   CitationPopoverController,
   renderCitationBlocks,
 } from "@apps/obsidian/ui/chat/citations/CitationPopover";
-import { createContainer, installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

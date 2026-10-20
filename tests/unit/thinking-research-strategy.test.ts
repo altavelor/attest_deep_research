@@ -17,7 +17,7 @@ import type {
 } from "@core/agent";
 import type { ResearchExecutionPolicy } from "@core/research";
 import { researchModeRetrievalParameters } from "@core/research";
-import { fixedNow } from "../helpers/factories";
+import { fixedNow } from "../support/factories";
 import type { SearchProvider } from "@application/ports";
 import type { SubAgentPort, SubAgentTelemetry } from "@application/research";
 import type { ContextDiagnostics } from "@core/diagnostics";

@@ -9,7 +9,7 @@ import process from "process";
  *
  * This guards the bundle against load-time failures. Source-level rules for
  * plugin code, including the Node-only `Buffer` global, live in
- * tests/arch/import-boundaries.test.ts.
+ * tests/scenario/arch/import-boundaries.test.ts.
  */
 
 const FORBIDDEN_MODULES = [

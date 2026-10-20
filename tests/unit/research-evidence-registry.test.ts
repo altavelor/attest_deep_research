@@ -1,5 +1,5 @@
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
-import { markdownSource, retrieved } from "../helpers/factories";
+import { markdownSource, retrieved } from "../support/factories";
 
 describe("ResearchEvidenceRegistry", () => {
   it("deduplicates index chunks and combines provenance", () => {

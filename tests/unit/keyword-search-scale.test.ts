@@ -7,7 +7,7 @@ import {
 } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("keyword search at corpus scale (Ф0)", () => {
   it("ranks a 50k-chunk lookup well under the latency budget", () => {

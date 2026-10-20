@@ -1,5 +1,5 @@
 import { parseQueryVariants, QueryExpansionService } from "@adapters/retrieval";
-import { FakeChatModel } from "../helpers/researchFakes";
+import { FakeChatModel } from "../support/researchFakes";
 
 describe("QueryExpansionService", () => {
   it("builds variants for languages present in the index but different from the query", async () => {

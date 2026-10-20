@@ -1,7 +1,7 @@
 import { FileVectorIndexStore, FileVectorInventoryStore } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("readIndexSection (Ф2.1)", () => {
   const folder = ".attest/index";

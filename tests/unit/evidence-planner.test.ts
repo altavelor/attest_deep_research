@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EvidencePlanner } from "@core/research";
-import { markdownSource, retrieved, webSource } from "../helpers/factories";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 
 describe("EvidencePlanner", () => {
   it("uses a local-first budget by default while keeping at least one web item", () => {

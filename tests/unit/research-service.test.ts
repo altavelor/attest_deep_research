@@ -19,9 +19,9 @@ import {
   pdfSource,
   retrieved,
   webSource,
-} from "../helpers/factories";
-import { collectAsync } from "../helpers/async";
-import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+} from "../support/factories";
+import { collectAsync } from "../support/async";
+import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
 import type { SearchProvider, SearchProviderResult } from "@application/ports/web";
 import { ChatModelProvider } from "@core/agent";
 class MemoryContextFiles implements ContextFileProvider {

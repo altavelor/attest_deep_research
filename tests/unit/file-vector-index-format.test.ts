@@ -13,7 +13,7 @@ import {
 } from "@adapters/indexing/store/FileVectorIndexFormat";
 import type { EmbeddedChunk, SourceReference } from "@core/model";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("file vector index format", () => {
   it("creates a versioned manifest for 32 source-path hash shards", () => {

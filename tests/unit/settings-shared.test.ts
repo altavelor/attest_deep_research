@@ -11,7 +11,7 @@ import {
   renderModalActions,
   statusForProfile,
 } from "@apps/obsidian/ui/settings/shared";
-import { createContainer, installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

@@ -8,7 +8,7 @@ import type { ChatRepository } from "@application/ports";
 import type { ResearchAnswer } from "@core/answer";
 import type { SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
-import { createTestSessionManager } from "../helpers/chatSessions";
+import { createTestSessionManager } from "../support/chatSessions";
 
 const settings: SavedChatSettings = {
   chatModelProfileId: "model-id",

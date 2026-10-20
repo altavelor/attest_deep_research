@@ -15,7 +15,7 @@ import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@
 import { VaultFileProvider, VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 import { FileVectorIndexStore } from "@adapters/indexing";
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
   return {

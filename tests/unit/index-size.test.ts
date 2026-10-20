@@ -1,6 +1,6 @@
 import { formatIndexSize, measureFolderSize } from "@adapters/indexing";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("index size formatting", () => {
   it("formats bytes using compact binary units", () => {

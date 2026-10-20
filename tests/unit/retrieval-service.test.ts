@@ -8,12 +8,12 @@ import {
   pdfSource,
   retrieved,
   webSource,
-} from "../helpers/factories";
+} from "../support/factories";
 import {
   FailingEmbeddingProvider,
   FakeEmbeddingProvider,
   FakeIndexStore,
-} from "../helpers/retrievalFakes";
+} from "../support/retrievalFakes";
 import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "@application/ports";
 import { RetrievedChunk } from "@core/model";

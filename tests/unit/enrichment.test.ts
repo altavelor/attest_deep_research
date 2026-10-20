@@ -14,7 +14,7 @@ import {
   parseExtractedMetadata,
 } from "@adapters/indexing";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("bibliography normalization", () => {
   it("extracts DOI, year, and a title key from a raw reference", () => {

@@ -8,7 +8,7 @@ import {
   renderSavedChatsPopoverContent,
 } from "@apps/obsidian/ui/chat/history/SavedChatsPanel";
 import type { SavedChatSummary } from "@core/chat/savedChat";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = ((key: string, values?: Record<string, unknown>) =>
   `${key}:${values?.count ?? ""}`) as never;

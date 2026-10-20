@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, Platform, TFile, TFolder } from "../stubs/obsidian";
+import { App, Platform, TFile, TFolder } from "../support/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
@@ -13,7 +13,7 @@ import type {
 } from "@adapters/settings";
 import { OnboardingModal } from "@apps/obsidian/ui/onboarding";
 import type { OnboardingModalOptions } from "@apps/obsidian/ui/onboarding";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

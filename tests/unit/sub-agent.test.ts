@@ -5,8 +5,8 @@ import { SubAgentPort, SubAgentTelemetry } from "@application/research";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { FakeChatModel, FakeSearchProvider } from "../helpers/researchFakes";
-import { markdownSource, retrieved, webSource } from "../helpers/factories";
+import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import type {
   ModelRoundProvider,
   ModelRoundRequest,

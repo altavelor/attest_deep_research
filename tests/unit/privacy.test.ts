@@ -10,9 +10,9 @@ import {
   INDEX_FOLDER_DESCRIPTION,
   WEB_SOURCES_DESCRIPTION,
 } from "@adapters/settings";
-import { collectAsync } from "../helpers/async";
-import { citation, markdownSource, retrieved } from "../helpers/factories";
-import { FakeChatModel, FakeRetriever, RecordingSearchProvider } from "../helpers/researchFakes";
+import { collectAsync } from "../support/async";
+import { citation, markdownSource, retrieved } from "../support/factories";
+import { FakeChatModel, FakeRetriever, RecordingSearchProvider } from "../support/researchFakes";
 
 describe("privacy boundaries", () => {
   it("does not log source content or generated answers from production code by default", () => {
