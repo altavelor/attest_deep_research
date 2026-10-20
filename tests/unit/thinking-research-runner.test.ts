@@ -11,7 +11,7 @@ import {
   ModelRoundRequest,
   ProviderContinuationState,
 } from "@core/agent";
-import { eventually } from "../support/async";
+import { eventually, settle } from "../support/async";
 
 class ScriptedProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -463,7 +463,7 @@ describe("ThinkingResearchRunner", () => {
       vi.fn().mockImplementation(async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await settle(10);
         active -= 1;
         return { ok: true, value: { answer: "done" } };
       }),
@@ -607,7 +607,7 @@ describe("ThinkingResearchRunner", () => {
     let started = 0;
     let releaseAll!: () => void;
     const bothStarted = new Promise<void>((resolve) => (releaseAll = resolve));
-    setTimeout(() => releaseAll(), 20);
+    void settle(20).then(() => releaseAll());
     const update = tool(
       "update_note",
       vi.fn().mockImplementation(async () => {

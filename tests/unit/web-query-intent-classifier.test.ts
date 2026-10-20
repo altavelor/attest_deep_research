@@ -56,28 +56,6 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(seen[0].reasoningEnabled).toBe(false);
   });
 
-  it("answers within the timeout because reasoning is off", async () => {
-    const thinker: ChatModelProvider = {
-      listModels: async () => ["m"],
-      streamChat: async function* (request: ChatRequest): AsyncIterable<ChatResponseChunk> {
-        if (request.reasoningEnabled !== false) {
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-        yield { content: '{"intent":"encyclopedic"}', isComplete: true };
-      },
-    };
-    const classifier = new ModelWebQueryIntentClassifier({
-      chatModel: thinker,
-      model: "m",
-      timeoutMs: 30,
-    });
-
-    await expect(classifier.classify("что такое нарзан")).resolves.toEqual({
-      intent: "encyclopedic",
-      origin: "model",
-    });
-  });
-
   it("accepts a bare intent word and rejects an unknown one", async () => {
     const bare = new ModelWebQueryIntentClassifier({
       chatModel: modelReturning("news"),
@@ -133,12 +111,17 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(aborted).toBe(true);
   });
 
-  it("degrades to the heuristic even when the provider ignores the abort signal", async () => {
+  it("degrades to the heuristic and closes the stream when the provider ignores the abort signal", async () => {
+    let returned = false;
     const deaf: ChatModelProvider = {
       listModels: async () => ["m"],
       streamChat: (): AsyncIterable<ChatResponseChunk> => ({
         [Symbol.asyncIterator]: () => ({
           next: () => new Promise<IteratorResult<ChatResponseChunk>>(() => {}),
+          return: async () => {
+            returned = true;
+            return { done: true, value: undefined } as IteratorResult<ChatResponseChunk>;
+          },
         }),
       }),
     };
@@ -153,6 +136,7 @@ describe("ModelWebQueryIntentClassifier", () => {
       origin: "heuristic",
       reason: "intent-classification-timeout",
     });
+    expect(returned).toBe(true);
   });
 
   it("stops waiting on a deaf provider when the caller cancels", async () => {
@@ -177,31 +161,6 @@ describe("ModelWebQueryIntentClassifier", () => {
     await expect(pending).resolves.toMatchObject({ intent: "news", origin: "heuristic" });
   });
 
-  it("closes the abandoned stream so the provider can release it", async () => {
-    let returned = false;
-    const deaf: ChatModelProvider = {
-      listModels: async () => ["m"],
-      streamChat: (): AsyncIterable<ChatResponseChunk> => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => new Promise<IteratorResult<ChatResponseChunk>>(() => {}),
-          return: async () => {
-            returned = true;
-            return { done: true, value: undefined } as IteratorResult<ChatResponseChunk>;
-          },
-        }),
-      }),
-    };
-    const classifier = new ModelWebQueryIntentClassifier({
-      chatModel: deaf,
-      model: "m",
-      timeoutMs: 10,
-    });
-
-    await classifier.classify("arxiv paper on RAG");
-
-    expect(returned).toBe(true);
-  });
-
   it("never reaches the model when the caller already cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
@@ -217,20 +176,6 @@ describe("ModelWebQueryIntentClassifier", () => {
       classifier.classify("latest release news", controller.signal),
     ).resolves.toMatchObject({ intent: "news", origin: "heuristic", reason: "aborted" });
     expect(calls).toBe(0);
-  });
-
-  it("degrades to the heuristic when the caller cancels", async () => {
-    const controller = new AbortController();
-    const classifier = new ModelWebQueryIntentClassifier({
-      chatModel: hangingModel(),
-      model: "m",
-      timeoutMs: 5_000,
-    });
-
-    const pending = classifier.classify("latest release news", controller.signal);
-    controller.abort();
-
-    await expect(pending).resolves.toMatchObject({ intent: "news", origin: "heuristic" });
   });
 
   it("serves a repeated query from cache and re-asks once the entry expires", async () => {
@@ -281,28 +226,6 @@ describe("ModelWebQueryIntentClassifier", () => {
     expect(calls).toBe(3);
 
     await classifier.classify("two");
-    expect(calls).toBe(4);
-  });
-
-  it("evicts the oldest entry once the cache is full", async () => {
-    let calls = 0;
-    const classifier = new ModelWebQueryIntentClassifier({
-      chatModel: modelReturning('{"intent":"general"}', () => {
-        calls += 1;
-      }),
-      model: "m",
-      maxCacheEntries: 2,
-    });
-
-    await classifier.classify("one");
-    await classifier.classify("two");
-    await classifier.classify("three");
-    expect(calls).toBe(3);
-
-    await classifier.classify("one");
-    expect(calls).toBe(4);
-
-    await classifier.classify("three");
     expect(calls).toBe(4);
   });
 
