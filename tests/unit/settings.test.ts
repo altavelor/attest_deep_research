@@ -31,6 +31,7 @@ describe("Attest settings", () => {
     expect(DEFAULT_SETTINGS.serverProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.chatModelProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.embeddingModelProfiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.indexProfiles).toEqual([]);
     expect(DEFAULT_SETTINGS.newChatDefaults).toEqual({
       searchMode: "indexOnly",
       indexProfileId: "",
@@ -95,44 +96,17 @@ describe("Attest settings", () => {
     expect(settings.debugMode).toBe(true);
   });
 
-  it("ignores the removed forceEagerResearch key in existing saved settings", () => {
-    const savedWithLegacyKey = {
-      ...currentSettings(),
-      forceEagerResearch: true,
-    };
-
-    const settings = readSettings(savedWithLegacyKey);
-
-    expect(settings).toEqual(DEFAULT_SETTINGS);
-    expect(settings).not.toHaveProperty("forceEagerResearch");
-  });
-
-  it("loads settings saved with the removed showChatIndexControl key and drops it", () => {
-    const savedWithRemovedKey = {
-      ...currentSettings(),
-      showChatIndexControl: true,
-    };
-
-    const settings = readSettings(savedWithRemovedKey);
-
-    expect(settings).toEqual(DEFAULT_SETTINGS);
-    expect(settings).not.toHaveProperty("showChatIndexControl");
-  });
-
-  it("loads settings saved without the removed showChatIndexControl key", () => {
-    const settings = readSettings(currentSettings({ debugMode: true }));
-
-    expect(settings.debugMode).toBe(true);
-    expect(settings).not.toHaveProperty("showChatIndexControl");
-  });
-
-  it("preserves current settings while dropping an unknown legacy setting", () => {
+  it("drops removed and unknown legacy keys while preserving current settings", () => {
     const settings = readSettings({
       ...currentSettings({ debugMode: true }),
+      forceEagerResearch: true,
+      showChatIndexControl: true,
       legacyIndexFolder: ".attest/legacy-index",
     });
 
-    expect(settings.debugMode).toBe(true);
+    expect(settings).toEqual({ ...DEFAULT_SETTINGS, debugMode: true });
+    expect(settings).not.toHaveProperty("forceEagerResearch");
+    expect(settings).not.toHaveProperty("showChatIndexControl");
     expect(settings).not.toHaveProperty("legacyIndexFolder");
   });
 
