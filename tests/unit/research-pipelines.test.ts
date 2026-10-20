@@ -3,6 +3,7 @@ import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
 import { VaultResearchPipeline } from "@application/use-cases/research/VaultResearchPipeline";
 import { WebResearchPipeline } from "@application/use-cases/research/WebResearchPipeline";
+import { AttestError } from "@core/errors";
 import { collectAsync } from "../support/async";
 import { citation, fixedNow, markdownSource, retrieved, webSource } from "../support/factories";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
@@ -377,6 +378,41 @@ describe("WebResearchPipeline", () => {
         }),
       ]),
     );
+  });
+});
+
+describe("AnswerSynthesisService context window", () => {
+  const request = { question: "Why?", evidence: [], citations: [], evidenceLimit: 8 };
+  const synthesizeWithin = (contextLimitTokens: number) =>
+    collectAsync(
+      new AnswerSynthesisService({
+        runToolLoop,
+        chatModel: new FakeChatModel(),
+        chatModelName: "qwen",
+        chatOptions: {},
+        contextLimitTokens,
+        now: fixedNow,
+      }).synthesize(request),
+    );
+  const estimatedTokens = async (): Promise<number> => {
+    const error = await synthesizeWithin(1).catch((caught: AttestError) => caught);
+    return Number((error as AttestError).details?.estimatedTokens);
+  };
+
+  it("refuses a request one token over the context window with its code and message", async () => {
+    const limit = (await estimatedTokens()) - 1;
+
+    await expect(synthesizeWithin(limit)).rejects.toMatchObject({
+      code: "CONTEXT_WINDOW_EXCEEDED",
+      message: "The current chat is too long for the selected model context window.",
+      details: { contextLimitTokens: limit, estimatedTokens: limit + 1 },
+    });
+  });
+
+  it("answers a request that exactly fills the context window", async () => {
+    const events = await synthesizeWithin(await estimatedTokens());
+
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
   });
 });
 
