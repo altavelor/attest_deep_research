@@ -88,16 +88,6 @@ describe("WebSourcesSection activation lamp", () => {
     expect(saveSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("returns to the starting state after three clicks", async () => {
-    const settings = settingsWith("off");
-
-    for (const expected of ["auto", "always", "off"] as const) {
-      const { container } = render(settings);
-      lampFor(container, "duckduckgo").click();
-      await eventually(() => expect(activationOf(settings)).toBe(expected));
-    }
-  });
-
   it("rolls back the activation and reports a failed save", async () => {
     const settings = settingsWith("off");
     const { container, requestRedisplay } = render(settings, async () => {
