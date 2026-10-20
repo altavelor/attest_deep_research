@@ -143,11 +143,9 @@ describe("docx image extraction rejects untrusted archive entries", () => {
   });
 
   it("skips an entry larger than the per-image byte limit", () => {
-    const oversized = Buffer.concat([png(64, 64, 0), Buffer.alloc(9 * 1024 * 1024, 0)]);
-    const archive = zip({
-      "word/media/huge.png": oversized,
-      "word/media/small.png": pngBytes,
-    });
+    const oversized = Buffer.alloc(IMAGE_EXTRACTION_LIMITS.maxEncodedBytes + 1, 0);
+    png(64, 64, 0).copy(oversized);
+    const archive = zip({ "word/media/huge.png": oversized, "word/media/small.png": pngBytes }, 0);
 
     expect(locators("docs/report.docx", archive)).toEqual(["zip:word/media/small.png"]);
   });
