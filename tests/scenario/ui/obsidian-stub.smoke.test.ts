@@ -55,7 +55,7 @@ class LateRegisteringView extends ItemView {
   }
 
   async onload(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     this.register(() => {});
     this.lifecycle.push("onload");
   }

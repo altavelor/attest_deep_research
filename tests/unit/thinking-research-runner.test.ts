@@ -11,6 +11,7 @@ import {
   ModelRoundRequest,
   ProviderContinuationState,
 } from "@core/agent";
+import { eventually } from "../support/async";
 
 class ScriptedProvider implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -539,7 +540,7 @@ describe("ThinkingResearchRunner", () => {
         events.push(`result:${id}`);
       },
     }).run();
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(events.length).toBeGreaterThanOrEqual(4);
     });
 

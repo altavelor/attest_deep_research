@@ -631,7 +631,7 @@ describe("AnswerSynthesisService", () => {
 });
 
 function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 async function completedValue<T>(generator: AsyncGenerator<unknown, T>): Promise<T> {

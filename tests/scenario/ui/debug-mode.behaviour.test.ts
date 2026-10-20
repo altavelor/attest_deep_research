@@ -134,7 +134,7 @@ describe("debug-mode toggle in advanced settings", () => {
     const { state, saveSettings, refreshChatViews, toggle } = renderToggle(false);
 
     toggle?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(state.debugMode).toBe(true);
     expect(saveSettings).toHaveBeenCalledTimes(1);

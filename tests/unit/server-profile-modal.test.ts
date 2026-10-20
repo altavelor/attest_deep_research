@@ -7,6 +7,7 @@ import type { ServerProfile } from "@adapters/settings";
 import { ServerProfileModal } from "@apps/obsidian/ui/settings/ServerProfileModal";
 import type { App as ObsidianApp } from "obsidian";
 import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
+import { eventually } from "../support/async";
 
 const t = createTranslator("en").t;
 
@@ -69,7 +70,7 @@ describe("ServerProfileModal", () => {
     choose(modal.contentEl, "API format", "anthropic");
     save(modal.contentEl);
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Personal API",
@@ -95,7 +96,7 @@ describe("ServerProfileModal", () => {
     expect(inputFor(modal.contentEl, "Name").value).toBe("Anthropic");
 
     save(modal.contentEl);
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Anthropic",
@@ -206,7 +207,7 @@ describe("ServerProfileModal", () => {
     choose(modal.contentEl, "Provider", "groq");
     save(modal.contentEl);
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Work key",

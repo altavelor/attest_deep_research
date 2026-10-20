@@ -9,6 +9,7 @@ import type { AnswerImage } from "@core/media";
 import type { DocumentImageResolver } from "@application/ports";
 import { createContainer, resetDom } from "../../support/domHarness";
 import { trackObjectUrls, type ObjectUrlTracker } from "../../support/objectUrls";
+import { settle } from "../../support/async";
 
 function embeddedImage(id: string): AnswerImage {
   return {
@@ -49,8 +50,6 @@ function openLightbox(images: AnswerImage[], startIndex = 0, returnFocusTo?: HTM
 function pressKey(modal: ImageLightboxModal, key: string): void {
   modal.modalEl.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 }
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   createContainer();

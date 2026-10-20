@@ -14,6 +14,7 @@ import AttestPlugin from "@apps/obsidian/main";
 import { cloneIndexProfile, DEFAULT_INDEX_PROFILE, DEFAULT_SETTINGS } from "@adapters/settings";
 import { ATTEST_CHAT_VIEW_TYPE } from "@apps/obsidian/ui/chat/AttestChatView";
 import { createContainer, resetDom, restoreDomTimers } from "../../support/domHarness";
+import { eventually } from "../../support/async";
 
 const FOREIGN_VIEW_TYPE = "foreign-view";
 
@@ -173,7 +174,7 @@ describe("Attest plugin lifecycle", () => {
     expect(ribbon?.getAttribute("aria-label")).toBe("Open Attest chat");
     ribbon?.click();
 
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(app.workspace.getLeavesOfType(ATTEST_CHAT_VIEW_TYPE)).toHaveLength(1);
     });
     expect(app.workspace.rightLeafRequests).toBe(1);
@@ -189,7 +190,7 @@ describe("Attest plugin lifecycle", () => {
     expect(command.editorCheckCallback?.(true, editor, context)).toBe(true);
     command.editorCheckCallback?.(false, editor, context);
 
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(runCommand).toHaveBeenCalledWith({
         contextPaths: ["Notes/Current.md"],
         submit: false,
@@ -209,7 +210,7 @@ describe("Attest plugin lifecycle", () => {
     expect(command.editorCheckCallback?.(true, selected.editor, selected.context)).toBe(true);
     command.editorCheckCallback?.(false, selected.editor, selected.context);
 
-    await vi.waitFor(() => expect(runCommand).toHaveBeenCalledOnce());
+    await eventually(() => expect(runCommand).toHaveBeenCalledOnce());
     expect(runCommand).toHaveBeenCalledWith({
       contextPaths: ["Notes/Current.md"],
       question: expect.stringContaining("> First line\n> Second line"),
@@ -230,7 +231,7 @@ describe("Attest plugin lifecycle", () => {
       context,
     );
 
-    await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2));
+    await eventually(() => expect(runCommand).toHaveBeenCalledTimes(2));
     expect(runCommand).toHaveBeenNthCalledWith(1, {
       contextPaths: ["Notes/Current.md"],
       question: expect.any(String),
@@ -254,7 +255,7 @@ describe("Attest plugin lifecycle", () => {
 
     registeredCommand(plugin, "update-index").callback?.();
 
-    await vi.waitFor(() => expect(start).toHaveBeenCalledWith(profileId));
+    await eventually(() => expect(start).toHaveBeenCalledWith(profileId));
   });
 
   it("reports an index-update rejection instead of leaking it", async () => {
@@ -262,7 +263,7 @@ describe("Attest plugin lifecycle", () => {
 
     registeredCommand(plugin, "update-index").callback?.();
 
-    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+    await eventually(() => expect(start).toHaveBeenCalledOnce());
     await Promise.resolve();
     expect(takeNotices().map((notice) => notice.message)).toEqual([
       "Something went wrong in Attest.",
@@ -538,7 +539,7 @@ describe("Attest first-run wizard", () => {
     ).find((button) => button.textContent === "Skip, configure manually");
     skip?.click();
 
-    await vi.waitFor(() => expect(plugin.settings.onboardingCompleted).toBe(true));
+    await eventually(() => expect(plugin.settings.onboardingCompleted).toBe(true));
     expect(wizardEl()).toBeNull();
   });
 
@@ -573,7 +574,7 @@ describe("Attest first-run wizard", () => {
     ).find((candidate) => candidate.textContent === "Skip, configure manually");
     skip?.click();
 
-    await vi.waitFor(() => expect(closed).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(closed).toHaveBeenCalledTimes(1));
   });
 
   it("does not commit skipped settings after unload while persistence is pending", async () => {

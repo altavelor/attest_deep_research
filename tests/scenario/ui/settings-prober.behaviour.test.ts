@@ -23,6 +23,7 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../support/domHarness";
+import { eventually } from "../../support/async";
 
 vi.mock("@adapters/settings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@adapters/settings")>();
@@ -228,7 +229,7 @@ describe("settings capability prober subscriptions", () => {
     vi.spyOn(settingsApi, "verifyEmbeddingCapability").mockResolvedValueOnce(true);
 
     prober.startEmbeddingProfileProbe("embedding");
-    await vi.waitFor(() => expect(saves).toBe(1));
+    await eventually(() => expect(saves).toBe(1));
 
     expect(settings.embeddingModelProfiles[0]).toMatchObject({
       isSuspended: false,

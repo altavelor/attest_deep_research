@@ -26,6 +26,7 @@ import {
   useDomFakeTimers,
 } from "../../support/domHarness";
 import { createTestSessionManager } from "../../support/chatSessions";
+import { eventually } from "../../support/async";
 
 const searchWeb: ChainItem = {
   kind: "tool-call",
@@ -285,7 +286,7 @@ describe("conversation sources action", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
 
-    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+    await eventually(() => expect(sourcesButton(view)).not.toBeNull());
     await leaf.detach();
   });
 
@@ -306,10 +307,10 @@ describe("conversation sources action", () => {
     const { view, leaf } = await openView({ loadSavedChat: async () => completedChat });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
-    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+    await eventually(() => expect(sourcesButton(view)).not.toBeNull());
 
     view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
-    await vi.waitFor(() => expect(sourcesButton(view)).toBeNull());
+    await eventually(() => expect(sourcesButton(view)).toBeNull());
     await leaf.detach();
   });
 
@@ -330,9 +331,9 @@ describe("conversation sources action", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
 
-    await vi.waitFor(() => expect(view.contentEl.textContent).toContain("Partial"));
+    await eventually(() => expect(view.contentEl.textContent).toContain("Partial"));
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(
         view.contentEl.querySelector(".attest-chat__message")?.getAttribute("data-status"),
       ).not.toBe("streaming"),
@@ -356,7 +357,7 @@ describe("conversation sources action", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
 
-    await vi.waitFor(() => expect(takeNotices()).toHaveLength(1));
+    await eventually(() => expect(takeNotices()).toHaveLength(1));
     expect(sourcesButton(view)).toBeNull();
     await leaf.detach();
   });
@@ -381,13 +382,13 @@ describe("conversation sources action", () => {
     input.value = "First";
     input.dispatchEvent(new Event("input"));
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
-    await vi.waitFor(() => expect(sourcesButton(view)).not.toBeNull());
+    await eventually(() => expect(sourcesButton(view)).not.toBeNull());
 
     input.value = "Second";
     input.dispatchEvent(new Event("input"));
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__submit")?.click();
 
-    await vi.waitFor(() => expect(turn).toBe(2));
+    await eventually(() => expect(turn).toBe(2));
     expect(sourcesButton(view)).not.toBeNull();
     await leaf.detach();
   });
@@ -397,7 +398,7 @@ describe("conversation sources action", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
       ),
@@ -459,7 +460,7 @@ describe("chat command actions", () => {
     const { app, view, leaf } = await openView({ sessions });
     app.vault.setFiles([new TFile("Notes/Current.md")]);
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
       ),
@@ -509,7 +510,7 @@ describe("chat command actions", () => {
       submit: true,
     });
 
-    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    await eventually(() => expect(requests).toHaveLength(2));
     expect(requests[0]).toMatchObject({
       question: "Find related notes",
       searchMode: "indexOnly",
@@ -536,7 +537,7 @@ describe("chat view transcript disposal", () => {
       }),
     });
     opened.view.contentEl.querySelector<HTMLElement>(".attest-chat__saved-open")?.click();
-    await vi.waitFor(() => {
+    await eventually(() => {
       if (!opened.view.contentEl.querySelector(".attest-chat__tool-fetch-target")) {
         throw new Error("The pending fetch targets were not rendered yet.");
       }
@@ -593,7 +594,7 @@ describe("chat view transcript disposal", () => {
     view.contentEl
       .querySelector<HTMLFormElement>(".attest-chat__form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(request).toBeDefined());
+    await eventually(() => expect(request).toBeDefined());
 
     await leaf.detach();
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
@@ -697,7 +698,7 @@ describe("saved chats from the chat view", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(loadSavedChat).toHaveBeenCalledWith(savedChat.id);
       expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
@@ -714,8 +715,8 @@ describe("saved chats from the chat view", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
 
-    await vi.waitFor(() => expect(loadSavedChat).toHaveBeenCalledWith(summary.id));
-    await vi.waitFor(() => {
+    await eventually(() => expect(loadSavedChat).toHaveBeenCalledWith(summary.id));
+    await eventually(() => {
       expect(takeNotices().map((notice) => notice.message)).toEqual(["Saved chat was not found."]);
     });
     expect(listSavedChats).toHaveBeenCalledTimes(2);
@@ -735,12 +736,12 @@ describe("saved chats from the chat view", () => {
     });
 
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[0]?.click();
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(view.contentEl.querySelector(".attest-chat__history-popover")).not.toBeNull();
     });
 
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[0]?.click();
-    await vi.waitFor(() => expect(setSavedChatFavorite).toHaveBeenCalledWith(summary.id, true));
+    await eventually(() => expect(setSavedChatFavorite).toHaveBeenCalledWith(summary.id, true));
 
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action")[1]?.click();
     const titleInput = view.contentEl.querySelector<HTMLInputElement>(
@@ -748,15 +749,15 @@ describe("saved chats from the chat view", () => {
     );
     titleInput!.value = "Renamed research";
     titleInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(renameSavedChat).toHaveBeenCalledWith(summary.id, "Renamed research");
     });
 
     view.contentEl
       .querySelectorAll<HTMLButtonElement>(".attest-chat__saved-action--delete")[0]
       ?.click();
-    await vi.waitFor(() => expect(deleteSavedChat).toHaveBeenCalledWith(summary.id));
-    await vi.waitFor(() => {
+    await eventually(() => expect(deleteSavedChat).toHaveBeenCalledWith(summary.id));
+    await eventually(() => {
       expect(takeNotices().map((notice) => notice.message)).toContain("Chat deleted.");
     });
     await leaf.detach();
@@ -768,14 +769,14 @@ describe("saved chats from the chat view", () => {
     const { view, leaf } = await openView({ sessions: manager });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(view.contentEl.querySelector(".attest-chat__message-text")?.textContent).toBe(
         "Find sources",
       );
     });
 
     view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(saveChat).toHaveBeenCalledWith(expect.objectContaining({ id: savedChat.id }));
       expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
     });
@@ -802,7 +803,7 @@ describe("chat view research composition", () => {
     input!.dispatchEvent(new Event("input"));
     view.contentEl.querySelector<HTMLButtonElement>("button.attest-chat__submit")?.click();
 
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(createResearchService).toHaveBeenCalledWith("model", "index", "webOnly");
     });
     await leaf.detach();

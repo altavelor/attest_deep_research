@@ -9,7 +9,7 @@ function deferred() {
 
 /** Flush all pending microtasks (the throttle defers task starts across a .then chain). */
 function flush(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("HostRequestThrottle", () => {

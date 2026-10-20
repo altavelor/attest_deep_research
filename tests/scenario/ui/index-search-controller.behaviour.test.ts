@@ -12,6 +12,7 @@ import type { IndexProfileSelectOption } from "@apps/obsidian/ui/chat/ChatCompos
 import type { RetrievedChunk } from "@core/model";
 import { createContainer, resetDom } from "../../support/domHarness";
 import { markdownSource, retrieved } from "../../support/factories";
+import { eventually } from "../../support/async";
 
 const t = createTranslator("en").t;
 
@@ -121,7 +122,7 @@ describe("index search panel warnings", () => {
     refs.query.value = "matched";
 
     refs.submit();
-    await vi.waitFor(() => {
+    await eventually(() => {
       if (!warningText(container)) throw new Error("No fallback warning yet.");
     });
 
@@ -137,7 +138,7 @@ describe("index search panel warnings", () => {
     const refs = panelRefs(container);
     refs.query.value = "matched";
     refs.submit();
-    await vi.waitFor(() => {
+    await eventually(() => {
       if (!warningText(container)) throw new Error("No fallback warning yet.");
     });
 
@@ -181,7 +182,7 @@ describe("index search panel accessibility roles", () => {
     const refs = panelRefs(container);
     refs.query.value = "matched";
     refs.submit();
-    await vi.waitFor(() => {
+    await eventually(() => {
       if (!container.querySelector(".attest-index-search__result")) {
         throw new Error("No result rendered yet.");
       }

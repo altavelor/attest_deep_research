@@ -8,6 +8,7 @@ import type { ResearchAnswer } from "@core/answer";
 import { AttestError } from "@core/errors";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import { createTestSessionManager } from "../support/chatSessions";
+import { settle } from "../support/async";
 
 const settings: SavedChatSettings = {
   chatModelProfileId: "model-id",
@@ -33,13 +34,6 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = () => res();
   });
   return { promise, resolve };
-}
-
-async function settle(): Promise<void> {
-  for (let index = 0; index < 50; index += 1) {
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 }
 
 interface Harness {

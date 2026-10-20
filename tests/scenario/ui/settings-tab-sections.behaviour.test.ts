@@ -15,6 +15,7 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../support/domHarness";
+import { eventually } from "../../support/async";
 
 vi.mock("@adapters/settings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@adapters/settings")>();
@@ -111,7 +112,7 @@ describe("settings tab sections", () => {
     const toggle = setting?.querySelector<HTMLInputElement>('input[type="checkbox"]');
 
     toggle?.click();
-    await vi.waitFor(() => expect(refreshed).toHaveBeenCalled());
+    await eventually(() => expect(refreshed).toHaveBeenCalled());
 
     expect(toggle).toBeDefined();
     expect(refreshed).toHaveBeenCalledTimes(1);

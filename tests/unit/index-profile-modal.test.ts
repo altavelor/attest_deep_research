@@ -8,6 +8,7 @@ import type { EmbeddingModelProfile } from "@adapters/settings";
 import { IndexProfileModal } from "@apps/obsidian/ui/settings/IndexProfileModal";
 import type { App as ObsidianApp } from "obsidian";
 import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
+import { eventually } from "../support/async";
 
 const t = createTranslator("en").t;
 
@@ -67,7 +68,7 @@ describe("IndexProfileModal", () => {
     inputFor(modal.contentEl, "Chunk overlap").dispatchEvent(new Event("input"));
     saveButton(modal.contentEl).click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Research index",
@@ -112,7 +113,7 @@ describe("IndexProfileModal", () => {
     inputFor(modal.contentEl, "PDF chunk size").dispatchEvent(new Event("input"));
     saveButton(modal.contentEl).click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(takeNotices().map((notice) => notice.message)).toContain(
       "Index settings changed. Rebuild this index to apply the new configuration.",
     );

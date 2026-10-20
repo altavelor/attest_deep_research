@@ -9,6 +9,7 @@ import type { ResearchAnswer } from "@core/answer";
 import type { SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
 import { createTestSessionManager } from "../support/chatSessions";
+import { settle } from "../support/async";
 
 const settings: SavedChatSettings = {
   chatModelProfileId: "model-id",
@@ -38,13 +39,6 @@ function request(question: string): ChatRunRequest {
     includeContextDiagnostics: false,
     modelLabel: "Model Label",
   };
-}
-
-async function settle(): Promise<void> {
-  for (let index = 0; index < 50; index += 1) {
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 }
 
 interface Gate {

@@ -14,6 +14,7 @@ import { createContainer, resetDom } from "../../support/domHarness";
 
 const t = createTranslator("en").t;
 import { trackObjectUrls, type ObjectUrlTracker } from "../../support/objectUrls";
+import { settle } from "../../support/async";
 
 const documentImages: DocumentImageResolver = {
   resolve: async () => ({
@@ -47,8 +48,6 @@ const embeddedImage = {
 
 let container: HTMLElement;
 let tracker: ObjectUrlTracker;
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   container = createContainer();

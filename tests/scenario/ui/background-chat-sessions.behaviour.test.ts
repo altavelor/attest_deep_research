@@ -17,6 +17,7 @@ import type { ResearchAnswer } from "@core/answer";
 import type { SavedChat, SavedChatSummary } from "@core/chat/savedChat";
 import { createTestSessionManager } from "../../support/chatSessions";
 import { installObsidianDomHelpers, resetDom, restoreDomTimers } from "../../support/domHarness";
+import { settle } from "../../support/async";
 
 interface Gate {
   emit(event: ResearchStreamEvent): void;
@@ -31,13 +32,6 @@ function answerFor(text: string): ResearchAnswer {
     followUpQuestions: [],
     createdAt: "2026-01-01T00:00:00.000Z",
   };
-}
-
-async function settle(): Promise<void> {
-  for (let index = 0; index < 40; index += 1) {
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 }
 
 function createGatedService(gates: Gate[], requests: ResearchRequest[]): () => ResearchService {

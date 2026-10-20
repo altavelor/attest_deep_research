@@ -18,6 +18,7 @@ import { citationEvidence } from "@apps/obsidian/ui/chat/citations/citationEvide
 import type { ChatTranscriptOptions } from "@apps/obsidian/ui/chat/ChatTranscript";
 import { createTranslator } from "@adapters/i18n";
 import { createContainer, resetDom } from "../../support/domHarness";
+import { settle } from "../../support/async";
 
 const t = createTranslator("en").t;
 
@@ -75,8 +76,6 @@ const renderOptions = {
   onSaveAnswerToNewNote: () => {},
   onAppendAnswerToActiveNote: () => {},
 } as unknown as ChatTranscriptOptions;
-
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 let container: HTMLElement;
 

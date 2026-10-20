@@ -11,6 +11,7 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../support/domHarness";
+import { eventually } from "../support/async";
 
 const t = createTranslator("en").t;
 
@@ -53,7 +54,7 @@ describe("NewChatDefaultsSection", () => {
     source!.dispatchEvent(new Event("change"));
     activeFile!.click();
 
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(current.newChatDefaults.searchMode).toBe("webOnly");
       expect(current.newChatDefaults.includeActiveFileContext).toBe(nextActiveFileValue);
       expect(saveSettings).toHaveBeenCalledTimes(2);

@@ -17,6 +17,7 @@ import {
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../support/domHarness";
+import { eventually } from "../../support/async";
 
 const t = createTranslator("en").t;
 
@@ -79,7 +80,7 @@ describe("WebSourcesSection activation lamp", () => {
     const { container, saveSettings, requestRedisplay } = render(settings);
 
     lampFor(container, "duckduckgo").click();
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(activationOf(settings)).toBe(to);
       expect(requestRedisplay).toHaveBeenCalledTimes(1);
     });
@@ -93,7 +94,7 @@ describe("WebSourcesSection activation lamp", () => {
     for (const expected of ["auto", "always", "off"] as const) {
       const { container } = render(settings);
       lampFor(container, "duckduckgo").click();
-      await vi.waitFor(() => expect(activationOf(settings)).toBe(expected));
+      await eventually(() => expect(activationOf(settings)).toBe(expected));
     }
   });
 
@@ -104,7 +105,7 @@ describe("WebSourcesSection activation lamp", () => {
     });
 
     lampFor(container, "duckduckgo").click();
-    await vi.waitFor(() => expect(requestRedisplay).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(requestRedisplay).toHaveBeenCalledTimes(1));
 
     expect(activationOf(settings)).toBe("off");
     expect(takeNotices()).toHaveLength(1);
@@ -127,9 +128,9 @@ describe("WebSourcesSection activation lamp", () => {
 
     lamp.click();
     lamp.click();
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(save).toHaveBeenCalledTimes(1));
     rejectFirst!(new Error("first save failed"));
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    await eventually(() => expect(save).toHaveBeenCalledTimes(2));
 
     expect(activationOf(settings)).toBe("auto");
   });
