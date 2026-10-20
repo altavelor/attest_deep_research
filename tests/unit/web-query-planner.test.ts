@@ -12,6 +12,7 @@ import { AttestError } from "@core/errors";
 import { parseWebSearchInput } from "@application/research";
 import { SearchProviderResult, WebSearchSource } from "@application/ports";
 import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
+import { settle } from "../support/async";
 
 function result(url: string, rank: number, query = "q"): SearchProviderResult {
   return {
@@ -45,7 +46,7 @@ function fakeSource(
 function slowSource(
   id: string,
   results: SearchProviderResult[],
-  delayMs: number,
+  turns: number | "never",
   activation: WebSourceActivation = "auto",
   onAbort?: () => never,
 ): WebSearchSource {
@@ -55,9 +56,10 @@ function slowSource(
     activation,
     search: (_query, options) =>
       new Promise((resolve, reject) => {
-        const timer = setTimeout(() => resolve(results), delayMs);
+        if (turns !== "never") {
+          void settle(turns).then(() => resolve(results));
+        }
         options?.signal?.addEventListener("abort", () => {
-          clearTimeout(timer);
           try {
             onAbort?.();
             reject(new Error("aborted"));
@@ -378,7 +380,7 @@ describe("WebQueryPlanner", () => {
 
   it("returns what arrived before the deadline and marks the laggard", async () => {
     const fast = fakeSource("brave", [result("https://fast.dev/", 1)]);
-    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], "never");
     const traces: WebSourceSelectionDiagnostics[] = [];
 
     const planner = new WebQueryPlanner({
@@ -404,13 +406,11 @@ describe("WebQueryPlanner", () => {
       activation: "auto",
       search: (_query, options) =>
         new Promise((_resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error("never")), 10_000);
           options?.signal?.addEventListener("abort", () => {
             sawAbort = true;
-            clearTimeout(timer);
             reject(new Error("aborted"));
           });
-          setTimeout(() => controller.abort(), 5);
+          void settle(5).then(() => controller.abort());
         }),
     };
     const traces: WebSourceSelectionDiagnostics[] = [];
@@ -430,7 +430,7 @@ describe("WebQueryPlanner", () => {
 
   it("reports an already-cancelled caller signal as cancelled, not as a missed deadline", async () => {
     const controller = new AbortController();
-    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], "never");
     const traces: WebSourceSelectionDiagnostics[] = [];
     const planner = new WebQueryPlanner({ registry: { enabledSources: () => [slow] } });
 
@@ -497,7 +497,7 @@ describe("WebQueryPlanner", () => {
       search: async () => {
         inFlight += 1;
         peak = Math.max(peak, inFlight);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await settle(5);
         inFlight -= 1;
         return [result(`https://${id}.dev/`, 1)];
       },
@@ -760,13 +760,11 @@ describe("WebQueryPlanner", () => {
       intentClassifier: { classify: () => new Promise(() => {}) },
     });
 
-    const startedAt = Date.now();
     const results = await planner.search("arxiv paper on RAG", {
-      deadlineMs: 120,
+      deadlineMs: 20,
       onSourceSelection: (d) => traces.push(d),
     });
 
-    expect(Date.now() - startedAt).toBeLessThan(1_000);
     expect(traces[0].intentOrigin).toBe("heuristic");
     expect(traces[0].intentReason).toBe("web-deadline");
     expect(traces[0].intent).toBe("academic");
@@ -792,7 +790,7 @@ describe("WebQueryPlanner", () => {
 
   it("does not suspend a source that was only cut off by the deadline", async () => {
     const health = new WebSourceHealthTracker();
-    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000, "auto", () => {
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], "never", "auto", () => {
       // What HttpWebSearchSource actually throws when its request is aborted.
       throw new AttestError({
         code: "WEB_SEARCH_FAILED",
@@ -813,7 +811,7 @@ describe("WebQueryPlanner", () => {
   it("does not suspend a source when the caller cancels the turn", async () => {
     const controller = new AbortController();
     const health = new WebSourceHealthTracker();
-    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], 10_000);
+    const slow = slowSource("duckduckgo", [result("https://slow.dev/", 1)], "never");
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [slow] },
       health,
