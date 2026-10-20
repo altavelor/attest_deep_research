@@ -21,14 +21,14 @@ describe("inflateRaw", () => {
     const original = repetitiveBytes(50_000);
     const compressed = new Uint8Array(deflateRawSync(Buffer.from(original)));
 
-    expect(Array.from(inflateRaw(compressed))).toEqual(Array.from(original));
+    expect(Buffer.compare(Buffer.from(inflateRaw(compressed)), Buffer.from(original))).toBe(0);
   });
 
   it("matches zlib for incompressible input, which produces stored blocks", () => {
     const original = new Uint8Array(randomCryptoBytes(70_000));
     const compressed = new Uint8Array(deflateRawSync(Buffer.from(original), { level: 0 }));
 
-    expect(Array.from(inflateRaw(compressed))).toEqual(Array.from(original));
+    expect(Buffer.compare(Buffer.from(inflateRaw(compressed)), Buffer.from(original))).toBe(0);
   });
 
   it("matches zlib across every compression level", () => {
@@ -36,7 +36,7 @@ describe("inflateRaw", () => {
 
     for (let level = 0; level <= 9; level += 1) {
       const compressed = new Uint8Array(deflateRawSync(Buffer.from(original), { level }));
-      expect(Array.from(inflateRaw(compressed))).toEqual(Array.from(original));
+      expect(Buffer.compare(Buffer.from(inflateRaw(compressed)), Buffer.from(original))).toBe(0);
     }
   });
 
@@ -48,7 +48,7 @@ describe("inflateRaw", () => {
     }
     const compressed = new Uint8Array(deflateRawSync(Buffer.from(original)));
 
-    expect(Array.from(inflateRaw(compressed))).toEqual(Array.from(original));
+    expect(Buffer.compare(Buffer.from(inflateRaw(compressed)), Buffer.from(original))).toBe(0);
   });
 
   it("throws on truncated input instead of returning partial output", () => {
@@ -91,7 +91,7 @@ describe("inflateZlib", () => {
     const original = repetitiveBytes(20_000);
     const compressed = new Uint8Array(deflateSync(Buffer.from(original)));
 
-    expect(Array.from(inflateZlib(compressed))).toEqual(Array.from(original));
+    expect(Buffer.compare(Buffer.from(inflateZlib(compressed)), Buffer.from(original))).toBe(0);
   });
 
   it("rejects a stream whose header checksum is wrong", () => {
@@ -134,9 +134,12 @@ describe("inflateZlib", () => {
   it("accepts a valid stream, so the checksum check is not vacuous", () => {
     const original = repetitiveBytes(5_000);
 
-    expect(Array.from(inflateZlib(new Uint8Array(deflateSync(Buffer.from(original)))))).toEqual(
-      Array.from(original),
-    );
+    expect(
+      Buffer.compare(
+        Buffer.from(inflateZlib(new Uint8Array(deflateSync(Buffer.from(original))))),
+        Buffer.from(original),
+      ),
+    ).toBe(0);
   });
 });
 
@@ -165,12 +168,18 @@ describe("DEFLATE bit order matches the reference implementation", () => {
         Buffer.concat([randomCryptoBytes(index * 11), Buffer.from("ab".repeat(index * 3), "utf8")]),
       );
 
-      expect(Array.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(source)))))).toEqual(
-        Array.from(source),
-      );
-      expect(Array.from(inflateRaw(new Uint8Array(deflateRawSync(Buffer.from(source)))))).toEqual(
-        Array.from(source),
-      );
+      expect(
+        Buffer.compare(
+          Buffer.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(source))))),
+          Buffer.from(source),
+        ),
+      ).toBe(0);
+      expect(
+        Buffer.compare(
+          Buffer.from(inflateRaw(new Uint8Array(deflateRawSync(Buffer.from(source))))),
+          Buffer.from(source),
+        ),
+      ).toBe(0);
     }
   });
 });
@@ -187,9 +196,12 @@ describe("deflateRaw", () => {
   it("round-trips incompressible data", () => {
     const original = new Uint8Array(randomCryptoBytes(50_000));
 
-    expect(Array.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(original)))))).toEqual(
-      Array.from(original),
-    );
+    expect(
+      Buffer.compare(
+        Buffer.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(original))))),
+        Buffer.from(original),
+      ),
+    ).toBe(0);
   });
 
   it("round-trips data with long repeats through its own decoder", () => {
@@ -215,7 +227,9 @@ describe("deflateRaw", () => {
         original[index] = (index * 7) % 256;
       }
 
-      expect(Array.from(inflateRaw(deflateRaw(original)))).toEqual(Array.from(original));
+      expect(
+        Buffer.compare(Buffer.from(inflateRaw(deflateRaw(original))), Buffer.from(original)),
+      ).toBe(0);
     }
   });
 });
@@ -224,8 +238,11 @@ describe("deflateZlib", () => {
   it("produces a stream Node's zlib can inflate", () => {
     const original = repetitiveBytes(100_000);
 
-    expect(Array.from(new Uint8Array(inflateSync(Buffer.from(deflateZlib(original)))))).toEqual(
-      Array.from(original),
-    );
+    expect(
+      Buffer.compare(
+        Buffer.from(new Uint8Array(inflateSync(Buffer.from(deflateZlib(original))))),
+        Buffer.from(original),
+      ),
+    ).toBe(0);
   });
 });
