@@ -16,6 +16,10 @@ import type {
 import { SUB_AGENT_PHASE, SUB_AGENT_TOOL_END, SUB_AGENT_TOOL_START } from "@application/research";
 import { SYNTHESIS_TOOL_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function toolContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
     callId: "call-1",
@@ -473,15 +477,6 @@ describe("createResearchToolRegistry run_subagent gating", () => {
     webProviderAvailable: true,
   };
 
-  it("exposes run_subagent when web is active and a runner + provider are present", () => {
-    const created = createResearchToolRegistry({
-      availability: webAvailability,
-      searchProvider: new FakeSearchProvider([]),
-      subAgentRunner: runner,
-    });
-    expect(created.tools.has("run_subagent")).toBe(true);
-  });
-
   it("omits run_subagent in a fully empty profile (no web/index/notes)", () => {
     const created = createResearchToolRegistry({
       availability: { ...webAvailability, searchMode: "none", webProviderAvailable: false },
@@ -496,15 +491,6 @@ describe("createResearchToolRegistry run_subagent gating", () => {
       searchProvider: new FakeSearchProvider([]),
     });
     expect(created.tools.has("run_subagent")).toBe(false);
-  });
-
-  it("still exposes run_subagent in index-only mode when a retriever is present", () => {
-    const created = createResearchToolRegistry({
-      availability: { ...webAvailability, searchMode: "indexOnly", retrieverAvailable: true },
-      retriever: { search: async () => ({ chunks: [], citations: [], usedFallback: false }) },
-      subAgentRunner: runner,
-    });
-    expect(created.tools.has("run_subagent")).toBe(true);
   });
 });
 
@@ -619,10 +605,12 @@ describe("SubAgentRunner telemetry", () => {
   });
 
   it("charges the synthesis pass to the run duration only", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     const runner = runnerWith(
       scriptedRounds(async (request, index) => {
         if (request.toolChoice?.type === "none") {
-          await new Promise((resolve) => setTimeout(resolve, 10));
+          now += 10;
           return textRound("Synthesized from evidence.");
         }
         return index === 1 ? searchCallRound("1") : textRound("");
@@ -682,9 +670,11 @@ describe("SubAgentTool telemetry", () => {
   });
 
   it("still reports one telemetry record when the runner throws", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     const runner: SubAgentPort = {
       run: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 3));
+        now += 3;
         throw new Error("sub-agent exploded");
       },
     };

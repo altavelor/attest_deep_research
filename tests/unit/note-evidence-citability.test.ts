@@ -1,5 +1,4 @@
 import { MarkdownExtractor } from "@adapters/extractors";
-import { ContextFileProvider } from "@application/ports";
 import { NoteToolService } from "@adapters/research-tools";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { createNoteTools, NOTE_PERMISSIONS } from "@adapters/research-tools/note/createNoteTools";
@@ -11,22 +10,7 @@ import {
   READ_NOTE_TOOL,
   SEARCH_NOTES_TOOL,
 } from "@core/agent";
-
-class MemoryFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) {}
-  async listPaths(): Promise<string[]> {
-    return Object.keys(this.files).sort();
-  }
-  async readFile(path: string): Promise<string> {
-    return this.files[path] ?? "";
-  }
-  async getModifiedTime(): Promise<number> {
-    return 0;
-  }
-  async getSize(path: string): Promise<number> {
-    return this.files[path]?.length ?? 0;
-  }
-}
+import { MemoryContextFiles } from "../support/noteFakes";
 
 const FILES = {
   "Research/Caffeine.md":
@@ -36,7 +20,7 @@ const FILES = {
 function harness(activePath?: string) {
   const evidence = new ResearchEvidenceRegistry();
   const service = new NoteToolService({
-    files: new MemoryFiles(FILES),
+    files: new MemoryContextFiles(FILES),
     extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 0 })],
     ...(activePath ? { getActiveFilePath: () => activePath } : {}),
   });
@@ -328,7 +312,7 @@ describe("note reads register citable evidence", () => {
 
   it("works without a registry, leaving the tool result unchanged", async () => {
     const service = new NoteToolService({
-      files: new MemoryFiles(FILES),
+      files: new MemoryContextFiles(FILES),
       extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 0 })],
     });
     const tools = new ToolManager(createNoteTools(service), new Set([NOTE_PERMISSIONS.read]));
@@ -345,7 +329,7 @@ describe("note reads register citable evidence", () => {
     }
     const evidence = new RejectingRegistry();
     const service = new NoteToolService({
-      files: new MemoryFiles(FILES),
+      files: new MemoryContextFiles(FILES),
       extractors: [new MarkdownExtractor({ maxChunkLength: 400, chunkOverlap: 0 })],
     });
     const tools = new ToolManager(
@@ -379,14 +363,11 @@ describe("note tool descriptions agree with the evidence policy", () => {
     (definition) => definition.function.name === SEARCH_NOTES_TOOL,
   );
 
-  it("no longer tells the model that read content is not citable", () => {
+  it("calls read content registered evidence and keeps navigation results outside it", () => {
     expect(readNote?.function.description).not.toContain("NOT citable evidence");
     expect(readNote?.function.description).toContain("registered evidence");
     expect(activeNote?.function.description).not.toContain("not citable evidence");
     expect(activeNote?.function.description).toContain("registered evidence");
-  });
-
-  it("keeps navigation results outside the evidence model", () => {
     expect(searchNotes?.function.description).toContain("NOT evidence");
   });
 
