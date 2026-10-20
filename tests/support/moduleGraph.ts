@@ -53,7 +53,7 @@ function resolveModule(specifier: string, fromModule: string): string | undefine
   return undefined;
 }
 
-export function readImports(module: string): string[] {
+function readImports(module: string): string[] {
   const source = readFileSync(resolve(module), "utf8");
   const imports = new Set<string>();
   for (const match of source.matchAll(SPECIFIER_PATTERN)) {

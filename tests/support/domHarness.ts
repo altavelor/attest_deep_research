@@ -171,11 +171,6 @@ export async function advanceTime(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(ms);
 }
 
-/** Runs the animation-frame callbacks queued for the next frame. */
-export async function flushAnimationFrames(): Promise<void> {
-  await vi.advanceTimersByTimeAsync(16);
-}
-
 export function pendingTimerCount(): number {
   return vi.getTimerCount();
 }
