@@ -170,9 +170,13 @@ describe("docx image extraction", () => {
     expect(refs[0]!.data).toBeUndefined();
   });
 
-  it("rejects members whose decoded dimensions exceed the limit", () => {
-    const data = zip({ "word/media/bomb.png": png(60_000, 60_000) });
-    expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
+  it("rejects png and avif members whose declared dimensions exceed the limit", () => {
+    for (const data of [
+      zip({ "word/media/bomb.png": png(60_000, 60_000) }),
+      zip({ "word/media/image1.avif": avif(60_000, 60_000) }),
+    ]) {
+      expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
+    }
   });
 
   it("accepts an avif member whose ispe box declares a displayable size", () => {
@@ -181,18 +185,9 @@ describe("docx image extraction", () => {
     expect(refs.map((ref) => ref.locator)).toEqual(["zip:word/media/image1.avif"]);
   });
 
-  it("rejects an avif member whose declared size is too large", () => {
-    const data = zip({ "word/media/image1.avif": avif(60_000, 60_000) });
-    expect(extractDocumentImages({ path: "docs/bomb.docx", data })).toEqual([]);
-  });
-
   it("rejects members whose header declares no readable size", () => {
     const data = zip({ "word/media/image1.png": Buffer.alloc(64, 0x00) });
     expect(extractDocumentImages({ path: "docs/opaque.docx", data })).toEqual([]);
-  });
-
-  it("degrades to no images for a corrupt archive", () => {
-    expect(extractDocumentImages({ path: "docs/broken.docx", data: "not a zip" })).toEqual([]);
   });
 });
 

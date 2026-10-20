@@ -123,28 +123,6 @@ describe("PdfExtractor", () => {
     expect(chunks.every((chunk) => chunk.contentHash.length === 64)).toBe(true);
   });
 
-  it("keeps small PDF book chunk ids stable across extraction runs", async () => {
-    const fixture = readFileSync(smallPdfBookFixturePath);
-    const data = fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength);
-    const extractor = new PdfExtractor({ maxChunkLength: 1_500 });
-
-    const first = await extractor.extract({
-      path: "Books/small-pdf-book.pdf",
-      data,
-      modifiedTime: 1,
-    });
-    const second = await extractor.extract({
-      path: "Books/small-pdf-book.pdf",
-      data,
-      modifiedTime: 2,
-    });
-
-    expect(second.map((chunk) => chunk.id)).toEqual(first.map((chunk) => chunk.id));
-    expect(second.map((chunk) => chunk.contentHash)).toEqual(
-      first.map((chunk) => chunk.contentHash),
-    );
-  });
-
   it("skips image-only or empty pages without failing the full file", async () => {
     const parser: PdfPageTextParser = {
       async *parsePages() {

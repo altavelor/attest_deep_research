@@ -2,11 +2,13 @@ import { deflateRawSync } from "zlib";
 
 import { extractDocumentImages } from "@adapters/extractors";
 import { ZipArchive } from "@adapters/extractors/common";
+import { IMAGE_EXTRACTION_LIMITS } from "@core/media";
 
-function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
+function zip(entries: Record<string, Buffer | string>, method: 0 | 8 = 8): ArrayBuffer {
   const files = Object.entries(entries).map(([name, content]) => {
     const data = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
-    return { name: Buffer.from(name, "utf8"), data, compressed: deflateRawSync(data) };
+    const compressed = method === 8 ? deflateRawSync(data) : data;
+    return { name: Buffer.from(name, "utf8"), data, compressed };
   });
 
   const locals: Buffer[] = [];
@@ -16,7 +18,7 @@ function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
   for (const file of files) {
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(8, 8);
+    local.writeUInt16LE(method, 8);
     local.writeUInt32LE(file.compressed.length, 18);
     local.writeUInt32LE(file.data.length, 22);
     local.writeUInt16LE(file.name.length, 26);
@@ -24,7 +26,7 @@ function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
 
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(8, 10);
+    central.writeUInt16LE(method, 10);
     central.writeUInt32LE(file.compressed.length, 20);
     central.writeUInt32LE(file.data.length, 24);
     central.writeUInt16LE(file.name.length, 28);
@@ -41,7 +43,7 @@ function zip(entries: Record<string, Buffer | string>): ArrayBuffer {
   eocd.writeUInt16LE(files.length, 10);
   eocd.writeUInt32LE(centralBuffer.length, 12);
   eocd.writeUInt32LE(offset, 16);
-  const zipped = Buffer.concat([Buffer.concat(locals), centralBuffer, eocd]);
+  const zipped = Buffer.concat([...locals, centralBuffer, eocd]);
   return zipped.buffer.slice(
     zipped.byteOffset,
     zipped.byteOffset + zipped.byteLength,
@@ -171,18 +173,23 @@ describe("docx image extraction rejects untrusted archive entries", () => {
   });
 
   it("stops once the total decoded byte budget is exceeded", () => {
+    const image = Buffer.alloc(IMAGE_EXTRACTION_LIMITS.maxEncodedBytes, 0);
+    png(64, 64, 0).copy(image);
     const entries: Record<string, Buffer> = {};
-    for (let index = 0; index < 6; index += 1) {
-      entries[`word/media/image${index}.png`] = Buffer.concat([
-        png(64, 64, 0),
-        Buffer.alloc(7 * 1024 * 1024, index + 1),
-      ]);
+    for (let index = 0; index < 4; index += 1) {
+      entries[`word/media/image${index}.png`] = image;
     }
+    entries["word/media/image4.png"] = pngBytes;
 
-    const refs = locators("docs/heavy.docx", zip(entries));
+    const refs = extractDocumentImages({
+      path: "docs/heavy.docx",
+      data: zip(entries, 0),
+      metadataOnly: true,
+    });
 
-    expect(refs.length).toBeGreaterThan(0);
-    expect(refs.length).toBeLessThan(6);
+    expect(refs.map((ref) => ref.locator)).toEqual(
+      [0, 1, 2, 3].map((index) => `zip:word/media/image${index}.png`),
+    );
   });
 
   it("keeps the image but drops alt text when the drawing metadata is unusable", () => {
