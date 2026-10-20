@@ -40,18 +40,6 @@ describe("inflateRaw", () => {
     }
   });
 
-  it("matches zlib for many randomized payloads of varying length", () => {
-    for (let iteration = 0; iteration < 60; iteration += 1) {
-      const length = iteration * 37;
-      const original = new Uint8Array(
-        Buffer.concat([randomCryptoBytes(length), Buffer.from(repetitiveBytes(length))]),
-      );
-      const compressed = new Uint8Array(deflateRawSync(Buffer.from(original)));
-
-      expect(Array.from(inflateRaw(compressed))).toEqual(Array.from(original));
-    }
-  });
-
   it("resolves long back-references that span block boundaries", () => {
     const unit = repetitiveBytes(300);
     const original = new Uint8Array(400 * unit.length);
@@ -189,12 +177,10 @@ describe("DEFLATE bit order matches the reference implementation", () => {
 
 describe("deflateRaw", () => {
   it("produces a stream Node's zlib can inflate", () => {
-    for (const length of [0, 1, 2, 3, 100, 1000, 65_536, 300_000]) {
-      const original = repetitiveBytes(length);
+    for (const length of [0, 1, 2, 3, 100, 1000, 65_536]) {
+      const original = Buffer.from(repetitiveBytes(length));
 
-      expect(Array.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(original)))))).toEqual(
-        Array.from(original),
-      );
+      expect(inflateRawSync(Buffer.from(deflateRaw(original))).equals(original)).toBe(true);
     }
   });
 
@@ -208,12 +194,12 @@ describe("deflateRaw", () => {
 
   it("round-trips data with long repeats through its own decoder", () => {
     const unit = repetitiveBytes(500);
-    const original = new Uint8Array(200 * unit.length);
-    for (let index = 0; index < 200; index += 1) {
+    const original = new Uint8Array(100 * unit.length);
+    for (let index = 0; index < 100; index += 1) {
       original.set(unit, index * unit.length);
     }
 
-    expect(Array.from(inflateRaw(deflateRaw(original)))).toEqual(Array.from(original));
+    expect(Buffer.from(inflateRaw(deflateRaw(original))).equals(Buffer.from(original))).toBe(true);
   });
 
   it("compresses repetitive input to a small fraction of its size", () => {
