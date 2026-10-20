@@ -187,16 +187,7 @@ describe("readImageDimensions rejects malformed headers", () => {
     ]);
     expect(readImageDimensions(vp8l, "webp")).toEqual({ width: 64, height: 1 });
 
-    const vp8x = webp("VP8X", [
-      ...new Array(8).fill(0),
-      0x3f,
-      0x00,
-      0x00,
-      0x1f,
-      0x00,
-      0x00,
-      ...new Array(4).fill(0),
-    ]);
+    const vp8x = webp("VP8X", [...new Array(8).fill(0), 0x3f, 0x00, 0x00, 0x1f, 0x00, 0x00]);
     expect(readImageDimensions(vp8x, "webp")).toEqual({ width: 64, height: 32 });
 
     expect(readImageDimensions(webp("VP8X", new Array(13).fill(0)), "webp")).toBeUndefined();
