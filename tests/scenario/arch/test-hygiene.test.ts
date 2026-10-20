@@ -64,7 +64,7 @@ describe("test suite hygiene", () => {
 
   it("reads every fixture file from some test", () => {
     const unread = listFiles(join(TESTS, "fixtures")).filter(
-      (path) => mentionsOutside(basename(path).replace(/[.]/g, "\\."), "").length === 0,
+      (path) => ![...testText.values()].some((text) => text.includes(basename(path))),
     );
     expect(unread).toEqual([]);
   });
