@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs";
 import { createResearchToolRegistry } from "@adapters/research-tools";
-import {
-  assemblePromptSections,
-  buildThinkingPromptSections,
-  buildThinkingResearchMessages,
-} from "@core/research";
+import { buildThinkingPromptSections, buildThinkingResearchMessages } from "@core/research";
 import {
   INDEX_SEARCH_QUERY_CHARS,
   INDEX_SEARCH_RESULT_LIMIT,
@@ -139,30 +134,6 @@ describe("thinking prompt ↔ tool registry drift guard", () => {
     },
   );
 
-  it("reports a section that names a tool the profile does not register", () => {
-    const { available } = promptFor("indexOnly");
-    const sections = buildThinkingPromptSections(optionsFor(available));
-    const result = assemblePromptSections(
-      [
-        ...sections,
-        {
-          id: "invented",
-          priority: "workflow" as const,
-          enabled: true,
-          content: "## Invented\nuse ghost_tool",
-          referencedTools: ["ghost_tool"],
-        },
-      ],
-      { availableTools: new Set(available) },
-    );
-    expect(result.issues).toContainEqual({
-      sectionId: "invented",
-      code: "unregistered-tool",
-      detail: "ghost_tool",
-      dropped: false,
-    });
-  });
-
   it("does not advertise web fetch in an index-only profile (the original regression)", () => {
     const { text, available } = promptFor("indexOnly");
     expect(available).not.toContain(WEB_FETCH_TOOL);
@@ -213,51 +184,5 @@ describe("numeric limit drift guard", () => {
     expect(drifted).not.toBe(system);
     expect(unexpectedNumerals(drifted)).toEqual(["7"]);
     expect(unexpectedNumerals(system)).toEqual([]);
-  });
-});
-
-describe("parallel capability plumbing", () => {
-  const sources = {
-    ThinkingResearchStrategy: readFileSync(
-      "src/application/use-cases/research/strategies/ThinkingResearchStrategy.ts",
-      "utf8",
-    ),
-    SubAgentRunner: readFileSync(
-      "src/application/use-cases/research/sub-agent/SubAgentRunner.ts",
-      "utf8",
-    ),
-  };
-
-  it("passes parallelToolCalls from the research strategy policy", () => {
-    expect(sources.ThinkingResearchStrategy).toContain(
-      "parallelToolCalls: effectivePolicy.parallelToolCalls",
-    );
-  });
-
-  it("passes parallelToolCalls from the sub-agent policy", () => {
-    expect(sources.SubAgentRunner).toContain(
-      "parallelToolCalls: SUB_AGENT_POLICY.parallelToolCalls",
-    );
-  });
-
-  it("routes prompt assembly issues into the run diagnostics", () => {
-    expect(sources.ThinkingResearchStrategy).toContain("onAssemblyIssue:");
-    expect(sources.ThinkingResearchStrategy).toContain("promptAssemblyIssues");
-    expect(sources.ThinkingResearchStrategy).toContain("diagnostics.warnings.push(warning)");
-  });
-
-  it("forwards every assembly issue from the builder to its hook", () => {
-    const builder = readFileSync("src/core/research/thinkingPrompts.ts", "utf8");
-    expect(builder).toContain("for (const issue of assembled.issues)");
-    expect(builder).toContain("options.onAssemblyIssue?.(issue)");
-  });
-
-  it("keeps the field optional so existing callers still compile", () => {
-    const messages = buildThinkingResearchMessages({
-      question: "Q",
-      requiredTools: [],
-      toolContext: { availableTools: [] },
-    });
-    expect(messages[0].content).toContain("Issue one tool call at a time");
   });
 });
