@@ -3,6 +3,9 @@
   "version": "0.4.5",
   "description": "Open-source Obsidian plugin for cited AI deep research across your vault and the web.",
   "private": true,
+  "engines": {
+    "node": ">=22.15"
+  },
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
