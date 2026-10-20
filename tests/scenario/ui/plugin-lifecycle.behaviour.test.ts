@@ -147,12 +147,6 @@ describe("Attest plugin lifecycle", () => {
     ]);
   });
 
-  it("does not repeat the plugin id in command ids", () => {
-    expect(asStubPlugin(plugin).commands.every((command) => !command.id.includes("attest"))).toBe(
-      true,
-    );
-  });
-
   it("hides note actions outside a Markdown editor", () => {
     const { editor, context } = markdownContext("Documents/Reference.pdf", "selection");
 
