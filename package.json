@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "typecheck:core": "tsc -p tsconfig.core.json",
-    "depcruise": "depcruise src --config .dependency-cruiser.cjs",
+    "depcruise": "node scripts/depcruise.mjs",
     "format": "prettier --check .",
     "check": "npm run typecheck && npm run typecheck:core && npm run test:coverage && npm run depcruise && npm run format && npm run build",
     "check:bundle": "node scripts/check-bundle.mjs"
@@ -28,6 +28,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@typescript/typescript6": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.2.0",
     "esbuild": "^0.28.2",
