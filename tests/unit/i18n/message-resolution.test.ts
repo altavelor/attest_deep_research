@@ -69,16 +69,9 @@ describe("translator", () => {
     expect(createTranslator("ru").locale).toBe("ru");
   });
 
-  it("returns the localized string for a translated key", () => {
+  it("returns the localized string for a translated key and the key for an unknown one", () => {
     expect(createTranslator("ru").t("common.cancel")).toBe("Отмена");
     expect(createTranslator("en").t("common.cancel")).toBe("Cancel");
-  });
-
-  it("falls back to English text rather than an empty string for a missing key", () => {
-    const translator = createTranslator("ru");
-    const missing = translator.translate("definitely.not.a.key");
-
-    expect(missing).toBe("definitely.not.a.key");
-    expect(missing).not.toBe("");
+    expect(createTranslator("ru").translate("definitely.not.a.key")).toBe("definitely.not.a.key");
   });
 });

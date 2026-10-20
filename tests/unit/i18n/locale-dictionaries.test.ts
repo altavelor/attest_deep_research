@@ -12,49 +12,51 @@ function placeholders(template: string): string[] {
 const referenceKeys = Object.keys(REFERENCE_MESSAGES).sort();
 
 describe("locale dictionaries", () => {
-  it("ships a dictionary for every supported locale", () => {
+  it("ships a dictionary for every supported locale over a non-trivial key set", () => {
     expect(Object.keys(LOCALE_MESSAGES).sort()).toEqual([...SUPPORTED_LOCALES].sort());
-  });
-
-  it("declares a non-trivial set of message keys", () => {
     expect(referenceKeys.length).toBeGreaterThan(50);
   });
 
-  it.each([...SUPPORTED_LOCALES])("covers exactly the English keys in %s", (locale) => {
-    expect(Object.keys(LOCALE_MESSAGES[locale]).sort()).toEqual(referenceKeys);
+  it("covers exactly the English keys in every locale", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(Object.keys(LOCALE_MESSAGES[locale]).sort(), locale).toEqual(referenceKeys);
+    }
   });
 
-  it.each([...SUPPORTED_LOCALES])("has no blank message in %s", (locale) => {
-    const blank = Object.entries(LOCALE_MESSAGES[locale])
-      .filter(([, value]) => typeof value !== "string" || value.trim().length === 0)
-      .map(([key]) => key);
+  it("has no blank message in any locale", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const blank = Object.entries(LOCALE_MESSAGES[locale])
+        .filter(([, value]) => typeof value !== "string" || value.trim().length === 0)
+        .map(([key]) => key);
 
-    expect(blank).toEqual([]);
+      expect(blank, locale).toEqual([]);
+    }
   });
 
-  it.each([...SUPPORTED_LOCALES])("keeps the English placeholders in %s", (locale) => {
-    const mismatched = referenceKeys.filter((key) => {
-      const translated = LOCALE_MESSAGES[locale][key as keyof typeof REFERENCE_MESSAGES];
-      return (
-        translated !== undefined &&
-        placeholders(translated).join(",") !==
-          placeholders(REFERENCE_MESSAGES[key as keyof typeof REFERENCE_MESSAGES]).join(",")
-      );
-    });
+  it("keeps the English placeholders in every locale", () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const mismatched = referenceKeys.filter((key) => {
+        const translated = LOCALE_MESSAGES[locale][key as keyof typeof REFERENCE_MESSAGES];
+        return (
+          translated !== undefined &&
+          placeholders(translated).join(",") !==
+            placeholders(REFERENCE_MESSAGES[key as keyof typeof REFERENCE_MESSAGES]).join(",")
+        );
+      });
 
-    expect(mismatched).toEqual([]);
+      expect(mismatched, locale).toEqual([]);
+    }
   });
 
-  it.each([...SUPPORTED_LOCALES].filter((locale) => locale !== "en"))(
-    "actually translates most of the interface in %s",
-    (locale) => {
+  it("actually translates most of the interface in every non-English locale", () => {
+    for (const locale of SUPPORTED_LOCALES.filter((candidate) => candidate !== "en")) {
       const untranslated = referenceKeys.filter(
         (key) =>
           LOCALE_MESSAGES[locale][key as keyof typeof REFERENCE_MESSAGES] ===
           REFERENCE_MESSAGES[key as keyof typeof REFERENCE_MESSAGES],
       );
 
-      expect(untranslated.length).toBeLessThan(referenceKeys.length / 4);
-    },
-  );
+      expect(untranslated.length, locale).toBeLessThan(referenceKeys.length / 4);
+    }
+  });
 });
