@@ -17,10 +17,17 @@ export default defineConfig({
     environment: "node",
     globals: true,
     setupFiles: ["tests/support/timeLimits.ts"],
+    pool: "forks",
     hookTimeout: 2000,
     projects: [
-      { extends: true, test: { name: "unit", include: ["tests/unit/**/*.test.ts"] } },
-      { extends: true, test: { name: "scenario", include: ["tests/scenario/**/*.test.ts"] } },
+      {
+        extends: true,
+        test: { name: "unit", include: ["tests/unit/**/*.test.ts"], testTimeout: 1000 },
+      },
+      {
+        extends: true,
+        test: { name: "scenario", include: ["tests/scenario/**/*.test.ts"], testTimeout: 5000 },
+      },
     ],
     coverage: {
       provider: "v8",

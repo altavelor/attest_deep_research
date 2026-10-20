@@ -44,8 +44,8 @@ function countCases(sha) {
     });
     return JSON.parse(listed).length;
   } finally {
-    execFileSync("git", ["worktree", "remove", "--force", dir]);
     rmSync(dir, { recursive: true, force: true });
+    execFileSync("git", ["worktree", "prune"]);
   }
 }
 

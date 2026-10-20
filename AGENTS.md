@@ -135,9 +135,11 @@ a regression test.
   `tests/support/async.ts`.
 - Time limits, enforced by `tests/support/timeLimits.ts` in every run: 0.1 s of
   worker CPU time per unit case and 0.5 s per scenario case, each including its
-  own hooks, so a loaded machine does not fail a light case; `beforeAll`
-  fixtures time out after 2 s. Over a limit, split the test or replace its heavy
-  part with a fake; never raise the limit.
+  own hooks, so a loaded machine does not fail a light case. Waiting is bounded
+  separately: `testTimeout` is 1 s for unit and 5 s for scenario cases, and
+  `beforeAll` fixtures time out after 2 s. Unit tests drive deadlines with a
+  fake clock (`runPastDeadline` in `tests/support/timers.ts`). Over a limit,
+  split the test or replace its heavy part with a fake; never raise the limit.
 - Density: at most 0.2 cases per source branch, checked by `npm run test:coverage`
   through `scripts/test-density.mjs`. Every case covers a branch or kills a
   named mutant (boundary, set element, message text, failure code) that no

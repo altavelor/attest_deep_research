@@ -36,7 +36,7 @@ describe("test suite hygiene", () => {
 
   it("keeps unit tests free of file system, network, subprocesses and the clock", () => {
     const forbidden =
-      /from "node:(fs|fs\/promises|os|child_process|net|http|https)"|setTimeout\([^,]+,\s*[1-9]|vi\.waitFor\(/;
+      /(?:from\s+|import\(\s*|require\(\s*)["'](?:node:)?(?:fs|fs\/promises|os|child_process|net|http|https|dns|tls|dgram|readline|worker_threads)["']|set(?:Timeout|Interval)\([^,]+,\s*[1-9]|vi\.waitFor\(/;
     const offenders = testSources.filter(
       (path) => path.startsWith("tests/unit/") && forbidden.test(testText.get(path) ?? ""),
     );
@@ -44,17 +44,21 @@ describe("test suite hygiene", () => {
   });
 
   it("mentions every failure code the source raises in at least one test", () => {
+    const declaredButNeverRaised = [
+      "INVALID_SKILL_SELECTION",
+      "SKILL_TOO_LARGE",
+      "WEB_SEARCH_DISABLED",
+    ];
     const declared = read("src/core/errors.ts").match(/^ {2}\| "([A-Z_]+)"/gm) ?? [];
     const codes = declared.map((line) => line.replace(/^ {2}\| "|"$/g, ""));
     const sources = listFiles(join(ROOT, "src")).filter(
       (path) => path.endsWith(".ts") && path !== "src/core/errors.ts",
     );
-    const raised = codes.filter((code) =>
-      sources.some((path) => read(path).includes(`code: "${code}"`)),
-    );
+    const sourceText = sources.map(read).join("\n");
+    const raised = codes.filter((code) => sourceText.includes(`"${code}"`));
     const untested = raised.filter((code) => mentionsOutside(code, "").length === 0);
 
-    expect(raised.length).toBeGreaterThan(0);
+    expect(codes.filter((code) => !raised.includes(code))).toEqual(declaredButNeverRaised);
     expect(untested).toEqual([]);
   });
 
@@ -72,7 +76,7 @@ describe("test suite hygiene", () => {
     const uncalled = helpers.flatMap((path) =>
       [
         ...(testText.get(path) ?? "").matchAll(
-          /^export (?:async )?(?:function|class|const) (\w+)/gm,
+          /^export (?:async )?(?:function|class|const|let) (\w+)/gm,
         ),
       ]
         .map((match) => match[1])
