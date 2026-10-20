@@ -13,6 +13,7 @@ import type {
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import { settle } from "../support/async";
 
 function chunk(id: string, path: string): RetrievedChunk {
   return {
@@ -177,7 +178,7 @@ describe("MapSources fan-out", () => {
       run: async () => {
         active += 1;
         peak = Math.max(peak, active);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await settle(5);
         active -= 1;
         return { answerText: "STANCE: SUPPORTS", snapshot: snapshot([]) };
       },
@@ -224,7 +225,7 @@ describe("MapSources fan-out", () => {
     const runner: SubAgentPort = {
       run: async (input): Promise<SubAgentRunResult> => {
         if (input.task.includes("b.pdf")) throw new Error("sub-agent exploded");
-        await new Promise((resolve) => setTimeout(resolve, 2));
+        await settle(2);
         return {
           answerText: "STANCE: SUPPORTS",
           snapshot: snapshot([]),

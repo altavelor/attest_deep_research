@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { QueryExpansionService } from "@adapters/retrieval";
 import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
@@ -643,10 +641,8 @@ async function completedValue<T>(generator: AsyncGenerator<unknown, T>): Promise
 }
 
 function decodedInvalidUtf8Fixture(): string {
-  const encoded = readFileSync(
-    join(__dirname, "..", "fixtures", "web", "russianfood-invalid-utf8.base64"),
-    "utf8",
-  ).trim();
+  const encoded =
+    "0OX25e/y+yDx+/Dt6Oru4iDt4CBSdXNzaWFuRm9vZC5jb206IPLi7vDu4ywg/+n24Cwg7PPq4C4gz+7k8O7h7fvpIPHv7vHu4SDv8Ojj7vLu4uvl7ej/IOgg8e7i5fL7Lg==";
   return new TextDecoder("utf-8").decode(Uint8Array.from(Buffer.from(encoded, "base64")));
 }
 

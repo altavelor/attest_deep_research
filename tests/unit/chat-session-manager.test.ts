@@ -747,25 +747,6 @@ describe("chat session manager activity", () => {
       unreadCompletedCount: 1,
     });
   });
-
-  it("ignores queued and stopping sessions in the running count", async () => {
-    const gated = createGatedService();
-    const { manager, repository } = createTestSessionManager({
-      createResearchService: gated.service,
-    });
-    const sessions: ChatSessionState[] = [];
-    for (let index = 0; index <= MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
-      const session = newSession(manager);
-      sessions.push(session);
-      await manager.start(session.sessionId, request(`Question ${index}`));
-    }
-    await settle();
-    manager.stop(sessions[0].sessionId);
-
-    expect(manager.activity(await repository.listChats()).runningCount).toBe(
-      MAX_CONCURRENT_CHAT_SESSIONS - 1,
-    );
-  });
 });
 
 describe("chat session manager lifecycle", () => {

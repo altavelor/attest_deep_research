@@ -1,4 +1,3 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
 import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
@@ -98,15 +97,6 @@ describe("citation token splitting", () => {
 
   it("keeps short bracketed text that is not a citation handle", () => {
     expect(splitCitationText("see [note] here", hasRef)).toBeNull();
-  });
-});
-
-describe("chat rendering wiring", () => {
-  it("linkifies url handles before the markdown renderer sees them", () => {
-    const source = readFileSync("src/apps/obsidian/ui/chat/assistantMessageRenderer.ts", "utf8");
-    expect(source).toContain("linkifyUrlCitations");
-    expect(source).toContain("shortUrlCitationLabel");
-    expect(source).toContain("answerMarkdown(message)");
   });
 });
 

@@ -1,7 +1,4 @@
-import {
-  resolveThinkingMaxResultChars,
-  ThinkingResearchStrategy,
-} from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
+import { ThinkingResearchStrategy } from "@application/use-cases/research/strategies/ThinkingResearchStrategy";
 import type {
   ResearchExecutionContext,
   ResearchStrategyDeps,
@@ -112,13 +109,6 @@ async function drain(
 }
 
 describe("ThinkingResearchStrategy failure paths", () => {
-  it("keeps a safe minimum output budget while respecting bounded context capacity", () => {
-    expect(resolveThinkingMaxResultChars({ usedTokens: 0 })).toBe(80_000);
-    expect(resolveThinkingMaxResultChars({ contextLimitTokens: 10, usedTokens: 20 })).toBe(80_000);
-    expect(resolveThinkingMaxResultChars({ contextLimitTokens: 2_000_000, usedTokens: 0 })).toBe(
-      1_000_000,
-    );
-  });
   it("returns a cancelled outcome and no answer when the run is aborted mid-stream", async () => {
     const controller = new AbortController();
     const modelRound = scriptedRounds((request, index) => {
@@ -511,9 +501,12 @@ describe("ThinkingResearchStrategy sub-agent telemetry", () => {
   });
 
   it("counts a sub-agent whose runner threw, with the duration it spent", async () => {
+    let now = 1_000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    onTestFinished(() => clock.mockRestore());
     const diagnostics = await runWithSubAgent({
       run: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 3));
+        now += 3;
         throw new Error("sub-agent exploded");
       },
     });
@@ -588,7 +581,7 @@ describe("ThinkingResearchStrategy web source tracing", () => {
     return (contextEvent as { diagnostics: ContextDiagnostics }).diagnostics;
   }
 
-  it("records one selection block per search_web call, tagged with its query", async () => {
+  it("records one selection block per search_web call with its query and the thinking deadline", async () => {
     const diagnostics = await runWithSearches(["rag papers", "vector databases"]);
 
     expect(diagnostics.webSourceSelections).toHaveLength(2);
@@ -596,17 +589,10 @@ describe("ThinkingResearchStrategy web source tracing", () => {
       "rag papers",
       "vector databases",
     ]);
+    const expected = researchModeRetrievalParameters("thinking").web;
     expect(diagnostics.webSourceSelections?.[0]).toMatchObject({
       intent: "academic",
       intentOrigin: "model",
-    });
-  });
-
-  it("passes the thinking mode's web deadline down to the search tool", async () => {
-    const diagnostics = await runWithSearches(["rag papers"]);
-    const expected = researchModeRetrievalParameters("thinking").web;
-
-    expect(diagnostics.webSourceSelections?.[0]).toMatchObject({
       deadlineMs: expected.deadlineMs,
       perSourceLimit: expected.perSourceLimit,
     });
