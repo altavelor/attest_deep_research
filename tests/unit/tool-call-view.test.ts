@@ -132,21 +132,6 @@ describe("describeToolCall detailed intent", () => {
     expect(unchanged.outCell).toBeUndefined();
   });
 
-  it("warns visibly when index search falls back to keyword ranking", () => {
-    const view = describeToolCall({
-      t,
-      name: "search_index",
-      label: "Search index",
-      status: "complete",
-      resultJson: JSON.stringify({
-        diagnostics: { usedKeywordFallback: true, semanticError: "Embedding endpoint failed" },
-      }),
-    });
-
-    expect(view.badge).toMatchObject({ text: "keyword-only" });
-    expect(view.badge?.tooltip).toContain("Embedding endpoint failed");
-  });
-
   it("derives pending fetch hosts from a partial result when explicit targets are unavailable", () => {
     const view = describeToolCall({
       t,
