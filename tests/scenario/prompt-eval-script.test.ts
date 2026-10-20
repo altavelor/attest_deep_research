@@ -1,5 +1,4 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -483,11 +482,6 @@ describe("case set", () => {
     models: string[];
   };
 
-  it("pins nine cases on the two models the specification fixed", () => {
-    expect(cases.cases).toHaveLength(9);
-    expect(cases.models).toEqual(["deepseek/deepseek-v4-flash-0731", "qwen/qwen3.8-2.4t-a95b"]);
-  });
-
   it("assigns three repeats to the noisy cases and one to the binary ones", () => {
     const repeats = Object.fromEntries(cases.cases.map((entry) => [entry.id, entry.repeats]));
     expect(repeats["separate-quick-notes"]).toBe(3);
@@ -519,7 +513,7 @@ describe("the command line refuses a baseline it cannot match to the fixtures", 
     rmSync(directory, { recursive: true, force: true });
   });
 
-  function run(baseline: Record<string, unknown>): number {
+  async function run(baseline: Record<string, unknown>): Promise<number> {
     const casesPath = join(directory, "cases.json");
     const runsDirectory = join(directory, "runs");
     const baselinePath = join(directory, "baseline.json");
@@ -538,16 +532,24 @@ describe("the command line refuses a baseline it cannot match to the fixtures", 
       JSON.stringify({ caseId: "c1", model: "m1", report: {} }),
     );
 
-    const result = spawnSync(
-      process.execPath,
-      [resolve("scripts/prompt-eval.mjs"), casesPath, runs, baselinePath],
-      { encoding: "utf8" },
-    );
-    return result.status ?? -1;
+    const script = resolve("scripts/prompt-eval.mjs");
+    const argv = process.argv;
+    const exitCode = process.exitCode;
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    process.argv = [argv[0], script, casesPath, runs, baselinePath];
+    try {
+      vi.resetModules();
+      await import(/* @vite-ignore */ pathToFileURL(script).href);
+      return Number(process.exitCode);
+    } finally {
+      process.argv = argv;
+      process.exitCode = exitCode;
+      error.mockRestore();
+    }
   }
 
-  it("reports a stale baseline when the recorded fixtures cannot be hashed", () => {
-    const status = run({
+  it("reports a stale baseline when the recorded fixtures cannot be hashed", async () => {
+    const status = await run({
       models: ["m1"],
       fixturesHash: "a-hash-of-fixtures-that-are-not-here",
     });

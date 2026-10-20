@@ -4,12 +4,16 @@ import { resolve } from "node:path";
 const read = (path: string): string => readFileSync(resolve(path), "utf8");
 
 describe("Obsidian review compliance", () => {
-  it("declares the minimum version required by the reviewed Obsidian APIs", () => {
-    const manifest = JSON.parse(read("manifest.json")) as { minAppVersion: string };
+  it("never lowers the minimum Obsidian version below an earlier release", () => {
+    const manifest = JSON.parse(read("manifest.json")) as {
+      version: string;
+      minAppVersion: string;
+    };
     const versions = JSON.parse(read("versions.json")) as Record<string, string>;
+    const highest = Object.values(versions).sort(compareVersions).at(-1);
 
-    expect(manifest.minAppVersion).toBe("1.8.7");
-    expect(versions["0.4.5"]).toBe("1.8.7");
+    expect(versions[manifest.version]).toBe(manifest.minAppVersion);
+    expect(manifest.minAppVersion).toBe(highest);
   });
 
   it("uses Obsidian APIs for the active language and configuration directory", () => {
@@ -63,3 +67,14 @@ describe("Obsidian review compliance", () => {
     expect(readable).not.toContain("createContextualFragment");
   });
 });
+
+/** Orders dotted numeric versions by their numeric parts. */
+function compareVersions(left: string, right: string): number {
+  const a = left.split(".").map(Number);
+  const b = right.split(".").map(Number);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
