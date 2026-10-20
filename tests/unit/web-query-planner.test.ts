@@ -13,6 +13,12 @@ import { parseWebSearchInput } from "@application/research";
 import { SearchProviderResult, WebSearchSource } from "@application/ports";
 import { FetchFallbackChain, WebQueryPlanner, WebSourceHealthTracker } from "@application/web";
 import { settle } from "../support/async";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function result(url: string, rank: number, query = "q"): SearchProviderResult {
   return {
@@ -386,10 +392,9 @@ describe("WebQueryPlanner", () => {
     const planner = new WebQueryPlanner({
       registry: { enabledSources: () => [fast, slow] },
     });
-    const results = await planner.search("query", {
-      deadlineMs: 25,
-      onSourceSelection: (d) => traces.push(d),
-    });
+    const results = await runPastDeadline(25, () =>
+      planner.search("query", { deadlineMs: 25, onSourceSelection: (d) => traces.push(d) }),
+    );
 
     expect(results.map((item) => item.source.url)).toEqual(["https://fast.dev/"]);
     expect(traces[0].deadlineExceeded).toBe(true);
@@ -760,10 +765,12 @@ describe("WebQueryPlanner", () => {
       intentClassifier: { classify: () => new Promise(() => {}) },
     });
 
-    const results = await planner.search("arxiv paper on RAG", {
-      deadlineMs: 20,
-      onSourceSelection: (d) => traces.push(d),
-    });
+    const results = await runPastDeadline(20, () =>
+      planner.search("arxiv paper on RAG", {
+        deadlineMs: 20,
+        onSourceSelection: (d) => traces.push(d),
+      }),
+    );
 
     expect(traces[0].intentOrigin).toBe("heuristic");
     expect(traces[0].intentReason).toBe("web-deadline");
@@ -803,7 +810,7 @@ describe("WebQueryPlanner", () => {
       health,
     });
 
-    await planner.search("query", { deadlineMs: 20 });
+    await runPastDeadline(20, () => planner.search("query", { deadlineMs: 20 }));
 
     expect(health.getIssue("duckduckgo")).toBeUndefined();
   });

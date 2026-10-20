@@ -1,5 +1,11 @@
 import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 import { ModelWebQueryIntentClassifier } from "@application/web";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function modelReturning(
   content: string,
@@ -106,7 +112,7 @@ describe("ModelWebQueryIntentClassifier", () => {
       timeoutMs: 10,
     });
 
-    const resolution = await classifier.classify("arxiv paper on RAG");
+    const resolution = await runPastDeadline(10, () => classifier.classify("arxiv paper on RAG"));
     expect(resolution).toMatchObject({ intent: "academic", origin: "heuristic" });
     expect(aborted).toBe(true);
   });
@@ -131,7 +137,9 @@ describe("ModelWebQueryIntentClassifier", () => {
       timeoutMs: 10,
     });
 
-    await expect(classifier.classify("arxiv paper on RAG")).resolves.toEqual({
+    await expect(
+      runPastDeadline(10, () => classifier.classify("arxiv paper on RAG")),
+    ).resolves.toEqual({
       intent: "academic",
       origin: "heuristic",
       reason: "intent-classification-timeout",
