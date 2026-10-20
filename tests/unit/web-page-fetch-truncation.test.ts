@@ -183,36 +183,23 @@ describe("batch download budget", () => {
 });
 
 describe("truncation is opt-in per call, not inferred from content type", () => {
-  it("refuses an oversized text/plain document instead of saving a partial file", async () => {
-    const { fetcher } = fetcherFor(
-      [bytes("a".repeat(4_000)), bytes("b".repeat(4_000))],
-      "text/plain",
-    );
-
-    const result = await fetcher.fetch(
+  it("refuses an oversized document or page instead of saving a partial file", async () => {
+    const chunks = () => [bytes("a".repeat(4_000)), bytes("b".repeat(4_000))];
+    const document = await fetcherFor(chunks(), "text/plain").fetcher.fetch(
       "https://example.com/dump.txt",
       { maxResponseBytes: 5_000 },
       isDocumentContentType,
     );
-
-    expect(result).toMatchObject({
-      ok: false,
-      result: { ok: false, error: { code: "web-fetch-response-too-large" } },
+    const page = await fetcherFor(chunks(), "text/html").fetcher.fetch("https://example.com/a", {
+      maxResponseBytes: 5_000,
     });
-  });
 
-  it("defaults to refusing when the caller does not opt in", async () => {
-    const { fetcher } = fetcherFor(
-      [bytes("x".repeat(4_000)), bytes("y".repeat(4_000))],
-      "text/html",
-    );
-
-    const result = await fetcher.fetch("https://example.com/a", { maxResponseBytes: 5_000 });
-
-    expect(result).toMatchObject({
-      ok: false,
-      result: { ok: false, error: { code: "web-fetch-response-too-large" } },
-    });
+    for (const result of [document, page]) {
+      expect(result).toMatchObject({
+        ok: false,
+        result: { ok: false, error: { code: "web-fetch-response-too-large" } },
+      });
+    }
   });
 });
 
