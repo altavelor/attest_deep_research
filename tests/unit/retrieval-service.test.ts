@@ -827,7 +827,7 @@ describe("rankKeywordMatches", () => {
         retrieved("two", markdownSource("two.md"), "local", 0.9),
         retrieved("none", markdownSource("none.md"), "unrelated", 99),
       ],
-      2,
+      3,
     );
 
     expect(ranked.map((chunk) => [chunk.id, chunk.score])).toEqual([
@@ -839,9 +839,9 @@ describe("rankKeywordMatches", () => {
 
 describe("citations", () => {
   it("formats markdown, pdf, document, and web citation links", () => {
-    expect(formatCitation(markdownSource("Research/ai.md", ["Models"], "block-1"))).toMatchObject({
-      label: "Research/ai.md > Models",
-    });
+    expect(
+      formatCitation(markdownSource("Research/ai.md", ["Models", "Local"], "block-1")),
+    ).toMatchObject({ label: "Research/ai.md > Models > Local" });
     expect(formatCitationLink(markdownSource("Research/ai.md", ["Models"], "block-1"))).toBe(
       "[Research/ai.md > Models](Research/ai.md#^block-1)",
     );
