@@ -12,25 +12,11 @@ import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { AttestError } from "@core/errors";
 import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
-import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import { VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 import { FileVectorIndexStore } from "@adapters/indexing";
 import { MemoryFileSystem } from "../support/memoryFileSystem";
-
-function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
-  return {
-    id,
-    text,
-    contentHash: `chunk-hash-${id}`,
-    source: {
-      id: `source-${id}`,
-      kind: "markdown",
-      path,
-      title: path,
-      headingPath: ["Test"],
-    },
-  };
-}
+import { FakeExtractor, FakeVaultFileProvider, markdownChunk } from "../support/indexingFakes";
 
 describe("change detection", () => {
   it("skips unchanged files by modification time and detects changed hashes", () => {
@@ -485,47 +471,6 @@ function file(
   data: string,
 ): VaultFileSummary & { data: string } {
   return { path, modifiedTime, data };
-}
-
-class FakeVaultFileProvider implements VaultFileProvider {
-  readPaths: string[] = [];
-  private files: Array<VaultFileSummary & { data: string }>;
-
-  constructor(files: Array<VaultFileSummary & { data: string }>) {
-    this.files = files;
-  }
-
-  async listFiles(): Promise<VaultFileSummary[]> {
-    return this.files.map(({ path, modifiedTime, size }) => ({ path, modifiedTime, size }));
-  }
-
-  async readFile(path: string): Promise<ArrayBuffer | string> {
-    this.readPaths.push(path);
-    return this.files.find((file) => file.path === path)?.data ?? "";
-  }
-
-  replace(file: VaultFileSummary & { data: string }): void {
-    this.files = this.files.map((existing) => (existing.path === file.path ? file : existing));
-  }
-}
-
-class FakeExtractor implements Extractor {
-  extractedPaths: string[] = [];
-
-  constructor(private readonly extension: string) {}
-
-  supports(path: string): boolean {
-    return path.endsWith(this.extension);
-  }
-
-  async extract(input: {
-    path: string;
-    data: ArrayBuffer | string;
-    modifiedTime: number;
-  }): Promise<ExtractedChunk[]> {
-    this.extractedPaths.push(input.path);
-    return [markdownChunk(input.path, input.path, String(input.data))];
-  }
 }
 
 class MultiChunkExtractor implements Extractor {

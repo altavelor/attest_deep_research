@@ -1,6 +1,8 @@
 import { IndexingProfileController, createIndexingStateFromProfile } from "@adapters/indexing";
-import { IndexingService, IndexingState } from "@adapters/indexing";
+import { IndexingService } from "@adapters/indexing";
 import { IndexProfile } from "@adapters/indexing";
+
+import { FakeIndexingService } from "../support/indexingFakes";
 
 describe("IndexingProfileController", () => {
   it("builds an initial state from profile summary fields", () => {
@@ -50,52 +52,6 @@ describe("IndexingProfileController", () => {
     await expect(controller.start("b")).resolves.toMatchObject({ status: "idle" });
   });
 });
-
-class FakeIndexingService {
-  private state: IndexingState = {
-    status: "idle",
-    scannedFiles: 0,
-    totalFiles: 0,
-    progress: 0,
-    indexedFiles: 0,
-    skippedFiles: 0,
-    embeddedChunks: 0,
-    deferredFiles: 0,
-    failedFiles: 0,
-    isStale: false,
-  };
-
-  getState(): IndexingState {
-    return { ...this.state };
-  }
-
-  async manualReindex(): Promise<IndexingState> {
-    this.state = {
-      ...this.state,
-      status: "idle",
-      indexedFiles: 1,
-      embeddedChunks: 2,
-      lastIndexedAt: "2026-06-14T10:00:00.000Z",
-    };
-    return this.getState();
-  }
-
-  async rebuild(): Promise<IndexingState> {
-    return this.manualReindex();
-  }
-
-  pause(): void {
-    this.state = { ...this.state, status: "paused" };
-  }
-
-  resume(): void {
-    this.state = { ...this.state, status: "idle" };
-  }
-
-  setIndexSizeBytes(indexSizeBytes?: number): void {
-    this.state = { ...this.state, indexSizeBytes };
-  }
-}
 
 function profile(overrides: Partial<IndexProfile> = {}): IndexProfile {
   return {
