@@ -107,13 +107,16 @@ describe("untrusted web search payloads", () => {
     }
   });
 
-  it("rejects a truncated body as bad-response instead of parsing a partial payload", async () => {
-    const truncated = JSON.stringify(SHAPES.brave!.wrap([SHAPES.brave!.complete])).slice(0, -6);
-    const fetchMock = vi.fn().mockResolvedValue(response(truncated));
+  it("rejects a truncated body from every provider as bad-response", async () => {
+    for (const [id, shape] of Object.entries(SHAPES)) {
+      const truncated = JSON.stringify(shape.wrap([shape.complete])).slice(0, -6);
+      const fetchMock = vi.fn().mockResolvedValue(response(truncated));
 
-    await expect(
-      sourceFor("brave", fetchMock as unknown as typeof fetch).search("obsidian plugins"),
-    ).rejects.toMatchObject({ details: { sourceId: "brave", reason: "bad-response" } });
+      await expect(
+        sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
+        id,
+      ).rejects.toMatchObject({ details: { sourceId: id, reason: "bad-response" } });
+    }
   });
 
   for (const [id, shape] of Object.entries(SHAPES)) {

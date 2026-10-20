@@ -60,33 +60,38 @@ describe("current date anchoring", () => {
 });
 
 describe("universal policy contract", () => {
-  it("states the deliverable, side-effect, language, verification, refusal and cost contract", () => {
-    const system = systemText({
-      availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, CREATE_NOTE_TOOL],
-      question: "Create five quick notes, a separate one for each company",
-    });
-    expect(system).toContain("Exactly the requested deliverables");
-    expect(system).toContain("Produce the requested deliverables and nothing else");
-    expect(system).toContain("an added summary note is a defect");
-    expect(system).toContain("creating the parent folder of a requested");
-    expect(system).toContain("MUST be named in the final message");
-    expect(system).toContain("in the language of the request");
-    expect(system).toContain("A size modifier");
-    expect(system).toContain("Brevity bounds the path, not only the text");
-    expect(system).toContain("Before the final answer");
-    expect(system).toContain("Check silently, without narrating the check");
-    expect(system).toContain("every mandatory source tool actually succeeded");
-    expect(system).toContain("When a tool refuses");
-    expect(system).toContain("An exhausted budget, a capability that is off");
-    expect(system).toContain("are terminal");
-    expect(system).toContain("A step that repeats without result");
-    expect(system).toContain("What each step costs");
-    expect(system).toContain("A round is a separate model call, not a free step");
-    expect(system).toContain("source budget is finite and shared");
-    expect(system).toContain("batch independent queries into one call");
-    expect(system).toContain("route with `category`");
-    expect(system).toContain("bound time " + "with `recency`");
-    expect(system).toContain("pass several identifiers per fetch");
+  it("states the deliverable, side-effect, language, verification, refusal and cost contract in every profile", () => {
+    for (const availableTools of [
+      [READ_NOTE_TOOL],
+      [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, CREATE_NOTE_TOOL],
+    ]) {
+      const system = systemText({
+        availableTools,
+        question: "Create five quick notes, a separate one for each company",
+      });
+      expect(system).toContain("Exactly the requested deliverables");
+      expect(system).toContain("Produce the requested deliverables and nothing else");
+      expect(system).toContain("an added summary note is a defect");
+      expect(system).toContain("creating the parent folder of a requested");
+      expect(system).toContain("MUST be named in the final message");
+      expect(system).toContain("in the language of the request");
+      expect(system).toContain("A size modifier");
+      expect(system).toContain("Brevity bounds the path, not only the text");
+      expect(system).toContain("Before the final answer");
+      expect(system).toContain("Check silently, without narrating the check");
+      expect(system).toContain("every mandatory source tool actually succeeded");
+      expect(system).toContain("When a tool refuses");
+      expect(system).toContain("An exhausted budget, a capability that is off");
+      expect(system).toContain("are terminal");
+      expect(system).toContain("A step that repeats without result");
+      expect(system).toContain("What each step costs");
+      expect(system).toContain("A round is a separate model call, not a free step");
+      expect(system).toContain("source budget is finite and shared");
+      expect(system).toContain("batch independent queries into one call");
+      expect(system).toContain("route with `category`");
+      expect(system).toContain("bound time " + "with `recency`");
+      expect(system).toContain("pass several identifiers per fetch");
+    }
   });
 
   it("states the source weighting policy in every profile that has a source", () => {
