@@ -4,6 +4,7 @@ import { CachedAsyncValue } from "@application/CachedAsyncValue";
 import { VaultWarmCaches } from "@apps/obsidian/composition/VaultWarmCaches";
 import { ContextFileProvider } from "@application/ports";
 import { LanguageInventoryItem } from "@core/model";
+import { settle } from "../support/async";
 
 function countingFiles(paths: string[]): ContextFileProvider & { listCalls: number } {
   return {
@@ -43,7 +44,7 @@ describe("CachedAsyncValue", () => {
     const value = new CachedAsyncValue(
       async () => {
         loads += 1;
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await settle(5);
         return loads;
       },
       { ttlMs: 1_000 },
