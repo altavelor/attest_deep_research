@@ -85,8 +85,8 @@ jobs:
         if: steps.guard.outputs.enabled == 'true'
         shell: bash
         env:
-          DEFAULT_MODEL: openrouter/openai/gpt-5.6-luna
-          DEFAULT_FALLBACK_MODELS: '["openrouter/anthropic/claude-sonnet-5"]'
+          DEFAULT_MODEL: openrouter/openai/gpt-6-luna
+          DEFAULT_FALLBACK_MODELS: '["openrouter/anthropic/claude-sonnet-5.5"]'
           DEFAULT_MAX_TOKENS: "128000"
           VAR_MODEL: ${{ vars.AI_REVIEW_MODEL }}
           VAR_FALLBACK_MODELS: ${{ vars.AI_REVIEW_FALLBACK_MODELS }}

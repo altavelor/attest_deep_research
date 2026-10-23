@@ -183,6 +183,17 @@ npm run build
 standards declared in `types/web-standard-globals.d.ts`, but never Node, DOM, or
 Obsidian APIs; introduce a port instead.
 
+### UI changes
+
+A change that touches a screen, layout, spacing, button states, or list rendering
+is not done until it has been opened. Before the final report, build the plugin,
+open the changed screen in Obsidian, and check the empty, long-text, error, and
+narrow-width states. Report one line of observation per screen; a screen not
+described in the report counts as unverified.
+
+Diffs that parse external data, vault paths, or network responses also get a
+security review in addition to the regular one.
+
 ## Pull request reviews
 
 Review independently and inspect the complete diff against the PR base branch.

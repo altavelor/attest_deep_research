@@ -9,3 +9,4 @@ dist/
 .claude/
 .codex/
 tasks/
+.delegate/
