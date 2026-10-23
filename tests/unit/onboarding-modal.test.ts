@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, Platform, TFile, TFolder } from "../stubs/obsidian";
+import { App, Platform, TFile, TFolder } from "../support/obsidian";
 import type { App as ObsidianApp } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
@@ -13,7 +13,8 @@ import type {
 } from "@adapters/settings";
 import { OnboardingModal } from "@apps/obsidian/ui/onboarding";
 import type { OnboardingModalOptions } from "@apps/obsidian/ui/onboarding";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
+import { eventually } from "../support/async";
 
 const t = createTranslator("en").t;
 
@@ -133,9 +134,9 @@ async function finishVaultRoute(
   click(modal.contentEl, "Continue");
   choose(modal.contentEl, "Embedding model", "nomic-embed-text");
   click(modal.contentEl, "Continue");
-  await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+  await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
   click(modal.contentEl, "Start indexing");
-  await vi.waitFor(() => expect(options.onStartIndexing).toHaveBeenCalled());
+  await eventually(() => expect(options.onStartIndexing).toHaveBeenCalled());
   return { modal };
 }
 
@@ -206,7 +207,7 @@ async function completeChatStep(container: HTMLElement): Promise<void> {
   choose(container, "Provider", "openai");
   type(container, "API key (optional)", "secret");
   click(container, "Test connection");
-  await vi.waitFor(() => expect(settingFor(container, "Chat model")).toBeDefined());
+  await eventually(() => expect(settingFor(container, "Chat model")).toBeDefined());
   choose(container, "Chat model", "gpt-4.1-mini");
   click(container, "Continue");
 }
@@ -230,7 +231,7 @@ describe("OnboardingModal", () => {
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(true);
 
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Chat model")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Chat model")).toBeDefined());
     choose(modal.contentEl, "Chat model", "gpt-4.1-mini");
 
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(false);
@@ -245,7 +246,7 @@ describe("OnboardingModal", () => {
     choose(modal.contentEl, "Provider", "openai");
 
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(
         settingFor(modal.contentEl, "Connection")?.querySelector(
           '.attest-onboarding__connection-status[data-icon="check"]',
@@ -258,7 +259,7 @@ describe("OnboardingModal", () => {
     expect(successStatus.parentElement?.firstElementChild).toBe(successStatus);
 
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(
         settingFor(modal.contentEl, "Connection")?.querySelector(
           '.attest-onboarding__connection-status[data-icon="x"]',
@@ -281,7 +282,7 @@ describe("OnboardingModal", () => {
     const { modal } = openModal({ fetchModels: vi.fn(async () => manyModels) });
     choose(modal.contentEl, "Provider", "openai");
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() => expect(inputFor(modal.contentEl, "Chat model")).toBeDefined());
+    await eventually(() => expect(inputFor(modal.contentEl, "Chat model")).toBeDefined());
 
     type(modal.contentEl, "Chat model", "GPT-4");
     const modelInput = inputFor(modal.contentEl, "Chat model");
@@ -398,7 +399,7 @@ describe("OnboardingModal", () => {
     chooseScope(modal.contentEl, "The web only");
     click(modal.contentEl, "Finish");
 
-    await vi.waitFor(() => expect(options.onComplete).toHaveBeenCalled());
+    await eventually(() => expect(options.onComplete).toHaveBeenCalled());
     const result = vi.mocked(options.onComplete).mock.calls[0][0];
     expect(result.scope).toBe("webOnly");
     expect(result.embedding).toBeUndefined();
@@ -434,7 +435,7 @@ describe("OnboardingModal", () => {
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
 
-    await vi.waitFor(() => expect(options.verifyEmbedding).toHaveBeenCalled());
+    await eventually(() => expect(options.verifyEmbedding).toHaveBeenCalled());
     const [server, modelName] = vi.mocked(options.verifyEmbedding).mock.calls[0];
     expect((server as ServerProfile).baseUrl).toBe("https://api.openai.com/v1");
     expect(modelName).toBe("nomic-embed-text");
@@ -472,11 +473,11 @@ describe("OnboardingModal", () => {
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
 
-    await vi.waitFor(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
+    await eventually(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
     expect(options.onComplete).not.toHaveBeenCalled();
 
     click(modal.contentEl, "Use the web instead");
-    await vi.waitFor(() => expect(options.onComplete).toHaveBeenCalled());
+    await eventually(() => expect(options.onComplete).toHaveBeenCalled());
     const result = vi.mocked(options.onComplete).mock.calls[0][0];
     expect(result.scope).toBe("webOnly");
     expect(result.embedding).toBeUndefined();
@@ -492,7 +493,7 @@ describe("OnboardingModal", () => {
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
 
-    await vi.waitFor(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
+    await eventually(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(false);
   });
 
@@ -505,12 +506,12 @@ describe("OnboardingModal", () => {
     choose(modal.contentEl, "Provider", "openai");
 
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(button(modal.contentEl, "Test connection")?.disabled).toBe(false),
     );
     click(modal.contentEl, "Test connection");
 
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Chat model")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Chat model")).toBeDefined());
     expect(fetchModels).toHaveBeenCalledTimes(2);
   });
 
@@ -551,10 +552,10 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
     click(modal.contentEl, "Start indexing");
 
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(options.onStartIndexing).toHaveBeenCalledWith("index-1", "embedding-1"),
     );
     const result = vi.mocked(options.onComplete).mock.calls[0][0];
@@ -599,7 +600,7 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
 
     const folders = settingFor(modal.contentEl, "Folders")!;
     expect(folders.querySelector("select")?.value).toBe("wholeVault");
@@ -622,7 +623,7 @@ describe("OnboardingModal", () => {
     type(modal.contentEl, "Index location", "Data/attest-index");
     click(modal.contentEl, "Start indexing");
 
-    await vi.waitFor(() => expect(options.onComplete).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(options.onComplete).toHaveBeenCalledTimes(1));
     expect(vi.mocked(options.onComplete).mock.calls[0][0].index).toEqual({
       mode: "wholeVault",
       indexFolder: "Data/attest-index",
@@ -646,9 +647,9 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
     click(modal.contentEl, "Start indexing");
-    await vi.waitFor(() => expect(button(modal.contentEl, "Open chat")).toBeDefined());
+    await eventually(() => expect(button(modal.contentEl, "Open chat")).toBeDefined());
 
     modal.close();
 
@@ -665,7 +666,7 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Test connection");
     type(modal.contentEl, "Base URL", "https://api.other.test/v1");
     release?.(discovered);
-    await vi.waitFor(() => expect(fetchModels).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(fetchModels).toHaveBeenCalledTimes(1));
 
     expect(inputFor(modal.contentEl, "Chat model").value).toBe("");
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(true);
@@ -678,13 +679,13 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
+    await eventually(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
 
     const fallback = button(modal.contentEl, "Use the web instead")!;
     fallback.click();
     fallback.click();
 
-    await vi.waitFor(() => expect(options.onComplete).toHaveBeenCalled());
+    await eventually(() => expect(options.onComplete).toHaveBeenCalled());
     expect(options.onComplete).toHaveBeenCalledTimes(1);
   });
 
@@ -738,7 +739,7 @@ describe("OnboardingModal", () => {
     const { modal } = openModal({ onSkip: vi.fn(async () => Promise.reject(new Error("disk"))) });
 
     click(modal.contentEl, "Skip, configure manually");
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(button(modal.contentEl, "Skip, configure manually")).toBeDefined(),
     );
 
@@ -751,7 +752,7 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
 
     type(modal.contentEl, "Index location", "../outside-the-vault");
 
@@ -768,7 +769,7 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
 
     choose(modal.contentEl, "Folders", "selected");
 
@@ -788,13 +789,13 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
+    await eventually(() => expect(button(modal.contentEl, "Use the web instead")).toBeDefined());
 
     choose(modal.contentEl, "Embedding model", "second-embedder");
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "third-embedder");
     release?.(true);
-    await vi.waitFor(() => expect(verifyEmbedding).toHaveBeenCalledTimes(2));
+    await eventually(() => expect(verifyEmbedding).toHaveBeenCalledTimes(2));
 
     expect(button(modal.contentEl, "Use the web instead")).toBeUndefined();
     expect(options.onComplete).not.toHaveBeenCalled();
@@ -813,7 +814,7 @@ describe("OnboardingModal", () => {
     const { modal } = openModal();
     choose(modal.contentEl, "Provider", "openai");
     click(modal.contentEl, "Test connection");
-    await vi.waitFor(() => expect(inputFor(modal.contentEl, "Chat model")).toBeDefined());
+    await eventually(() => expect(inputFor(modal.contentEl, "Chat model")).toBeDefined());
 
     modal.close();
 
@@ -826,7 +827,7 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
     choose(modal.contentEl, "Folders", "selected");
 
     expect(modal.contentEl.querySelector(".attest-onboarding__selected-empty")?.textContent).toBe(
@@ -866,12 +867,12 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
 
     click(modal.contentEl, "Back");
     click(modal.contentEl, "Continue");
 
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
     expect(verifyEmbedding).toHaveBeenCalledTimes(1);
   });
 
@@ -883,13 +884,13 @@ describe("OnboardingModal", () => {
     click(modal.contentEl, "Continue");
     choose(modal.contentEl, "Embedding model", "nomic-embed-text");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
 
     click(modal.contentEl, "Back");
     choose(modal.contentEl, "Embedding model", "another-embedder");
     click(modal.contentEl, "Continue");
 
-    await vi.waitFor(() => expect(verifyEmbedding).toHaveBeenCalledTimes(2));
+    await eventually(() => expect(verifyEmbedding).toHaveBeenCalledTimes(2));
   });
 
   it("says it is checking while the provider is contacted", async () => {
@@ -907,7 +908,7 @@ describe("OnboardingModal", () => {
     expect(button(modal.contentEl, "Checking…")?.disabled).toBe(true);
 
     release?.(true);
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
   });
 
   it("opens a re-run on the setup the wizard already created", () => {
@@ -967,7 +968,7 @@ describe("OnboardingModal", () => {
     chooseScope(modal.contentEl, "My notes and the web");
     click(modal.contentEl, "Continue");
     click(modal.contentEl, "Continue");
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Index location")).toBeDefined());
+    await eventually(() => expect(settingFor(modal.contentEl, "Index location")).toBeDefined());
 
     expect(modal.contentEl.textContent).toContain("Projects");
     expect(inputFor(modal.contentEl, "Index location").value).toBe(".attest/index");
@@ -983,34 +984,17 @@ describe("OnboardingModal", () => {
 
     pickModel(modal.contentEl, "Embedding model", "nomic-embed-text");
 
-    await vi.waitFor(() => expect(verifyEmbedding).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(verifyEmbedding).toHaveBeenCalledTimes(1));
     expect(modal.contentEl.querySelector(".attest-onboarding__model-probe")).not.toBeNull();
     expect(modal.contentEl.textContent).toContain("Testing");
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(true);
 
     settle?.(true);
 
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(modal.contentEl.querySelector(".attest-onboarding__model-probe")).toBeNull(),
     );
     expect(button(modal.contentEl, "Continue")?.disabled).toBe(false);
-  });
-
-  it("does not test the model a second time when Continue follows the picked one", async () => {
-    const verifyEmbedding = vi.fn(async () => true);
-    const { modal } = openModal({ verifyEmbedding });
-    await completeChatStep(modal.contentEl);
-    chooseScope(modal.contentEl, "My notes and the web");
-    click(modal.contentEl, "Continue");
-
-    pickModel(modal.contentEl, "Embedding model", "nomic-embed-text");
-    await vi.waitFor(() =>
-      expect(modal.contentEl.querySelector(".attest-onboarding__model-probe")).toBeNull(),
-    );
-    click(modal.contentEl, "Continue");
-
-    await vi.waitFor(() => expect(settingFor(modal.contentEl, "Folders")).toBeDefined());
-    expect(verifyEmbedding).toHaveBeenCalledTimes(1);
   });
 
   it("says the index run finished instead of leaving the screen on indexing", async () => {
@@ -1085,7 +1069,7 @@ describe("OnboardingModal", () => {
     chooseScope(modal.contentEl, "The web only");
     click(modal.contentEl, "Finish");
 
-    await vi.waitFor(() => expect(options.onComplete).toHaveBeenCalled());
+    await eventually(() => expect(options.onComplete).toHaveBeenCalled());
     const result = vi.mocked(options.onComplete).mock.calls[0][0];
     expect(result.chat.capabilitySnapshot).toEqual(snapshot);
   });

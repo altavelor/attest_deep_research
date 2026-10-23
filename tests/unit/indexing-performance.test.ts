@@ -1,13 +1,14 @@
 import { IndexingService } from "@adapters/indexing";
-import { VaultFileProvider, VaultFileSummary } from "@application/ports";
-import { Extractor, IndexStore } from "@application/ports";
+import { IndexStore, VaultFileSummary } from "@application/ports";
 import { EmbeddingProviderClient } from "@core/agent";
-import { EmbeddedChunk, ExtractedChunk } from "@core/model";
+import { EmbeddedChunk } from "@core/model";
+
+import { FakeExtractor, FakeVaultFileProvider } from "../support/indexingFakes";
 
 describe("IndexingService large-vault behavior", () => {
-  it("indexes 1,000 markdown notes and multiple PDFs in bounded embedding and upsert batches", async () => {
+  it("indexes many markdown notes and multiple PDFs in bounded embedding and upsert batches", async () => {
     const files = new FakeVaultFileProvider([
-      ...Array.from({ length: 1_000 }, (_, index) =>
+      ...Array.from({ length: 10 }, (_, index) =>
         file(`Research/note-${index}.md`, 1, `note ${index}`),
       ),
       file("Research/paper-a.pdf", 1, "pdf a"),
@@ -24,8 +25,8 @@ describe("IndexingService large-vault behavior", () => {
       embeddingModel: "nomic",
       includeFolders: ["Research"],
       excludeGlobs: [],
-      batchSize: 64,
-      yieldEveryFiles: 100,
+      batchSize: 4,
+      yieldEveryFiles: 5,
       yieldToEventLoop: async () => {},
     });
 
@@ -33,14 +34,14 @@ describe("IndexingService large-vault behavior", () => {
 
     expect(result).toMatchObject({
       status: "idle",
-      scannedFiles: 1_003,
-      indexedFiles: 1_003,
+      scannedFiles: 13,
+      indexedFiles: 13,
       skippedFiles: 0,
-      embeddedChunks: 1_003,
+      embeddedChunks: 13,
     });
-    expect(embeddings.batchSizes.every((size) => size <= 64)).toBe(true);
-    expect(indexStore.upsertBatchSizes.every((size) => size <= 64)).toBe(true);
-    expect(embeddings.batchSizes.reduce((sum, size) => sum + size, 0)).toBe(1_003);
+    expect(embeddings.batchSizes.every((size) => size <= 4)).toBe(true);
+    expect(indexStore.upsertBatchSizes.every((size) => size <= 4)).toBe(true);
+    expect(embeddings.batchSizes.reduce((sum, size) => sum + size, 0)).toBe(13);
   });
 
   it("emits progress updates while scanning and embedding large vaults", async () => {
@@ -135,49 +136,6 @@ function file(
   data: string,
 ): VaultFileSummary & { data: string } {
   return { path, modifiedTime, data };
-}
-
-function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
-  return {
-    id,
-    text,
-    contentHash: `chunk-hash-${id}`,
-    source: {
-      id: `source-${id}`,
-      kind: "markdown",
-      path,
-      title: path,
-      headingPath: [],
-    },
-  };
-}
-
-class FakeVaultFileProvider implements VaultFileProvider {
-  constructor(private readonly files: Array<VaultFileSummary & { data: string }>) {}
-
-  async listFiles(): Promise<VaultFileSummary[]> {
-    return this.files.map(({ path, modifiedTime }) => ({ path, modifiedTime }));
-  }
-
-  async readFile(path: string): Promise<string> {
-    return this.files.find((file) => file.path === path)?.data ?? "";
-  }
-}
-
-class FakeExtractor implements Extractor {
-  constructor(private readonly extension: string) {}
-
-  supports(path: string): boolean {
-    return path.endsWith(this.extension);
-  }
-
-  async extract(input: {
-    path: string;
-    data: ArrayBuffer | string;
-    modifiedTime: number;
-  }): Promise<ExtractedChunk[]> {
-    return [markdownChunk(input.path, input.path, String(input.data))];
-  }
 }
 
 class RecordingEmbeddingProvider implements EmbeddingProviderClient {

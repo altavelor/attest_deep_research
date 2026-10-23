@@ -1,6 +1,4 @@
-import { rankKeywordMatches } from "@adapters/retrieval";
 import { filterRetrievedChunks } from "@core/retrieval";
-import { formatCitation } from "@core/retrieval";
 import type { RetrievedChunk } from "@core/model";
 
 function chunk(id: string, text: string, score: number, path = `${id}.md`): RetrievedChunk {
@@ -14,15 +12,6 @@ function chunk(id: string, text: string, score: number, path = `${id}.md`): Retr
 }
 
 describe("core/retrieval", () => {
-  it("ranks chunks by keyword occurrences, then by base score", () => {
-    const ranked = rankKeywordMatches(
-      "vector search",
-      [chunk("a", "vector vector search", 0.1), chunk("b", "search", 0.9), chunk("c", "nope", 0.5)],
-      10,
-    );
-    expect(ranked.map((c) => c.id)).toEqual(["a", "b"]);
-  });
-
   it("filters out web chunks unless web results are included", () => {
     const web: RetrievedChunk = {
       id: "w",
@@ -44,16 +33,5 @@ describe("core/retrieval", () => {
       includeWebResults: false,
     });
     expect(out.map((c) => c.id)).toEqual(["a"]);
-  });
-
-  it("formats a citation label from the source", () => {
-    const citation = formatCitation({
-      kind: "markdown",
-      id: "n",
-      title: "Note",
-      path: "Note.md",
-      headingPath: ["A", "B"],
-    });
-    expect(citation.label).toBe("Note.md > A > B");
   });
 });

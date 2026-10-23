@@ -8,7 +8,8 @@ import type { ChatRepository } from "@application/ports";
 import type { ResearchAnswer } from "@core/answer";
 import type { SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
-import { createTestSessionManager } from "../helpers/chatSessions";
+import { createTestSessionManager } from "../support/chatSessions";
+import { settle } from "../support/async";
 
 const settings: SavedChatSettings = {
   chatModelProfileId: "model-id",
@@ -38,13 +39,6 @@ function request(question: string): ChatRunRequest {
     includeContextDiagnostics: false,
     modelLabel: "Model Label",
   };
-}
-
-async function settle(): Promise<void> {
-  for (let index = 0; index < 50; index += 1) {
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 }
 
 interface Gate {
@@ -752,25 +746,6 @@ describe("chat session manager activity", () => {
       runningCount: 1,
       unreadCompletedCount: 1,
     });
-  });
-
-  it("ignores queued and stopping sessions in the running count", async () => {
-    const gated = createGatedService();
-    const { manager, repository } = createTestSessionManager({
-      createResearchService: gated.service,
-    });
-    const sessions: ChatSessionState[] = [];
-    for (let index = 0; index <= MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
-      const session = newSession(manager);
-      sessions.push(session);
-      await manager.start(session.sessionId, request(`Question ${index}`));
-    }
-    await settle();
-    manager.stop(sessions[0].sessionId);
-
-    expect(manager.activity(await repository.listChats()).runningCount).toBe(
-      MAX_CONCURRENT_CHAT_SESSIONS - 1,
-    );
   });
 });
 

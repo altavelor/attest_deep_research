@@ -123,6 +123,42 @@ do not assert private implementation details or use snapshots where explicit
 assertions express the behavior. Mock network calls. Every regression fix needs
 a regression test.
 
+### Tests
+
+- Layout: `tests/unit/` holds one rule of one module with its dependencies
+  replaced; no file system, network, subprocesses, or clock (`setTimeout` with a
+  delay, `vi.waitFor`). `tests/scenario/` holds layer seams where one side is
+  real and the other is a fake: view behaviour through the Obsidian stub, fixture
+  files, scripts, and source-text contracts in `tests/scenario/arch/`. Shared
+  fakes and helpers live in `tests/support/` and are never copied into test
+  files; wait for async work with `settle()` or `eventually()` from
+  `tests/support/async.ts`.
+- Time limits, enforced by `tests/support/timeLimits.ts` in every run: 0.1 s of
+  worker CPU time per unit case and 0.5 s per scenario case, each including its
+  own hooks, so a loaded machine does not fail a light case. Waiting is bounded
+  separately: `testTimeout` is 1 s for unit and 5 s for scenario cases, and
+  `beforeAll` fixtures time out after 2 s. Unit tests drive deadlines with a
+  fake clock (`runPastDeadline` in `tests/support/timers.ts`). Over a limit,
+  split the test or replace its heavy part with a fake; never raise the limit.
+- Density: at most 0.2 cases per source branch, checked by `npm run test:coverage`
+  through `scripts/test-density.mjs`. Every case covers a branch or kills a
+  named mutant (boundary, set element, message text, failure code) that no
+  other case covers. A threshold gets one case on each side; a failure code is
+  tested once together with its message text.
+- Growth: a change adds cases only for new rules, and a behaviour change edits
+  or deletes the old tests instead of adding new ones. A commit adding more than
+  15 cases needs a `Case growth:` line in its message.
+  `npm run test:growth -- <base-ref>` (default `origin/main`) prints the case
+  delta of each commit.
+- Never: subprocesses or sleeps in unit tests, assertions on execution time,
+  version-number literals, snapshot or whole-run golden comparisons, or cases
+  that pin model wording from past runs. When deleting or merging tests, run at
+  least three differential mutants per group of deleted cases and restore any
+  case whose mutant the remaining tests miss.
+- `tests/scenario/arch/test-hygiene.test.ts` keeps the layout, checks that every
+  raised failure code appears in a test, and rejects unread fixtures and
+  uncalled support helpers.
+
 Before a refactor that changes execution flow, add characterization tests for
 observable behavior such as streaming-event order and fallback paths. Pure code
 moves, file splits, and barrel extraction do not require new characterization

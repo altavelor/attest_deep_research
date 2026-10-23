@@ -60,57 +60,38 @@ describe("current date anchoring", () => {
 });
 
 describe("universal policy contract", () => {
-  it("demands exactly the requested deliverables and forbids extra artefacts", () => {
-    const system = systemText({
-      availableTools: [WEB_SEARCH_TOOL, CREATE_NOTE_TOOL],
-      question: "Create five quick notes, a separate one for each company",
-    });
-    expect(system).toContain("Exactly the requested deliverables");
-    expect(system).toContain("Produce the requested deliverables and nothing else");
-    expect(system).toContain("an added summary note is a defect");
-  });
-
-  it("requires unavoidable side effects such as created folders to be named", () => {
-    const system = systemText({ availableTools: [CREATE_NOTE_TOOL] });
-    expect(system).toContain("creating the parent folder of a requested");
-    expect(system).toContain("MUST be named in the final message");
-  });
-
-  it("states the language and brevity contract", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL] });
-    expect(system).toContain("in the language of the request");
-    expect(system).toContain("A size modifier");
-    expect(system).toContain("Brevity bounds the path, not only the text");
-  });
-
-  it("carries a pre-final verification protocol that is not narrated", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL] });
-    expect(system).toContain("Before the final answer");
-    expect(system).toContain("Check silently, without narrating the check");
-    expect(system).toContain("every mandatory source tool actually succeeded");
-  });
-
-  it("distinguishes a terminal refusal from an empty result", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL] });
-    expect(system).toContain("When a tool refuses");
-    expect(system).toContain("An exhausted budget, a capability that is off");
-    expect(system).toContain("are terminal");
-    expect(system).toContain("A step that repeats without result");
-  });
-
-  it("prices a round and the shared source budget", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL] });
-    expect(system).toContain("What each step costs");
-    expect(system).toContain("A round is a separate model call, not a free step");
-    expect(system).toContain("source budget is finite and shared");
-  });
-
-  it("names the cheap levers at the point of decision, not in a reference block", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, WEB_FETCH_TOOL] });
-    expect(system).toContain("batch independent queries into one call");
-    expect(system).toContain("route with `category`");
-    expect(system).toContain("bound time " + "with `recency`");
-    expect(system).toContain("pass several identifiers per fetch");
+  it("states the deliverable, side-effect, language, verification, refusal and cost contract in every profile", () => {
+    for (const availableTools of [
+      [READ_NOTE_TOOL],
+      [WEB_SEARCH_TOOL, WEB_FETCH_TOOL, CREATE_NOTE_TOOL],
+    ]) {
+      const system = systemText({
+        availableTools,
+        question: "Create five quick notes, a separate one for each company",
+      });
+      expect(system).toContain("Exactly the requested deliverables");
+      expect(system).toContain("Produce the requested deliverables and nothing else");
+      expect(system).toContain("an added summary note is a defect");
+      expect(system).toContain("creating the parent folder of a requested");
+      expect(system).toContain("MUST be named in the final message");
+      expect(system).toContain("in the language of the request");
+      expect(system).toContain("A size modifier");
+      expect(system).toContain("Brevity bounds the path, not only the text");
+      expect(system).toContain("Before the final answer");
+      expect(system).toContain("Check silently, without narrating the check");
+      expect(system).toContain("every mandatory source tool actually succeeded");
+      expect(system).toContain("When a tool refuses");
+      expect(system).toContain("An exhausted budget, a capability that is off");
+      expect(system).toContain("are terminal");
+      expect(system).toContain("A step that repeats without result");
+      expect(system).toContain("What each step costs");
+      expect(system).toContain("A round is a separate model call, not a free step");
+      expect(system).toContain("source budget is finite and shared");
+      expect(system).toContain("batch independent queries into one call");
+      expect(system).toContain("route with `category`");
+      expect(system).toContain("bound time " + "with `recency`");
+      expect(system).toContain("pass several identifiers per fetch");
+    }
   });
 
   it("states the source weighting policy in every profile that has a source", () => {
@@ -146,20 +127,12 @@ describe("evidence and citation policy", () => {
     expect(system).not.toContain("NOT citable evidence");
   });
 
-  it("says a mutation result proves the action, not the facts written", () => {
-    const system = systemText({ availableTools: [READ_NOTE_TOOL, CREATE_NOTE_TOOL] });
+  it("separates action proof from fact support and keeps citations inline", () => {
+    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, CREATE_NOTE_TOOL] });
     expect(system).toContain("proves an action happened at a path, not that the facts");
-  });
-
-  it("requires semantic support and forbids a self-initiated Sources section", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL] });
     expect(system).toContain("the cited text must actually say what you claim");
     expect(system).toContain("Same " + "topic is not support");
     expect(system).toContain("Do not add a `Sources` section to a chat answer on your own");
-  });
-
-  it("allows a source list inside a created note without replacing inline citations", () => {
-    const system = systemText({ availableTools: [WEB_SEARCH_TOOL, CREATE_NOTE_TOOL] });
     expect(system).toContain("A created note may carry a source list");
     expect(system).toContain("never replaces inline citations");
   });
@@ -254,14 +227,6 @@ describe("intent gating of workflow modules", () => {
   ])("reads %s as an explicit compile request", (question) => {
     const system = systemText({ availableTools: knowledgeTools, question });
     expect(system).toContain("Compiling corpus knowledge into notes");
-  });
-
-  it("includes compile-knowledge only on an explicit compile request", () => {
-    const system = systemText({
-      availableTools: knowledgeTools,
-      question: "Compile what the library says about transformers into folder Notes/X/",
-    });
-    expect(system).toContain("Compiling corpus knowledge into notes");
     expect(system).toContain("[[wikilinks]]");
   });
 
@@ -301,14 +266,6 @@ describe("intent gating of workflow modules", () => {
     const notAsked = systemText({ availableTools: tools, question: "What is a transformer?" });
     expect(notAsked).toContain("## Downloading documents");
     expect(notAsked).not.toContain("Real side effect");
-  });
-
-  it("routes a non-English request through the same intent classifier", () => {
-    const system = systemText({
-      availableTools: knowledgeTools,
-      question: "Скомпилируй базу знаний по трансформерам в папку Notes/X/",
-    });
-    expect(system).toContain("Compiling corpus knowledge into notes");
   });
 });
 
@@ -373,6 +330,7 @@ describe("capability gating", () => {
     expect(withMutation).not.toContain("retry create_note with overwrite:true");
 
     const without = systemText({ availableTools: [INDEX_SEARCH_TOOL] });
+    expect(without).not.toContain("Note mutation rules");
     expect(without).not.toContain(CREATE_NOTE_TOOL);
     expect(without).not.toContain(DELETE_NOTE_TOOL);
   });
@@ -454,15 +412,5 @@ describe("vault profile", () => {
     expect(system).toContain("This profile exposes no evidence sources");
     expect(system).toContain("Web is OFF");
     expect(system).toContain("Local index is OFF");
-  });
-
-  it("keeps mutation rules out of a read-only vault profile", () => {
-    const system = systemText({
-      question: "Summarise my notes on caffeine",
-      availableTools: [SEARCH_NOTES_TOOL, LIST_NOTES_TOOL, READ_NOTE_TOOL, GET_ACTIVE_NOTE_TOOL],
-    });
-
-    expect(system).toContain("search_notes and list_notes return navigation metadata only");
-    expect(system).not.toContain("Note mutation rules");
   });
 });

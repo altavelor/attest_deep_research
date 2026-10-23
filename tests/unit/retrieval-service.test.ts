@@ -1,4 +1,5 @@
 import { formatCitation } from "@core/retrieval";
+import { settle } from "../support/async";
 import { formatCitationLink } from "@application/use-cases/research";
 import { rankKeywordMatches } from "@adapters/retrieval";
 import { RetrievalService } from "@adapters/retrieval";
@@ -8,12 +9,12 @@ import {
   pdfSource,
   retrieved,
   webSource,
-} from "../helpers/factories";
+} from "../support/factories";
 import {
   FailingEmbeddingProvider,
   FakeEmbeddingProvider,
   FakeIndexStore,
-} from "../helpers/retrievalFakes";
+} from "../support/retrievalFakes";
 import { EmbeddingProviderClient } from "@core/agent";
 import { IndexStore } from "@application/ports";
 import { RetrievedChunk } from "@core/model";
@@ -124,6 +125,7 @@ describe("RetrievalService", () => {
       usedFallback: true,
       semanticError: "embedding unavailable",
     });
+    expect(indexStore.keywordQueries).toEqual(["local retrieval"]);
   });
 
   it("omits web fallback chunks when web results are disabled", async () => {
@@ -164,23 +166,6 @@ describe("RetrievalService", () => {
     });
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["md"]);
-  });
-
-  it("uses store-backed keyword search", async () => {
-    const indexStore = new FakeIndexStore([]);
-    indexStore.keywordResults = [
-      retrieved("store-keyword", markdownSource("Research/store.md"), "local keyword", 2),
-    ];
-    const service = makeRetrievalService({
-      embeddings: new FailingEmbeddingProvider(),
-      indexStore,
-      embeddingModel: "nomic",
-    });
-
-    const result = await service.search("local", { limit: 5, includeWebResults: false });
-
-    expect(result.chunks.map((chunk) => chunk.id)).toEqual(["store-keyword"]);
-    expect(indexStore.keywordQueries).toEqual(["local"]);
   });
 
   it("fuses semantic and keyword candidates before applying the final limit", async () => {
@@ -419,26 +404,6 @@ describe("RetrievalService", () => {
     });
 
     expect(result.chunks.map((chunk) => chunk.id)).toEqual(["a"]);
-  });
-
-  it("ranks a boosted chunk ahead of the results it was retrieved behind", async () => {
-    const service = makeRetrievalService({
-      embeddings: new FakeEmbeddingProvider([[1, 0]]),
-      indexStore: new FakeIndexStore(boostRankingChunks()),
-      embeddingModel: "nomic",
-    });
-
-    const result = await service.search("x", {
-      limit: 8,
-      includeWebResults: false,
-      boostedSourcePaths: ["Linked/near.md", "Linked/far.md"],
-    });
-
-    expect(result.chunks.map((chunk) => chunk.id).slice(0, 3)).toEqual([
-      "linked-near",
-      "top",
-      "filler-2",
-    ]);
   });
 
   it("lets a distant boosted chunk in only behind the stronger results", async () => {
@@ -741,7 +706,7 @@ describe("RetrievalService query variants", () => {
 
     override async query(embedding: number[], _limit: number): Promise<RetrievedChunk[]> {
       const key = embedding[0]!;
-      await new Promise((resolve) => setTimeout(resolve, (4 - key) * 5));
+      await settle((4 - key) * 5);
       return this.chunksByEmbedding.get(key) ?? [];
     }
   }
@@ -862,7 +827,7 @@ describe("rankKeywordMatches", () => {
         retrieved("two", markdownSource("two.md"), "local", 0.9),
         retrieved("none", markdownSource("none.md"), "unrelated", 99),
       ],
-      2,
+      3,
     );
 
     expect(ranked.map((chunk) => [chunk.id, chunk.score])).toEqual([
@@ -874,9 +839,9 @@ describe("rankKeywordMatches", () => {
 
 describe("citations", () => {
   it("formats markdown, pdf, document, and web citation links", () => {
-    expect(formatCitation(markdownSource("Research/ai.md", ["Models"], "block-1"))).toMatchObject({
-      label: "Research/ai.md > Models",
-    });
+    expect(
+      formatCitation(markdownSource("Research/ai.md", ["Models", "Local"], "block-1")),
+    ).toMatchObject({ label: "Research/ai.md > Models > Local" });
     expect(formatCitationLink(markdownSource("Research/ai.md", ["Models"], "block-1"))).toBe(
       "[Research/ai.md > Models](Research/ai.md#^block-1)",
     );

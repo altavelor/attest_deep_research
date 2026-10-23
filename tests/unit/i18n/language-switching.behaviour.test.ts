@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { App, TFile, View, WorkspaceLeaf } from "../../stubs/obsidian";
+import { App, TFile, View, WorkspaceLeaf } from "../../support/obsidian";
 import type {
   App as ObsidianApp,
   TFile as ObsidianTFile,
@@ -15,9 +15,9 @@ import {
 } from "@apps/obsidian/ui/chat/AttestChatView";
 import { createTranslator } from "@adapters/i18n";
 import type { UiTranslator } from "@adapters/i18n";
-import { installObsidianDomHelpers, resetDom } from "../../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { ContextDocumentPickerModal } from "@apps/obsidian/ui/chat/context/ContextDocumentPickerModal";
-import { createTestSessionManager } from "../../helpers/chatSessions";
+import { createTestSessionManager } from "../../support/chatSessions";
 
 const PROBE_KEY = "chat.composer.placeholder";
 

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, takeNotices } from "../stubs/obsidian";
+import { App, takeNotices } from "../support/obsidian";
 
 import { createTranslator } from "@adapters/i18n";
 import type {
@@ -16,7 +16,8 @@ import {
   resetDom,
   restoreDomTimers,
   useDomFakeTimers,
-} from "../helpers/domHarness";
+} from "../support/domHarness";
+import { eventually } from "../support/async";
 
 const t = createTranslator("en").t;
 
@@ -131,12 +132,12 @@ describe("ModelProfileModal", () => {
     );
     expect(option?.textContent).toBe("chat-model");
     option!.click();
-    await vi.waitFor(() => expect(inputFor(modal.contentEl, "Context size").value).toBe("32000"));
+    await eventually(() => expect(inputFor(modal.contentEl, "Context size").value).toBe("32000"));
 
     const buttons = Array.from(modal.contentEl.querySelectorAll<HTMLButtonElement>("button"));
     buttons.find((button) => button.textContent === "Save")!.click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Primary chat",
@@ -244,7 +245,7 @@ describe("ModelProfileModal", () => {
       .find((button) => button.textContent === "Save")!
       .click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         toolsEnabled: true,
@@ -374,7 +375,7 @@ describe("ModelProfileModal", () => {
       .find((button) => button.textContent === "Save")!
       .click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.lastCall?.[0].capabilities?.toolCalling?.formatDefault).toEqual({
       calls: true,
       choiceRequired: true,
@@ -553,7 +554,7 @@ describe("ModelProfileModal", () => {
       .find((button) => button.textContent === "Save")!
       .click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Embedding",
@@ -671,7 +672,7 @@ describe("ModelProfileModal", () => {
       .find((button) => button.textContent === "Save")!
       .click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         id: profile.id,
@@ -855,7 +856,7 @@ describe("ModelProfileModal", () => {
       .find((button) => button.textContent === "Save")!
       .click();
 
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "legacy-chat",

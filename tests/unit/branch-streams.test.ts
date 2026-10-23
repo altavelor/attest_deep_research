@@ -54,10 +54,10 @@ describe("ResearchBranchStream", () => {
       })(),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     branch.close();
     release!();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(cleanedUp).toBe(true);
   });
@@ -78,10 +78,10 @@ describe("ResearchBranchStream", () => {
     );
     const kept = stream.run(statusThen(["vault"], "vault-result"));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     abandoned.close();
     release!();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
 
     const events: ResearchStreamEvent[] = [];
     const generator = stream.until(kept);
@@ -105,7 +105,7 @@ describe("ResearchBranchStream", () => {
       })(),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     branch.close();
 
     const generator = stream.until(branch);
@@ -122,7 +122,7 @@ describe("ResearchBranchStream", () => {
     const branch = stream.run(statusThen([], "done", () => (cleanupCount += 1)));
 
     await branch.result;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     branch.close();
 
     expect(cleanupCount).toBe(1);
@@ -137,7 +137,7 @@ describe("ResearchBranchStream", () => {
       })(),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(branch.status()).toBe("rejected");
   });

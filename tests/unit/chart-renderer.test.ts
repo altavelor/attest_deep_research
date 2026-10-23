@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTranslator } from "@adapters/i18n";
 import type { ChartArtifact } from "@core/media";
 import { renderChartArtifact } from "@apps/obsidian/ui/chat/artifacts/chartRenderer";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

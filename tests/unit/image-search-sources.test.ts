@@ -411,8 +411,8 @@ describe("untrusted image provider responses", () => {
     );
   }
 
-  for (const status of [429, 500, 503]) {
-    it(`reports HTTP ${status} as a failure instead of an empty result set`, async () => {
+  it("reports HTTP 429 and 5xx as a failure instead of an empty result set", async () => {
+    for (const status of [429, 503]) {
       const commonsFetch = vi.fn().mockResolvedValue(errorResponse(status));
       await expect(
         commonsSource(commonsFetch as unknown as typeof fetch).searchImages("cats"),
@@ -428,8 +428,8 @@ describe("untrusted image provider responses", () => {
         code: "WEB_SEARCH_FAILED",
         message: expect.stringContaining(String(status)),
       });
-    });
-  }
+    }
+  });
 
   it("reports a truncated Openverse body as malformed rather than parsing a partial payload", async () => {
     const truncated = JSON.stringify(openverseBody).slice(0, 120);

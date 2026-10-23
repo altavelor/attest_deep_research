@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { ModelProfilesSection } from "@apps/obsidian/ui/settings/ModelProfilesSection";
 import { createTranslator } from "@adapters/i18n";
-import { createContainer, installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

@@ -10,13 +10,25 @@ export default defineConfig({
       "@apps": resolve("src/apps"),
       "@shared": resolve("src/shared"),
       "@manifest": resolve("manifest.json"),
-      obsidian: resolve("tests/stubs/obsidian/index.ts"),
+      obsidian: resolve("tests/support/obsidian/index.ts"),
     },
   },
   test: {
     environment: "node",
     globals: true,
-    include: ["tests/**/*.test.ts"],
+    setupFiles: ["tests/support/timeLimits.ts"],
+    pool: "forks",
+    hookTimeout: 2000,
+    projects: [
+      {
+        extends: true,
+        test: { name: "unit", include: ["tests/unit/**/*.test.ts"], testTimeout: 1000 },
+      },
+      {
+        extends: true,
+        test: { name: "scenario", include: ["tests/scenario/**/*.test.ts"], testTimeout: 5000 },
+      },
+    ],
     coverage: {
       provider: "v8",
       all: true,

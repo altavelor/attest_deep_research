@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { App } from "../stubs/obsidian";
+import { App } from "../support/obsidian";
 
 import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_INDEX_PROFILE } from "@adapters/settings";
 import { IndexReportModal } from "@apps/obsidian/ui/settings/IndexReportModal";
 import type { App as ObsidianApp } from "obsidian";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

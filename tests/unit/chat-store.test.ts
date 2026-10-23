@@ -1,7 +1,7 @@
 import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileChatRepository";
 import { inferChatTitle } from "@core/chat/savedChat";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 const CHAT_SETTINGS = {
   chatModelProfileId: "chat-model",

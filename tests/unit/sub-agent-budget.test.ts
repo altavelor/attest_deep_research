@@ -8,7 +8,7 @@ import type { ToolContext } from "@core/agent";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { FakeChatModel, FakeSearchProvider } from "../helpers/researchFakes";
+import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
 
 function webChunk(index: number): RetrievedChunk {
   const url = `https://example${index}.com/page`;

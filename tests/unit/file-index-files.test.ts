@@ -6,7 +6,7 @@ import {
   readFirstJsonlIndexRows,
 } from "@adapters/indexing";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("file index files", () => {
   const folder = ".attest/index";

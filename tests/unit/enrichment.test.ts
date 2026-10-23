@@ -14,7 +14,8 @@ import {
   parseExtractedMetadata,
 } from "@adapters/indexing";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { settle } from "../support/async";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("bibliography normalization", () => {
   it("extracts DOI, year, and a title key from a raw reference", () => {
@@ -216,7 +217,7 @@ describe("EnrichIndexSources summaries (Ф4)", () => {
           }
           active.push(name);
           maxActive = Math.max(maxActive, active.length);
-          await wait(5);
+          await settle(5);
           active.splice(active.indexOf(name), 1);
           return `Summary of ${name}`;
         },
@@ -675,8 +676,4 @@ function mutableOutlineRetriever(
       };
     },
   };
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

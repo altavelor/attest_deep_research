@@ -367,22 +367,13 @@ describe("createWebSearchSources", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("count=12");
   });
 
-  it("builds sources only for active, fully configured profiles", () => {
+  it("builds sources only for active, fully configured profiles with their activation", () => {
     const sources = createWebSearchSources([
       profile({}),
       profile({ sourceId: "tavily", activation: "off" }),
       profile({ sourceId: "serper", credentials: {} }),
-      profile({ sourceId: "wikipedia", credentials: {} }),
-      profile({ sourceId: "unknown-source" }),
-    ]);
-
-    expect(sources.map((source) => source.descriptor.id).sort()).toEqual(["brave", "wikipedia"]);
-  });
-
-  it("carries each profile's activation onto the built source", () => {
-    const sources = createWebSearchSources([
-      profile({}),
       profile({ sourceId: "wikipedia", activation: "always", credentials: {} }),
+      profile({ sourceId: "unknown-source" }),
     ]);
 
     expect(sources.map((source) => [source.descriptor.id, source.activation])).toEqual([
@@ -457,20 +448,17 @@ describe("default web sources", () => {
     expect(settings.webSources).toEqual([]);
   });
 
-  it("hands out independent copies so saved credentials never leak into the defaults", () => {
+  it("hands out copies isolated from both the defaults and the caller's saved objects", () => {
     const first = readSettings(undefined);
     first.webSources[0]!.credentials.apiKey = "leaked";
 
     expect(DEFAULT_SETTINGS.webSources[0]!.credentials).toEqual({});
     expect(readSettings(undefined).webSources[0]!.credentials).toEqual({});
-  });
 
-  it("reads saved web sources without mutating the caller's own objects", () => {
     const saved = {
       ...DEFAULT_SETTINGS,
       webSources: [{ sourceId: "brave", enabled: true, credentials: { apiKey: "k" } }],
     };
-
     const settings = readSettings(saved);
     settings.webSources[0]!.credentials.apiKey = "rotated";
 

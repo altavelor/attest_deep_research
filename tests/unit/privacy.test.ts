@@ -1,7 +1,5 @@
-import { readdirSync, readFileSync } from "fs";
 import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
-import { join } from "path";
 
 import { ResearchService } from "@application/use-cases/research";
 import {
@@ -10,20 +8,11 @@ import {
   INDEX_FOLDER_DESCRIPTION,
   WEB_SOURCES_DESCRIPTION,
 } from "@adapters/settings";
-import { collectAsync } from "../helpers/async";
-import { citation, markdownSource, retrieved } from "../helpers/factories";
-import { FakeChatModel, FakeRetriever, RecordingSearchProvider } from "../helpers/researchFakes";
+import { collectAsync } from "../support/async";
+import { citation, markdownSource, retrieved } from "../support/factories";
+import { FakeChatModel, FakeRetriever, RecordingSearchProvider } from "../support/researchFakes";
 
 describe("privacy boundaries", () => {
-  it("does not log source content or generated answers from production code by default", () => {
-    const allowedLogger = join(process.cwd(), "src/adapters/settings/debugLogger.ts");
-    const files = sourceFiles(join(process.cwd(), "src")).filter((file) => file !== allowedLogger);
-    const consoleCallPattern = /\bconsole\.(?:debug|info|log|warn|error)\s*\(/;
-    const offenders = files.filter((file) => consoleCallPattern.test(readFileSync(file, "utf8")));
-
-    expect(offenders).toEqual([]);
-  });
-
   it("sends only the typed question to web search, never retrieved vault content", async () => {
     const privateVaultText = "Private vault paragraph about Project Cardinal";
     const searchProvider = new RecordingSearchProvider();
@@ -84,15 +73,3 @@ describe("privacy boundaries", () => {
     expect(WEB_SOURCES_DESCRIPTION).toContain("never retrieved vault content");
   });
 });
-
-function sourceFiles(folder: string): string[] {
-  return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(folder, entry.name);
-
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-
-    return entry.isFile() && path.endsWith(".ts") ? [path] : [];
-  });
-}

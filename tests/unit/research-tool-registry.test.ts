@@ -1,20 +1,11 @@
 import { MarkdownExtractor } from "@adapters/extractors";
-import { ContextFileProvider } from "@application/ports";
 import { IndexResearchTool } from "@adapters/research-tools/index/IndexResearchTool";
 import { NoteToolService } from "@adapters/research-tools/note/NoteTools";
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ToolManager } from "@application/tools/ToolManager";
 import { NOTE_PERMISSIONS, createNoteTools } from "@adapters/research-tools/note/createNoteTools";
 import { ResearchRetriever } from "@application/contracts";
-
-class MemoryFiles implements ContextFileProvider {
-  async listPaths(): Promise<string[]> {
-    return ["Notes/One.md"];
-  }
-  async readFile(): Promise<string> {
-    return "# One\n\nNote content";
-  }
-}
+import { MemoryContextFiles } from "../support/noteFakes";
 
 describe("ToolManager", () => {
   it("refuses a tool whose permission is not granted, without invoking the service", async () => {
@@ -77,7 +68,7 @@ describe("ToolManager", () => {
 
   it("delegates a permitted note tool to the service and adapts its payload", async () => {
     const notes = new NoteToolService({
-      files: new MemoryFiles(),
+      files: new MemoryContextFiles({ "Notes/One.md": "# One\n\nNote content" }),
       extractors: [new MarkdownExtractor()],
     });
     const registry = new ToolManager(createNoteTools(notes), new Set([NOTE_PERMISSIONS.read]));

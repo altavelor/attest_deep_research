@@ -61,40 +61,30 @@ describe("core runAgentLoop", () => {
     expect(events).toEqual(["vault_search"]);
   });
 
-  it("throws on a length/error stop reason", async () => {
-    await expect(
-      runAgentLoop({
-        modelRound: provider([{ items: [], stopReason: "error" }]),
+  it("reports a length or error stop reason through an AttestError and disposes the continuation", async () => {
+    for (const stopReason of ["length", "error"] as const) {
+      const dispose = vi.fn();
+      const error = await runAgentLoop({
+        modelRound: provider([
+          {
+            items: [],
+            stopReason,
+            continuation: { provider: "openai-compatible", dispose },
+          },
+        ]),
         model: "m",
         messages: [],
         tools: [],
         executeTool: async () => ({ ok: true, result: "{}" }),
-      }),
-    ).rejects.toThrow();
-  });
+      }).catch((thrown: unknown) => thrown);
 
-  it("reports the stop reason through an AttestError and disposes the continuation", async () => {
-    const dispose = vi.fn();
-    const error = await runAgentLoop({
-      modelRound: provider([
-        {
-          items: [],
-          stopReason: "length",
-          continuation: { provider: "openai-compatible", dispose },
-        },
-      ]),
-      model: "m",
-      messages: [],
-      tools: [],
-      executeTool: async () => ({ ok: true, result: "{}" }),
-    }).catch((thrown: unknown) => thrown);
-
-    expect(isAttestError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: "MODEL_PROVIDER_UNAVAILABLE",
-      details: { reason: "model-round-length" },
-    });
-    expect(dispose).toHaveBeenCalledTimes(1);
+      expect(isAttestError(error)).toBe(true);
+      expect(error).toMatchObject({
+        code: "MODEL_PROVIDER_UNAVAILABLE",
+        details: { reason: `model-round-${stopReason}` },
+      });
+      expect(dispose).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("executes only the calls within maxToolCallsPerRound and skips the rest", async () => {

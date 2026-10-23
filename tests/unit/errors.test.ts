@@ -41,19 +41,6 @@ describe("Attest errors", () => {
     expect(toUserMessage(error)).toBe("fetch failed");
   });
 
-  it("shows the provider error when an embedding request fails", () => {
-    const error = new AttestError({
-      code: "EMBEDDING_UNAVAILABLE",
-      message: "Provider returned HTTP 402.",
-      details: {
-        status: 402,
-        providerMessage: "Insufficient credits.",
-      },
-    });
-
-    expect(toUserMessage(error)).toBe("Provider returned HTTP 402: Insufficient credits.");
-  });
-
   it("keeps a transport failure distinguishable from a provider rejection", () => {
     const error = new AttestError({
       code: "EMBEDDING_UNAVAILABLE",
@@ -80,24 +67,20 @@ describe("Attest errors", () => {
     expect(toUserMessage(error)).toBe("Attest could not read this file.");
   });
 
-  it("exposes actionable capability validation messages", () => {
-    const error = new AttestError({
+  it("exposes actionable capability and settings validation messages", () => {
+    const capability = new AttestError({
       code: "UNSUPPORTED_CAPABILITY",
       message: "Responses capability detection has not completed for this model profile.",
     });
-
-    expect(toUserMessage(error)).toBe(
-      "Responses capability detection has not completed for this model profile.",
-    );
-  });
-
-  it("exposes actionable settings messages", () => {
-    const error = new AttestError({
+    const settings = new AttestError({
       code: "INVALID_SETTINGS",
       message: "Index this profile before using it in chat or search.",
     });
 
-    expect(toUserMessage(error)).toBe("Index this profile before using it in chat or search.");
+    expect(toUserMessage(capability)).toBe(
+      "Responses capability detection has not completed for this model profile.",
+    );
+    expect(toUserMessage(settings)).toBe("Index this profile before using it in chat or search.");
   });
 
   it("classifies unknown errors without throwing", () => {

@@ -1,7 +1,7 @@
 import { CheckUrlsTool, ListIndexUrlsTool } from "@adapters/research-tools/index/IndexUrlTools";
 import { executeTool } from "@core/agent";
 import type { ResearchRetriever, UrlStatusChecker } from "@application/contracts";
-import { markdownSource } from "../helpers/factories";
+import { markdownSource } from "../support/factories";
 
 describe("index URL tools", () => {
   it("lists indexed URLs with pagination inputs clamped to the tool maximum", async () => {

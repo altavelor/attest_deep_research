@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App, TFile } from "../stubs/obsidian";
+import { App, TFile } from "../support/obsidian";
 
 import { createTranslator } from "@adapters/i18n";
 import { ContextDocumentPickerModal } from "@apps/obsidian/ui/chat/context/ContextDocumentPickerModal";
 import type { App as ObsidianApp } from "obsidian";
 import type { TFile as ObsidianTFile } from "obsidian";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FileVectorIndexReader } from "@adapters/indexing";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 function reader(rows: Array<Record<string, unknown>>) {
   const state = {

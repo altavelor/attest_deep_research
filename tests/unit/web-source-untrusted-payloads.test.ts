@@ -71,8 +71,8 @@ function sourceFor(id: string, fetchMock: typeof fetch): HttpWebSearchSource {
 }
 
 describe("web search requests with absent configuration", () => {
-  for (const id of Object.keys(SHAPES)) {
-    it(`${id}: builds a request for every recency window without credentials`, () => {
+  it("builds a request for every provider and recency window without credentials", () => {
+    for (const id of Object.keys(SHAPES)) {
       const definition = WEB_SOURCE_DEFINITIONS.find((entry) => entry.descriptor.id === id)!;
 
       for (const recency of [undefined, "day", "week", "month"] as const) {
@@ -83,55 +83,57 @@ describe("web search requests with absent configuration", () => {
           ...(recency ? { recency } : {}),
         });
 
-        expect(JSON.stringify(request)).not.toContain("undefined");
-        expect(`${request.url}${request.body ?? ""}`).toContain("obsidian");
+        expect(JSON.stringify(request), id).not.toContain("undefined");
+        expect(`${request.url}${request.body ?? ""}`, id).toContain("obsidian");
       }
-    });
-  }
+    }
+  });
 });
 
 describe("untrusted web search payloads", () => {
+  it("maps HTTP 429 and 5xx to a failure with the reason and status", async () => {
+    for (const [status, reason] of [
+      [429, "rate-limited"],
+      [500, "http"],
+      [503, "http"],
+    ] as const) {
+      const fetchMock = vi.fn().mockResolvedValue(response("{}", status));
+      await expect(
+        sourceFor("brave", fetchMock as unknown as typeof fetch).search("obsidian plugins"),
+      ).rejects.toMatchObject({
+        code: "WEB_SEARCH_FAILED",
+        details: { sourceId: "brave", reason, status },
+      });
+    }
+  });
+
+  it("rejects a truncated body from every provider as bad-response", async () => {
+    for (const [id, shape] of Object.entries(SHAPES)) {
+      const truncated = JSON.stringify(shape.wrap([shape.complete])).slice(0, -6);
+      const fetchMock = vi.fn().mockResolvedValue(response(truncated));
+
+      await expect(
+        sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
+        id,
+      ).rejects.toMatchObject({ details: { sourceId: id, reason: "bad-response" } });
+    }
+  });
+
   for (const [id, shape] of Object.entries(SHAPES)) {
     describe(id, () => {
-      it("maps HTTP 429 and 5xx to a failure with the reason and status", async () => {
-        for (const [status, reason] of [
-          [429, "rate-limited"],
-          [500, "http"],
-          [503, "http"],
-        ] as const) {
-          const fetchMock = vi.fn().mockResolvedValue(response("{}", status));
-          await expect(
-            sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
-          ).rejects.toMatchObject({
-            code: "WEB_SEARCH_FAILED",
-            details: { sourceId: id, reason, status },
-          });
-        }
-      });
-
-      it("rejects a truncated body as bad-response instead of parsing a partial payload", async () => {
-        const truncated = JSON.stringify(shape.wrap([shape.complete])).slice(0, -6);
-        const fetchMock = vi.fn().mockResolvedValue(response(truncated));
-
-        await expect(
-          sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
-        ).rejects.toMatchObject({ details: { sourceId: id, reason: "bad-response" } });
-      });
-
-      it("returns no results for JSON of the wrong shape", async () => {
-        for (const body of ["null", '"a string"', "[1,2,3]", JSON.stringify(shape.wrap({}))]) {
+      it("returns no results for JSON of the wrong shape or an empty result array", async () => {
+        for (const body of [
+          "null",
+          '"a string"',
+          "[1,2,3]",
+          JSON.stringify(shape.wrap({})),
+          JSON.stringify(shape.wrap([])),
+        ]) {
           const fetchMock = vi.fn().mockResolvedValue(response(body));
           await expect(
             sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
           ).resolves.toEqual([]);
         }
-      });
-
-      it("returns no results for an empty result array", async () => {
-        const fetchMock = vi.fn().mockResolvedValue(response(JSON.stringify(shape.wrap([]))));
-        await expect(
-          sourceFor(id, fetchMock as unknown as typeof fetch).search("obsidian plugins"),
-        ).resolves.toEqual([]);
       });
 
       it("drops entries missing a required field and keeps the valid ones", async () => {

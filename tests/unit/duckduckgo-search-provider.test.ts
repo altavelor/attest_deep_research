@@ -1,5 +1,6 @@
 import { DuckDuckGoSearchProvider } from "@adapters/web";
 import { WebPageFetcher } from "@adapters/web/WebPageFetcher";
+import { settle } from "../support/async";
 
 function htmlResponse(body: string, init?: ResponseInit): Response {
   return new Response(body, {
@@ -519,7 +520,7 @@ describe("DuckDuckGoSearchProvider result page throttling", () => {
       inFlight.push(url);
       pending += 1;
       peakConcurrentPages = Math.max(peakConcurrentPages, pending);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await settle(5);
       pending -= 1;
       return htmlResponse(
         `<html><body><article><p>Paragraph for ${url} with enough words to extract.</p></article></body></html>`,
@@ -587,29 +588,6 @@ describe("DuckDuckGoSearchProvider result page throttling", () => {
 
     expect(results[0]!.source.wasContentFetched).toBe(true);
     expect(results[0]!.extractedText).toContain("Readable paragraph");
-  });
-
-  it("skips a result page that cannot be fetched", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("https://html.duckduckgo.com/")) {
-        return htmlResponse(`
-          <html><body>
-            <div class="result"><a class="result__a" href="https://a.example.com/">A</a><a class="result__snippet">a</a></div>
-          </body></html>
-        `);
-      }
-      return htmlResponse("nope", { status: 500 });
-    });
-    const provider = new DuckDuckGoSearchProvider({
-      fetch: fetchMock as unknown as typeof fetch,
-      minRequestIntervalMs: 0,
-    });
-
-    const results = await provider.search("local models", { limit: 1, maxFetches: 1 });
-
-    expect(results).toHaveLength(1);
-    expect(results[0]!.source.wasContentFetched).toBe(false);
-    expect(results[0]!.extractedText).toBeUndefined();
   });
 });
 

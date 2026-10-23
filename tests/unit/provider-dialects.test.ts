@@ -2,14 +2,6 @@ import { capabilityFromKinds, resolveProviderDialect } from "@adapters/settings"
 import { SERVER_PRESETS } from "@core/agent";
 
 describe("provider dialect resolution", () => {
-  it("selects a dialect from the configured base URL host", () => {
-    expect(resolveProviderDialect("https://openrouter.ai/api/v1").id).toBe("openrouter");
-    expect(resolveProviderDialect("https://api.deepinfra.com/v1/openai").id).toBe("deepinfra");
-    expect(resolveProviderDialect("https://api.together.xyz/v1").id).toBe("together");
-    expect(resolveProviderDialect("https://api.mistral.ai/v1").id).toBe("mistral");
-    expect(resolveProviderDialect("https://api.groq.com/openai/v1").id).toBe("groq");
-  });
-
   it("keeps every server preset URL on the dialect that provider needs", () => {
     const resolved = Object.fromEntries(
       SERVER_PRESETS.map((preset) => [preset.id, resolveProviderDialect(preset.baseUrl).id]),

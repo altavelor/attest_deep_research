@@ -5,7 +5,7 @@ import { shardIdForSourcePath } from "@adapters/indexing";
 import { EmbeddedChunk, SourceReference } from "@core/model";
 import { AttestError } from "@core/errors";
 
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
+import { MemoryFileSystem } from "../support/memoryFileSystem";
 
 describe("FileVectorIndexStore", () => {
   const folder = ".attest/index";

@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 
 import {
   applyOnboardingResult,
@@ -46,6 +44,8 @@ describe("applyOnboardingResult", () => {
     expect(settings.serverProfiles[0].baseUrl).toBe("https://api.openai.com/v1");
     expect(settings.chatModelProfiles).toHaveLength(1);
     expect(settings.embeddingModelProfiles).toEqual([]);
+    expect(settings.indexProfiles).toEqual([]);
+    expect(settings.newChatDefaults.indexProfileId).toBe("");
     expect(settings.newChatDefaults.searchMode).toBe("webOnly");
     expect(settings.newChatDefaults.chatModelProfileId).toBe(settings.chatModelProfiles[0].id);
     expect(settings.onboardingCompleted).toBe(true);
@@ -246,21 +246,6 @@ describe("onboarding persistence", () => {
       "sentence-transformers/all-mpnet-base-v2-with-a-very-long-suffix",
     );
   });
-  it("leaves a fresh vault with no index profile at all", () => {
-    expect(DEFAULT_SETTINGS.indexProfiles).toEqual([]);
-    expect(readSettings(undefined).indexProfiles).toEqual([]);
-    expect(freshSettings().indexProfiles).toEqual([]);
-  });
-
-  it("creates no index profile on the web-only route", () => {
-    const settings = freshSettings();
-
-    applyOnboardingResult(settings, { scope: "webOnly", chat });
-
-    expect(settings.indexProfiles).toEqual([]);
-    expect(settings.newChatDefaults.indexProfileId).toBe("");
-  });
-
   it("creates no index profile when the vault route is abandoned before the folders step", () => {
     const settings = freshSettings();
 
@@ -268,12 +253,6 @@ describe("onboarding persistence", () => {
 
     expect(settings.indexProfiles).toEqual([]);
     expect(settings.embeddingModelProfiles).toHaveLength(1);
-  });
-  it("builds the first index as a rebuild so it is not left flagged for reindexing", () => {
-    const source = readFileSync(resolve("src/apps/obsidian/main.ts"), "utf8");
-    const wizardStart = source.slice(source.indexOf("onStartIndexing:"));
-
-    expect(wizardStart.slice(0, wizardStart.indexOf("},"))).toContain('mode: "rebuild"');
   });
   it("edits the profiles the first run created instead of adding a second set", () => {
     const settings = freshSettings();

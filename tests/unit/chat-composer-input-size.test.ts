@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createTranslator } from "@adapters/i18n";
 import { renderChatComposer } from "@apps/obsidian/ui/chat/ChatComposer";
-import { installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
 

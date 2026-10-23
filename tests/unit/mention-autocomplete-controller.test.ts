@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMentionAutocomplete } from "@apps/obsidian/ui/chat/mentionAutocompleteController";
-import { createContainer, installObsidianDomHelpers, resetDom } from "../helpers/domHarness";
+import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 describe("mention autocomplete controller", () => {
   beforeEach(installObsidianDomHelpers);

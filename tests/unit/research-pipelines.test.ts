@@ -1,13 +1,12 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { QueryExpansionService } from "@adapters/retrieval";
 import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
 import { VaultResearchPipeline } from "@application/use-cases/research/VaultResearchPipeline";
 import { WebResearchPipeline } from "@application/use-cases/research/WebResearchPipeline";
-import { collectAsync } from "../helpers/async";
-import { citation, fixedNow, markdownSource, retrieved, webSource } from "../helpers/factories";
-import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+import { AttestError } from "@core/errors";
+import { collectAsync } from "../support/async";
+import { citation, fixedNow, markdownSource, retrieved, webSource } from "../support/factories";
+import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
 
 describe("VaultResearchPipeline", () => {
   it("expands vault query variants when language inventory is available", async () => {
@@ -382,6 +381,41 @@ describe("WebResearchPipeline", () => {
   });
 });
 
+describe("AnswerSynthesisService context window", () => {
+  const request = { question: "Why?", evidence: [], citations: [], evidenceLimit: 8 };
+  const synthesizeWithin = (contextLimitTokens: number) =>
+    collectAsync(
+      new AnswerSynthesisService({
+        runToolLoop,
+        chatModel: new FakeChatModel(),
+        chatModelName: "qwen",
+        chatOptions: {},
+        contextLimitTokens,
+        now: fixedNow,
+      }).synthesize(request),
+    );
+  const estimatedTokens = async (): Promise<number> => {
+    const error = await synthesizeWithin(1).catch((caught: AttestError) => caught);
+    return Number((error as AttestError).details?.estimatedTokens);
+  };
+
+  it("refuses a request one token over the context window with its code and message", async () => {
+    const limit = (await estimatedTokens()) - 1;
+
+    await expect(synthesizeWithin(limit)).rejects.toMatchObject({
+      code: "CONTEXT_WINDOW_EXCEEDED",
+      message: "The current chat is too long for the selected model context window.",
+      details: { contextLimitTokens: limit, estimatedTokens: limit + 1 },
+    });
+  });
+
+  it("answers a request that exactly fills the context window", async () => {
+    const events = await synthesizeWithin(await estimatedTokens());
+
+    expect(events.at(-1)).toMatchObject({ type: "complete" });
+  });
+});
+
 describe("AnswerSynthesisService", () => {
   it("appends the partial-results notice so the cacheable system prompt prefix is stable", async () => {
     const chatModel = new FakeChatModel();
@@ -631,7 +665,7 @@ describe("AnswerSynthesisService", () => {
 });
 
 function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 async function completedValue<T>(generator: AsyncGenerator<unknown, T>): Promise<T> {
@@ -643,10 +677,8 @@ async function completedValue<T>(generator: AsyncGenerator<unknown, T>): Promise
 }
 
 function decodedInvalidUtf8Fixture(): string {
-  const encoded = readFileSync(
-    join(__dirname, "..", "fixtures", "web", "russianfood-invalid-utf8.base64"),
-    "utf8",
-  ).trim();
+  const encoded =
+    "0OX25e/y+yDx+/Dt6Oru4iDt4CBSdXNzaWFuRm9vZC5jb206IPLi7vDu4ywg/+n24Cwg7PPq4C4gz+7k8O7h7fvpIPHv7vHu4SDv8Ojj7vLu4uvl7ej/IOgg8e7i5fL7Lg==";
   return new TextDecoder("utf-8").decode(Uint8Array.from(Buffer.from(encoded, "base64")));
 }
 

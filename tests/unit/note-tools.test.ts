@@ -1,31 +1,12 @@
 import { MarkdownExtractor } from "@adapters/extractors";
-import { ContextFileProvider, VaultWriter } from "@application/ports";
+import { VaultWriter } from "@application/ports";
 import {
   AUTO_CONFIRM,
   NoteActionConfirmation,
   NoteToolService,
   validateMutablePath,
 } from "@adapters/research-tools";
-
-class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) {}
-
-  async listPaths(): Promise<string[]> {
-    return Object.keys(this.files).sort();
-  }
-
-  async readFile(path: string): Promise<string> {
-    return this.files[path] ?? "";
-  }
-
-  async getModifiedTime(): Promise<number> {
-    return 0;
-  }
-
-  async getSize(path: string): Promise<number> {
-    return this.files[path]?.length ?? 0;
-  }
-}
+import { MemoryContextFiles } from "../support/noteFakes";
 
 describe("NoteToolService", () => {
   it("reads notes through the context extractor pipeline with truncation metadata", async () => {
@@ -118,23 +99,15 @@ describe("NoteToolService", () => {
 });
 
 describe("validateMutablePath", () => {
-  it("accepts a valid markdown path", () => {
+  it("accepts flat and nested markdown paths", () => {
     expect(validateMutablePath("Notes/Hello.md")).toEqual({ ok: true });
-  });
-
-  it("accepts a nested markdown path", () => {
     expect(validateMutablePath("folder/sub/note.md")).toEqual({ ok: true });
   });
 
-  it("rejects a non-.md path", () => {
-    expect(validateMutablePath("Notes/image.png")).toEqual({
-      ok: false,
-      reason: "invalid-path",
-    });
-  });
-
-  it("rejects an empty path", () => {
-    expect(validateMutablePath("")).toEqual({ ok: false, reason: "invalid-path" });
+  it("rejects an empty or non-markdown path", () => {
+    for (const path of ["", "Notes/image.png"]) {
+      expect(validateMutablePath(path)).toEqual({ ok: false, reason: "invalid-path" });
+    }
   });
 
   it("rejects .attest/ paths", () => {
@@ -144,25 +117,10 @@ describe("validateMutablePath", () => {
     });
   });
 
-  it("rejects path traversal with ..", () => {
-    expect(validateMutablePath("../../secret.md")).toEqual({
-      ok: false,
-      reason: "invalid-path",
-    });
-  });
-
-  it("rejects path with . segment", () => {
-    expect(validateMutablePath("./Notes/foo.md")).toEqual({
-      ok: false,
-      reason: "invalid-path",
-    });
-  });
-
-  it("rejects nested path traversal", () => {
-    expect(validateMutablePath("Notes/../../../etc/passwd.md")).toEqual({
-      ok: false,
-      reason: "invalid-path",
-    });
+  it("rejects . and .. segments anywhere in the path", () => {
+    for (const path of ["../../secret.md", "./Notes/foo.md", "Notes/../../../etc/passwd.md"]) {
+      expect(validateMutablePath(path)).toEqual({ ok: false, reason: "invalid-path" });
+    }
   });
 });
 
@@ -170,13 +128,6 @@ describe("AUTO_CONFIRM", () => {
   it("always resolves to true", async () => {
     const result = await AUTO_CONFIRM.confirm({ action: "create", path: "Notes/a.md" });
     expect(result).toBe(true);
-  });
-});
-
-describe("VaultWriter type contract", () => {
-  it("MemoryVaultWriter satisfies VaultWriter interface at compile time", () => {
-    const writer: VaultWriter = new MemoryVaultWriter();
-    expect(writer).toBeDefined();
   });
 });
 

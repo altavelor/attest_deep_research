@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { takeNotices } from "../stubs/obsidian";
+import { takeNotices } from "../support/obsidian";
 import { ChatHistoryCompactor } from "@apps/obsidian/ui/chat/research/ChatHistoryCompactor";
 import { AttestError } from "@core/errors";
 import type { ChatDisplayMessage } from "@core/conversation";

@@ -1,4 +1,3 @@
-import { ContextFileProvider } from "@application/ports";
 import { ResearchService } from "@application/use-cases/research";
 import { MarkdownExtractor } from "@adapters/extractors";
 import { createResearchToolRegistry, NoteToolService, runToolLoop } from "@adapters/research-tools";
@@ -19,23 +18,12 @@ import {
   pdfSource,
   retrieved,
   webSource,
-} from "../helpers/factories";
-import { collectAsync } from "../helpers/async";
-import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../helpers/researchFakes";
+} from "../support/factories";
+import { collectAsync, settle } from "../support/async";
+import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
 import type { SearchProvider, SearchProviderResult } from "@application/ports/web";
 import { ChatModelProvider } from "@core/agent";
-class MemoryContextFiles implements ContextFileProvider {
-  constructor(private readonly files: Record<string, string>) {}
-
-  async listPaths(): Promise<string[]> {
-    return Object.keys(this.files).sort();
-  }
-
-  async readFile(path: string): Promise<string> {
-    return this.files[path] ?? "";
-  }
-}
-
+import { MemoryContextFiles } from "../support/noteFakes";
 describe("buildResearchPrompt", () => {
   it("includes the claim-sensitive citation policy exactly once in the instant prompt pair", () => {
     const system = buildResearchSystemPrompt();
@@ -1563,7 +1551,7 @@ describe("ResearchService", () => {
   it("survives a web branch that rejects before vault retrieval finishes", async () => {
     const slowRetriever = {
       search: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await settle(10);
         return {
           chunks: [retrieved("local-1", markdownSource("Research/local.md"), "Local model notes")],
           citations: [
@@ -1616,7 +1604,7 @@ describe("ResearchService", () => {
     });
     const failingWebSearch: SearchProvider = {
       search: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await settle(5);
         throw new Error("web search unavailable");
       },
     };
@@ -1648,7 +1636,7 @@ describe("ResearchService", () => {
     );
 
     expect(events.at(-1)).toMatchObject({ type: "complete" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await settle(20);
   });
 
   it("waits for the web branch when the question signals freshness", async () => {
@@ -1659,7 +1647,7 @@ describe("ResearchService", () => {
     });
     const slowWebSearch: SearchProvider = {
       search: async (query) => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await settle(10);
         return [
           {
             source: webSource("https://example.com/latest"),

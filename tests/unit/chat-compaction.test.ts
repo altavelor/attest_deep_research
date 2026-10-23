@@ -8,7 +8,7 @@ import {
   shouldCompactForContext,
   summarizeCompactionWithModel,
 } from "@application/use-cases/chat";
-import { markdownSource, retrieved, webSource } from "../helpers/factories";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import { ChatDisplayMessage } from "@core/conversation";
 
 describe("ChatCompaction", () => {

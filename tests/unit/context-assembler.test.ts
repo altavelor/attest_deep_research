@@ -10,7 +10,7 @@ import { chatHistoryForPrompt, compactChatMessages } from "@application/use-case
 import { GraphContextProvider } from "@core/research";
 import { Extractor } from "@application/ports";
 import { ExtractedChunk } from "@core/model";
-import { markdownSource } from "../helpers/factories";
+import { markdownSource } from "../support/factories";
 
 describe("ContextAssembler", () => {
   it("prioritizes explicit files before the active note", async () => {

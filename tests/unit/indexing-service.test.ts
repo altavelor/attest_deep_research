@@ -12,25 +12,11 @@ import { EmbeddingProviderClient } from "@core/agent";
 import { EmbeddedChunk, ExtractedChunk } from "@core/model";
 import { AttestError } from "@core/errors";
 import { IndexingService, IndexingFileLogEvent, REQUIRED_INDEX_VERSION } from "@adapters/indexing";
-import { VaultFileProvider, VaultFileSummary } from "@application/ports";
+import { VaultFileSummary } from "@application/ports";
 import { hashFileData, shouldIndexFile, updateSnapshot } from "@adapters/indexing";
 import { FileVectorIndexStore } from "@adapters/indexing";
-import { MemoryFileSystem } from "../helpers/memoryFileSystem";
-
-function markdownChunk(id: string, path: string, text = `text ${id}`): ExtractedChunk {
-  return {
-    id,
-    text,
-    contentHash: `chunk-hash-${id}`,
-    source: {
-      id: `source-${id}`,
-      kind: "markdown",
-      path,
-      title: path,
-      headingPath: ["Test"],
-    },
-  };
-}
+import { MemoryFileSystem } from "../support/memoryFileSystem";
+import { FakeExtractor, FakeVaultFileProvider, markdownChunk } from "../support/indexingFakes";
 
 describe("change detection", () => {
   it("skips unchanged files by modification time and detects changed hashes", () => {
@@ -157,9 +143,19 @@ describe("IndexingService", () => {
   it("embeds chunks with source path and heading context while storing clean chunk text", async () => {
     const embeddings = new FakeEmbeddingProvider();
     const indexStore = new FakeIndexStore();
+    const headless: Extractor = {
+      supports: (path) => path.endsWith(".txt"),
+      extract: async ({ path, data }) => {
+        const chunk = markdownChunk(path, path, String(data));
+        return [{ ...chunk, source: { ...chunk.source, headingPath: [] } }];
+      },
+    };
     const service = new IndexingService({
-      files: new FakeVaultFileProvider([file("Research/a.md", 1, "body text")]),
-      extractors: [new FakeExtractor(".md")],
+      files: new FakeVaultFileProvider([
+        file("Research/a.md", 1, "body text"),
+        file("Research/b.txt", 1, "plain text"),
+      ]),
+      extractors: [new FakeExtractor(".md"), headless],
       embeddings,
       indexStore,
       embeddingModel: "nomic",
@@ -169,9 +165,14 @@ describe("IndexingService", () => {
 
     await service.manualReindex();
 
-    expect(embeddings.inputs[0]).toContain("File: Research/a.md");
-    expect(embeddings.inputs[0]).toContain("Heading:");
-    expect(indexStore.upserted[0].text).toBe("body text");
+    expect([...embeddings.inputs].sort()).toEqual([
+      "File: Research/a.md\nHeading: Test\nbody text",
+      "File: Research/b.txt\nplain text",
+    ]);
+    expect(indexStore.upserted.map((chunk) => chunk.text).sort()).toEqual([
+      "body text",
+      "plain text",
+    ]);
   });
 
   it("logs indexing decisions for indexed, skipped, empty, and failed files", async () => {
@@ -485,47 +486,6 @@ function file(
   data: string,
 ): VaultFileSummary & { data: string } {
   return { path, modifiedTime, data };
-}
-
-class FakeVaultFileProvider implements VaultFileProvider {
-  readPaths: string[] = [];
-  private files: Array<VaultFileSummary & { data: string }>;
-
-  constructor(files: Array<VaultFileSummary & { data: string }>) {
-    this.files = files;
-  }
-
-  async listFiles(): Promise<VaultFileSummary[]> {
-    return this.files.map(({ path, modifiedTime, size }) => ({ path, modifiedTime, size }));
-  }
-
-  async readFile(path: string): Promise<ArrayBuffer | string> {
-    this.readPaths.push(path);
-    return this.files.find((file) => file.path === path)?.data ?? "";
-  }
-
-  replace(file: VaultFileSummary & { data: string }): void {
-    this.files = this.files.map((existing) => (existing.path === file.path ? file : existing));
-  }
-}
-
-class FakeExtractor implements Extractor {
-  extractedPaths: string[] = [];
-
-  constructor(private readonly extension: string) {}
-
-  supports(path: string): boolean {
-    return path.endsWith(this.extension);
-  }
-
-  async extract(input: {
-    path: string;
-    data: ArrayBuffer | string;
-    modifiedTime: number;
-  }): Promise<ExtractedChunk[]> {
-    this.extractedPaths.push(input.path);
-    return [markdownChunk(input.path, input.path, String(input.data))];
-  }
 }
 
 class MultiChunkExtractor implements Extractor {

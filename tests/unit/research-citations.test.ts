@@ -136,11 +136,12 @@ describe("normalizeCitationTokens", () => {
     expect([...ids]).toEqual([]);
   });
 
-  it("drops a destination whose url contains nested parentheses", () => {
+  it("drops the link destination of a url handle, even with nested parentheses", () => {
     const wiki = "https://en.wikipedia.org/wiki/Mercury_(planet)";
     const index = new Map<string, string>([[wiki, "web:hash-mercury"]]);
-    const { text } = normalizeCitationTokens(`See [url:${wiki}](${wiki}).`, index);
+    const { text, ids } = normalizeCitationTokens(`See [url:${wiki}](${wiki}).`, index);
     expect(text).toBe("See [web:hash-mercury].");
+    expect([...ids]).toEqual(["web:hash-mercury"]);
   });
 
   it("keeps parenthesised prose that follows a token", () => {
@@ -164,15 +165,6 @@ describe("normalizeCitationTokens", () => {
     );
     expect(text).toBe("See [example.com/pricing](https://example.com/pricing).");
     expect(ids.size).toBe(0);
-  });
-
-  it("drops the markdown destination of a url handle written as a link", () => {
-    const { text, ids } = normalizeCitationTokens(
-      "See [url:https://openai.com/pricing](https://openai.com/pricing).",
-      urlToEvidenceId,
-    );
-    expect(text).toBe("See [web:hash-openai].");
-    expect([...ids]).toEqual(["web:hash-openai"]);
   });
 
   it("leaves no link behind for a cited page without evidence written as a link", () => {
