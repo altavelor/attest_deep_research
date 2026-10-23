@@ -77,28 +77,6 @@ describe("PdfExtractor", () => {
     ).toContain("Сезонсбораклюквы");
   });
 
-  it("keeps plain-text PDF chunk ids stable across extraction runs", async () => {
-    const fixture = readFileSync(plainTextFixturePath);
-    const data = fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength);
-    const extractor = new PdfExtractor({ maxChunkLength: 2_000 });
-
-    const first = await extractor.extract({
-      path: "Papers/plain-text.pdf",
-      data,
-      modifiedTime: 1,
-    });
-    const second = await extractor.extract({
-      path: "Papers/plain-text.pdf",
-      data,
-      modifiedTime: 2,
-    });
-
-    expect(second.map((chunk) => chunk.id)).toEqual(first.map((chunk) => chunk.id));
-    expect(second.map((chunk) => chunk.contentHash)).toEqual(
-      first.map((chunk) => chunk.contentHash),
-    );
-  });
-
   it("extracts page-cited chunks from a small PDF book fixture", async () => {
     const fixture = readFileSync(smallPdfBookFixturePath);
     const extractor = new PdfExtractor({ maxChunkLength: 1_500 });

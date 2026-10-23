@@ -162,26 +162,32 @@ describe("DEFLATE bit order matches the reference implementation", () => {
     expect(Buffer.from(inflateRaw(compressed)).toString("utf8")).toBe(small.toString("utf8"));
   });
 
-  it("round-trips both directions against zlib across many payloads", () => {
-    for (let index = 0; index < 60; index += 1) {
-      const source = new Uint8Array(
-        Buffer.concat([randomCryptoBytes(index * 11), Buffer.from("ab".repeat(index * 3), "utf8")]),
-      );
+  it.each([0, 10, 20, 30, 40, 50])(
+    "round-trips both directions against zlib for payloads %i through the next nine",
+    (start) => {
+      for (let index = start; index < start + 10; index += 1) {
+        const source = new Uint8Array(
+          Buffer.concat([
+            randomCryptoBytes(index * 11),
+            Buffer.from("ab".repeat(index * 3), "utf8"),
+          ]),
+        );
 
-      expect(
-        Buffer.compare(
-          Buffer.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(source))))),
-          Buffer.from(source),
-        ),
-      ).toBe(0);
-      expect(
-        Buffer.compare(
-          Buffer.from(inflateRaw(new Uint8Array(deflateRawSync(Buffer.from(source))))),
-          Buffer.from(source),
-        ),
-      ).toBe(0);
-    }
-  });
+        expect(
+          Buffer.compare(
+            Buffer.from(new Uint8Array(inflateRawSync(Buffer.from(deflateRaw(source))))),
+            Buffer.from(source),
+          ),
+        ).toBe(0);
+        expect(
+          Buffer.compare(
+            Buffer.from(inflateRaw(new Uint8Array(deflateRawSync(Buffer.from(source))))),
+            Buffer.from(source),
+          ),
+        ).toBe(0);
+      }
+    },
+  );
 });
 
 describe("deflateRaw", () => {
@@ -220,18 +226,22 @@ describe("deflateRaw", () => {
     expect(deflateRaw(original).length).toBeLessThan(original.length / 10);
   });
 
-  it("round-trips every byte value and boundary-length input", () => {
-    for (let length = 0; length <= 300; length += 1) {
-      const original = new Uint8Array(length);
-      for (let index = 0; index < length; index += 1) {
-        original[index] = (index * 7) % 256;
-      }
+  it.each([0, 50, 100, 150, 200, 250])(
+    "round-trips byte patterns for lengths starting at %i",
+    (start) => {
+      const end = start === 250 ? 300 : start + 49;
+      for (let length = start; length <= end; length += 1) {
+        const original = new Uint8Array(length);
+        for (let index = 0; index < length; index += 1) {
+          original[index] = (index * 7) % 256;
+        }
 
-      expect(
-        Buffer.compare(Buffer.from(inflateRaw(deflateRaw(original))), Buffer.from(original)),
-      ).toBe(0);
-    }
-  });
+        expect(
+          Buffer.compare(Buffer.from(inflateRaw(deflateRaw(original))), Buffer.from(original)),
+        ).toBe(0);
+      }
+    },
+  );
 });
 
 describe("deflateZlib", () => {
