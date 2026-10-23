@@ -5,16 +5,17 @@ Mobile. Measurements below use the committed lockfile and production minificatio
 
 ## Measurements
 
-| Metric           |    Before | UTF-8 output |            Change |
-| ---------------- | --------: | -----------: | ----------------: |
-| `main.js`, bytes | 3,735,184 |    3,523,719 | -211,465 (-5.66%) |
-| gzip, bytes      | 1,073,985 |    1,065,212 |   -8,773 (-0.82%) |
+| Metric           |    Before | UTF-8 output | Host PDF runtime | Total reduction |
+| ---------------- | --------: | -----------: | ---------------: | --------------: |
+| `main.js`, bytes | 3,735,184 |    3,523,719 |        1,705,628 |          54.34% |
+| gzip, bytes      | 1,073,985 |    1,065,212 |          494,929 |          53.92% |
 
 esbuild defaults to ASCII output, escaping non-ASCII string contents. Setting
 `charset: "utf8"` preserves translated strings directly and reduces the local
 artifact size without changing their values. See [esbuild's charset documentation](https://esbuild.github.io/api/#charset).
 The gzip result is a comparison of compressed artifacts, not a measured download
-or startup time improvement. The bundle budget is now 3,600,000 bytes.
+or startup time improvement. The bundle budget is now 1,750,000 bytes. The final
+artifact also improves on the intermediate UTF-8 build by 51.60%.
 
 ## Largest contributors before optimization
 
@@ -29,12 +30,19 @@ the difference between their sum and the complete artifact.
 | franc-min                             |   173,788 |               4.7% |
 | Anthropic SDK                         |   154,231 |               4.1% |
 
-PDF.js is the largest remaining target. Its dynamic imports are bundled into
-`main.js`: this CommonJS build does not split them into separately downloaded
-chunks. Splitting requires changes to distribution and loading; the supported
-Obsidian release assets are currently `main.js`, `manifest.json`, and `styles.css`.
-Replacing the legacy PDF build also requires checking the oldest supported Mobile
-WebViews. Those changes need compatibility evidence before adoption.
+The plugin now uses Obsidian's public `loadPdfJs()` API instead of bundling a
+second PDF.js runtime and worker. The API is documented in the
+[official Obsidian declarations](https://github.com/obsidianmd/obsidian-api/blob/master/obsidian.d.ts).
+The host loads its PDF engine on demand and owns worker configuration. The adapter
+still copies the input bytes and destroys its document task after success or
+failure. No PDF.js runtime is shipped in `main.js`; `pdfjs-dist` remains a
+development dependency for real PDF fixture tests through the Obsidian stub.
+
+Release assets remain `main.js`, `manifest.json`, and `styles.css`. This reduces
+duplicated plugin code rather than eliminating PDF processing from the application.
+The PDF runtime version follows Obsidian. Tests cover the API seam and fixture
+extraction; a real-device check on the oldest supported Desktop and Mobile versions
+is still needed before release.
 
 ## Reproduce
 

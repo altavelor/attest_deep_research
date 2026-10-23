@@ -39,6 +39,7 @@
     "esbuild": "^0.28.2",
     "happy-dom": "^20.11.2",
     "obsidian": "^1.14.4",
+    "pdfjs-dist": "^6.0.227",
     "prettier": "^3.9.10",
     "tslib": "^2.6.3",
     "typescript": "^7.0.2",
@@ -48,7 +49,6 @@
     "@anthropic-ai/sdk": "^0.117.1",
     "franc-min": "^6.2.0",
     "ollama": "^0.6.3",
-    "openai": "^7.5.0",
-    "pdfjs-dist": "^6.0.227"
+    "openai": "^7.5.0"
   }
 }
