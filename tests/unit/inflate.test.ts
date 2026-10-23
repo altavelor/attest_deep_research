@@ -1,8 +1,8 @@
 import { deflateRawSync, deflateSync, gzipSync, inflateRawSync, inflateSync } from "zlib";
-import { randomBytes as randomCryptoBytes } from "crypto";
 import { describe, expect, it } from "vitest";
 
 import { deflateRaw, deflateZlib, inflateRaw, inflateZlib } from "@shared";
+import { deterministicBytes } from "../support/bytes";
 
 function repetitiveBytes(length: number): Uint8Array {
   const out = new Uint8Array(length);
@@ -25,7 +25,7 @@ describe("inflateRaw", () => {
   });
 
   it("matches zlib for incompressible input, which produces stored blocks", () => {
-    const original = new Uint8Array(randomCryptoBytes(70_000));
+    const original = deterministicBytes(70_000);
     const compressed = new Uint8Array(deflateRawSync(Buffer.from(original), { level: 0 }));
 
     expect(Buffer.compare(Buffer.from(inflateRaw(compressed)), Buffer.from(original))).toBe(0);
@@ -69,7 +69,7 @@ describe("inflateRaw", () => {
 
   it("throws on random garbage rather than looping forever", () => {
     for (let iteration = 0; iteration < 50; iteration += 1) {
-      const garbage = new Uint8Array(randomCryptoBytes(64));
+      const garbage = deterministicBytes(64, iteration + 1);
       try {
         inflateRaw(garbage, { maxOutputLength: 1 << 20 });
       } catch {
@@ -168,7 +168,7 @@ describe("DEFLATE bit order matches the reference implementation", () => {
       for (let index = start; index < start + 10; index += 1) {
         const source = new Uint8Array(
           Buffer.concat([
-            randomCryptoBytes(index * 11),
+            deterministicBytes(index * 11),
             Buffer.from("ab".repeat(index * 3), "utf8"),
           ]),
         );
@@ -200,7 +200,8 @@ describe("deflateRaw", () => {
   });
 
   it("round-trips incompressible data", () => {
-    const original = new Uint8Array(randomCryptoBytes(50_000));
+    const original = deterministicBytes(4_096);
+    expect(deflateRawSync(original).byteLength).toBeGreaterThanOrEqual(original.byteLength);
 
     expect(
       Buffer.compare(
@@ -212,10 +213,13 @@ describe("deflateRaw", () => {
 
   it("round-trips data with long repeats through its own decoder", () => {
     const unit = repetitiveBytes(500);
-    const original = new Uint8Array(100 * unit.length);
+    const marker = new Uint8Array([255, 254, 253]);
+    const original = new Uint8Array(100 * unit.length + 2 * marker.length);
+    original.set(marker);
     for (let index = 0; index < 100; index += 1) {
-      original.set(unit, index * unit.length);
+      original.set(unit, marker.length + index * unit.length);
     }
+    original.set(marker, original.length - marker.length);
 
     expect(Buffer.from(inflateRaw(deflateRaw(original))).equals(Buffer.from(original))).toBe(true);
   });
