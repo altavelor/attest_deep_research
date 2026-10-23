@@ -4,9 +4,9 @@ import { join } from "path";
 import { PdfExtractor, PdfPageTextParser } from "@adapters/extractors";
 import { PdfTextCache } from "@adapters/extractors";
 
-const fixturePath = join(__dirname, "../fixtures/pdf/simple-text.pdf");
-const plainTextFixturePath = join(__dirname, "../fixtures/pdf/plain-text.pdf");
-const smallPdfBookFixturePath = join(__dirname, "../fixtures/pdf/small-pdf-book.pdf");
+const fixturePath = join(__dirname, "../fixtures/pdf/synthetic-pages.pdf");
+const plainTextFixturePath = join(__dirname, "../fixtures/pdf/synthetic-unicode.pdf");
+const syntheticBookFixturePath = join(__dirname, "../fixtures/pdf/synthetic-book.pdf");
 
 describe("PdfExtractor", () => {
   beforeAll(async () => {
@@ -18,7 +18,7 @@ describe("PdfExtractor", () => {
     const fixture = readFileSync(fixturePath);
     const extractor = new PdfExtractor({ maxChunkLength: 120 });
     const chunks = await extractor.extract({
-      path: "Papers/simple-text.pdf",
+      path: "Papers/synthetic-pages.pdf",
       data: fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength),
       modifiedTime: 1,
     });
@@ -27,18 +27,18 @@ describe("PdfExtractor", () => {
     expect(chunks[0]).toMatchObject({
       source: {
         kind: "pdf",
-        path: "Papers/simple-text.pdf",
+        path: "Papers/synthetic-pages.pdf",
         pageNumber: 1,
-        title: "simple-text.pdf p. 1",
+        title: "synthetic-pages.pdf p. 1",
       },
       text: "First page title\nFirst page body.",
     });
     expect(chunks[1]).toMatchObject({
       source: {
         kind: "pdf",
-        path: "Papers/simple-text.pdf",
+        path: "Papers/synthetic-pages.pdf",
         pageNumber: 3,
-        title: "simple-text.pdf p. 3",
+        title: "synthetic-pages.pdf p. 3",
       },
       text: "Second page text.",
     });
@@ -48,7 +48,7 @@ describe("PdfExtractor", () => {
     const fixture = readFileSync(plainTextFixturePath);
     const extractor = new PdfExtractor({ maxChunkLength: 2_000 });
     const chunks = await extractor.extract({
-      path: "Papers/plain-text.pdf",
+      path: "Papers/synthetic-unicode.pdf",
       data: fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength),
       modifiedTime: 1,
     });
@@ -65,9 +65,9 @@ describe("PdfExtractor", () => {
     ).toEqual(new Set([1, 2, 3, 4, 5]));
     expect(chunks[0].source).toMatchObject({
       kind: "pdf",
-      path: "Papers/plain-text.pdf",
+      path: "Papers/synthetic-unicode.pdf",
       pageNumber: 1,
-      title: "plain-text.pdf p. 1",
+      title: "synthetic-unicode.pdf p. 1",
     });
     expect(
       chunks
@@ -77,16 +77,20 @@ describe("PdfExtractor", () => {
     ).toContain("Сезонсбораклюквы");
   });
 
-  it("extracts page-cited chunks from a small PDF book fixture", async () => {
-    const fixture = readFileSync(smallPdfBookFixturePath);
+  it("extracts page-cited chunks from a synthetic multi-page PDF fixture", async () => {
+    const fixture = readFileSync(syntheticBookFixturePath);
     const extractor = new PdfExtractor({ maxChunkLength: 1_500 });
     const chunks = await extractor.extract({
-      path: "Books/small-pdf-book.pdf",
+      path: "Books/synthetic-book.pdf",
       data: fixture.buffer.slice(fixture.byteOffset, fixture.byteOffset + fixture.byteLength),
       modifiedTime: 1,
     });
 
     expect(chunks).toHaveLength(13);
+    expect(chunks[0].text).toBe("Synthetic book cover.");
+    expect(chunks.find((chunk) => chunk.text.startsWith("Synthetic chapter 7."))).toMatchObject({
+      source: { pageNumber: 7 },
+    });
     expect(
       new Set(
         chunks.map((chunk) => {
@@ -97,9 +101,9 @@ describe("PdfExtractor", () => {
     ).toEqual(new Set([1, 2, 3, 4, 5, 6, 7]));
     expect(chunks[0].source).toMatchObject({
       kind: "pdf",
-      path: "Books/small-pdf-book.pdf",
+      path: "Books/synthetic-book.pdf",
       pageNumber: 1,
-      title: "small-pdf-book.pdf p. 1",
+      title: "synthetic-book.pdf p. 1",
     });
     expect(chunks.every((chunk) => chunk.text.length <= 1_500)).toBe(true);
     expect(chunks.every((chunk) => chunk.id.length === 64)).toBe(true);
