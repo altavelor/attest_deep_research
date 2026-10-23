@@ -1,3 +1,4 @@
+import { loadPdfJs } from "obsidian";
 import { AttestError } from "@core/errors";
 import { positiveIntegerOrDefault } from "@shared";
 import { Extractor, ExtractorInput } from "@application/ports";
@@ -170,16 +171,7 @@ export class PdfJsTextParser implements PdfPageTextParser {
   }
 
   async parseDocument(data: ArrayBuffer): Promise<PdfParsedDocument> {
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const pdfWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-    if (typeof window !== "undefined") {
-      const workerWindow = window as typeof window & {
-        pdfjsWorker?: { WorkerMessageHandler: unknown };
-      };
-      workerWindow.pdfjsWorker = {
-        WorkerMessageHandler: pdfWorker.WorkerMessageHandler,
-      };
-    }
+    const pdfjs: typeof import("pdfjs-dist/legacy/build/pdf.mjs") = await loadPdfJs();
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(data).slice(),
       useSystemFonts: true,

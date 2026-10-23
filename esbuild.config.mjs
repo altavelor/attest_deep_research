@@ -27,6 +27,7 @@ const nodeShims = {
 
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
+const analyze = process.argv.includes("--analyze");
 const defaultOutputDir = resolve("dist");
 const pluginOutputDir = process.env.ATTEST_OUTPUT_DIR ?? defaultOutputDir;
 const pluginOutputFile = join(pluginOutputDir, "main.js");
@@ -50,6 +51,7 @@ const context = await esbuild.context({
     js: banner,
   },
   bundle: true,
+  charset: "utf8",
   entryPoints: ["src/apps/obsidian/main.ts"],
   external: [
     "obsidian",
@@ -69,6 +71,7 @@ const context = await esbuild.context({
   format: "cjs",
   logLevel: "info",
   minify: production,
+  metafile: analyze,
   outfile: pluginOutputFile,
   platform: "browser",
   plugins: [
@@ -90,6 +93,9 @@ if (watch) {
   await context.watch();
   console.log(`Watching for changes and writing artifacts to ${pluginOutputDir}...`);
 } else {
-  await context.rebuild();
+  const result = await context.rebuild();
   await context.dispose();
+  if (analyze) {
+    console.log(await esbuild.analyzeMetafile(result.metafile));
+  }
 }

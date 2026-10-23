@@ -4,6 +4,7 @@ export * from "./dom";
 export * from "./menu";
 export * from "./modal";
 export * from "./notice";
+export * from "./pdf";
 export * from "./plugin";
 export * from "./vault";
 export * from "./view";
