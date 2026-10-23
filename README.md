@@ -1,10 +1,13 @@
 # Attest AI Deep Research
 
 [![Release](https://img.shields.io/github/v/release/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
-[![Downloads](https://img.shields.io/github/downloads/altavelor/attest_deep_research/total?style=flat-square)](https://github.com/altavelor/attest_deep_research/releases)
+[![Downloads](https://img.shields.io/github/downloads/altavelor/attest_deep_research/main.js?style=flat-square&displayAssetName=false)](https://github.com/altavelor/attest_deep_research/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/altavelor/attest_deep_research/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/altavelor/attest_deep_research/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/altavelor/attest_deep_research?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/stargazers)
+
+Downloads count `main.js` downloads across releases as an approximation of installations and
+updates; companion files are excluded. This is not a count of unique users or verified installations.
 
 **Cited deep research across your notes and the web.**
 
