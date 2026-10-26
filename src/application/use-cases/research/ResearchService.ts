@@ -331,7 +331,7 @@ export class ResearchService implements ConversationEngine {
       }),
       createRunner: (modelRound) => new SubAgentRunner({ ...this.subAgentRunnerDeps, modelRound }),
       toolContext: (request) =>
-        subAgentToolContext(this.subAgentSources, request.sourcePolicy, web),
+        subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
       now: this.now,
     });
   }

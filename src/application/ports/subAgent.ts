@@ -206,6 +206,7 @@ export interface SubAgentExecutionEvent {
 export interface SubAgentExecutionRequest {
   sessionId: string;
   runId: string;
+  origin?: SubAgentTaskOrigin;
   attempt: number;
   task: string;
   sourcePolicy: SubAgentSourcePolicy;

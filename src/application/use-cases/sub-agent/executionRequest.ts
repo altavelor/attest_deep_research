@@ -38,6 +38,7 @@ export function buildExecutionRequest(
   return {
     sessionId: record.session.subAgentSessionId,
     runId: run.subAgentRunId,
+    origin: run.origin,
     attempt: run.attempt,
     task: run.command,
     sourcePolicy: run.effectiveSourcePolicy,
