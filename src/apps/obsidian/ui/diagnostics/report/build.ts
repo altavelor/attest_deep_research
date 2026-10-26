@@ -1,3 +1,4 @@
+import { withholdSubAgentDiagnostics } from "./subAgentProjection";
 import { ContextDiagnostics } from "@core/diagnostics";
 import {
   buildAnswerSection,
@@ -11,7 +12,8 @@ import { computeFindings } from "./findings";
 import { DiagnosticReportV3 } from "./types";
 import { redactSensitiveData } from "@shared";
 
-export function buildDiagnosticReportV3(diagnostics: ContextDiagnostics): DiagnosticReportV3 {
+export function buildDiagnosticReportV3(saved: ContextDiagnostics): DiagnosticReportV3 {
+  const diagnostics = withholdSubAgentDiagnostics(saved);
   const model = buildModelSection(diagnostics);
   const preflight = buildPreflightSection(diagnostics);
   const request = buildRequestSection(diagnostics);
