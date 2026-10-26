@@ -102,7 +102,7 @@ export const SUB_AGENT_REDACTION_MARKER = "[redacted]";
 export const MAX_PROMPT_SNAPSHOT_CHARS = 64 * 1024;
 export const MAX_TOOL_PAYLOAD_CHARS = 32 * 1024;
 export const MAX_RUN_PAYLOAD_CHARS = 256 * 1024;
-export const MAX_REPLY_EXCERPT_CHARS = 4 * 1024;
+export const MAX_REPLY_EXCERPT_BYTES = 4 * 1024;
 
 const SAFE_CODE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const TOKEN_FIELDS = [
@@ -114,16 +114,33 @@ const TOKEN_FIELDS = [
 ] as const;
 
 /**
- * Cuts already-redacted text to at most max characters. A redaction marker that would be
- * split by the limit is dropped entirely, so the cut never leaves part of a marker.
+ * Cuts already-redacted text to at most max characters, or max UTF-8 bytes without
+ * splitting a code point. A redaction marker that the limit would split is dropped
+ * entirely, so the cut never leaves part of a marker.
  */
-export function capRedactedText(text: string, max: number): { text: string; truncated: boolean } {
-  if (text.length <= max) return { text, truncated: false };
-  let cut = max;
-  const from = Math.max(0, max - SUB_AGENT_REDACTION_MARKER.length + 1);
+export function capRedactedText(
+  text: string,
+  max: number,
+  unit: "chars" | "utf8" = "chars",
+): { text: string; truncated: boolean } {
+  let cut = unit === "chars" ? Math.min(text.length, max) : utf8Cut(text, max);
+  if (cut >= text.length) return { text, truncated: false };
+  const from = Math.max(0, cut - SUB_AGENT_REDACTION_MARKER.length + 1);
   const straddling = text.indexOf(SUB_AGENT_REDACTION_MARKER, from);
-  if (straddling !== -1 && straddling < max) cut = straddling;
+  if (straddling !== -1 && straddling < cut) cut = straddling;
   return { text: text.slice(0, cut), truncated: true };
+}
+
+function utf8Cut(text: string, maxBytes: number): number {
+  let bytes = 0;
+  let index = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0)!;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    if (bytes > maxBytes) return index;
+    index += char.length;
+  }
+  return index;
 }
 
 /** Returns the code when it is a short lowercase safe code, otherwise "unknown". */

@@ -2,7 +2,7 @@ import type { SubAgentMainEventIntent } from "@application/ports/subAgent";
 import {
   capRedactedText,
   findOwnRun,
-  MAX_REPLY_EXCERPT_CHARS,
+  MAX_REPLY_EXCERPT_BYTES,
   safeSubAgentCode,
   subAgentDispatchKey,
   subAgentNoticeKey,
@@ -21,12 +21,12 @@ export type SubAgentTerminalNoticeKind = Extract<
 /**
  * Builds the main-visible dispatch and notice intents of lifecycle transitions. Intents
  * are built synchronously from the transition's state and delivered to the chat sink
- * off-lock; each event key is published at most once, a terminal run gets one notice
- * and a closed parent run or worker command never creates a new entry.
+ * off-lock; each event key is published at most once and a closed parent run or worker
+ * command never creates a new entry. A created session and a command waiting for a slot
+ * are separate events, so one session may get both a created and a queued notice.
  */
 export class SubAgentMainEvents {
   private readonly published = new Set<string>();
-  private readonly terminalRuns = new Set<string>();
 
   constructor(private readonly parts: SubAgentManagerParts) {}
 
@@ -67,19 +67,22 @@ export class SubAgentMainEvents {
   ): void {
     const record = this.parts.store.record(sessionId);
     const run = record ? findOwnRun(record, runId) : undefined;
-    if (!run || run.origin !== "direct" || this.terminalRuns.has(runId)) return;
+    if (!run || run.origin !== "direct") return;
     const reply =
       answerText === undefined
         ? undefined
-        : capRedactedText(this.parts.observation.redact(answerText), MAX_REPLY_EXCERPT_CHARS);
-    const published = this.notice(sessionId, runId, kind, {
+        : capRedactedText(
+            this.parts.observation.redact(answerText),
+            MAX_REPLY_EXCERPT_BYTES,
+            "utf8",
+          );
+    this.notice(sessionId, runId, kind, {
       durationMs: run.usage.durationMs,
       usage: run.usage,
       ...(run.model ? { modelLabel: run.model.label } : {}),
       ...(run.terminalReason !== null ? { reasonCode: safeSubAgentCode(run.terminalReason) } : {}),
       ...(reply ? { replyExcerpt: reply.text, replyTruncated: reply.truncated } : {}),
     });
-    if (published) this.terminalRuns.add(runId);
   }
 
   closed(parentRunId: string, closedCount: number): void {
@@ -125,6 +128,10 @@ export class SubAgentMainEvents {
     });
   }
 
+  clear(): void {
+    this.published.clear();
+  }
+
   private live(parentRunId: string): boolean {
     return !this.parts.fences.disposed && !this.parts.fences.isRevoked(parentRunId);
   }
@@ -133,13 +140,9 @@ export class SubAgentMainEvents {
     const sink = this.parts.context.mainEvents;
     if (!sink || this.published.has(intent.entry.eventKey)) return false;
     this.published.add(intent.entry.eventKey);
-    void Promise.resolve().then(() => {
-      try {
-        sink.publish([intent]);
-      } catch {
-        return;
-      }
-    });
+    void Promise.resolve()
+      .then(() => sink.publish([intent]))
+      .catch(() => undefined);
     return true;
   }
 }

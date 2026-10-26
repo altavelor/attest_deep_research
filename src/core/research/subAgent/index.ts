@@ -104,7 +104,7 @@ export {
   capRedactedText,
   isSubAgentModelSnapshot,
   MAX_PROMPT_SNAPSHOT_CHARS,
-  MAX_REPLY_EXCERPT_CHARS,
+  MAX_REPLY_EXCERPT_BYTES,
   MAX_RUN_PAYLOAD_CHARS,
   MAX_TOOL_PAYLOAD_CHARS,
   mergeSubAgentUsage,
