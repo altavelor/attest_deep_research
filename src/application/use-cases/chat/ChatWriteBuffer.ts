@@ -161,6 +161,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
       }
     }
     this.conflict = null;
+    this.settleWaiters();
     this.plan();
   }
 
@@ -304,7 +305,9 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
       if (code === "unreadable-section") this.sectionBlocked = error as ChatStorageError;
       else this.sectionInvalid = error as ChatStorageError;
       await this.writeChatOnly(chatId, chat);
-    } else if (code !== "chat-missing") {
+    } else if (code === "chat-missing") {
+      this.fenced = true;
+    } else {
       this.retries += 1;
       const delay = Math.min(
         this.limits.saveGapMs * 2 ** (this.retries - 1),

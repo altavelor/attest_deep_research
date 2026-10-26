@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ChatStorageError } from "@application/ports";
+import { ChatStorageError, type SavedChat } from "@application/ports";
 import { ChatWriteBuffer, type ChatWriteBufferLimits } from "@application/use-cases/chat";
 import type { SubAgentBufferedValue } from "@core/research";
 import {
@@ -136,15 +136,60 @@ describe("ChatWriteBuffer durability", () => {
 
   it("flushes a barrier at once without acknowledging a failed save and disposes its timer", async () => {
     const { repository, clock, writer } = setup();
-    repository.failNext(new Error("offline"));
-    const revision = writer.markChatDirty(chatInput());
+    const saved = writer.markChatDirty(chatInput());
+    writer.markDirty("a", 9, sessionDelta("session-1"));
+    repository.failNext(new ChatStorageError("invalid-snapshot", "bad section"));
+    await writer.flushThrough(saved, "barrier");
+    writer.markDirty("a", 10, { op: "delete", entity: "observation", id: "none" });
+    repository.failNext(new Error("offline"), new Error("still offline"));
+    const revision = writer.markChatDirty(chatInput({ title: "Unsaved" }));
 
     await expect(writer.flushThrough(revision, "barrier")).rejects.toThrow("offline");
     expect(clock.pendingTimers()).toBe(1);
 
     await writer.dispose();
     expect(clock.pendingTimers()).toBe(0);
-    expect(repository.commits).toHaveLength(2);
+    expect(repository.commits).toHaveLength(4);
+  });
+
+  it("clears only the revisions a successful save carried", async () => {
+    const { repository, writer } = setup();
+    const release = repository.holdNext();
+    writer.markDirty("a", 1, sessionDelta("session-1"));
+    const first = writer.flushThrough(1, "barrier");
+    writer.markDirty("a", 2, sessionDelta("session-1", { title: "Second" }));
+    release();
+    await first;
+
+    await writer.flushThrough(2, "barrier");
+
+    expect(sessionTitles(repository)).toEqual(["Renamed", "Second"]);
+  });
+
+  it("stops writing after the chat file disappeared", async () => {
+    const { repository, clock, writer, errors } = setup();
+    repository.failNext(new ChatStorageError("chat-missing", "gone"));
+
+    await expect(
+      writer.flushThrough(writer.markChatDirty(chatInput()), "barrier"),
+    ).rejects.toMatchObject({ code: "chat-missing" });
+    await clock.advance(60_000);
+
+    expect([repository.commits.length, errors.length]).toEqual([1, 1]);
+    expect(() => writer.markChatDirty(chatInput())).toThrow(ChatStorageError);
+  });
+
+  it("settles waiters whose writes a reload discarded", async () => {
+    const { repository, clock, writer } = setup();
+    repository.failNext(new ChatStorageError("document-conflict", "changed"));
+    const revision = writer.markChatDirty(chatInput());
+    await clock.advance(500);
+    const waiting = writer.flushThrough(revision, "timer");
+    repository.loaded = { chat: { id: "chat-1" } as SavedChat, base: BASE };
+
+    await writer.resolveConflict("reload");
+
+    await expect(waiting).resolves.toBeUndefined();
   });
 
   it("merges a pending timed batch and its waiters into a recovery marker commit", async () => {
