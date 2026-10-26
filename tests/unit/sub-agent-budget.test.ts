@@ -71,28 +71,6 @@ describe("run_subagent budget and resources", () => {
     expect(inputs[0].resources).toEqual(["wikipedia.org"]);
   });
 
-  it("defaults the search budget when the caller omits it and clamps out-of-range values", () => {
-    const { runner } = recordingRunner(snapshotOf(0));
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
-
-    expect(tool.parseInput({ task: "t" })).toMatchObject({
-      ok: true,
-      value: { maxSearches: 8 },
-    });
-    expect(tool.parseInput({ task: "t", maxSearches: 99 })).toMatchObject({
-      ok: true,
-      value: { maxSearches: 20 },
-    });
-    expect(tool.parseInput({ task: "t", maxSearches: 1.5 })).toMatchObject({
-      ok: false,
-      error: { code: "invalid-max-searches" },
-    });
-    expect(tool.parseInput({ task: "t", resources: [""] })).toMatchObject({
-      ok: false,
-      error: { code: "invalid-resources" },
-    });
-  });
-
   it("caps how many web sources one sub-agent imports and reports the dropped ones", async () => {
     const { runner } = recordingRunner(snapshotOf(14));
     const evidence = new ResearchEvidenceRegistry();

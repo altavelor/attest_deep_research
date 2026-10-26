@@ -12,6 +12,4 @@ export * from "./ResearchExecutionPolicy";
 export * from "./GraphContext";
 export * from "./searchMode";
 export * from "./evidence-planner/EvidencePlanner";
-export * from "./subAgent/subAgentDirective";
-export * from "./subAgent/subAgentFraming";
-export * from "./subAgent/subAgentTelemetrySummary";
+export * from "./subAgent";
