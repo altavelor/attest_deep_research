@@ -52,7 +52,7 @@ export function resultStateOf(
   record: SubAgentSessionRecord,
   run: SubAgentRunSummary,
 ): SubAgentResultState {
-  const resultRevision = run.resultRevision;
+  const resultRevision = run.resultRevision + parts.imports.revisionOffset(run.subAgentRunId);
   if (run.status === "failed" || run.status === "interrupted") {
     const fallback = run.status === "failed" ? "provider-failed" : "stopped";
     return {

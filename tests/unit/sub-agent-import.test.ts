@@ -107,9 +107,10 @@ describe("sub-agent evidence import", () => {
 
   it("U1: drops web sources beyond the parent's remaining capacity at prepare", async () => {
     const harness = importHarness();
+    let reads = 0;
     harness.grants.set(
       "grant-1",
-      delegationGrant(harness.binding, { remainingWebCapacity: () => 1 }),
+      delegationGrant(harness.binding, { remainingWebCapacity: () => ((reads += 1), 1) }),
     );
     const { delegator, sessionId, runId } = await launchWith(harness);
     harness.execution.finish(
@@ -126,6 +127,28 @@ describe("sub-agent evidence import", () => {
     expect(state.outcome.evidenceBudgetExhausted).toBe(true);
     expect(state.outcome.answerText.match(/source unavailable/g)).toHaveLength(2);
     expect(importDeltas(harness)[0].evidenceBudgetExhausted).toBe(true);
+    expect(reads).toBe(1);
+    for (const capacity of [
+      () => {
+        throw new Error("registry gone");
+      },
+      () => Number.NaN,
+      () => Number.POSITIVE_INFINITY,
+    ]) {
+      const invalid = importHarness();
+      invalid.grants.set(
+        "grant-1",
+        delegationGrant(invalid.binding, { remainingWebCapacity: capacity }),
+      );
+      const launched = await launchWith(invalid);
+      invalid.execution.finish(0, result("[e1]"));
+      await settle();
+      const read = await launched.delegator.getResult(launched.sessionId, launched.runId);
+      expect(read.state === "completed" && read.outcome).toMatchObject({
+        evidence: [],
+        evidenceBudgetExhausted: true,
+      });
+    }
   });
 
   it("U2: replays a prepare with the same importId and registers its source once", async () => {
@@ -195,8 +218,14 @@ describe("sub-agent evidence import", () => {
     harness.execution.finish(0, result("Answer [e1]"));
     await settle();
 
+    const parts = managerParts(harness.manager);
+    const pending = parts.store.state!.imports.at(-1)!;
+    const live = parts.imports.isCurrent(pending as never);
+    forgeImport(harness, (entry) => ({ ...entry, chatId: "chat-2" }));
+    const foreign = parts.imports.isCurrent(pending as never);
     forgeImport(harness, (entry) => ({
       ...entry,
+      chatId: "chat-1",
       state: "tombstoned",
       tombstoneReason: "stopped",
     }));
@@ -209,6 +238,7 @@ describe("sub-agent evidence import", () => {
     expect(state).toMatchObject({ state: "failed", error: { code: "import-failed" } });
     expect(importDeltas(harness).some((fields) => fields.state === "committed")).toBe(false);
     expect(harness.chat.attempts).toBe(1);
+    expect([live, foreign]).toEqual([true, false]);
     await expect(
       harness.bridge.resolve({ importId: "x", run: { subAgentRunId: runId } } as never),
     ).rejects.toMatchObject({ code: "import-failed" });
@@ -301,7 +331,7 @@ describe("sub-agent evidence import", () => {
     hung();
     await settle();
     const afterTimeout = await second.getResult(sessionId, runId);
-    const third = epoch(harness, 3);
+    const third = epoch(harness, 6);
     await third.getResult(sessionId, runId);
     await settle();
     const repaired = await third.getResult(sessionId, runId);
@@ -323,13 +353,20 @@ describe("sub-agent evidence import", () => {
     const { delegator, sessionId, runId } = await launchWith(harness);
     harness.execution.finish(0, result("Answer [e1]"));
     await settle();
-    await delegator.getResult(sessionId, runId);
+    const healthy = await delegator.getResult(sessionId, runId);
     await settle();
     const lose = () => (harness.chat.registry = { sources: [] });
+    const deltasBeforeNoOp = harness.writer.deltas.length;
+    const flushesBeforeNoOp = harness.writer.flushes;
+    const noOp = await epoch(harness, 2).getResult(sessionId, runId);
+    await settle();
+    const afterNoOp = await harness.delegator("grant-1", 2).getResult(sessionId, runId);
+    const deltasAfterNoOp = harness.writer.deltas.length;
+    const flushesAfterNoOp = harness.writer.flushes;
 
     lose();
     harness.chat.failNext(new Error("disk full"));
-    const second = epoch(harness, 2);
+    const second = epoch(harness, 5);
     await second.getResult(sessionId, runId);
     await settle();
     const broken = await second.getResult(sessionId, runId);
@@ -341,10 +378,16 @@ describe("sub-agent evidence import", () => {
     const restored = await third.getResult(sessionId, runId);
     lose();
     forgeImport(harness, (entry) => ({ ...entry, state: "tombstoned" }));
-    await epoch(harness, 4).getResult(sessionId, runId);
+    await epoch(harness, 7).getResult(sessionId, runId);
     await settle();
 
+    expect(noOp.resultRevision).toBe(healthy.resultRevision);
+    expect(afterNoOp.resultRevision).toBe(healthy.resultRevision);
+    expect(deltasAfterNoOp).toBe(deltasBeforeNoOp);
+    expect(flushesAfterNoOp).toBe(flushesBeforeNoOp);
     expect(broken).toMatchObject({ state: "failed", error: { code: "import-failed" } });
+    expect(broken.resultRevision).toBe(healthy.resultRevision + 1);
+    expect(restored.resultRevision).toBe(healthy.resultRevision + 2);
     expect(attemptsInSecondEpoch).toBe(2);
     expect(restored.state).toBe("completed");
     expect(harness.chat.attempts).toBe(3);

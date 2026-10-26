@@ -46,6 +46,7 @@ export interface SubAgentImportCommitter {
 export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, SubAgentImportLookup {
   private readonly reconciled = new Map<string, { sessionId: string; epochs: Set<number> }>();
   private readonly broken = new Set<string>();
+  private readonly offsets = new Map<string, number>();
   committer: SubAgentImportCommitter | null = null;
 
   constructor(
@@ -175,22 +176,33 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     );
     const prepared = entry ? this.preparedOf(entry) : null;
     if (!prepared || !this.attempted(prepared, deliveryEpoch) || !this.isCurrent(prepared)) return;
+    const revision = this.parts.store.currentRevision;
     void settleWithin(
       this.register({ ...prepared, repairOnly: !this.broken.has(prepared.importId) }, null),
       IMPORT_TIMEOUT_MS,
     )
       .then(async (outcome) => {
         if (!this.isCurrent(prepared)) return;
-        if (outcome.status !== "done") {
-          this.broken.add(prepared.importId);
+        const healthy = outcome.status === "done";
+        if (healthy === this.broken.has(prepared.importId)) {
+          if (healthy) this.broken.delete(prepared.importId);
+          else this.broken.add(prepared.importId);
+          this.offsets.set(prepared.runId, this.revisionOffset(prepared.runId) + 1);
           this.parts.notifyResults();
-          return;
         }
-        this.broken.delete(prepared.importId);
-        this.parts.notifyResults();
-        await this.parts.store.flush(this.parts.store.currentRevision);
+        if (healthy && this.parts.store.currentRevision !== revision) {
+          await this.parts.store.flush(this.parts.store.currentRevision);
+        }
       })
       .catch(() => undefined);
+  }
+
+  /**
+   * Returns how often a run's committed import switched between broken and healthy; it is
+   * kept only in memory because no lookup survives a restart, the binding being terminal.
+   */
+  revisionOffset(runId: string): number {
+    return this.offsets.get(runId) ?? 0;
   }
 
   /** True when a committed import lost an alias that one repair could not restore. */
@@ -214,6 +226,7 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     return (
       entry !== undefined &&
       entry.state !== "tombstoned" &&
+      entry.chatId === this.parts.store.state?.chatId &&
       entry.sessionId === prepared.sessionId &&
       entry.runId === prepared.runId &&
       entry.generation === prepared.generation &&
@@ -283,7 +296,9 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
       ?.runs.find((entry) => entry.subAgentRunId === prepared.runId);
     if (!aliases || !run || !this.isCurrent(prepared)) throw sessionFailure("import-failed");
     const entry = this.importRecord(prepared.importId)!;
-    this.parts.store.putImport({ ...entry, aliases });
+    if (JSON.stringify(entry.aliases) !== JSON.stringify(aliases)) {
+      this.parts.store.putImport({ ...entry, aliases });
+    }
     return {
       run: importedRunSummary(run, prepared.answerText),
       answerText: prepared.answerText,
