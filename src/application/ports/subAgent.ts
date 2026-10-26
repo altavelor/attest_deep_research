@@ -147,7 +147,86 @@ export interface SubAgentEvidenceImportPort {
   commit(request: SubAgentImportRequest): Promise<SubAgentImportResult>;
 }
 
+export type SubAgentBudgetUnit =
+  | "branchAttempts"
+  | "modelRounds"
+  | "searches"
+  | "fetches"
+  | "evidenceItems"
+  | "verificationFollowUps"
+  | "inputTokens"
+  | "outputTokens";
+
+export interface SubAgentBudgetRequest {
+  actionKey: string;
+  action: "model-round" | "search" | "fetch" | "evidence-append";
+  units: Partial<Readonly<Record<SubAgentBudgetUnit, number>>>;
+}
+
+export interface SubAgentBudgetPermit {
+  permitId: string;
+  scopeId: string;
+  actionKey: string;
+}
+
+export interface SubAgentBudgetRegistration {
+  registrationId: string;
+  scopeId: string;
+  creationKey: string;
+  generation: number;
+}
+
+export type SubAgentBudgetClosureReason =
+  { type: "exhausted"; dimension: SubAgentBudgetUnit } | { type: "deadline" };
+
+export type SubAgentBudgetRegistrationResult =
+  | { type: "registered"; registration: SubAgentBudgetRegistration }
+  | {
+      type: "denied";
+      closureId: string;
+      creationKey: string;
+      closedAt: string;
+      reason: SubAgentBudgetClosureReason;
+    };
+
+export type SubAgentBudgetRegistrationFinishResult =
+  | { type: "accepted" }
+  | { type: "closed"; closureId: string; closedAt: string; reason: SubAgentBudgetClosureReason };
+
+export type SubAgentBudgetReserveResult =
+  | { type: "granted"; permit: SubAgentBudgetPermit }
+  | {
+      type: "work-denied";
+      denialId: string;
+      actionKey: string;
+      reason: "per-work-attempt-limit";
+    }
+  | {
+      type: "denied";
+      closureId: string;
+      actionKey: string;
+      closedAt: string;
+      reason: SubAgentBudgetClosureReason;
+    };
+
+export interface SubAgentBudgetPermitPort {
+  beginSessionRegistration(
+    scopeId: string,
+    creationKey: string,
+  ): Promise<SubAgentBudgetRegistrationResult>;
+  finishSessionRegistration(
+    registration: SubAgentBudgetRegistration,
+    outcome: { type: "published"; sessionId: string } | { type: "aborted" },
+  ): Promise<SubAgentBudgetRegistrationFinishResult>;
+  beginExecution(scopeId: string, actionKey: string): Promise<SubAgentBudgetReserveResult>;
+  reserve(scopeId: string, request: SubAgentBudgetRequest): Promise<SubAgentBudgetReserveResult>;
+  markStarted(permit: SubAgentBudgetPermit): Promise<void>;
+  settle(permit: SubAgentBudgetPermit, outcome: "consumed" | "not-started"): Promise<void>;
+  claimClosureCleanup(scopeId: string, closureId: string): Promise<boolean>;
+}
+
 export interface SubAgentSessionManagerContext {
+  budget?: SubAgentBudgetPermitPort;
   getChatId(): string | null;
   repository: SubAgentSessionRepository;
   writer: SubAgentDurableWriter;
