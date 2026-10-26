@@ -695,6 +695,9 @@ describe("chat session manager deletion guard", () => {
 
     expect(manager.getSessionByChatId(chatId)).toBe(session);
     expect(manager.listSessions()).toContain(session);
+    manager.update(session.sessionId, { attachedContextPaths: ["kept.md"] });
+    await manager.save(session.sessionId);
+    expect((await repository.loadChat(chatId))?.attachedContextPaths).toEqual(["kept.md"]);
   });
 });
 

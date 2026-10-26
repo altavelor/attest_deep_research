@@ -4,7 +4,9 @@ import type { ChatRunRequest } from "@application/use-cases/chat";
 import { TERMINAL_SAVE_WAIT_MS } from "@application/use-cases/chat/terminalSave";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
 import type { SavedChatSettings } from "@core/chat/savedChat";
+import { ChatStorageError } from "@application/ports/chat";
 import { settle } from "../support/async";
+import { sessionDelta } from "../support/chatDocuments";
 import { createTestSessionManager, fakeChildHosts, gatedResearch } from "../support/chatSessions";
 import { runPastDeadline } from "../support/timers";
 
@@ -125,7 +127,19 @@ describe("chat runtime and its child host", () => {
     research.end(research.requests.length - 1);
     await settle();
     log.length = 0;
+    const idleWriter = children.hosts.at(-1)!.context.writer;
+    const removeChat = repository.deleteChat.bind(repository);
+    let lateWrite: unknown = null;
+    vi.spyOn(repository, "deleteChat").mockImplementationOnce(async (id) => {
+      try {
+        idleWriter.markDirty("s", 9, sessionDelta("s"));
+      } catch (error) {
+        lateWrite = error;
+      }
+      await removeChat(id);
+    });
     await manager.deleteChat(idle.chatId!);
+    expect(lateWrite).toBeInstanceOf(ChatStorageError);
     expect(log).toEqual([`dispose:${MAX_CONCURRENT_CHAT_SESSIONS + 1}`]);
 
     log.length = 0;
@@ -156,6 +170,24 @@ describe("chat runtime and its child host", () => {
     const parent = manager.createSession(thinking);
     await manager.start(parent.sessionId, request("First"));
     await settle();
+    const changes: string[] = [];
+    manager.subscribe((change) => void changes.push(change.kind));
+    const notice = (parentRunId: string) => ({
+      type: "notice" as const,
+      entry: {
+        eventKey: `notice:${parentRunId}:queued`,
+        parentRunId,
+        description: "Child",
+        createdAt: "t",
+        sessionId: "child-1",
+        runId: "child-run-1",
+        kind: "queued" as const,
+      },
+    });
+    children.hosts[0]!.context.mainEvents?.publish([notice("foreign-run")]);
+    expect([parent.subAgentNotices.length, changes]).toEqual([0, []]);
+    children.hosts[0]!.context.mainEvents?.publish([notice(parent.activeRunId!)]);
+    expect(parent.subAgentNotices.map((entry) => entry.parentRunId)).toEqual([parent.activeRunId]);
     const failure = new Error("Close failed.");
     children.hosts[0]!.closeGate = Promise.reject(failure);
     research.emit(0, completed);
