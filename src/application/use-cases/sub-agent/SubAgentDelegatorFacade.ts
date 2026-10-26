@@ -1,0 +1,174 @@
+import type {
+  SubAgentDelegationGrant,
+  SubAgentDelegator,
+  SubAgentWaitOptions,
+  SubAgentWaitResult,
+} from "@application/ports/subAgent";
+import {
+  findOwnRun,
+  type CreateSubAgentSessionInput,
+  type ParentRunBinding,
+  type ParentRunDeliveryContext,
+  type RetrySubAgentCommand,
+  type SubAgentCommand,
+  type SubAgentResultState,
+  type SubAgentRunReceipt,
+  type SubAgentRunRef,
+  type SubAgentSessionRecord,
+  type SubAgentSessionSummary,
+} from "@core/research";
+import { authorizeCall, ownedRecord } from "./authorization";
+import type { SubAgentManagerParts } from "./managerParts";
+import { resultStateOf } from "./resultState";
+import type { SubAgentRunScheduler } from "./runScheduler";
+import type { SubAgentSessionCreation } from "./sessionCreation";
+import type { SubAgentSubmissions } from "./submissions";
+import { sessionFailure } from "./SubAgentStateStore";
+import { waitForRunResults } from "./waitForResults";
+
+export interface SubAgentFacadeServices {
+  parts: SubAgentManagerParts;
+  creation: SubAgentSessionCreation;
+  submissions: SubAgentSubmissions;
+  scheduler: SubAgentRunScheduler;
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * The model-facing facade of one parent run binding and delivery epoch. Every call
+ * loads the chat's section, re-checks the binding and grant before touching state and
+ * is delivered through the parent fences, so closing the parent rejects it at once.
+ */
+export class SubAgentDelegatorFacade implements SubAgentDelegator {
+  constructor(
+    private readonly services: SubAgentFacadeServices,
+    private readonly binding: ParentRunBinding,
+    private readonly delivery: ParentRunDeliveryContext,
+  ) {}
+
+  create(input: CreateSubAgentSessionInput): Promise<SubAgentSessionSummary> {
+    return this.call((grant) => this.services.creation.create(this.binding, grant, input));
+  }
+
+  getCreatedSession(createRequestId: string): Promise<SubAgentSessionSummary> {
+    return this.call(() => this.services.creation.getCreatedSession(this.binding, createRequestId));
+  }
+
+  run(
+    sessionId: string,
+    command: Extract<SubAgentCommand, { type: "initial" }>,
+    submissionId: string,
+  ): Promise<SubAgentRunReceipt> {
+    return this.submitCommand(sessionId, command, submissionId, true);
+  }
+
+  continue(
+    sessionId: string,
+    command: Exclude<SubAgentCommand, { type: "initial" }>,
+    submissionId: string,
+  ): Promise<SubAgentRunReceipt> {
+    return this.submitCommand(sessionId, command, submissionId, false);
+  }
+
+  retry(
+    sessionId: string,
+    command: RetrySubAgentCommand,
+    submissionId: string,
+  ): Promise<SubAgentRunReceipt> {
+    return this.call((grant) =>
+      this.services.submissions.submit(
+        this.binding,
+        grant,
+        sessionId,
+        { kind: "retry", retry: command },
+        submissionId,
+      ),
+    );
+  }
+
+  getResult(sessionId: string, runId: string): Promise<SubAgentResultState> {
+    return this.call(() => this.read({ sessionId, runId }));
+  }
+
+  waitForResults(
+    refs: readonly SubAgentRunRef[],
+    options: SubAgentWaitOptions,
+  ): Promise<SubAgentWaitResult> {
+    return this.call((_grant, fence) => {
+      refs.forEach((ref) => this.read(ref));
+      return waitForRunResults(
+        { subscribe: this.services.subscribe, read: (ref) => this.read(ref) },
+        refs,
+        options,
+        fence,
+      );
+    });
+  }
+
+  stop(sessionId: string): Promise<void> {
+    return this.call(async () => {
+      const { parts, scheduler } = this.services;
+      const record = ownedRecord(parts.store, this.binding, sessionId);
+      const revision = stopTarget(scheduler, record);
+      await parts.store.flush(revision ?? parts.store.currentRevision);
+      if (revision !== null) parts.notifyResults();
+    });
+  }
+
+  private submitCommand(
+    sessionId: string,
+    command: SubAgentCommand,
+    submissionId: string,
+    initial: boolean,
+  ): Promise<SubAgentRunReceipt> {
+    return this.call((grant) => {
+      if ((command?.type === "initial") !== initial) throw sessionFailure("invalid-input");
+      return this.services.submissions.submit(
+        this.binding,
+        grant,
+        sessionId,
+        { kind: "command", command },
+        submissionId,
+      );
+    });
+  }
+
+  private read(ref: SubAgentRunRef): SubAgentResultState {
+    const record = ownedRecord(this.services.parts.store, this.binding, ref.sessionId);
+    const run = findOwnRun(record, ref.runId);
+    if (!run) throw sessionFailure("not-authorized");
+    return resultStateOf(this.services.parts, record, run);
+  }
+
+  private call<T>(
+    operation: (grant: SubAgentDelegationGrant, fence: AbortSignal) => T | Promise<T>,
+  ): Promise<T> {
+    const { parts } = this.services;
+    return parts.fences.deliver(this.binding.parentRunId, async (fence) => {
+      await parts.store.load();
+      const grant = authorizeCall(
+        parts.context,
+        parts.fences,
+        parts.store,
+        this.binding,
+        this.delivery,
+      );
+      return operation(grant, fence);
+    });
+  }
+}
+
+/** Fences and terminates the session's current queued, running or importing work; null when idle. */
+function stopTarget(scheduler: SubAgentRunScheduler, record: SubAgentSessionRecord): number | null {
+  const { session } = record;
+  scheduler.fenceSession(session.subAgentSessionId);
+  if (session.status === "importing") {
+    return scheduler.transition(session.subAgentSessionId, { type: "stop-import" });
+  }
+  if (session.activeSubAgentRunId === null) return null;
+  return scheduler.transition(session.subAgentSessionId, {
+    type: "model-stop",
+    runId: session.activeSubAgentRunId,
+    reason: "stopped",
+  });
+}
