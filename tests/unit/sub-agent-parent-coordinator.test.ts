@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SubAgentParentCoordinator } from "@application/use-cases/sub-agent";
 import { settle } from "../support/async";
-import { resultBoard } from "../support/subAgentSessions";
+import { fakeParentRun, resultBoard } from "../support/subAgentSessions";
+import type { SubAgentEvidenceTarget } from "@application/research/subAgentResults";
+import { subAgentRoundHooks } from "@application/use-cases/research/subAgentRoundHooks";
 import { runPastDeadline } from "../support/timers";
 
 vi.mock("@shared", async (importOriginal) => {
@@ -125,5 +127,23 @@ describe("SubAgentParentCoordinator", () => {
     await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
     expect(board.listenerCount()).toBe(0);
     coordinator.dispose();
+  });
+
+  it("U3d: offers delivered results again until the round that carried them is accepted", async () => {
+    const board = resultBoard();
+    board.set("r1", "failed", 1, "provider-error");
+    const coordinator = coordinatorOver(board);
+    const hooks = subAgentRoundHooks(
+      { ...fakeParentRun().parent, coordinator },
+      {} as SubAgentEvidenceTarget,
+    );
+
+    const first = await hooks.beforeModelRound();
+    const repeated = await hooks.beforeModelRound();
+    hooks.afterRoundAccepted();
+
+    expect(repeated).toBe(first);
+    expect(first).toContain("s-r1");
+    expect(await hooks.beforeModelRound()).toBeNull();
   });
 });
