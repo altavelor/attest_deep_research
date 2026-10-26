@@ -31,12 +31,13 @@ export function committedOutcome(
     (row) => row.runId === run.subAgentRunId && row.sessionId === record.session.subAgentSessionId,
   );
   if (!entry) return parts.outcomes.get(run.subAgentRunId);
-  if (entry.state !== "committed") return undefined;
+  if (entry.state !== "committed" || parts.imports.isBroken(entry.importId)) return undefined;
   return {
     run: importedRunSummary(run, entry.answerText),
     answerText: entry.answerText,
     evidence: entry.aliases,
     importId: entry.importId,
+    ...(entry.evidenceBudgetExhausted ? { evidenceBudgetExhausted: true } : {}),
   };
 }
 
@@ -72,7 +73,13 @@ export function resultStateOf(
   if (session.pendingImportRunId === run.subAgentRunId && session.status === "importing") {
     return { state: "pending", resultRevision, run: unimported };
   }
-  if (session.pendingImportRunId === run.subAgentRunId && session.status === "failed") {
+  const brokenImport = parts.store.state?.imports.some(
+    (row) => row.runId === run.subAgentRunId && parts.imports.isBroken(row.importId),
+  );
+  if (
+    brokenImport ||
+    (session.pendingImportRunId === run.subAgentRunId && session.status === "failed")
+  ) {
     const error = subAgentSessionError("import-failed");
     return {
       state: "failed",

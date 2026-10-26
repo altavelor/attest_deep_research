@@ -87,6 +87,7 @@ export class SubAgentSessionManager implements SubAgentHost {
   }
 
   closeAll(parentRunId: string, terminalReason: string): Promise<SubAgentCloseResult> {
+    this.parts.imports.forgetParent(parentRunId);
     return closeParentRun(this.parts, this.services.scheduler, parentRunId, terminalReason);
   }
 
@@ -98,6 +99,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.parts.sessionOptions.clear();
       this.parts.outcomes.clear();
       this.parts.unsavedImports.clear();
+      this.parts.imports.forgetParent(null);
       this.disposal = Promise.resolve();
     }
     return this.disposal;

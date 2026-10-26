@@ -82,7 +82,10 @@ describe("chat evidence bridge over the chat repository", () => {
     expect(resolved.evidence.map((chunk) => chunk.id)).toEqual([alias.conversationEvidenceId]);
     expect(resolved.citations[0].id).toBe(alias.conversationEvidenceId);
     expect(resolved.provenance[0].calls[0]).toMatchObject({ tool: "search_web", query: "q" });
-    const runRegistry = new ResearchEvidenceRegistry({ createHandle: () => "result_1" });
+    const runRegistry = new ResearchEvidenceRegistry({
+      createHandle: () => "result_1",
+      maxWebResults: 1,
+    });
     const handle = runRegistry.registerWebResult(
       { url: "https://example.com/e1", title: "Parent", snippet: "s", rank: 1 },
       { callId: "c1", query: "q" },

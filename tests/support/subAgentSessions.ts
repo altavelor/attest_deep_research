@@ -31,6 +31,7 @@ import {
   createSubAgentSessionManager,
   type SubAgentSessionManager,
 } from "@application/use-cases/sub-agent";
+import type { SubAgentManagerParts } from "@application/use-cases/sub-agent/managerParts";
 import { ParentFences } from "@application/use-cases/sub-agent/parentFences";
 import { SubAgentBudgetCoordinator } from "@application/use-cases/sub-agent/subAgentBudget";
 import { SubAgentStateStore } from "@application/use-cases/sub-agent/SubAgentStateStore";
@@ -579,4 +580,9 @@ export function importHarness(
   const harness = managerHarness({ ...options, evidenceImport: bridge });
   lookup = (harness.manager as SubAgentSessionManager).importLookup();
   return { ...harness, chat, bridge };
+}
+
+/** Returns the manager's internal parts, so a white-box test can stage a record as storage would. */
+export function managerParts(manager: unknown): SubAgentManagerParts {
+  return (manager as { parts: SubAgentManagerParts }).parts;
 }

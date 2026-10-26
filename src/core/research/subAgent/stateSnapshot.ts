@@ -28,6 +28,7 @@ export interface SubAgentImportRecord {
   answerText: string;
   createdAt: string;
   tombstoneReason?: string;
+  evidenceBudgetExhausted?: boolean;
 }
 
 export type SubAgentPendingActionState =

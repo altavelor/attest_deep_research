@@ -206,7 +206,7 @@ export function recordConversationCitationUsages(
   return { sources };
 }
 
-function revisionContentHash(chunks: readonly RetrievedChunk[]): string {
+export function revisionContentHash(chunks: readonly RetrievedChunk[]): string {
   return chunks
     .map((chunk) => chunk.contentHash)
     .sort()

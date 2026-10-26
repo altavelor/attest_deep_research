@@ -170,6 +170,7 @@ export interface ImportedSubAgentRunOutcome {
   answerText: string;
   evidence: readonly ImportedSubAgentEvidenceReference[];
   importId: string;
+  evidenceBudgetExhausted?: boolean;
 }
 
 export interface SubAgentResultError {

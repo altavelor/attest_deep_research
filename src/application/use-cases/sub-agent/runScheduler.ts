@@ -9,13 +9,13 @@ import {
 import { settleWithin } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
 import { IMPORT_TIMEOUT_MS, type SubAgentImportCommitter } from "./importCoordinator";
+import { importedSummary } from "./importPlan";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import { admitScopedRun } from "./scopedAdmission";
 import { scopeOf, type SubAgentBudgetGrant } from "./subAgentBudget";
 
 export { IMPORT_TIMEOUT_MS };
 export const LOCAL_RUN_CAPACITY = 4;
-const RESULT_SUMMARY_CHARS = 1_000;
 
 export interface QueuedRun {
   sessionId: string;
@@ -200,15 +200,16 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     }
     let completed = false;
     try {
+      const plan = this.parts.imports.plan(slot.sessionId, slot.runId, result);
       const revision = this.transition(slot.sessionId, {
         type: "runner-completed",
         runId: slot.runId,
         usage: result.usage,
         evidenceCount: result.evidence.length,
-        resultSummary: result.answerText.trim().slice(0, RESULT_SUMMARY_CHARS) || null,
+        resultSummary: plan ? importedSummary(plan.prepared.answerText) : null,
       });
       if (revision !== null) {
-        this.parts.imports.prepare(slot.sessionId, slot.runId, result);
+        if (plan) this.parts.imports.stage(plan);
         await this.parts.store.flush(this.parts.store.currentRevision);
         completed = true;
         this.parts.notifyResults();
@@ -271,7 +272,10 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     let marker: SubAgentImportRecord | null = null;
     this.parts.unsavedImports.add(slot.runId);
     try {
-      if (this.transition(slot.sessionId, { type: "import-committed", generation }) === null)
+      if (
+        !this.parts.imports.hasPrepared(slot.sessionId, slot.runId, generation) ||
+        this.transition(slot.sessionId, { type: "import-committed", generation }) === null
+      )
         return;
       staged = this.parts.store.record(slot.sessionId);
       marker = this.parts.imports.markCommitted(slot.sessionId, slot.runId, generation);

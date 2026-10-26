@@ -95,6 +95,7 @@ export interface SubAgentDelegationGrant {
   capturedActiveFilePath?: string;
   origin: SubAgentTaskOrigin;
   limits: { maxRounds: number; maxResultChars: number; maxSearches: number };
+  remainingWebCapacity?(): number;
 }
 
 export interface SubAgentPriorContext {
@@ -132,6 +133,11 @@ export interface SubAgentExecutionResult {
   telemetry: ValidatedJsonValue;
 }
 
+/**
+ * Runs one child command. A continue-partial run must return the evidence it keeps from
+ * the interrupted run in its own result evidence, because the manager stores only the
+ * references of committed imports; such a result is imported as incomplete.
+ */
 export interface SubAgentExecutionPort {
   run(request: SubAgentExecutionRequest): Promise<SubAgentExecutionResult>;
 }
@@ -159,6 +165,8 @@ export interface SubAgentPreparedImport {
   attempt: number;
   items: readonly SubAgentImportItem[];
   answerText: string;
+  evidenceBudgetExhausted: boolean;
+  repairOnly?: boolean;
 }
 
 export interface SubAgentPreparedImportRequest extends SubAgentImportRequest {

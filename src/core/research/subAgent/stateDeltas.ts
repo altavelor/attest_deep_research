@@ -87,6 +87,7 @@ const LISTS: Readonly<Record<string, { list: ListKey; idField: string; fields: s
       "answerText",
       "createdAt",
       "tombstoneReason",
+      "evidenceBudgetExhausted",
     ],
   },
   action: {

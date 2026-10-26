@@ -25,6 +25,8 @@ export interface SubAgentImportPlanInput {
   attempt: number;
   policy: SubAgentSourcePolicy;
   resources: readonly string[];
+  webCapacity: number;
+  incomplete: boolean;
   result: SubAgentExecutionResult;
   now: string;
 }
@@ -41,7 +43,12 @@ export function importedRunSummary(
   run: SubAgentRunSummary,
   answerText: string,
 ): SubAgentRunSummary {
-  return { ...run, resultSummary: answerText.trim().slice(0, RESULT_SUMMARY_CHARS) || null };
+  return { ...run, resultSummary: importedSummary(answerText) };
+}
+
+/** Returns the bounded run summary taken from a rewritten, alias-only answer. */
+export function importedSummary(answerText: string): string | null {
+  return answerText.trim().slice(0, RESULT_SUMMARY_CHARS) || null;
 }
 
 /**
@@ -55,10 +62,11 @@ export function planSubAgentImport(input: SubAgentImportPlanInput): SubAgentImpo
     .slice(0, MAX_IMPORTED_EVIDENCE_ITEMS * 4)
     .map((value) => parseSubAgentChildEvidence(value, normalizeWebUrl))
     .filter((item): item is SubAgentChildEvidence => item !== null);
-  const { admitted } = admitSubAgentEvidence(
+  const { admitted, evidenceBudgetExhausted } = admitSubAgentEvidence(
     parsed,
     subAgentAllowedHosts(input.resources),
     input.policy,
+    input.webCapacity,
   );
   const keyed = admitted
     .map((item) => ({ item, key: identityKey(item) }))
@@ -95,6 +103,7 @@ export function planSubAgentImport(input: SubAgentImportPlanInput): SubAgentImpo
       attempt: input.attempt,
       items,
       answerText,
+      evidenceBudgetExhausted,
     },
   };
 }
@@ -122,7 +131,7 @@ function importItem(
     ],
     collectedAt,
     attempt: input.attempt,
-    incomplete: input.result.incomplete,
+    incomplete: input.incomplete,
   };
 }
 
@@ -130,7 +139,8 @@ function identityKey(item: SubAgentChildEvidence): string {
   return `${item.source.kind}|${canonicalSourceKey(item.source)}|${sha256Hex(item.text)}|${item.id}`;
 }
 
-function normalizeWebUrl(url: string): string | null {
+/** Returns the canonical public form of a web URL, or null when it is unsafe or invalid. */
+export function normalizeWebUrl(url: string): string | null {
   const validated = validatePublicWebUrl(url);
   return validated.ok ? validated.url : null;
 }

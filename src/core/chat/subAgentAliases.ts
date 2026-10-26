@@ -1,5 +1,9 @@
 import { subAgentAliasPrefix, type SubAgentStateSnapshot } from "@core/research";
-import type { ConversationSource, ConversationSourceRegistry } from "./sourceRegistry";
+import {
+  revisionContentHash,
+  type ConversationSource,
+  type ConversationSourceRegistry,
+} from "./sourceRegistry";
 
 /**
  * Removes conversation aliases left by tombstoned sub-agent imports. Only revisions
@@ -25,7 +29,9 @@ export function removeOrphanSubAgentAliases(
       }
       changed = true;
       const chunks = revision.chunks.filter((chunk) => !orphan(chunk.id));
-      return chunks.length > 0 ? [{ ...revision, chunks }] : [];
+      return chunks.length > 0
+        ? [{ ...revision, chunks, contentHash: revisionContentHash(chunks) }]
+        : [];
     });
     if (revisions.length === 0) continue;
     const hadActive = source.revisions.some((revision) => revision.status === "active");

@@ -18,7 +18,12 @@ import {
   type SubAgentImportRecord,
 } from "@core/research";
 import { settleWithin } from "./deadline";
-import { importedRunSummary, planSubAgentImport } from "./importPlan";
+import {
+  importedRunSummary,
+  normalizeWebUrl,
+  planSubAgentImport,
+  type SubAgentImportPlan,
+} from "./importPlan";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import { scopeOf } from "./subAgentBudget";
 import { sessionFailure } from "./SubAgentStateStore";
@@ -41,7 +46,8 @@ export interface SubAgentImportCommitter {
  * per delivery epoch without re-running the child.
  */
 export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, SubAgentImportLookup {
-  private readonly reconciled = new Set<string>();
+  private readonly reconciled = new Map<string, { sessionId: string; epochs: Set<number> }>();
+  private readonly broken = new Set<string>();
   committer: SubAgentImportCommitter | null = null;
 
   constructor(
@@ -49,40 +55,55 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     private readonly bridge: SubAgentEvidenceImportPort,
   ) {}
 
-  /** Stages the prepare record of a run whose runner-completed transition was just staged. */
-  prepare(sessionId: string, runId: string, result: SubAgentExecutionResult): void {
+  /**
+   * Plans the import of a finished run before its runner-completed transition is staged,
+   * so the staged summary is already rewritten. The run is incomplete when it continues
+   * a partial run or the runner says so; that flag never enters the digest.
+   */
+  plan(
+    sessionId: string,
+    runId: string,
+    result: SubAgentExecutionResult,
+  ): SubAgentImportPlan | null {
     const { store } = this.parts;
     const record = store.record(sessionId);
     const run = record?.runs.find((entry) => entry.subAgentRunId === runId);
-    const generation = record?.session.pendingImportGeneration;
-    if (!record || !run || !store.state || generation === null || generation === undefined) return;
-    const { prepared, evidenceDigest } = planSubAgentImport({
+    if (!record || !run || !store.state) return null;
+    return planSubAgentImport({
       chatId: store.state.chatId,
       sessionId,
       runId,
-      generation,
+      generation: record.session.lastImportGeneration + 1,
       attempt: run.attempt,
       policy: run.effectiveSourcePolicy,
       resources: this.parts.sessionOptions.get(sessionId)?.resources ?? [],
+      webCapacity: this.webCapacity(sessionId),
+      incomplete: run.continuedFromRunId !== null || result.incomplete,
       result,
       now: timestamp(this.parts),
     });
-    this.reconciled.add(`${prepared.importId}@${this.parts.context.getCurrentDeliveryEpoch()}`);
+  }
+
+  /** Stages the prepare record of a planned import in the runner's terminal barrier. */
+  stage({ prepared, evidenceDigest }: SubAgentImportPlan): void {
+    const generation = this.parts.store.record(prepared.sessionId)?.session.pendingImportGeneration;
+    if (generation !== prepared.generation) return;
+    this.attempted(prepared, this.parts.context.getCurrentDeliveryEpoch());
     if (this.importRecord(prepared.importId)) return;
-    const entry: SubAgentImportRecord = {
+    this.parts.store.putImport({
       state: "prepared",
       importId: prepared.importId,
       chatId: prepared.chatId,
-      sessionId,
-      runId,
+      sessionId: prepared.sessionId,
+      runId: prepared.runId,
       evidenceDigest,
-      generation,
+      generation: prepared.generation,
       evidence: prepared.items.flatMap((item) => toValidatedJson(item) ?? []),
       aliases: [],
       answerText: prepared.answerText,
       createdAt: timestamp(this.parts),
-    };
-    store.putImport(entry);
+      ...(prepared.evidenceBudgetExhausted ? { evidenceBudgetExhausted: true } : {}),
+    });
   }
 
   async commit(request: SubAgentImportRequest): Promise<SubAgentImportResult> {
@@ -108,11 +129,20 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     return { outcome };
   }
 
+  /** True while the run's import of this generation is prepared and may still be committed. */
+  hasPrepared(sessionId: string, runId: string, generation: number): boolean {
+    return this.findImport(sessionId, runId, generation)?.state === "prepared";
+  }
+
   /** Stages the commit marker of an import inside the manager's import-committed barrier. */
   markCommitted(sessionId: string, runId: string, generation: number): SubAgentImportRecord | null {
     const entry = this.findImport(sessionId, runId, generation);
     if (!entry || entry.state !== "prepared") return null;
     this.parts.store.putImport({ ...entry, state: "committed" });
+    this.reconciled.set(entry.importId, {
+      sessionId,
+      epochs: new Set([this.parts.context.getCurrentDeliveryEpoch()]),
+    });
     return entry;
   }
 
@@ -129,23 +159,55 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
    * fenced imports are never repaired.
    */
   reconcile(sessionId: string, runId: string, deliveryEpoch: number): void {
-    const record = this.parts.store.record(sessionId);
-    const session = record?.session;
-    if (
-      !session ||
-      session.status !== "failed" ||
-      session.pendingImportRunId !== runId ||
-      session.pendingImportGeneration === null
-    ) {
-      return;
-    }
-    const generation = session.pendingImportGeneration;
+    const session = this.parts.store.record(sessionId)?.session;
+    const generation = session?.pendingImportGeneration;
+    if (session?.status !== "failed" || session.pendingImportRunId !== runId || !generation) return;
     const prepared = this.pendingPrepared(sessionId, runId);
-    if (!prepared) return;
-    const key = `${prepared.importId}@${deliveryEpoch}`;
-    if (this.reconciled.has(key)) return;
-    this.reconciled.add(key);
-    void this.repair(prepared, generation);
+    if (!prepared || !this.attempted(prepared, deliveryEpoch)) return;
+    void this.repair(prepared, generation).catch(() => undefined);
+  }
+
+  /**
+   * Re-registers the aliases of a committed import once per delivery epoch before its
+   * marker is trusted again; when an alias cannot be restored the import reads as failed.
+   */
+  verify(sessionId: string, runId: string, deliveryEpoch: number): void {
+    const entry = this.parts.store.state?.imports.find(
+      (row) => row.sessionId === sessionId && row.runId === runId && row.state === "committed",
+    );
+    const prepared = entry ? this.preparedOf(entry) : null;
+    if (!prepared || !this.attempted(prepared, deliveryEpoch) || !this.isCurrent(prepared)) return;
+    void settleWithin(
+      this.register({ ...prepared, repairOnly: !this.broken.has(prepared.importId) }, null),
+      IMPORT_TIMEOUT_MS,
+    )
+      .then(async (outcome) => {
+        if (!this.isCurrent(prepared)) return;
+        if (outcome.status !== "done") {
+          this.broken.add(prepared.importId);
+          this.parts.notifyResults();
+          return;
+        }
+        this.broken.delete(prepared.importId);
+        this.parts.notifyResults();
+        await this.parts.store.flush(this.parts.store.currentRevision);
+      })
+      .catch(() => undefined);
+  }
+
+  /** True when a committed import lost an alias that one repair could not restore. */
+  isBroken(importId: string): boolean {
+    return this.broken.has(importId);
+  }
+
+  /** Drops the repair bookkeeping of a parent's imports when the parent run closes. */
+  forgetParent(parentRunId: string | null): void {
+    for (const [importId, entry] of this.reconciled) {
+      const session = this.parts.store.record(entry.sessionId)?.session;
+      if (parentRunId === null || !session || session.parentRunId === parentRunId) {
+        this.reconciled.delete(importId);
+      }
+    }
   }
 
   isCurrent(prepared: SubAgentPreparedImport): boolean {
@@ -229,34 +291,65 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
       answerText: prepared.answerText,
       evidence: aliases,
       importId: prepared.importId,
+      ...(prepared.evidenceBudgetExhausted ? { evidenceBudgetExhausted: true } : {}),
     };
   }
 
   private pendingPrepared(sessionId: string, runId: string): SubAgentPreparedImport | null {
     const session = this.parts.store.record(sessionId)?.session;
     const generation = session?.pendingImportGeneration;
-    if (
-      !session ||
-      session.pendingImportRunId !== runId ||
-      generation === null ||
-      generation === undefined
-    )
-      return null;
+    if (!session || session.pendingImportRunId !== runId || !generation) return null;
     const entry = this.findImport(sessionId, runId, generation);
-    if (!entry || entry.state !== "prepared") return null;
-    const items = readSubAgentImportItems(entry.evidence, subAgentAliasPrefix(entry.importId));
-    const run = this.parts.store.record(sessionId)?.runs.find((row) => row.subAgentRunId === runId);
+    return entry?.state === "prepared" ? this.preparedOf(entry) : null;
+  }
+
+  private preparedOf(entry: SubAgentImportRecord): SubAgentPreparedImport | null {
+    const items = readSubAgentImportItems(
+      entry.evidence,
+      subAgentAliasPrefix(entry.importId),
+      normalizeWebUrl,
+    );
+    const run = this.parts.store
+      .record(entry.sessionId)
+      ?.runs.find((row) => row.subAgentRunId === entry.runId);
     if (!items || !run) return null;
     return {
       importId: entry.importId,
       chatId: entry.chatId,
-      sessionId,
-      runId,
-      generation,
+      sessionId: entry.sessionId,
+      runId: entry.runId,
+      generation: entry.generation,
       attempt: run.attempt,
       items,
       answerText: entry.answerText,
+      evidenceBudgetExhausted: entry.evidenceBudgetExhausted === true,
     };
+  }
+
+  /** Records a repair attempt of an import in an epoch; false when one was already made. */
+  private attempted(prepared: SubAgentPreparedImport, deliveryEpoch: number): boolean {
+    for (const importId of this.reconciled.keys()) {
+      if (this.importRecord(importId)?.state === "tombstoned") this.reconciled.delete(importId);
+    }
+    const known = this.reconciled.get(prepared.importId);
+    if (known?.epochs.has(deliveryEpoch)) return false;
+    if (known) known.epochs.add(deliveryEpoch);
+    else
+      this.reconciled.set(prepared.importId, {
+        sessionId: prepared.sessionId,
+        epochs: new Set([deliveryEpoch]),
+      });
+    return true;
+  }
+
+  private webCapacity(sessionId: string): number {
+    try {
+      const remaining = this.parts.sessionOptions.get(sessionId)?.grant.remainingWebCapacity?.();
+      if (remaining === undefined) return Number.POSITIVE_INFINITY;
+      return Number.isFinite(remaining) ? Math.max(0, Math.floor(remaining)) : 0;
+    } catch {
+      return 0;
+    }
   }
 
   private findImport(

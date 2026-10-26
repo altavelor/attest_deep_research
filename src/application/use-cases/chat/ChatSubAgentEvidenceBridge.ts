@@ -8,6 +8,7 @@ import type {
   SubAgentPreparedImportRequest,
 } from "@application/ports/subAgent";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 import {
   registerConversationEvidence,
   type ConversationEvidenceRevision,
@@ -64,12 +65,17 @@ export class ChatSubAgentEvidenceBridge
         registry = registerConversationEvidence(
           registry,
           missing.map((item) => item.chunk),
-          missing[0].collectedAt,
+          missing
+            .map((item) => item.collectedAt)
+            .sort()
+            .at(-1)!,
         ).registry;
         this.context.writeRegistry(registry);
       }
       if (!this.isCurrent(prepared)) throw importFailure();
-      await this.context.saveRegistry(frozenCopy(registry));
+      if (missing.length > 0 || !prepared.repairOnly) {
+        await this.context.saveRegistry(frozenCopy(registry));
+      }
       if (!this.isCurrent(prepared)) throw importFailure();
       return { outcome: registeredOutcome(prepared, items, registry) };
     });
@@ -139,7 +145,13 @@ function checkedItems(values: readonly unknown[], importId: string): SubAgentImp
   return readSubAgentImportItems(
     values as Parameters<typeof readSubAgentImportItems>[0],
     subAgentAliasPrefix(importId),
+    publicWebUrl,
   );
+}
+
+function publicWebUrl(url: string): string | null {
+  const validated = validatePublicWebUrl(url);
+  return validated.ok ? validated.url : null;
 }
 
 function locate(registry: ConversationSourceRegistry, chunkId: string): LocatedChunk | null {

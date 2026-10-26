@@ -50,6 +50,7 @@ export interface SubAgentImportItem {
 export interface SubAgentEvidenceAdmission {
   admitted: SubAgentChildEvidence[];
   droppedTokens: string[];
+  evidenceBudgetExhausted: boolean;
 }
 
 const TOOLS: readonly SubAgentEvidenceTool[] = [
@@ -119,20 +120,26 @@ export function parseSubAgentChildEvidence(
 /**
  * Applies the import policy of the former run_subagent tool: web evidence needs search or
  * fetch provenance, an allowed host and a place under the ten-source cap; index and note
- * evidence needs its own provenance and a path inside the session's granted scope.
+ * evidence needs its own provenance and a path inside the session's granted scope. Web
+ * sources beyond the parent's remaining capacity are dropped and reported as exhausted.
  */
 export function admitSubAgentEvidence(
   items: readonly SubAgentChildEvidence[],
   allowedHosts: readonly string[],
   policy: SubAgentSourcePolicy,
+  webCapacity = Number.POSITIVE_INFINITY,
 ): SubAgentEvidenceAdmission {
   const admitted: SubAgentChildEvidence[] = [];
   const droppedTokens: string[] = [];
   let webSources = 0;
+  let evidenceBudgetExhausted = false;
   for (const item of items) {
+    const overCapacity = item.source.kind === "web" && webSources >= webCapacity;
+    evidenceBudgetExhausted ||= overCapacity;
     const allowed =
       item.source.kind === "web"
-        ? (item.tool === "search_web" || item.tool === "fetch_web_page") &&
+        ? !overCapacity &&
+          (item.tool === "search_web" || item.tool === "fetch_web_page") &&
           webSources < MAX_IMPORTED_WEB_SOURCES &&
           subAgentHostAllowed(item.source.url, allowedHosts)
         : item.tool !== "search_web" &&
@@ -148,7 +155,7 @@ export function admitSubAgentEvidence(
     if (item.source.kind === "web") webSources += 1;
     admitted.push(item);
   }
-  return { admitted, droppedTokens };
+  return { admitted, droppedTokens, evidenceBudgetExhausted };
 }
 
 /**
@@ -186,51 +193,102 @@ export function unresolvedSubAgentCitations(text: string, aliases: ReadonlySet<s
 }
 
 /**
- * Reads prepared import items back from stored JSON and checks that every alias carries
- * the import's alias prefix and a well-formed chunk; null when any item is malformed.
+ * Reads prepared import items back from stored JSON. Each source is rebuilt with the same
+ * checks as fresh child evidence, calls must name known tools, and every alias must carry
+ * the import's alias prefix; null when any item is malformed or oversized.
  */
 export function readSubAgentImportItems(
   values: readonly ValidatedJsonValue[],
   aliasPrefix: string,
+  normalizeUrl: (url: string) => string | null,
 ): SubAgentImportItem[] | null {
   const items: SubAgentImportItem[] = [];
   for (const value of values) {
-    if (!isRecord(value) || !isRecord(value.chunk) || !Array.isArray(value.calls)) return null;
-    const { conversationEvidenceId: alias, subAgentEvidenceId, collectedAt } = value;
-    if (
-      typeof alias !== "string" ||
-      !alias.startsWith(aliasPrefix) ||
-      !SAFE_ITEM_ID.test(alias) ||
-      typeof subAgentEvidenceId !== "string" ||
-      !SAFE_ITEM_ID.test(subAgentEvidenceId) ||
-      typeof collectedAt !== "string" ||
-      !ISO_TIME.test(collectedAt) ||
-      typeof value.attempt !== "number" ||
-      typeof value.incomplete !== "boolean"
-    ) {
-      return null;
-    }
-    const { chunk } = value;
-    const source = isRecord(chunk.source) ? chunk.source : null;
-    if (
-      chunk.id !== alias ||
-      source?.id !== alias ||
-      typeof chunk.text !== "string" ||
-      chunk.text.length > MAX_IMPORTED_TEXT_CHARS ||
-      typeof chunk.contentHash !== "string"
-    ) {
-      return null;
-    }
-    items.push(value as unknown as SubAgentImportItem);
+    const item = readImportItem(value, aliasPrefix, normalizeUrl);
+    if (!item) return null;
+    items.push(item);
   }
   return items;
 }
 
+function readImportItem(
+  value: ValidatedJsonValue,
+  aliasPrefix: string,
+  normalizeUrl: (url: string) => string | null,
+): SubAgentImportItem | null {
+  if (!isRecord(value) || !isRecord(value.chunk) || !Array.isArray(value.calls)) return null;
+  const { conversationEvidenceId: alias, subAgentEvidenceId, collectedAt, attempt } = value;
+  const { chunk } = value;
+  if (
+    typeof alias !== "string" ||
+    !alias.startsWith(aliasPrefix) ||
+    !SAFE_ITEM_ID.test(alias) ||
+    typeof subAgentEvidenceId !== "string" ||
+    !SAFE_ITEM_ID.test(subAgentEvidenceId) ||
+    typeof collectedAt !== "string" ||
+    !ISO_TIME.test(collectedAt) ||
+    typeof attempt !== "number" ||
+    !Number.isSafeInteger(attempt) ||
+    attempt < 0 ||
+    typeof value.incomplete !== "boolean" ||
+    chunk.id !== alias ||
+    typeof chunk.text !== "string" ||
+    chunk.text.length > MAX_IMPORTED_TEXT_CHARS ||
+    typeof chunk.contentHash !== "string" ||
+    !SAFE_ITEM_ID.test(chunk.contentHash)
+  ) {
+    return null;
+  }
+  const calls = readCalls(value.calls);
+  const tool = calls?.[0]?.tool;
+  const source = tool
+    ? parseSource(alias, chunk.source, chunk.text, collectedAt, tool, normalizeUrl)
+    : null;
+  if (!calls || !source) return null;
+  return {
+    conversationEvidenceId: alias,
+    subAgentEvidenceId,
+    chunk: { id: alias, source, text: chunk.text, contentHash: chunk.contentHash, score: 1 },
+    calls,
+    collectedAt,
+    attempt,
+    incomplete: value.incomplete,
+  };
+}
+
+function readCalls(values: readonly ValidatedJsonValue[]): SubAgentImportCall[] | null {
+  const calls: SubAgentImportCall[] = [];
+  for (const call of values) {
+    if (
+      !isRecord(call) ||
+      typeof call.callId !== "string" ||
+      !SAFE_ITEM_ID.test(call.callId) ||
+      typeof call.tool !== "string" ||
+      !TOOLS.includes(call.tool as SubAgentEvidenceTool) ||
+      (call.query !== undefined &&
+        (typeof call.query !== "string" || call.query.length > MAX_QUERY_CHARS))
+    ) {
+      return null;
+    }
+    calls.push({
+      callId: call.callId,
+      tool: call.tool as SubAgentEvidenceTool,
+      ...(typeof call.query === "string" ? { query: call.query } : {}),
+    });
+  }
+  return calls.length > 0 ? calls : null;
+}
+
 function pathAllowed(policy: SubAgentSourcePolicy, path: string): boolean {
+  if (
+    /^[A-Za-z]:/u.test(path) ||
+    path.includes("\\") ||
+    path.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    return false;
+  }
   if (policy.indexScope === "all-allowed") return true;
   if (policy.indexScope === "none") return false;
-  const segments = path.split("/");
-  if (segments.includes("..") || segments.includes(".")) return false;
   return policy.contextPaths.some((granted) => path === granted || path.startsWith(`${granted}/`));
 }
 
