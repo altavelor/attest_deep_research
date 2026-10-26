@@ -2,6 +2,7 @@ import { createResearchToolRegistry } from "@adapters/research-tools";
 import { ResearchRetriever } from "@application/contracts";
 import { SearchProvider, VaultWriter } from "@application/ports";
 import { fakeParentRun, recordingDelegator } from "../support/subAgentSessions";
+import { mapSourcesContext } from "../support/mapSourcesFakes";
 
 describe("createResearchToolRegistry", () => {
   it("creates only explicitly permitted tools and a fresh answer-scoped registry", () => {
@@ -197,15 +198,15 @@ describe("createResearchToolRegistry", () => {
     ]);
   });
 
-  it("exposes map_sources only with a sub-agent runner and index, run_subagent with a delegator", () => {
+  it("exposes map_sources only with a parent batch context and index, run_subagent with a delegator", () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
     };
-    const subAgentRunner = { run: vi.fn() };
+    const subAgentMapSources = mapSourcesContext().context;
 
     const indexed = createResearchToolRegistry({
       retriever,
-      subAgentRunner,
+      subAgentMapSources,
       subAgentDelegator: recordingDelegator().delegator,
       subAgentParent: fakeParentRun().parent,
       availability: {
@@ -220,10 +221,11 @@ describe("createResearchToolRegistry", () => {
     const indexedNames = indexed.tools.definitions().map((definition) => definition.function.name);
     expect(indexedNames).toContain("run_subagent");
     expect(indexedNames).toContain("map_sources");
+    expect(indexedNames).toContain("get_map_sources_result");
 
     const webOnly = createResearchToolRegistry({
       searchProvider: { search: vi.fn().mockResolvedValue([]) },
-      subAgentRunner,
+      subAgentMapSources,
       availability: {
         searchMode: "webOnly",
         noteAccess: false,

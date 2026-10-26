@@ -1,168 +1,248 @@
 import type { ResearchRetriever } from "@application/contracts/research";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import type { SubAgentImportedEvidenceResolver } from "@application/ports/subAgent";
+import type { SubAgentTelemetry } from "@application/research/subAgentPort";
+import type { SubAgentEvidenceTarget } from "@application/research/subAgentResults";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import type { RetrievedChunk } from "@core/model";
-import type {
-  SubAgentPort,
-  ResearchToolsetOptions,
-  SubAgentTelemetry,
-} from "@application/research";
-import { buildSourceTask, citedEvidenceIds, parseSourceAnswer } from "./mapSourcesParse";
-import { MapSourceRow, MapSourcesProgress, MapSourcesResult } from "./types";
+import {
+  isSubAgentStateId,
+  mapSourcesBatchError,
+  mapSourcesBatchState,
+  MAX_MAP_SOURCES_ROWS,
+  SubAgentSessionFailure,
+  type MapSourcesBatchReceipt,
+  type MapSourcesBatchRecord,
+  type MapSourcesBatchState,
+} from "@core/research";
+import { sha256Hex } from "@shared";
+import { MapSourcesBatchWatcher } from "./batchWatcher";
+import { workerTelemetry } from "./batchMatrix";
+import { buildSourceTask } from "./mapSourcesParse";
+import {
+  batchIdOf,
+  canonicalSourcePath,
+  MapSourcesFailure,
+  normalizeMapSourcesInput,
+  PER_SOURCE_RESULT_CHARS,
+  workerRequestIdOf,
+  type MapSourcesInput,
+  type NormalizedMapSourcesInput,
+} from "./mapSourcesInput";
 
 export interface MapSourcesDeps {
-  runner: SubAgentPort;
+  runner: MapSourcesRunContext["workers"];
   retriever: ResearchRetriever;
-
-  toolContext: ResearchToolsetOptions;
-
-  maxParallel?: number;
-
+  context: Omit<MapSourcesRunContext, "workers">;
+  resolver: SubAgentImportedEvidenceResolver;
+  evidence?: SubAgentEvidenceTarget;
   defaultMaxSources?: number;
-
   sourceHardCap?: number;
 }
 
-export interface MapSourcesInput {
-  question: string;
-  sourcePaths?: readonly string[];
-  maxSources?: number;
-
-  perSourceRounds?: number;
-  signal?: AbortSignal;
-  onProgress?: (event: MapSourcesProgress) => void;
-}
-
-const DEFAULT_MAX_PARALLEL = 4;
-const DEFAULT_MAX_SOURCES = 8;
-const DEFAULT_SOURCE_HARD_CAP = 20;
-const DEFAULT_PER_SOURCE_ROUNDS = 6;
-const PER_SOURCE_RESULT_CHARS = 20_000;
 const SELECTION_SEARCH_LIMIT = 5;
+const PARENT_GONE_CODES = new Set(["not-authorized", "fenced-delivery"]);
 
+/**
+ * Starts a map_sources batch of one parent run and serves its result. Start selects the
+ * documents once, stores the batch intent durably before any worker exists, starts one
+ * child session per document and returns the receipt once the refs are durable; the matrix
+ * is gathered off the call by result signals and read later with getResult.
+ */
 export class MapSources {
-  constructor(private readonly deps: MapSourcesDeps) {}
+  private readonly watcher: MapSourcesBatchWatcher;
+  private readonly starting = new Map<string, Promise<MapSourcesBatchReceipt>>();
+  private readonly startErrors = new Map<string, Map<string, string>>();
+  private readonly telemetry = new Map<string, SubAgentTelemetry[]>();
 
-  async run(input: MapSourcesInput): Promise<MapSourcesResult> {
-    const hardCap = this.deps.sourceHardCap ?? DEFAULT_SOURCE_HARD_CAP;
-    const maxSources = Math.min(
-      input.maxSources ?? this.deps.defaultMaxSources ?? DEFAULT_MAX_SOURCES,
-      hardCap,
-    );
-
-    const selection = await this.selectSources(input, maxSources);
-    input.onProgress?.({
-      type: "selected",
-      sourcePaths: selection.sourcePaths,
-      selection: selection.kind,
+  constructor(private readonly deps: MapSourcesDeps) {
+    this.watcher = new MapSourcesBatchWatcher({
+      ...deps.context,
+      workers: deps.runner,
+      resolver: deps.resolver,
+      startErrors: (batchId) => this.startErrors.get(batchId) ?? new Map(),
     });
+  }
 
-    const total = selection.sourcePaths.length;
-    const rows = new Array<MapSourceRow>(total);
-    const telemetry = new Array<SubAgentTelemetry | undefined>(total);
-    const limiter = new Limiter(this.deps.maxParallel ?? DEFAULT_MAX_PARALLEL);
+  start(input: MapSourcesInput, requestId: string): Promise<MapSourcesBatchReceipt> {
+    if (!isSubAgentStateId(requestId)) {
+      return Promise.reject(new MapSourcesFailure("invalid-input", "Invalid request id."));
+    }
+    const batchId = batchIdOf(requestId);
+    const running = this.starting.get(batchId);
+    if (running) return running;
+    const started = this.startBatch(input, requestId, batchId);
+    this.starting.set(batchId, started);
+    const forget = (): void => void this.starting.delete(batchId);
+    started.then(forget, forget);
+    return started;
+  }
 
-    await Promise.all(
-      selection.sourcePaths.map((sourcePath, index) =>
-        limiter.run(async () => {
-          input.onProgress?.({ type: "source-start", sourcePath, index, total });
-          const mapped = await this.mapOne(input, sourcePath);
-          rows[index] = mapped.row;
-          telemetry[index] = mapped.telemetry;
-          input.onProgress?.({
-            type: "source-done",
-            sourcePath,
-            ok: mapped.row.ok,
-            index,
-            total,
-          });
-        }),
-      ),
+  async getResult(batchId: string): Promise<MapSourcesBatchState> {
+    const { batches, parentRunId } = this.deps.context;
+    await batches.load();
+    const record = batches.get(batchId);
+    if (!record || record.parentRunId !== parentRunId) {
+      return {
+        state: "failed",
+        batchId,
+        error: {
+          code: "unknown-batch",
+          message: "No map_sources batch with this id belongs to this run.",
+        },
+      };
+    }
+    if (record.state === "completed") await this.importEvidence(record);
+    if (record.state === "pending") this.watcher.watch(batchId);
+    const counts = this.watcher.counts(batchId);
+    return mapSourcesBatchState(record, { completed: counts.done, failed: counts.failed });
+  }
+
+  /** Returns the worker telemetry gathered by the last completed result read of a batch. */
+  telemetryOf(batchId: string): readonly SubAgentTelemetry[] {
+    return this.telemetry.get(batchId) ?? [];
+  }
+
+  private async startBatch(
+    input: MapSourcesInput,
+    requestId: string,
+    batchId: string,
+  ): Promise<MapSourcesBatchReceipt> {
+    const { batches, parentRunId } = this.deps.context;
+    const normalized = normalizeMapSourcesInput(
+      input,
+      this.deps.defaultMaxSources,
+      this.deps.sourceHardCap ?? MAX_MAP_SOURCES_ROWS,
     );
-
-    const completed = rows.filter((row) => row.ok).length;
-    return {
-      question: input.question,
-      rows,
-      diagnostics: {
-        selection: selection.kind,
-        requested: total,
-        completed,
-        failed: total - completed,
-        subAgents: telemetry.filter((entry): entry is SubAgentTelemetry => entry !== undefined),
-      },
+    const digest = sha256Hex(
+      JSON.stringify([
+        normalized.question,
+        normalized.sourcePaths,
+        normalized.maxSources,
+        normalized.perSourceRounds,
+      ]),
+    );
+    await batches.load();
+    const existing = batches.get(batchId);
+    if (existing) {
+      if (
+        existing.parentRunId !== parentRunId ||
+        existing.requestId !== requestId ||
+        existing.normalizedInputDigest !== digest
+      ) {
+        throw new MapSourcesFailure(
+          "idempotency-conflict",
+          "This call already started a different fan-out.",
+        );
+      }
+      return this.register(existing, normalized, input.signal);
+    }
+    const selection = await this.select(normalized);
+    if (selection.sourcePaths.length === 0) {
+      throw new MapSourcesFailure(
+        "map-sources-empty",
+        "No documents matched — provide sourcePaths or broaden the question.",
+      );
+    }
+    const record: MapSourcesBatchRecord = {
+      batchId,
+      parentRunId,
+      requestId,
+      normalizedInputDigest: digest,
+      question: this.deps.context.redact(normalized.question).slice(0, 1_000) || "?",
+      createdAt: this.deps.context.now().toISOString(),
+      selection: selection.kind,
+      sourcePaths: selection.sourcePaths,
+      refs: [],
+      state: "preparing",
     };
+    await batches.put(record, true);
+    this.watcher.announce(record);
+    return this.register(record, normalized, input.signal);
   }
 
-  private async mapOne(
-    input: MapSourcesInput,
-    sourcePath: string,
-  ): Promise<{ row: MapSourceRow; telemetry?: SubAgentTelemetry }> {
-    const startedAt = Date.now();
-    try {
-      const result = await this.deps.runner.run({
-        task: buildSourceTask(input.question, sourcePath),
-        toolContext: this.scopedContext(sourcePath),
-        budget: {
-          maxRounds: input.perSourceRounds ?? DEFAULT_PER_SOURCE_ROUNDS,
+  private async register(
+    record: MapSourcesBatchRecord,
+    input: NormalizedMapSourcesInput,
+    signal?: AbortSignal,
+  ): Promise<MapSourcesBatchReceipt> {
+    if (record.state !== "preparing") {
+      if (record.state === "pending") this.watcher.watch(record.batchId);
+      return receiptOf(record);
+    }
+    const { batches } = this.deps.context;
+    const refs = [...record.refs];
+    const errors = this.startErrors.get(record.batchId) ?? new Map<string, string>();
+    this.startErrors.set(record.batchId, errors);
+    for (const sourcePath of record.sourcePaths) {
+      if (refs.some((entry) => entry.sourcePath === sourcePath)) continue;
+      try {
+        const receipt = await this.deps.runner.runSource({
+          requestId: workerRequestIdOf(record.batchId, sourcePath),
+          task: buildSourceTask(input.question, sourcePath),
+          sourcePath,
+          maxRounds: input.perSourceRounds,
           maxResultChars: PER_SOURCE_RESULT_CHARS,
-        },
-        signal: input.signal,
-      });
-      const parsed = parseSourceAnswer(result.answerText);
-      return {
-        row: {
-          sourcePath,
-          ok: true,
-          stance: parsed.stance,
-          keyFindings: parsed.keyFindings,
-          evidenceIds: citedEvidenceIds(result.answerText, result.snapshot),
-          answer: result.answerText,
-          snapshot: result.snapshot,
-        },
-        ...(result.telemetry ? { telemetry: result.telemetry } : {}),
-      };
-    } catch (error) {
-      return {
-        row: {
-          sourcePath,
-          ok: false,
-          stance: "unclear",
-          keyFindings: [],
-          evidenceIds: [],
-          answer: "",
-          error: error instanceof Error ? error.message : String(error),
-          snapshot: { evidence: [], citations: [], provenance: [] },
-        },
-        telemetry: exceptionTelemetry(Date.now() - startedAt, input.signal?.aborted === true),
-      };
+          ...(signal ? { signal } : {}),
+        });
+        refs.push({ sourcePath, ref: { sessionId: receipt.sessionId, runId: receipt.runId } });
+        await batches.put({ ...record, refs: [...refs] }, false);
+      } catch (error) {
+        const code = error instanceof SubAgentSessionFailure ? error.code : "not-started";
+        if (PARENT_GONE_CODES.has(code) || signal?.aborted) {
+          await this.stopBatch({ ...record, refs }, "parent-terminal");
+        }
+        errors.set(sourcePath, code);
+      }
     }
+    const next: MapSourcesBatchRecord =
+      refs.length > 0
+        ? { ...record, refs, state: "pending" }
+        : {
+            ...record,
+            refs,
+            state: "failed",
+            error: mapSourcesBatchError("workers-not-started", "No document worker could start."),
+          };
+    await batches.put(next, true);
+    if (next.state === "pending") this.watcher.watch(next.batchId);
+    return receiptOf(next);
   }
 
-  /** Index-only view locked to one document; no web, no notes, no recursion. */
-  private scopedContext(sourcePath: string): ResearchToolsetOptions {
-    const base = this.deps.toolContext;
-    return {
-      ...base,
-      availability: {
-        ...base.availability,
-        searchMode: "indexOnly",
-        noteAccess: false,
-        activeFileAccess: false,
-        noteMutationAccess: false,
+  private async stopBatch(record: MapSourcesBatchRecord, code: string): Promise<never> {
+    await this.deps.context.batches.put(
+      {
+        ...record,
+        state: "interrupted",
+        error: mapSourcesBatchError(code, "The parent run ended before the batch started."),
       },
-      indexSourcePaths: [sourcePath],
-      subAgentRunner: undefined,
-    };
+      true,
+    );
+    throw new MapSourcesFailure(code, "The parent run ended before the batch started.");
   }
 
-  private async selectSources(
-    input: MapSourcesInput,
-    maxSources: number,
-  ): Promise<{ sourcePaths: string[]; kind: "explicit" | "relevance" }> {
-    const explicit = dedupe((input.sourcePaths ?? []).filter((path) => path.trim().length > 0));
-    if (explicit.length > 0) {
-      return { sourcePaths: explicit.slice(0, maxSources), kind: "explicit" };
+  private async importEvidence(record: MapSourcesBatchRecord): Promise<void> {
+    const telemetry: SubAgentTelemetry[] = [];
+    for (const { sourcePath, ref } of record.refs) {
+      try {
+        const state = await this.deps.runner.getResult(ref);
+        telemetry.push(workerTelemetry(state));
+        if (state.state !== "completed") continue;
+        const snapshot = await this.deps.resolver.resolve(state.outcome);
+        this.deps.evidence?.importRegisteredSnapshot?.(
+          attributed(snapshot, record.requestId, sourcePath),
+        );
+      } catch {
+        continue;
+      }
     }
+    this.telemetry.set(record.batchId, telemetry);
+  }
 
+  private async select(
+    input: NormalizedMapSourcesInput,
+  ): Promise<{ sourcePaths: string[]; kind: "explicit" | "relevance" }> {
+    if (input.sourcePaths.length > 0) return { sourcePaths: input.sourcePaths, kind: "explicit" };
     let chunks: RetrievedChunk[] = [];
     try {
       const retrieval = await this.deps.retriever.search(input.question, {
@@ -173,62 +253,34 @@ export class MapSources {
     } catch {
       chunks = [];
     }
-    const paths = dedupe(
-      chunks.map(chunkSourcePath).filter((path): path is string => Boolean(path)),
-    );
-    return { sourcePaths: paths.slice(0, maxSources), kind: "relevance" };
+    const paths: string[] = [];
+    for (const chunk of chunks) {
+      const canonical = "path" in chunk.source ? canonicalSourcePath(chunk.source.path) : null;
+      if (canonical && !paths.includes(canonical)) paths.push(canonical);
+    }
+    return { sourcePaths: paths.slice(0, input.maxSources), kind: "relevance" };
   }
 }
 
-function chunkSourcePath(chunk: RetrievedChunk): string | undefined {
-  return "path" in chunk.source ? chunk.source.path : undefined;
-}
-
-function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values)];
-}
-
-class Limiter {
-  private active = 0;
-  private readonly queue: (() => void)[] = [];
-
-  constructor(private readonly limit: number) {}
-
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.limit) {
-      await new Promise<void>((resolve) => this.queue.push(resolve));
-    }
-    this.active += 1;
-    try {
-      return await fn();
-    } finally {
-      this.active -= 1;
-      this.queue.shift()?.();
-    }
-  }
-}
-
-/**
- * Telemetry for a mapped document whose sub-agent threw before reporting its own
- * counters, so a failed mapping still counts as one launch. A run the caller
- * cancelled is reported as cancelled rather than as a failure.
- */
-function exceptionTelemetry(durationMs: number, aborted: boolean): SubAgentTelemetry {
+function receiptOf(record: MapSourcesBatchRecord): MapSourcesBatchReceipt {
   return {
-    runId: `map-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
-    durationMs,
-    loopDurationMs: durationMs,
-    rounds: 0,
-    maxRounds: 0,
-    hitRoundLimit: false,
-    failureReason: aborted ? "cancelled" : "tool-exception",
-    toolCalls: 0,
-    duplicateToolCalls: 0,
-    searchCalls: 0,
-    maxSearches: 0,
-    searchBudgetRejections: 0,
-    usedSynthesisFallback: false,
-    answerChars: 0,
-    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    batchId: record.batchId,
+    requested: record.sourcePaths.length,
+    refs: record.refs.map((entry) => ({ ...entry.ref })),
+  };
+}
+
+/** Attributes resolved row evidence to the original map_sources call, as the matrix cites it. */
+function attributed(
+  snapshot: ResearchEvidenceSnapshot,
+  callId: string,
+  sourcePath: string,
+): ResearchEvidenceSnapshot {
+  return {
+    ...snapshot,
+    provenance: snapshot.evidence.map((chunk) => ({
+      evidenceId: chunk.id,
+      calls: [{ callId, query: sourcePath, tool: "search_index" as const }],
+    })),
   };
 }

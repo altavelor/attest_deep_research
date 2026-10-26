@@ -721,8 +721,14 @@ export function resultBoard(parentRunId = "parent-1") {
         return state;
       },
     },
-    set(runId: string, state: SubAgentResultState["state"], resultRevision = 1, code = "x"): void {
-      const run = { status: state } as unknown as SubAgentRunSummary;
+    set(
+      runId: string,
+      state: SubAgentResultState["state"],
+      resultRevision = 1,
+      code = "x",
+      origin = "direct",
+    ): void {
+      const run = { status: state, origin } as unknown as SubAgentRunSummary;
       states.set(
         runId,
         state === "completed"

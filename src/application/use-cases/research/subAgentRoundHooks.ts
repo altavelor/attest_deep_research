@@ -1,4 +1,4 @@
-import type { SubAgentParentRun } from "@application/ports/subAgent";
+import type { SubAgentBatchStore, SubAgentParentRun } from "@application/ports/subAgent";
 import {
   formatDeliveredSubAgentResults,
   MAX_DELIVERY_ANSWER_CHARS,
@@ -24,8 +24,9 @@ export interface ThinkingRoundHooks {
 export function subAgentRoundHooks(
   parent: SubAgentParentRun,
   evidence: SubAgentEvidenceTarget,
-  maxDeliveryChars = MAX_DELIVERY_ANSWER_CHARS,
+  options: { batches?: Pick<SubAgentBatchStore, "batchOf">; maxDeliveryChars?: number } = {},
 ): ThinkingRoundHooks {
+  const maxDeliveryChars = options.maxDeliveryChars ?? MAX_DELIVERY_ANSWER_CHARS;
   let delivered: { ref: SubAgentRunRef; resultRevision: number }[] = [];
   return {
     async beforeModelRound() {
@@ -39,7 +40,7 @@ export function subAgentRoundHooks(
         resultRevision: result.resultRevision,
       }));
       delivered = acknowledged;
-      return formatDeliveredSubAgentResults(results, parent.resolver, evidence);
+      return formatDeliveredSubAgentResults(results, parent.resolver, evidence, options.batches);
     },
     afterRoundAccepted() {
       if (delivered.length === 0) return;

@@ -41,8 +41,3 @@ export interface MapSourcesResult {
   rows: MapSourceRow[];
   diagnostics: MapSourcesDiagnostics;
 }
-
-export type MapSourcesProgress =
-  | { type: "selected"; sourcePaths: readonly string[]; selection: "explicit" | "relevance" }
-  | { type: "source-start"; sourcePath: string; index: number; total: number }
-  | { type: "source-done"; sourcePath: string; ok: boolean; index: number; total: number };

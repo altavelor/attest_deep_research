@@ -41,7 +41,7 @@ import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/Res
 import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
-import { SubAgentLogger, SubAgentPort } from "@application/research/subAgentPort";
+import { SubAgentLogger } from "@application/research/subAgentPort";
 import type { SubAgentExecutionPort } from "@application/ports/subAgent";
 import { SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
 import type { ResearchModeWebParameters } from "@core/research";
@@ -183,7 +183,6 @@ export class ResearchService implements ConversationEngine {
       searchProvider: options.searchProvider,
       urlStatusChecker: options.urlStatusChecker,
     };
-    const subAgentRunner: SubAgentPort = new SubAgentRunner(this.subAgentRunnerDeps);
 
     const deps: ResearchStrategyDeps = {
       chatModel: options.chatModel,
@@ -214,7 +213,6 @@ export class ResearchService implements ConversationEngine {
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
-      subAgentRunner,
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,

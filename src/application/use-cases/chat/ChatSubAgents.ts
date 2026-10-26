@@ -1,4 +1,5 @@
 import type {
+  SubAgentBatchStore,
   SubAgentDelegationGrant,
   SubAgentDelegator,
   SubAgentDurableWriter,
@@ -8,9 +9,15 @@ import type {
   SubAgentParentRun,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import {
+  MapSourcesWorkerAdapter,
+  type MapSourcesWorkerLimits,
+} from "@application/use-cases/map-sources";
 import { SubAgentParentCoordinator } from "@application/use-cases/sub-agent";
 import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import {
+  mapSourcesBatchError,
   MAX_SUB_AGENT_SEARCHES,
   type ParentRunBinding,
   type ResearchMode,
@@ -35,6 +42,7 @@ export interface ChatSubAgentsOptions {
 export interface ChatSubAgentParentRun {
   delegator: SubAgentDelegator;
   parent: SubAgentParentRun;
+  mapSources?: MapSourcesRunContext;
 }
 
 const CHILD_MAX_ROUNDS = 12;
@@ -124,14 +132,17 @@ export class ChatSubAgents {
     this.ownedRuns.add(runId);
     this.grants.set(grantId, this.grant(binding, request));
     const delegator = this.host.delegatorFor(binding, { deliveryEpoch: this.epoch, grantId });
+    const batches = this.host.batches?.();
     const coordinator = new SubAgentParentCoordinator({
       delegator,
       host: this.host,
       parentRunId: runId,
+      ...(batches ? { pendingBatches: () => batches.pendingCount(runId) } : {}),
       logError: (error) => this.options.logError(error),
     });
     this.coordinators.set(runId, coordinator);
     return {
+      ...(batches ? { mapSources: this.mapSourcesContext(binding, request, batches) } : {}),
       delegator,
       parent: {
         parentRunId: runId,
@@ -152,12 +163,23 @@ export class ChatSubAgents {
     if (!this.host || !this.ownedRuns.has(runId)) return;
     this.coordinators.get(runId)?.dispose();
     this.coordinators.delete(runId);
-    this.grants.delete(`grant-${runId}`);
+    for (const grantId of [...this.grants.keys()]) {
+      if (grantId === `grant-${runId}` || grantId.startsWith(`grant-${runId}-map-`)) {
+        this.grants.delete(grantId);
+      }
+    }
     if (this.binding?.parentRunId === runId) {
       this.binding = null;
       this.execution = null;
       this.capacity = null;
     }
+    await this.host
+      .batches?.()
+      .interrupt(
+        runId,
+        mapSourcesBatchError("parent-terminal", "The parent run ended before the batch finished."),
+      )
+      .catch((error: unknown) => this.options.logError(error));
     try {
       await this.host.closeAll(runId, reason);
     } catch (error) {
@@ -219,6 +241,58 @@ export class ChatSubAgents {
         maxSearches: MAX_SUB_AGENT_SEARCHES,
       },
       remainingWebCapacity: () => this.capacity?.remainingWebCapacity?.() ?? 0,
+    };
+  }
+
+  /**
+   * Builds the map_sources context of a parent run: document workers run through grants
+   * of origin map_sources with index-only search of the run's index scope, no active file,
+   * notes or mutation, and the limits of the batch; batch notices go to the chat sink.
+   */
+  private mapSourcesContext(
+    binding: ParentRunBinding,
+    request: ChatRunRequest,
+    batches: SubAgentBatchStore,
+  ): MapSourcesRunContext {
+    const deliveryEpoch = this.epoch;
+    const delegator = (limits: MapSourcesWorkerLimits): SubAgentDelegator => {
+      const grantId = `grant-${binding.parentRunId}-map-${limits.maxRounds}-${limits.maxResultChars}`;
+      if (!this.grants.has(grantId) && this.ownedRuns.has(binding.parentRunId)) {
+        this.grants.set(grantId, this.mapGrant(binding, request, limits));
+      }
+      return this.host!.delegatorFor(binding, { deliveryEpoch, grantId });
+    };
+    return {
+      chatId: binding.chatSessionId,
+      parentRunId: binding.parentRunId,
+      workers: new MapSourcesWorkerAdapter({ delegator }),
+      batches,
+      notices: this.bridge,
+      subscribe: (listener) => this.host?.subscribeResults(listener) ?? (() => undefined),
+      now: this.options.now,
+      redact: this.options.services?.redact ?? ((text) => text),
+    };
+  }
+
+  private mapGrant(
+    binding: ParentRunBinding,
+    request: ChatRunRequest,
+    limits: MapSourcesWorkerLimits,
+  ): SubAgentDelegationGrant {
+    const policy = this.sourcePolicy(request, false);
+    const usesIndex = policy.indexScope !== "none";
+    return {
+      binding,
+      callerMode: "thinking",
+      budgetPolicy: { type: "local" },
+      maximumSourcePolicy: {
+        ...policy,
+        searchMode: usesIndex ? "indexOnly" : "none",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      origin: "map_sources",
+      limits: { ...limits, maxSearches: MAX_SUB_AGENT_SEARCHES },
     };
   }
 

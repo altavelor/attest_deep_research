@@ -1,19 +1,16 @@
+import { describe, expect, it, vi } from "vitest";
+
 import { MapSources } from "@application/use-cases/map-sources";
 import {
   buildSourceTask,
   citedEvidenceIds,
   parseSourceAnswer,
 } from "@application/use-cases/map-sources";
-import type {
-  SubAgentPort,
-  SubAgentRunInput,
-  SubAgentRunResult,
-  SubAgentTelemetry,
-} from "@application/research";
 import type { ResearchRetriever } from "@application/contracts/research";
 import type { RetrievedChunk } from "@core/model";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { settle } from "../support/async";
+import { FakeBatchStore, mapSourcesContext, workerState } from "../support/mapSourcesFakes";
 
 function chunk(id: string, path: string): RetrievedChunk {
   return {
@@ -29,35 +26,34 @@ function snapshot(chunks: RetrievedChunk[]): ResearchEvidenceSnapshot {
   return { evidence: chunks, citations: [], provenance: [] };
 }
 
-function telemetryOf(runId: string): SubAgentTelemetry {
+function retrieverOf(chunks: RetrievedChunk[] = []): ResearchRetriever {
   return {
-    runId,
-    durationMs: 40,
-    loopDurationMs: 40,
-    rounds: 2,
-    maxRounds: 6,
-    hitRoundLimit: false,
-    toolCalls: 1,
-    duplicateToolCalls: 0,
-    searchCalls: 1,
-    maxSearches: 8,
-    searchBudgetRejections: 0,
-    usedSynthesisFallback: false,
-    answerChars: 16,
-    usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0 },
-  };
+    search: vi.fn().mockResolvedValue({ chunks, citations: [], usedFallback: false }),
+  } as unknown as ResearchRetriever;
 }
 
-const emptyContext = {
-  availability: {
-    searchMode: "indexAndWeb" as const,
-    noteAccess: true,
-    activeFileAccess: false,
-    retrieverAvailable: true,
-    webProviderAvailable: true,
-    noteMutationAccess: false,
-  },
-};
+/** Builds a mapper over the fake context whose resolver gives each run one chunk of its document. */
+function mapper(
+  options: { batches?: FakeBatchStore; parentRunId?: string; chunks?: RetrievedChunk[] } = {},
+) {
+  const harness = mapSourcesContext({
+    ...(options.batches ? { batches: options.batches } : {}),
+    ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
+  });
+  const imported: ResearchEvidenceSnapshot[] = [];
+  const retriever = retrieverOf(options.chunks);
+  const instance = new MapSources({
+    runner: harness.workers,
+    retriever,
+    context: harness.context,
+    resolver: {
+      resolve: async (outcome) =>
+        snapshot([chunk(`e-${outcome.run.subAgentRunId.slice(-6)}`, "doc.pdf")]),
+    },
+    evidence: { importRegisteredSnapshot: (value) => void imported.push(value) },
+  });
+  return { ...harness, mapper: instance, retriever, imported };
+}
 
 describe("map-sources parsing", () => {
   it("extracts stance and findings, tolerating case and bullet markers", () => {
@@ -91,181 +87,234 @@ describe("map-sources parsing", () => {
   });
 });
 
-describe("MapSources fan-out", () => {
-  it("selects sources by relevance when none are given and scopes each sub-agent", async () => {
-    const seen: SubAgentRunInput[] = [];
-    const runner: SubAgentPort = {
-      run: async (input): Promise<SubAgentRunResult> => {
-        seen.push(input);
-        const path = /"([^"]+\.pdf)"/.exec(input.task)?.[1] ?? "?";
-        return {
-          answerText: `Finding for ${path} [c-${path}]\nSTANCE: SUPPORTS`,
-          snapshot: snapshot([chunk(`c-${path}`, path)]),
-        };
-      },
-    };
-    const retriever = {
-      search: vi.fn().mockResolvedValue({
-        chunks: [chunk("x", "a.pdf"), chunk("y", "a.pdf"), chunk("z", "b.pdf")],
-        citations: [],
-        usedFallback: false,
-      }),
-    } as unknown as ResearchRetriever;
+describe("MapSources batches", () => {
+  it("selects by relevance once and returns the receipt after the durable refs, before any result", async () => {
+    const run = mapper({
+      chunks: [chunk("x", "a.pdf"), chunk("y", "./a.pdf"), chunk("z", "b.pdf")],
+    });
 
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({ question: "Does X hold?" });
+    const receipt = await run.mapper.start({ question: " Does X hold? " }, "parent-1-r1-call");
 
-    expect(result.diagnostics.selection).toBe("relevance");
+    expect(run.retriever.search).toHaveBeenCalledTimes(1);
+    expect(receipt).toEqual({
+      batchId: expect.stringMatching(/^mapbatch-[0-9a-f]{24}$/u),
+      requested: 2,
+      refs: run.workers.inputs.map((input) => ({
+        sessionId: `session-${input.requestId}`,
+        runId: `run-${input.requestId}`,
+      })),
+    });
+    expect(run.batches.puts.map(({ state, durable }) => [state, durable])).toEqual([
+      ["preparing", true],
+      ["preparing", false],
+      ["preparing", false],
+      ["pending", true],
+    ]);
+    expect(
+      run.workers.inputs.map(({ sourcePath, maxRounds, maxResultChars }) => [
+        sourcePath,
+        maxRounds,
+        maxResultChars,
+      ]),
+    ).toEqual([
+      ["a.pdf", 6, 20_000],
+      ["b.pdf", 6, 20_000],
+    ]);
+    expect(run.workers.inputs[0]?.task).toBe(buildSourceTask("Does X hold?", "a.pdf"));
+    expect(run.batches.get(receipt.batchId)).toMatchObject({
+      selection: "relevance",
+      state: "pending",
+    });
+    expect(run.notices).toHaveLength(1);
+  });
 
-    expect(result.rows.map((row) => row.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
-    expect(result.rows.every((row) => row.ok && row.stance === "supports")).toBe(true);
-    expect(result.diagnostics.completed).toBe(2);
+  it("maps explicit canonical paths without selection and rejects traversal or an empty selection", async () => {
+    const run = mapper();
 
-    for (const input of seen) {
-      expect(input.toolContext?.availability.searchMode).toBe("indexOnly");
-      expect(input.toolContext?.availability.noteAccess).toBe(false);
-      expect(input.toolContext?.subAgentRunner).toBeUndefined();
-      expect(input.toolContext?.indexSourcePaths).toHaveLength(1);
-      expect(input.budget?.maxRounds).toBeGreaterThan(0);
+    const receipt = await run.mapper.start(
+      { question: "compare", sourcePaths: ["a.pdf", "dir//b.pdf", "./a.pdf"], perSourceRounds: 40 },
+      "call-a",
+    );
+
+    expect(run.retriever.search).not.toHaveBeenCalled();
+    expect(receipt.requested).toBe(2);
+    expect(run.workers.inputs.map((input) => [input.sourcePath, input.maxRounds])).toEqual([
+      ["a.pdf", 12],
+      ["dir/b.pdf", 12],
+    ]);
+    await expect(
+      run.mapper.start({ question: "q", sourcePaths: ["../secret.md"] }, "call-b"),
+    ).rejects.toMatchObject({ code: "invalid-source-path" });
+    await expect(run.mapper.start({ question: "q" }, "call-c")).rejects.toMatchObject({
+      code: "map-sources-empty",
+      message: "No documents matched — provide sourcePaths or broaden the question.",
+    });
+  });
+
+  it("publishes a partial matrix in selection order once every worker settled, with redacted row errors", async () => {
+    const run = mapper();
+    const receipt = await run.mapper.start(
+      { question: "q", sourcePaths: ["a.pdf", "b.pdf", "c.pdf"] },
+      "call-1",
+    );
+    const [a, b, c] = ["a.pdf", "b.pdf", "c.pdf"].map((path) => run.workers.runIdOf(path));
+    run.workers.states.set(c!, workerState(c!, "completed", "Finding [x]\nSTANCE: OPPOSES"));
+    run.workers.states.set(
+      a!,
+      workerState(a!, "failed", "provider secret token", "provider-failed"),
+    );
+    run.signal();
+    await settle();
+    expect(run.batches.get(receipt.batchId)?.state).toBe("pending");
+
+    run.workers.states.set(b!, workerState(b!, "interrupted", "Stopped by user", "stopped"));
+    run.signal();
+    await settle();
+
+    const result = run.batches.get(receipt.batchId)?.result;
+    expect(result?.rows.map((row) => [row.sourcePath, row.ok, row.stance, row.error])).toEqual([
+      ["a.pdf", false, "unclear", "provider-failed: provider [redacted] token"],
+      ["b.pdf", false, "unclear", "stopped: Stopped by user"],
+      ["c.pdf", true, "opposes", undefined],
+    ]);
+    expect(result?.diagnostics).toEqual({
+      selection: "explicit",
+      requested: 3,
+      completed: 1,
+      failed: 2,
+    });
+    expect(JSON.stringify(result)).not.toContain("snapshot");
+    expect(run.listenerCount()).toBe(0);
+  });
+
+  it("reports worker telemetry by real run ids with no invented tokens for an early failure", async () => {
+    const run = mapper();
+    const receipt = await run.mapper.start(
+      { question: "q", sourcePaths: ["a.pdf", "b.pdf"] },
+      "call-1",
+    );
+    const [a, b] = ["a.pdf", "b.pdf"].map((path) => run.workers.runIdOf(path));
+    run.workers.states.set(a!, workerState(a!, "completed", "STANCE: SUPPORTS"));
+    const early = workerState(b!, "failed", "denied", "execution-denied");
+    if (early.state === "failed") {
+      early.run.usage = {
+        requestCount: 0,
+        modelRounds: 0,
+        toolCalls: 0,
+        durationMs: 0,
+        source: "unavailable",
+      };
     }
-  });
+    run.workers.states.set(b!, early);
+    run.signal();
+    await settle();
 
-  it("uses explicit sourcePaths and does not call the retriever", async () => {
-    const runner: SubAgentPort = {
-      run: async () => ({ answerText: "STANCE: MIXED", snapshot: snapshot([]) }),
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+    await run.mapper.getResult(receipt.batchId);
 
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({
-      question: "compare",
-      sourcePaths: ["a.pdf", "b.pdf", "a.pdf"],
-    });
-
-    expect(retriever.search).not.toHaveBeenCalled();
-    expect(result.diagnostics.selection).toBe("explicit");
-    expect(result.rows.map((row) => row.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
-  });
-
-  it("degrades one failing sub-agent to an error row without failing the run", async () => {
-    const runner: SubAgentPort = {
-      run: async (input) => {
-        if (input.task.includes("b.pdf")) {
-          throw new Error("boom");
-        }
-        return {
-          answerText: "ok [c1]\nSTANCE: SUPPORTS",
-          snapshot: snapshot([chunk("c1", "a.pdf")]),
-        };
-      },
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
-
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] });
-
-    const failed = result.rows.find((row) => row.sourcePath === "b.pdf");
-    expect(failed?.ok).toBe(false);
-    expect(failed?.error).toContain("boom");
-    expect(result.diagnostics.completed).toBe(1);
-    expect(result.diagnostics.failed).toBe(1);
-  });
-
-  it("bounds concurrent sub-agents to maxParallel", async () => {
-    let active = 0;
-    let peak = 0;
-    const runner: SubAgentPort = {
-      run: async () => {
-        active += 1;
-        peak = Math.max(peak, active);
-        await settle(5);
-        active -= 1;
-        return { answerText: "STANCE: SUPPORTS", snapshot: snapshot([]) };
-      },
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
-
-    const mapper = new MapSources({
-      runner,
-      retriever,
-      toolContext: emptyContext,
-      maxParallel: 2,
-    });
-    await mapper.run({
-      question: "q",
-      sourcePaths: ["a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"],
-    });
-    expect(peak).toBeLessThanOrEqual(2);
-  });
-
-  it("collects one telemetry record per mapped document", async () => {
-    const runner: SubAgentPort = {
-      run: async (input): Promise<SubAgentRunResult> => {
-        const path = /"([^"]+\.pdf)"/.exec(input.task)?.[1] ?? "?";
-        return {
-          answerText: "STANCE: SUPPORTS",
-          snapshot: snapshot([]),
-          telemetry: telemetryOf(`run-${path}`),
-        };
-      },
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
-
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] });
-
-    expect(result.diagnostics.subAgents).toHaveLength(2);
-    expect(result.diagnostics.subAgents?.map((entry) => entry.runId).sort()).toEqual([
-      "run-a.pdf",
-      "run-b.pdf",
+    expect(
+      run.mapper
+        .telemetryOf(receipt.batchId)
+        .map((entry) => [entry.runId, entry.rounds, entry.failureReason, entry.usage.inputTokens]),
+    ).toEqual([
+      [a, 2, undefined, 0],
+      [b, 0, "provider-error", 0],
     ]);
   });
 
-  it("still records a launch for a document whose sub-agent threw", async () => {
-    const runner: SubAgentPort = {
-      run: async (input): Promise<SubAgentRunResult> => {
-        if (input.task.includes("b.pdf")) throw new Error("sub-agent exploded");
-        await settle(2);
-        return {
-          answerText: "STANCE: SUPPORTS",
-          snapshot: snapshot([]),
-          telemetry: telemetryOf("run-a.pdf"),
-        };
-      },
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+  it("interrupts a batch whose parent run ends while its workers start", async () => {
+    const run = mapper();
+    run.workers.rejected.set("b.pdf", "not-authorized");
 
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] });
+    await expect(
+      run.mapper.start({ question: "q", sourcePaths: ["a.pdf", "b.pdf", "c.pdf"] }, "call-1"),
+    ).rejects.toMatchObject({ code: "parent-terminal" });
 
-    expect(result.diagnostics.failed).toBe(1);
-    expect(result.diagnostics.subAgents).toHaveLength(2);
-    const failed = result.diagnostics.subAgents?.find(
-      (entry) => entry.failureReason === "tool-exception",
-    );
-    expect(failed).toBeDefined();
-    expect(failed?.runId).not.toBe("run-a.pdf");
-    expect(failed?.rounds).toBe(0);
+    const [record] = run.batches.records.values();
+    expect(record).toMatchObject({
+      state: "interrupted",
+      error: { code: "parent-terminal", message: "The parent run ended before the batch started." },
+    });
+    expect(run.workers.inputs.map((input) => input.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
   });
 
-  it("reports a cancelled mapping as cancelled, not as a failure", async () => {
-    const controller = new AbortController();
-    const runner: SubAgentPort = {
-      run: async () => {
-        controller.abort();
-        throw new Error("aborted");
-      },
-    };
-    const retriever = { search: vi.fn() } as unknown as ResearchRetriever;
+  it("U1: keeps stable worker identities, replays without new workers and conflicts on other input", async () => {
+    const shared = new FakeBatchStore();
+    const first = mapper({ batches: shared });
+    first.workers.rejected.set("b.pdf", "persistence-failed");
+    const partial = await first.mapper.start(
+      { question: "q", sourcePaths: ["a.pdf", "b.pdf"] },
+      "call-1",
+    );
+    const [, input] = first.workers.inputs;
+    shared.records.set(partial.batchId, { ...shared.get(partial.batchId)!, state: "preparing" });
 
-    const mapper = new MapSources({ runner, retriever, toolContext: emptyContext });
-    const result = await mapper.run({
-      question: "q",
-      sourcePaths: ["a.pdf"],
-      signal: controller.signal,
+    const again = mapper({ batches: shared });
+    const replayed = await again.mapper.start(
+      { question: "q", sourcePaths: ["a.pdf", "b.pdf"] },
+      "call-1",
+    );
+
+    expect(again.workers.inputs).toEqual([input]);
+    expect(input?.requestId).toMatch(new RegExp(`^${partial.batchId}-[0-9a-f]{16}$`, "u"));
+    expect(replayed.refs).toEqual([
+      ...partial.refs,
+      { sessionId: `session-${input?.requestId}`, runId: `run-${input?.requestId}` },
+    ]);
+    expect(
+      await again.mapper.start({ question: "q", sourcePaths: ["a.pdf", "b.pdf"] }, "call-1"),
+    ).toEqual(replayed);
+    expect(again.workers.inputs).toHaveLength(1);
+    await expect(
+      again.mapper.start({ question: "other", sourcePaths: ["a.pdf"] }, "call-1"),
+    ).rejects.toMatchObject({ code: "idempotency-conflict" });
+  });
+
+  it("U2: isolates batches by run and chat, never waits while pending and reads a terminal matrix again", async () => {
+    const shared = new FakeBatchStore();
+    const run = mapper({ batches: shared });
+    const receipt = await run.mapper.start(
+      { question: "q", sourcePaths: ["b.pdf", "a.pdf"] },
+      "call-1",
+    );
+    const otherRun = mapper({ batches: shared, parentRunId: "parent-2" });
+
+    expect(await otherRun.mapper.getResult(receipt.batchId)).toEqual({
+      state: "failed",
+      batchId: receipt.batchId,
+      error: {
+        code: "unknown-batch",
+        message: "No map_sources batch with this id belongs to this run.",
+      },
+    });
+    expect((await run.mapper.getResult("mapbatch-missing")).state).toBe("failed");
+    expect(await run.mapper.getResult(receipt.batchId)).toEqual({
+      state: "pending",
+      batchId: receipt.batchId,
+      completed: 0,
+      failed: 0,
     });
 
-    expect(result.diagnostics.subAgents).toHaveLength(1);
-    expect(result.diagnostics.subAgents?.[0].failureReason).toBe("cancelled");
+    const [b, a] = ["b.pdf", "a.pdf"].map((path) => run.workers.runIdOf(path));
+    run.workers.states.set(a!, workerState(a!, "completed", "A finding [x] secret\nSTANCE: MIXED"));
+    run.workers.states.set(b!, workerState(b!, "completed", "B finding\nSTANCE: SUPPORTS"));
+    run.signal();
+    await settle();
+    run.workers.states.set(a!, workerState(a!, "failed", "late", "import-failed"));
+
+    const first = await run.mapper.getResult(receipt.batchId);
+    const second = await run.mapper.getResult(receipt.batchId);
+
+    expect(second).toEqual(first);
+    expect(
+      first.state === "completed" &&
+        first.result.rows.map((row) => [row.sourcePath, row.keyFindings]),
+    ).toEqual([
+      ["b.pdf", ["B finding"]],
+      ["a.pdf", ["A finding [x] [redacted]"]],
+    ]);
+    expect(JSON.stringify([...shared.records.values()])).not.toContain("secret");
+    expect(run.imported[0]?.provenance[0]?.calls).toEqual([
+      { callId: "call-1", query: "b.pdf", tool: "search_index" },
+    ]);
   });
 });

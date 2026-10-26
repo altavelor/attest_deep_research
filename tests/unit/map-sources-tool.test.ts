@@ -1,136 +1,105 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MapSourcesTool } from "@adapters/research-tools/map-sources/MapSourcesTool";
+import {
+  MapSourcesResultTool,
+  MapSourcesTool,
+} from "@adapters/research-tools/map-sources/MapSourcesTool";
 import { executeTool } from "@core/agent";
-import type { MapSources } from "@application/use-cases/map-sources";
-import type { EvidenceRegistry } from "@application/sources";
+import { MapSourcesFailure, type MapSources } from "@application/use-cases/map-sources";
 import type { SubAgentTelemetry } from "@application/research";
-import { summarizeSubAgentTelemetry } from "@core/research";
+import { summarizeSubAgentTelemetry, type MapSourcesBatchState } from "@core/research";
 
-function execute(
-  mapper: Pick<MapSources, "run">,
-  evidence = { registerIndexChunk: vi.fn() },
-  emit = vi.fn(),
-  arguments_: Record<string, unknown> = { question: "What do the documents conclude?" },
-) {
+type Mapper = Partial<Pick<MapSources, "start" | "getResult" | "telemetryOf">>;
+
+function execute(mapper: Mapper, arguments_: Record<string, unknown> = { question: "What?" }) {
   return executeTool(
-    new MapSourcesTool({
-      mapper: mapper as MapSources,
-      evidence: evidence as unknown as EvidenceRegistry,
-    }),
+    new MapSourcesTool({ mapper: mapper as MapSources, parentRunId: "parent-1" }),
     { id: "map-call", name: "map_sources", arguments: arguments_ },
-    { emit },
+    { emit: vi.fn(), round: 2 },
   );
 }
 
+const receipt = { batchId: "mapbatch-1", requested: 1, refs: [{ sessionId: "s", runId: "r" }] };
+
 describe("MapSourcesTool", () => {
   it("returns a helpful failure when no document matches", async () => {
-    const mapper = { run: vi.fn().mockResolvedValue({ rows: [] }) };
+    const mapper = {
+      start: vi
+        .fn()
+        .mockRejectedValue(new MapSourcesFailure("map-sources-empty", "No documents matched.")),
+    };
 
     await expect(execute(mapper)).resolves.toMatchObject({
       ok: false,
-      error: { code: "map-sources-empty", retryable: false },
+      error: { code: "map-sources-empty", message: "No documents matched.", retryable: false },
     });
   });
 
   it("reports mapper failures as retryable without leaking the exception", async () => {
-    const mapper = { run: vi.fn().mockRejectedValue(new Error("backend unavailable")) };
+    const mapper = { start: vi.fn().mockRejectedValue(new Error("backend unavailable")) };
 
-    await expect(execute(mapper)).resolves.toMatchObject({
+    const result = await execute(mapper);
+
+    expect(result).toMatchObject({
       ok: false,
       error: { code: "map-sources-failed", retryable: true },
     });
+    expect(JSON.stringify(result)).not.toContain("backend unavailable");
   });
 
-  it("emits source progress, returns rows, and registers only indexed evidence", async () => {
-    const indexedChunk = {
-      id: "chunk-1",
-      source: { kind: "document", path: "Notes/one.md" },
-    };
-    const webChunk = { id: "web-1", source: { kind: "web", url: "https://example.test" } };
-    const mapper = {
-      run: vi.fn(async (input) => {
-        input.onProgress?.({
-          type: "source-start",
-          sourcePath: "Notes/one.md",
-          index: 0,
-          total: 1,
-        });
-        return {
-          question: input.question,
-          rows: [
-            {
-              sourcePath: "Notes/one.md",
-              ok: false,
-              stance: "mixed",
-              keyFindings: ["One limitation"],
-              evidenceIds: ["chunk-1"],
-              error: "partial result",
-              snapshot: { evidence: [indexedChunk, webChunk] },
-            },
-          ],
-          diagnostics: { selection: "explicit", requested: 1, completed: 0, failed: 1 },
-        };
-      }),
-    };
-    const evidence = { registerIndexChunk: vi.fn() };
-    const emit = vi.fn();
+  it("accepts a batch under the call identity of the parent run and returns only its receipt", async () => {
+    const mapper = { start: vi.fn().mockResolvedValue(receipt) };
 
     await expect(
-      execute(mapper as unknown as Pick<MapSources, "run">, evidence, emit, {
+      execute(mapper, {
         question: "Compare findings",
         sourcePaths: ["Notes/one.md"],
         maxSources: 1,
         perSourceBudget: 3,
       }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: {
+    ).resolves.toEqual({ ok: true, value: { state: "accepted", receipt } });
+    expect(mapper.start).toHaveBeenCalledWith(
+      expect.objectContaining({
         question: "Compare findings",
-        rows: [expect.objectContaining({ error: "partial result", evidenceIds: ["chunk-1"] })],
-        diagnostics: { selection: "explicit", failed: 1 },
-      },
-    });
-    expect(mapper.run).toHaveBeenCalledWith(
-      expect.objectContaining({ sourcePaths: ["Notes/one.md"], maxSources: 1, perSourceRounds: 3 }),
+        sourcePaths: ["Notes/one.md"],
+        maxSources: 1,
+        perSourceRounds: 3,
+      }),
+      "parent-1-r2-map-call",
     );
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "sub-agent-phase", message: "Analyzing one.md (1/1)…" }),
-    );
-    expect(evidence.registerIndexChunk).toHaveBeenCalledWith(indexedChunk, {
-      callId: "map-call",
-      query: "Notes/one.md",
-    });
   });
 
   it("rejects invalid fan-out arguments before starting the mapper", async () => {
-    const mapper = { run: vi.fn() };
+    const mapper = { start: vi.fn() };
 
-    await expect(execute(mapper, undefined, undefined, { question: "" })).resolves.toMatchObject({
+    await expect(execute(mapper, { question: "" })).resolves.toMatchObject({
       ok: false,
       error: { code: "invalid-input" },
     });
-    expect(mapper.run).not.toHaveBeenCalled();
+    expect(mapper.start).not.toHaveBeenCalled();
   });
-  it("reports sub-agent telemetry in the mapSources namespace, not in the tool value", async () => {
+
+  it("reads the matrix separately with telemetry in the mapSources namespace only once completed", async () => {
     const telemetry: SubAgentTelemetry = {
       runId: "run-a",
       durationMs: 40,
       loopDurationMs: 40,
       rounds: 2,
-      maxRounds: 6,
+      maxRounds: 0,
       hitRoundLimit: false,
       toolCalls: 1,
       duplicateToolCalls: 0,
       searchCalls: 1,
-      maxSearches: 8,
+      maxSearches: 0,
       searchBudgetRejections: 0,
       usedSynthesisFallback: false,
       answerChars: 16,
       usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0 },
     };
-    const mapper = {
-      run: vi.fn().mockResolvedValue({
+    const completed: MapSourcesBatchState = {
+      state: "completed",
+      batchId: "mapbatch-1",
+      result: {
         question: "q",
         rows: [
           {
@@ -139,29 +108,34 @@ describe("MapSourcesTool", () => {
             stance: "supports",
             keyFindings: [],
             evidenceIds: [],
-            snapshot: { evidence: [] },
           },
         ],
-        diagnostics: {
-          selection: "explicit",
-          requested: 1,
-          completed: 1,
-          failed: 0,
-          subAgents: [telemetry],
-        },
-      }),
+        diagnostics: { selection: "explicit", requested: 1, completed: 1, failed: 0 },
+      },
     };
+    const mapper = {
+      getResult: vi
+        .fn()
+        .mockResolvedValueOnce({ state: "pending", batchId: "mapbatch-1", completed: 0, failed: 0 })
+        .mockResolvedValue(completed),
+      telemetryOf: vi.fn().mockReturnValue([telemetry]),
+    };
+    const read = () =>
+      executeTool(
+        new MapSourcesResultTool({ mapper: mapper as unknown as MapSources, parentRunId: "p" }),
+        { id: "read-call", name: "get_map_sources_result", arguments: { batchId: "mapbatch-1" } },
+        { emit: vi.fn() },
+      );
 
-    const result = await execute(mapper as unknown as Pick<MapSources, "run">);
+    const pending = await read();
+    const result = await read();
 
-    expect(result.ok).toBe(true);
-    expect(result.diagnostic).toEqual({ mapSources: [telemetry] });
-    expect(JSON.stringify(result.ok ? result.value : {})).not.toContain("runId");
-
+    expect(pending.diagnostic).toBeUndefined();
+    expect(result).toEqual({ ok: true, value: completed, diagnostic: { mapSources: [telemetry] } });
     const summary = summarizeSubAgentTelemetry([
       {
-        id: "map-call",
-        name: "map_sources",
+        id: "read-call",
+        name: "get_map_sources_result",
         status: "success",
         arguments: {},
         round: 1,

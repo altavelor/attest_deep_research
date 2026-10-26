@@ -2,29 +2,32 @@ import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
 import { EvidenceRegistry } from "@application/sources";
 import { ResearchRetriever } from "@application/contracts/research";
-import { ResearchToolsetOptions, SubAgentPort } from "@application/research";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import type { SubAgentParentRun } from "@application/ports/subAgent";
 import { MapSources } from "@application/use-cases/map-sources";
-import { MapSourcesTool } from "./MapSourcesTool";
+import { MapSourcesResultTool, MapSourcesTool } from "./MapSourcesTool";
 
 export interface MapSourcesSourceOptions {
-  runner: SubAgentPort;
+  context: MapSourcesRunContext;
+  parent: SubAgentParentRun;
   retriever: ResearchRetriever;
   evidence: EvidenceRegistry;
-  toolContext: ResearchToolsetOptions;
   available?: boolean;
 }
 
+/** Offers the fan-out tools of one parent run over its session-backed document workers. */
 export class MapSourcesSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
   private readonly mapper: MapSources;
-  private readonly evidence: EvidenceRegistry;
 
-  constructor(options: MapSourcesSourceOptions) {
-    this.evidence = options.evidence;
+  constructor(private readonly options: MapSourcesSourceOptions) {
+    const { context, parent } = options;
     this.mapper = new MapSources({
-      runner: options.runner,
+      runner: context.workers,
       retriever: options.retriever,
-      toolContext: options.toolContext,
+      context,
+      resolver: parent.resolver,
+      evidence: options.evidence,
     });
     this.descriptor = {
       id: "map-sources",
@@ -35,6 +38,7 @@ export class MapSourcesSource implements DataSource {
   }
 
   tools(): Tool[] {
-    return [new MapSourcesTool({ mapper: this.mapper, evidence: this.evidence })];
+    const deps = { mapper: this.mapper, parentRunId: this.options.parent.parentRunId };
+    return [new MapSourcesTool(deps), new MapSourcesResultTool(deps)];
   }
 }

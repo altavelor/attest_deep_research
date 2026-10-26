@@ -116,6 +116,76 @@ describe("sub-agent section validation", () => {
       "Sub-agent state has an invalid field: batches[0].refs[0].ref.",
       "Sub-agent state has an invalid field: batches[0].error.",
     ]);
+    const row = {
+      sourcePath: "Notes/a.md",
+      ok: true,
+      stance: "supports",
+      keyFindings: [],
+      evidenceIds: [],
+    };
+    const result = {
+      question: "q",
+      rows: [row],
+      diagnostics: { selection: "explicit", requested: 1, completed: 1, failed: 0 },
+    };
+    const completed = (rows: unknown[], extra = {}) =>
+      batchRecord({ state: "completed", result: { ...result, rows, ...extra } as never });
+    const ref = { sessionId: "session-1", runId: "run-1" };
+    const batchField = (batches: unknown) =>
+      fieldOf({ ...linked, batches })
+        .replace("Sub-agent state has an invalid field: ", "")
+        .replace(/\.$/u, "");
+    expect(
+      [
+        "x",
+        [null],
+        [batchRecord(), batchRecord()],
+        [batchRecord({ requestId: "../x" })],
+        [batchRecord({ question: "" })],
+        [batchRecord({ createdAt: "yesterday" })],
+        [batchRecord({ selection: "random" as never })],
+        [batchRecord({ sourcePaths: ["Notes/a.md", "Notes/a.md"] })],
+        [batchRecord({ refs: "none" as never })],
+        [batchRecord({ refs: [{ sourcePath: "Notes/b.md", ref }] })],
+        [
+          batchRecord({
+            sourcePaths: ["Notes/a.md", "Notes/b.md"],
+            refs: [
+              { sourcePath: "Notes/a.md", ref },
+              { sourcePath: "Notes/a.md", ref },
+            ],
+          }),
+        ],
+        [batchRecord({ refs: [{ sourcePath: "Notes/a.md", ref: { ...ref, sessionId: "../" } }] })],
+        [batchRecord({ state: "done" as never })],
+        [batchRecord({ result: result as never })],
+        [completed([{ ...row, stance: "s".repeat(33) }])],
+        [completed([{ ...row, evidenceIds: ["../x"] }])],
+        [completed([row], { diagnostics: {} })],
+        [batchRecord({ error: { code: "Bad Code", message: "m" } })],
+        [completed([{ ...row, error: "provider-failed: m" }])],
+      ].map(batchField),
+    ).toEqual([
+      "batches",
+      "batches[0]",
+      "batches[1].batchId",
+      "batches[0].requestId",
+      "batches[0].question",
+      "batches[0].createdAt",
+      "batches[0].selection",
+      "batches[0].sourcePaths",
+      "batches[0].refs",
+      "batches[0].refs[0]",
+      "batches[0].refs[1]",
+      "batches[0].refs[0].ref",
+      "batches[0].state",
+      "batches[0].result",
+      "batches[0].result",
+      "batches[0].result",
+      "batches[0].result",
+      "batches[0].error",
+      "valid",
+    ]);
   });
 
   it.each([

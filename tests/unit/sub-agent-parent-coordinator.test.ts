@@ -54,6 +54,22 @@ describe("SubAgentParentCoordinator", () => {
       delivered.map(({ ref, result }) => ({ ref, resultRevision: result.resultRevision })),
     );
     expect(await fresh.beforeFinalize()).toBe("ready");
+    const quiet = resultBoard();
+    let openBatches = 1;
+    const batched = new SubAgentParentCoordinator({
+      delegator: quiet.delegator as never,
+      host: quiet.host,
+      parentRunId: "parent-1",
+      pendingBatches: () => openBatches,
+    });
+    let batchDecision: string | null = null;
+    void batched.beforeFinalize().then((value) => (batchDecision = value));
+    await settle();
+    expect(batchDecision).toBeNull();
+    openBatches = 0;
+    quiet.signal();
+    await settle();
+    expect(batchDecision).toBe("ready");
     coordinator.dispose();
     fresh.dispose();
     const held = resultBoard();
@@ -137,7 +153,7 @@ describe("SubAgentParentCoordinator", () => {
     const hooks = subAgentRoundHooks(
       { ...fakeParentRun().parent, coordinator },
       {} as SubAgentEvidenceTarget,
-      0,
+      { maxDeliveryChars: 0, batches: { batchOf: () => "batch-9" } },
     );
 
     const first = await hooks.beforeModelRound();
@@ -149,6 +165,11 @@ describe("SubAgentParentCoordinator", () => {
     expect(repeated).toBe(first);
     expect([first?.includes("s-r1"), first?.includes("s-r2")]).toEqual([true, false]);
     expect(second).toContain("s-r2");
+    board.set("r3", "completed", 1, "x", "map_sources");
+    const worker = await hooks.beforeModelRound();
+    hooks.afterRoundAccepted();
+    expect(worker).toContain('"batchId":"batch-9","sessionId":"s-r3"');
+    expect(worker).not.toContain('"answer"');
     expect(await hooks.beforeModelRound()).toBeNull();
   });
 });
