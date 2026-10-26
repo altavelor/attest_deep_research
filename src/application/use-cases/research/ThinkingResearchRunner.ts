@@ -129,20 +129,10 @@ const SYNTHESIS_NUDGE =
 export class ThinkingResearchRunner {
   constructor(private readonly options: ThinkingResearchRunnerOptions) {}
 
-  /**
-   * Asks the delegated-work barrier whether the final draft may be published. A continued
-   * provider response cannot take a results message, so its results are acknowledged
-   * and the barrier asked again until nothing new remains.
-   */
-  private async finalizeDecision(continued: boolean): Promise<"ready" | "resume-with-results"> {
+  /** Asks the delegated-work barrier whether the final draft may be published. */
+  private async finalizeDecision(): Promise<"ready" | "resume-with-results"> {
     const hooks = this.options.roundHooks;
-    if (!hooks) return "ready";
-    let decision = await hooks.beforeFinalize(this.options.signal);
-    while (continued && decision === "resume-with-results") {
-      await hooks.beforeModelRound(false);
-      decision = await hooks.beforeFinalize(this.options.signal);
-    }
-    return decision;
+    return hooks ? hooks.beforeFinalize(this.options.signal) : "ready";
   }
 
   async run(): Promise<ThinkingResearchResult> {
@@ -217,10 +207,18 @@ export class ThinkingResearchRunner {
                 ? { type: "specific", name: repairTool! }
                 : { type: "required" }
               : { type: "auto" };
-        const delivery = await this.options.roundHooks?.beforeModelRound(!continuation);
-        if (delivery) messages.push({ role: "user", content: delivery });
+        const delivery = await this.options.roundHooks?.beforeModelRound();
+        const deliveryMessage = delivery ? { role: "user" as const, content: delivery } : null;
+        if (deliveryMessage && !continuation) messages.push(deliveryMessage);
         promptRounds.push(
-          buildRoundPromptDelta(round, toolChoice, messages.slice(promptLoggedCount), toolOutputs),
+          buildRoundPromptDelta(
+            round,
+            toolChoice,
+            continuation && deliveryMessage
+              ? [...messages.slice(promptLoggedCount), deliveryMessage]
+              : messages.slice(promptLoggedCount),
+            toolOutputs,
+          ),
         );
         promptLoggedCount = messages.length;
         const response = await collectThinkingModelRound(
@@ -232,6 +230,7 @@ export class ThinkingResearchRunner {
           toolOutputs,
           round,
           undefined,
+          continuation && deliveryMessage ? [deliveryMessage] : undefined,
         );
         continuation = response.continuation;
         reasoningItemCount += response.reasoningItemCount;
@@ -261,7 +260,7 @@ export class ThinkingResearchRunner {
           if (
             missing.length === 0 &&
             phase !== "repair" &&
-            (await this.finalizeDecision(Boolean(continuation))) === "resume-with-results"
+            (await this.finalizeDecision()) === "resume-with-results"
           ) {
             this.options.onRoundClassified?.(round, "intermediate");
             if (!continuation) messages.push({ role: "assistant", content: response.content });
