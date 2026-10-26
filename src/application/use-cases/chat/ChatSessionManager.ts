@@ -4,6 +4,7 @@ import { recoverSubAgentState } from "@core/research";
 
 import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { inferChatTitle } from "@core/chat/savedChat";
+import { normalizeSubAgentTimeline } from "@core/chat/subAgentTimeline";
 import type { SavedChatSummary } from "@core/chat/savedChat";
 import {
   chatHistoryActivity,
@@ -20,6 +21,7 @@ import {
   nextAssistantMessage,
   nextUserMessage,
   startAssistantProgress,
+  stripChainDisplayFields,
   stripMessageDiagnostics,
 } from "@core/conversation";
 import { toUserMessage } from "@core/errors";
@@ -629,9 +631,11 @@ export class ChatSessionManager {
   }
 
   private saveInput(state: ChatSessionState): SaveChatInput {
+    const timeline = normalizeSubAgentTimeline(state);
+    const displayFree = stripChainDisplayFields(timeline.messages);
     const messages = this.options.persistDiagnostics()
-      ? state.messages
-      : stripMessageDiagnostics(state.messages);
+      ? displayFree
+      : stripMessageDiagnostics(displayFree);
     return {
       id: state.chatId ?? undefined,
       title: inferChatTitle(state.messages),
@@ -642,6 +646,9 @@ export class ChatSessionManager {
       attachedContextPaths: state.attachedContextPaths,
       chatSettings: state.chatSettings,
       sourceRegistry: state.sourceRegistry,
+      subAgentDispatches: [...timeline.subAgentDispatches],
+      subAgentNotices: [...timeline.subAgentNotices],
+      timelineSequence: timeline.timelineSequence,
     };
   }
 

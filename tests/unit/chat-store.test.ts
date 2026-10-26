@@ -259,6 +259,9 @@ describe("FileChatStore", () => {
       "sourceRegistry",
       "unreadCompletion",
       "isFavorite",
+      "subAgentDispatches",
+      "subAgentNotices",
+      "timelineSequence",
       "subAgents",
     ]);
     await expect(fileSystem.exists(`${folder}/chat-1.json.tmp`)).resolves.toBe(false);

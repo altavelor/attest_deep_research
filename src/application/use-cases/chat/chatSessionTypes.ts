@@ -7,6 +7,7 @@ import type {
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ChatSessionStatus, InterruptionReason } from "@core/chat/chatSession";
 import type { ResearchService } from "@application/use-cases/research";
+import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 export interface ChatSessionState {
   sessionId: string;
@@ -24,10 +25,19 @@ export interface ChatSessionState {
   completedAt: string | null;
   unreadCompletion: boolean;
   interruptionReason: InterruptionReason | null;
+  subAgentDispatches: readonly SubAgentDispatchEntry[];
+  subAgentNotices: readonly SubAgentNoticeEntry[];
+  timelineSequence: number;
 }
 
 export type ChatSessionChangeKind =
-  "status" | "messages" | "active-message" | "progress" | "answer" | "error";
+  "status"
+  | "messages"
+  | "active-message"
+  | "progress"
+  | "answer"
+  | "error"
+  | "sub-agents";
 
 export interface ChatSessionChange {
   sessionId: string;

@@ -29,6 +29,7 @@ export interface ChatDisplayMessage {
   researchProgress?: AssistantResearchProgress;
   isFallback?: true;
   fallbackReason?: string;
+  timelineSequence?: number;
 }
 
 export interface ReasoningSegment {
