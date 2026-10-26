@@ -61,7 +61,29 @@ export async function viewSubAgentResult(
   };
 }
 
-/** Formats delivered child results as one bounded service message for the next model round. */
+export const MAX_DELIVERY_ANSWER_CHARS = 60_000;
+
+/**
+ * Selects the results one service message carries: answers fit the character budget
+ * together, and the first result is always carried so delivery never stalls.
+ */
+export function selectDeliverableResults(
+  results: readonly SubAgentDeliveredResult[],
+  maxAnswerChars = MAX_DELIVERY_ANSWER_CHARS,
+): SubAgentDeliveredResult[] {
+  const selected: SubAgentDeliveredResult[] = [];
+  let used = 0;
+  for (const delivered of results) {
+    const { result } = delivered;
+    const chars = result.state === "completed" ? result.outcome.answerText.length : 0;
+    if (selected.length > 0 && used + chars > maxAnswerChars) break;
+    selected.push(delivered);
+    used += chars;
+  }
+  return selected;
+}
+
+/** Formats delivered child results as one service message for the next model round. */
 export async function formatDeliveredSubAgentResults(
   results: readonly SubAgentDeliveredResult[],
   resolver: SubAgentImportedEvidenceResolver,

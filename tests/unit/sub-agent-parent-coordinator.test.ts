@@ -129,21 +129,26 @@ describe("SubAgentParentCoordinator", () => {
     coordinator.dispose();
   });
 
-  it("U3d: offers delivered results again until the round that carried them is accepted", async () => {
+  it("U3d: offers delivered results again until the round that carried them is accepted, within the budget", async () => {
     const board = resultBoard();
     board.set("r1", "failed", 1, "provider-error");
+    board.set("r2", "completed");
     const coordinator = coordinatorOver(board);
     const hooks = subAgentRoundHooks(
       { ...fakeParentRun().parent, coordinator },
       {} as SubAgentEvidenceTarget,
+      0,
     );
 
     const first = await hooks.beforeModelRound();
     const repeated = await hooks.beforeModelRound();
     hooks.afterRoundAccepted();
+    const second = await hooks.beforeModelRound();
+    hooks.afterRoundAccepted();
 
     expect(repeated).toBe(first);
-    expect(first).toContain("s-r1");
+    expect([first?.includes("s-r1"), first?.includes("s-r2")]).toEqual([true, false]);
+    expect(second).toContain("s-r2");
     expect(await hooks.beforeModelRound()).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import type { SubAgentParentRun } from "@application/ports/subAgent";
 import {
   formatDeliveredSubAgentResults,
+  MAX_DELIVERY_ANSWER_CHARS,
+  selectDeliverableResults,
   type SubAgentEvidenceTarget,
 } from "@application/research/subAgentResults";
 import type { SubAgentRunRef } from "@core/research";
@@ -16,16 +18,21 @@ export interface ThinkingRoundHooks {
  * Adapts the parent coordinator to the Thinking loop: new terminal child results become
  * one service message for the next round, aliased into the run's evidence registry, and
  * are acknowledged only once a round that carried them, as a message or as service
- * input of a continued provider response, was accepted.
+ * input of a continued provider response, was accepted. Results beyond the answer
+ * budget of one message stay unacknowledged and are offered again next round.
  */
 export function subAgentRoundHooks(
   parent: SubAgentParentRun,
   evidence: SubAgentEvidenceTarget,
+  maxDeliveryChars = MAX_DELIVERY_ANSWER_CHARS,
 ): ThinkingRoundHooks {
   let delivered: { ref: SubAgentRunRef; resultRevision: number }[] = [];
   return {
     async beforeModelRound() {
-      const results = await parent.coordinator.beforeModelRound();
+      const results = selectDeliverableResults(
+        await parent.coordinator.beforeModelRound(),
+        maxDeliveryChars,
+      );
       if (results.length === 0) return null;
       const acknowledged = results.map(({ ref, result }) => ({
         ref,
