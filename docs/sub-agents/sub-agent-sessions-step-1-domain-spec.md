@@ -133,6 +133,11 @@ partial result. Обычный follow-up сохраняет session ID и исп
 Ссылка на не-current terminal head, чужой run, importing или параллельный run отклоняется.
 User-archive окончательно закрывает сессию; model stop может оставить право retry.
 Повтор user-archive не создаёт новый run, событие или изменение revision.
+Уточнения реализации: событие stop-requested переводит running в stopping у сессии и run;
+из stopping допустимы model-stop и provider-failed. Строка import-failed оставляет статус run
+completed, но увеличивает resultRevision, потому что публичное состояние результата становится
+failed/import-failed. Tombstone import возвращается переходом отдельно от записи
+(tombstonedImport) и поднимает lastImportGeneration до max(last, pending).
 
 ## 4. Валидация и права источников
 
