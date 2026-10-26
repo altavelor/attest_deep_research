@@ -328,26 +328,34 @@ describe("required-scope denial and cleanup", () => {
     expect([...harness.owner.settlements.values()]).toEqual(["not-started"]);
   });
 
-  it("U9: a stop in any turn after a held permit or start settles it once and never runs", async () => {
+  it("U9 (late grant window): a close in any turn before the runner settles the permit once and never runs", async () => {
     const leaks: string[] = [];
+    let windows = 0;
     for (const method of ["beginExecution", "markStarted"] as const) {
       for (let turns = 0; turns < 12; turns += 1) {
         const harness = scopedHarness();
         const release = harness.owner.hold(method);
-        const { session } = await launchChild(harness.delegator("scope-1"), "a");
+        await launchChild(harness.delegator("scope-1"), "a");
         await settle();
         release();
         for (let turn = 0; turn < turns; turn += 1) await Promise.resolve();
-        void harness.delegator("scope-1").stop(session.subAgentSessionId);
+        if (harness.execution.requests.length > 0) break;
+        void harness.manager.closeAll("parent-1", "done");
         await settle();
-        const settled = [...harness.owner.settlements.values()].join();
         const expected = harness.owner.started.size > 0 ? "consumed" : "not-started";
-        if (harness.execution.requests.length === 0 && settled !== expected) {
-          leaks.push(`${method}:${turns}:${settled}`);
+        const settles = harness.owner.calls.filter((call) => call.startsWith("settle:"));
+        windows += 1;
+        if (
+          harness.execution.requests.length !== 0 ||
+          settles.length !== 1 ||
+          !settles[0].endsWith(`:${expected}`)
+        ) {
+          leaks.push(`${method}:${turns}:${settles.join()}`);
         }
       }
     }
 
+    expect(windows).toBeGreaterThan(2);
     expect(leaks).toEqual([]);
   });
 
