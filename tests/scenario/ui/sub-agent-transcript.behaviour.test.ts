@@ -8,6 +8,7 @@ import {
   renderChatTranscript,
   type ChatTranscriptOptions,
 } from "@apps/obsidian/ui/chat/ChatTranscript";
+import { renderSubAgentDispatch } from "@apps/obsidian/ui/chat/subAgentEvents";
 import type { ChatRunRequest } from "@application/use-cases/chat";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import { settle } from "../../support/async";
@@ -231,6 +232,21 @@ describe("sub-agent events in a reloaded parent transcript", () => {
     expect(transcript.textContent).not.toContain("Legacy child answer");
     expect(transcript.textContent).not.toContain("Child fetch");
     expect(transcript.querySelector('[data-tool-id="own"]')).not.toBeNull();
+    expect(transcript.querySelectorAll("[aria-live]")).toHaveLength(0);
+
+    const folded = document.createElement("div");
+    const t = ((key: string) => key) as never;
+    for (const body of ["a".repeat(280), "b".repeat(281)]) {
+      renderSubAgentDispatch(folded, { ...state.subAgentDispatches[0]!, body }, { t });
+    }
+    const [short, long] = [...folded.querySelectorAll<HTMLElement>(".attest-chat__agent-card")];
+    const toggle = long!.querySelector<HTMLButtonElement>(".attest-chat__agent-toggle")!;
+    const longText = () => long!.querySelector(".attest-chat__agent-text")!.textContent;
+    expect(short!.querySelector(".attest-chat__agent-toggle")).toBeNull();
+    expect(longText()).toBe(`${"b".repeat(280)}…`);
+    toggle.click();
+    expect([longText(), toggle.getAttribute("aria-expanded")]).toEqual(["b".repeat(281), "true"]);
+    expect(folded.querySelector(".attest-chat__agent-open")).toBeNull();
 
     await manager.save(state.sessionId);
     await repository.renameChat("chat-legacy", "Renamed");
