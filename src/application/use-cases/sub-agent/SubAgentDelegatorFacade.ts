@@ -47,7 +47,13 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
   ) {}
 
   create(input: CreateSubAgentSessionInput): Promise<SubAgentSessionSummary> {
-    return this.call((grant) => this.services.creation.create(this.binding, grant, input));
+    return this.call(async (grant) => {
+      const session = await this.services.creation.create(this.binding, grant, input);
+      if (this.services.parts.context.getCurrentDeliveryEpoch() !== this.delivery.deliveryEpoch) {
+        throw sessionFailure("fenced-delivery");
+      }
+      return session;
+    });
   }
 
   getCreatedSession(createRequestId: string): Promise<SubAgentSessionSummary> {

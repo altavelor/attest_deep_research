@@ -38,6 +38,7 @@ interface NormalizedCreate {
 const DENIAL_CODES: readonly SubAgentSessionErrorCode[] = [
   "budget-denied",
   "budget-port-error",
+  "persistence-failed",
   "source-scope-denied",
 ];
 
@@ -184,10 +185,13 @@ export class SubAgentSessionCreation {
     try {
       await store.flush(revision);
     } catch (error) {
-      if (registration) void this.abortRegistration(registration);
+      if (registration) {
+        void this.abortRegistration(registration);
+        await this.withdraw(record, session, "persistence-failed");
+      }
       throw error;
     }
-    if (registration) await this.finishRegistration(registration, session);
+    if (registration) await this.finishRegistration(record, registration, session);
     this.parts.sessionOptions.set(session.subAgentSessionId, {
       grant: normalized.grant,
       resources: normalized.resources,
@@ -209,11 +213,11 @@ export class SubAgentSessionCreation {
     try {
       begun = await this.parts.budget.register(scopeId, record.createRequestId);
     } catch (error) {
-      this.deny(record, "budget-port-error");
+      await this.deny(record, "budget-port-error");
       throw error;
     }
     if (begun.type === "denied") {
-      this.deny(record, "budget-denied");
+      await this.deny(record, "budget-denied");
       throw sessionFailure("budget-denied");
     }
     if (
@@ -228,6 +232,7 @@ export class SubAgentSessionCreation {
 
   /** Finishes a published registration; a closed scope or port error archives the unusable session. */
   private async finishRegistration(
+    create: SubAgentCreateRecord,
     registration: SubAgentBudgetRegistration,
     session: SubAgentSessionSummary,
   ): Promise<void> {
@@ -242,20 +247,30 @@ export class SubAgentSessionCreation {
       code = "budget-port-error";
     }
     if (code === null) return;
-    const record = this.parts.store.record(session.subAgentSessionId);
-    const archived =
-      record &&
-      applySubAgentTransition(record, {
-        type: "archive",
-        reason: "user-archive",
-        at: timestamp(this.parts),
-      });
-    if (archived?.ok) {
-      await this.parts.store
-        .flush(this.parts.store.putRecord(archived.record, record))
-        .catch(() => undefined);
-    }
+    await this.withdraw(create, session, code);
     throw sessionFailure(code);
+  }
+
+  /** Archives a published session that may not be used and stores the denial on its create record. */
+  private async withdraw(
+    create: SubAgentCreateRecord,
+    session: SubAgentSessionSummary,
+    terminalReason: SubAgentSessionErrorCode,
+  ): Promise<void> {
+    const record = this.parts.store.record(session.subAgentSessionId);
+    try {
+      const archived =
+        record &&
+        applySubAgentTransition(record, {
+          type: "archive",
+          reason: "user-archive",
+          at: timestamp(this.parts),
+        });
+      if (record && archived?.ok) this.parts.store.putRecord(archived.record, record);
+    } catch {
+      return this.deny(create, terminalReason);
+    }
+    await this.deny(create, terminalReason);
   }
 
   private async abortRegistration(registration: SubAgentBudgetRegistration): Promise<void> {
@@ -264,10 +279,12 @@ export class SubAgentSessionCreation {
       .catch(() => undefined);
   }
 
-  private deny(record: SubAgentCreateRecord, terminalReason: string): void {
+  private async deny(record: SubAgentCreateRecord, terminalReason: string): Promise<void> {
     this.pendingInputs.delete(record.createRequestId);
     try {
-      this.parts.store.putCreate({ ...record, status: "denied", terminalReason });
+      await this.parts.store.flush(
+        this.parts.store.putCreate({ ...record, status: "denied", terminalReason }),
+      );
     } catch {
       return;
     }
