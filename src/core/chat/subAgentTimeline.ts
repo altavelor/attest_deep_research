@@ -156,7 +156,7 @@ export type SubAgentTimelineEvent =
 /**
  * Adds one main-visible event with the next shared sequence, after first stamping
  * messages that have none. A known event key changes nothing, except a batch notice,
- * which is updated in place with its original sequence; null means unchanged.
+ * which an update with no fewer settled children replaces with its original sequence.
  */
 export function applySubAgentTimelineEvent(
   state: SubAgentTimelineState,
@@ -177,9 +177,11 @@ export function applySubAgentTimelineEvent(
   }
   const existing = state.subAgentNotices.findIndex((entry) => entry.eventKey === key);
   if (existing !== -1) {
-    if (event.entry.kind !== "batch") return null;
+    const saved = state.subAgentNotices[existing]!;
+    if (event.entry.kind !== "batch" || saved.kind !== "batch") return null;
+    if (settledCount(event.entry.batch) < settledCount(saved.batch)) return null;
     const notices = [...state.subAgentNotices];
-    notices[existing] = { ...event.entry, sequence: notices[existing]!.sequence };
+    notices[existing] = { ...event.entry, sequence: saved.sequence };
     return { ...state, subAgentNotices: notices };
   }
   const stamped = normalizeSubAgentTimeline(state);
@@ -236,6 +238,10 @@ function messageSortKey(messages: readonly ChatDisplayMessage[], index: number):
     .reverse()
     .find((message) => message.timelineSequence !== undefined);
   return (preceding?.timelineSequence ?? index) + 0.5;
+}
+
+function settledCount(batch: SubAgentNoticeEntry["batch"]): number {
+  return batch ? batch.done + batch.failed : 0;
 }
 
 function withoutSequence(message: ChatDisplayMessage): ChatDisplayMessage {
