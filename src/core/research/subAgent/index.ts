@@ -41,6 +41,7 @@ export type {
 } from "./sessionModel";
 export {
   subAgentSessionError,
+  SubAgentSessionFailure,
   type SubAgentErrorDetail,
   type SubAgentSessionError,
   type SubAgentSessionErrorCode,
@@ -71,6 +72,7 @@ export {
   type ValidatedJsonValue,
 } from "./stateSnapshot";
 export {
+  isSubAgentStateId,
   validateSubAgentState,
   type SubAgentStateValidation,
   type SubAgentStateValidationCode,

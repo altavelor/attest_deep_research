@@ -29,6 +29,11 @@ const SEARCH_MODES = ["none", "indexOnly", "indexAndWeb", "webOnly"];
 
 class InvalidField extends Error {}
 
+/** True when the value can be stored as an id of the sub-agent section. */
+export function isSubAgentStateId(value: unknown): value is string {
+  return typeof value === "string" && SAFE_ID.test(value);
+}
+
 /**
  * Checks an untrusted sub-agent section against the step-1 domain model and the
  * section envelope: safe IDs, known statuses and discriminants, ISO timestamps,
