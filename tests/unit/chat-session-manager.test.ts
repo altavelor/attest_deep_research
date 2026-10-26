@@ -1025,6 +1025,12 @@ function createUnorderedRepository(): {
     deleteChat: async (id) => {
       chats.delete(id);
     },
+    loadChatDocument: async () => {
+      throw new Error("Chat documents are not used by this repository.");
+    },
+    commitChatDocument: async () => {
+      throw new Error("Chat documents are not used by this repository.");
+    },
   };
 
   return {

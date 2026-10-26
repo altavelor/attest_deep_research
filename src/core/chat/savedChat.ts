@@ -6,6 +6,12 @@ import { ContextMode } from "@core/diagnostics";
 import { parseSavedChatRunState, type SavedChatRunState } from "./chatSession";
 import { condenseTitleText } from "./titlePolicy";
 import {
+  toValidatedJson,
+  validateSubAgentState,
+  type SubAgentStateSnapshot,
+  type ValidatedJsonValue,
+} from "@core/research/subAgent";
+import {
   canonicalSourceKey,
   ConversationEvidenceRevision,
   ConversationSource,
@@ -40,7 +46,13 @@ export interface SavedChat {
 
   isFavorite?: boolean;
   lastRun?: SavedChatRunState;
+  subAgents?: SavedChatSubAgents;
+  recoveredFrom?: "previous";
 }
+
+export type SavedChatSubAgents =
+  | { status: "ready"; snapshot: SubAgentStateSnapshot }
+  | { status: "unreadable"; raw: ValidatedJsonValue; reason: string };
 
 export interface SavedChatSummary {
   id: string;
@@ -111,8 +123,11 @@ export function parseSavedChat(value: unknown): SavedChat | null {
     sourceRegistry: _sourceRegistry,
     unreadCompletion: _unreadCompletion,
     lastRun: _lastRun,
+    subAgents: _subAgents,
+    recoveredFrom: _recoveredFrom,
     ...rest
   } = chat;
+  const subAgents = parseSavedChatSubAgents((value as { subAgents?: unknown }).subAgents, chat.id!);
 
   return {
     ...(rest as Omit<
@@ -126,7 +141,28 @@ export function parseSavedChat(value: unknown): SavedChat | null {
         : sanitizeConversationSourceRegistry(chat.sourceRegistry),
     unreadCompletion: isCurrent && chat.unreadCompletion === true,
     ...(lastRun ? { lastRun } : {}),
+    ...(subAgents ? { subAgents } : {}),
   };
+}
+
+/**
+ * Reads the optional sub-agent section separately from the rest of the chat. An
+ * absent section yields undefined; a section of another version, another chat or
+ * with invalid content is kept verbatim as unreadable so it is never overwritten
+ * with an empty state, while the chat itself stays readable.
+ */
+export function parseSavedChatSubAgents(
+  value: unknown,
+  chatId: string,
+): SavedChatSubAgents | undefined {
+  if (value === undefined) return undefined;
+  const raw = toValidatedJson(value) ?? null;
+  const validation = validateSubAgentState(value);
+  if (!validation.ok) return { status: "unreadable", raw, reason: validation.message };
+  if (validation.snapshot.chatId !== chatId) {
+    return { status: "unreadable", raw, reason: "Sub-agent state belongs to another chat." };
+  }
+  return { status: "ready", snapshot: validation.snapshot };
 }
 
 function hasSavedChatBase(chat: Partial<SavedChat>): boolean {

@@ -4,7 +4,10 @@ import { listSourceModules, reachableModules } from "../../support/moduleGraph";
 
 const ENTRY_POINTS = ["src/apps/obsidian/main.ts"];
 
-const MODULES_REACHED_ONLY_BY_TESTS = ["src/apps/obsidian/pluginMetadata.ts"];
+const MODULES_REACHED_ONLY_BY_TESTS = [
+  "src/apps/obsidian/pluginMetadata.ts",
+  "src/adapters/filesystem/sub-agent/ChatDocumentSubAgentRepository.ts",
+];
 
 describe("module reachability", () => {
   const modules = listSourceModules();

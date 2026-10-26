@@ -30,5 +30,6 @@ export interface FileSystemPort {
   append(path: string, content: string): Promise<void>;
   rename(fromPath: string, toPath: string): Promise<void>;
   remove(path: string): Promise<void>;
+  removeReplaceable(path: string): Promise<void>;
   removeFolder(path: string, options?: { recursive?: boolean }): Promise<void>;
 }

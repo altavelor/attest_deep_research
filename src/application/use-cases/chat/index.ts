@@ -4,3 +4,4 @@ export * from "./ChatSessionManager";
 export * from "./ChatSessionRuntime";
 export * from "./chatSessionSnapshots";
 export * from "./chatSessionTypes";
+export * from "./ChatWriteBuffer";

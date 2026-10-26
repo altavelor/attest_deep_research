@@ -137,6 +137,10 @@ export class MemoryFileSystem implements FileSystemPort {
     this.modifiedTimes.delete(key);
   }
 
+  async removeReplaceable(path: string): Promise<void> {
+    this.files.delete(joinVaultPath(path));
+  }
+
   async removeFolder(path: string, options?: { recursive?: boolean }): Promise<void> {
     const key = joinVaultPath(path);
 
