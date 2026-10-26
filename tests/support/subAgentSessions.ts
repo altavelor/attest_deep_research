@@ -17,6 +17,7 @@ import type {
   SubAgentImportRequest,
   SubAgentImportResult,
   SubAgentImportLookup,
+  SubAgentMainEventIntent,
   SubAgentSessionManagerContext,
 } from "@application/ports";
 import {
@@ -432,6 +433,8 @@ export interface ManagerHarnessOptions {
   load?: () => Promise<SubAgentStateSnapshot | null>;
   budget?: FakeBudgetOwner;
   evidenceImport?: SubAgentEvidenceImportPort;
+  redact?: (text: string) => string;
+  execution?: SubAgentExecutionPort;
 }
 
 /** Builds one untrusted child evidence value as the runner reports it, web by default. */
@@ -512,13 +515,14 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
   const execution = new FakeSubAgentExecution();
   const imports = new FakeSubAgentImport();
   const grants = new Map([["grant-1", delegationGrant(binding)]]);
-  const probes = { parent: binding as ParentRunBinding | null, epoch: 1 };
+  const probes = { parent: binding as ParentRunBinding | null, epoch: 1, debug: false, clockMs: 0 };
+  const mainEvents: SubAgentMainEventIntent[] = [];
   let sequence = 0;
   const context: SubAgentSessionManagerContext = {
     getChatId: () => chatId,
     repository: { load: options.load ?? (async () => null) },
     writer,
-    execution,
+    execution: options.execution ?? execution,
     evidenceImport: options.evidenceImport ?? imports,
     ...(options.budget ? { budget: options.budget } : {}),
     getCurrentParentBinding: () => probes.parent,
@@ -526,11 +530,15 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
     resolveGrant: (id) => grants.get(id) ?? null,
     now: () => new Date(AT),
     createId: (prefix) => `${prefix}-${chatId ?? "draft"}-${(sequence += 1)}`,
+    ...(options.redact ? { redact: options.redact } : {}),
+    monotonicNow: () => probes.clockMs,
+    isDebugCapture: () => probes.debug,
+    mainEvents: { publish: (intents) => void mainEvents.push(...intents) },
   };
   const manager = createSubAgentSessionManager(context);
   const delegator = (grantId = "grant-1", deliveryEpoch = 1) =>
     manager.delegatorFor(binding, { deliveryEpoch, grantId });
-  return { manager, binding, writer, execution, imports, grants, probes, delegator };
+  return { manager, binding, writer, execution, imports, grants, probes, delegator, mainEvents };
 }
 
 /** Creates a session through the delegator and submits its initial command. */
