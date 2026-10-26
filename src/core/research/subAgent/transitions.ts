@@ -48,7 +48,11 @@ export type SubAgentTransition =
   | ({ type: "model-stop"; reason: string } & SubAgentRunEvent)
   | { type: "import-committed" | "import-failed"; generation: number; at: string }
   | { type: "stop-import"; at: string }
-  | { type: "archive"; reason: "parent-terminal" | "user-archive"; at: string };
+  | {
+      type: "archive";
+      reason: "parent-terminal" | "user-archive" | "checkpoint-corrupt";
+      at: string;
+    };
 
 export type SubAgentTransitionResult =
   | { ok: true; record: SubAgentSessionRecord; tombstonedImport: SubAgentImportTombstone | null }
@@ -268,6 +272,8 @@ function completeRun(
   const run = activeRun(record, event.runId);
   if (!run || run.status !== "running") return rejected("invalid-state");
   const { session } = record;
+  if (!Number.isSafeInteger(session.lastImportGeneration + 1))
+    return rejected("checkpoint-corrupt");
   return accepted(
     replaceRun(record, {
       ...run,

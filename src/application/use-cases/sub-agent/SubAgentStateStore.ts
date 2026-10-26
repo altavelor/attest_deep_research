@@ -7,6 +7,7 @@ import {
   SubAgentSessionFailure,
   type SubAgentBufferedValue,
   type SubAgentCreateRecord,
+  type SubAgentImportRecord,
   type SubAgentImportTombstone,
   type SubAgentPendingAction,
   type SubAgentRecoveryMarker,
@@ -115,13 +116,17 @@ export class SubAgentStateStore {
     return this.put("marker", marker.parentRunId, marker);
   }
 
-  tombstoneImport(tombstone: SubAgentImportTombstone | null): void {
+  putImport(entry: SubAgentImportRecord): number {
+    return this.put("import", entry.importId, entry);
+  }
+
+  tombstoneImport(tombstone: SubAgentImportTombstone | null, reason = "stopped"): void {
     if (!tombstone) return;
     const entry = this.snapshot?.imports.find(
       (row) => row.runId === tombstone.runId && row.generation === tombstone.generation,
     );
     if (entry && entry.state !== "tombstoned") {
-      this.put("import", entry.importId, { state: "tombstoned", tombstoneReason: "stopped" });
+      this.put("import", entry.importId, { state: "tombstoned", tombstoneReason: reason });
     }
   }
 

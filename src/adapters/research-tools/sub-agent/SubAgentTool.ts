@@ -5,9 +5,13 @@ import {
   MAX_SUB_AGENT_RESOURCE_CHARS,
   MAX_SUB_AGENT_RESOURCES,
   MAX_SUB_AGENT_SEARCHES,
+  MAX_IMPORTED_WEB_SOURCES,
+  MAX_REGISTERED_SNIPPET_CHARS,
   MAX_SUB_AGENT_TASK_CHARS,
   MIN_SUB_AGENT_SEARCHES,
   readSubAgentSearchBudget,
+  subAgentAllowedHosts,
+  subAgentHostAllowed,
   validateSubAgentResources,
   validateSubAgentTaskInput,
 } from "@core/research";
@@ -29,12 +33,6 @@ export interface SubAgentOutput {
   droppedSourceCount: number;
   evidenceBudgetExhausted: boolean;
 }
-
-const MAX_REGISTERED_SNIPPET_CHARS = 2_000;
-
-const MAX_IMPORTED_WEB_SOURCES = 10;
-
-const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<SubAgentInput> {
   const unknownProperty = Object.keys(input).find(
@@ -61,21 +59,6 @@ function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<Sub
       ...(resources.value.length > 0 ? { resources: resources.value } : {}),
     },
   };
-}
-
-/**
- * True when the URL belongs to one of the allowed hosts, matching a host and its
- * subdomains. An empty allow-list permits everything; an unparsable URL is refused.
- */
-function hostAllowed(url: string, allowedHosts: string[]): boolean {
-  if (allowedHosts.length === 0) return true;
-  let host: string;
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
 }
 
 export const SubAgentTool = defineTool<
@@ -136,9 +119,7 @@ export const SubAgentTool = defineTool<
       };
     }
 
-    const allowedHosts = (input.resources ?? [])
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => DOMAIN_RESOURCE.test(entry));
+    const allowedHosts = subAgentAllowedHosts(input.resources ?? []);
 
     let sourceCount = 0;
     let webSourceCount = 0;
@@ -157,7 +138,7 @@ export const SubAgentTool = defineTool<
           }
           if (
             webSourceCount >= MAX_IMPORTED_WEB_SOURCES ||
-            !hostAllowed(chunk.source.url, allowedHosts)
+            !subAgentHostAllowed(chunk.source.url, allowedHosts)
           ) {
             droppedSourceCount += 1;
             droppedCitationTokens.push(chunk.id, `url:${chunk.source.url}`);

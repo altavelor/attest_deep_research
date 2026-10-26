@@ -57,4 +57,5 @@ export interface EvidenceRegistry {
     page: { content: string; finalUrl: string; truncated: boolean; callId: string },
   ): void;
   snapshot(): ResearchEvidenceSnapshot;
+  importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void;
 }

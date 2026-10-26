@@ -2,18 +2,20 @@ import type { SubAgentExecutionResult } from "@application/ports/subAgent";
 import {
   applySubAgentTransition,
   type ImportedSubAgentRunOutcome,
+  type SubAgentImportRecord,
   type SubAgentSessionRecord,
   type SubAgentTransition,
 } from "@core/research";
 import { settleWithin } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
+import { IMPORT_TIMEOUT_MS, type SubAgentImportCommitter } from "./importCoordinator";
+import { importedSummary } from "./importPlan";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import { admitScopedRun } from "./scopedAdmission";
 import { scopeOf, type SubAgentBudgetGrant } from "./subAgentBudget";
 
+export { IMPORT_TIMEOUT_MS };
 export const LOCAL_RUN_CAPACITY = 4;
-export const IMPORT_TIMEOUT_MS = 2_000;
-const RESULT_SUMMARY_CHARS = 1_000;
 
 export interface QueuedRun {
   sessionId: string;
@@ -38,12 +40,14 @@ type TransitionEvent = SubAgentTransition extends infer T
  * result. Fencing a session drops its queue entry, aborts and releases its slot at once
  * and cancels its import wait, so a late completion is discarded.
  */
-export class SubAgentRunScheduler {
+export class SubAgentRunScheduler implements SubAgentImportCommitter {
   private readonly queue: QueuedRun[] = [];
   private readonly slots = new Map<string, RunSlot>();
   private readonly imports = new Map<string, AbortController>();
 
-  constructor(readonly parts: SubAgentManagerParts) {}
+  constructor(readonly parts: SubAgentManagerParts) {
+    parts.imports.committer = this;
+  }
 
   get runningCount(): number {
     return this.slots.size;
@@ -91,7 +95,10 @@ export class SubAgentRunScheduler {
     } as SubAgentTransition);
     if (!result.ok) return null;
     const revision = this.parts.store.putRecord(result.record, record);
-    this.parts.store.tombstoneImport(result.tombstonedImport);
+    this.parts.store.tombstoneImport(
+      result.tombstonedImport,
+      event.type === "archive" ? event.reason : "stopped",
+    );
     return revision;
   }
 
@@ -186,13 +193,30 @@ export class SubAgentRunScheduler {
   }
 
   private async complete(slot: RunSlot, result: SubAgentExecutionResult): Promise<void> {
-    const completed = await this.settle(slot, {
-      type: "runner-completed",
-      runId: slot.runId,
-      usage: result.usage,
-      evidenceCount: result.evidence.length,
-      resultSummary: result.answerText.trim().slice(0, RESULT_SUMMARY_CHARS) || null,
-    });
+    const last = this.parts.store.record(slot.sessionId)?.session.lastImportGeneration ?? 0;
+    if (!Number.isSafeInteger(last + 1)) {
+      await this.settle(slot, { type: "archive", reason: "checkpoint-corrupt" });
+      return;
+    }
+    let completed = false;
+    try {
+      const plan = this.parts.imports.plan(slot.sessionId, slot.runId, result);
+      const revision = this.transition(slot.sessionId, {
+        type: "runner-completed",
+        runId: slot.runId,
+        usage: result.usage,
+        evidenceCount: result.evidence.length,
+        resultSummary: plan ? importedSummary(plan.prepared.answerText) : null,
+      });
+      if (revision !== null) {
+        if (plan) this.parts.imports.stage(plan);
+        await this.parts.store.flush(this.parts.store.currentRevision);
+        completed = true;
+        this.parts.notifyResults();
+      }
+    } catch {
+      completed = false;
+    }
     const generation = this.parts.store.record(slot.sessionId)?.session.pendingImportGeneration;
     if (generation === null || generation === undefined) return;
     if (!completed) {
@@ -202,7 +226,7 @@ export class SubAgentRunScheduler {
     const fence = new AbortController();
     this.imports.set(slot.sessionId, fence);
     const outcome = await settleWithin(
-      this.parts.context.evidenceImport.commit({
+      this.parts.imports.commit({
         sessionId: slot.sessionId,
         runId: slot.runId,
         result,
@@ -238,19 +262,24 @@ export class SubAgentRunScheduler {
    * write is pending the run reads as pending; if it fails, the record is restored and
    * the import fails instead of exposing an unsaved answer.
    */
-  private async commitImport(
-    slot: RunSlot,
+  async commitImport(
+    slot: QueuedRun,
     generation: number,
     imported: ImportedSubAgentRunOutcome,
   ): Promise<void> {
     const before = this.parts.store.record(slot.sessionId);
     let staged: SubAgentSessionRecord | undefined;
+    let marker: SubAgentImportRecord | null = null;
     this.parts.unsavedImports.add(slot.runId);
     try {
-      const revision = this.transition(slot.sessionId, { type: "import-committed", generation });
-      if (revision === null) return;
+      if (
+        !this.parts.imports.hasPrepared(slot.sessionId, slot.runId, generation) ||
+        this.transition(slot.sessionId, { type: "import-committed", generation }) === null
+      )
+        return;
       staged = this.parts.store.record(slot.sessionId);
-      await this.parts.store.flush(revision);
+      marker = this.parts.imports.markCommitted(slot.sessionId, slot.runId, generation);
+      await this.parts.store.flush(this.parts.store.currentRevision);
       const session = this.parts.store.record(slot.sessionId)?.session;
       if (session && !this.parts.fences.isRevoked(session.parentRunId))
         this.parts.outcomes.set(slot.runId, imported);
@@ -258,6 +287,7 @@ export class SubAgentRunScheduler {
       if (!before || !staged || this.parts.store.record(slot.sessionId) !== staged) return;
       try {
         this.parts.store.putRecord(before);
+        if (marker) this.parts.imports.unmarkCommitted(marker);
       } catch {
         return;
       }
@@ -330,7 +360,7 @@ export class SubAgentRunScheduler {
   }
 
   /** Fails an import whose completed result could not be saved, so the session never hangs in importing. */
-  private async abandonImport(slot: RunSlot, generation: number): Promise<void> {
+  private async abandonImport(slot: QueuedRun, generation: number): Promise<void> {
     const session = this.parts.store.record(slot.sessionId)?.session;
     if (
       session?.status !== "importing" ||

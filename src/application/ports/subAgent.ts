@@ -10,6 +10,8 @@ import type {
   SubAgentBufferedValue,
   SubAgentCommand,
   SubAgentFlushReason,
+  SubAgentImportItem,
+  SubAgentImportRecord,
   SubAgentResultState,
   SubAgentRunReceipt,
   SubAgentRunRef,
@@ -19,6 +21,7 @@ import type {
   SubAgentTaskOrigin,
   ValidatedJsonValue,
 } from "@core/research";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 
 export interface SubAgentSessionRepository {
   load(chatId: string): Promise<SubAgentStateSnapshot | null>;
@@ -92,6 +95,7 @@ export interface SubAgentDelegationGrant {
   capturedActiveFilePath?: string;
   origin: SubAgentTaskOrigin;
   limits: { maxRounds: number; maxResultChars: number; maxSearches: number };
+  remainingWebCapacity?(): number;
 }
 
 export interface SubAgentPriorContext {
@@ -129,6 +133,11 @@ export interface SubAgentExecutionResult {
   telemetry: ValidatedJsonValue;
 }
 
+/**
+ * Runs one child command. A continue-partial run must return the evidence it keeps from
+ * the interrupted run in its own result evidence, because the manager stores only the
+ * references of committed imports; such a result is imported as incomplete.
+ */
 export interface SubAgentExecutionPort {
   run(request: SubAgentExecutionRequest): Promise<SubAgentExecutionResult>;
 }
@@ -145,6 +154,32 @@ export interface SubAgentImportResult {
 
 export interface SubAgentEvidenceImportPort {
   commit(request: SubAgentImportRequest): Promise<SubAgentImportResult>;
+}
+
+export interface SubAgentPreparedImport {
+  importId: string;
+  chatId: string;
+  sessionId: string;
+  runId: string;
+  generation: number;
+  attempt: number;
+  items: readonly SubAgentImportItem[];
+  answerText: string;
+  evidenceBudgetExhausted: boolean;
+  repairOnly?: boolean;
+}
+
+export interface SubAgentPreparedImportRequest extends SubAgentImportRequest {
+  prepared: SubAgentPreparedImport;
+}
+
+export interface SubAgentImportedEvidenceResolver {
+  resolve(outcome: ImportedSubAgentRunOutcome): Promise<ResearchEvidenceSnapshot>;
+}
+
+export interface SubAgentImportLookup {
+  isCurrent(prepared: SubAgentPreparedImport): boolean;
+  committed(outcome: ImportedSubAgentRunOutcome): SubAgentImportRecord | null;
 }
 
 export type SubAgentBudgetUnit =

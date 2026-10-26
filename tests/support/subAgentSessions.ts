@@ -16,9 +16,22 @@ import type {
   SubAgentExecutionResult,
   SubAgentImportRequest,
   SubAgentImportResult,
+  SubAgentImportLookup,
   SubAgentSessionManagerContext,
 } from "@application/ports";
-import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
+import {
+  ChatSubAgentEvidenceBridge,
+  type ChatSubAgentEvidenceBridgeContext,
+} from "@application/use-cases/chat";
+import {
+  createConversationSourceRegistry,
+  type ConversationSourceRegistry,
+} from "@core/chat/sourceRegistry";
+import {
+  createSubAgentSessionManager,
+  type SubAgentSessionManager,
+} from "@application/use-cases/sub-agent";
+import type { SubAgentManagerParts } from "@application/use-cases/sub-agent/managerParts";
 import { ParentFences } from "@application/use-cases/sub-agent/parentFences";
 import { SubAgentBudgetCoordinator } from "@application/use-cases/sub-agent/subAgentBudget";
 import { SubAgentStateStore } from "@application/use-cases/sub-agent/SubAgentStateStore";
@@ -34,6 +47,7 @@ import {
   type SubAgentSourcePolicy,
   type SubAgentStateSnapshot,
   type SubAgentTransition,
+  type ValidatedJsonValue,
 } from "@core/research";
 
 export const AT = "2026-10-26T10:00:00.000Z";
@@ -417,6 +431,69 @@ export interface ManagerHarnessOptions {
   chatId?: string | null;
   load?: () => Promise<SubAgentStateSnapshot | null>;
   budget?: FakeBudgetOwner;
+  evidenceImport?: SubAgentEvidenceImportPort;
+}
+
+/** Builds one untrusted child evidence value as the runner reports it, web by default. */
+export function childEvidence(
+  id: string,
+  overrides: Record<string, ValidatedJsonValue> = {},
+): ValidatedJsonValue {
+  return {
+    id,
+    source: { kind: "web", url: `https://example.com/${id}`, title: `Title ${id}` },
+    text: `Text of ${id}`,
+    tool: "search_web",
+    query: "q",
+    ...overrides,
+  };
+}
+
+/**
+ * The chat side of the evidence bridge: one in-memory conversation registry, a serializer
+ * that runs work in order and a durable save that succeeds unless failed or held.
+ */
+export class FakeChatRegistry {
+  registry: ConversationSourceRegistry = createConversationSourceRegistry();
+  readonly saved: ConversationSourceRegistry[] = [];
+  attempts = 0;
+  private failures: Error[] = [];
+  private gates: Deferred<void>[] = [];
+  private tail: Promise<unknown> = Promise.resolve();
+
+  constructor(private readonly save?: (registry: ConversationSourceRegistry) => Promise<unknown>) {}
+
+  failNext(error: Error): void {
+    this.failures.push(error);
+  }
+
+  holdNext(): () => void {
+    const gate = deferred<void>();
+    this.gates.push(gate);
+    return () => gate.resolve();
+  }
+
+  context(lookup: () => SubAgentImportLookup | null): ChatSubAgentEvidenceBridgeContext {
+    return {
+      lookup,
+      serialize: <T>(work: () => Promise<T>): Promise<T> => {
+        const next = this.tail.then(work, work);
+        this.tail = next.catch(() => undefined);
+        return next;
+      },
+      readRegistry: () => this.registry,
+      writeRegistry: (registry) => (this.registry = registry),
+      saveRegistry: async (registry) => {
+        this.attempts += 1;
+        const gate = this.gates.shift();
+        if (gate) await gate.promise;
+        const failure = this.failures.shift();
+        if (failure) throw failure;
+        await this.save?.(registry);
+        this.saved.push(registry);
+      },
+    };
+  }
 }
 
 /**
@@ -442,7 +519,7 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
     repository: { load: options.load ?? (async () => null) },
     writer,
     execution,
-    evidenceImport: imports,
+    evidenceImport: options.evidenceImport ?? imports,
     ...(options.budget ? { budget: options.budget } : {}),
     getCurrentParentBinding: () => probes.parent,
     getCurrentDeliveryEpoch: () => probes.epoch,
@@ -486,4 +563,26 @@ export async function budgetCoordinator(owner: FakeBudgetOwner, snapshot: SubAge
   const fences = new ParentFences();
   const coordinator = new SubAgentBudgetCoordinator({ context: { budget: owner }, store, fences });
   return { coordinator, store, fences };
+}
+
+/**
+ * Builds a manager harness whose import port is the real chat evidence bridge over a fake
+ * chat registry, wired to the manager's own import lookup as the composition root does.
+ */
+export function importHarness(
+  options: ManagerHarnessOptions & {
+    save?: (registry: ConversationSourceRegistry) => Promise<unknown>;
+  } = {},
+) {
+  const chat = new FakeChatRegistry(options.save);
+  let lookup: SubAgentImportLookup | null = null;
+  const bridge = new ChatSubAgentEvidenceBridge(chat.context(() => lookup));
+  const harness = managerHarness({ ...options, evidenceImport: bridge });
+  lookup = (harness.manager as SubAgentSessionManager).importLookup();
+  return { ...harness, chat, bridge };
+}
+
+/** Returns the manager's internal parts, so a white-box test can stage a record as storage would. */
+export function managerParts(manager: unknown): SubAgentManagerParts {
+  return (manager as { parts: SubAgentManagerParts }).parts;
 }

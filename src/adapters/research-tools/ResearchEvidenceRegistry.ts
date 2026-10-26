@@ -189,6 +189,27 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
     return deepFreeze(snapshot);
   }
 
+  /**
+   * Adds evidence that a resolver already registered in the conversation, under its own
+   * alias IDs. Existing entries and web handles stay unchanged and the web capacity is
+   * not charged, because the import was admitted and stored before.
+   */
+  importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void {
+    for (const chunk of snapshot.evidence) {
+      if (this.entries.has(chunk.id)) continue;
+      const citation = snapshot.citations.find((entry) => entry.id === chunk.id);
+      const provenance = snapshot.provenance.find((entry) => entry.evidenceId === chunk.id);
+      this.entries.set(chunk.id, {
+        chunk: cloneChunk(chunk),
+        citation: citation
+          ? cloneValue(citation)
+          : { ...formatCitation(chunk.source), id: chunk.id },
+        calls: (provenance?.calls ?? []).map((call) => ({ ...call })),
+        ...(provenance?.page ? { page: { ...provenance.page } } : {}),
+      });
+    }
+  }
+
   private uniqueHandle(): string {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const handle = this.createHandle();

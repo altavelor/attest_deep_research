@@ -93,7 +93,17 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
   }
 
   getResult(sessionId: string, runId: string): Promise<SubAgentResultState> {
-    return this.call(() => this.read({ sessionId, runId }));
+    return this.call(() => {
+      const state = this.read({ sessionId, runId });
+      const { imports } = this.services.parts;
+      if (state.state === "failed" && state.error.code === "import-failed") {
+        imports.reconcile(sessionId, runId, this.delivery.deliveryEpoch);
+      }
+      if (state.state === "completed" || state.state === "failed") {
+        imports.verify(sessionId, runId, this.delivery.deliveryEpoch);
+      }
+      return state;
+    });
   }
 
   waitForResults(

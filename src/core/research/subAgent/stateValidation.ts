@@ -190,6 +190,11 @@ function checkImport(entry: Rec, path: string): void {
   if (typeof entry.answerText !== "string") invalid(`${path}.answerText`);
   time(entry.createdAt, `${path}.createdAt`);
   if (entry.tombstoneReason !== undefined) text(entry.tombstoneReason, `${path}.tombstoneReason`);
+  if (
+    entry.evidenceBudgetExhausted !== undefined &&
+    typeof entry.evidenceBudgetExhausted !== "boolean"
+  )
+    invalid(`${path}.evidenceBudgetExhausted`);
 }
 
 function checkRunReference(

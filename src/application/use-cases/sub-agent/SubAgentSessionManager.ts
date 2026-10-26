@@ -2,11 +2,13 @@ import type {
   SubAgentCloseResult,
   SubAgentDelegator,
   SubAgentHost,
+  SubAgentImportLookup,
   SubAgentSessionManagerContext,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
 import type { ParentRunBinding, ParentRunDeliveryContext, SubAgentRunRef } from "@core/research";
 import { closeParentRun } from "./closeBarrier";
+import { SubAgentImportCoordinator } from "./importCoordinator";
 import type { SubAgentManagerParts } from "./managerParts";
 import { ParentFences } from "./parentFences";
 import { SubAgentRunScheduler } from "./runScheduler";
@@ -30,7 +32,7 @@ export class SubAgentSessionManager implements SubAgentHost {
   constructor(context: SubAgentSessionManagerContext) {
     const store = new SubAgentStateStore(context);
     const fences = new ParentFences();
-    this.parts = {
+    const parts = {
       context,
       store,
       fences,
@@ -39,7 +41,9 @@ export class SubAgentSessionManager implements SubAgentHost {
       outcomes: new Map(),
       unsavedImports: new Set(),
       notifyResults: () => this.notify(),
-    };
+    } as Omit<SubAgentManagerParts, "imports"> as SubAgentManagerParts;
+    parts.imports = new SubAgentImportCoordinator(parts, context.evidenceImport);
+    this.parts = parts;
     const scheduler = new SubAgentRunScheduler(this.parts);
     this.services = {
       parts: this.parts,
@@ -48,6 +52,11 @@ export class SubAgentSessionManager implements SubAgentHost {
       submissions: new SubAgentSubmissions(this.parts, scheduler),
       subscribe: (listener) => this.subscribeResults(listener),
     };
+  }
+
+  /** Returns the manager's import lookup that the chat evidence bridge uses to check imports. */
+  importLookup(): SubAgentImportLookup {
+    return this.parts.imports;
   }
 
   delegatorFor(binding: ParentRunBinding, delivery: ParentRunDeliveryContext): SubAgentDelegator {
@@ -78,6 +87,7 @@ export class SubAgentSessionManager implements SubAgentHost {
   }
 
   closeAll(parentRunId: string, terminalReason: string): Promise<SubAgentCloseResult> {
+    this.parts.imports.forgetParent(parentRunId);
     return closeParentRun(this.parts, this.services.scheduler, parentRunId, terminalReason);
   }
 
@@ -89,6 +99,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.parts.sessionOptions.clear();
       this.parts.outcomes.clear();
       this.parts.unsavedImports.clear();
+      this.parts.imports.forgetParent(null);
       this.disposal = Promise.resolve();
     }
     return this.disposal;

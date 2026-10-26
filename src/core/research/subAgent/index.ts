@@ -80,3 +80,23 @@ export {
 export { recoverSubAgentState } from "./recovery";
 export { evictSubAgentDetails, type SubAgentDetailsEviction } from "./detailsRetention";
 export { applySubAgentDelta, checkSubAgentDelta } from "./stateDeltas";
+export {
+  admitSubAgentEvidence,
+  MAX_IMPORTED_ANSWER_CHARS,
+  MAX_IMPORTED_EVIDENCE_ITEMS,
+  MAX_IMPORTED_WEB_SOURCES,
+  MAX_REGISTERED_SNIPPET_CHARS,
+  parseSubAgentChildEvidence,
+  readSubAgentImportItems,
+  rewriteSubAgentCitations,
+  subAgentAliasPrefix,
+  subAgentAllowedHosts,
+  subAgentHostAllowed,
+  UNAVAILABLE_CITATION,
+  unresolvedSubAgentCitations,
+  type SubAgentChildEvidence,
+  type SubAgentEvidenceAdmission,
+  type SubAgentEvidenceTool,
+  type SubAgentImportCall,
+  type SubAgentImportItem,
+} from "./importItems";
