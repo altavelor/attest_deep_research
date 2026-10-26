@@ -383,6 +383,6 @@ describe("sub-agent source policy", () => {
 
   it("derives titles with the shared chat title policy after removing control characters", () => {
     expect(deriveSubAgentTitle(" Compare\u202E\n\tvendors ")).toBe("Compare vendors");
-    expect(deriveSubAgentTitle(" \u202E\u0007 ")).toBe("Untitled sub-agent");
+    expect(deriveSubAgentTitle(" \u202E\u061C\u0007 ")).toBe("Untitled sub-agent");
   });
 });

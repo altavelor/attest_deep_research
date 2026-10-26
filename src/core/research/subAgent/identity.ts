@@ -7,7 +7,7 @@ import type {
 } from "./sessionModel";
 
 const UNSAFE_TITLE_CHARACTERS =
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
 
 /**
  * Derives a display title from a sub-agent task with the shared chat title policy.
