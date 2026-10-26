@@ -13,7 +13,7 @@ import {
 import { assertSessionBudget, ownedRecord } from "./authorization";
 import { digestOf } from "./digest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
-import type { SubAgentRunScheduler } from "./runScheduler";
+import { LOCAL_RUN_CAPACITY, type SubAgentRunScheduler } from "./runScheduler";
 import { sessionFailure } from "./SubAgentStateStore";
 
 export type SubAgentSubmission =
@@ -73,19 +73,29 @@ export class SubAgentSubmissions {
       runId,
       receipt,
     });
-    const accepted = this.accept(receipt, revision);
+    const kind = submission.kind === "retry" ? "retry" : submission.command.type;
+    const accepted = this.accept(receipt, revision, kind);
     this.inFlight.set(submissionId, accepted);
     const forget = (): void => void this.inFlight.delete(submissionId);
     accepted.then(forget, forget);
     return accepted;
   }
 
-  private async accept(receipt: SubAgentRunReceipt, revision: number): Promise<SubAgentRunReceipt> {
+  private async accept(
+    receipt: SubAgentRunReceipt,
+    revision: number,
+    kind: SubAgentCommand["type"] | "retry",
+  ): Promise<SubAgentRunReceipt> {
     try {
       await this.parts.store.flush(revision);
     } catch (error) {
       this.rollback(receipt);
       throw error;
+    }
+    const { mainEvents } = this.parts;
+    mainEvents.dispatch(receipt.sessionId, receipt.runId, kind);
+    if (this.scheduler.runningCount >= LOCAL_RUN_CAPACITY) {
+      mainEvents.created(receipt.sessionId, "queued", receipt.runId);
     }
     this.scheduler.enqueue({ sessionId: receipt.sessionId, runId: receipt.runId });
     return receipt;

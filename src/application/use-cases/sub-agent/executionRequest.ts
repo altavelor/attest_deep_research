@@ -26,6 +26,7 @@ export function buildExecutionRequest(
   run: SubAgentRunSummary,
   signal: AbortSignal,
   observe: (event: SubAgentExecutionEvent) => void,
+  onObservation: SubAgentExecutionRequest["onObservation"],
 ): SubAgentExecutionRequest {
   const options = parts.sessionOptions.get(record.session.subAgentSessionId);
   const grant = options?.grant;
@@ -48,6 +49,7 @@ export function buildExecutionRequest(
     priorContext: priorContextOf(parts, record, run),
     signal,
     observe,
+    onObservation,
   };
 }
 

@@ -3,6 +3,7 @@ import type {
   SubAgentDelegator,
   SubAgentHost,
   SubAgentImportLookup,
+  SubAgentInspectionPort,
   SubAgentSessionManagerContext,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
@@ -10,6 +11,9 @@ import type { ParentRunBinding, ParentRunDeliveryContext, SubAgentRunRef } from 
 import { closeParentRun } from "./closeBarrier";
 import { SubAgentImportCoordinator } from "./importCoordinator";
 import type { SubAgentManagerParts } from "./managerParts";
+import { SubAgentInspectionService } from "./SubAgentInspectionService";
+import { SubAgentMainEvents } from "./mainEvents";
+import { SubAgentObservationRecorder } from "./observationRecorder";
 import { ParentFences } from "./parentFences";
 import { SubAgentRunScheduler } from "./runScheduler";
 import { SubAgentBudgetCoordinator } from "./subAgentBudget";
@@ -17,6 +21,7 @@ import { SubAgentSessionCreation } from "./sessionCreation";
 import { SubAgentStateStore } from "./SubAgentStateStore";
 import { SubAgentDelegatorFacade, type SubAgentFacadeServices } from "./SubAgentDelegatorFacade";
 import { SubAgentSubmissions } from "./submissions";
+import { SubAgentUserStop } from "./userStop";
 
 /**
  * Owns the child sessions of one chat runtime: its own section view, queue, grants
@@ -25,6 +30,8 @@ import { SubAgentSubmissions } from "./submissions";
  */
 export class SubAgentSessionManager implements SubAgentHost {
   private readonly listeners = new Set<() => void>();
+  private readonly changeListeners = new Set<() => void>();
+  private readonly inspectionPort: SubAgentInspectionPort;
   private readonly parts: SubAgentManagerParts;
   private readonly services: SubAgentFacadeServices;
   private disposal: Promise<void> | null = null;
@@ -41,8 +48,11 @@ export class SubAgentSessionManager implements SubAgentHost {
       outcomes: new Map(),
       unsavedImports: new Set(),
       notifyResults: () => this.notify(),
-    } as Omit<SubAgentManagerParts, "imports"> as SubAgentManagerParts;
+      notifyObservation: () => this.notifyChanges(),
+    } as Partial<SubAgentManagerParts> as SubAgentManagerParts;
     parts.imports = new SubAgentImportCoordinator(parts, context.evidenceImport);
+    parts.observation = new SubAgentObservationRecorder(parts);
+    parts.mainEvents = new SubAgentMainEvents(parts);
     this.parts = parts;
     const scheduler = new SubAgentRunScheduler(this.parts);
     this.services = {
@@ -52,6 +62,30 @@ export class SubAgentSessionManager implements SubAgentHost {
       submissions: new SubAgentSubmissions(this.parts, scheduler),
       subscribe: (listener) => this.subscribeResults(listener),
     };
+    const userStop = new SubAgentUserStop(parts, scheduler);
+    this.inspectionPort = new SubAgentInspectionService({
+      load: () => parts.store.load(),
+      inputs: () => ({
+        state: parts.store.state,
+        revision:
+          parts.store.currentRevision +
+          (parts.store.state?.records ?? []).reduce(
+            (sum, record) => sum + parts.observation.liveRevision(record.session.subAgentSessionId),
+            0,
+          ),
+        debug: context.isDebugCapture?.() === true,
+        redact: (text) => parts.observation.redact(text),
+        elapsed: (runId) => parts.observation.elapsed(runId),
+        liveRevision: (sessionId) => parts.observation.liveRevision(sessionId),
+        parentLive: (parentRunId) => !parts.fences.isRevoked(parentRunId),
+      }),
+      subscribe: (listener) => this.subscribeChanges(listener),
+      stop: (sessionId, expectedRunId) => userStop.stop(sessionId, expectedRunId),
+    });
+  }
+
+  inspection(): SubAgentInspectionPort {
+    return this.inspectionPort;
   }
 
   /** Returns the manager's import lookup that the chat evidence bridge uses to check imports. */
@@ -86,6 +120,12 @@ export class SubAgentSessionManager implements SubAgentHost {
       );
   }
 
+  private subscribeChanges(listener: () => void): () => void {
+    if (this.parts.fences.disposed) return () => undefined;
+    this.changeListeners.add(listener);
+    return () => void this.changeListeners.delete(listener);
+  }
+
   closeAll(parentRunId: string, terminalReason: string): Promise<SubAgentCloseResult> {
     this.parts.imports.forgetParent(parentRunId);
     return closeParentRun(this.parts, this.services.scheduler, parentRunId, terminalReason);
@@ -96,6 +136,8 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.parts.fences.disposeAll();
       this.services.scheduler.fenceAll();
       this.listeners.clear();
+      this.changeListeners.clear();
+      this.parts.observation.clear();
       this.parts.sessionOptions.clear();
       this.parts.outcomes.clear();
       this.parts.unsavedImports.clear();
@@ -106,7 +148,18 @@ export class SubAgentSessionManager implements SubAgentHost {
   }
 
   private notify(): void {
+    this.notifyChanges();
     for (const listener of [...this.listeners]) {
+      try {
+        listener();
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  private notifyChanges(): void {
+    for (const listener of [...this.changeListeners]) {
       try {
         listener();
       } catch {

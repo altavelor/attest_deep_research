@@ -9,6 +9,8 @@ import {
   type SubAgentCreateRecord,
   type SubAgentImportRecord,
   type SubAgentImportTombstone,
+  type SubAgentModelSnapshot,
+  type SubAgentObservationRecord,
   type SubAgentPendingAction,
   type SubAgentRecoveryMarker,
   type SubAgentSessionErrorCode,
@@ -114,6 +116,14 @@ export class SubAgentStateStore {
 
   putMarker(marker: SubAgentRecoveryMarker): number {
     return this.put("marker", marker.parentRunId, marker);
+  }
+
+  putObservation(entry: SubAgentObservationRecord): number {
+    return this.put("observation", entry.observationId, entry);
+  }
+
+  putRunModel(runId: string, model: SubAgentModelSnapshot): number {
+    return this.put("run", runId, { model });
   }
 
   putImport(entry: SubAgentImportRecord): number {
