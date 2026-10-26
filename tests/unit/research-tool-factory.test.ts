@@ -1,6 +1,7 @@
 import { createResearchToolRegistry } from "@adapters/research-tools";
 import { ResearchRetriever } from "@application/contracts";
 import { SearchProvider, VaultWriter } from "@application/ports";
+import { fakeParentRun, recordingDelegator } from "../support/subAgentSessions";
 
 describe("createResearchToolRegistry", () => {
   it("creates only explicitly permitted tools and a fresh answer-scoped registry", () => {
@@ -196,7 +197,7 @@ describe("createResearchToolRegistry", () => {
     ]);
   });
 
-  it("exposes map_sources (and run_subagent) only when a sub-agent runner and index are present", () => {
+  it("exposes map_sources only with a sub-agent runner and index, run_subagent with a delegator", () => {
     const retriever: ResearchRetriever = {
       search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
     };
@@ -205,6 +206,8 @@ describe("createResearchToolRegistry", () => {
     const indexed = createResearchToolRegistry({
       retriever,
       subAgentRunner,
+      subAgentDelegator: recordingDelegator().delegator,
+      subAgentParent: fakeParentRun().parent,
       availability: {
         searchMode: "indexOnly",
         noteAccess: false,
@@ -231,7 +234,7 @@ describe("createResearchToolRegistry", () => {
       },
     });
     const webNames = webOnly.tools.definitions().map((definition) => definition.function.name);
-    expect(webNames).toContain("run_subagent");
+    expect(webNames).not.toContain("run_subagent");
     expect(webNames).not.toContain("map_sources");
   });
 });

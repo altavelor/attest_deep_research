@@ -9,7 +9,12 @@ import type {
   SubAgentToolCall,
   SubAgentToolResult,
 } from "@application/research/subAgentPort";
-import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type {
+  EvidenceCallProvenance,
+  ResearchEvidenceSnapshot,
+} from "@application/sources/evidence";
+import type { ResearchToolsetOptions } from "@application/research/toolPorts";
+import type { RetrievedChunk } from "@core/model";
 import {
   mergeSubAgentUsage,
   toValidatedJson,
@@ -27,6 +32,7 @@ export interface SubAgentModelSelection {
 export interface SubAgentExecutionAdapterDeps {
   selectModel(): SubAgentModelSelection;
   createRunner(modelRound: ModelRoundProvider): SubAgentPort;
+  toolContext?(request: SubAgentExecutionRequest): ResearchToolsetOptions | undefined;
   now(): Date;
 }
 
@@ -44,8 +50,10 @@ export class SubAgentExecutionAdapter implements SubAgentExecutionPort {
     const usages: NormalizedUsage[] = [];
     const observed = this.observedModelRound(request, model, modelRound, usages);
     const tools = new Map<string, SubAgentWorkflowItem>();
+    const toolContext = this.deps.toolContext?.(request);
     const output = await this.deps.createRunner(observed).run({
       task: taskWithContext(request),
+      ...(toolContext ? { toolContext } : {}),
       budget: request.limits,
       resources: request.resources,
       signal: request.signal,
@@ -66,7 +74,7 @@ export class SubAgentExecutionAdapter implements SubAgentExecutionPort {
     const failureReason = telemetry?.failureReason ?? null;
     return {
       answerText: output.answerText,
-      evidence: childEvidence(output.snapshot),
+      evidence: childEvidence(output.snapshot, this.deps.now().toISOString()),
       usage: { ...mergeSubAgentUsage(usages).usage, toolCalls: telemetry?.toolCalls ?? 0 },
       incomplete: request.signal.aborted || failureReason !== null,
       terminalReason: failureReason,
@@ -176,19 +184,29 @@ function requestUsage(result: ModelRoundResult): NormalizedUsage {
 }
 
 function taskWithContext(request: SubAgentExecutionRequest): string {
-  const { summary, previousResult, partialSummary } = request.priorContext;
+  const { summary, previousResult, partialSummary, priorEvidence } = request.priorContext;
+  const priorIds = priorEvidence.map((reference) => reference.conversationEvidenceId);
   const sections = [
     request.task,
     ...(summary ? [`Session summary:\n${summary}`] : []),
     ...(previousResult ? [`Previous result:\n${previousResult}`] : []),
     ...(partialSummary ? [`Partial result to continue:\n${partialSummary}`] : []),
+    ...(priorIds.length > 0
+      ? [`Evidence already collected by earlier runs of this session: ${priorIds.join(", ")}`]
+      : []),
   ];
   return sections.join("\n\n");
 }
 
-function childEvidence(snapshot: ResearchEvidenceSnapshot): ValidatedJsonValue[] {
+/**
+ * Maps the runner's evidence to the child evidence wire format. Every provenance call
+ * of an element is considered and the first one whose tool fits the source kind is
+ * reported, so evidence first seen through another tool is not dropped on import.
+ */
+function childEvidence(snapshot: ResearchEvidenceSnapshot, now: string): ValidatedJsonValue[] {
   return snapshot.evidence.flatMap((chunk) => {
-    const call = snapshot.provenance.find((entry) => entry.evidenceId === chunk.id)?.calls[0];
+    const calls = snapshot.provenance.find((entry) => entry.evidenceId === chunk.id)?.calls ?? [];
+    const call = calls.find((entry) => fitsSource(chunk, entry)) ?? calls[0];
     if (!call) return [];
     const value = toValidatedJson({
       id: chunk.id,
@@ -196,7 +214,15 @@ function childEvidence(snapshot: ResearchEvidenceSnapshot): ValidatedJsonValue[]
       text: chunk.text,
       tool: call.tool,
       ...(call.query !== undefined ? { query: call.query } : {}),
+      collectedAt: chunk.source.kind === "web" ? chunk.source.retrievedAt || now : now,
     });
     return value === undefined ? [] : [value];
   });
+}
+
+function fitsSource(chunk: RetrievedChunk, call: EvidenceCallProvenance): boolean {
+  if (chunk.source.kind === "web") {
+    return call.tool === "search_web" || call.tool === "fetch_web_page";
+  }
+  return call.tool !== "search_web" && call.tool !== "fetch_web_page";
 }

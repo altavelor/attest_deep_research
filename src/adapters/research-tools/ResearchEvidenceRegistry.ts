@@ -194,6 +194,10 @@ export class ResearchEvidenceRegistry implements EvidenceRegistry {
    * alias IDs. Existing entries and web handles stay unchanged and the web capacity is
    * not charged, because the import was admitted and stored before.
    */
+  remainingWebCapacity(): number {
+    return Math.max(0, this.maxWebResults - this.handles.size);
+  }
+
   importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void {
     for (const chunk of snapshot.evidence) {
       if (this.entries.has(chunk.id)) continue;

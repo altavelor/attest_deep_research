@@ -11,7 +11,7 @@ import {
   contentBearingTool,
   extractEvidenceIds,
   launchParallelToolPool,
-  mutationTool,
+  uncachedTool,
   normalizedCallKey,
   searchTool,
   serializeExecution,
@@ -160,6 +160,7 @@ export class ThinkingToolRoundExecutor {
       (id, event) => this.options.onToolEvent?.(id, event),
       this.options.maxParallelSubAgents,
       this.options.maxParallelToolCalls,
+      options.round,
     );
 
     let roundDuplicates = 0;
@@ -176,7 +177,7 @@ export class ThinkingToolRoundExecutor {
         call.name === options.repairTool &&
         cachedExecution?.ok === false &&
         cachedExecution.retryable;
-      const bypassCache = mutationTool(call.name);
+      const bypassCache = uncachedTool(call.name);
       const cacheHit = !!cachedExecution && !retryMandatory && !bypassCache;
       let execution: CachedExecution;
       if (cacheHit) {
@@ -188,6 +189,7 @@ export class ThinkingToolRoundExecutor {
         const raw = pooled
           ? await pooled
           : await this.options.tools.execute(call, {
+              round: options.round,
               signal: this.options.signal,
               emit: (event) => this.options.onToolEvent?.(call.id, event),
             });

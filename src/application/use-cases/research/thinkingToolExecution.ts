@@ -4,7 +4,12 @@ import {
   ToolExecution as ResearchToolExecution,
   toolExecutionPayload,
 } from "@core/agent";
-import { DOWNLOAD_DOCUMENT_TOOL, SUB_AGENT_TOOL } from "@core/agent";
+import {
+  DOWNLOAD_DOCUMENT_TOOL,
+  SUB_AGENT_RESULT_TOOL,
+  SUB_AGENT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
+} from "@core/agent";
 import { ToolManager } from "@application/tools/ToolManager";
 import { ConcurrencyLimiter } from "./ToolConcurrencyPool";
 
@@ -63,6 +68,7 @@ export function launchParallelToolPool(
   onToolEvent: (id: string, event: ToolEvent) => void,
   subAgentLimit: number,
   toolLimit: number,
+  round?: number,
 ): Map<string, Promise<ResearchToolExecution<unknown>>> {
   const subAgentLimiter = new ConcurrencyLimiter(subAgentLimit);
   const toolLimiter = new ConcurrencyLimiter(toolLimit);
@@ -76,12 +82,21 @@ export function launchParallelToolPool(
     const promise =
       launchedByKey.get(key) ??
       limiter.run(() =>
-        tools.execute(call, { signal, emit: (event) => onToolEvent(call.id, event) }),
+        tools.execute(call, {
+          ...(round !== undefined ? { round } : {}),
+          signal,
+          emit: (event) => onToolEvent(call.id, event),
+        }),
       );
     launchedByKey.set(key, promise);
     pool.set(call.id, promise);
   }
   return pool;
+}
+
+/** True for tools whose answer changes over time, so a repeated call is never served from the cache. */
+export function uncachedTool(name: string): boolean {
+  return mutationTool(name) || name === SUB_AGENT_RESULT_TOOL || name === SUB_AGENT_WAIT_TOOL;
 }
 
 export function mutationTool(name: string): boolean {

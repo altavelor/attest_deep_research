@@ -12,13 +12,8 @@ import { buildThinkingResearchMessages } from "@core/research";
 import { isWebQueryIntent, isWebQueryRecency } from "@core/web";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import type { WebSearchOptions } from "@application/ports";
-import { ToolEvent } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
-import {
-  SUB_AGENT_PHASE,
-  SUB_AGENT_TOOL_END,
-  SUB_AGENT_TOOL_START,
-} from "@application/research/subAgentPort";
+import { subAgentRoundHooks } from "../subAgentRoundHooks";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { ThinkingResearchRunner, ThinkingResearchFailure } from "../ThinkingResearchRunner";
 import {
@@ -170,6 +165,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
           }
         : {}),
       subAgentRunner: this.deps.subAgentRunner,
+      ...(request.subAgentDelegator && request.subAgentParent
+        ? { subAgentDelegator: request.subAgentDelegator, subAgentParent: request.subAgentParent }
+        : {}),
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
     });
@@ -266,7 +264,9 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             resultSummary,
             resultJson,
           }),
-        onToolEvent: (callId, event) => emitNestedSubAgentEvent(onEvent, callId, event),
+        ...(request.subAgentParent
+          ? { roundHooks: subAgentRoundHooks(request.subAgentParent, created.evidence) }
+          : {}),
       }).run();
     }
     const snapshot = created.evidence.snapshot();
@@ -435,51 +435,6 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
       diagnostics: request.includeContextDiagnostics ? diagnostics : undefined,
     };
   }
-}
-
-/**
- * Maps a run_subagent session's progress (emitted via the tool's `emit`) into
- * nested research-stream events tagged with the parent run_subagent call id, so
- * the UI can render the session's live work under its cell. Inner tool-call ids
- * are namespaced by the parent id to stay unique across parallel sessions.
- */
-function emitNestedSubAgentEvent(
-  onEvent: (event: ResearchStreamEvent) => void,
-  parentId: string,
-  event: ToolEvent,
-): void {
-  const data = event.data ?? {};
-  if (event.type === SUB_AGENT_PHASE) {
-    onEvent({ type: "sub-agent-phase", parentId, phase: event.message ?? "" });
-    return;
-  }
-  if (event.type === SUB_AGENT_TOOL_START) {
-    onEvent({
-      type: "tool-call-start",
-      parentId,
-      id: `${parentId}:${stringValue(data.id)}`,
-      name: stringValue(data.name),
-      label: stringValue(data.label) || stringValue(data.name),
-      round: typeof data.round === "number" ? data.round : 0,
-    });
-    return;
-  }
-  if (event.type === SUB_AGENT_TOOL_END) {
-    onEvent({
-      type: "tool-call-end",
-      parentId,
-      id: `${parentId}:${stringValue(data.id)}`,
-      ok: data.ok === true,
-      resolvedLabel: typeof data.resolvedLabel === "string" ? data.resolvedLabel : undefined,
-      resultSummary: typeof data.resultSummary === "string" ? data.resultSummary : undefined,
-    });
-  }
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
-    ? String(value)
-    : "";
 }
 
 export function resolveThinkingMaxResultChars(input: {

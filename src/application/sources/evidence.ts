@@ -58,4 +58,5 @@ export interface EvidenceRegistry {
   ): void;
   snapshot(): ResearchEvidenceSnapshot;
   importRegisteredSnapshot(snapshot: ResearchEvidenceSnapshot): void;
+  remainingWebCapacity?(): number;
 }

@@ -26,6 +26,8 @@ export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
 export const PRESENT_CHART_TOOL = "present_chart";
 
 export const SUB_AGENT_TOOL = "run_subagent";
+export const SUB_AGENT_RESULT_TOOL = "get_subagent_result";
+export const SUB_AGENT_WAIT_TOOL = "wait_subagents";
 
 export const MAP_SOURCES_TOOL = "map_sources";
 
@@ -60,6 +62,8 @@ export const PROMPT_TOOL_NAMES = [
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
   SUB_AGENT_TOOL,
+  SUB_AGENT_RESULT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
   MAP_SOURCES_TOOL,
   FIND_CLAIMS_TOOL,
   LIST_INDEX_URLS_TOOL,
