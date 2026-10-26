@@ -138,6 +138,8 @@ User-archive окончательно закрывает сессию; model sto
 completed, но увеличивает resultRevision, потому что публичное состояние результата становится
 failed/import-failed. Tombstone import возвращается переходом отдельно от записи
 (tombstonedImport) и поднимает lastImportGeneration до max(last, pending).
+Когда retry, continue-partial, follow-up-путь с tombstone или archive/stop-import отменяют pending import, resultRevision
+завершённого run увеличивается: его публичное состояние меняется с failed/import-failed на interrupted/import-cancelled.
 
 ## 4. Валидация и права источников
 
