@@ -49,6 +49,6 @@
     "@anthropic-ai/sdk": "^0.136.0",
     "franc-min": "^6.2.0",
     "ollama": "^0.6.4",
-    "openai": "^7.39.0"
+    "openai": "^7.43.0"
   }
 }
