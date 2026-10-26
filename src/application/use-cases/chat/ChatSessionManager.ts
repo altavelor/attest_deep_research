@@ -38,7 +38,12 @@ import type {
   ChatSessionViewProbe,
 } from "./chatSessionTypes";
 
-const SKIPPED_RECOVERY_CODES = new Set(["unreadable-section", "chat-missing", "document-conflict"]);
+const SKIPPED_RECOVERY_CODES = new Set([
+  "unreadable-section",
+  "invalid-snapshot",
+  "chat-missing",
+  "document-conflict",
+]);
 
 export interface ChatSessionManagerOptions {
   repository: ChatRepository;

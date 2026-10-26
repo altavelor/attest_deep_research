@@ -294,6 +294,21 @@ describe("chat document repository over a vault that refuses replacing renames",
         lastRun: { runId: "q", startedAt: COMPLETED.startedAt, status: "running" },
       }),
     );
+    await repository.saveChat(
+      chatInput({
+        id: "chat-4",
+        updatedAt: "2026-10-28T10:00:00.000Z",
+        lastRun: { runId: "m", startedAt: COMPLETED.startedAt, status: "running" },
+      }),
+    );
+    await repository.commitChatDocument({
+      chatId: "chat-4",
+      base: (await repository.loadChatDocument("chat-4"))!.base,
+      subAgents: subAgentSection(undefined, {
+        chatId: "chat-4",
+        revision: Number.MAX_SAFE_INTEGER,
+      }),
+    });
     const vanishing = Object.create(repository) as FileChatRepository;
     vanishing.loadChatDocument = async (id) => {
       const document = await repository.loadChatDocument(id);
