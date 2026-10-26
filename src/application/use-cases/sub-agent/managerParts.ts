@@ -4,6 +4,7 @@ import type {
 } from "@application/ports/subAgent";
 import type { ImportedSubAgentRunOutcome } from "@core/research";
 import type { ParentFences } from "./parentFences";
+import type { SubAgentBudgetCoordinator } from "./subAgentBudget";
 import type { SubAgentStateStore } from "./SubAgentStateStore";
 
 export interface SubAgentSessionOptions {
@@ -16,6 +17,7 @@ export interface SubAgentManagerParts {
   context: SubAgentSessionManagerContext;
   store: SubAgentStateStore;
   fences: ParentFences;
+  budget: SubAgentBudgetCoordinator;
   sessionOptions: Map<string, SubAgentSessionOptions>;
   outcomes: Map<string, ImportedSubAgentRunOutcome>;
   unsavedImports: Set<string>;

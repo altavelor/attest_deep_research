@@ -193,8 +193,10 @@ describe("SubAgentSessionManager queue", () => {
       delegator.continue(session.subAgentSessionId, { type: "follow-up", task: "More" }, "s-2"),
     );
 
+    const record = readySubAgentRecord("restored");
+    const local = { ...record, session: { ...record.session, budgetPolicy: { type: "local" } } };
     const restored = managerHarness({
-      load: async () => subAgentSection([readySubAgentRecord("restored")]),
+      load: async () => subAgentSection([local as typeof record]),
     });
     const denied = await restored
       .delegator()

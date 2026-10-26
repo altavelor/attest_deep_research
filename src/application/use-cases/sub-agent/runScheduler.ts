@@ -8,19 +8,22 @@ import {
 import { settleWithin } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
+import { admitScopedRun } from "./scopedAdmission";
+import { scopeOf, type SubAgentBudgetGrant } from "./subAgentBudget";
 
 export const LOCAL_RUN_CAPACITY = 4;
 export const IMPORT_TIMEOUT_MS = 2_000;
 const RESULT_SUMMARY_CHARS = 1_000;
 
-interface QueuedRun {
+export interface QueuedRun {
   sessionId: string;
   runId: string;
 }
 
-interface RunSlot extends QueuedRun {
+export interface RunSlot extends QueuedRun {
   controller: AbortController | null;
   fenced: boolean;
+  grant: SubAgentBudgetGrant | null;
 }
 
 type TransitionEvent = SubAgentTransition extends infer T
@@ -40,7 +43,7 @@ export class SubAgentRunScheduler {
   private readonly slots = new Map<string, RunSlot>();
   private readonly imports = new Map<string, AbortController>();
 
-  constructor(private readonly parts: SubAgentManagerParts) {}
+  constructor(readonly parts: SubAgentManagerParts) {}
 
   get runningCount(): number {
     return this.slots.size;
@@ -53,6 +56,7 @@ export class SubAgentRunScheduler {
 
   fenceSession(sessionId: string): string[] {
     const fenced: string[] = [];
+    this.parts.budget.fence(sessionId);
     for (let index = this.queue.length - 1; index >= 0; index -= 1) {
       if (this.queue[index].sessionId !== sessionId) continue;
       fenced.push(this.queue[index].runId);
@@ -107,7 +111,15 @@ export class SubAgentRunScheduler {
       return;
     }
     if (!this.parts.sessionOptions.has(entry.sessionId)) {
-      void this.deny(entry);
+      void this.deny(entry, "execution-denied");
+      return;
+    }
+    const scopeId = scopeOf(record.session.budgetPolicy);
+    const attempt = record.runs.find((run) => run.subAgentRunId === entry.runId)?.attempt;
+    if (scopeId !== null && attempt !== undefined) {
+      const slot: RunSlot = { ...entry, controller: null, fenced: false, grant: null };
+      this.slots.set(entry.runId, slot);
+      void admitScopedRun(this, slot, { ...entry, attempt, scopeId });
       return;
     }
     let revision: number | null;
@@ -117,16 +129,17 @@ export class SubAgentRunScheduler {
       revision = null;
     }
     if (revision === null) return;
-    const slot: RunSlot = { ...entry, controller: null, fenced: false };
+    const slot: RunSlot = { ...entry, controller: null, fenced: false, grant: null };
     this.slots.set(entry.runId, slot);
     void this.execute(slot, revision);
   }
 
-  private async execute(slot: RunSlot, startRevision: number): Promise<void> {
+  async execute(slot: RunSlot, startRevision: number): Promise<void> {
     try {
       await this.parts.store.flush(startRevision);
     } catch {
       this.release(slot);
+      if (slot.grant) void this.parts.budget.settle(slot.grant, "not-started");
       if (!slot.fenced)
         await this.settle(slot, {
           type: "provider-failed",
@@ -135,6 +148,7 @@ export class SubAgentRunScheduler {
         });
       return;
     }
+    if (slot.grant && !(await this.startPermit(slot, slot.grant))) return;
     const record = this.parts.store.record(slot.sessionId);
     const run = record?.runs.find((entry) => entry.subAgentRunId === slot.runId);
     if (slot.fenced || !record || !run) {
@@ -156,6 +170,7 @@ export class SubAgentRunScheduler {
       result = null;
     } finally {
       this.release(slot);
+      if (slot.grant) void this.parts.budget.settle(slot.grant, "consumed");
     }
     if (slot.fenced) return;
     if (!result) {
@@ -254,13 +269,43 @@ export class SubAgentRunScheduler {
     this.parts.notifyResults();
   }
 
-  /** Fails a queued run whose session has no host-owned options, so it never starts without limits. */
-  private async deny(entry: QueuedRun): Promise<void> {
+  /** Durably marks the execution permit started; false when the run must not reach the runner. */
+  private async startPermit(slot: RunSlot, grant: SubAgentBudgetGrant): Promise<boolean> {
+    if (slot.fenced) {
+      this.release(slot);
+      void this.parts.budget.settle(grant, "not-started");
+      return false;
+    }
+    const started = await this.parts.budget.start(grant, () => this.isAdmissible(slot));
+    if (started === "started") return true;
+    this.release(slot);
+    if (started === "failed" && !slot.fenced) {
+      await this.settle(slot, {
+        type: "provider-failed",
+        runId: slot.runId,
+        reason: "budget-port-error",
+      });
+    }
+    return false;
+  }
+
+  isAdmissible(slot: RunSlot): boolean {
+    return (
+      !slot.fenced &&
+      this.slots.get(slot.runId) === slot &&
+      !this.parts.fences.isRevoked(
+        this.parts.store.record(slot.sessionId)?.session.parentRunId ?? "",
+      )
+    );
+  }
+
+  /** Fails a queued run that may not start, so it never runs without its limits or permit. */
+  async deny(entry: QueuedRun, reason: string): Promise<void> {
     try {
       const revision = this.transition(entry.sessionId, {
         type: "execution-denied",
         runId: entry.runId,
-        reason: "execution-denied",
+        reason,
       });
       if (revision !== null) await this.parts.store.flush(revision);
     } catch {
@@ -302,7 +347,7 @@ export class SubAgentRunScheduler {
     this.parts.notifyResults();
   }
 
-  private release(slot: RunSlot): void {
+  release(slot: RunSlot): void {
     slot.controller = null;
     if (this.slots.get(slot.runId) !== slot) return;
     this.slots.delete(slot.runId);

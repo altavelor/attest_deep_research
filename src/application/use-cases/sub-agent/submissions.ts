@@ -10,7 +10,7 @@ import {
   type SubAgentRunReceipt,
   type SubAgentTransition,
 } from "@core/research";
-import { ownedRecord } from "./authorization";
+import { assertSessionBudget, ownedRecord } from "./authorization";
 import { digestOf } from "./digest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import type { SubAgentRunScheduler } from "./runScheduler";
@@ -43,6 +43,7 @@ export class SubAgentSubmissions {
     if (!isSubAgentStateId(submissionId)) throw sessionFailure("invalid-input");
     const digest = digestOf({ sessionId, submission });
     const record = ownedRecord(this.parts.store, binding, sessionId);
+    assertSessionBudget(record, grant);
     const existing = this.parts.store.submission(submissionId);
     if (existing) {
       ownedRecord(this.parts.store, binding, existing.sessionId);

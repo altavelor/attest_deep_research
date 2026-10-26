@@ -1,4 +1,12 @@
 import type {
+  SubAgentBudgetClosureReason,
+  SubAgentBudgetPermit,
+  SubAgentBudgetPermitPort,
+  SubAgentBudgetRegistration,
+  SubAgentBudgetRegistrationFinishResult,
+  SubAgentBudgetRegistrationResult,
+  SubAgentBudgetRequest,
+  SubAgentBudgetReserveResult,
   SubAgentDelegationGrant,
   SubAgentDelegator,
   SubAgentDurableWriter,
@@ -11,6 +19,9 @@ import type {
   SubAgentSessionManagerContext,
 } from "@application/ports";
 import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
+import { ParentFences } from "@application/use-cases/sub-agent/parentFences";
+import { SubAgentBudgetCoordinator } from "@application/use-cases/sub-agent/subAgentBudget";
+import { SubAgentStateStore } from "@application/use-cases/sub-agent/SubAgentStateStore";
 import {
   applySubAgentTransition,
   type ParentRunBinding,
@@ -235,9 +246,177 @@ export function delegationGrant(
   };
 }
 
+type BudgetMethod = keyof SubAgentBudgetPermitPort;
+
+interface FakeScope {
+  closure: { closureId: string; closedAt: string; reason: SubAgentBudgetClosureReason } | null;
+  generation: number;
+  registrations: Set<string>;
+  executionsLeft: number;
+  claimed: boolean;
+}
+
+/**
+ * Scope owner fake of the budget permit port: permits are single-use and idempotent per
+ * action key, settlement keeps its first outcome, a sealed scope gives one stable closure
+ * and the cleanup claim is a compare-and-set. Any method can be held or failed per call.
+ */
+export class FakeBudgetOwner implements SubAgentBudgetPermitPort {
+  readonly calls: string[] = [];
+  readonly permits = new Map<string, SubAgentBudgetPermit>();
+  readonly started = new Set<string>();
+  readonly settlements = new Map<string, "consumed" | "not-started">();
+  readonly deniedWork = new Set<string>();
+  private readonly scopes = new Map<string, FakeScope>();
+  private readonly held = new Map<BudgetMethod, Deferred<void>[]>();
+  private readonly failing = new Map<BudgetMethod, number>();
+
+  scope(scopeId: string): FakeScope {
+    const existing = this.scopes.get(scopeId);
+    if (existing) return existing;
+    const created: FakeScope = {
+      closure: null,
+      generation: 1,
+      registrations: new Set(),
+      executionsLeft: Infinity,
+      claimed: false,
+    };
+    this.scopes.set(scopeId, created);
+    return created;
+  }
+
+  seal(scopeId: string): void {
+    const scope = this.scope(scopeId);
+    scope.closure ??= {
+      closureId: `closure-${scopeId}`,
+      closedAt: AT,
+      reason: { type: "exhausted", dimension: "branchAttempts" },
+    };
+  }
+
+  hold(method: BudgetMethod): () => void {
+    const gate = deferred<void>();
+    this.held.set(method, [...(this.held.get(method) ?? []), gate]);
+    return () => gate.resolve();
+  }
+
+  failNext(method: BudgetMethod, times = 1): void {
+    this.failing.set(method, times);
+  }
+
+  async beginSessionRegistration(
+    scopeId: string,
+    creationKey: string,
+  ): Promise<SubAgentBudgetRegistrationResult> {
+    const scope = this.scope(scopeId);
+    const closure = scope.closure;
+    if (!closure) scope.registrations.add(creationKey);
+    await this.enter("beginSessionRegistration", creationKey);
+    if (closure) return { type: "denied", creationKey, ...closure };
+    const registration = { registrationId: `reg-${creationKey}`, scopeId, creationKey };
+    return { type: "registered", registration: { ...registration, generation: scope.generation } };
+  }
+
+  async finishSessionRegistration(
+    registration: SubAgentBudgetRegistration,
+    outcome: { type: "published"; sessionId: string } | { type: "aborted" },
+  ): Promise<SubAgentBudgetRegistrationFinishResult> {
+    await this.enter("finishSessionRegistration", `${registration.creationKey}:${outcome.type}`);
+    const scope = this.scope(registration.scopeId);
+    scope.registrations.delete(registration.creationKey);
+    if (scope.closure && outcome.type === "published") return { type: "closed", ...scope.closure };
+    return { type: "accepted" };
+  }
+
+  async beginExecution(scopeId: string, actionKey: string): Promise<SubAgentBudgetReserveResult> {
+    await this.enter("beginExecution", actionKey);
+    const scope = this.scope(scopeId);
+    const fresh = !this.permits.has(actionKey);
+    if (fresh && scope.executionsLeft <= 0) this.seal(scopeId);
+    const result = this.grant(scopeId, actionKey);
+    if (result.type === "granted" && fresh) scope.executionsLeft -= 1;
+    return result;
+  }
+
+  async reserve(
+    scopeId: string,
+    request: SubAgentBudgetRequest,
+  ): Promise<SubAgentBudgetReserveResult> {
+    await this.enter("reserve", request.actionKey);
+    return this.grant(scopeId, request.actionKey);
+  }
+
+  async markStarted(permit: SubAgentBudgetPermit): Promise<void> {
+    await this.enter("markStarted", permit.actionKey);
+    this.started.add(permit.actionKey);
+  }
+
+  async settle(permit: SubAgentBudgetPermit, outcome: "consumed" | "not-started"): Promise<void> {
+    await this.enter("settle", `${permit.actionKey}:${outcome}`);
+    if (!this.settlements.has(permit.permitId)) this.settlements.set(permit.permitId, outcome);
+  }
+
+  async claimClosureCleanup(scopeId: string, closureId: string): Promise<boolean> {
+    await this.enter("claimClosureCleanup", closureId);
+    const scope = this.scope(scopeId);
+    if (scope.claimed || scope.closure?.closureId !== closureId) return false;
+    scope.claimed = true;
+    return true;
+  }
+
+  consumed(): number {
+    return [...this.settlements.values()].filter((outcome) => outcome === "consumed").length;
+  }
+
+  private grant(scopeId: string, actionKey: string): SubAgentBudgetReserveResult {
+    const scope = this.scope(scopeId);
+    if (this.deniedWork.has(actionKey)) {
+      return {
+        type: "work-denied",
+        denialId: `denial-${actionKey}`,
+        actionKey,
+        reason: "per-work-attempt-limit",
+      };
+    }
+    if (scope.closure && !this.permits.has(actionKey)) {
+      return { type: "denied", actionKey, ...scope.closure };
+    }
+    const permit = this.permits.get(actionKey) ?? {
+      permitId: `permit-${actionKey}`,
+      scopeId,
+      actionKey,
+    };
+    this.permits.set(actionKey, permit);
+    return { type: "granted", permit };
+  }
+
+  private async enter(method: BudgetMethod, detail: string): Promise<void> {
+    this.calls.push(`${method}:${detail}`);
+    const gate = this.held.get(method)?.shift();
+    if (gate) await gate.promise;
+    const failures = this.failing.get(method) ?? 0;
+    if (failures > 0) {
+      this.failing.set(method, failures - 1);
+      throw new Error(`${method} unavailable`);
+    }
+  }
+}
+
+/** Builds a delegation grant bound to a required-scope budget of the given scope. */
+export function scopedGrant(
+  binding: ParentRunBinding,
+  scopeId = "scope-1",
+): SubAgentDelegationGrant {
+  return delegationGrant(binding, {
+    callerMode: "deep-research",
+    budgetPolicy: { type: "required-scope", scopeId },
+  });
+}
+
 export interface ManagerHarnessOptions {
   chatId?: string | null;
   load?: () => Promise<SubAgentStateSnapshot | null>;
+  budget?: FakeBudgetOwner;
 }
 
 /**
@@ -264,6 +443,7 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
     writer,
     execution,
     evidenceImport: imports,
+    ...(options.budget ? { budget: options.budget } : {}),
     getCurrentParentBinding: () => probes.parent,
     getCurrentDeliveryEpoch: () => probes.epoch,
     resolveGrant: (id) => grants.get(id) ?? null,
@@ -289,4 +469,21 @@ export async function launchChild(
     `submit-${name}`,
   );
   return { session, receipt };
+}
+
+/**
+ * Builds a budget coordinator over the fake owner and a store loaded from the snapshot,
+ * as the manager wires it; reloading means building a second one from the first's state.
+ */
+export async function budgetCoordinator(owner: FakeBudgetOwner, snapshot: SubAgentStateSnapshot) {
+  const writer = new FakeSubAgentWriter();
+  const store = new SubAgentStateStore({
+    getChatId: () => snapshot.chatId,
+    repository: { load: async () => snapshot },
+    writer,
+  });
+  await store.load();
+  const fences = new ParentFences();
+  const coordinator = new SubAgentBudgetCoordinator({ context: { budget: owner }, store, fences });
+  return { coordinator, store, fences };
 }
