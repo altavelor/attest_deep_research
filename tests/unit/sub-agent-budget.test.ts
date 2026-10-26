@@ -2,7 +2,14 @@ import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvide
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
 import { SubAgentResultTool } from "@adapters/research-tools/sub-agent/SubAgentResultTools";
 import { SubAgentSource } from "@adapters/research-tools/sub-agent/SubAgentSource";
-import { buildSubAgentFraming, subAgentAllowedHosts, subAgentHostAllowed } from "@core/research";
+import {
+  admitSubAgentEvidence,
+  buildSubAgentFraming,
+  parseSubAgentChildEvidence,
+  subAgentAllowedHosts,
+  subAgentHostAllowed,
+  type ValidatedJsonValue,
+} from "@core/research";
 import { ResearchEvidenceSnapshot } from "@application/sources";
 import { RetrievedChunk } from "@core/model";
 import type { ToolContext } from "@core/agent";
@@ -10,7 +17,12 @@ import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAge
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
-import { fakeParentRun, recordingDelegator } from "../support/subAgentSessions";
+import {
+  childEvidence,
+  fakeParentRun,
+  recordingDelegator,
+  sourcePolicy,
+} from "../support/subAgentSessions";
 
 function webChunk(index: number): RetrievedChunk {
   const url = `https://example${index}.com/page`;
@@ -215,5 +227,43 @@ describe("run_subagent resource restriction", () => {
     const allowed = subAgentAllowedHosts(["official investor relations pages"]);
 
     expect(subAgentHostAllowed("https://example1.com/page", allowed)).toBe(true);
+  });
+});
+
+describe("run_subagent provenance validation", () => {
+  function parsed(id: string, overrides: Record<string, ValidatedJsonValue> = {}) {
+    const item = parseSubAgentChildEvidence(childEvidence(id, overrides), (url) => url);
+    if (!item) throw new Error(`unparsable ${id}`);
+    return item;
+  }
+
+  it("drops note evidence that claims a web tool", () => {
+    const admission = admitSubAgentEvidence(
+      [parsed("n1", { source: { kind: "markdown", path: "Research/A.md", title: "A" } })],
+      [],
+      sourcePolicy(),
+    );
+
+    expect(admission).toMatchObject({ admitted: [], droppedTokens: ["n1"] });
+  });
+
+  it("drops web evidence without web provenance with its url token", () => {
+    const admission = admitSubAgentEvidence(
+      [parsed("w1", { tool: "read_note" })],
+      [],
+      sourcePolicy(),
+    );
+
+    expect(admission.admitted).toEqual([]);
+    expect(admission.droppedTokens).toEqual(["w1", "url:https://example.com/w1"]);
+  });
+
+  it("drops web sources over the import cap with their url tokens", () => {
+    const items = Array.from({ length: 11 }, (_, index) => parsed(`w${index}`));
+
+    const admission = admitSubAgentEvidence(items, [], sourcePolicy());
+
+    expect(admission.admitted).toHaveLength(10);
+    expect(admission.droppedTokens).toEqual(["w10", "url:https://example.com/w10"]);
   });
 });
