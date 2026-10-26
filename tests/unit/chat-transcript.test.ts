@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Component } from "obsidian";
 
 import {
   patchActiveAssistantMessage,
@@ -13,7 +14,7 @@ import { installObsidianDomHelpers, resetDom } from "../support/domHarness";
 function options(overrides: Partial<ChatTranscriptOptions> = {}): ChatTranscriptOptions {
   return {
     app: {} as never,
-    markdownContext: {} as never,
+    markdownContext: new Component(),
     messages: [],
     editingMessageIndex: null,
     assistantLabel: "Attest",

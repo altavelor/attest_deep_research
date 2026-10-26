@@ -8,6 +8,7 @@ export type EventRef = { detach(): void };
 export class Component {
   private readonly cleanups: (() => void)[] = [];
   private loaded = false;
+  private readonly childCleanups = new Map<Component, () => void>();
 
   async load(): Promise<void> {
     this.loaded = true;
@@ -47,8 +48,19 @@ export class Component {
   }
 
   addChild<T extends Component>(child: T): T {
-    this.register(() => child.unload());
+    const cleanup = (): void => child.unload();
+    this.childCleanups.set(child, cleanup);
+    this.register(cleanup);
     void child.load();
+    return child;
+  }
+
+  removeChild<T extends Component>(child: T): T {
+    const cleanup = this.childCleanups.get(child);
+    if (!cleanup) return child;
+    this.childCleanups.delete(child);
+    this.cleanups.splice(this.cleanups.indexOf(cleanup), 1);
+    child.unload();
     return child;
   }
 

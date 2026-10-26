@@ -5,7 +5,12 @@ import { App, Component } from "obsidian";
 
 import { AdvancedSettingsSection } from "@apps/obsidian/ui/settings/AdvancedSettingsSection";
 import { createTranslator } from "@adapters/i18n";
-import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
+import {
+  renderWorkflowTimeline,
+  toParentWorkflowModel,
+  toSubAgentWorkflowModel,
+  WorkflowTimelineModel,
+} from "@apps/obsidian/ui/chat/workflow";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createContainer, resetDom } from "../../support/domHarness";
 
@@ -37,13 +42,51 @@ function assistantWithToolCall(): ChatDisplayMessage {
   };
 }
 
-function renderWorkflow(host: HTMLElement, isDebugMode: boolean): boolean {
-  return renderWorkflowNodes(host, assistantWithToolCall(), {
+function childModel(isDebugMode: boolean): WorkflowTimelineModel {
+  return toSubAgentWorkflowModel(
+    "session-1",
+    [
+      {
+        id: "t1",
+        sessionId: "session-1",
+        runId: "run-1",
+        name: "search_index",
+        label: "Search",
+        sequence: 0,
+        round: 1,
+        status: "complete",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        payloadState: isDebugMode ? "captured" : "disabled",
+        ...(isDebugMode
+          ? {
+              args: { query: "vault notes", limit: 4242 },
+              resultJson: JSON.stringify({ hits: ["[x](javascript:alert(1)) private result"] }),
+            }
+          : {}),
+      },
+    ],
+    "complete",
+  );
+}
+
+const adapters = {
+  parent: () => toParentWorkflowModel(assistantWithToolCall()),
+  child: childModel,
+};
+
+function renderWorkflow(
+  host: HTMLElement,
+  isDebugMode: boolean,
+  adapter: keyof typeof adapters = "parent",
+  onOpenToolOutput = vi.fn(),
+) {
+  return renderWorkflowTimeline(host, adapters[adapter](isDebugMode), {
     app: new App(),
     markdownContext: new Component(),
     isDebugMode,
     t,
-    onOpenToolOutput: () => {},
+    onOpenToolOutput,
+    ...(adapter === "child" ? { outputViewerHost: host } : {}),
   });
 }
 
@@ -58,12 +101,15 @@ afterEach(() => {
 });
 
 describe("debug-mode gating of the workflow transcript", () => {
-  it("hides tool input and output cells outside debug mode", () => {
-    expect(renderWorkflow(container, false)).toBe(true);
+  it("hides tool input and output cells outside debug mode through both adapters", () => {
+    for (const adapter of ["parent", "child"] as const) {
+      container.innerHTML = "";
+      expect(renderWorkflow(container, false, adapter).rendered).toBe(true);
 
-    expect(container.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(0);
-    expect(container.textContent).not.toContain("private result");
-    expect(container.textContent).not.toContain("hits");
+      expect(container.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(0);
+      expect(container.innerHTML).not.toContain("private result");
+      expect(container.innerHTML).not.toContain("hits");
+    }
   });
 
   it("keeps the tool-call header visible in both modes", () => {
@@ -77,32 +123,47 @@ describe("debug-mode gating of the workflow transcript", () => {
     expect(container.querySelector(".attest-chat__tool-name")?.textContent).toBe(withoutDebug);
   });
 
-  it("shows In and Out cells in debug mode", () => {
-    renderWorkflow(container, true);
+  it("shows In and Out cells in debug mode through both adapters", () => {
+    for (const adapter of ["parent", "child"] as const) {
+      container.innerHTML = "";
+      renderWorkflow(container, true, adapter);
 
-    const labels = Array.from(
-      container.querySelectorAll(".attest-chat__tool-cell-label"),
-      (el) => el.textContent,
-    );
-    expect(labels).toEqual(["In", "Out"]);
-    expect(container.textContent).toContain("private result");
+      const labels = Array.from(
+        container.querySelectorAll(".attest-chat__tool-cell-label"),
+        (el) => el.textContent,
+      );
+      expect(labels).toEqual(["In", "Out"]);
+      expect(container.textContent).toContain("private result");
+    }
   });
 
-  it("opens the full tool output from a debug cell with the keyboard", () => {
+  it("opens full output with the keyboard: parent through the callback, child as inline text closed on dispose", () => {
     const onOpenToolOutput = vi.fn();
-    renderWorkflowNodes(container, assistantWithToolCall(), {
-      app: new App(),
-      markdownContext: new Component(),
-      isDebugMode: true,
-      t,
-      onOpenToolOutput,
-    });
+    renderWorkflow(container, true, "parent", onOpenToolOutput);
 
     const cell = container.querySelector<HTMLElement>(".attest-chat__tool-cell");
     expect(cell?.getAttribute("tabindex")).toBe("0");
     cell?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 
     expect(onOpenToolOutput).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".attest-chat__tool-output-viewer")).toBeNull();
+
+    onOpenToolOutput.mockClear();
+    container.innerHTML = "";
+    const handle = renderWorkflow(container, true, "child", onOpenToolOutput);
+
+    container
+      .querySelector<HTMLElement>(".attest-chat__tool-cell")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+
+    const text = container.querySelector(".attest-chat__tool-output-viewer-text");
+    expect(text?.textContent).toContain("[x](javascript:alert(1)) private result");
+    expect(text?.querySelector("a")).toBeNull();
+    expect(onOpenToolOutput).not.toHaveBeenCalled();
+
+    handle.dispose();
+    handle.dispose();
+    expect(container.querySelector(".attest-chat__tool-output-viewer")).toBeNull();
   });
 });
 

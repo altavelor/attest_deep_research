@@ -23,20 +23,3 @@ export class FetchTargetAnimator {
     this.timers.clear();
   }
 }
-
-const animatorsByTranscript = new WeakMap<HTMLElement, FetchTargetAnimator>();
-
-export function animateFetchTargets(targetList: HTMLElement, targetElements: HTMLElement[]): void {
-  const transcriptEl = targetList.closest<HTMLElement>(".attest-chat__transcript");
-  if (!transcriptEl) return;
-  const animator = animatorsByTranscript.get(transcriptEl) ?? new FetchTargetAnimator();
-  animatorsByTranscript.set(transcriptEl, animator);
-  animator.start(targetList, targetElements);
-}
-
-export function disposeFetchTargetAnimations(containerEl: HTMLElement): void {
-  const transcriptEl = containerEl.matches(".attest-chat__transcript")
-    ? containerEl
-    : containerEl.closest<HTMLElement>(".attest-chat__transcript");
-  animatorsByTranscript.get(transcriptEl ?? containerEl)?.dispose();
-}

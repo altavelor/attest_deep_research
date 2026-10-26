@@ -11,10 +11,10 @@ import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { RenderVersionTracker } from "./renderVersion";
 import {
   captureWorkflowUiState,
+  disposeWorkflowNodes,
   renderWorkflowNodes,
   WorkflowRenderContext,
 } from "./workflowRenderer";
-import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
 import { disposeAnswerArtifacts, renderAnswerArtifacts } from "./artifacts";
 
 const renderVersionsByAnswer = new WeakMap<HTMLElement, RenderVersionTracker>();
@@ -49,7 +49,7 @@ export function patchAssistantMessageContent(
 
   const contentEl = progressEl.parentElement;
   const uiState = captureWorkflowUiState(progressEl);
-  disposeFetchTargetAnimations(progressEl);
+  disposeWorkflowNodes(progressEl);
   progressEl.empty();
   const hasWorkflow = renderWorkflowNodes(
     progressEl,

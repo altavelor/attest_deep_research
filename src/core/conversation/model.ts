@@ -76,6 +76,8 @@ export type ChainItem =
       resultJson?: string;
 
       phase?: string;
+      badge?: { text: string; tooltip?: string };
+      attempt?: { runId: string; round: number };
 
       children?: ChainItem[];
     };

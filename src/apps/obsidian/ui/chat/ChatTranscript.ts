@@ -28,7 +28,7 @@ import {
 import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
 import { disposeAnswerArtifacts } from "./artifacts";
-import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
+import { disposeWorkflowNodes } from "./workflowRenderer";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -328,7 +328,7 @@ function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): voi
 
 /** Releases everything the transcript owns before its DOM is emptied or replaced. */
 export function disposeChatTranscript(transcriptEl: HTMLElement): void {
-  disposeFetchTargetAnimations(transcriptEl);
+  disposeWorkflowNodes(transcriptEl);
   disposeAnswerArtifacts(transcriptEl);
 }
 

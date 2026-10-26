@@ -125,6 +125,8 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.out": "Sortie",
   "chat.workflow.tool.openFullOutput": "Ouvrir la sortie complète",
   "chat.workflow.tool.fetching.aria": "Récupération : {targets}",
+  "chat.workflow.tool.closeOutput": "Fermer",
+  "chat.workflow.attempt": "Exécution {run} · tentative {round}",
 
   "chat.toolCall.badge.keywordOnly": "mots-clés uniquement",
   "chat.toolCall.badge.semanticFailed": "Échec de la recherche sémantique (embeddings) : {error}",

@@ -116,6 +116,8 @@ export const chat = {
   "chat.workflow.tool.out": "Out",
   "chat.workflow.tool.openFullOutput": "Open full output",
   "chat.workflow.tool.fetching.aria": "Fetching: {targets}",
+  "chat.workflow.tool.closeOutput": "Close",
+  "chat.workflow.attempt": "Run {run} · attempt {round}",
 
   "chat.toolCall.badge.keywordOnly": "keyword-only",
   "chat.toolCall.badge.semanticFailed": "Semantic (embedding) search failed: {error}",

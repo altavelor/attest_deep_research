@@ -125,6 +125,8 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.out": "Выход",
   "chat.workflow.tool.openFullOutput": "Открыть полный вывод",
   "chat.workflow.tool.fetching.aria": "Загрузка: {targets}",
+  "chat.workflow.tool.closeOutput": "Закрыть",
+  "chat.workflow.attempt": "Запуск {run} · попытка {round}",
 
   "chat.toolCall.badge.keywordOnly": "только ключевые слова",
   "chat.toolCall.badge.semanticFailed": "Семантический поиск (по эмбеддингам) не удался: {error}",
