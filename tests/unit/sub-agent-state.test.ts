@@ -34,7 +34,7 @@ function detail(observationId: string, runId: string, text: string, cited = fals
 }
 
 describe("sub-agent section validation", () => {
-  it("keeps a corrupt section verbatim as unreadable while the chat stays readable", () => {
+  it("keeps a corrupt section verbatim as unreadable and rejects dangling references", () => {
     const section = { version: 1, chatId: "chat-1", revision: -1 };
     const chat = parseSavedChat({
       schemaVersion: 4,
@@ -55,6 +55,50 @@ describe("sub-agent section validation", () => {
       raw: section,
       reason: "Sub-agent state has an invalid field: revision.",
     });
+
+    const imported = {
+      state: "prepared",
+      importId: "import-1",
+      chatId: "chat-1",
+      sessionId: "session-1",
+      runId: "run-1",
+      evidenceDigest: "digest",
+      generation: 1,
+      evidence: [],
+      aliases: [],
+      answerText: "",
+      createdAt: LATER,
+    } as const;
+    const action = {
+      state: "prepared",
+      actionKey: "action-1",
+      sessionId: "session-1",
+      runId: "run-1",
+      attempt: 1,
+      action: "search",
+      ordinal: 0,
+      fenceGeneration: 1,
+    } as const;
+    const linked = {
+      ...withRun(subAgentSection(), () => undefined),
+      imports: [imported],
+      pendingActions: [action],
+    };
+    const fieldOf = (value: unknown) =>
+      (validateSubAgentState(value) as { message?: string }).message ?? "valid";
+
+    expect(fieldOf(linked)).toBe("valid");
+    expect(
+      [
+        { ...linked, imports: [{ ...imported, chatId: "chat-2" }] },
+        { ...linked, imports: [{ ...imported, sessionId: "session-9" }] },
+        { ...linked, pendingActions: [{ ...action, runId: "run-9" }] },
+      ].map(fieldOf),
+    ).toEqual([
+      "Sub-agent state has an invalid field: imports[0].chatId.",
+      "Sub-agent state has an invalid field: imports[0].sessionId.",
+      "Sub-agent state has an invalid field: pendingActions[0].runId.",
+    ]);
   });
 
   it.each([

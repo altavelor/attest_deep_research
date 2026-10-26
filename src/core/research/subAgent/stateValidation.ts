@@ -61,6 +61,7 @@ function checkSnapshot(value: Rec): void {
   count(value.revision, "revision");
   const sessionIds = new Set<string>();
   const runIds = new Set<string>();
+  const runsBySession = new Map<string, readonly string[]>();
   list(value.records, "records").forEach((record, index) => {
     const path = `records[${index}]`;
     const sessionId = checkSession(rec(record.session, `${path}.session`), `${path}.session`);
@@ -72,6 +73,7 @@ function checkSnapshot(value: Rec): void {
       unique(runIds, runId, `${runPath}.subAgentRunId`);
       return runId;
     });
+    runsBySession.set(sessionId, ownRuns);
     const session = record.session as Rec;
     for (const key of ["activeSubAgentRunId", "pendingImportRunId"]) {
       if (session[key] !== null && !ownRuns.includes(session[key] as string)) {
@@ -94,9 +96,14 @@ function checkSnapshot(value: Rec): void {
     ids(receipt, ["sessionId", "runId", "submissionId"], `${path}.receipt`);
     time(receipt.acceptedAt, `${path}.receipt.acceptedAt`);
   });
-  list(value.imports, "imports").forEach((entry, index) => checkImport(entry, `imports[${index}]`));
+  list(value.imports, "imports").forEach((entry, index) => {
+    const path = `imports[${index}]`;
+    checkImport(entry, path);
+    if (entry.chatId !== value.chatId) invalid(`${path}.chatId`);
+    checkRunReference(entry, path, runsBySession);
+  });
   list(value.pendingActions, "pendingActions").forEach((entry, index) =>
-    checkAction(entry, `pendingActions[${index}]`),
+    checkAction(entry, `pendingActions[${index}]`, runsBySession),
   );
   list(value.recoveryMarkers, "recoveryMarkers").forEach((entry, index) =>
     checkMarker(entry, `recoveryMarkers[${index}]`),
@@ -180,13 +187,28 @@ function checkImport(entry: Rec, path: string): void {
   if (entry.tombstoneReason !== undefined) text(entry.tombstoneReason, `${path}.tombstoneReason`);
 }
 
-function checkAction(entry: Rec, path: string): void {
+function checkRunReference(
+  entry: Rec,
+  path: string,
+  runsBySession: ReadonlyMap<string, readonly string[]>,
+): void {
+  const runs = runsBySession.get(entry.sessionId as string);
+  if (!runs) invalid(`${path}.sessionId`);
+  if (!runs.includes(entry.runId as string)) invalid(`${path}.runId`);
+}
+
+function checkAction(
+  entry: Rec,
+  path: string,
+  runsBySession: ReadonlyMap<string, readonly string[]>,
+): void {
   oneOf(entry.state, ACTION_STATES, `${path}.state`);
   ids(entry, ["actionKey", "sessionId", "runId"], path);
   text(entry.action, `${path}.action`);
   for (const key of ["attempt", "ordinal", "fenceGeneration"]) count(entry[key], `${path}.${key}`);
   if (entry.permit !== undefined) json(entry.permit, `${path}.permit`);
   if (entry.outcome !== undefined) json(entry.outcome, `${path}.outcome`);
+  checkRunReference(entry, path, runsBySession);
 }
 
 function checkMarker(entry: Rec, path: string): void {
