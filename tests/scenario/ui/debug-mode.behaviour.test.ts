@@ -57,6 +57,7 @@ function childModel(isDebugMode: boolean): WorkflowTimelineModel {
         status: "complete",
         startedAt: "2026-01-01T00:00:00.000Z",
         payloadState: isDebugMode ? "captured" : "disabled",
+        badge: { text: "keyword-only", tooltip: "Safe tooltip" },
         ...(isDebugMode
           ? {
               args: { query: "vault notes", limit: 4242 },
@@ -109,6 +110,8 @@ describe("debug-mode gating of the workflow transcript", () => {
       expect(container.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(0);
       expect(container.innerHTML).not.toContain("private result");
       expect(container.innerHTML).not.toContain("hits");
+      const badge = container.querySelector(".attest-chat__tool-badge");
+      if (adapter === "child") expect(badge?.getAttribute("title")).toBe("Safe tooltip");
     }
   });
 

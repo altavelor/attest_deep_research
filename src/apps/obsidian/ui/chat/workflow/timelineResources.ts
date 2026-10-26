@@ -41,7 +41,6 @@ export class TimelineResources {
   }
 
   openToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void {
-    if (this.disposed) return;
     if (this.viewer) this.viewer.open(item);
     else this.context.onOpenToolOutput(item);
   }
