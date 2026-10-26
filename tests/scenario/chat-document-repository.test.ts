@@ -152,13 +152,21 @@ describe("chat document repository over a vault that refuses replacing renames",
 
     await adapter.write(MAIN, "{");
     await adapter.write(`${MAIN}.tmp`, good);
-    expect((await repository.loadChat("chat-1"))?.title).toBe("Question?");
-    expect(await fileSystem.readText(MAIN)).toBe(good);
+    await repository.saveChat(chatInput({ title: "After", createdAt: undefined }));
+    expect(JSON.parse(await fileSystem.readText(MAIN))).toMatchObject({
+      title: "After",
+      createdAt: JSON.parse(good).createdAt,
+      subAgents: JSON.parse(good).subAgents,
+    });
+    await adapter.write(MAIN, "{");
+    await adapter.write(`${MAIN}.tmp`, good);
+    expect((await repository.renameChat("chat-1", "Renamed"))?.title).toBe("Renamed");
 
     await adapter.write(MAIN, "{");
     await adapter.write(`${MAIN}.tmp`, "{");
     await adapter.write(`${MAIN}.prev`, good);
     expect((await repository.loadChat("chat-1"))?.recoveredFrom).toBe("previous");
+    expect(await repository.setChatFavorite("chat-1", true)).toBeNull();
     expect((await repository.listChats()).map((chat) => chat.id)).toEqual(["chat-1"]);
 
     await adapter.remove(MAIN);
@@ -172,6 +180,16 @@ describe("chat document repository over a vault that refuses replacing renames",
     const base = await seed(repository);
     const clock = new ManualClock();
     const { writer } = buffer(repository, clock, base);
+    const legacy = JSON.parse(await fileSystem.readText(MAIN));
+    delete legacy.subAgents;
+    await fileSystem.writeText(MAIN, JSON.stringify(legacy, null, 2));
+    const legacyBase = (await repository.loadChatDocument("chat-1"))!.base;
+    await repository.commitChatDocument({
+      chatId: "chat-1",
+      base: legacyBase,
+      chat: chatInput(),
+      subAgents: subAgentSection(),
+    });
     const other = new FileChatRepository({ fileSystem, folder: FOLDER });
     const external = (await other.loadChatDocument("chat-1"))!;
     await other.commitChatDocument({
@@ -229,7 +247,7 @@ describe("chat document repository over a vault that refuses replacing renames",
   });
 
   it("keeps the previous generation only for terminal chat saves", async () => {
-    const { fileSystem, repository } = setup();
+    const { adapter, fileSystem, repository } = setup();
     const base = await seed(repository);
     const afterSection = await repository.commitChatDocument({
       chatId: "chat-1",
@@ -238,12 +256,16 @@ describe("chat document repository over a vault that refuses replacing renames",
     });
     expect(await fileSystem.exists(`${MAIN}.prev`)).toBe(false);
     const previous = await fileSystem.readText(MAIN);
-
-    await repository.commitChatDocument({
+    const terminal = {
       chatId: "chat-1",
       base: afterSection.base,
       chat: chatInput({ lastRun: COMPLETED }),
-    });
+    };
+
+    adapter.failNext("rename", "chat-1.json.prev");
+    await expect(repository.commitChatDocument(terminal)).rejects.toThrow("Interrupted rename");
+    expect(await fileSystem.exists(`${MAIN}.prev`)).toBe(false);
+    await repository.commitChatDocument(terminal);
 
     expect(await fileSystem.readText(`${MAIN}.prev`)).toBe(previous);
   });
@@ -259,10 +281,31 @@ describe("chat document repository over a vault that refuses replacing renames",
         lastRun: { runId: "p", startedAt: COMPLETED.startedAt, status: "running" },
       }),
     });
-    const { manager } = createTestSessionManager({ repository });
+    const staleText = await fileSystem.readText(MAIN);
+    await fileSystem.writeText(`${FOLDER}/chat-3.json`, "{");
+    await fileSystem.writeText(
+      `${FOLDER}/chat-3.json.prev`,
+      JSON.stringify({ ...JSON.parse(staleText), id: "chat-3", subAgents: undefined }),
+    );
+    await repository.saveChat(
+      chatInput({
+        id: "chat-2",
+        updatedAt: "2026-10-27T10:00:00.000Z",
+        lastRun: { runId: "q", startedAt: COMPLETED.startedAt, status: "running" },
+      }),
+    );
+    const vanishing = Object.create(repository) as FileChatRepository;
+    vanishing.loadChatDocument = async (id) => {
+      const document = await repository.loadChatDocument(id);
+      if (id === "chat-2") await repository.deleteChat(id);
+      return document;
+    };
+    const { manager } = createTestSessionManager({ repository: vanishing });
 
     await manager.normalizeStaleChats();
 
+    expect(await fileSystem.readText(`${FOLDER}/chat-3.json`)).toBe("{");
+    expect(await fileSystem.exists(`${FOLDER}/chat-2.json`)).toBe(false);
     const saved = JSON.parse(await fileSystem.readText(MAIN));
     expect(saved.lastRun.status).toBe("interrupted");
     expect(saved.subAgents.records[0].runs[0]).toMatchObject({
@@ -327,6 +370,11 @@ describe("chat document repository over a vault that refuses replacing renames",
     ).rejects.toMatchObject({
       code: "document-conflict",
       message: "A newer sub-agent state is already saved for this chat.",
+    });
+    await repository.commitChatDocument({
+      chatId: "chat-1",
+      base: current,
+      subAgents: subAgentSection(undefined, { revision: 5 }),
     });
 
     await adapter.write(

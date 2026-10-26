@@ -1,5 +1,6 @@
 import { isChatStorageError, type ChatRepository } from "@application/ports/chat";
 import { recoverSubAgentState } from "@core/research";
+
 import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { inferChatTitle } from "@core/chat/savedChat";
 import type { SavedChatSummary } from "@core/chat/savedChat";
@@ -36,6 +37,8 @@ import type {
   ChatSessionState,
   ChatSessionViewProbe,
 } from "./chatSessionTypes";
+
+const SKIPPED_RECOVERY_CODES = new Set(["unreadable-section", "chat-missing", "document-conflict"]);
 
 export interface ChatSessionManagerOptions {
   repository: ChatRepository;
@@ -397,7 +400,7 @@ export class ChatSessionManager {
     for (const summary of summaries) {
       if (!summary.lastRun || !isNonTerminalChatSessionStatus(summary.lastRun.status)) continue;
       const document = await this.options.repository.loadChatDocument(summary.id);
-      if (!document?.chat.lastRun) continue;
+      if (!document?.chat.lastRun || document.chat.recoveredFrom) continue;
       const { chat } = document;
       const lastRun = normalizeStaleRunState(chat.lastRun, completedAt);
       if (!lastRun) continue;
@@ -423,7 +426,7 @@ export class ChatSessionManager {
           ...(subAgents && subAgents !== section ? { subAgents } : {}),
         });
       } catch (error) {
-        if (!isChatStorageError(error) || error.code !== "document-conflict") throw error;
+        if (!isChatStorageError(error) || !SKIPPED_RECOVERY_CODES.has(error.code)) throw error;
       }
     }
   }

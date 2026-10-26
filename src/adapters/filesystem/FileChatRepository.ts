@@ -102,6 +102,7 @@ export class FileChatRepository implements ChatRepository {
     assertSafeChatId(id);
     return this.mutateChat(id, async () => {
       await this.fileSystem.createFolder(this.folder);
+      await this.files.recoverOrphanTemp(id);
       const current = await this.files.readCurrent(id);
       return (await this.write(id, current, input, undefined)).chat;
     });
@@ -161,6 +162,7 @@ export class FileChatRepository implements ChatRepository {
     assertSafeChatId(id);
     return this.mutateChat(id, async () => {
       await this.fileSystem.createFolder(this.folder);
+      await this.files.recoverOrphanTemp(id);
       const current = await this.files.readCurrent(id);
       if (!current || current.recovered) return null;
       const chat = patch(current.document.chat);

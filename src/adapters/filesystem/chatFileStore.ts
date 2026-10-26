@@ -52,11 +52,15 @@ export class ChatFileStore {
   /** Writes the text through a temp file and an atomic replace, removing the temp file on failure. */
   async replace(id: string, text: string, previousText: string | null): Promise<void> {
     const main = this.mainPath(id);
-    if (previousText !== null) await this.fileSystem.writeText(`${main}.prev`, previousText);
-    const temp = `${main}.tmp`;
+    if (previousText !== null) await this.writeAtomically(`${main}.prev`, previousText);
+    await this.writeAtomically(main, text);
+  }
+
+  private async writeAtomically(path: string, text: string): Promise<void> {
+    const temp = `${path}.tmp`;
     try {
       await this.fileSystem.writeText(temp, text);
-      await this.fileSystem.rename(temp, main);
+      await this.fileSystem.rename(temp, path);
     } catch (error) {
       await this.fileSystem.remove(temp).catch(() => undefined);
       throw error;
@@ -78,7 +82,7 @@ export class ChatFileStore {
     const main = this.mainPath(id);
     this.cache.delete(main);
     await this.fileSystem.removeReplaceable(main);
-    for (const path of [`${main}.tmp`, `${main}.prev`]) {
+    for (const path of [`${main}.tmp`, `${main}.prev`, `${main}.prev.tmp`]) {
       if (await this.fileSystem.exists(path)) await this.fileSystem.remove(path);
     }
   }

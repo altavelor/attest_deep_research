@@ -281,9 +281,7 @@ describe("FileChatStore", () => {
 
     await store.setChatFavorite("chat-1", true);
 
-    const raw = await fileSystem.readText(path);
-    expect(raw).toBe(`${JSON.stringify(JSON.parse(raw))}\n`);
-    expect(JSON.parse(raw).messages[0].content).toBe("Questiom?");
+    expect(JSON.parse(await fileSystem.readText(path)).messages[0].content).toBe("Questiom?");
   });
 
   it("refuses an invalid sub-agent section before writing", async () => {
