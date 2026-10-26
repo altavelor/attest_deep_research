@@ -227,6 +227,14 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
 
   private async runBatch(): Promise<void> {
     const chatId = this.options.getChatId();
+    if (chatId !== null && this.baseline === null) {
+      try {
+        await this.adoptStoredDocument(chatId);
+      } catch (error) {
+        await this.handleFailure(error as Error, chatId, this.chat, false);
+        return;
+      }
+    }
     const chat = this.chat;
     const deltas = new Map(this.pending);
     this.batchChat = chat;
@@ -267,6 +275,15 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
       this.batchChat = null;
       this.batchDeltas = new Set();
     }
+  }
+
+  /** Takes the baseline and saved sub-agent section of a chat this buffer did not create. */
+  private async adoptStoredDocument(chatId: string): Promise<void> {
+    const loaded = await this.options.repository.loadChatDocument(chatId);
+    if (!loaded) throw chatMissing();
+    this.baseline = loaded.base;
+    const section = loaded.chat.subAgents;
+    if (this.durable === null && section?.status === "ready") this.durable = section.snapshot;
   }
 
   private async write(

@@ -8,6 +8,10 @@ import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ChatSessionStatus, InterruptionReason } from "@core/chat/chatSession";
 import type { ResearchService } from "@application/use-cases/research";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
+import type {
+  SubAgentSessionManagerFactory,
+  SubAgentSessionRepository,
+} from "@application/ports/subAgent";
 
 export interface ChatSessionState {
   sessionId: string;
@@ -31,13 +35,7 @@ export interface ChatSessionState {
 }
 
 export type ChatSessionChangeKind =
-  "status"
-  | "messages"
-  | "active-message"
-  | "progress"
-  | "answer"
-  | "error"
-  | "sub-agents";
+  "status" | "messages" | "active-message" | "progress" | "answer" | "error" | "sub-agents";
 
 export interface ChatSessionChange {
   sessionId: string;
@@ -61,6 +59,13 @@ export interface ChatRunRequest {
   modelLabel: string;
 }
 
+export interface ChatSubAgentServices {
+  repository: SubAgentSessionRepository;
+  redact(text: string): string;
+  isDebugCapture?(): boolean;
+  monotonicNow?(): number;
+}
+
 export interface ChatSessionEnvironment {
   createResearchService(settings: SavedChatSettings): ResearchService;
   now(): Date;
@@ -70,4 +75,7 @@ export interface ChatSessionEnvironment {
     question: string,
   ): ConversationRegistryPromptView;
   logError?(error: unknown): void;
+  createSubAgentSessionManager?: SubAgentSessionManagerFactory;
+  subAgentServices?: ChatSubAgentServices;
+  scheduleTimeout?(callback: () => void, delayMs: number): { cancel(): void };
 }

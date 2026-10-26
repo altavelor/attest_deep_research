@@ -6,3 +6,4 @@ export * from "./ChatSubAgentEvidenceBridge";
 export * from "./chatSessionSnapshots";
 export * from "./chatSessionTypes";
 export * from "./ChatWriteBuffer";
+export * from "./ChatSubAgentBridge";

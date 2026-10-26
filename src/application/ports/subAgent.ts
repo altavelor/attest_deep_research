@@ -106,6 +106,37 @@ export interface SubAgentHost extends SubAgentLifecycle {
   subscribeResults(listener: () => void): () => void;
   listRunRefs(parentRunId: string): readonly SubAgentRunRef[];
   inspection(): SubAgentInspectionPort;
+  importLookup?(): SubAgentImportLookup;
+}
+
+export type SubAgentTerminalResult = Exclude<SubAgentResultState, { state: "pending" }>;
+
+export interface SubAgentDeliveredResult {
+  ref: SubAgentRunRef;
+  result: SubAgentTerminalResult;
+}
+
+/**
+ * Parent-side delivery of child results at model round boundaries and the completion
+ * barrier that keeps a final answer from being published while children are pending.
+ */
+export interface SubAgentParentCoordinatorPort {
+  beforeModelRound(): Promise<readonly SubAgentDeliveredResult[]>;
+  acknowledgeResults(results: readonly { ref: SubAgentRunRef; resultRevision: number }[]): void;
+  beforeFinalize(signal?: AbortSignal): Promise<"ready" | "resume-with-results">;
+}
+
+/**
+ * What one parent run hands to its research strategy for delegated work: the results
+ * coordinator, the evidence resolver of committed imports, and hooks that bind the
+ * run's child execution and its evidence registry capacity.
+ */
+export interface SubAgentParentRun {
+  parentRunId: string;
+  coordinator: SubAgentParentCoordinatorPort;
+  resolver: SubAgentImportedEvidenceResolver;
+  bindExecution(execution: SubAgentExecutionPort): void;
+  attachEvidence(capacity: { remainingWebCapacity?(): number }): void;
 }
 
 export type SubAgentMainEventIntent =

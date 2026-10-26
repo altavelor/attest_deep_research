@@ -2,12 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { listSourceModules, reachableModules } from "../../support/moduleGraph";
 
-const ENTRY_POINTS = ["src/apps/obsidian/main.ts", "src/application/use-cases/sub-agent/index.ts"];
+const ENTRY_POINTS = ["src/apps/obsidian/main.ts"];
 
-const MODULES_REACHED_ONLY_BY_TESTS = [
-  "src/apps/obsidian/pluginMetadata.ts",
-  "src/adapters/filesystem/sub-agent/ChatDocumentSubAgentRepository.ts",
-];
+const MODULES_REACHED_ONLY_BY_TESTS = ["src/apps/obsidian/pluginMetadata.ts"];
 
 describe("module reachability", () => {
   const modules = listSourceModules();

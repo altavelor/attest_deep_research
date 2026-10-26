@@ -7,7 +7,7 @@ import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
 import { AttestError } from "@core/errors";
 import type { SavedChatSettings } from "@core/chat/savedChat";
-import { createTestSessionManager } from "../support/chatSessions";
+import { createTestSessionManager, fakeChildHosts } from "../support/chatSessions";
 import { settle } from "../support/async";
 
 const settings: SavedChatSettings = {
@@ -222,6 +222,58 @@ describe("chat session runtime research mode", () => {
   });
 });
 
+describe("chat session runtime delegation", () => {
+  it("hands a Thinking run the delegator and a grant with the active file of its request", async () => {
+    const children = fakeChildHosts();
+    const requests: ResearchRequest[] = [];
+    const grants: unknown[] = [];
+    const { manager } = createTestSessionManager({
+      createSubAgentSessionManager: children.factory,
+      createResearchService: () =>
+        ({
+          answer: async function* answer(request: ResearchRequest) {
+            requests.push(request);
+            const host = children.hosts[0]!;
+            grants.push(host.context.resolveGrant(host.bindings.at(-1)!.delivery.grantId));
+            yield { type: "complete", answer: answerFor("Done") };
+          },
+        }) as unknown as ResearchService,
+    });
+    const state = manager.createSession({ ...settings, researchMode: "thinking" });
+    const run = (activeFilePath: string, mode: SavedChatSettings["researchMode"]) => {
+      state.chatSettings = { ...settings, researchMode: mode };
+      return manager.start(state.sessionId, {
+        question: "Question?",
+        chatHistory: [],
+        appendQuestion: true,
+        contextPaths: ["Notes"],
+        activeFilePath,
+        includeActiveFile: true,
+        includeContextDiagnostics: false,
+        modelLabel: "Model",
+      });
+    };
+
+    await run("Notes/Captured.md", "thinking");
+    await settle();
+    await run("Notes/Instant.md", "instant");
+    await settle();
+
+    const [{ delegator, delivery }] = children.hosts[0]!.bindings;
+    expect(requests[0]?.subAgentDelegator).toBe(delegator);
+    expect(requests[0]?.subAgentParent?.parentRunId).toBe("run-1");
+    expect(grants[0]).toMatchObject({
+      callerMode: "thinking",
+      budgetPolicy: { type: "local" },
+      capturedActiveFilePath: "Notes/Captured.md",
+      maximumSourcePolicy: { contextPaths: ["Notes"], allowActiveFile: true },
+    });
+    expect(requests[1]?.subAgentDelegator).toBeUndefined();
+    expect(children.hosts[0]!.bindings).toHaveLength(1);
+    expect(children.hosts[0]!.context.resolveGrant(delivery.grantId)).toBeNull();
+  });
+});
+
 describe("chat session runtime cancellation", () => {
   it("aborts the request and marks the answer interrupted mid-stream", async () => {
     const gate = deferred();
@@ -368,7 +420,7 @@ describe("chat session runtime failures", () => {
         throw new Error("The model must not be contacted.");
       },
     });
-    vi.spyOn(repository, "saveChat").mockRejectedValue(failure);
+    vi.spyOn(repository, "commitChatDocument").mockRejectedValue(failure);
     const state = manager.createSession(settings);
 
     const result = await manager.start(state.sessionId, {
