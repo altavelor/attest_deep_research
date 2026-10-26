@@ -7,6 +7,8 @@ import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
 import { AttestError } from "@core/errors";
 import type { SavedChatSettings } from "@core/chat/savedChat";
+import { parentWorkflowChain, type ChainItem } from "@core/conversation";
+import { buildThinkingResearchMessages } from "@core/research";
 import { createTestSessionManager, fakeChildHosts } from "../support/chatSessions";
 import { settle } from "../support/async";
 
@@ -271,6 +273,141 @@ describe("chat session runtime delegation", () => {
     expect(requests[1]?.subAgentDelegator).toBeUndefined();
     expect(children.hosts[0]!.bindings).toHaveLength(1);
     expect(children.hosts[0]!.context.resolveGrant(delivery.grantId)).toBeNull();
+  });
+});
+
+describe("chat session runtime display projection", () => {
+  it("U2: keeps dispatches, notices and child details out of the provider request and the parent workflow", async () => {
+    const requests: ResearchRequest[] = [];
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: () =>
+        ({
+          answer: async function* answer(request: ResearchRequest) {
+            requests.push(request);
+            yield { type: "complete", answer: answerFor("Done") };
+          },
+        }) as unknown as ResearchService,
+    });
+    const legacyChain: ChainItem[] = [
+      {
+        kind: "tool-call",
+        id: "own",
+        name: "search_web",
+        label: "Search",
+        status: "complete",
+        resultJson: "{}",
+      },
+      {
+        kind: "tool-call",
+        id: "agent",
+        name: "run_subagent",
+        label: "Delegate",
+        status: "complete",
+        args: { task: "Legacy task" },
+        resultJson: '{"answer":"Legacy child answer"}',
+        children: [
+          {
+            kind: "tool-call",
+            id: "child",
+            name: "fetch_web_page",
+            label: "Child fetch",
+            status: "complete",
+          },
+        ],
+      },
+    ];
+    const saved = await repository.saveChat({
+      id: "chat-u2",
+      title: "Chat",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      messages: [
+        { role: "user", content: "Question?", createdAt: "2026-01-01T00:00:00.000Z" },
+        {
+          role: "assistant",
+          content: "Earlier answer",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          researchProgress: {
+            phase: "complete",
+            disclosure: "auto",
+            view: "expanded",
+            reasoning: { phase: "complete", segments: [] },
+            checkpoints: [],
+            chain: legacyChain,
+          },
+        },
+      ],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: settings,
+      subAgentDispatches: [
+        {
+          eventKey: "dispatch:chat-u2:p:s:r",
+          sessionId: "s",
+          runId: "r",
+          parentRunId: "p",
+          body: "Secret task body",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          commandKind: "initial",
+          attempt: 1,
+          sequence: 3,
+        },
+      ],
+      subAgentNotices: [
+        {
+          eventKey: "notice:chat-u2:p:s:r:finished",
+          parentRunId: "p",
+          description: "Agent description",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          sessionId: "s",
+          runId: "r",
+          sequence: 4,
+          kind: "finished",
+          replyExcerpt: "Child reply text",
+        },
+      ],
+      timelineSequence: 5,
+    });
+    const state = manager.adoptChat(saved, settings);
+
+    await manager.start(state.sessionId, {
+      question: "Next?",
+      chatHistory: state.messages,
+      appendQuestion: true,
+      contextPaths: [],
+      includeActiveFile: false,
+      includeContextDiagnostics: false,
+      modelLabel: "Model",
+    });
+    await settle();
+
+    const provider = JSON.stringify(
+      buildThinkingResearchMessages({
+        question: requests[0]!.question,
+        chatHistory: requests[0]!.chatHistory,
+        requiredTools: [],
+        toolContext: { availableTools: [], parallelToolCalls: false },
+      }),
+    );
+    for (const hidden of [
+      "Secret task body",
+      "Child reply text",
+      "Agent description",
+      "Legacy child answer",
+    ]) {
+      expect(provider).not.toContain(hidden);
+    }
+    expect(state.subAgentDispatches).toHaveLength(1);
+    expect(parentWorkflowChain(legacyChain)).toEqual([
+      legacyChain[0],
+      {
+        kind: "tool-call",
+        id: "agent",
+        name: "run_subagent",
+        label: "Delegate",
+        status: "complete",
+        args: { task: "Legacy task" },
+      },
+    ]);
   });
 });
 

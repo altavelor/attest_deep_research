@@ -628,6 +628,8 @@ export class AttestChatView extends ItemView {
       app: this.app,
       markdownContext: this,
       messages: this.messages,
+      subAgentDispatches: this.session.subAgentDispatches,
+      subAgentNotices: this.session.subAgentNotices,
       editingMessageIndex: this.editingMessageIndex,
       assistantLabel: this.getCurrentChatModelLabel() || this.t("chat.message.assistant"),
       isDebugMode: this.services.isDebugMode(),
@@ -839,7 +841,7 @@ export class AttestChatView extends ItemView {
       this.renderAnswerDetails();
       return;
     }
-    if (change.kind === "messages") {
+    if (change.kind === "messages" || change.kind === "sub-agents") {
       this.renderMessagesAfterFinalizingFrame();
       return;
     }

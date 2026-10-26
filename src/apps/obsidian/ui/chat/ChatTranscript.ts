@@ -29,6 +29,9 @@ import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
 import { disposeAnswerArtifacts } from "./artifacts";
 import { disposeWorkflowNodes } from "./workflowRenderer";
+import { renderSubAgentDispatch, renderSubAgentNotice } from "./subAgentEvents";
+import { buildChatTimeline } from "@core/chat/subAgentTimeline";
+import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -55,6 +58,9 @@ export interface ChatTranscriptOptions {
   onAppendAnswerToActiveNote: (answer: ResearchAnswer) => void;
 
   documentImages?: DocumentImageResolver;
+  subAgentDispatches?: readonly SubAgentDispatchEntry[];
+  subAgentNotices?: readonly SubAgentNoticeEntry[];
+  onOpenSubAgentSession?: (sessionId: string) => void;
 }
 
 export function renderChatTranscript(
@@ -72,9 +78,27 @@ export function renderChatTranscript(
     return;
   }
 
-  visibleMessages.forEach(({ message, index }) =>
-    renderMessage(transcriptEl, message, index, options),
-  );
+  const indexes = new Map(visibleMessages.map(({ message, index }) => [message, index]));
+  const timeline = buildChatTimeline({
+    messages: visibleMessages.map(({ message }) => message),
+    subAgentDispatches: options.subAgentDispatches ?? [],
+    subAgentNotices: options.subAgentNotices ?? [],
+  });
+  const events = {
+    t: options.t,
+    ...(options.onOpenSubAgentSession
+      ? { onOpenSubAgentSession: options.onOpenSubAgentSession }
+      : {}),
+  };
+  for (const item of timeline) {
+    if (item.kind === "message") {
+      renderMessage(transcriptEl, item.message, indexes.get(item.message)!, options);
+    } else if (item.kind === "agent-dispatch") {
+      renderSubAgentDispatch(transcriptEl, item.dispatch, events);
+    } else {
+      renderSubAgentNotice(transcriptEl, item.notice, events);
+    }
+  }
   applyScrollAnchor(transcriptEl, scroll);
 }
 

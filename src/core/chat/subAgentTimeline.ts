@@ -90,9 +90,9 @@ export function parseTimelineSequence(value: unknown): number {
 
 /**
  * Gives every timeline item a unique sequence without reordering messages. Messages
- * keep a valid increasing sequence and receive the next free one otherwise; events
- * that collide are moved after the highest sequence in event-key order, and the
- * allocator ends above every sequence in use.
+ * keep a valid increasing sequence and receive the next free one otherwise, from one
+ * when no message has a sequence yet; colliding events move after the highest sequence
+ * in event-key order, and the allocator ends above every sequence in use.
  */
 export function normalizeSubAgentTimeline(state: SubAgentTimelineState): SubAgentTimelineState {
   const events = [
@@ -100,7 +100,13 @@ export function normalizeSubAgentTimeline(state: SubAgentTimelineState): SubAgen
     ...state.subAgentNotices.map((entry) => ({ key: entry.eventKey, sequence: entry.sequence })),
   ];
   const used = new Set<number>();
-  let next = Math.max(1, state.timelineSequence, ...events.map((event) => event.sequence + 1));
+  const allocated = Math.max(
+    1,
+    state.timelineSequence,
+    ...events.map((event) => event.sequence + 1),
+  );
+  const legacy = !state.messages.some((message) => isSequence(message.timelineSequence));
+  let next = legacy ? 1 : allocated;
   let previous = 0;
   const messages = state.messages.map((message) => {
     if (message.kind === "compact-summary") return withoutSequence(message);
@@ -117,6 +123,7 @@ export function normalizeSubAgentTimeline(state: SubAgentTimelineState): SubAgen
     next = sequence + 1;
     return { ...message, timelineSequence: sequence };
   });
+  next = Math.max(next, allocated);
   const moved = new Map<string, number>();
   const ordered = [...events].sort(
     (left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key),
