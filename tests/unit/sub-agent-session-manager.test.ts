@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatStorageError } from "@application/ports";
-import type { SubAgentSessionFailure } from "@core/research";
+import { waitForRunResults } from "@application/use-cases/sub-agent/waitForResults";
+import type { SubAgentResultState, SubAgentSessionFailure } from "@core/research";
 import { settle } from "../support/async";
+import { subAgentSection } from "../support/chatDocuments";
 import {
   deferred,
   executionResult,
   launchChild,
   managerHarness,
   delegationGrant,
+  readySubAgentRecord,
 } from "../support/subAgentSessions";
 import { runPastDeadline } from "../support/timers";
 
@@ -16,6 +19,16 @@ vi.mock("@shared", async (importOriginal) => {
   const { withGlobalTimers } = await import("../support/timers");
   return withGlobalTimers(await importOriginal<typeof import("@shared")>());
 });
+
+function foreignParent(harness: ReturnType<typeof managerHarness>) {
+  return { ...harness.binding, parentRunId: "parent-2" };
+}
+
+function foreignDelegator(harness: ReturnType<typeof managerHarness>) {
+  const binding = foreignParent(harness);
+  harness.grants.set("grant-2", delegationGrant(binding));
+  return harness.manager.delegatorFor(binding, { deliveryEpoch: 1, grantId: "grant-2" });
+}
 
 async function failureOf(promise: Promise<unknown>): Promise<SubAgentSessionFailure> {
   const failure = await promise.then(
@@ -46,7 +59,10 @@ describe("SubAgentSessionManager ownership", () => {
   });
 
   it.each([
-    ["an unknown grant", (h: ReturnType<typeof managerHarness>) => h.delegator("forged")],
+    [
+      "an unknown grant on a stale epoch",
+      (h: ReturnType<typeof managerHarness>) => h.delegator("forged", 0),
+    ],
     [
       "a non-Thinking caller mode",
       (h: ReturnType<typeof managerHarness>) => {
@@ -114,7 +130,12 @@ describe("SubAgentSessionManager idempotency", () => {
     release();
 
     expect((await joined).subAgentSessionId).toBe((await first).subAgentSessionId);
+    harness.probes.parent = foreignParent(harness);
+    const foreign = await failureOf(
+      foreignDelegator(harness).create({ createRequestId: "create-1", title: "Other" }),
+    );
     expect(conflict.code).toBe("idempotency-conflict");
+    expect(foreign.code).toBe("not-authorized");
     expect(harness.writer.deltas.filter((delta) => delta.entity === "session")).toHaveLength(1);
   });
 
@@ -132,8 +153,19 @@ describe("SubAgentSessionManager idempotency", () => {
       delegator.run(session.subAgentSessionId, { type: "initial", task: "Other" }, "submit-a"),
     );
 
+    harness.probes.parent = foreignParent(harness);
+    const foreignFacade = foreignDelegator(harness);
+    const foreignSession = await foreignFacade.create({ createRequestId: "create-f", title: "F" });
+    const foreign = await failureOf(
+      foreignFacade.run(
+        foreignSession.subAgentSessionId,
+        { type: "initial", task: "Other" },
+        "submit-a",
+      ),
+    );
     expect(replay).toEqual(receipt);
     expect(conflict.code).toBe("idempotency-conflict");
+    expect(foreign.error.message).toBe("Нет доступа к сессии.");
     expect(harness.execution.requests).toHaveLength(1);
   });
 });
@@ -145,7 +177,7 @@ describe("SubAgentSessionManager queue", () => {
     for (const name of ["a", "b", "c", "d", "e"]) await launchChild(delegator, name);
     const started = harness.execution.requests.map((request) => request.task);
 
-    harness.execution.finish(1);
+    harness.execution.fail(1);
     await settle();
 
     expect(started).toEqual(["Investigate a", "Investigate b", "Investigate c", "Investigate d"]);
@@ -161,7 +193,20 @@ describe("SubAgentSessionManager queue", () => {
       delegator.continue(session.subAgentSessionId, { type: "follow-up", task: "More" }, "s-2"),
     );
 
+    const restored = managerHarness({
+      load: async () => subAgentSection([readySubAgentRecord("restored")]),
+    });
+    const denied = await restored
+      .delegator()
+      .run("restored", { type: "initial", task: "Task" }, "s-restored");
+    await settle();
+
     expect(second.code).toBe("invalid-state");
+    expect(restored.execution.requests).toEqual([]);
+    expect(await restored.delegator().getResult("restored", denied.runId)).toMatchObject({
+      state: "failed",
+      error: { code: "execution-denied" },
+    });
   });
 
   it("U5: gives no receipt when acceptance cannot be persisted", async () => {
@@ -280,8 +325,20 @@ describe("SubAgentSessionManager stop", () => {
     harness.execution.finish(0);
     await settle();
 
+    const second = await launchChild(delegator, "b");
+    harness.imports.mode = "hold";
+    const timers = await runPastDeadline(0, async () => {
+      harness.execution.finish(1);
+      await settle();
+      await delegator.stop(second.session.subAgentSessionId);
+      return vi.getTimerCount();
+    });
+
+    expect(timers).toBe(0);
     expect(harness.execution.requests[0].signal.aborted).toBe(true);
-    expect(harness.imports.requests).toEqual([]);
+    expect(harness.imports.requests.map((request) => request.runId)).toEqual([
+      second.receipt.runId,
+    ]);
     expect((await delegator.getResult(session.subAgentSessionId, receipt.runId)).state).toBe(
       "interrupted",
     );
@@ -309,6 +366,11 @@ describe("SubAgentSessionManager close barrier", () => {
     expect(abortedBeforeAwait).toBe(true);
     expect((await waitingFailure).code).toBe("fenced-delivery");
     expect(await closing).toMatchObject({ durable: true, recoveryMarkerPersisted: false });
+    const deltas = harness.writer.deltas.length;
+    expect(await harness.manager.closeAll("parent-1", "completed")).toMatchObject({
+      durable: true,
+    });
+    expect(harness.writer.deltas).toHaveLength(deltas);
   });
 
   it("U9: writes the recovery marker in the reserved budget when the drain hangs", async () => {
@@ -316,10 +378,12 @@ describe("SubAgentSessionManager close barrier", () => {
     await launchChild(harness.delegator(), "a");
     harness.writer.holdNext();
 
-    const result = await runPastDeadline(1_500, () =>
-      harness.manager.closeAll("parent-1", "failed"),
-    );
+    const { result, timers } = await runPastDeadline(1_500, async () => ({
+      result: await harness.manager.closeAll("parent-1", "failed"),
+      timers: vi.getTimerCount(),
+    }));
 
+    expect(timers).toBe(0);
     expect(result).toEqual({
       durable: true,
       recoveryMarkerPersisted: true,
@@ -396,8 +460,15 @@ describe("SubAgentSessionManager wait", () => {
     const all = await delegator.waitForResults(refs, { mode: "all", timeoutMs: 0 });
 
     expect(any).toEqual({ ready: [refs[0]], timedOut: false });
+    harness.writer.failNext(new ChatStorageError("file-too-large", "too large"));
+    harness.imports.release();
+    await settle();
+    const unsaved = await delegator.getResult(refs[1].sessionId, refs[1].runId);
+
     expect(all).toEqual({ ready: [refs[0]], timedOut: true });
     expect(other.receipt.runId).not.toBe(refs[0].runId);
+    expect(unsaved).toMatchObject({ state: "failed", error: { code: "import-failed" } });
+    expect(JSON.stringify(unsaved)).not.toContain("Child answer");
   });
 
   it("U11: resolves on the result signal that follows the snapshot", async () => {
@@ -430,6 +501,22 @@ describe("SubAgentSessionManager wait", () => {
     await settle();
     controller.abort(new Error("parent cancelled"));
 
+    const listeners = new Set<() => void>();
+    const immediate = await waitForRunResults(
+      {
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        read: () => ({ state: "pending" }) as SubAgentResultState,
+      },
+      [receipt],
+      { mode: "any", timeoutMs: 0 },
+      new AbortController().signal,
+    );
+
+    expect(immediate.timedOut).toBe(true);
+    expect(listeners.size).toBe(0);
     expect(timedOut).toEqual({ result: { ready: [], timedOut: true }, timers: 0 });
     await expect(cancelled).rejects.toThrow("parent cancelled");
     expect(harness.execution.requests[0].signal.aborted).toBe(false);
