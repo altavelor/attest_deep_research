@@ -60,7 +60,7 @@ describe("SubAgentTool", () => {
     const events: unknown[] = [];
 
     const result = await tool.execute(
-      { task: "How fast is X?", maxSearches: 3, resources: ["wikipedia.org"] },
+      { task: "How fast is X?", maxSearches: 5, resources: ["wikipedia.org"] },
       toolContext({ round: 2, emit: (event) => events.push(event) }),
     );
 
@@ -74,7 +74,7 @@ describe("SubAgentTool", () => {
         },
       },
     });
-    expect(calls[0]?.args[0]).toMatchObject({ maxSearches: 3, resources: ["wikipedia.org"] });
+    expect(calls[0]?.args[0]).toMatchObject({ maxSearches: 5, resources: ["wikipedia.org"] });
     const [dotted, underscored] = ["a.b", "a_b"].map((id) => subAgentCallIdentity("p", 1, id));
     expect(dotted).not.toBe(underscored);
     expect(underscored).toBe("p-r1-a_b");
