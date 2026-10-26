@@ -50,3 +50,15 @@ export function subAgentSessionError(
     ...(details === undefined ? {} : { details }),
   };
 }
+
+/** Error thrown by sub-agent facades; it carries the safe session error for its code. */
+export class SubAgentSessionFailure extends Error {
+  constructor(readonly error: SubAgentSessionError) {
+    super(error.message);
+    this.name = "SubAgentSessionFailure";
+  }
+
+  get code(): SubAgentSessionErrorCode {
+    return this.error.code;
+  }
+}
