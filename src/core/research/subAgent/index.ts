@@ -77,3 +77,4 @@ export {
 } from "./stateValidation";
 export { recoverSubAgentState } from "./recovery";
 export { evictSubAgentDetails, type SubAgentDetailsEviction } from "./detailsRetention";
+export { applySubAgentDelta, checkSubAgentDelta } from "./stateDeltas";

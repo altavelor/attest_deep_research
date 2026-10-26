@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { parseSavedChat } from "@core/chat/savedChat";
 import {
+  applySubAgentDelta,
+  checkSubAgentDelta,
   evictSubAgentDetails,
   recoverSubAgentState,
   validateSubAgentState,
@@ -91,6 +93,23 @@ describe("sub-agent section validation", () => {
     ],
   ])("rejects %s with its code and message", (_name, value, code, message) => {
     expect(validateSubAgentState(value)).toEqual({ ok: false, code, message });
+  });
+
+  it("refuses deltas outside the allow-list and entities without section storage", () => {
+    expect(
+      checkSubAgentDelta({ op: "set", entity: "session", id: "s", fields: { apiKey: "x" } }),
+    ).toBe("Field apiKey is not allowed for session");
+    expect(checkSubAgentDelta({ op: "delete", entity: "batch", id: "b" })).toBe(
+      "Unsupported sub-agent entity: batch",
+    );
+    expect(
+      applySubAgentDelta(subAgentSection([]), {
+        op: "set",
+        entity: "run",
+        id: "run-9",
+        fields: { subAgentSessionId: "missing" },
+      }),
+    ).toBeNull();
   });
 });
 
