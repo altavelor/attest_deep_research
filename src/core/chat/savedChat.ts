@@ -4,6 +4,7 @@ import { ResearchSearchMode } from "@core/research/searchMode";
 import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
 import { parseSavedChatRunState, type SavedChatRunState } from "./chatSession";
+import { condenseTitleText } from "./titlePolicy";
 import {
   canonicalSourceKey,
   ConversationEvidenceRevision,
@@ -66,14 +67,8 @@ export interface SaveChatInput {
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
-  const firstUserMessage = messages.find((message) => message.role === "user")?.content.trim();
-
-  if (!firstUserMessage) {
-    return "Untitled chat";
-  }
-
-  const singleLine = firstUserMessage.replace(/\s+/g, " ");
-  return singleLine.length <= 80 ? singleLine : `${singleLine.slice(0, 77)}...`;
+  const firstUserMessage = messages.find((message) => message.role === "user")?.content ?? "";
+  return condenseTitleText(firstUserMessage) || "Untitled chat";
 }
 
 export function normalizeTitle(title: string): string {
