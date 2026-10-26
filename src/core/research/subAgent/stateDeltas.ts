@@ -8,7 +8,13 @@ import { toValidatedJson } from "./stateSnapshot";
 
 type Row = Record<string, unknown>;
 type ListKey =
-  "creates" | "submissions" | "imports" | "pendingActions" | "observation" | "recoveryMarkers";
+  | "creates"
+  | "submissions"
+  | "imports"
+  | "pendingActions"
+  | "observation"
+  | "recoveryMarkers"
+  | "batches";
 
 const SESSION_FIELDS = [
   "subAgentSessionId",
@@ -112,6 +118,24 @@ const LISTS: Readonly<Record<string, { list: ListKey; idField: string; fields: s
     idField: "observationId",
     fields: ["kind", "observationId", "sessionId", "runId", "cited", "payload", "evicted"],
   },
+  batch: {
+    list: "batches",
+    idField: "batchId",
+    fields: [
+      "batchId",
+      "parentRunId",
+      "requestId",
+      "normalizedInputDigest",
+      "question",
+      "createdAt",
+      "selection",
+      "sourcePaths",
+      "refs",
+      "state",
+      "result",
+      "error",
+    ],
+  },
   marker: {
     list: "recoveryMarkers",
     idField: "parentRunId",
@@ -128,8 +152,7 @@ const LISTS: Readonly<Record<string, { list: ListKey; idField: string; fields: s
 
 /**
  * Checks that a buffered delta names a supported entity, only allow-listed fields of
- * that entity and valid JSON values. It returns the reason for rejection or null;
- * the batch entity has no section storage until map_sources batches are added.
+ * that entity and valid JSON values. It returns the reason for rejection or null.
  */
 export function checkSubAgentDelta(delta: SubAgentBufferedValue): string | null {
   const allowed = fieldsOf(delta.entity);
@@ -146,24 +169,46 @@ export function checkSubAgentDelta(delta: SubAgentBufferedValue): string | null 
 /**
  * Applies one checked delta to an immutable section and returns the new section, or
  * null when the delta refers to a missing parent entity. A set merges the given
- * fields into the entity or creates it; a delete removes it.
+ * fields into the entity or creates it; a delete removes it together with the
+ * map_sources batches that refer to a deleted session or run.
  */
 export function applySubAgentDelta(
   snapshot: SubAgentStateSnapshot,
   delta: SubAgentBufferedValue,
 ): SubAgentStateSnapshot | null {
-  if (delta.entity === "session") return applySession(snapshot, delta);
-  if (delta.entity === "run") return applyRun(snapshot, delta);
+  if (delta.entity === "session") return withoutDanglingBatches(applySession(snapshot, delta));
+  if (delta.entity === "run") {
+    const next = applyRun(snapshot, delta);
+    return next && withoutDanglingBatches(next);
+  }
   const target = LISTS[delta.entity];
   if (!target) return null;
-  const rows = snapshot[target.list] as unknown as readonly Row[];
+  const rows = (snapshot[target.list] ?? []) as unknown as readonly Row[];
   const rest = rows.filter((row) => row[target.idField] !== delta.id);
   if (delta.op === "delete") return { ...snapshot, [target.list]: rest };
   const existing = rows.find((row) => row[target.idField] === delta.id) ?? {};
   const next = { ...existing, ...delta.fields, [target.idField]: delta.id };
   const index = rows.findIndex((row) => row[target.idField] === delta.id);
   const updated = index < 0 ? [...rows, next] : rows.map((row, at) => (at === index ? next : row));
+  if (delta.entity === "batch" && !refsKnown(snapshot, next.refs)) return null;
   return { ...snapshot, [target.list]: updated };
+}
+
+function refsKnown(snapshot: SubAgentStateSnapshot, refs: unknown): boolean {
+  if (!Array.isArray(refs)) return true;
+  return refs.every((entry: { ref?: { sessionId?: unknown; runId?: unknown } }) =>
+    snapshot.records.some(
+      (record) =>
+        record.session.subAgentSessionId === entry?.ref?.sessionId &&
+        record.runs.some((run) => run.subAgentRunId === entry.ref?.runId),
+    ),
+  );
+}
+
+function withoutDanglingBatches(snapshot: SubAgentStateSnapshot): SubAgentStateSnapshot {
+  if (!snapshot.batches?.length) return snapshot;
+  const batches = snapshot.batches.filter((batch) => refsKnown(snapshot, batch.refs));
+  return batches.length === snapshot.batches.length ? snapshot : { ...snapshot, batches };
 }
 
 function applySession(

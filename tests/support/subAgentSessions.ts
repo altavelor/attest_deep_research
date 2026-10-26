@@ -40,6 +40,7 @@ import { SubAgentBudgetCoordinator } from "@application/use-cases/sub-agent/subA
 import { SubAgentStateStore } from "@application/use-cases/sub-agent/SubAgentStateStore";
 import {
   applySubAgentTransition,
+  type MapSourcesBatchRecord,
   type ParentRunBinding,
   type SubAgentBufferedValue,
   type SubAgentCommand,
@@ -131,6 +132,23 @@ export function runToImport(
       resultSummary: `summary of ${runId}`,
     },
   ];
+}
+
+/** Builds a stored map_sources batch of parent-1 over one document mapped by run-1 of session-1. */
+export function batchRecord(overrides: Partial<MapSourcesBatchRecord> = {}): MapSourcesBatchRecord {
+  return {
+    batchId: "batch-1",
+    parentRunId: "parent-1",
+    requestId: "parent-1-r1-call",
+    normalizedInputDigest: "digest-1",
+    question: "Does X hold?",
+    createdAt: AT,
+    selection: "explicit",
+    sourcePaths: ["Notes/a.md"],
+    refs: [{ sourcePath: "Notes/a.md", ref: { sessionId: "session-1", runId: "run-1" } }],
+    state: "pending",
+    ...overrides,
+  };
 }
 
 export interface Deferred<T> {

@@ -1,4 +1,5 @@
 import { MAP_SOURCES_TOOL, toolFailure } from "@core/agent";
+import type { MapSourcesOutput } from "@core/research";
 import { SUB_AGENT_PHASE } from "@application/research";
 import { MapSources, MapSourceRow } from "@application/use-cases/map-sources";
 import { EvidenceRegistry } from "@application/sources";
@@ -9,26 +10,6 @@ export interface MapSourcesInputDto {
   sourcePaths?: string[];
   maxSources?: number;
   perSourceBudget?: number;
-}
-
-interface MatrixRow {
-  sourcePath: string;
-  ok: boolean;
-  stance: string;
-  keyFindings: string[];
-  evidenceIds: string[];
-  error?: string;
-}
-
-export interface MapSourcesOutput {
-  question: string;
-  rows: MatrixRow[];
-  diagnostics: {
-    selection: "explicit" | "relevance";
-    requested: number;
-    completed: number;
-    failed: number;
-  };
 }
 
 const MAX_QUESTION_CHARS = 1_000;

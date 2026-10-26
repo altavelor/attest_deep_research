@@ -11,7 +11,12 @@ import {
   type SubAgentStateSnapshot,
 } from "@core/research";
 import { subAgentSection, DOCUMENT_CHAT_SETTINGS } from "../support/chatDocuments";
-import { applyAll, readySubAgentRecord, runToImport } from "../support/subAgentSessions";
+import {
+  applyAll,
+  batchRecord,
+  readySubAgentRecord,
+  runToImport,
+} from "../support/subAgentSessions";
 
 const LATER = "2026-10-27T08:00:00.000Z";
 
@@ -83,6 +88,7 @@ describe("sub-agent section validation", () => {
       ...withRun(subAgentSection(), () => undefined),
       imports: [imported],
       pendingActions: [action],
+      batches: [batchRecord()],
     };
     const fieldOf = (value: unknown) =>
       (validateSubAgentState(value) as { message?: string }).message ?? "valid";
@@ -93,11 +99,22 @@ describe("sub-agent section validation", () => {
         { ...linked, imports: [{ ...imported, chatId: "chat-2" }] },
         { ...linked, imports: [{ ...imported, sessionId: "session-9" }] },
         { ...linked, pendingActions: [{ ...action, runId: "run-9" }] },
+        {
+          ...linked,
+          batches: [
+            batchRecord({
+              refs: [{ sourcePath: "Notes/a.md", ref: { sessionId: "session-1", runId: "run-9" } }],
+            }),
+          ],
+        },
+        { ...linked, batches: [batchRecord({ error: { code: "x", message: "e".repeat(501) } })] },
       ].map(fieldOf),
     ).toEqual([
       "Sub-agent state has an invalid field: imports[0].chatId.",
       "Sub-agent state has an invalid field: imports[0].sessionId.",
       "Sub-agent state has an invalid field: pendingActions[0].runId.",
+      "Sub-agent state has an invalid field: batches[0].refs[0].ref.",
+      "Sub-agent state has an invalid field: batches[0].error.",
     ]);
   });
 
@@ -139,13 +156,17 @@ describe("sub-agent section validation", () => {
     expect(validateSubAgentState(value)).toEqual({ ok: false, code, message });
   });
 
-  it("refuses deltas outside the allow-list and entities without section storage", () => {
+  it("refuses deltas outside the allow-list and drops batches of a deleted session", () => {
     expect(
       checkSubAgentDelta({ op: "set", entity: "session", id: "s", fields: { apiKey: "x" } }),
     ).toBe("Field apiKey is not allowed for session");
-    expect(checkSubAgentDelta({ op: "delete", entity: "batch", id: "b" })).toBe(
-      "Unsupported sub-agent entity: batch",
+    expect(checkSubAgentDelta({ op: "set", entity: "batch", id: "b", fields: { rows: [] } })).toBe(
+      "Field rows is not allowed for batch",
     );
+    const linked = { ...withRun(subAgentSection(), () => undefined), batches: [batchRecord()] };
+    expect(
+      applySubAgentDelta(linked, { op: "delete", entity: "session", id: "session-1" })?.batches,
+    ).toEqual([]);
     expect(
       applySubAgentDelta(subAgentSection([]), {
         op: "set",
@@ -164,10 +185,24 @@ describe("recoverSubAgentState", () => {
       ...readySubAgentRecord("done"),
       session: { ...readySubAgentRecord("done").session, status: "archived" as const },
     };
-    const snapshot = subAgentSection([live, done]);
+    const finished = batchRecord({ batchId: "batch-0", refs: [], state: "failed" });
+    const snapshot = subAgentSection([live, done], {
+      batches: [finished, batchRecord({ refs: [], state: "preparing" })],
+    });
 
     const recovered = recoverSubAgentState(snapshot, LATER);
 
+    expect(recovered.batches).toEqual([
+      finished,
+      batchRecord({
+        refs: [],
+        state: "interrupted",
+        error: {
+          code: "crash-recovery",
+          message: "The batch was interrupted when the app restarted.",
+        },
+      }),
+    ]);
     expect(recovered.revision).toBe(2);
     expect(recovered.records[1]).toBe(done);
     expect(recovered.records[0]?.session).toMatchObject({
@@ -209,6 +244,18 @@ describe("evictSubAgentDetails", () => {
 
   it("evicts uncited details of the oldest terminal run above the budget and keeps the rest", () => {
     const live = applyAll(readySubAgentRecord("live"), runToImport("run-live").slice(0, 2));
+    const row = {
+      sourcePath: "Notes/a.md",
+      ok: true,
+      stance: "supports",
+      keyFindings: ["A long finding [e-1]"],
+      evidenceIds: ["e-1"],
+    };
+    const result = {
+      question: "Does X hold?",
+      rows: [row],
+      diagnostics: { selection: "explicit" as const, requested: 1, completed: 1, failed: 0 },
+    };
     const snapshot = {
       ...old,
       records: [...old.records, live],
@@ -217,11 +264,15 @@ describe("evictSubAgentDetails", () => {
         detail("o2", "run-1", "cited", true),
         detail("o3", "run-live", "live"),
       ],
+      batches: [batchRecord({ state: "completed", result })],
     };
 
     const { snapshot: evicted, withinBudget } = evictSubAgentDetails(snapshot, 13);
 
     expect(withinBudget).toBe(true);
+    expect(evicted.batches?.[0]?.result?.rows).toEqual([
+      { ...row, keyFindings: ["[evicted: chat size limit]"] },
+    ]);
     expect(evicted.observation).toEqual([
       { ...detail("o1", "run-1", "abcd"), payload: null, evicted: { reason: "chat size limit" } },
       detail("o2", "run-1", "cited", true),

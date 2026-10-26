@@ -1,6 +1,8 @@
 import type { SubAgentStateSnapshot } from "./stateSnapshot";
 import { isSubAgentModelSnapshot } from "./observationModel";
 import { toValidatedJson } from "./stateSnapshot";
+import { isSubAgentStateId } from "./stateIds";
+import { checkMapSourcesBatches } from "./batchState";
 
 export type SubAgentStateValidationCode = "unsupported-state-version" | "invalid-state-field";
 
@@ -10,7 +12,6 @@ export type SubAgentStateValidation =
 
 type Rec = Record<string, unknown>;
 
-const SAFE_ID = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_:.-]{0,199}$/u;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/u;
 const SESSION_STATUSES = [
   "ready",
@@ -30,10 +31,7 @@ const SEARCH_MODES = ["none", "indexOnly", "indexAndWeb", "webOnly"];
 
 class InvalidField extends Error {}
 
-/** True when the value can be stored as an id of the sub-agent section. */
-export function isSubAgentStateId(value: unknown): value is string {
-  return typeof value === "string" && SAFE_ID.test(value);
-}
+export { isSubAgentStateId };
 
 /**
  * Checks an untrusted sub-agent section against the step-1 domain model and the
@@ -117,6 +115,8 @@ function checkSnapshot(value: Rec): void {
   list(value.observation, "observation").forEach((entry, index) =>
     checkObservation(entry, `observation[${index}]`),
   );
+  const batchProblem = checkMapSourcesBatches(value.batches, runsBySession);
+  if (batchProblem !== null) invalid(batchProblem);
 }
 
 function checkSession(session: Rec, path: string): string {
@@ -275,7 +275,7 @@ function ids(value: Rec, keys: readonly string[], path: string): void {
 }
 
 function id(value: unknown, path: string): void {
-  if (typeof value !== "string" || !SAFE_ID.test(value)) invalid(path);
+  if (!isSubAgentStateId(value)) invalid(path);
 }
 
 function text(value: unknown, path: string): void {
