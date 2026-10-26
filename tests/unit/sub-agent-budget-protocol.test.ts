@@ -104,7 +104,10 @@ describe("required-scope registration", () => {
     let created = false;
 
     const first = delegator.create({ createRequestId: "create-a", title: "Task" });
-    void first.then(() => (created = true));
+    void first.then(
+      () => (created = true),
+      () => undefined,
+    );
     await settle();
     const replay = delegator.create({ createRequestId: "create-a", title: "Task" });
     const conflict = await failureOf(
@@ -113,10 +116,14 @@ describe("required-scope registration", () => {
     releaseBegin();
     await settle();
     const beforeFinish = created;
+    harness.probes.epoch = 2;
     releaseFinish();
+    const staleCodes = [(await failureOf(first)).code, (await failureOf(replay)).code];
+    const restored = await harness.delegator("scope-1", 2).getCreatedSession("create-a");
 
     expect(beforeFinish).toBe(false);
-    expect((await replay).subAgentSessionId).toBe((await first).subAgentSessionId);
+    expect(staleCodes).toEqual(["fenced-delivery", "fenced-delivery"]);
+    expect(restored.subAgentSessionId).toBe("subagent-session-chat-1-1");
     expect(conflict.code).toBe("idempotency-conflict");
     expect(harness.owner.calls.filter((call) => call.startsWith("begin"))).toEqual([
       "beginSessionRegistration:create-a",
@@ -139,9 +146,14 @@ describe("required-scope registration", () => {
     const replayed = await failureOf(
       delegator.create({ createRequestId: "create-b", title: "Task" }),
     );
+    const closedReplay = await failureOf(
+      delegator.create({ createRequestId: "create-a", title: "Task" }),
+    );
     const published = harness.manager.listRunRefs("parent-1");
 
-    expect([sealed.code, postSeal.code, replayed.code]).toEqual(Array(3).fill("budget-denied"));
+    expect([sealed.code, postSeal.code, replayed.code, closedReplay.code]).toEqual(
+      Array(4).fill("budget-denied"),
+    );
     expect(harness.owner.calls).toContain("finishSessionRegistration:create-a:published");
     expect(harness.owner.calls).not.toContain("finishSessionRegistration:create-b:published");
     expect(harness.owner.scope("scope-1").registrations.size).toBe(0);
@@ -152,7 +164,13 @@ describe("required-scope registration", () => {
 describe("required-scope execution permits", () => {
   it("U4: takes one execution permit per run and keeps metering keys stable across reload", async () => {
     const harness = scopedHarness();
+    const releaseStart = harness.owner.hold("markStarted");
     const { session, receipt } = await launchChild(harness.delegator("scope-1"), "a");
+    await settle();
+    const runnerBeforeStart = harness.execution.requests.length;
+    releaseStart();
+    await settle();
+    harness.execution.finish(0);
     await settle();
     const owner = new FakeBudgetOwner();
     const first = await budgetCoordinator(owner, runningSection());
@@ -169,6 +187,8 @@ describe("required-scope execution permits", () => {
       async () => 0,
     );
 
+    expect(runnerBeforeStart).toBe(0);
+    expect([...harness.owner.settlements.values()]).toEqual(["consumed"]);
     expect(harness.owner.calls.filter((call) => call.startsWith("beginExecution"))).toEqual([
       `beginExecution:${session.subAgentSessionId}:${receipt.runId}:1:execution:0`,
     ]);
@@ -277,7 +297,11 @@ describe("required-scope denial and cleanup", () => {
       ),
     );
 
+    harness.execution.finish(0);
+    await settle();
+
     expect(states.map((state) => state.state)).toEqual(["interrupted", "failed", "failed"]);
+    expect([...harness.owner.settlements.values()]).toEqual(["consumed"]);
     expect(harness.owner.calls.filter((call) => call.startsWith("claim"))).toEqual([
       "claimClosureCleanup:closure-scope-1",
       "claimClosureCleanup:closure-scope-1",
@@ -302,6 +326,29 @@ describe("required-scope denial and cleanup", () => {
     expect(closed.unsettledPermits).toBe(1);
     expect(harness.execution.requests).toEqual([]);
     expect([...harness.owner.settlements.values()]).toEqual(["not-started"]);
+  });
+
+  it("U9: a stop in any turn after a held permit or start settles it once and never runs", async () => {
+    const leaks: string[] = [];
+    for (const method of ["beginExecution", "markStarted"] as const) {
+      for (let turns = 0; turns < 12; turns += 1) {
+        const harness = scopedHarness();
+        const release = harness.owner.hold(method);
+        const { session } = await launchChild(harness.delegator("scope-1"), "a");
+        await settle();
+        release();
+        for (let turn = 0; turn < turns; turn += 1) await Promise.resolve();
+        void harness.delegator("scope-1").stop(session.subAgentSessionId);
+        await settle();
+        const settled = [...harness.owner.settlements.values()].join();
+        const expected = harness.owner.started.size > 0 ? "consumed" : "not-started";
+        if (harness.execution.requests.length === 0 && settled !== expected) {
+          leaks.push(`${method}:${turns}:${settled}`);
+        }
+      }
+    }
+
+    expect(leaks).toEqual([]);
   });
 
   it("U10: invalid units and a port rejection fail explicitly without a local bypass", async () => {

@@ -19,7 +19,12 @@ export async function admitScopedRun(
   } catch {
     admission = { type: "refused", reason: "budget-port-error", closureId: null };
   }
-  if (admission.type === "stale" || !isCurrent()) return;
+  if (admission.type === "stale" || !isCurrent()) {
+    scheduler.release(slot);
+    if (admission.type === "granted")
+      void scheduler.parts.budget.settle(admission.grant, "not-started");
+    return;
+  }
   if (admission.type === "refused") {
     scheduler.release(slot);
     await scheduler.deny(slot, admission.reason);

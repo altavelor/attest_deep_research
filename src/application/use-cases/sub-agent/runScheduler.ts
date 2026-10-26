@@ -153,6 +153,7 @@ export class SubAgentRunScheduler {
     const run = record?.runs.find((entry) => entry.subAgentRunId === slot.runId);
     if (slot.fenced || !record || !run) {
       this.release(slot);
+      if (slot.grant) void this.parts.budget.settle(slot.grant, "consumed");
       return;
     }
     slot.controller = new AbortController();
