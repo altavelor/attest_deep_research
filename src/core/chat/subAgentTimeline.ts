@@ -199,10 +199,11 @@ export function applySubAgentTimelineEvent(
 export function buildChatTimeline(
   state: Omit<SubAgentTimelineState, "timelineSequence">,
 ): ChatTimelineItem[] {
+  const keys = messageSortKeys(state.messages);
   const items: ChatTimelineItem[] = [
     ...state.messages.map((message, index) => ({
       kind: "message" as const,
-      sequence: messageSortKey(state.messages, index),
+      sequence: keys[index]!,
       message,
     })),
     ...state.subAgentDispatches.map((dispatch) => ({
@@ -226,18 +227,24 @@ export function buildChatTimeline(
  * A message without its own sequence, such as a compaction marker, sorts just before
  * the next sequenced message, or just after the previous one at the end of the chat.
  */
-function messageSortKey(messages: readonly ChatDisplayMessage[], index: number): number {
-  const own = messages[index]!.timelineSequence;
-  if (own !== undefined) return own;
-  const following = messages
-    .slice(index + 1)
-    .find((message) => message.timelineSequence !== undefined);
-  if (following) return following.timelineSequence! - 0.5;
-  const preceding = messages
-    .slice(0, index)
-    .reverse()
-    .find((message) => message.timelineSequence !== undefined);
-  return (preceding?.timelineSequence ?? index) + 0.5;
+function messageSortKeys(messages: readonly ChatDisplayMessage[]): number[] {
+  const following: (number | undefined)[] = new Array(messages.length);
+  let next: number | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    following[index] = next;
+    next = messages[index]!.timelineSequence ?? next;
+  }
+  let preceding: number | undefined;
+  return messages.map((message, index) => {
+    const own = message.timelineSequence;
+    if (own !== undefined) {
+      preceding = own;
+      return own;
+    }
+    const after = following[index];
+    if (after !== undefined) return after - 0.5;
+    return (preceding ?? index) + 0.5;
+  });
 }
 
 function settledCount(batch: SubAgentNoticeEntry["batch"]): number {
