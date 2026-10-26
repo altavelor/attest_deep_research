@@ -27,6 +27,7 @@ export interface ChatSubAgentsOptions {
   writer: SubAgentDurableWriter;
   now(): Date;
   createId(): string;
+  logError(error: unknown): void;
   saveRegistry(): Promise<void>;
   onTimelineChanged(): void;
 }
@@ -127,6 +128,7 @@ export class ChatSubAgents {
       delegator,
       host: this.host,
       parentRunId: runId,
+      logError: (error) => this.options.logError(error),
     });
     this.coordinators.set(runId, coordinator);
     return {
@@ -158,8 +160,10 @@ export class ChatSubAgents {
     }
     try {
       await this.host.closeAll(runId, reason);
-    } catch {
-      return;
+    } catch (error) {
+      this.options.logError(error);
+    } finally {
+      this.ownedRuns.delete(runId);
     }
   }
 
@@ -171,6 +175,7 @@ export class ChatSubAgents {
     for (const coordinator of this.coordinators.values()) coordinator.dispose();
     this.coordinators.clear();
     this.grants.clear();
+    this.ownedRuns.clear();
     this.binding = null;
     this.execution = null;
     this.bridge.dispose();

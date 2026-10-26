@@ -90,6 +90,7 @@ describe("chat runtime and its child host", () => {
     log.length = 0;
     let release = (): void => undefined;
     hold = new Promise<void>((resolve) => (release = resolve));
+    children.hosts[0]!.closeGate = new Promise<void>(() => undefined);
     await runPastDeadline(TERMINAL_SAVE_WAIT_MS, async () => {
       research.emit(0, completed);
       research.end(0);
@@ -99,6 +100,7 @@ describe("chat runtime and its child host", () => {
     expect(parent.status).toBe("completed");
     await settle();
     expect(queued.status).toBe("running");
+    children.hosts[0]!.closeGate = Promise.resolve();
     hold = null;
     release();
     await settle();
@@ -140,5 +142,33 @@ describe("chat runtime and its child host", () => {
       "dispose:0",
     ]);
     expect(notices).toEqual(["interrupted"]);
+  });
+
+  it("logs a failed child close and unloads once the shared budget passes while children never close", async () => {
+    const children = fakeChildHosts();
+    const research = gatedResearch();
+    const logged: unknown[] = [];
+    const { manager } = createTestSessionManager({
+      createResearchService: research.service,
+      createSubAgentSessionManager: children.factory,
+      logError: (error) => logged.push(error),
+    });
+    const parent = manager.createSession(thinking);
+    await manager.start(parent.sessionId, request("First"));
+    await settle();
+    const failure = new Error("Close failed.");
+    children.hosts[0]!.closeGate = Promise.reject(failure);
+    research.emit(0, completed);
+    research.end(0);
+    await settle();
+    expect(logged).toEqual([failure]);
+    await manager.start(parent.sessionId, request("Second"));
+    await settle();
+    children.hosts[0]!.closeGate = new Promise<void>(() => undefined);
+    children.log.length = 0;
+
+    await runPastDeadline(TERMINAL_SAVE_WAIT_MS, () => manager.dispose());
+
+    expect(children.log.filter((entry) => !entry.startsWith("closeAll"))).toEqual(["dispose:0"]);
   });
 });

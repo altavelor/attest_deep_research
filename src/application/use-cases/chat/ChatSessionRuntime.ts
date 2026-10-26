@@ -84,6 +84,7 @@ export class ChatSessionRuntime {
       writer: this.writes,
       now: () => environment.now(),
       createId: () => environment.createRunId(),
+      logError: (error) => environment.logError?.(error),
       saveRegistry: () => this.persist(host.saveInput(state)),
       onTimelineChanged: () => {
         this.persistLater(host.saveInput(state));

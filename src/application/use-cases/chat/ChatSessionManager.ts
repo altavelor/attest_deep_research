@@ -25,7 +25,7 @@ import type { SubAgentInspectionPort } from "@application/ports/subAgent";
 import { chatSaveInput } from "./chatSaveInput";
 import { ChatSessionRuntime, type ChatSessionRuntimeHost } from "./ChatSessionRuntime";
 import { normalizeStaleChats } from "./staleChatRecovery";
-import { settleWithin, TERMINAL_SAVE_WAIT_MS } from "./terminalSave";
+import { terminalBudget } from "./terminalSave";
 import {
   createIdleSessionState,
   resolveRunMode,
@@ -442,14 +442,17 @@ export class ChatSessionManager {
             interruptionReason: "plugin-unload" as const,
           }
         : null;
+      const budget = terminalBudget();
       writes.push(
-        closing
+        budget
+          .within(closing)
           .then(() =>
             state.chatId && lastRun
               ? runtime.persist({ ...this.saveInput(state), lastRun })
               : undefined,
           )
           .catch(logError)
+          .finally(() => budget.cancel())
           .then(() => runtime.dispose())
           .catch(logError),
       );
@@ -528,13 +531,15 @@ export class ChatSessionManager {
     this.emit(sessionId, "status");
 
     if (runId) {
-      await closing;
+      const budget = terminalBudget();
+      await budget.within(closing);
       const saving = runtime.persist({
         ...this.saveInput(state),
         unreadCompletion: state.unreadCompletion,
         lastRun: this.terminalRunState(state, runId, completedAt),
       });
-      const outcome = await settleWithin(saving, TERMINAL_SAVE_WAIT_MS);
+      const outcome = await budget.within(saving);
+      budget.cancel();
       if (outcome.status === "failed") {
         this.options.environment.logError?.(outcome.error);
         failure = failure ?? outcome.error;
