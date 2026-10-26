@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, Component, MarkdownRenderer } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
+import { renderWorkflowTimeline, toSubAgentWorkflowModel } from "@apps/obsidian/ui/chat/workflow";
 import {
   captureWorkflowUiState,
   disposeWorkflowNodes,
@@ -301,6 +302,8 @@ describe("workflow timeline lifecycle", () => {
 
     renderWorkflowNodes(host, first, context);
     pendingWrites.splice(0).forEach((write) => write());
+    await Promise.resolve();
+    expect(host.querySelector(".attest-chat__thinking")?.textContent).toContain("Step 0");
     host.querySelector<HTMLDetailsElement>("details[data-thinking-id='s1']")!.open = true;
     const uiState = captureWorkflowUiState(host);
     disposeWorkflowNodes(host);
@@ -333,5 +336,51 @@ describe("workflow timeline lifecycle", () => {
     expect(onOpenToolOutput).not.toHaveBeenCalled();
     expect(pendingTimerCount()).toBe(0);
     expect((markdownContext as unknown as StubComponent).registrationCount()).toBe(0);
+  });
+});
+
+describe("sub-agent lifetime", () => {
+  it("separates runs and attempts once between groups and keeps the safe child badge", () => {
+    const call = (id: string, sequence: number, runId: string, round: number) => ({
+      id,
+      sessionId: "s",
+      runId,
+      name: "search_index",
+      label: "Search",
+      sequence,
+      round,
+      status: "complete" as const,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      payloadState: "captured" as const,
+      resultJson: JSON.stringify({ diagnostics: { usedKeywordFallback: true } }),
+      badge: { text: "child badge" },
+    });
+    renderWorkflowTimeline(
+      container,
+      toSubAgentWorkflowModel(
+        "s",
+        [
+          call("a", 0, "run-1", 1),
+          call("b", 1, "run-1", 1),
+          call("c", 2, "run-1", 2),
+          call("d", 3, "run-2", 1),
+        ],
+        "complete",
+      ),
+      {
+        app: new App(),
+        markdownContext: new Component(),
+        isDebugMode: false,
+        t,
+        onOpenToolOutput: () => {},
+      },
+    );
+
+    const rows = Array.from(
+      container.querySelectorAll(".attest-chat__workflow > *"),
+      (el) => el.getAttribute("data-tool-id") ?? el.textContent,
+    );
+    expect(rows).toEqual(["a", "b", "Run 1 · attempt 2", "c", "Run 2 · attempt 1", "d"]);
+    expect(container.querySelector(".attest-chat__tool-badge")?.textContent).toBe("child badge");
   });
 });
