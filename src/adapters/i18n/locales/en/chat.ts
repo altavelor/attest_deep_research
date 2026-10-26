@@ -117,6 +117,9 @@ export const chat = {
   "chat.workflow.tool.openFullOutput": "Open full output",
   "chat.workflow.tool.fetching.aria": "Fetching: {targets}",
   "chat.workflow.tool.closeOutput": "Close",
+  "chat.workflow.payload.disabled": "Payload capture was off for this call.",
+  "chat.workflow.payload.evicted": "Payload was evicted from memory.",
+  "chat.workflow.payload.truncated": "Payload was truncated.",
   "chat.workflow.attempt": "Run {run} · attempt {round}",
 
   "chat.toolCall.badge.keywordOnly": "keyword-only",

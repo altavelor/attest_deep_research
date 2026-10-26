@@ -16,6 +16,8 @@ const handlesByOwner = new WeakMap<HTMLElement, Map<HTMLElement, WorkflowTimelin
 /**
  * Renders a chat message's workflow through the shared timeline engine and keeps
  * the handle with its transcript, replacing a previous handle of the same host.
+ * Only disposeWorkflowNodes or disposeChatTranscript release these handles, so
+ * other consumers such as a modal must hold the handle from renderWorkflowTimeline directly.
  */
 export function renderWorkflowNodes(
   hostEl: HTMLElement,

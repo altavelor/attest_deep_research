@@ -9,6 +9,7 @@ import type { WorkflowRenderContext, WorkflowUiState } from "./renderContext";
 import { TimelineResources, TimelineScope } from "./timelineResources";
 import type { WorkflowTimelineHandle, WorkflowTimelineModel } from "./timelineModel";
 import { renderToolNode } from "./toolCallNodeRenderer";
+import { toolKey } from "./toolKey";
 
 interface WorkflowState {
   isStreaming: boolean;
@@ -23,7 +24,10 @@ export function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
   hostEl.querySelectorAll<HTMLDetailsElement>("details[data-thinking-id]").forEach((el) => {
     if (el.open && el.dataset.thinkingId) openThinking.add(el.dataset.thinkingId);
   });
-  return { openThinking };
+  const openOutputKey = hostEl.querySelector<HTMLElement>(
+    ".attest-chat__tool-output-viewer[data-output-key]",
+  )?.dataset.outputKey;
+  return openOutputKey ? { openThinking, openOutputKey } : { openThinking };
 }
 
 /**
@@ -37,14 +41,34 @@ export function renderWorkflowTimeline(
   context: WorkflowRenderContext,
   uiState?: WorkflowUiState,
 ): WorkflowTimelineHandle {
-  const resources = new TimelineResources(context);
+  const resources = new TimelineResources(context, model.scopeId);
   const rendered = renderModel(
     hostEl,
     model,
     { scopeId: model.scopeId, context, resources },
     uiState,
   );
+  const reopened = uiState?.openOutputKey
+    ? findToolCall(model.items, model.scopeId, uiState.openOutputKey)
+    : undefined;
+  if (reopened && context.isDebugMode && context.outputViewerHost) {
+    resources.openToolOutput(reopened);
+  }
   return { rendered, dispose: () => resources.dispose() };
+}
+
+function findToolCall(
+  items: readonly ChainItem[],
+  scopeId: string,
+  key: string,
+): Extract<ChainItem, { kind: "tool-call" }> | undefined {
+  for (const item of items) {
+    if (item.kind !== "tool-call") continue;
+    if (toolKey(scopeId, item) === key) return item;
+    const nested = findToolCall(item.children ?? [], scopeId, key);
+    if (nested) return nested;
+  }
+  return undefined;
 }
 
 function renderModel(

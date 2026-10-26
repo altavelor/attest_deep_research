@@ -400,3 +400,9 @@
   overflow-wrap: anywhere;
   user-select: text;
 }
+
+.attest-chat__tool-payload-state {
+  margin-top: 0.25rem;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}

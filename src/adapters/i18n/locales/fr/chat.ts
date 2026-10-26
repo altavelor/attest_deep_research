@@ -126,6 +126,9 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.openFullOutput": "Ouvrir la sortie complète",
   "chat.workflow.tool.fetching.aria": "Récupération : {targets}",
   "chat.workflow.tool.closeOutput": "Fermer",
+  "chat.workflow.payload.disabled": "La capture des données était désactivée pour cet appel.",
+  "chat.workflow.payload.evicted": "Les données ont été évincées de la mémoire.",
+  "chat.workflow.payload.truncated": "Les données ont été tronquées.",
   "chat.workflow.attempt": "Exécution {run} · tentative {round}",
 
   "chat.toolCall.badge.keywordOnly": "mots-clés uniquement",

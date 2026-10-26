@@ -3,6 +3,7 @@ import { Component, MarkdownRenderer } from "obsidian";
 import type { ChainItem } from "@core/conversation";
 import { FetchTargetAnimator } from "../fetchTargetAnimator";
 import type { WorkflowRenderContext } from "./renderContext";
+import { toolKey } from "./toolKey";
 import { ToolOutputTextViewer } from "./toolOutputTextViewer";
 
 /** Owns everything one timeline render allocates: Markdown components, DOM listeners, fetch-target timers and the inline output viewer. */
@@ -13,7 +14,10 @@ export class TimelineResources {
   private readonly listeners = new AbortController();
   private readonly viewer: ToolOutputTextViewer | undefined;
 
-  constructor(private readonly context: WorkflowRenderContext) {
+  constructor(
+    private readonly context: WorkflowRenderContext,
+    private readonly scopeId: string,
+  ) {
     context.markdownContext.addChild(this.component);
     this.viewer = context.outputViewerHost
       ? new ToolOutputTextViewer(context.outputViewerHost, context.t)
@@ -41,7 +45,7 @@ export class TimelineResources {
   }
 
   openToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void {
-    if (this.viewer) this.viewer.open(item);
+    if (this.viewer) this.viewer.open(item, toolKey(this.scopeId, item));
     else this.context.onOpenToolOutput(item);
   }
 

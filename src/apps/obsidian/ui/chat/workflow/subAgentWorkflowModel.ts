@@ -29,5 +29,7 @@ function toChainItem(item: SubAgentWorkflowItem): ChainItem {
     ...(item.resultJson !== undefined ? { resultJson: item.resultJson } : {}),
     ...(item.badge ? { badge: item.badge } : {}),
     attempt: { runId: item.runId, round: item.round },
+    untrusted: true,
+    payloadState: item.payloadState,
   };
 }

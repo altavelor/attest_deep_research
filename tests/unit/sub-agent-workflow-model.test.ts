@@ -43,6 +43,8 @@ describe("sub-agent workflow model", () => {
         status: "pending",
         badge: { text: "partial" },
         attempt: { runId: "run-1", round: 1 },
+        untrusted: true,
+        payloadState: "disabled",
       },
       {
         kind: "tool-call",
@@ -51,6 +53,8 @@ describe("sub-agent workflow model", () => {
         label: "Search the web",
         status: "failed",
         attempt: { runId: "run-2", round: 2 },
+        untrusted: true,
+        payloadState: "disabled",
       },
     ]);
   });

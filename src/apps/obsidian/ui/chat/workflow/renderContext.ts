@@ -14,4 +14,5 @@ export interface WorkflowRenderContext {
 
 export interface WorkflowUiState {
   openThinking: Set<string>;
+  openOutputKey?: string;
 }

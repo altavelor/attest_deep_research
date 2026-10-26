@@ -11,11 +11,11 @@ export class ToolOutputTextViewer {
     private readonly t: Translate,
   ) {}
 
-  open(item: Extract<ChainItem, { kind: "tool-call" }>): void {
+  open(item: Extract<ChainItem, { kind: "tool-call" }>, key: string): void {
     this.close();
     const viewerEl = this.hostEl.createDiv({
       cls: "attest-chat__tool-output-viewer",
-      attr: { role: "region", "aria-label": toolTitle(item.name) },
+      attr: { role: "region", "aria-label": toolTitle(item.name), "data-output-key": key },
     });
     const header = viewerEl.createDiv({ cls: "attest-chat__tool-output-viewer-header" });
     header.createSpan({ cls: "attest-chat__tool-output-viewer-title", text: toolTitle(item.name) });
@@ -24,6 +24,12 @@ export class ToolOutputTextViewer {
       text: this.t("chat.workflow.tool.closeOutput"),
     });
     closeButton.addEventListener("click", () => this.close());
+    if (item.payloadState && item.payloadState !== "captured") {
+      viewerEl.createDiv({
+        cls: "attest-chat__tool-payload-state",
+        text: this.t(`chat.workflow.payload.${item.payloadState}`),
+      });
+    }
     viewerEl.createEl("pre", { cls: "attest-chat__tool-output-viewer-text" }).textContent =
       payloadText(item);
     this.viewerEl = viewerEl;

@@ -78,6 +78,8 @@ export type ChainItem =
       phase?: string;
       badge?: { text: string; tooltip?: string };
       attempt?: { runId: string; round: number };
+      untrusted?: true;
+      payloadState?: "captured" | "disabled" | "evicted" | "truncated";
 
       children?: ChainItem[];
     };

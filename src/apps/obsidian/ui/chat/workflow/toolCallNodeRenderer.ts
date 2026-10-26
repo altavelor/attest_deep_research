@@ -2,6 +2,7 @@ import { toolTitle } from "@core/agent";
 import { ChainItem } from "@core/conversation";
 import { describeToolCall, ToolCell } from "../toolCallView";
 import type { TimelineScope } from "./timelineResources";
+import { toolKey } from "./toolKey";
 
 type ToolCallItem = Extract<ChainItem, { kind: "tool-call" }>;
 
@@ -48,19 +49,32 @@ export function renderToolNode(
       ...(badge.tooltip ? { attr: { "aria-label": badge.tooltip, title: badge.tooltip } } : {}),
     });
   }
+  if (context.isDebugMode && item.payloadState && item.payloadState !== "captured") {
+    body.createDiv({
+      cls: "attest-chat__tool-payload-state",
+      text: context.t(`chat.workflow.payload.${item.payloadState}`),
+    });
+  }
   const onOpen = (): void => scope.resources.openToolOutput(item);
   if (context.isDebugMode && view.inCell) {
-    renderToolCell(body, `${item.id}:in`, context.t("chat.workflow.tool.in"), view.inCell, scope, {
-      variant: "in",
-      onOpen,
-    });
+    renderToolCell(
+      body,
+      `${item.id}:in`,
+      context.t("chat.workflow.tool.in"),
+      safeCell(item, view.inCell),
+      scope,
+      {
+        variant: "in",
+        onOpen,
+      },
+    );
   }
   if (context.isDebugMode && view.outCell) {
     renderToolCell(
       body,
       `${item.id}:out`,
       context.t("chat.workflow.tool.out"),
-      view.outCell,
+      safeCell(item, view.outCell),
       scope,
       { variant: "out", onOpen },
     );
@@ -75,8 +89,8 @@ export function renderToolNode(
   }
 }
 
-function toolKey(scopeId: string, item: ToolCallItem): string {
-  return item.attempt ? `${scopeId}/${item.attempt.runId}/${item.id}` : `${scopeId}/${item.id}`;
+function safeCell(item: ToolCallItem, cell: ToolCell): ToolCell {
+  return item.untrusted && cell.kind === "text" ? { kind: "code", text: cell.text } : cell;
 }
 
 function renderFetchTargets(

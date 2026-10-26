@@ -126,6 +126,9 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.openFullOutput": "Открыть полный вывод",
   "chat.workflow.tool.fetching.aria": "Загрузка: {targets}",
   "chat.workflow.tool.closeOutput": "Закрыть",
+  "chat.workflow.payload.disabled": "Запись данных вызова была выключена.",
+  "chat.workflow.payload.evicted": "Данные вызова вытеснены из памяти.",
+  "chat.workflow.payload.truncated": "Данные вызова обрезаны.",
   "chat.workflow.attempt": "Запуск {run} · попытка {round}",
 
   "chat.toolCall.badge.keywordOnly": "только ключевые слова",
