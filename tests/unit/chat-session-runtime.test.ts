@@ -323,6 +323,17 @@ describe("chat session runtime display projection", () => {
         status: "complete",
         resultJson: '{"answer":"Delivered child answer"}',
       },
+      {
+        kind: "tool-call",
+        id: "map",
+        name: "map_sources",
+        label: "Map",
+        status: "complete",
+        phase: "Mapping",
+        children: [
+          { kind: "tool-call", id: "m1", name: "search_web", label: "S", status: "complete" },
+        ],
+      },
     ];
     const saved = await repository.saveChat({
       id: "chat-u2",
@@ -423,6 +434,7 @@ describe("chat session runtime display projection", () => {
         label: "Result",
         status: "complete",
       },
+      legacyChain[3],
     ]);
   });
 });

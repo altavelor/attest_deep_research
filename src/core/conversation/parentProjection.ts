@@ -2,17 +2,20 @@ import { SUB_AGENT_RESULT_TOOL, SUB_AGENT_TOOL, SUB_AGENT_WAIT_TOOL } from "@cor
 import type { ChainItem } from "./model";
 
 /**
- * Projects a parent workflow chain for display. Nested child calls and phases are
- * dropped from every node, and a sub-agent tool node keeps only its call and status:
- * its output, current receipts, delivered or legacy child answers, never reaches the
- * parent view.
+ * Projects a parent workflow chain for display. A sub-agent tool node keeps only its call
+ * and status: nested child calls, phases, receipts and delivered or legacy child answers
+ * never reach the parent view, while other tools such as map_sources keep their nodes.
  */
 export function parentWorkflowChain(chain: readonly ChainItem[]): ChainItem[] {
   return chain.map((item) => {
-    if (item.kind !== "tool-call") return item;
-    const { children: _children, phase: _phase, ...rest } = item;
-    if (!isSubAgentTool(item.name)) return rest;
-    const { resultJson: _resultJson, resultSummary: _resultSummary, ...call } = rest;
+    if (item.kind !== "tool-call" || !isSubAgentTool(item.name)) return item;
+    const {
+      children: _children,
+      phase: _phase,
+      resultJson: _resultJson,
+      resultSummary: _resultSummary,
+      ...call
+    } = item;
     return call;
   });
 }
