@@ -18,6 +18,10 @@ export class SubAgentUserStop {
     private readonly scheduler: SubAgentRunScheduler,
   ) {}
 
+  clear(): void {
+    this.unsaved.clear();
+  }
+
   async stop(sessionId: string, expectedRunId: string | null): Promise<SubAgentUserStopResult> {
     const { parts } = this;
     if (parts.fences.disposed) throw sessionFailure("not-authorized");

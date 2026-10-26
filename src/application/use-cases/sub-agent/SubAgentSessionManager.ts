@@ -32,6 +32,7 @@ export class SubAgentSessionManager implements SubAgentHost {
   private readonly listeners = new Set<() => void>();
   private readonly changeListeners = new Set<() => void>();
   private readonly inspectionPort: SubAgentInspectionPort;
+  private readonly userStop: SubAgentUserStop;
   private readonly parts: SubAgentManagerParts;
   private readonly services: SubAgentFacadeServices;
   private disposal: Promise<void> | null = null;
@@ -63,6 +64,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       subscribe: (listener) => this.subscribeResults(listener),
     };
     const userStop = new SubAgentUserStop(parts, scheduler);
+    this.userStop = userStop;
     this.inspectionPort = new SubAgentInspectionService({
       load: () => parts.store.load(),
       inputs: () => ({
@@ -138,6 +140,8 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.listeners.clear();
       this.changeListeners.clear();
       this.parts.observation.clear();
+      this.parts.mainEvents.clear();
+      this.userStop.clear();
       this.parts.sessionOptions.clear();
       this.parts.outcomes.clear();
       this.parts.unsavedImports.clear();

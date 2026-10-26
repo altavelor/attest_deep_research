@@ -9,6 +9,7 @@ import {
   type SubAgentCreateRecord,
   type SubAgentImportRecord,
   type SubAgentImportTombstone,
+  type NormalizedUsage,
   type SubAgentModelSnapshot,
   type SubAgentObservationRecord,
   type SubAgentPendingAction,
@@ -120,6 +121,10 @@ export class SubAgentStateStore {
 
   putObservation(entry: SubAgentObservationRecord): number {
     return this.put("observation", entry.observationId, entry);
+  }
+
+  putRunUsage(runId: string, usage: NormalizedUsage): number {
+    return this.put("run", runId, { usage });
   }
 
   putRunModel(runId: string, model: SubAgentModelSnapshot): number {

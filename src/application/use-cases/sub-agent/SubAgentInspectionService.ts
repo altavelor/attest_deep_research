@@ -61,6 +61,7 @@ export class SubAgentInspectionService implements SubAgentInspectionPort {
       if (this.listeners.size === 0) return;
       const snapshot = buildInspectionSnapshot(this.source.inputs());
       for (const listener of [...this.listeners]) {
+        if (!this.listeners.has(listener)) continue;
         try {
           listener(snapshot);
         } catch {
