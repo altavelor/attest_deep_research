@@ -52,6 +52,7 @@ const RUN_FIELDS = [
   "retryOfRunId",
   "continuedFromRunId",
   "budgetScopeId",
+  "model",
 ];
 const LISTS: Readonly<Record<string, { list: ListKey; idField: string; fields: string[] }>> = {
   create: {

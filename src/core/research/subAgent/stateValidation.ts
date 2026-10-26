@@ -1,4 +1,5 @@
 import type { SubAgentStateSnapshot } from "./stateSnapshot";
+import { isSubAgentModelSnapshot } from "./observationModel";
 import { toValidatedJson } from "./stateSnapshot";
 
 export type SubAgentStateValidationCode = "unsupported-state-version" | "invalid-state-field";
@@ -157,6 +158,7 @@ function checkRun(run: Rec, path: string): string {
   nullable(run.continuedFromRunId, `${path}.continuedFromRunId`, id);
   nullable(run.budgetScopeId, `${path}.budgetScopeId`, id);
   checkSourcePolicy(run.effectiveSourcePolicy, `${path}.effectiveSourcePolicy`);
+  if (run.model !== undefined && !isSubAgentModelSnapshot(run.model)) invalid(`${path}.model`);
   const usage = rec(run.usage, `${path}.usage`);
   for (const key of ["requestCount", "modelRounds", "toolCalls", "durationMs"]) {
     count(usage[key], `${path}.usage.${key}`);
