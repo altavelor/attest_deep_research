@@ -163,6 +163,7 @@ export class ThinkingResearchRunner {
     let rounds = 0;
     const phases: string[] = [];
     const promptRounds: RoundPromptDeltaDiagnostic[] = [];
+    const serviceMessages = new Set<ChatMessage>();
     let promptLoggedCount = 0;
     const stopReasons: string[] = [];
     let continuation: ProviderContinuationState | undefined;
@@ -209,6 +210,7 @@ export class ThinkingResearchRunner {
               : { type: "auto" };
         const delivery = await this.options.roundHooks?.beforeModelRound();
         const deliveryMessage = delivery ? { role: "user" as const, content: delivery } : null;
+        if (deliveryMessage) serviceMessages.add(deliveryMessage);
         if (deliveryMessage && !continuation) messages.push(deliveryMessage);
         promptRounds.push(
           buildRoundPromptDelta(
@@ -218,6 +220,7 @@ export class ThinkingResearchRunner {
               ? [...messages.slice(promptLoggedCount), deliveryMessage]
               : messages.slice(promptLoggedCount),
             toolOutputs,
+            serviceMessages,
           ),
         );
         promptLoggedCount = messages.length;

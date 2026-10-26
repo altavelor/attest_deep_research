@@ -109,5 +109,12 @@ describe("session-backed run_subagent in a Thinking loop", () => {
     expect(result.ok).toBe(true);
     expect(summarizeSubAgentTelemetry(result.diagnostics).subAgents).toMatchObject({ count: 2 });
     expect(model.requests).toHaveLength(6);
+    const diagnostics = JSON.stringify([result.promptRounds, result.diagnostics]);
+    expect(diagnostics).not.toContain("untrusted data");
+    expect(
+      result.diagnostics.flatMap((call) =>
+        call.name === "search_web" ? [] : [call.resultPreview],
+      ),
+    ).toEqual(Array(3).fill("[withheld sub-agent output]"));
   });
 });

@@ -1,3 +1,4 @@
+import { isSubAgentTool } from "@core/conversation";
 import { ChatMessage, ChatToolCall, ModelToolOutput, ToolEvent } from "@core/agent";
 import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ToolManager } from "@application/tools/ToolManager";
@@ -302,9 +303,11 @@ export class ThinkingToolRoundExecutor {
       name: call.name,
       status: execution.ok ? "success" : "failed",
       arguments: call.arguments,
-      resultPreview: contentBearingTool(call.name)
-        ? "[redacted tool content]"
-        : execution.result.slice(0, PREVIEW_CHARS),
+      resultPreview: isSubAgentTool(call.name)
+        ? "[withheld sub-agent output]"
+        : contentBearingTool(call.name)
+          ? "[redacted tool content]"
+          : execution.result.slice(0, PREVIEW_CHARS),
       resultBytes: execution.result.length,
       round: options.round,
       ...(this.cache.get(key) === execution &&

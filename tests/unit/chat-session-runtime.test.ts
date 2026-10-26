@@ -315,6 +315,14 @@ describe("chat session runtime display projection", () => {
           },
         ],
       },
+      {
+        kind: "tool-call",
+        id: "result",
+        name: "get_subagent_result",
+        label: "Result",
+        status: "complete",
+        resultJson: '{"answer":"Delivered child answer"}',
+      },
     ];
     const saved = await repository.saveChat({
       id: "chat-u2",
@@ -393,6 +401,7 @@ describe("chat session runtime display projection", () => {
       "Child reply text",
       "Agent description",
       "Legacy child answer",
+      "Delivered child answer",
     ]) {
       expect(provider).not.toContain(hidden);
     }
@@ -406,6 +415,13 @@ describe("chat session runtime display projection", () => {
         label: "Delegate",
         status: "complete",
         args: { task: "Legacy task" },
+      },
+      {
+        kind: "tool-call",
+        id: "result",
+        name: "get_subagent_result",
+        label: "Result",
+        status: "complete",
       },
     ]);
   });
