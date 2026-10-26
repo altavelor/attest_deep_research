@@ -63,6 +63,7 @@ export type ModelRoundDelta =
 export interface ModelRoundRequest extends ChatRequest {
   continuation?: ProviderContinuationState;
   toolOutputs?: ModelToolOutput[];
+  continuationMessages?: ChatMessage[];
   reasoning?: {
     enabled: boolean;
     effort?: string;

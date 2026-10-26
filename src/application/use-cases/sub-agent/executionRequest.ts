@@ -13,7 +13,9 @@ const EMPTY_CONTEXT: SubAgentPriorContext = {
   summary: null,
   previousResult: null,
   partialSummary: null,
+  continuesPartial: false,
   priorEvidence: [],
+  priorEvidenceItems: [],
 };
 
 /**
@@ -57,6 +59,7 @@ export function buildExecutionRequest(
  * Selects the prior context of a run by its lineage. A first run has none; a follow-up
  * gets the session summary, the previous committed answer and its evidence; a retry
  * drops the earlier answer, and a partial continuation adds the explicit partial summary.
+ * Prior evidence texts are resolved later by the chat that owns the registry.
  */
 function priorContextOf(
   parts: SubAgentManagerParts,
@@ -73,11 +76,17 @@ function priorContextOf(
     summary: bounded(record.session.contextSummary),
     previousResult: run.retryOfRunId ? null : bounded(previous?.answerText ?? null),
     partialSummary: null,
+    continuesPartial: false,
     priorEvidence: (previous?.evidence ?? []).slice(-MAX_PRIOR_EVIDENCE),
+    priorEvidenceItems: [],
   };
   if (!run.continuedFromRunId) return base;
   const partial = earlier.find((candidate) => candidate.subAgentRunId === run.continuedFromRunId);
-  return { ...base, partialSummary: bounded(partial?.resultSummary ?? null) };
+  return {
+    ...base,
+    partialSummary: bounded(partial?.resultSummary ?? null),
+    continuesPartial: true,
+  };
 }
 
 function bounded(text: string | null): string | null {

@@ -10,7 +10,7 @@ import { FakeSearchProvider, scriptedModelRounds } from "../support/researchFake
 import { AT, importHarness, launchChild } from "../support/subAgentSessions";
 
 describe("sub-agent observation through the execution adapter", () => {
-  it("records the first request, model, usage and tool payloads from a real runner", async () => {
+  it("records the first request, model, usage, tool payloads and imported evidence of a real runner", async () => {
     const modelRound = scriptedModelRounds((_request, index) =>
       index === 1
         ? {
@@ -47,7 +47,11 @@ describe("sub-agent observation through the execution adapter", () => {
     });
     const harness = importHarness({ execution, redact: (text) => redactSensitiveData(text) });
     harness.probes.debug = true;
-    const { session } = await launchChild(harness.delegator(), "alpha", "Investigate alpha");
+    const { session, receipt } = await launchChild(
+      harness.delegator(),
+      "alpha",
+      "Investigate alpha",
+    );
     const inspection = harness.manager.inspection();
     await eventually(async () =>
       expect((await inspection.getSession(session.subAgentSessionId))?.card.status).toBe("ready"),
@@ -76,5 +80,7 @@ describe("sub-agent observation through the execution adapter", () => {
       payloadState: "captured",
     });
     expect(detail.lifetime[0].resultJson).toContain("https://e.com/x");
+    const result = await harness.delegator().getResult(session.subAgentSessionId, receipt.runId);
+    expect(result.state === "completed" && result.outcome.evidence).toHaveLength(1);
   });
 });

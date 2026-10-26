@@ -39,12 +39,15 @@ export interface ToolEvent {
 export interface ToolContext {
   callId: string;
 
+  round?: number;
+
   signal: AbortSignal;
 
   emit(event: ToolEvent): void;
 }
 
 export interface ToolDispatchContext {
+  round?: number;
   signal?: AbortSignal;
   emit?: (event: ToolEvent) => void;
 }
@@ -59,6 +62,7 @@ const NOOP_EMIT = (): void => {};
 function resolveToolContext(callId: string, context: ToolDispatchContext): ToolContext {
   return {
     callId,
+    ...(context.round !== undefined ? { round: context.round } : {}),
     signal: context.signal ?? NEVER_ABORT_SIGNAL,
     emit: context.emit ?? NOOP_EMIT,
   };

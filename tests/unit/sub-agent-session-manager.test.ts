@@ -303,11 +303,19 @@ describe("SubAgentSessionManager queue", () => {
       summary: null,
       previousResult: null,
       partialSummary: null,
+      continuesPartial: false,
       priorEvidence: [],
+      priorEvidenceItems: [],
     });
     expect(contexts[1]).toMatchObject({ summary: "First answer", previousResult: "First answer" });
     expect(contexts[2]).toMatchObject({ previousResult: null, partialSummary: null });
     expect(contexts[3].partialSummary).toHaveLength(1000);
+    expect(contexts.map((context) => context.continuesPartial)).toEqual([
+      false,
+      false,
+      false,
+      true,
+    ]);
     expect(harness.execution.requests[1].limits).toEqual({
       maxRounds: 6,
       maxResultChars: 4000,

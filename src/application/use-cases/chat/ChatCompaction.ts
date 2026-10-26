@@ -1,7 +1,12 @@
 import { ChatModelProvider } from "@core/agent";
 import { sourceLabel } from "@core/retrieval";
 import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "@core/research";
-import { ChainItem, ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
+import {
+  ChainItem,
+  ChatDisplayMessage,
+  ConversationCompactionSummary,
+  parentWorkflowChain,
+} from "@core/conversation";
 
 export const COMPACTION_RECENT_MESSAGE_COUNT = 4;
 
@@ -339,11 +344,17 @@ function researchTraceForPrompt(
     lines.push(`Checkpoint round ${checkpoint.round}: ${checkpoint.content}`);
   }
 
-  for (const item of progress.chain) {
-    lines.push(...chainItemTraceLines(item));
+  for (const item of parentWorkflowChain(progress.chain)) {
+    lines.push(...chainItemTraceLines(withoutNestedWork(item)));
   }
 
   return uniqueStrings(lines);
+}
+
+function withoutNestedWork(item: ChainItem): ChainItem {
+  if (item.kind !== "tool-call" || !item.children) return item;
+  const { children: _children, ...rest } = item;
+  return rest;
 }
 
 function chainItemTraceLines(item: ChainItem, depth = 0): string[] {

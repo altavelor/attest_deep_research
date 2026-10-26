@@ -1,4 +1,4 @@
-import { ChatDisplayMessage } from "./model";
+import { ChainItem, ChatDisplayMessage } from "./model";
 
 export function shouldShowDiagnosticAction(
   message: ChatDisplayMessage,
@@ -39,4 +39,42 @@ export function stripCitationsSection(value: string): string {
 
 export function cleanupDanglingMarkdown(value: string): string {
   return value.replace(/\s+\*\*\s*$/, "").trim();
+}
+
+/**
+ * Drops the display-only workflow fields (badge, attempt, untrusted marker and payload
+ * state) from every chain item, so they are never persisted or sent to a model.
+ */
+export function stripChainDisplayFields(messages: ChatDisplayMessage[]): ChatDisplayMessage[] {
+  return messages.map((message) => {
+    const chain = message.researchProgress?.chain;
+    if (!chain || !chain.some(hasDisplayFields)) return message;
+    return {
+      ...message,
+      researchProgress: { ...message.researchProgress!, chain: chain.map(stripChainItem) },
+    };
+  });
+}
+
+function hasDisplayFields(item: ChainItem): boolean {
+  if (item.kind !== "tool-call") return false;
+  return (
+    item.badge !== undefined ||
+    item.attempt !== undefined ||
+    item.untrusted !== undefined ||
+    item.payloadState !== undefined ||
+    (item.children ?? []).some(hasDisplayFields)
+  );
+}
+
+function stripChainItem(item: ChainItem): ChainItem {
+  if (item.kind !== "tool-call") return item;
+  const {
+    badge: _badge,
+    attempt: _attempt,
+    untrusted: _untrusted,
+    payloadState: _payloadState,
+    ...rest
+  } = item;
+  return rest.children ? { ...rest, children: rest.children.map(stripChainItem) } : rest;
 }

@@ -55,13 +55,14 @@ function policy(requiredTools: string[]): ResearchExecutionPolicy {
 }
 
 describe("ThinkingResearchRunner", () => {
-  it("keeps Responses continuation outside the message transcript", async () => {
+  it("keeps Responses continuation outside the message transcript and carries child results in it", async () => {
     const search = tool("search_index");
     const continuation: ProviderContinuationState = {
       provider: "openai-compatible",
       dispose: vi.fn(),
     };
     const requests: ModelRoundRequest[] = [];
+    const acks: number[] = [];
     const roundProvider: ModelRoundProvider = {
       listModels: async () => ["m"],
       runRound: vi.fn(async (request: ModelRoundRequest) => {
@@ -86,12 +87,41 @@ describe("ThinkingResearchRunner", () => {
       messages: [{ role: "user", content: "q" }],
       tools: new ToolManager([search.handler]),
       policy: policy(["search_index"]),
+      roundHooks: {
+        beforeModelRound: async () => (requests.length === 1 ? "child results" : null),
+        afterRoundAccepted: () => void acks.push(requests.length),
+        beforeFinalize: async () => "ready",
+      },
     }).run();
 
     expect(result).toMatchObject({ ok: true, answerText: "final" });
+    expect(requests[1].continuationMessages).toEqual([{ role: "user", content: "child results" }]);
+    expect(acks).toEqual([1, 2]);
     expect(requests[1].continuation).toBe(continuation);
     expect(requests[1].toolOutputs?.[0]).toMatchObject({ callId: "call-1" });
     expect(requests[1].messages).toEqual([{ role: "user", content: "q" }]);
+  });
+
+  it("never acknowledges delivered child results of a round the provider failed", async () => {
+    const accepted = vi.fn();
+    const result = await new ThinkingResearchRunner({
+      modelRound: {
+        listModels: async () => ["m"],
+        runRound: async () => ({ items: [], stopReason: "error" as const }),
+      },
+      model: "m",
+      messages: [{ role: "user", content: "q" }],
+      tools: new ToolManager([]),
+      policy: policy([]),
+      roundHooks: {
+        beforeModelRound: async () => "child results",
+        afterRoundAccepted: accepted,
+        beforeFinalize: async () => "ready",
+      },
+    }).run();
+
+    expect(result).toMatchObject({ ok: false, reason: "provider-error" });
+    expect(accepted).not.toHaveBeenCalled();
   });
 
   it("attributes streamed reasoning segments to their round and phase", async () => {
@@ -289,6 +319,7 @@ describe("ThinkingResearchRunner", () => {
     }).run();
     expect(result).toMatchObject({ ok: true, repairedTools: ["search_index"], duplicateCalls: 0 });
     expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls.map((call) => call[1]?.round)).toEqual([1, 2]);
   });
 
   it("stops gathering and synthesizes when distinct queries surface no new evidence", async () => {

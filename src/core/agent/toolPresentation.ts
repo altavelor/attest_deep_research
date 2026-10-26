@@ -25,7 +25,9 @@ import {
   READ_NOTE_TOOL,
   SEARCH_INDEX_BY_METADATA_TOOL,
   SEARCH_NOTES_TOOL,
+  SUB_AGENT_RESULT_TOOL,
   SUB_AGENT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
   SUMMARIZE_INDEX_SOURCE_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_SECTION_TOOL,
@@ -317,6 +319,14 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
       const task = str(args, "task");
       return task ? `Delegating to a sub-agent: ${quoted(task)}` : "Running a sub-agent";
     },
+  },
+  [SUB_AGENT_RESULT_TOOL]: {
+    title: "Sub-agent result",
+    intent: () => "Checking a sub-agent result",
+  },
+  [SUB_AGENT_WAIT_TOOL]: {
+    title: "Wait for sub-agents",
+    intent: () => "Waiting for sub-agents",
   },
   [MAP_SOURCES_TOOL]: {
     title: "Fan-out over sources",

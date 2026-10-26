@@ -11,6 +11,7 @@ export {
   shouldShowAnswerNoteActions,
   shouldShowDiagnosticAction,
   stripCitationsSection,
+  stripChainDisplayFields,
   stripFollowUpSection,
   stripMessageDiagnostics,
 } from "./messageContent";

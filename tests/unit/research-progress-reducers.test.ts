@@ -4,6 +4,7 @@ import {
   interruptLastAssistantProgress,
   nextChainReasoningSegment,
   nextChainSubAgentPhase,
+  parentWorkflowChain,
   nextChainToolCallEnd,
   nextChainToolCallStart,
   nextAssistantCheckpoint,
@@ -68,7 +69,7 @@ describe("research progress reducers edge cases", () => {
     });
   });
 
-  it("records nested tool results and sub-agent phase without changing sibling calls", () => {
+  it("keeps legacy nested sub-agent results stored but out of the parent projection", () => {
     const root = nextChainToolCallStart(
       startAssistantProgress([], "thinking"),
       "agent-1",
@@ -95,7 +96,17 @@ describe("research progress reducers edge cases", () => {
       "agent-1",
     );
 
-    expect(completed.at(-1)?.researchProgress?.chain).toEqual([
+    const chain = completed.at(-1)!.researchProgress!.chain;
+    expect(parentWorkflowChain(chain)).toEqual([
+      {
+        kind: "tool-call",
+        id: "agent-1",
+        name: "run_subagent",
+        label: "Research",
+        status: "pending",
+      },
+    ]);
+    expect(chain).toEqual([
       {
         kind: "tool-call",
         id: "agent-1",

@@ -18,6 +18,7 @@ import { ToolManager } from "@application/tools/ToolManager";
 import { buildRoundPromptDelta } from "./thinkingPromptLog";
 import { collectThinkingModelRound } from "./ThinkingModelRoundCollector";
 import { ThinkingToolRoundExecutor } from "./ThinkingToolRoundExecutor";
+import type { ThinkingRoundHooks } from "./subAgentRoundHooks";
 
 export type ThinkingFallbackReason =
   | "multiple-mandatory-tools-unresolved"
@@ -66,6 +67,8 @@ export interface ThinkingResearchRunnerOptions {
   ) => void;
 
   onToolEvent?: (callId: string, event: ToolEvent) => void;
+
+  roundHooks?: ThinkingRoundHooks;
 }
 
 export type ThinkingResearchResult = ThinkingResearchSuccess | ThinkingResearchFailure;
@@ -126,6 +129,12 @@ const SYNTHESIS_NUDGE =
 export class ThinkingResearchRunner {
   constructor(private readonly options: ThinkingResearchRunnerOptions) {}
 
+  /** Asks the delegated-work barrier whether the final draft may be published. */
+  private async finalizeDecision(): Promise<"ready" | "resume-with-results"> {
+    const hooks = this.options.roundHooks;
+    return hooks ? hooks.beforeFinalize(this.options.signal) : "ready";
+  }
+
   async run(): Promise<ThinkingResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
     const required = new Set(this.options.policy.requiredTools);
@@ -154,6 +163,7 @@ export class ThinkingResearchRunner {
     let rounds = 0;
     const phases: string[] = [];
     const promptRounds: RoundPromptDeltaDiagnostic[] = [];
+    const serviceMessages = new Set<ChatMessage>();
     let promptLoggedCount = 0;
     const stopReasons: string[] = [];
     let continuation: ProviderContinuationState | undefined;
@@ -198,8 +208,20 @@ export class ThinkingResearchRunner {
                 ? { type: "specific", name: repairTool! }
                 : { type: "required" }
               : { type: "auto" };
+        const delivery = await this.options.roundHooks?.beforeModelRound();
+        const deliveryMessage = delivery ? { role: "user" as const, content: delivery } : null;
+        if (deliveryMessage) serviceMessages.add(deliveryMessage);
+        if (deliveryMessage && !continuation) messages.push(deliveryMessage);
         promptRounds.push(
-          buildRoundPromptDelta(round, toolChoice, messages.slice(promptLoggedCount), toolOutputs),
+          buildRoundPromptDelta(
+            round,
+            toolChoice,
+            continuation && deliveryMessage
+              ? [...messages.slice(promptLoggedCount), deliveryMessage]
+              : messages.slice(promptLoggedCount),
+            toolOutputs,
+            serviceMessages,
+          ),
         );
         promptLoggedCount = messages.length;
         const response = await collectThinkingModelRound(
@@ -211,6 +233,7 @@ export class ThinkingResearchRunner {
           toolOutputs,
           round,
           undefined,
+          continuation && deliveryMessage ? [deliveryMessage] : undefined,
         );
         continuation = response.continuation;
         reasoningItemCount += response.reasoningItemCount;
@@ -233,9 +256,19 @@ export class ThinkingResearchRunner {
             response.stopReason === "length" ? "context-limit-exceeded" : "provider-error",
           );
         }
+        this.options.roundHooks?.afterRoundAccepted();
 
         if (response.toolCalls.length === 0) {
           const missing = missingTools(required, satisfied);
+          if (
+            missing.length === 0 &&
+            phase !== "repair" &&
+            (await this.finalizeDecision()) === "resume-with-results"
+          ) {
+            this.options.onRoundClassified?.(round, "intermediate");
+            if (!continuation) messages.push({ role: "assistant", content: response.content });
+            continue;
+          }
           if (missing.length === 0 && phase !== "repair") {
             this.options.onRoundClassified?.(round, "final");
             return {

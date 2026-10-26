@@ -230,9 +230,7 @@ describe("ChatCompaction", () => {
     expect(assistantHistory.content).toContain(
       'Tool search_index [complete] Search index; args: {"query":"Attest"}; summary: 1 result; result: {"results":[{"path":"Notes/Attest.md","text":"Use Attest."}]}',
     );
-    expect(assistantHistory.content).toContain(
-      'Child tool read_note [complete] Read note; args: {"path":"Notes/Attest.md"}; result: {"content":"Use Attest."}',
-    );
+    expect(assistantHistory.content).not.toContain("Child tool");
   });
 });
 

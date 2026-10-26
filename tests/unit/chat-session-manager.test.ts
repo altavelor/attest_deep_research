@@ -6,7 +6,7 @@ import type { ResearchService, ResearchStreamEvent } from "@application/use-case
 import type { ResearchRequest } from "@application/contracts/research";
 import type { ChatRepository } from "@application/ports";
 import type { ResearchAnswer } from "@core/answer";
-import type { SavedChat, SavedChatSettings } from "@core/chat/savedChat";
+import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
 import { createTestSessionManager } from "../support/chatSessions";
 import { settle } from "../support/async";
@@ -250,7 +250,7 @@ describe("chat session manager double submission", () => {
     const { manager, repository } = createTestSessionManager({
       createResearchService: gated.service,
     });
-    const saveChat = vi.spyOn(repository, "saveChat");
+    const saveChat = vi.spyOn(repository, "commitChatDocument");
     const session = newSession(manager);
 
     const results = await Promise.all([
@@ -356,7 +356,7 @@ describe("chat session manager persistence", () => {
     const { manager, repository } = createTestSessionManager({
       createResearchService: gated.service,
     });
-    const saveChat = vi.spyOn(repository, "saveChat");
+    const saveChat = vi.spyOn(repository, "commitChatDocument");
     const session = newSession(manager);
 
     await manager.start(session.sessionId, request("Question?"));
@@ -570,7 +570,7 @@ describe("chat session manager deletion guard", () => {
     repository.holdNextSave();
     const start = manager.start(session.sessionId, request("Follow-up?"));
     await settle();
-    const saveChat = vi.spyOn(repository.repository, "saveChat");
+    const saveChat = vi.spyOn(repository.repository, "commitChatDocument");
 
     await manager.save(session.sessionId);
 
@@ -695,6 +695,9 @@ describe("chat session manager deletion guard", () => {
 
     expect(manager.getSessionByChatId(chatId)).toBe(session);
     expect(manager.listSessions()).toContain(session);
+    manager.update(session.sessionId, { attachedContextPaths: ["kept.md"] });
+    await manager.save(session.sessionId);
+    expect((await repository.loadChat(chatId))?.attachedContextPaths).toEqual(["kept.md"]);
   });
 });
 
@@ -798,12 +801,12 @@ describe("chat session manager lifecycle", () => {
     await manager.start(session.sessionId, request("Question?"));
     await settle();
 
-    const realSave = repository.saveChat.bind(repository);
+    const realSave = repository.commitChatDocument.bind(repository);
     let releaseTerminalSave = (): void => {};
     const pending = new Promise<void>((resolve) => (releaseTerminalSave = () => resolve()));
-    vi.spyOn(repository, "saveChat").mockImplementation(async (input) => {
+    vi.spyOn(repository, "commitChatDocument").mockImplementation(async (change) => {
       await pending;
-      return realSave(input);
+      return realSave(change);
     });
 
     gated.gates[0].emit({ type: "complete", answer: answerFor("Done") });
@@ -839,9 +842,10 @@ describe("chat session manager lifecycle", () => {
     await settle();
     expect(session.status).toBe("completed");
 
-    await manager.start(session.sessionId, request("Follow-up?"));
+    const followUp = manager.start(session.sessionId, request("Follow-up?"));
     await settle();
     repository.releaseHeldSave();
+    await followUp;
     await settle();
     expect(session.status).toBe("running");
 
@@ -967,6 +971,32 @@ function createUnorderedRepository(): {
   let sequence = 0;
   let hold: Promise<void> | null = null;
   let release = (): void => {};
+  const store = async (input: SaveChatInput, chatId: string | undefined): Promise<SavedChat> => {
+    const held = hold;
+    hold = null;
+    if (held) await held;
+    sequence += 1;
+    const id = chatId ?? `chat-${sequence}`;
+    const now = input.updatedAt ?? `2026-01-01T00:00:0${sequence % 10}.000Z`;
+    const chat: SavedChat = {
+      schemaVersion: 4,
+      id,
+      title: input.title ?? "Chat",
+      createdAt: input.createdAt ?? chats.get(id)?.createdAt ?? now,
+      updatedAt: now,
+      messages: input.messages,
+      lastAnswer: input.lastAnswer,
+      attachedContextPaths: [...input.attachedContextPaths],
+      chatSettings: input.chatSettings,
+      sourceRegistry: input.sourceRegistry ?? { sources: [] },
+      unreadCompletion: input.unreadCompletion ?? chats.get(id)?.unreadCompletion ?? false,
+      ...((input.lastRun ?? chats.get(id)?.lastRun)
+        ? { lastRun: input.lastRun ?? chats.get(id)!.lastRun! }
+        : {}),
+    };
+    chats.set(id, chat);
+    return chat;
+  };
 
   const repository: ChatRepository = {
     listChats: async () =>
@@ -980,32 +1010,7 @@ function createUnorderedRepository(): {
         ...(chat.lastRun ? { lastRun: chat.lastRun } : {}),
       })),
     loadChat: async (id) => chats.get(id) ?? null,
-    saveChat: async (input) => {
-      const held = hold;
-      hold = null;
-      if (held) await held;
-      sequence += 1;
-      const id = input.id ?? `chat-${sequence}`;
-      const now = input.updatedAt ?? `2026-01-01T00:00:0${sequence % 10}.000Z`;
-      const chat: SavedChat = {
-        schemaVersion: 4,
-        id,
-        title: input.title ?? "Chat",
-        createdAt: input.createdAt ?? chats.get(id)?.createdAt ?? now,
-        updatedAt: now,
-        messages: input.messages,
-        lastAnswer: input.lastAnswer,
-        attachedContextPaths: [...input.attachedContextPaths],
-        chatSettings: input.chatSettings,
-        sourceRegistry: input.sourceRegistry ?? { sources: [] },
-        unreadCompletion: input.unreadCompletion ?? chats.get(id)?.unreadCompletion ?? false,
-        ...((input.lastRun ?? chats.get(id)?.lastRun)
-          ? { lastRun: input.lastRun ?? chats.get(id)!.lastRun! }
-          : {}),
-      };
-      chats.set(id, chat);
-      return chat;
-    },
+    saveChat: (input) => store(input, input.id),
     renameChat: async (id) => chats.get(id) ?? null,
     setChatFavorite: async (id) => chats.get(id) ?? null,
     setChatUnreadCompletion: async (id, unreadCompletion) => {
@@ -1025,12 +1030,16 @@ function createUnorderedRepository(): {
     deleteChat: async (id) => {
       chats.delete(id);
     },
-    loadChatDocument: async () => {
-      throw new Error("Chat documents are not used by this repository.");
+    loadChatDocument: async (id) => {
+      const chat = chats.get(id);
+      return chat ? { chat, base: { content: "", subAgents: "" } } : null;
     },
-    commitChatDocument: async () => {
-      throw new Error("Chat documents are not used by this repository.");
-    },
+    commitChatDocument: async (change) => ({
+      chat: await store(change.chat!, change.chatId ?? undefined),
+      base: { content: "", subAgents: "" },
+      subAgentRevision: null,
+      written: true,
+    }),
   };
 
   return {

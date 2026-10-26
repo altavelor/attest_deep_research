@@ -99,16 +99,12 @@ export function createResearchToolRegistry(
     (options.searchProvider !== undefined && availability.webProviderAvailable) ||
     (options.retriever !== undefined && availability.retrieverAvailable) ||
     (options.noteTools !== undefined && availability.noteAccess);
-  if (options.subAgentRunner && hasAnyReadSource) {
+  if (options.subAgentDelegator && options.subAgentParent && hasAnyReadSource) {
     sources.register(
       new SubAgentSource({
-        runner: options.subAgentRunner,
+        delegator: options.subAgentDelegator,
+        parent: options.subAgentParent,
         evidence,
-        toolContext: {
-          ...options,
-          subAgentRunner: undefined,
-          availability: { ...availability, noteMutationAccess: false },
-        },
       }),
     );
   }
@@ -127,6 +123,8 @@ export function createResearchToolRegistry(
         toolContext: {
           ...options,
           subAgentRunner: undefined,
+          subAgentDelegator: undefined,
+          subAgentParent: undefined,
           availability: { ...availability, noteMutationAccess: false },
         },
       }),

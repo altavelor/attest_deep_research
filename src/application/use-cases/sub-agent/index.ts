@@ -9,3 +9,4 @@ export {
   type SubAgentExecutionAdapterDeps,
   type SubAgentModelSelection,
 } from "./executionAdapter";
+export { SubAgentParentCoordinator } from "./SubAgentParentCoordinator";

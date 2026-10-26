@@ -234,6 +234,9 @@ export class FileChatRepository implements ChatRepository {
       unreadCompletion: input.unreadCompletion ?? existing?.unreadCompletion ?? false,
       isFavorite: existing?.isFavorite === true,
       ...(lastRun ? { lastRun } : {}),
+      subAgentDispatches: input.subAgentDispatches ?? existing?.subAgentDispatches ?? [],
+      subAgentNotices: input.subAgentNotices ?? existing?.subAgentNotices ?? [],
+      timelineSequence: input.timelineSequence ?? existing?.timelineSequence ?? 0,
       ...(existing?.subAgents ? { subAgents: existing.subAgents } : {}),
     };
   }

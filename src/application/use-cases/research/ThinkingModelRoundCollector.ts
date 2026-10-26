@@ -44,6 +44,7 @@ export async function collectThinkingModelRound(
   toolOutputs?: ModelToolOutput[],
   round = 1,
   allowedTools?: readonly string[],
+  continuationMessages?: ChatMessage[],
 ): Promise<ThinkingModelRound> {
   let streamedText = false;
   let streamedReasoning = false;
@@ -63,6 +64,7 @@ export async function collectThinkingModelRound(
     signal: options.signal,
     continuation,
     toolOutputs,
+    ...(continuationMessages?.length ? { continuationMessages } : {}),
     reasoning: options.reasoning,
     onDelta: (delta) => {
       if (delta.type === "text") streamedText = true;

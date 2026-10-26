@@ -1,7 +1,15 @@
 import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
-import { buildSubAgentFraming } from "@core/research";
-import { SubAgentPort, SubAgentRunInput } from "@application/research";
+import { SubAgentResultTool } from "@adapters/research-tools/sub-agent/SubAgentResultTools";
+import { SubAgentSource } from "@adapters/research-tools/sub-agent/SubAgentSource";
+import {
+  admitSubAgentEvidence,
+  buildSubAgentFraming,
+  parseSubAgentChildEvidence,
+  subAgentAllowedHosts,
+  subAgentHostAllowed,
+  type ValidatedJsonValue,
+} from "@core/research";
 import { ResearchEvidenceSnapshot } from "@application/sources";
 import { RetrievedChunk } from "@core/model";
 import type { ToolContext } from "@core/agent";
@@ -9,6 +17,12 @@ import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAge
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
+import {
+  childEvidence,
+  fakeParentRun,
+  recordingDelegator,
+  sourcePolicy,
+} from "../support/subAgentSessions";
 
 function webChunk(index: number): RetrievedChunk {
   const url = `https://example${index}.com/page`;
@@ -41,39 +55,16 @@ function snapshotOf(count: number): ResearchEvidenceSnapshot {
   };
 }
 
-function recordingRunner(snapshot: ResearchEvidenceSnapshot, answerText = "answer") {
-  const inputs: SubAgentRunInput[] = [];
-  const runner: SubAgentPort = {
-    run: async (input) => {
-      inputs.push(input);
-      return { answerText, snapshot };
-    },
-  };
-  return { runner, inputs };
-}
-
 function toolContext(): ToolContext {
   return { callId: "call-sub", signal: new AbortController().signal, emit: () => {} };
 }
 
 describe("run_subagent budget and resources", () => {
-  it("forwards the search budget and the allowed resources to the runner", async () => {
-    const { runner, inputs } = recordingRunner(snapshotOf(0));
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
-
-    const result = await tool.execute(
-      { task: "Research X", maxSearches: 3, resources: ["wikipedia.org"] },
-      toolContext(),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(inputs[0].budget).toMatchObject({ maxSearches: 3 });
-    expect(inputs[0].resources).toEqual(["wikipedia.org"]);
-  });
-
   it("defaults the search budget when the caller omits it and clamps out-of-range values", () => {
-    const { runner } = recordingRunner(snapshotOf(0));
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+    const tool = new SubAgentTool({
+      delegator: recordingDelegator().delegator,
+      parent: fakeParentRun().parent,
+    });
 
     expect(tool.parseInput({ task: "t" })).toMatchObject({
       ok: true,
@@ -93,33 +84,53 @@ describe("run_subagent budget and resources", () => {
     });
   });
 
-  it("caps how many web sources one sub-agent imports and reports the dropped ones", async () => {
-    const { runner } = recordingRunner(snapshotOf(14));
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner, evidence });
+  it("charges child imports against the remaining web capacity of the parent registry", () => {
+    const { parent, attached } = fakeParentRun();
+    const evidence = new ResearchEvidenceRegistry({ maxWebResults: 2 });
+    new SubAgentSource({ delegator: recordingDelegator().delegator, parent, evidence });
 
-    const result = await tool.execute({ task: "Research X", maxSearches: 8 }, toolContext());
+    evidence.registerWebResult(
+      { url: "https://example0.com/page", title: "T", snippet: "S", rank: 1 },
+      { callId: "c1", query: "q" },
+    );
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toMatchObject({ sourceCount: 10, droppedSourceCount: 4 });
-    expect(evidence.snapshot().evidence).toHaveLength(10);
+    expect(attached[0]?.remainingWebCapacity?.()).toBe(1);
   });
 
-  it("reports an exhausted shared evidence budget rather than swallowing it", async () => {
-    const { runner } = recordingRunner(snapshotOf(3));
-    const evidence = new ResearchEvidenceRegistry({ maxWebResults: 1 });
-    const tool = new SubAgentTool({ runner, evidence });
-
-    const result = await tool.execute({ task: "Research X", maxSearches: 8 }, toolContext());
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toMatchObject({
-      sourceCount: 1,
-      droppedSourceCount: 2,
-      evidenceBudgetExhausted: true,
+  it("reports an exhausted shared evidence budget and aliases imported evidence", async () => {
+    const snapshot = snapshotOf(1);
+    const { delegator } = recordingDelegator({
+      r1: {
+        state: "completed",
+        resultRevision: 2,
+        outcome: {
+          run: {} as never,
+          answerText: "Answer [web:0]",
+          evidence: [],
+          importId: "import-1",
+          evidenceBudgetExhausted: true,
+        },
+      },
     });
+    const evidence = new ResearchEvidenceRegistry();
+    const tool = new SubAgentResultTool({
+      delegator,
+      parent: fakeParentRun(snapshot).parent,
+      evidence,
+    });
+
+    const result = await tool.execute({ sessionId: "s1", runId: "r1" }, toolContext());
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        state: "completed",
+        answer: "Answer [web:0]",
+        sourceCount: 1,
+        evidenceBudgetExhausted: true,
+      },
+    });
+    expect(evidence.snapshot().evidence.map((chunk) => chunk.id)).toEqual(["web:0"]);
   });
 });
 
@@ -204,113 +215,55 @@ describe("SubAgentRunner budget enforcement", () => {
 });
 
 describe("run_subagent resource restriction", () => {
-  it("drops imported web sources whose host is outside the named resources", async () => {
-    const snapshot: ResearchEvidenceSnapshot = {
-      evidence: [webChunk(0), webChunk(1)],
-      citations: [],
-      provenance: [webChunk(0), webChunk(1)].map((chunk) => ({
-        evidenceId: chunk.id,
-        calls: [{ callId: "inner", query: "q", tool: "search_web" as const }],
-      })),
-    };
-    const { runner } = recordingRunner(snapshot);
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner, evidence });
+  it("allows web sources only from the named domains and their subdomains", () => {
+    const allowed = subAgentAllowedHosts(["Example0.com", "official investor relations pages"]);
 
-    const result = await tool.execute(
-      { task: "Research X", maxSearches: 8, resources: ["example0.com"] },
-      toolContext(),
-    );
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toMatchObject({ sourceCount: 1, droppedSourceCount: 1 });
-    expect(
-      evidence.snapshot().evidence.map((chunk) => chunk.source.kind === "web" && chunk.source.url),
-    ).toEqual(["https://example0.com/page"]);
+    expect(allowed).toEqual(["example0.com"]);
+    expect(subAgentHostAllowed("https://docs.example0.com/page", allowed)).toBe(true);
+    expect(subAgentHostAllowed("https://example1.com/page", allowed)).toBe(false);
   });
 
-  it("imports everything when the resources are prose rather than domains", async () => {
-    const { runner } = recordingRunner(snapshotOf(2));
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner, evidence });
+  it("allows every host when the resources are prose rather than domains", () => {
+    const allowed = subAgentAllowedHosts(["official investor relations pages"]);
 
-    const result = await tool.execute(
-      { task: "Research X", maxSearches: 8, resources: ["official investor relations pages"] },
-      toolContext(),
-    );
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toMatchObject({ sourceCount: 2, droppedSourceCount: 0 });
+    expect(subAgentHostAllowed("https://example1.com/page", allowed)).toBe(true);
   });
 });
 
 describe("run_subagent provenance validation", () => {
-  it("drops non-web evidence without explicit supported provenance", async () => {
-    const chunk: RetrievedChunk = {
-      ...webChunk(0),
-      source: {
-        id: "index:1",
-        kind: "markdown",
-        title: "Index",
-        path: "index.md",
-        headingPath: [],
-      },
-    };
-    const snapshot: ResearchEvidenceSnapshot = {
-      evidence: [chunk],
-      citations: [],
-      provenance: [],
-    };
-    const { runner } = recordingRunner(snapshot);
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner, evidence });
+  function parsed(id: string, overrides: Record<string, ValidatedJsonValue> = {}) {
+    const item = parseSubAgentChildEvidence(childEvidence(id, overrides), (url) => url);
+    if (!item) throw new Error(`unparsable ${id}`);
+    return item;
+  }
 
-    const result = await tool.execute({ task: "Research X", maxSearches: 8 }, toolContext());
+  it("drops note evidence that claims a web tool", () => {
+    const admission = admitSubAgentEvidence(
+      [parsed("n1", { source: { kind: "markdown", path: "Research/A.md", title: "A" } })],
+      [],
+      sourcePolicy(),
+    );
 
-    expect(result).toMatchObject({
-      ok: true,
-      value: { sourceCount: 0, droppedSourceCount: 1 },
-    });
-    expect(evidence.snapshot().evidence).toHaveLength(0);
+    expect(admission).toMatchObject({ admitted: [], droppedTokens: ["n1"] });
   });
 
-  it("drops web evidence without web provenance and redacts its citation", async () => {
-    const chunk = webChunk(0);
-    const snapshot: ResearchEvidenceSnapshot = {
-      evidence: [chunk],
-      citations: [],
-      provenance: [],
-    };
-    if (chunk.source.kind !== "web") throw new Error("expected web source");
-    const { runner } = recordingRunner(snapshot, `Claim [url:${chunk.source.url}].`);
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+  it("drops web evidence without web provenance with its url token", () => {
+    const admission = admitSubAgentEvidence(
+      [parsed("w1", { tool: "read_note" })],
+      [],
+      sourcePolicy(),
+    );
 
-    const result = await tool.execute({ task: "Research X", maxSearches: 8 }, toolContext());
-
-    expect(result).toMatchObject({
-      ok: true,
-      value: {
-        sourceCount: 0,
-        droppedSourceCount: 1,
-        answer: "Claim [source unavailable].",
-      },
-    });
+    expect(admission.admitted).toEqual([]);
+    expect(admission.droppedTokens).toEqual(["w1", "url:https://example.com/w1"]);
   });
 
-  it("redacts citations to web sources dropped by the import cap", async () => {
-    const snapshot = snapshotOf(11);
-    const dropped = snapshot.evidence[10];
-    if (dropped.source.kind !== "web") throw new Error("expected web source");
-    const { runner } = recordingRunner(snapshot, `Claim [url:${dropped.source.url}].`);
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+  it("drops web sources over the import cap with their url tokens", () => {
+    const items = Array.from({ length: 11 }, (_, index) => parsed(`w${index}`));
 
-    const result = await tool.execute({ task: "Research X", maxSearches: 8 }, toolContext());
+    const admission = admitSubAgentEvidence(items, [], sourcePolicy());
 
-    expect(result).toMatchObject({
-      ok: true,
-      value: { sourceCount: 10, droppedSourceCount: 1, answer: "Claim [source unavailable]." },
-    });
+    expect(admission.admitted).toHaveLength(10);
+    expect(admission.droppedTokens).toEqual(["w10", "url:https://example.com/w10"]);
   });
 });

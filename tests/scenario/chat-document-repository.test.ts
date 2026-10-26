@@ -327,6 +327,14 @@ describe("chat document repository over a vault that refuses replacing renames",
       status: "interrupted",
       terminalReason: "crash-recovery",
     });
+    expect(saved.subAgentNotices).toEqual([
+      expect.objectContaining({
+        kind: "interrupted",
+        runId: "run-1",
+        reasonCode: "crash-recovery",
+      }),
+    ]);
+    expect(saved.subAgentNotices[0].sequence).toBeLessThan(saved.timelineSequence);
   });
 
   it("creates a new chat through the buffer before control returns and never retries a failed create", async () => {

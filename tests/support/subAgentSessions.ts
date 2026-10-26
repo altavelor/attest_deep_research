@@ -18,8 +18,10 @@ import type {
   SubAgentImportResult,
   SubAgentImportLookup,
   SubAgentMainEventIntent,
+  SubAgentParentRun,
   SubAgentSessionManagerContext,
 } from "@application/ports";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import {
   ChatSubAgentEvidenceBridge,
   type ChatSubAgentEvidenceBridgeContext,
@@ -41,6 +43,7 @@ import {
   type ParentRunBinding,
   type SubAgentBufferedValue,
   type SubAgentCommand,
+  type SubAgentResultState,
   type SubAgentRunReceipt,
   type SubAgentRunSummary,
   type SubAgentSessionRecord,
@@ -599,4 +602,126 @@ export function importHarness(
 /** Returns the manager's internal parts, so a white-box test can stage a record as storage would. */
 export function managerParts(manager: unknown): SubAgentManagerParts {
   return (manager as { parts: SubAgentManagerParts }).parts;
+}
+
+/**
+ * A delegator that accepts every command at once and records each call with its
+ * arguments; results come from the states the test queues per run.
+ */
+export function recordingDelegator(results: Record<string, SubAgentResultState> = {}) {
+  const calls: { method: string; args: unknown[] }[] = [];
+  const receipt = (sessionId: string, submissionId: string): SubAgentRunReceipt => ({
+    sessionId,
+    runId: `run-of-${submissionId}`,
+    submissionId,
+    acceptedAt: AT,
+  });
+  const delegator = {
+    create: async (...args: unknown[]) => {
+      calls.push({ method: "create", args });
+      const input = args[0] as { createRequestId: string };
+      return { subAgentSessionId: `session-of-${input.createRequestId}` };
+    },
+    run: async (sessionId: string, ...rest: unknown[]) => {
+      calls.push({ method: "run", args: [sessionId, ...rest] });
+      return receipt(sessionId, rest[1] as string);
+    },
+    continue: async (sessionId: string, ...rest: unknown[]) => {
+      calls.push({ method: "continue", args: [sessionId, ...rest] });
+      return receipt(sessionId, rest[1] as string);
+    },
+    retry: async (sessionId: string, ...rest: unknown[]) => {
+      calls.push({ method: "retry", args: [sessionId, ...rest] });
+      return receipt(sessionId, rest[1] as string);
+    },
+    getResult: async (sessionId: string, runId: string) => {
+      calls.push({ method: "getResult", args: [sessionId, runId] });
+      const state = results[runId];
+      if (!state) throw new Error(`No result for ${runId}.`);
+      return state;
+    },
+  } as unknown as SubAgentDelegator;
+  return { delegator, calls };
+}
+
+/** A parent run whose resolver returns the given snapshot and which records attached capacity. */
+export function fakeParentRun(
+  snapshot: ResearchEvidenceSnapshot = { evidence: [], citations: [], provenance: [] },
+  parentRunId = "parent-1",
+) {
+  const attached: { remainingWebCapacity?(): number }[] = [];
+  const parent: SubAgentParentRun = {
+    parentRunId,
+    coordinator: {
+      beforeModelRound: async () => [],
+      acknowledgeResults: () => undefined,
+      beforeFinalize: async () => "ready",
+    },
+    resolver: { resolve: async () => snapshot },
+    bindExecution: () => undefined,
+    attachEvidence: (capacity) => void attached.push(capacity),
+  };
+  return { parent, attached };
+}
+
+/**
+ * A child host and delegator over result states the test sets per run. A read returns
+ * the state current when it started; onRead may then change states and signal.
+ */
+export function resultBoard(parentRunId = "parent-1") {
+  const states = new Map<string, SubAgentResultState>();
+  const listeners = new Set<() => void>();
+  const closed: string[] = [];
+  const reads: string[] = [];
+  const unreadable = new Set<string>();
+  const refs = () =>
+    [...states.keys(), ...unreadable].map((runId) => ({ sessionId: `s-${runId}`, runId }));
+  const board = {
+    closed,
+    unreadable,
+    closeFailure: null as Error | null,
+    reads,
+    onRead: (_runId: string): void => undefined,
+    host: {
+      subscribeResults: (listener: () => void) => {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+      listRunRefs: (id: string) => (id === parentRunId ? refs() : []),
+      closeAll: async (_id: string, reason: string) => {
+        closed.push(reason);
+        if (board.closeFailure) throw board.closeFailure;
+        return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };
+      },
+    },
+    delegator: {
+      getResult: async (_sessionId: string, runId: string) => {
+        reads.push(runId);
+        if (unreadable.has(runId)) throw new Error("Unreadable result.");
+        const state = states.get(runId)!;
+        board.onRead(runId);
+        return state;
+      },
+    },
+    set(runId: string, state: SubAgentResultState["state"], resultRevision = 1, code = "x"): void {
+      const run = { status: state } as unknown as SubAgentRunSummary;
+      states.set(
+        runId,
+        state === "completed"
+          ? {
+              state,
+              resultRevision,
+              outcome: { run, answerText: "A", evidence: [], importId: "i" },
+            }
+          : state === "pending"
+            ? { state, resultRevision, run }
+            : { state, resultRevision, run, error: { code, message: code } },
+      );
+    },
+    signal(): void {
+      for (const listener of [...listeners]) listener();
+    },
+    listenerCount: () => listeners.size,
+  };
+  return board;
 }

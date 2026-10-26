@@ -26,6 +26,9 @@ const CHAT_FIELDS = [
   "unreadCompletion",
   "isFavorite",
   "lastRun",
+  "subAgentDispatches",
+  "subAgentNotices",
+  "timelineSequence",
 ] as const;
 const snapshotTexts = new WeakMap<SubAgentStateSnapshot, string>();
 

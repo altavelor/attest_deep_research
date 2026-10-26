@@ -7,7 +7,9 @@ import type { ResearchRequest } from "@application/contracts/research";
 import type { ResearchAnswer } from "@core/answer";
 import { AttestError } from "@core/errors";
 import type { SavedChatSettings } from "@core/chat/savedChat";
-import { createTestSessionManager } from "../support/chatSessions";
+import { parentWorkflowChain, type ChainItem } from "@core/conversation";
+import { buildThinkingResearchMessages } from "@core/research";
+import { createTestSessionManager, fakeChildHosts } from "../support/chatSessions";
 import { settle } from "../support/async";
 
 const settings: SavedChatSettings = {
@@ -222,6 +224,221 @@ describe("chat session runtime research mode", () => {
   });
 });
 
+describe("chat session runtime delegation", () => {
+  it("hands a Thinking run the delegator and a grant with the active file of its request", async () => {
+    const children = fakeChildHosts();
+    const requests: ResearchRequest[] = [];
+    const grants: unknown[] = [];
+    const { manager } = createTestSessionManager({
+      createSubAgentSessionManager: children.factory,
+      createResearchService: () =>
+        ({
+          answer: async function* answer(request: ResearchRequest) {
+            requests.push(request);
+            const host = children.hosts[0]!;
+            grants.push(host.context.resolveGrant(host.bindings.at(-1)!.delivery.grantId));
+            yield { type: "complete", answer: answerFor("Done") };
+          },
+        }) as unknown as ResearchService,
+    });
+    const state = manager.createSession({ ...settings, researchMode: "thinking" });
+    const run = (activeFilePath: string, mode: SavedChatSettings["researchMode"]) => {
+      state.chatSettings = { ...settings, researchMode: mode };
+      return manager.start(state.sessionId, {
+        question: "Question?",
+        chatHistory: [],
+        appendQuestion: true,
+        contextPaths: ["Notes"],
+        activeFilePath,
+        includeActiveFile: true,
+        includeContextDiagnostics: false,
+        modelLabel: "Model",
+      });
+    };
+
+    await run("Notes/Captured.md", "thinking");
+    await settle();
+    await run("Notes/Instant.md", "instant");
+    await settle();
+
+    const [{ delegator, delivery }] = children.hosts[0]!.bindings;
+    expect(requests[0]?.subAgentDelegator).toBe(delegator);
+    expect(requests[0]?.subAgentParent?.parentRunId).toBe("run-1");
+    expect(grants[0]).toMatchObject({
+      callerMode: "thinking",
+      budgetPolicy: { type: "local" },
+      capturedActiveFilePath: "Notes/Captured.md",
+      maximumSourcePolicy: { contextPaths: ["Notes"], allowActiveFile: true },
+    });
+    expect(requests[1]?.subAgentDelegator).toBeUndefined();
+    expect(children.hosts[0]!.bindings).toHaveLength(1);
+    expect(children.hosts[0]!.context.resolveGrant(delivery.grantId)).toBeNull();
+  });
+});
+
+describe("chat session runtime display projection", () => {
+  it("U2: keeps dispatches, notices and child details out of the provider request and the parent workflow", async () => {
+    const requests: ResearchRequest[] = [];
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: () =>
+        ({
+          answer: async function* answer(request: ResearchRequest) {
+            requests.push(request);
+            yield { type: "complete", answer: answerFor("Done") };
+          },
+        }) as unknown as ResearchService,
+    });
+    const legacyChain: ChainItem[] = [
+      {
+        kind: "tool-call",
+        id: "own",
+        name: "search_web",
+        label: "Search",
+        status: "complete",
+        resultJson: "{}",
+      },
+      {
+        kind: "tool-call",
+        id: "agent",
+        name: "run_subagent",
+        label: "Delegate",
+        status: "complete",
+        args: { task: "Legacy task" },
+        resultJson: '{"answer":"Legacy child answer"}',
+        children: [
+          {
+            kind: "tool-call",
+            id: "child",
+            name: "fetch_web_page",
+            label: "Child fetch",
+            status: "complete",
+          },
+        ],
+      },
+      {
+        kind: "tool-call",
+        id: "result",
+        name: "get_subagent_result",
+        label: "Result",
+        status: "complete",
+        resultJson: '{"answer":"Delivered child answer"}',
+      },
+      {
+        kind: "tool-call",
+        id: "map",
+        name: "map_sources",
+        label: "Map",
+        status: "complete",
+        phase: "Mapping",
+        children: [
+          { kind: "tool-call", id: "m1", name: "search_web", label: "S", status: "complete" },
+        ],
+      },
+    ];
+    const saved = await repository.saveChat({
+      id: "chat-u2",
+      title: "Chat",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      messages: [
+        { role: "user", content: "Question?", createdAt: "2026-01-01T00:00:00.000Z" },
+        {
+          role: "assistant",
+          content: "Earlier answer",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          researchProgress: {
+            phase: "complete",
+            disclosure: "auto",
+            view: "expanded",
+            reasoning: { phase: "complete", segments: [] },
+            checkpoints: [],
+            chain: legacyChain,
+          },
+        },
+      ],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: settings,
+      subAgentDispatches: [
+        {
+          eventKey: "dispatch:chat-u2:p:s:r",
+          sessionId: "s",
+          runId: "r",
+          parentRunId: "p",
+          body: "Secret task body",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          commandKind: "initial",
+          attempt: 1,
+          sequence: 3,
+        },
+      ],
+      subAgentNotices: [
+        {
+          eventKey: "notice:chat-u2:p:s:r:finished",
+          parentRunId: "p",
+          description: "Agent description",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          sessionId: "s",
+          runId: "r",
+          sequence: 4,
+          kind: "finished",
+          replyExcerpt: "Child reply text",
+        },
+      ],
+      timelineSequence: 5,
+    });
+    const state = manager.adoptChat(saved, settings);
+
+    await manager.start(state.sessionId, {
+      question: "Next?",
+      chatHistory: state.messages,
+      appendQuestion: true,
+      contextPaths: [],
+      includeActiveFile: false,
+      includeContextDiagnostics: false,
+      modelLabel: "Model",
+    });
+    await settle();
+
+    const provider = JSON.stringify(
+      buildThinkingResearchMessages({
+        question: requests[0]!.question,
+        chatHistory: requests[0]!.chatHistory,
+        requiredTools: [],
+        toolContext: { availableTools: [], parallelToolCalls: false },
+      }),
+    );
+    for (const hidden of [
+      "Secret task body",
+      "Child reply text",
+      "Agent description",
+      "Legacy child answer",
+      "Delivered child answer",
+    ]) {
+      expect(provider).not.toContain(hidden);
+    }
+    expect(state.subAgentDispatches).toHaveLength(1);
+    expect(parentWorkflowChain(legacyChain)).toEqual([
+      legacyChain[0],
+      {
+        kind: "tool-call",
+        id: "agent",
+        name: "run_subagent",
+        label: "Delegate",
+        status: "complete",
+        args: { task: "Legacy task" },
+      },
+      {
+        kind: "tool-call",
+        id: "result",
+        name: "get_subagent_result",
+        label: "Result",
+        status: "complete",
+      },
+      legacyChain[3],
+    ]);
+  });
+});
+
 describe("chat session runtime cancellation", () => {
   it("aborts the request and marks the answer interrupted mid-stream", async () => {
     const gate = deferred();
@@ -368,7 +585,7 @@ describe("chat session runtime failures", () => {
         throw new Error("The model must not be contacted.");
       },
     });
-    vi.spyOn(repository, "saveChat").mockRejectedValue(failure);
+    vi.spyOn(repository, "commitChatDocument").mockRejectedValue(failure);
     const state = manager.createSession(settings);
 
     const result = await manager.start(state.sessionId, {

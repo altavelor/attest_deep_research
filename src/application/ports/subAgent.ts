@@ -12,6 +12,7 @@ import type {
   SubAgentFlushReason,
   SubAgentImportItem,
   SubAgentDispatchEntry,
+  SubAgentEvidenceTool,
   SubAgentImportRecord,
   SubAgentNoticeEntry,
   SubAgentObservationEvent,
@@ -25,6 +26,7 @@ import type {
   ValidatedJsonValue,
 } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type { SourceReference } from "@core/model";
 import type {
   SubAgentInspectionDetail,
   SubAgentInspectionSnapshot,
@@ -106,6 +108,37 @@ export interface SubAgentHost extends SubAgentLifecycle {
   subscribeResults(listener: () => void): () => void;
   listRunRefs(parentRunId: string): readonly SubAgentRunRef[];
   inspection(): SubAgentInspectionPort;
+  importLookup?(): SubAgentImportLookup;
+}
+
+export type SubAgentTerminalResult = Exclude<SubAgentResultState, { state: "pending" }>;
+
+export interface SubAgentDeliveredResult {
+  ref: SubAgentRunRef;
+  result: SubAgentTerminalResult;
+}
+
+/**
+ * Parent-side delivery of child results at model round boundaries and the completion
+ * barrier that keeps a final answer from being published while children are pending.
+ */
+export interface SubAgentParentCoordinatorPort {
+  beforeModelRound(): Promise<readonly SubAgentDeliveredResult[]>;
+  acknowledgeResults(results: readonly { ref: SubAgentRunRef; resultRevision: number }[]): void;
+  beforeFinalize(signal?: AbortSignal): Promise<"ready" | "resume-with-results">;
+}
+
+/**
+ * What one parent run hands to its research strategy for delegated work: the results
+ * coordinator, the evidence resolver of committed imports, and hooks that bind the
+ * run's child execution and its evidence registry capacity.
+ */
+export interface SubAgentParentRun {
+  parentRunId: string;
+  coordinator: SubAgentParentCoordinatorPort;
+  resolver: SubAgentImportedEvidenceResolver;
+  bindExecution(execution: SubAgentExecutionPort): void;
+  attachEvidence(capacity: { remainingWebCapacity?(): number }): void;
 }
 
 export type SubAgentMainEventIntent =
@@ -131,11 +164,21 @@ export interface SubAgentDelegationGrant {
   remainingWebCapacity?(): number;
 }
 
+export interface SubAgentPriorEvidenceItem {
+  id: string;
+  source: SourceReference;
+  text: string;
+  tool: SubAgentEvidenceTool;
+  collectedAt: string;
+}
+
 export interface SubAgentPriorContext {
   summary: string | null;
   previousResult: string | null;
   partialSummary: string | null;
+  continuesPartial: boolean;
   priorEvidence: readonly ImportedSubAgentEvidenceReference[];
+  priorEvidenceItems: readonly SubAgentPriorEvidenceItem[];
 }
 
 export interface SubAgentExecutionEvent {
@@ -169,8 +212,8 @@ export interface SubAgentExecutionResult {
 
 /**
  * Runs one child command. A continue-partial run must return the evidence it keeps from
- * the interrupted run in its own result evidence, because the manager stores only the
- * references of committed imports; such a result is imported as incomplete.
+ * the interrupted run, at least its resolved prior evidence items, in its own result
+ * evidence, because the manager stores only references of committed imports.
  */
 export interface SubAgentExecutionPort {
   run(request: SubAgentExecutionRequest): Promise<SubAgentExecutionResult>;

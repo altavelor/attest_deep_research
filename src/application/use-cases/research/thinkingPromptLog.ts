@@ -14,8 +14,13 @@ export function buildRoundPromptDelta(
   toolChoice: ChatRequest["toolChoice"],
   appendedMessages: ChatMessage[],
   toolOutputs?: ModelToolOutput[],
+  serviceMessages: ReadonlySet<ChatMessage> = new Set(),
 ): RoundPromptDeltaDiagnostic {
-  const messages = appendedMessages.map(promptDeltaMessage);
+  const messages = appendedMessages.map((message) =>
+    serviceMessages.has(message)
+      ? { role: message.role, chars: (message.content ?? "").length }
+      : promptDeltaMessage(message),
+  );
   for (const output of toolOutputs ?? []) {
     messages.push({ role: "tool", chars: output.output.length, toolCallId: output.callId });
   }

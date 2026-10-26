@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildDiagnosticReportV3 } from "@apps/obsidian/ui/diagnostics/report/build";
 import { renderInternals } from "@apps/obsidian/ui/diagnostics/html/sections";
+import { SUB_AGENT_RESULTS_PREAMBLE } from "@application/research";
 import type { ContextDiagnostics, ThinkingAttemptDiagnostics } from "@core/diagnostics";
 
 function telemetry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -247,20 +248,37 @@ describe("sub-agent telemetry in the diagnostic report", () => {
     expect(report.reasoning.thinkingLoop?.subAgents?.count).toBe(5);
   });
 
-  it("reads and renders a report recorded before telemetry existed", () => {
+  it("reads and renders a report recorded before telemetry existed, withholding child output", () => {
     const report = buildDiagnosticReportV3(
       diagnostics({
-        thinking: thinking(),
+        thinking: thinking({
+          promptDeltas: [
+            {
+              round: 1,
+              toolChoice: "null",
+              messages: [
+                { role: "user", chars: 90, content: `${SUB_AGENT_RESULTS_PREAMBLE} Child secret` },
+              ],
+            },
+          ],
+        }),
         tools: [
           {
             id: "call-1",
             name: "run_subagent",
             status: "success",
             arguments: { task: "a" },
+            resultPreview: '{"answer":"Child secret"}',
             round: 1,
           },
         ],
       }),
+    );
+
+    expect(JSON.stringify(report)).not.toContain("Child secret");
+    expect(renderInternals(report)).not.toContain("Child secret");
+    expect(report.reasoning.thinkingLoop?.rounds[0]?.toolCalls[0]?.resultPreview).toBe(
+      "[withheld sub-agent output]",
     );
 
     expect(report.reasoning.thinkingLoop?.subAgents).toBeUndefined();

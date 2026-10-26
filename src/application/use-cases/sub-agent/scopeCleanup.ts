@@ -32,16 +32,28 @@ export async function closeBudgetScope(
   scopeId: string,
 ): Promise<void> {
   let revision: number | null = null;
+  const stopped: { sessionId: string; runId: string }[] = [];
   for (const record of parts.store.state?.records ?? []) {
     const policy = record.session.budgetPolicy;
     if (policy.type !== "required-scope" || policy.scopeId !== scopeId) continue;
+    const { session } = record;
+    const runId = session.activeSubAgentRunId ?? session.pendingImportRunId;
     try {
-      revision = stopSessionWork(scheduler, record, "budget-denied") ?? revision;
+      const stop = stopSessionWork(scheduler, record, "budget-denied");
+      if (stop === null) continue;
+      revision = stop;
+      if (runId) stopped.push({ sessionId: session.subAgentSessionId, runId });
     } catch {
       continue;
     }
   }
   if (revision === null) return;
-  await parts.store.flush(revision).catch(() => undefined);
+  const durable = await parts.store.flush(revision).then(
+    () => true,
+    () => false,
+  );
+  if (durable) {
+    for (const run of stopped) parts.mainEvents.terminal(run.sessionId, run.runId, "stopped");
+  }
   parts.notifyResults();
 }

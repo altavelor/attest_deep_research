@@ -2,42 +2,48 @@ import { ToolParseResult, toolFailure } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
 import {
   DEFAULT_SUB_AGENT_SEARCHES,
+  deriveSubAgentTitle,
   MAX_SUB_AGENT_RESOURCE_CHARS,
   MAX_SUB_AGENT_RESOURCES,
   MAX_SUB_AGENT_SEARCHES,
-  MAX_IMPORTED_WEB_SOURCES,
-  MAX_REGISTERED_SNIPPET_CHARS,
   MAX_SUB_AGENT_TASK_CHARS,
   MIN_SUB_AGENT_SEARCHES,
   readSubAgentSearchBudget,
-  subAgentAllowedHosts,
-  subAgentHostAllowed,
   validateSubAgentResources,
   validateSubAgentTaskInput,
+  type SubAgentRunReceipt,
 } from "@core/research";
-import { ResearchToolsetOptions, SubAgentPort, SubAgentTelemetry } from "@application/research";
-import { EvidenceRegistry, isWebResultCapacityError } from "@application/sources";
-import { defineTool, int, str, strArray } from "@application/sources/tools";
+import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
+import { defineTool, enumOf, int, str, strArray } from "@application/sources/tools";
+import { subAgentCallIdentity, subAgentToolFailure } from "./subAgentCalls";
+
+export type SubAgentCommandKind = "follow-up" | "continue-partial" | "retry";
 
 export interface SubAgentInput {
   task: string;
   maxSearches: number;
   resources?: string[];
+  sessionId?: string;
+  command?: SubAgentCommandKind;
+  runId?: string;
 }
 
 export interface SubAgentOutput {
-  task: string;
-
-  answer: string;
-  sourceCount: number;
-  droppedSourceCount: number;
-  evidenceBudgetExhausted: boolean;
+  state: "accepted";
+  receipt: SubAgentRunReceipt;
 }
 
+export interface SubAgentToolDeps {
+  delegator: SubAgentDelegator;
+  parent: SubAgentParentRun;
+}
+
+const PROPERTIES = ["task", "maxSearches", "resources", "sessionId", "command", "runId"];
+const COMMANDS: readonly SubAgentCommandKind[] = ["follow-up", "continue-partial", "retry"];
+const MAX_ID_CHARS = 200;
+
 function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<SubAgentInput> {
-  const unknownProperty = Object.keys(input).find(
-    (key) => !["task", "maxSearches", "resources"].includes(key),
-  );
+  const unknownProperty = Object.keys(input).find((key) => !PROPERTIES.includes(key));
   if (unknownProperty) {
     return toolFailure("unknown-property", `Unknown property: ${unknownProperty}.`, false, {
       property: unknownProperty,
@@ -50,6 +56,20 @@ function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<Sub
   if (!maxSearches.ok) return toolFailure(maxSearches.code, maxSearches.message);
   const resources = validateSubAgentResources(input.resources);
   if (!resources.ok) return toolFailure(resources.code, resources.message);
+  const sessionId = optionalId(input.sessionId);
+  const runId = optionalId(input.runId);
+  const command = input.command as SubAgentCommandKind | undefined;
+  if (
+    sessionId === null ||
+    runId === null ||
+    (command !== undefined && (!COMMANDS.includes(command) || sessionId === undefined)) ||
+    ((command === "retry" || command === "continue-partial") && runId === undefined)
+  ) {
+    return toolFailure(
+      "invalid-command",
+      "A follow-up needs sessionId; continue-partial and retry also need the runId they refer to.",
+    );
+  }
 
   return {
     ok: true,
@@ -57,27 +77,32 @@ function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<Sub
       task: task.value,
       maxSearches: maxSearches.value,
       ...(resources.value.length > 0 ? { resources: resources.value } : {}),
+      ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(sessionId !== undefined ? { command: command ?? "follow-up" } : {}),
+      ...(runId !== undefined ? { runId } : {}),
     },
   };
 }
 
-export const SubAgentTool = defineTool<
-  { runner: SubAgentPort; evidence: EvidenceRegistry; toolContext?: ResearchToolsetOptions },
-  SubAgentInput,
-  SubAgentOutput
->({
+/**
+ * Sends one command to a child session through the parent run's delegator and returns
+ * its accepted receipt at once; the result is delivered separately. The create and
+ * submission identities derive from the parent run, model round and call, so a replayed
+ * call reuses the session and run it already started instead of starting another.
+ */
+export const SubAgentTool = defineTool<SubAgentToolDeps, SubAgentInput, SubAgentOutput>({
   name: SUB_AGENT_TOOL,
   description:
-    "Launch a sub-agent to autonomously complete one self-contained task, with the same " +
-    "read-only tools you have (index/web/notes). Use for delegating a facet of the work — " +
-    "deep web research, cross-checking facts, reading and comparing several notes — " +
-    "especially when several independent facets can run in parallel (up to 3 at once). " +
-    "Name the resources the sub-agent may consult and keep its search budget tight: every " +
-    "source it registers is charged to the shared evidence budget of this run.",
+    "Start a sub-agent on one self-contained task, with the same read-only tools you have " +
+    "(index/web/notes). It returns immediately with an accepted receipt, not an answer: the " +
+    "sub-agent works in the background while you continue, and its result arrives before a " +
+    "later round (or read it with get_subagent_result). Use it for a facet that needs its own " +
+    "research loop, especially several independent facets in parallel. Pass sessionId to send " +
+    "a follow-up, continue-partial or retry command to an existing sub-agent.",
   schema: {
     task: str(MAX_SUB_AGENT_TASK_CHARS, {
       required: true,
-      description: "Self-contained task for the sub-agent, including the success criteria.",
+      description: "Self-contained task or follow-up for the sub-agent, with success criteria.",
     }),
     maxSearches: int(MIN_SUB_AGENT_SEARCHES, MAX_SUB_AGENT_SEARCHES, DEFAULT_SUB_AGENT_SEARCHES, {
       description:
@@ -89,149 +114,68 @@ export const SubAgentTool = defineTool<
         "Sites, domains, or named sources the sub-agent must restrict itself to, " +
         'e.g. "wikipedia.org", "official investor relations pages".',
     }),
+    sessionId: str(MAX_ID_CHARS, {
+      description:
+        "An existing sub-agent session from an earlier receipt; omit to start a new one.",
+    }),
+    command: enumOf(COMMANDS, {
+      description: "With sessionId: follow-up (default), continue-partial or retry.",
+    }),
+    runId: str(MAX_ID_CHARS, {
+      description: "The run that continue-partial continues or retry repeats.",
+    }),
   },
   parse: parseSubAgentInput,
   execute: async (deps, input, context) => {
-    const startedAt = Date.now();
-    let run;
+    const identity = subAgentCallIdentity(deps.parent.parentRunId, context.round, context.callId);
     try {
-      run = await deps.runner.run({
-        task: input.task,
-        budget: { maxSearches: input.maxSearches },
-        ...(input.resources ? { resources: input.resources } : {}),
-        toolContext: deps.toolContext,
-        signal: context.signal,
-        onEvent: (event) => context.emit(event),
-      });
-    } catch {
+      const receipt = await submit(deps.delegator, input, identity);
       return {
-        ...toolFailure("sub-agent-failed", "Sub-agent session failed.", true),
-        diagnostic: {
-          ...exceptionTelemetry(
-            context.callId,
-            Date.now() - startedAt,
-            context.signal?.aborted === true,
-          ),
-          sourceCount: 0,
-          droppedSourceCount: 0,
-          evidenceBudgetExhausted: false,
-        },
+        ok: true,
+        value: { state: "accepted", receipt },
+        diagnostic: { runId: receipt.runId, sessionId: receipt.sessionId, accepted: true },
       };
+    } catch (error) {
+      return subAgentToolFailure(error);
     }
-
-    const allowedHosts = subAgentAllowedHosts(input.resources ?? []);
-
-    let sourceCount = 0;
-    let webSourceCount = 0;
-    let droppedSourceCount = 0;
-    let evidenceBudgetExhausted = false;
-    const droppedCitationTokens: string[] = [];
-    for (const chunk of run.snapshot.evidence) {
-      const provenance = run.snapshot.provenance.find((entry) => entry.evidenceId === chunk.id);
-      const call = provenance?.calls[0];
-      try {
-        if (chunk.source.kind === "web") {
-          if (call?.tool !== "search_web" && call?.tool !== "fetch_web_page") {
-            droppedSourceCount += 1;
-            droppedCitationTokens.push(chunk.id, `url:${chunk.source.url}`);
-            continue;
-          }
-          if (
-            webSourceCount >= MAX_IMPORTED_WEB_SOURCES ||
-            !subAgentHostAllowed(chunk.source.url, allowedHosts)
-          ) {
-            droppedSourceCount += 1;
-            droppedCitationTokens.push(chunk.id, `url:${chunk.source.url}`);
-            continue;
-          }
-          deps.evidence.registerWebResult(
-            {
-              url: chunk.source.url,
-              title: chunk.source.title,
-              snippet: chunk.text.slice(0, MAX_REGISTERED_SNIPPET_CHARS),
-              rank: sourceCount + 1,
-            },
-            { callId: context.callId, query: call?.query ?? input.task },
-          );
-          webSourceCount += 1;
-        } else if (call?.tool === "read_note" || call?.tool === "get_active_note") {
-          deps.evidence.registerNoteEvidence(
-            { evidenceId: chunk.id, source: chunk.source, content: chunk.text },
-            { callId: context.callId, tool: call.tool },
-          );
-        } else if (call?.tool === "search_index") {
-          deps.evidence.registerIndexChunk(chunk, {
-            callId: context.callId,
-            query: call?.query ?? input.task,
-          });
-        } else {
-          droppedSourceCount += 1;
-          droppedCitationTokens.push(chunk.id);
-          continue;
-        }
-        sourceCount += 1;
-      } catch (error) {
-        droppedSourceCount += 1;
-        droppedCitationTokens.push(
-          chunk.id,
-          ...(chunk.source.kind === "web" ? [`url:${chunk.source.url}`] : []),
-        );
-        if (isWebResultCapacityError(error)) {
-          evidenceBudgetExhausted = true;
-        }
-      }
-    }
-
-    return {
-      ok: true,
-      value: {
-        task: input.task,
-        answer: redactDroppedCitations(run.answerText, droppedCitationTokens),
-        sourceCount,
-        droppedSourceCount,
-        evidenceBudgetExhausted,
-      },
-      diagnostic: {
-        ...(run.telemetry ?? {}),
-        sourceCount,
-        droppedSourceCount,
-        evidenceBudgetExhausted,
-      },
-    };
   },
 });
 
-/**
- * Telemetry for a sub-agent that threw before it could report its own counters. A run the
- * user cancelled is reported as cancelled, so it does not inflate the failure count.
- */
-function exceptionTelemetry(
-  runId: string,
-  durationMs: number,
-  aborted: boolean,
-): SubAgentTelemetry {
-  return {
-    runId,
-    durationMs,
-    loopDurationMs: durationMs,
-    rounds: 0,
-    maxRounds: 0,
-    hitRoundLimit: false,
-    failureReason: aborted ? "cancelled" : "tool-exception",
-    toolCalls: 0,
-    duplicateToolCalls: 0,
-    searchCalls: 0,
-    maxSearches: 0,
-    searchBudgetRejections: 0,
-    usedSynthesisFallback: false,
-    answerChars: 0,
-    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
-  };
+async function submit(
+  delegator: SubAgentDelegator,
+  input: SubAgentInput,
+  identity: string,
+): Promise<SubAgentRunReceipt> {
+  const submissionId = `submit-${identity}`;
+  if (input.sessionId === undefined) {
+    const session = await delegator.create({
+      createRequestId: `create-${identity}`,
+      title: deriveSubAgentTitle(input.task),
+      maxSearches: input.maxSearches,
+      ...(input.resources ? { resources: input.resources } : {}),
+    });
+    return delegator.run(
+      session.subAgentSessionId,
+      { type: "initial", task: input.task },
+      submissionId,
+    );
+  }
+  if (input.command === "retry") {
+    return delegator.retry(input.sessionId, { runId: input.runId! }, submissionId);
+  }
+  if (input.command === "continue-partial") {
+    return delegator.continue(
+      input.sessionId,
+      { type: "continue-partial", task: input.task, fromRunId: input.runId! },
+      submissionId,
+    );
+  }
+  return delegator.continue(input.sessionId, { type: "follow-up", task: input.task }, submissionId);
 }
 
-function redactDroppedCitations(answer: string, tokens: readonly string[]): string {
-  return [...new Set(tokens)].reduce(
-    (text, token) => text.replaceAll(`[${token}]`, "[source unavailable]"),
-    answer,
-  );
+function optionalId(value: unknown): string | undefined | null {
+  if (value === undefined) return undefined;
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_ID_CHARS
+    ? value
+    : null;
 }
