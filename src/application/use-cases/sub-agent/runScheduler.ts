@@ -2,6 +2,7 @@ import type { SubAgentExecutionResult } from "@application/ports/subAgent";
 import {
   applySubAgentTransition,
   type ImportedSubAgentRunOutcome,
+  type SubAgentSessionRecord,
   type SubAgentTransition,
 } from "@core/research";
 import { settleWithin } from "./deadline";
@@ -227,27 +228,29 @@ export class SubAgentRunScheduler {
     imported: ImportedSubAgentRunOutcome,
   ): Promise<void> {
     const before = this.parts.store.record(slot.sessionId);
+    let staged: SubAgentSessionRecord | undefined;
     this.parts.unsavedImports.add(slot.runId);
     try {
       const revision = this.transition(slot.sessionId, { type: "import-committed", generation });
-      if (revision === null) {
-        this.parts.unsavedImports.delete(slot.runId);
-        return;
-      }
+      if (revision === null) return;
+      staged = this.parts.store.record(slot.sessionId);
       await this.parts.store.flush(revision);
-      this.parts.outcomes.set(slot.runId, imported);
+      const session = this.parts.store.record(slot.sessionId)?.session;
+      if (session && !this.parts.fences.isRevoked(session.parentRunId))
+        this.parts.outcomes.set(slot.runId, imported);
     } catch {
+      if (!before || !staged || this.parts.store.record(slot.sessionId) !== staged) return;
       try {
-        if (before) this.parts.store.putRecord(before);
+        this.parts.store.putRecord(before);
       } catch {
         return;
-      } finally {
-        this.parts.unsavedImports.delete(slot.runId);
       }
+      this.parts.unsavedImports.delete(slot.runId);
       await this.abandonImport(slot, generation);
       return;
+    } finally {
+      this.parts.unsavedImports.delete(slot.runId);
     }
-    this.parts.unsavedImports.delete(slot.runId);
     this.parts.notifyResults();
   }
 
@@ -283,7 +286,12 @@ export class SubAgentRunScheduler {
   /** Fails an import whose completed result could not be saved, so the session never hangs in importing. */
   private async abandonImport(slot: RunSlot, generation: number): Promise<void> {
     const session = this.parts.store.record(slot.sessionId)?.session;
-    if (session?.status !== "importing" || session.pendingImportRunId !== slot.runId) return;
+    if (
+      session?.status !== "importing" ||
+      session.pendingImportRunId !== slot.runId ||
+      this.parts.fences.isRevoked(session.parentRunId)
+    )
+      return;
     try {
       const revision = this.transition(slot.sessionId, { type: "import-failed", generation });
       if (revision !== null) await this.parts.store.flush(revision);

@@ -256,6 +256,24 @@ describe("SubAgentSessionManager queue", () => {
       error: { code: "import-failed" },
     });
     expect(harness.imports.requests).toEqual([]);
+
+    const raced = await launchChild(delegator, "b");
+    harness.imports.mode = "hold";
+    harness.execution.finish(1);
+    await settle();
+    const release = harness.writer.holdNext();
+    harness.writer.failNext(new ChatStorageError("file-too-large", "too large"));
+    harness.imports.release();
+    await settle();
+    const closing = harness.manager.closeAll("parent-1", "failed");
+    await settle();
+    release();
+    await closing;
+    await settle();
+    const sessionWrites = harness.writer.deltas.filter(
+      (delta) => delta.entity === "session" && delta.id === raced.receipt.sessionId,
+    );
+    expect(sessionWrites.at(-1)).toMatchObject({ fields: { status: "archived" } });
   });
 
   it("U6: passes lineage-specific bounded context to follow-up, retry and partial runs", async () => {

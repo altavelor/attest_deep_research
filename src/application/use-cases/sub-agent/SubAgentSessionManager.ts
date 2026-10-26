@@ -84,6 +84,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.listeners.clear();
       this.parts.sessionOptions.clear();
       this.parts.outcomes.clear();
+      this.parts.unsavedImports.clear();
       this.disposal = Promise.resolve();
     }
     return this.disposal;
