@@ -244,6 +244,21 @@ describe("chat document repository over a vault that refuses replacing renames",
       title: "Kept",
       messages: [{ content: "Question?" }],
     });
+
+    const timelineBase = (await repository.loadChatDocument("chat-1"))!.base;
+    const writer2 = new FileChatRepository({ fileSystem, folder: FOLDER });
+    await writer2.commitChatDocument({
+      chatId: "chat-1",
+      base: timelineBase,
+      chat: chatInput({ title: "Kept", timelineSequence: 7 }),
+    });
+    await expect(
+      repository.commitChatDocument({
+        chatId: "chat-1",
+        base: timelineBase,
+        chat: chatInput({ title: "Late" }),
+      }),
+    ).rejects.toMatchObject({ code: "document-conflict" });
   });
 
   it("keeps the previous generation only for terminal chat saves", async () => {
