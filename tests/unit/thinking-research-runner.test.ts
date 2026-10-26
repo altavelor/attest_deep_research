@@ -102,6 +102,28 @@ describe("ThinkingResearchRunner", () => {
     expect(requests[1].messages).toEqual([{ role: "user", content: "q" }]);
   });
 
+  it("never acknowledges delivered child results of a round the provider failed", async () => {
+    const accepted = vi.fn();
+    const result = await new ThinkingResearchRunner({
+      modelRound: {
+        listModels: async () => ["m"],
+        runRound: async () => ({ items: [], stopReason: "error" as const }),
+      },
+      model: "m",
+      messages: [{ role: "user", content: "q" }],
+      tools: new ToolManager([]),
+      policy: policy([]),
+      roundHooks: {
+        beforeModelRound: async () => "child results",
+        afterRoundAccepted: accepted,
+        beforeFinalize: async () => "ready",
+      },
+    }).run();
+
+    expect(result).toMatchObject({ ok: false, reason: "provider-error" });
+    expect(accepted).not.toHaveBeenCalled();
+  });
+
   it("attributes streamed reasoning segments to their round and phase", async () => {
     const search = tool("search_index");
     const roundProvider: ModelRoundProvider = {
@@ -297,6 +319,7 @@ describe("ThinkingResearchRunner", () => {
     }).run();
     expect(result).toMatchObject({ ok: true, repairedTools: ["search_index"], duplicateCalls: 0 });
     expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls.map((call) => call[1]?.round)).toEqual([1, 2]);
   });
 
   it("stops gathering and synthesizes when distinct queries surface no new evidence", async () => {
