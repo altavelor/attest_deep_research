@@ -14,3 +14,42 @@ export {
   type SubAgentInputValidation,
   type SubAgentTaskOrigin,
 } from "./validation";
+export type {
+  CreateSubAgentSessionInput,
+  ImportedSubAgentEvidenceReference,
+  ImportedSubAgentRunOutcome,
+  NormalizedUsage,
+  ParentRunBinding,
+  ParentRunDeliveryContext,
+  RetrySubAgentCommand,
+  SubAgentBudgetPolicy,
+  SubAgentCommand,
+  SubAgentCreateRecord,
+  SubAgentIndexScope,
+  SubAgentResultError,
+  SubAgentResultState,
+  SubAgentRunReceipt,
+  SubAgentRunRef,
+  SubAgentRunStatus,
+  SubAgentRunSummary,
+  SubAgentScopeReduction,
+  SubAgentSessionRecord,
+  SubAgentSessionStatus,
+  SubAgentSessionSummary,
+  SubAgentSourcePolicy,
+  SubAgentSubmissionRecord,
+} from "./sessionModel";
+export {
+  subAgentSessionError,
+  type SubAgentErrorDetail,
+  type SubAgentSessionError,
+  type SubAgentSessionErrorCode,
+} from "./errors";
+export { deriveSubAgentTitle, findOwnRun, headRun, isBoundToParentRun } from "./identity";
+export { reduceSubAgentSourcePolicy, type SubAgentSourcePolicyReduction } from "./sourcePolicy";
+export {
+  applySubAgentTransition,
+  type SubAgentImportTombstone,
+  type SubAgentTransition,
+  type SubAgentTransitionResult,
+} from "./transitions";
