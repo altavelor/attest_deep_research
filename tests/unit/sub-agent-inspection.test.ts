@@ -12,6 +12,7 @@ import {
 import { settle } from "../support/async";
 import {
   AT,
+  childEvidence,
   delegationGrant,
   executionResult,
   launchChild,
@@ -524,16 +525,24 @@ describe("sub-agent inspection hardening", () => {
       cyclic,
       { meta: { id: "token=metasecret" } },
       JSON.parse('{"__proto__":{"polluted":true},"text":"t"}'),
+      childEvidence("token=sk-live-SECRETID"),
+      childEvidence("kept-1"),
     ];
-    harness.execution.finish(0, { ...executionResult("Answer"), evidence: evidence as never });
+    harness.execution.finish(0, {
+      ...executionResult("Answer [token=sk-live-SECRETID] and [kept-1]"),
+      evidence: evidence as never,
+    });
     harness.execution.finish(1, executionResult("EXPLODE"));
     await settle();
 
     const detail = await harness.manager.inspection().getSession(session.subAgentSessionId);
     expect(detail!.runs[0].command).toBe("Check token=[redacted] now");
     expect(JSON.stringify(detail)).not.toContain("tasksecret");
-    expect(stateText(harness)).not.toMatch(/idsecret|metasecret/);
-    expect((await card(harness, session.subAgentSessionId)).status).toBe("ready");
+    expect(stateText(harness)).not.toMatch(/idsecret|metasecret|SECRETID/);
+    const imported = managerParts(harness.manager).store.state!.imports[0];
+    expect(imported.evidence).toHaveLength(1);
+    expect(imported.answerText).not.toContain("token=");
+    expect(detail!.runs[0].status).toBe("completed");
     const copy = redactSubAgentJson(evidence[3], (text) => text) as Record<string, unknown>;
     expect([Object.getPrototypeOf(copy), copy.polluted]).toEqual([Object.prototype, undefined]);
     expect(redactSubAgentJson(cyclic, (text) => text).self).toBeNull();
