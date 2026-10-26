@@ -16,7 +16,8 @@ loadChatDocument(id: string): Promise<{ chat: SavedChat; base: ChatFileBaseline 
 commitChatDocument(change: ChatDocumentChange): Promise<ChatDocumentCommit>.
 Новый ChatFileBaseline — непрозрачный токен содержимого файла, прочитанного или записанного
 держателем: текст содержательной части (messages, lastAnswer, attachedContextPaths, chatSettings,
-sourceRegistry) и текст секции subAgents. Метаданные (title, isFavorite, unreadCompletion, lastRun,
+sourceRegistry, а с шага 8 также subAgentDispatches, subAgentNotices, timelineSequence; пустое
+значение и отсутствие поля равны) и текст секции subAgents. Метаданные (title, isFavorite, unreadCompletion, lastRun,
 updatedAt) в токен не входят.
 Новый ChatDocumentChange = { chatId: string | null; base?: ChatFileBaseline; chat?: SaveChatInput;
 subAgents?: SubAgentStateSnapshot }; chatId=null допустим только вместе с chat, без base, и

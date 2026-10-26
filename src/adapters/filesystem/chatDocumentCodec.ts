@@ -85,7 +85,13 @@ export function encodeChatDocument(sections: ChatSections): string {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${sections.get(key)}`).join(",")}}\n`;
 }
 
-/** Builds the conflict token: the normalized content fields and the raw sub-agent section text. */
+const TIMELINE_FIELDS = ["subAgentDispatches", "subAgentNotices", "timelineSequence"] as const;
+
+function emptyTimelineText(text: string | undefined): string {
+  return text === undefined || text === "[]" || text === "0" ? "" : text;
+}
+
+/** Builds the conflict token: the normalized content and timeline fields and the raw sub-agent section text. */
 export function baselineOf(chat: SavedChat, sections: ChatSections): ChatFileBaseline {
   return {
     content: JSON.stringify([
@@ -94,6 +100,7 @@ export function baselineOf(chat: SavedChat, sections: ChatSections): ChatFileBas
       chat.attachedContextPaths,
       chat.chatSettings,
       chat.sourceRegistry,
+      ...TIMELINE_FIELDS.map((key) => emptyTimelineText(sections.get(key))),
     ]),
     subAgents: sections.get(SUB_AGENTS) ?? "",
   };
