@@ -1,5 +1,6 @@
 import type { ResearchMode } from "../researchMode";
 import type { ResearchSearchMode } from "../searchMode";
+import type { SubAgentModelSnapshot } from "./modelSnapshot";
 import type { SubAgentTaskOrigin } from "./validation";
 
 export type SubAgentSessionStatus =
@@ -83,6 +84,7 @@ export interface SubAgentRunSummary {
   retryOfRunId: string | null;
   continuedFromRunId: string | null;
   budgetScopeId: string | null;
+  model?: SubAgentModelSnapshot;
 }
 
 export interface SubAgentSessionRecord {

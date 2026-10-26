@@ -448,15 +448,20 @@ describe("SubAgentRunner cancellation and budgets", () => {
       model: "m",
     });
 
+    const payloads: unknown[] = [];
     const result = await runner.run({
       task: "What is X?",
       onEvent: (event) => events.push(event),
+      onToolCall: (call) => payloads.push(call.args),
+      onToolResult: (toolResult) => payloads.push(toolResult.resultJson),
     });
 
     expect(result.answerText).toBe("Answer despite the failure.");
     expect(events.find((event) => event.type === SUB_AGENT_TOOL_END)?.data).toMatchObject({
       ok: false,
     });
+    expect(payloads[0]).toEqual({ query: "q-1", limit: 3 });
+    expect(payloads[1]).toEqual(expect.stringContaining("error"));
     expect(result.snapshot.evidence).toHaveLength(0);
   });
 });

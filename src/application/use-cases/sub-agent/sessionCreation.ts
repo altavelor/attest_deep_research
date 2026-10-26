@@ -197,6 +197,9 @@ export class SubAgentSessionCreation {
       resources: normalized.resources,
       maxSearches: normalized.maxSearches,
     });
+    if (normalized.grant.origin === "direct") {
+      this.parts.mainEvents.created(session.subAgentSessionId, "created");
+    }
     return session;
   }
 

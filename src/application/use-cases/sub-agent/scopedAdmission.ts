@@ -1,3 +1,4 @@
+import { denyRun } from "./runSettlement";
 import type { RunSlot, SubAgentRunScheduler } from "./runScheduler";
 import { closeBudgetScope } from "./scopeCleanup";
 import type { SubAgentBudgetAdmission, SubAgentBudgetIdentity } from "./subAgentBudget";
@@ -27,7 +28,7 @@ export async function admitScopedRun(
   }
   if (admission.type === "refused") {
     scheduler.release(slot);
-    await scheduler.deny(slot, admission.reason);
+    await denyRun(scheduler, slot, admission.reason);
     if (
       admission.closureId !== null &&
       (await scheduler.parts.budget.claimCleanup(identity.scopeId, admission.closureId))

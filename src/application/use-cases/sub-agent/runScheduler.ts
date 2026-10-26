@@ -12,6 +12,8 @@ import { IMPORT_TIMEOUT_MS, type SubAgentImportCommitter } from "./importCoordin
 import { importedSummary } from "./importPlan";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import { admitScopedRun } from "./scopedAdmission";
+import { redactExecutionResult } from "./resultRedaction";
+import { abandonRunImport, denyRun, settleRun } from "./runSettlement";
 import { scopeOf, type SubAgentBudgetGrant } from "./subAgentBudget";
 
 export { IMPORT_TIMEOUT_MS };
@@ -28,7 +30,7 @@ export interface RunSlot extends QueuedRun {
   grant: SubAgentBudgetGrant | null;
 }
 
-type TransitionEvent = SubAgentTransition extends infer T
+export type TransitionEvent = SubAgentTransition extends infer T
   ? T extends { at: string }
     ? Omit<T, "at">
     : never
@@ -44,6 +46,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
   private readonly queue: QueuedRun[] = [];
   private readonly slots = new Map<string, RunSlot>();
   private readonly imports = new Map<string, AbortController>();
+  private readonly incompleteRuns = new Set<string>();
 
   constructor(readonly parts: SubAgentManagerParts) {
     parts.imports.committer = this;
@@ -69,13 +72,31 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     for (const slot of [...this.slots.values()]) {
       if (slot.sessionId !== sessionId) continue;
       fenced.push(slot.runId);
+      this.keepElapsed(slot);
       slot.fenced = true;
       slot.controller?.abort();
       this.release(slot);
     }
     this.imports.get(sessionId)?.abort();
     this.imports.delete(sessionId);
+    for (const run of this.parts.store.record(sessionId)?.runs ?? []) {
+      this.incompleteRuns.delete(run.subAgentRunId);
+    }
     return fenced;
+  }
+
+  /** Stores the execution time of a fenced running slot, so a stopped run keeps its elapsed time. */
+  private keepElapsed(slot: RunSlot): void {
+    const elapsed = this.parts.observation.elapsed(slot.runId);
+    const run = this.parts.store
+      .record(slot.sessionId)
+      ?.runs.find((entry) => entry.subAgentRunId === slot.runId);
+    if (!run || elapsed === 0) return;
+    try {
+      this.parts.store.putRunUsage(slot.runId, { ...run.usage, durationMs: elapsed });
+    } catch {
+      return;
+    }
   }
 
   fenceAll(): void {
@@ -83,6 +104,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     for (const slot of [...this.slots.values()]) this.fenceSession(slot.sessionId);
     for (const controller of this.imports.values()) controller.abort();
     this.imports.clear();
+    this.incompleteRuns.clear();
   }
 
   /** Applies a transition to the session's current record and stages it; null when rejected. */
@@ -118,7 +140,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       return;
     }
     if (!this.parts.sessionOptions.has(entry.sessionId)) {
-      void this.deny(entry, "execution-denied");
+      void denyRun(this, entry, "execution-denied");
       return;
     }
     const scopeId = scopeOf(record.session.budgetPolicy);
@@ -148,7 +170,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       this.release(slot);
       if (slot.grant) void this.parts.budget.settle(slot.grant, "not-started");
       if (!slot.fenced)
-        await this.settle(slot, {
+        await settleRun(this, slot, {
           type: "provider-failed",
           runId: slot.runId,
           reason: "scheduler-start-failed",
@@ -164,38 +186,57 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       return;
     }
     slot.controller = new AbortController();
+    const { observation } = this.parts;
     const request = buildExecutionRequest(
       this.parts,
       record,
       run,
       slot.controller.signal,
       () => undefined,
+      observation.observer(slot.sessionId, slot.runId, () => this.isAdmissible(slot)),
     );
     let result: SubAgentExecutionResult | null = null;
+    let durationMs = 0;
+    observation.begin(slot.runId);
     try {
       result = await this.parts.context.execution.run(request);
     } catch {
       result = null;
     } finally {
+      durationMs = observation.finish(slot.runId);
       this.release(slot);
       if (slot.grant) void this.parts.budget.settle(slot.grant, "consumed");
     }
     if (slot.fenced) return;
-    if (!result) {
-      await this.settle(slot, {
+    const redacted = result ? this.redacted(result) : null;
+    if (!result || !redacted) {
+      await settleRun(this, slot, {
         type: "provider-failed",
         runId: slot.runId,
         reason: "provider-failed",
+        usage: { ...run.usage, durationMs },
       });
       return;
     }
-    await this.complete(slot, result);
+    await this.complete(slot, redacted, { ...result.usage, durationMs });
   }
 
-  private async complete(slot: RunSlot, result: SubAgentExecutionResult): Promise<void> {
+  private redacted(result: SubAgentExecutionResult): SubAgentExecutionResult | null {
+    try {
+      return redactExecutionResult(result, (text) => this.parts.observation.redact(text));
+    } catch {
+      return null;
+    }
+  }
+
+  private async complete(
+    slot: RunSlot,
+    result: SubAgentExecutionResult,
+    usage: SubAgentExecutionResult["usage"],
+  ): Promise<void> {
     const last = this.parts.store.record(slot.sessionId)?.session.lastImportGeneration ?? 0;
     if (!Number.isSafeInteger(last + 1)) {
-      await this.settle(slot, { type: "archive", reason: "checkpoint-corrupt" });
+      await settleRun(this, slot, { type: "archive", reason: "checkpoint-corrupt" });
       return;
     }
     let completed = false;
@@ -204,11 +245,12 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       const revision = this.transition(slot.sessionId, {
         type: "runner-completed",
         runId: slot.runId,
-        usage: result.usage,
+        usage,
         evidenceCount: result.evidence.length,
         resultSummary: plan ? importedSummary(plan.prepared.answerText) : null,
       });
       if (revision !== null) {
+        if (result.incomplete) this.incompleteRuns.add(slot.runId);
         if (plan) this.parts.imports.stage(plan);
         await this.parts.store.flush(this.parts.store.currentRevision);
         completed = true;
@@ -220,7 +262,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     const generation = this.parts.store.record(slot.sessionId)?.session.pendingImportGeneration;
     if (generation === null || generation === undefined) return;
     if (!completed) {
-      await this.abandonImport(slot, generation);
+      await abandonRunImport(this, slot, generation);
       return;
     }
     const fence = new AbortController();
@@ -251,7 +293,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
         ? outcome.value.outcome
         : null;
     if (!imported) {
-      await this.settle(slot, { type: "import-failed", generation });
+      await settleRun(this, slot, { type: "import-failed", generation });
       return;
     }
     await this.commitImport(slot, generation, imported);
@@ -292,11 +334,13 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
         return;
       }
       this.parts.unsavedImports.delete(slot.runId);
-      await this.abandonImport(slot, generation);
+      await abandonRunImport(this, slot, generation);
       return;
     } finally {
       this.parts.unsavedImports.delete(slot.runId);
     }
+    const kind = this.incompleteRuns.delete(slot.runId) ? "partial" : "finished";
+    this.parts.mainEvents.terminal(slot.sessionId, slot.runId, kind, imported.answerText);
     this.parts.notifyResults();
   }
 
@@ -311,7 +355,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     if (started === "started") return true;
     this.release(slot);
     if (started === "failed" && !slot.fenced) {
-      await this.settle(slot, {
+      await settleRun(this, slot, {
         type: "provider-failed",
         runId: slot.runId,
         reason: "budget-port-error",
@@ -328,54 +372,6 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
         this.parts.store.record(slot.sessionId)?.session.parentRunId ?? "",
       )
     );
-  }
-
-  /** Fails a queued run that may not start, so it never runs without its limits or permit. */
-  async deny(entry: QueuedRun, reason: string): Promise<void> {
-    try {
-      const revision = this.transition(entry.sessionId, {
-        type: "execution-denied",
-        runId: entry.runId,
-        reason,
-      });
-      if (revision !== null) await this.parts.store.flush(revision);
-    } catch {
-      return;
-    }
-    this.parts.notifyResults();
-  }
-
-  /** Stages a terminal or import transition, waits for it to be durable and then notifies. */
-  private async settle(slot: RunSlot, event: TransitionEvent): Promise<boolean> {
-    let revision: number | null;
-    try {
-      revision = this.transition(slot.sessionId, event);
-      if (revision === null) return false;
-      await this.parts.store.flush(revision);
-    } catch {
-      return false;
-    }
-    this.parts.notifyResults();
-    return true;
-  }
-
-  /** Fails an import whose completed result could not be saved, so the session never hangs in importing. */
-  private async abandonImport(slot: QueuedRun, generation: number): Promise<void> {
-    const session = this.parts.store.record(slot.sessionId)?.session;
-    if (
-      session?.status !== "importing" ||
-      session.pendingImportRunId !== slot.runId ||
-      this.parts.fences.isRevoked(session.parentRunId)
-    )
-      return;
-    try {
-      const revision = this.transition(slot.sessionId, { type: "import-failed", generation });
-      if (revision !== null) await this.parts.store.flush(revision);
-    } catch {
-      this.parts.notifyResults();
-      return;
-    }
-    this.parts.notifyResults();
   }
 
   release(slot: RunSlot): void {

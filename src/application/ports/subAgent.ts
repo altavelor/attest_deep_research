@@ -11,7 +11,10 @@ import type {
   SubAgentCommand,
   SubAgentFlushReason,
   SubAgentImportItem,
+  SubAgentDispatchEntry,
   SubAgentImportRecord,
+  SubAgentNoticeEntry,
+  SubAgentObservationEvent,
   SubAgentResultState,
   SubAgentRunReceipt,
   SubAgentRunRef,
@@ -22,6 +25,10 @@ import type {
   ValidatedJsonValue,
 } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type {
+  SubAgentInspectionDetail,
+  SubAgentInspectionSnapshot,
+} from "@application/contracts/subAgentInspection";
 
 export interface SubAgentSessionRepository {
   load(chatId: string): Promise<SubAgentStateSnapshot | null>;
@@ -81,10 +88,36 @@ export interface SubAgentLifecycle {
   dispose(): Promise<void>;
 }
 
+export type SubAgentUserStopResult = "stopped" | "already-terminal" | "stale";
+
+/**
+ * Read and stop-only capability of one chat's child sessions for the UI. It never hands
+ * out the manager, a delegator or a grant; a stop names the run the user saw.
+ */
+export interface SubAgentInspectionPort {
+  snapshot(): Promise<SubAgentInspectionSnapshot>;
+  getSession(sessionId: string): Promise<SubAgentInspectionDetail | null>;
+  subscribe(listener: (snapshot: SubAgentInspectionSnapshot) => void): () => void;
+  stopFromUser(sessionId: string, expectedRunId: string | null): Promise<SubAgentUserStopResult>;
+}
+
 export interface SubAgentHost extends SubAgentLifecycle {
   delegatorFor(binding: ParentRunBinding, delivery: ParentRunDeliveryContext): SubAgentDelegator;
   subscribeResults(listener: () => void): () => void;
   listRunRefs(parentRunId: string): readonly SubAgentRunRef[];
+  inspection(): SubAgentInspectionPort;
+}
+
+export type SubAgentMainEventIntent =
+  | { type: "dispatch"; entry: Omit<SubAgentDispatchEntry, "sequence"> }
+  | { type: "notice"; entry: Omit<SubAgentNoticeEntry, "sequence"> };
+
+/**
+ * Receives the main-visible dispatch and notice intents of lifecycle transitions off the
+ * manager lock; the chat side allocates their sequence and stores them idempotently by eventKey.
+ */
+export interface SubAgentMainEventSink {
+  publish(intents: readonly SubAgentMainEventIntent[]): void;
 }
 
 export interface SubAgentDelegationGrant {
@@ -122,6 +155,7 @@ export interface SubAgentExecutionRequest {
   priorContext: SubAgentPriorContext;
   signal: AbortSignal;
   observe(event: SubAgentExecutionEvent): void;
+  onObservation(event: SubAgentObservationEvent): void;
 }
 
 export interface SubAgentExecutionResult {
@@ -272,6 +306,10 @@ export interface SubAgentSessionManagerContext {
   resolveGrant(id: string): SubAgentDelegationGrant | null;
   now(): Date;
   createId(prefix: string): string;
+  redact(text: string): string;
+  monotonicNow?(): number;
+  isDebugCapture?(): boolean;
+  mainEvents?: SubAgentMainEventSink;
 }
 
 export type SubAgentSessionManagerFactory = (

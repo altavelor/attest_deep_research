@@ -125,9 +125,12 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
     return this.call(async () => {
       const { parts, scheduler } = this.services;
       const record = ownedRecord(parts.store, this.binding, sessionId);
+      const stoppedRunId = record.session.activeSubAgentRunId ?? record.session.pendingImportRunId;
       const revision = stopSessionWork(scheduler, record, "stopped");
       await parts.store.flush(revision ?? parts.store.currentRevision);
-      if (revision !== null) parts.notifyResults();
+      if (revision === null) return;
+      if (stoppedRunId) parts.mainEvents.terminal(sessionId, stoppedRunId, "stopped");
+      parts.notifyResults();
     });
   }
 

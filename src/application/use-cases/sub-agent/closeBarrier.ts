@@ -104,6 +104,7 @@ async function drain(
 ): Promise<void> {
   const state = await parts.store.load();
   let revision = parts.store.currentRevision;
+  let closed = 0;
   for (const record of state.records) {
     const { session } = record;
     if (session.parentRunId !== parentRunId || session.status === "archived") continue;
@@ -120,13 +121,15 @@ async function drain(
     if (importId && session.pendingImportGeneration !== null) {
       progress.cancelledImports.push({ importId, generation: session.pendingImportGeneration });
     }
-    revision =
-      scheduler.transition(session.subAgentSessionId, {
-        type: "archive",
-        reason: "parent-terminal",
-      }) ?? revision;
+    const archived = scheduler.transition(session.subAgentSessionId, {
+      type: "archive",
+      reason: "parent-terminal",
+    });
+    if (archived !== null) closed += 1;
+    revision = archived ?? revision;
   }
   await parts.store.flush(revision);
+  parts.mainEvents.closed(parentRunId, closed);
 }
 
 async function writeMarker(
