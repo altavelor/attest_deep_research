@@ -5,6 +5,7 @@ import {
 } from "@core/research";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
+import { subAgentCallIdentity } from "@adapters/research-tools/sub-agent/subAgentCalls";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
@@ -74,6 +75,9 @@ describe("SubAgentTool", () => {
       },
     });
     expect(calls[0]?.args[0]).toMatchObject({ maxSearches: 3, resources: ["wikipedia.org"] });
+    const [dotted, underscored] = ["a.b", "a_b"].map((id) => subAgentCallIdentity("p", 1, id));
+    expect(dotted).not.toBe(underscored);
+    expect(underscored).toBe("p-r1-a_b");
     expect(JSON.stringify(result)).not.toContain("answer");
     expect(events).toEqual([]);
   });
