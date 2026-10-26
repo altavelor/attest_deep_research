@@ -166,7 +166,11 @@ export class SubAgentRunScheduler {
       resultSummary: result.answerText.trim().slice(0, RESULT_SUMMARY_CHARS) || null,
     });
     const generation = this.parts.store.record(slot.sessionId)?.session.pendingImportGeneration;
-    if (!completed || generation === null || generation === undefined) return;
+    if (generation === null || generation === undefined) return;
+    if (!completed) {
+      await this.abandonImport(slot, generation);
+      return;
+    }
     const fence = new AbortController();
     this.imports.set(slot.sessionId, fence);
     const outcome = await settleWithin(
@@ -213,6 +217,20 @@ export class SubAgentRunScheduler {
     }
     this.parts.notifyResults();
     return true;
+  }
+
+  /** Fails an import whose completed result could not be saved, so the session never hangs in importing. */
+  private async abandonImport(slot: RunSlot, generation: number): Promise<void> {
+    const session = this.parts.store.record(slot.sessionId)?.session;
+    if (session?.status !== "importing" || session.pendingImportRunId !== slot.runId) return;
+    try {
+      const revision = this.transition(slot.sessionId, { type: "import-failed", generation });
+      if (revision !== null) await this.parts.store.flush(revision);
+    } catch {
+      this.parts.notifyResults();
+      return;
+    }
+    this.parts.notifyResults();
   }
 
   private release(slot: RunSlot): void {

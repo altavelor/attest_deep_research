@@ -197,6 +197,22 @@ describe("SubAgentSessionManager queue", () => {
     expect(JSON.stringify(after)).not.toContain("secret");
   });
 
+  it("U5: fails a completed run whose result cannot be saved instead of leaving it importing", async () => {
+    const harness = managerHarness();
+    const delegator = harness.delegator();
+    const { receipt } = await launchChild(delegator, "a");
+    harness.writer.failNext(new ChatStorageError("file-too-large", "too large"));
+
+    harness.execution.finish(0);
+    await settle();
+
+    expect(await delegator.getResult(receipt.sessionId, receipt.runId)).toMatchObject({
+      state: "failed",
+      error: { code: "import-failed" },
+    });
+    expect(harness.imports.requests).toEqual([]);
+  });
+
   it("U6: passes lineage-specific bounded context to follow-up, retry and partial runs", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
