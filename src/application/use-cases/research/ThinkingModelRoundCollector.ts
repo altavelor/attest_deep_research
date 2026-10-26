@@ -30,6 +30,7 @@ export interface ThinkingModelRound {
   reasoningItemCount: number;
   reasoningSegments: { segmentId: string; chars: number }[];
   usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  reportedUsage?: { input: boolean; output: boolean; reasoning: boolean };
   streamedText: boolean;
 }
 
@@ -103,6 +104,19 @@ export async function collectThinkingModelRound(
     reasoningItemCount: result.reasoningItemCount ?? 0,
     reasoningSegments: [...segmentChars].map(([segmentId, chars]) => ({ segmentId, chars })),
     usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    ...(result.usage
+      ? {
+          reportedUsage: {
+            input: reportedCount(result.usage.inputTokens),
+            output: reportedCount(result.usage.outputTokens),
+            reasoning: reportedCount(result.usage.reasoningTokens),
+          },
+        }
+      : {}),
     streamedText,
   };
+}
+
+function reportedCount(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }

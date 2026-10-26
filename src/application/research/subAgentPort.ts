@@ -15,6 +15,26 @@ export interface SubAgentRunInput {
   signal?: AbortSignal;
 
   onEvent?: (event: ToolEvent) => void;
+
+  onToolCall?: (call: SubAgentToolCall) => void;
+
+  onToolResult?: (result: SubAgentToolResult) => void;
+}
+
+export interface SubAgentToolCall {
+  id: string;
+  name: string;
+  label: string;
+  round: number;
+  args?: Record<string, unknown>;
+}
+
+export interface SubAgentToolResult {
+  id: string;
+  ok: boolean;
+  resolvedLabel?: string;
+  resultSummary?: string;
+  resultJson?: string;
 }
 
 export type SubAgentFailureReason = ThinkingFallbackReason | "tool-exception";
