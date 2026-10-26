@@ -478,13 +478,18 @@ describe("SubAgentSessionManager wait", () => {
     const all = await delegator.waitForResults(refs, { mode: "all", timeoutMs: 0 });
 
     expect(any).toEqual({ ready: [refs[0]], timedOut: false });
+    const release = harness.writer.holdNext();
     harness.writer.failNext(new ChatStorageError("file-too-large", "too large"));
     harness.imports.release();
+    await settle();
+    const committing = await delegator.getResult(refs[1].sessionId, refs[1].runId);
+    release();
     await settle();
     const unsaved = await delegator.getResult(refs[1].sessionId, refs[1].runId);
 
     expect(all).toEqual({ ready: [refs[0]], timedOut: true });
     expect(other.receipt.runId).not.toBe(refs[0].runId);
+    expect(committing).toMatchObject({ state: "pending", run: { resultSummary: null } });
     expect(unsaved).toMatchObject({ state: "failed", error: { code: "import-failed" } });
     expect(JSON.stringify(unsaved)).not.toContain("Child answer");
   });
