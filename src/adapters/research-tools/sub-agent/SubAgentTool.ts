@@ -1,5 +1,16 @@
 import { ToolParseResult, toolFailure } from "@core/agent";
 import { SUB_AGENT_TOOL } from "@core/agent";
+import {
+  DEFAULT_SUB_AGENT_SEARCHES,
+  MAX_SUB_AGENT_RESOURCE_CHARS,
+  MAX_SUB_AGENT_RESOURCES,
+  MAX_SUB_AGENT_SEARCHES,
+  MAX_SUB_AGENT_TASK_CHARS,
+  MIN_SUB_AGENT_SEARCHES,
+  readSubAgentSearchBudget,
+  validateSubAgentResources,
+  validateSubAgentTaskInput,
+} from "@core/research";
 import { ResearchToolsetOptions, SubAgentPort, SubAgentTelemetry } from "@application/research";
 import { EvidenceRegistry, isWebResultCapacityError } from "@application/sources";
 import { defineTool, int, str, strArray } from "@application/sources/tools";
@@ -19,15 +30,7 @@ export interface SubAgentOutput {
   evidenceBudgetExhausted: boolean;
 }
 
-const MAX_TASK_CHARS = 2_000;
 const MAX_REGISTERED_SNIPPET_CHARS = 2_000;
-
-const MAX_RESOURCES = 8;
-const MAX_RESOURCE_CHARS = 120;
-
-const MIN_SUB_AGENT_SEARCHES = 1;
-const MAX_SUB_AGENT_SEARCHES = 20;
-const DEFAULT_SUB_AGENT_SEARCHES = 8;
 
 const MAX_IMPORTED_WEB_SOURCES = 10;
 
@@ -43,49 +46,21 @@ function parseSubAgentInput(input: Record<string, unknown>): ToolParseResult<Sub
     });
   }
 
-  const task = typeof input.task === "string" ? input.task.trim() : "";
-  if (!task) {
-    return toolFailure("missing-task", "A task instruction is required.");
-  }
-  if (task.length > MAX_TASK_CHARS) {
-    return toolFailure("task-too-long", `Task must not exceed ${MAX_TASK_CHARS} characters.`);
-  }
-
-  const maxSearches = readSearchBudget(input.maxSearches);
-  if (maxSearches === false) {
-    return toolFailure("invalid-max-searches", "maxSearches must be an integer.");
-  }
-
-  const resources = readResources(input.resources);
-  if (resources === false) {
-    return toolFailure(
-      "invalid-resources",
-      `resources must be an array of at most ${MAX_RESOURCES} non-empty strings.`,
-    );
-  }
+  const task = validateSubAgentTaskInput(input.task);
+  if (!task.ok) return toolFailure(task.code, task.message);
+  const maxSearches = readSubAgentSearchBudget(input.maxSearches);
+  if (!maxSearches.ok) return toolFailure(maxSearches.code, maxSearches.message);
+  const resources = validateSubAgentResources(input.resources);
+  if (!resources.ok) return toolFailure(resources.code, resources.message);
 
   return {
     ok: true,
-    value: { task, maxSearches, ...(resources.length > 0 ? { resources } : {}) },
+    value: {
+      task: task.value,
+      maxSearches: maxSearches.value,
+      ...(resources.value.length > 0 ? { resources: resources.value } : {}),
+    },
   };
-}
-
-function readSearchBudget(value: unknown): number | false {
-  if (value === undefined) return DEFAULT_SUB_AGENT_SEARCHES;
-  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
-    return false;
-  }
-  return Math.max(MIN_SUB_AGENT_SEARCHES, Math.min(MAX_SUB_AGENT_SEARCHES, value));
-}
-
-function readResources(value: unknown): string[] | false {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > MAX_RESOURCES) return false;
-  const entries = value.map((entry) => (typeof entry === "string" ? entry.trim() : ""));
-  if (entries.some((entry) => entry.length === 0 || entry.length > MAX_RESOURCE_CHARS)) {
-    return false;
-  }
-  return entries;
 }
 
 /**
@@ -117,7 +92,7 @@ export const SubAgentTool = defineTool<
     "Name the resources the sub-agent may consult and keep its search budget tight: every " +
     "source it registers is charged to the shared evidence budget of this run.",
   schema: {
-    task: str(MAX_TASK_CHARS, {
+    task: str(MAX_SUB_AGENT_TASK_CHARS, {
       required: true,
       description: "Self-contained task for the sub-agent, including the success criteria.",
     }),
@@ -126,7 +101,7 @@ export const SubAgentTool = defineTool<
         "Maximum search calls the sub-agent may spend on the whole task. Keep it small; " +
         "further searches are rejected.",
     }),
-    resources: strArray(MAX_RESOURCES, MAX_RESOURCE_CHARS, {
+    resources: strArray(MAX_SUB_AGENT_RESOURCES, MAX_SUB_AGENT_RESOURCE_CHARS, {
       description:
         "Sites, domains, or named sources the sub-agent must restrict itself to, " +
         'e.g. "wikipedia.org", "official investor relations pages".',
