@@ -191,6 +191,9 @@ describe("sub-agent events in a reloaded parent transcript", () => {
       createSubAgentSessionManager: children.factory,
     });
     const state = manager.adoptChat((await repository.loadChat("chat-legacy"))!, settings);
+    expect((await repository.loadChat("chat-legacy"))!.timelineSequence).toBe(
+      4 + NOTICE_KINDS.length,
+    );
     const opened: string[] = [];
     const transcript = document.createElement("div");
     transcript.className = "attest-chat__transcript";

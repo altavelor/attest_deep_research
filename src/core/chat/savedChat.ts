@@ -187,7 +187,7 @@ function parseSavedTimeline(
   return {
     subAgentDispatches: [...normalized.subAgentDispatches],
     subAgentNotices: [...normalized.subAgentNotices],
-    timelineSequence: parseTimelineSequence(value.timelineSequence),
+    timelineSequence: normalized.timelineSequence,
   };
 }
 
