@@ -6,6 +6,7 @@ import type { SubAgentRunScheduler } from "./runScheduler";
 
 export const CLOSE_DEADLINE_MS = 2_000;
 export const PRIMARY_DRAIN_MS = 1_500;
+const INTERRUPTING_REASONS = new Set(["plugin-unload"]);
 
 interface CloseProgress {
   sessionIds: Set<string>;
@@ -53,7 +54,7 @@ export async function closeParentRun(
   const deadline = scheduleTimeout(() => expire(), CLOSE_DEADLINE_MS);
   try {
     const primary = await settleWithin(
-      drain(parts, scheduler, parentRunId, progress),
+      drain(parts, scheduler, parentRunId, terminalReason, progress),
       PRIMARY_DRAIN_MS,
     );
     if (primary.status === "done") {
@@ -100,11 +101,13 @@ async function drain(
   parts: SubAgentManagerParts,
   scheduler: SubAgentRunScheduler,
   parentRunId: string,
+  terminalReason: string,
   progress: CloseProgress,
 ): Promise<void> {
   const state = await parts.store.load();
   let revision = parts.store.currentRevision;
   let closed = 0;
+  const interrupted: { sessionId: string; runId: string }[] = [];
   for (const record of state.records) {
     const { session } = record;
     if (session.parentRunId !== parentRunId || session.status === "archived") continue;
@@ -121,14 +124,20 @@ async function drain(
     if (importId && session.pendingImportGeneration !== null) {
       progress.cancelledImports.push({ importId, generation: session.pendingImportGeneration });
     }
+    const activeRunId = session.activeSubAgentRunId;
     const archived = scheduler.transition(session.subAgentSessionId, {
       type: "archive",
       reason: "parent-terminal",
     });
     if (archived !== null) closed += 1;
+    if (archived !== null && activeRunId && INTERRUPTING_REASONS.has(terminalReason)) {
+      interrupted.push({ sessionId: session.subAgentSessionId, runId: activeRunId });
+    }
     revision = archived ?? revision;
   }
   await parts.store.flush(revision);
+  for (const run of interrupted)
+    parts.mainEvents.interrupted(run.sessionId, run.runId, terminalReason);
   parts.mainEvents.closed(parentRunId, closed);
 }
 

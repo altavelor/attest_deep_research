@@ -108,6 +108,25 @@ class FakeChildHost implements SubAgentHost {
   async closeAll(parentRunId: string, reason: string): Promise<SubAgentCloseResult> {
     this.log.push(`closeAll:${parentRunId}:${reason}`);
     await this.closeGate;
+    if (reason === "plugin-unload") {
+      await Promise.resolve().then(() =>
+        this.context.mainEvents?.publish([
+          {
+            type: "notice",
+            entry: {
+              eventKey: `notice:${parentRunId}:interrupted`,
+              parentRunId,
+              description: "Child",
+              createdAt: "t",
+              sessionId: "child-1",
+              runId: "child-run-1",
+              kind: "interrupted",
+              reasonCode: reason,
+            },
+          },
+        ]),
+      );
+    }
     return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };
   }
 

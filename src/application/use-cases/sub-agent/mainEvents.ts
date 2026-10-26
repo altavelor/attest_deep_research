@@ -85,6 +85,20 @@ export class SubAgentMainEvents {
     });
   }
 
+  /** Publishes the interrupted notice of a direct run its closing parent run cut off. */
+  interrupted(sessionId: string, runId: string, reasonCode: string): void {
+    const record = this.parts.store.record(sessionId);
+    const run = record ? findOwnRun(record, runId) : undefined;
+    if (!run || run.origin !== "direct") return;
+    this.notice(
+      sessionId,
+      runId,
+      "interrupted",
+      { reasonCode: safeSubAgentCode(reasonCode) },
+      true,
+    );
+  }
+
   closed(parentRunId: string, closedCount: number): void {
     const chatId = this.parts.store.state?.chatId;
     if (!chatId || closedCount <= 0) return;
@@ -108,10 +122,12 @@ export class SubAgentMainEvents {
     runId: string | null,
     kind: SubAgentNoticeKind,
     details: Partial<SubAgentNoticeEntry>,
+    closing = false,
   ): boolean {
     const record = this.parts.store.record(sessionId);
     const chatId = this.parts.store.state?.chatId;
-    if (!record || !chatId || !this.live(record.session.parentRunId)) return false;
+    if (!record || !chatId) return false;
+    if (closing ? this.parts.fences.disposed : !this.live(record.session.parentRunId)) return false;
     const { parentRunId } = record.session;
     return this.publish({
       type: "notice",

@@ -47,6 +47,7 @@ describe("chat runtime and its child host", () => {
     });
     const commit = repository.commitChatDocument.bind(repository);
     let failNext = true;
+    let notices: string[] = [];
     let hold: Promise<void> | null = null;
     vi.spyOn(repository, "commitChatDocument").mockImplementation(async (change) => {
       if (failNext) {
@@ -55,6 +56,7 @@ describe("chat runtime and its child host", () => {
       }
       if (hold) await hold;
       log.push(`commit:${change.chat?.lastRun?.status ?? "-"}`);
+      notices = change.chat?.subAgentNotices?.map((notice) => notice.kind) ?? [];
       return commit(change);
     });
 
@@ -137,5 +139,6 @@ describe("chat runtime and its child host", () => {
       "commit:interrupted",
       "dispose:0",
     ]);
+    expect(notices).toEqual(["interrupted"]);
   });
 });

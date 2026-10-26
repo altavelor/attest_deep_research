@@ -480,7 +480,7 @@ describe("sub-agent inspection hardening", () => {
     expect((await card(harness, session.subAgentSessionId)).status).toBe("ready");
   });
 
-  it("publishes queued, failed, not-started and closed notices once each", async () => {
+  it("publishes queued, failed, not-started, unload-interrupted and closed notices once each", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
     const launched = [];
@@ -489,8 +489,8 @@ describe("sub-agent inspection hardening", () => {
     harness.execution.fail(0);
     await settle();
     await harness.manager.closeAll("parent-empty", "completed");
-    await harness.manager.closeAll("parent-1", "completed");
-    await harness.manager.closeAll("parent-1", "completed");
+    await harness.manager.closeAll("parent-1", "plugin-unload");
+    await harness.manager.closeAll("parent-1", "plugin-unload");
     await settle();
 
     const notices = harness.mainEvents.flatMap((intent) =>
@@ -500,10 +500,14 @@ describe("sub-agent inspection hardening", () => {
       "queued",
       "not-started",
       "failed",
+      "interrupted",
+      "interrupted",
+      "interrupted",
       "closed",
     ]);
     expect(notices[2]).toMatchObject({ reasonCode: "provider-failed" });
-    expect(notices[3]).toMatchObject({ closedCount: 5, sessionId: null });
+    expect(notices[3]).toMatchObject({ reasonCode: "plugin-unload" });
+    expect(notices[6]).toMatchObject({ closedCount: 5, sessionId: null });
   });
 
   it("redacts run text in the detail and bounds untrusted result values", async () => {

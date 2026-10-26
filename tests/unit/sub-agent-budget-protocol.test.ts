@@ -309,6 +309,12 @@ describe("required-scope denial and cleanup", () => {
     expect(harness.execution.requests[0].signal.aborted).toBe(true);
     expect(harness.execution.requests[1].sessionId).toBe(neighbour.session.subAgentSessionId);
     expect(harness.execution.requests[1].signal.aborted).toBe(false);
+    const stopped = harness.mainEvents.flatMap((intent) =>
+      intent.type === "notice" && intent.entry.kind === "stopped" ? [intent.entry] : [],
+    );
+    expect(stopped.map((entry) => [entry.runId, entry.reasonCode])).toEqual([
+      [running.receipt.runId, "budget-denied"],
+    ]);
   });
 
   it("U9: hung budget promises never block stop, close or dispose and a late grant is returned", async () => {

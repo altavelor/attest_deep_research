@@ -1,17 +1,15 @@
-import { isChatStorageError, type ChatRepository } from "@application/ports/chat";
-import { removeOrphanSubAgentAliases } from "@core/chat/subAgentAliases";
-import { recoverSubAgentState } from "@core/research";
-
-import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
-import { inferChatTitle } from "@core/chat/savedChat";
-import { normalizeSubAgentTimeline } from "@core/chat/subAgentTimeline";
-import type { SavedChatSummary } from "@core/chat/savedChat";
+import type { ChatRepository } from "@application/ports/chat";
+import type {
+  SaveChatInput,
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+} from "@core/chat/savedChat";
 import {
   chatHistoryActivity,
   isNonTerminalChatSessionStatus,
   MAX_CONCURRENT_CHAT_SESSIONS,
   nextRunStatus,
-  normalizeStaleRunState,
   type ChatHistoryActivity,
   type ChatSessionStatus,
   type SavedChatRunState,
@@ -21,13 +19,12 @@ import {
   nextAssistantMessage,
   nextUserMessage,
   startAssistantProgress,
-  stripChainDisplayFields,
-  stripMessageDiagnostics,
 } from "@core/conversation";
 import { toUserMessage } from "@core/errors";
-import type { ResearchAnswer } from "@core/answer";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
+import { chatSaveInput } from "./chatSaveInput";
 import { ChatSessionRuntime, type ChatSessionRuntimeHost } from "./ChatSessionRuntime";
+import { normalizeStaleChats } from "./staleChatRecovery";
 import { settleWithin, TERMINAL_SAVE_WAIT_MS } from "./terminalSave";
 import {
   createIdleSessionState,
@@ -42,13 +39,6 @@ import type {
   ChatSessionState,
   ChatSessionViewProbe,
 } from "./chatSessionTypes";
-
-const SKIPPED_RECOVERY_CODES = new Set([
-  "unreadable-section",
-  "invalid-snapshot",
-  "chat-missing",
-  "document-conflict",
-]);
 
 export interface ChatSessionManagerOptions {
   repository: ChatRepository;
@@ -411,49 +401,9 @@ export class ChatSessionManager {
     runtime.abort();
   }
 
-  /**
-   * Startup recovery. Converts persisted queued, running, or stopping runs into
-   * interrupted ones with reason `crash-recovery`, preserving `updatedAt` so an
-   * old chat does not jump to the top of history. The chat and its recovered
-   * sub-agent section are written in one commit; a chat changed meanwhile is skipped.
-   */
-  async normalizeStaleChats(): Promise<void> {
-    const summaries = await this.options.repository.listChats();
-    const completedAt = this.options.environment.now().toISOString();
-    for (const summary of summaries) {
-      if (!summary.lastRun || !isNonTerminalChatSessionStatus(summary.lastRun.status)) continue;
-      const document = await this.options.repository.loadChatDocument(summary.id);
-      if (!document?.chat.lastRun || document.chat.recoveredFrom) continue;
-      const { chat } = document;
-      const lastRun = normalizeStaleRunState(chat.lastRun, completedAt);
-      if (!lastRun) continue;
-      const section = chat.subAgents?.status === "ready" ? chat.subAgents.snapshot : null;
-      const subAgents = section ? recoverSubAgentState(section, completedAt) : null;
-      try {
-        await this.options.repository.commitChatDocument({
-          chatId: chat.id,
-          base: document.base,
-          chat: {
-            id: chat.id,
-            title: chat.title,
-            createdAt: chat.createdAt,
-            updatedAt: chat.updatedAt,
-            messages: interruptLastAssistantProgress(chat.messages),
-            lastAnswer: chat.lastAnswer,
-            attachedContextPaths: chat.attachedContextPaths,
-            chatSettings: chat.chatSettings,
-            sourceRegistry: subAgents
-              ? removeOrphanSubAgentAliases(chat.sourceRegistry, subAgents)
-              : chat.sourceRegistry,
-            unreadCompletion: chat.unreadCompletion,
-            lastRun,
-          },
-          ...(subAgents && subAgents !== section ? { subAgents } : {}),
-        });
-      } catch (error) {
-        if (!isChatStorageError(error) || !SKIPPED_RECOVERY_CODES.has(error.code)) throw error;
-      }
-    }
+  /** Startup recovery of runs a crash left non-terminal; see `normalizeStaleChats`. */
+  normalizeStaleChats(): Promise<void> {
+    return normalizeStaleChats(this.options.repository, this.options.environment.now());
   }
 
   /**
@@ -659,25 +609,7 @@ export class ChatSessionManager {
   }
 
   private saveInput(state: ChatSessionState): SaveChatInput {
-    const timeline = normalizeSubAgentTimeline(state);
-    const displayFree = stripChainDisplayFields(timeline.messages);
-    const messages = this.options.persistDiagnostics()
-      ? displayFree
-      : stripMessageDiagnostics(displayFree);
-    return {
-      id: state.chatId ?? undefined,
-      title: inferChatTitle(state.messages),
-      messages,
-      lastAnswer: this.options.persistDiagnostics()
-        ? state.lastAnswer
-        : stripAnswerContextDiagnostics(state.lastAnswer),
-      attachedContextPaths: state.attachedContextPaths,
-      chatSettings: state.chatSettings,
-      sourceRegistry: state.sourceRegistry,
-      subAgentDispatches: [...timeline.subAgentDispatches],
-      subAgentNotices: [...timeline.subAgentNotices],
-      timelineSequence: timeline.timelineSequence,
-    };
+    return chatSaveInput(state, this.options.persistDiagnostics());
   }
 
   private runtimeHost(): ChatSessionRuntimeHost {
@@ -703,12 +635,6 @@ export class ChatSessionManager {
       listener({ sessionId, chatId, kind: "error", error });
     }
   }
-}
-
-function stripAnswerContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
-  if (!answer?.contextDiagnostics) return answer;
-  const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
-  return rest;
 }
 
 function persistedStatus(lastRun: SavedChatRunState | undefined): ChatSessionStatus {
