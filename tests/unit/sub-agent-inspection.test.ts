@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { redactSensitiveData } from "@shared";
 import {
   deriveSubAgentTitle,
+  redactSubAgentJson,
   type SubAgentModelSnapshot,
   type SubAgentObservationEvent,
   type SubAgentSessionFailure,
@@ -10,6 +11,7 @@ import {
 } from "@core/research";
 import { settle } from "../support/async";
 import {
+  AT,
   delegationGrant,
   executionResult,
   launchChild,
@@ -75,30 +77,35 @@ describe("sub-agent inspection snapshot", () => {
     const delegator = harness.delegator();
     const idle = await delegator.create({ createRequestId: "create-idle", title: "Idle" });
     expect((await harness.manager.inspection().snapshot()).hasAgentRuns).toBe(false);
-    const first = await launchChild(delegator, "first");
+    await launchChild(delegator, "first");
     const second = await launchChild(delegator, "second");
     harness.imports.mode = "hold";
+    harness.probes.now = "2026-10-26T11:00:00.000Z";
     harness.execution.finish(0);
     await settle();
+    for (const name of ["c", "d", "e", "queued"]) await launchChild(delegator, name);
 
     const snapshot = await harness.manager.inspection().snapshot();
-    expect(snapshot.activeCount).toBe(1);
+    expect(snapshot.activeCount).toBe(4);
     expect(snapshot.hasAgentRuns).toBe(true);
-    const rest = [first.session.subAgentSessionId, idle.subAgentSessionId].sort();
-    expect(snapshot.sessions.map((entry) => entry.sessionId)).toEqual([
-      second.session.subAgentSessionId,
-      ...rest,
-    ]);
-    expect(snapshot.sessions.map((entry) => entry.status).sort()).toEqual([
-      "importing",
-      "ready",
-      "running",
-    ]);
-    const reloaded = managerHarness({
-      load: async () => managerParts(harness.manager).store.state,
-    });
-    const after = await reloaded.manager.inspection().snapshot();
-    expect(after.hasAgentRuns).toBe(true);
+    expect(snapshot.sessions.slice(0, 4).map((entry) => entry.status)).toEqual(
+      Array(4).fill("running"),
+    );
+    expect(snapshot.sessions[3].sessionId).toBe(second.session.subAgentSessionId);
+    expect(
+      snapshot.sessions
+        .slice(4, 6)
+        .map((entry) => entry.status)
+        .sort(),
+    ).toEqual(["importing", "queued"]);
+    expect(snapshot.sessions[6].sessionId).toBe(idle.subAgentSessionId);
+    const state = managerParts(harness.manager).store.state!;
+    const trimmed = {
+      ...state,
+      records: state.records.map((record) => ({ ...record, runs: [] })),
+    };
+    const reloaded = managerHarness({ load: async () => trimmed });
+    expect((await reloaded.manager.inspection().snapshot()).hasAgentRuns).toBe(true);
   });
 
   it("keeps the captured model per run and the title of the first task", async () => {
@@ -148,7 +155,16 @@ describe("sub-agent inspection snapshot", () => {
     await delegator.continue(sessionId, { type: "follow-up", task: "More" }, "submit-more");
     await settle();
     harness.probes.clockMs = 90_250;
+    const running = await card(harness, sessionId);
+    expect(running.elapsedMs).toBe(650);
+    await harness.manager.inspection().stopFromUser(sessionId, running.controlRunId);
+    await settle();
+    harness.probes.clockMs = 99_000;
     expect((await card(harness, sessionId)).elapsedMs).toBe(650);
+    const stopped = harness.mainEvents.find(
+      (intent) => intent.type === "notice" && intent.entry.kind === "stopped",
+    );
+    expect(stopped?.entry).toMatchObject({ durationMs: 250 });
   });
 
   it("sums usage per request, replaces live by final and keeps unknown totals partial", async () => {
@@ -212,10 +228,18 @@ describe("sub-agent inspection snapshot", () => {
         ],
       } as never,
     });
+    observe(harness, 0, {
+      type: "model-started",
+      runId: receipt.runId,
+      model: { ...MODEL_A, label: "Later model" },
+      prompt: { messages: [{ role: "user", content: "Second request" }] } as never,
+    });
     harness.execution.finish(1);
     await settle();
 
     const prompt = await detailOf(session.subAgentSessionId);
+    expect((await card(harness, session.subAgentSessionId)).model?.label).toBe("Model A");
+    expect(prompt.messages[0].content).toBe("Framing");
     expect(prompt).toMatchObject({ state: "captured", redacted: true, truncated: true });
     expect(prompt.messages.map((message) => message.role)).toEqual(["system", "user"]);
     expect(prompt.messages[1].content.length).toBeLessThanOrEqual(64 * 1024 - "Framing".length);
@@ -230,7 +254,7 @@ describe("sub-agent inspection snapshot", () => {
     const secretAtCallCap = `${"a".repeat(32 * 1024 - 12)} token=prefixsecret1`;
     observe(harness, 0, {
       type: "tool-start",
-      item: toolItem(harness, 0, "c1", { args: { q: "x" } }),
+      item: toolItem(harness, 0, "c1", { args: { q: "z".repeat(10 * 1024) } }),
     });
     observe(harness, 0, { type: "tool-start", item: toolItem(harness, 0, "c2") });
     observe(harness, 0, {
@@ -258,7 +282,7 @@ describe("sub-agent inspection snapshot", () => {
     expect(items[0]).toMatchObject({
       status: "failed",
       badge: { text: "web-fetch-failed" },
-      args: { q: "x" },
+      args: { q: "z".repeat(10 * 1024) },
     });
     expect(items[1].payloadState).toBe("truncated");
     expect(items.map((item) => item.payloadState).slice(2)).toEqual([
@@ -266,6 +290,11 @@ describe("sub-agent inspection snapshot", () => {
       "truncated",
     ]);
     expect(stateText(harness)).not.toMatch(/prefixsecret|runsecret11/);
+    const parts = managerParts(harness.manager);
+    const c2 = parts.store.state!.observation.find((entry) => entry.observationId.endsWith(":c2"))!;
+    parts.store.putObservation({ ...c2, payload: null, evicted: { reason: "chat size limit" } });
+    const evicted = await harness.manager.inspection().getSession(session.subAgentSessionId);
+    expect(evicted!.lifetime[1]).toMatchObject({ sequence: 2, payloadState: "evicted" });
     harness.probes.debug = false;
     const hidden = await harness.manager.inspection().getSession(session.subAgentSessionId);
     expect(hidden!.lifetime[0]).toMatchObject({ payloadState: "disabled" });
@@ -309,7 +338,16 @@ describe("sub-agent user stop", () => {
     expect(
       await inspection.stopFromUser(finished.session.subAgentSessionId, finished.receipt.runId),
     ).toBe("stale");
+    const stoppedCard = await card(harness, running.session.subAgentSessionId);
+    observe(harness, 0, { type: "tool-end", item: toolItem(harness, 0, "late") });
+    expect((await card(harness, running.session.subAgentSessionId)).revision).toBe(
+      stoppedCard.revision,
+    );
+    expect(stateText(harness)).not.toContain(":late");
     expect(await inspection.stopFromUser(idle.subAgentSessionId, null)).toBe("stopped");
+    const open = await delegator.create({ createRequestId: "create-open", title: "Open" });
+    managerParts(harness.manager).fences.revoke("parent-1");
+    expect(await inspection.stopFromUser(open.subAgentSessionId, null)).toBe("already-terminal");
     expect((await failureOf(inspection.stopFromUser("session-foreign", null))).error.code).toBe(
       "not-authorized",
     );
@@ -385,7 +423,7 @@ describe("sub-agent main-visible events", () => {
         messages: [{ role: "assistant", content: "token=promptsecret", reasoning: "hidden chain" }],
       } as never,
     });
-    const answer = `${"y".repeat(4 * 1024 - 10)} token=replysecret`;
+    const answer = `${"é".repeat(2040)} token=replysecret`;
     harness.execution.finish(0, executionResult(answer));
     await settle();
 
@@ -398,7 +436,12 @@ describe("sub-agent main-visible events", () => {
       replyTruncated: boolean;
     };
     expect(finished.replyTruncated).toBe(true);
-    expect(finished.replyExcerpt.length).toBeLessThanOrEqual(4 * 1024);
+    expect(finished.replyExcerpt).toBe(`${"é".repeat(2040)} token=`);
+    const parts = managerParts(harness.manager);
+    parts.mainEvents.terminal(session.subAgentSessionId, receipt.runId, "finished", answer);
+    parts.mainEvents.dispatch(session.subAgentSessionId, receipt.runId, "initial");
+    await settle();
+    expect(harness.mainEvents).toHaveLength(3);
     const detail = await harness.manager.inspection().getSession(session.subAgentSessionId);
     const visible = JSON.stringify([
       harness.mainEvents,
@@ -406,5 +449,94 @@ describe("sub-agent main-visible events", () => {
       managerParts(harness.manager).store.state,
     ]);
     expect(visible).not.toMatch(/promptsecret|replysecret|replys|hidden chain/);
+  });
+});
+
+describe("sub-agent inspection hardening", () => {
+  it("coalesces change notifications into one snapshot and survives unsubscribing", async () => {
+    const harness = managerHarness();
+    const inspection = harness.manager.inspection();
+    const { session, receipt } = await launchChild(harness.delegator(), "alpha");
+    const seen: string[] = [];
+    let stopSecond = (): void => undefined;
+    const stopFirst = inspection.subscribe((snapshot) => {
+      seen.push(snapshot.sessions[0].status);
+      stopSecond();
+    });
+    stopSecond = inspection.subscribe(() => seen.push("second"));
+    observe(harness, 0, { type: "phase", runId: receipt.runId, phase: "One", occurredAt: AT });
+    observe(harness, 0, { type: "phase", runId: receipt.runId, phase: "Two", occurredAt: AT });
+    await settle();
+    expect(seen).toEqual(["running"]);
+    harness.execution.finish(0);
+    await settle();
+    expect(seen.at(-1)).toBe("ready");
+    const delivered = seen.length;
+    stopFirst();
+    await launchChild(harness.delegator(), "beta");
+    await settle();
+    expect(seen).toHaveLength(delivered);
+    expect((await card(harness, session.subAgentSessionId)).status).toBe("ready");
+  });
+
+  it("publishes queued, failed, not-started and closed notices once each", async () => {
+    const harness = managerHarness();
+    const delegator = harness.delegator();
+    const launched = [];
+    for (const name of ["a", "b", "c", "d", "e"]) launched.push(await launchChild(delegator, name));
+    managerParts(harness.manager).sessionOptions.delete(launched[4].session.subAgentSessionId);
+    harness.execution.fail(0);
+    await settle();
+    await harness.manager.closeAll("parent-empty", "completed");
+    await harness.manager.closeAll("parent-1", "completed");
+    await harness.manager.closeAll("parent-1", "completed");
+    await settle();
+
+    const notices = harness.mainEvents.flatMap((intent) =>
+      intent.type === "notice" && intent.entry.kind !== "created" ? [intent.entry] : [],
+    );
+    expect(notices.map((entry) => entry.kind)).toEqual([
+      "queued",
+      "not-started",
+      "failed",
+      "closed",
+    ]);
+    expect(notices[2]).toMatchObject({ reasonCode: "provider-failed" });
+    expect(notices[3]).toMatchObject({ closedCount: 5, sessionId: null });
+  });
+
+  it("redacts run text in the detail and bounds untrusted result values", async () => {
+    const harness = managerHarness({
+      redact: (text) => {
+        if (text.includes("EXPLODE")) throw new Error("redactor failed");
+        return redactSensitiveData(text);
+      },
+    });
+    const delegator = harness.delegator();
+    const { session } = await launchChild(delegator, "alpha", "Check token=tasksecret now");
+    const failing = await launchChild(delegator, "beta");
+    let nested: Record<string, unknown> = { text: "leaf" };
+    for (let depth = 0; depth < 100_000; depth += 1) nested = { child: nested };
+    const cyclic: Record<string, unknown> = { id: "token=idsecret" };
+    cyclic.self = cyclic;
+    const evidence = [
+      nested,
+      cyclic,
+      { meta: { id: "token=metasecret" } },
+      JSON.parse('{"__proto__":{"polluted":true},"text":"t"}'),
+    ];
+    harness.execution.finish(0, { ...executionResult("Answer"), evidence: evidence as never });
+    harness.execution.finish(1, executionResult("EXPLODE"));
+    await settle();
+
+    const detail = await harness.manager.inspection().getSession(session.subAgentSessionId);
+    expect(detail!.runs[0].command).toBe("Check token=[redacted] now");
+    expect(JSON.stringify(detail)).not.toContain("tasksecret");
+    expect(stateText(harness)).not.toMatch(/idsecret|metasecret/);
+    expect((await card(harness, session.subAgentSessionId)).status).toBe("ready");
+    const copy = redactSubAgentJson(evidence[3], (text) => text) as Record<string, unknown>;
+    expect([Object.getPrototypeOf(copy), copy.polluted]).toEqual([Object.prototype, undefined]);
+    expect(redactSubAgentJson(cyclic, (text) => text).self).toBeNull();
+    expect((await card(harness, failing.session.subAgentSessionId)).status).toBe("failed");
   });
 });
