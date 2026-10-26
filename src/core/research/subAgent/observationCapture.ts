@@ -13,6 +13,7 @@ export type SubAgentRedactor = (text: string) => string;
 const ROLES = new Set(["system", "user", "assistant", "tool"]);
 const MAX_LABEL_CHARS = 200;
 const MAX_SUMMARY_CHARS = 1_000;
+const MAX_JSON_DEPTH = 64;
 
 export interface SubAgentToolCapture {
   item: SubAgentWorkflowItem;
@@ -67,7 +68,7 @@ export function sanitizeSubAgentToolItem(
 ): SubAgentToolCapture {
   const { redact } = options;
   const resultJson = typeof item.resultJson === "string" ? redact(item.resultJson) : undefined;
-  const args = isPlainRecord(item.args) ? redactDeep(item.args, redact) : undefined;
+  const args = isPlainRecord(item.args) ? redactSubAgentJson(item.args, redact) : undefined;
   const payloadChars = (args ? JSON.stringify(args).length : 0) + (resultJson?.length ?? 0);
   const status = item.status === "complete" || item.status === "failed" ? item.status : "pending";
   const base: SubAgentWorkflowItem = {
@@ -120,30 +121,37 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function redactDeep<T>(value: T, redact: SubAgentRedactor): T {
-  if (typeof value === "string") return redact(value) as T;
-  if (Array.isArray(value)) return value.map((entry: unknown) => redactDeep(entry, redact)) as T;
-  if (!isPlainRecord(value)) {
-    return (typeof value === "number" && !Number.isFinite(value) ? null : value) as T;
-  }
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) result[key] = redactDeep(entry, redact);
-  return result as T;
-}
-
 /**
- * Redacts every string of an untrusted JSON value except item ids, so a child result is
- * stored and planned only in its redacted form.
+ * Redacts every string of an untrusted JSON-like value, ids included. Nesting deeper
+ * than 64 levels, cycles, non-finite numbers and functions become null, and a
+ * `__proto__` key is dropped, so the copy is plain, bounded JSON.
  */
 export function redactSubAgentJson<T>(value: T, redact: SubAgentRedactor): T {
-  if (typeof value === "string") return redact(value) as T;
+  return redactJson(value, redact, 0, new Set()) as T;
+}
+
+function redactJson(
+  value: unknown,
+  redact: SubAgentRedactor,
+  depth: number,
+  seen: Set<object>,
+): unknown {
+  if (typeof value === "string") return redact(value);
+  if (typeof value === "boolean" || value === null) return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "object" || depth >= MAX_JSON_DEPTH || seen.has(value)) return null;
+  seen.add(value);
+  let result: unknown;
   if (Array.isArray(value)) {
-    return value.map((entry: unknown) => redactSubAgentJson(entry, redact)) as T;
+    result = value.map((entry: unknown) => redactJson(entry, redact, depth + 1, seen));
+  } else {
+    const copy: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (key === "__proto__") continue;
+      copy[key] = redactJson(entry, redact, depth + 1, seen);
+    }
+    result = copy;
   }
-  if (!isPlainRecord(value)) return value;
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    result[key] = key === "id" ? entry : redactSubAgentJson(entry, redact);
-  }
-  return result as T;
+  seen.delete(value);
+  return result;
 }

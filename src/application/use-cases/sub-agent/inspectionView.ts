@@ -6,6 +6,7 @@ import type {
 import {
   deriveSubAgentTitle,
   mergeSubAgentUsage,
+  safeSubAgentCode,
   type NormalizedUsage,
   type SubAgentInitialPrompt,
   type SubAgentObservationRecord,
@@ -79,15 +80,24 @@ export function buildInspectionDetail(
   const observation = inputs.state?.observation ?? [];
   const lifetime = observation
     .filter((entry) => entry.sessionId === sessionId && entry.observationId.startsWith("tool:"))
-    .map((entry) => workflowItem(entry, inputs.debug))
-    .sort((left, right) => left.sequence - right.sequence);
+    .map((entry, position) => workflowItem(entry, position + 1, inputs.debug));
   return copy({
     card: buildCard(record, inputs),
-    runs: record.runs,
+    runs: record.runs.map((run) => publicRun(run, inputs.redact)),
     selectedRunId: controlRunIdOf(record),
     initialPrompts: record.runs.map((run) => initialPrompt(run, observation)),
     lifetime,
   });
+}
+
+function publicRun(run: SubAgentRunSummary, redact: (text: string) => string): SubAgentRunSummary {
+  return {
+    ...run,
+    command: redact(run.command),
+    terminalReason: run.terminalReason === null ? null : safeSubAgentCode(run.terminalReason),
+    resultSummary: run.resultSummary === null ? null : redact(run.resultSummary),
+    ...(run.model ? { model: { ...run.model, label: redact(run.model.label) } } : {}),
+  };
 }
 
 function ownRecords(state: SubAgentStateSnapshot | null): readonly SubAgentSessionRecord[] {
@@ -156,16 +166,20 @@ function initialPrompt(
   return { ...empty, state: "unavailable", truncated: false, unavailableReason: "not-recorded" };
 }
 
-function workflowItem(entry: SubAgentObservationRecord, debug: boolean): SubAgentWorkflowItem {
+function workflowItem(
+  entry: SubAgentObservationRecord,
+  position: number,
+  debug: boolean,
+): SubAgentWorkflowItem {
   const payload = entry.payload as SubAgentWorkflowItem | null;
   if (!payload || entry.evicted) {
     return {
-      id: entry.observationId.slice("tool:".length),
+      id: entry.observationId.slice(`tool:${entry.runId}:`.length),
       sessionId: entry.sessionId,
       runId: entry.runId,
       name: "",
       label: "",
-      sequence: Number.MAX_SAFE_INTEGER,
+      sequence: position,
       round: 0,
       status: "complete",
       startedAt: "",

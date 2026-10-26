@@ -66,6 +66,7 @@ describe("sub-agent manager and import port", () => {
     let sequence = 0;
     const manager = createSubAgentSessionManager({
       getChatId: () => "chat-1",
+      redact: (text) => text,
       repository: { load: async () => subAgentSection([]) },
       writer,
       execution: new FakeSubAgentExecution(),

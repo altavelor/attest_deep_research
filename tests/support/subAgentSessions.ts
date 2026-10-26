@@ -515,7 +515,13 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
   const execution = new FakeSubAgentExecution();
   const imports = new FakeSubAgentImport();
   const grants = new Map([["grant-1", delegationGrant(binding)]]);
-  const probes = { parent: binding as ParentRunBinding | null, epoch: 1, debug: false, clockMs: 0 };
+  const probes = {
+    parent: binding as ParentRunBinding | null,
+    epoch: 1,
+    debug: false,
+    clockMs: 0,
+    now: AT,
+  };
   const mainEvents: SubAgentMainEventIntent[] = [];
   let sequence = 0;
   const context: SubAgentSessionManagerContext = {
@@ -528,9 +534,9 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
     getCurrentParentBinding: () => probes.parent,
     getCurrentDeliveryEpoch: () => probes.epoch,
     resolveGrant: (id) => grants.get(id) ?? null,
-    now: () => new Date(AT),
+    now: () => new Date(probes.now),
     createId: (prefix) => `${prefix}-${chatId ?? "draft"}-${(sequence += 1)}`,
-    ...(options.redact ? { redact: options.redact } : {}),
+    redact: options.redact ?? ((text) => text),
     monotonicNow: () => probes.clockMs,
     isDebugCapture: () => probes.debug,
     mainEvents: { publish: (intents) => void mainEvents.push(...intents) },

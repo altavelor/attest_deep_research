@@ -36,12 +36,13 @@ const MAX_PHASE_CHARS = 200;
 export class SubAgentObservationRecorder {
   private readonly starts = new Map<string, number>();
   private readonly payloadChars = new Map<string, number>();
+  private readonly itemChars = new Map<string, number>();
   private readonly liveRevisions = new Map<string, number>();
 
   constructor(private readonly parts: SubAgentManagerParts) {}
 
   redact(text: string): string {
-    return this.parts.context.redact ? this.parts.context.redact(text) : text;
+    return this.parts.context.redact(text);
   }
 
   begin(runId: string): void {
@@ -53,6 +54,9 @@ export class SubAgentObservationRecorder {
     const elapsed = this.elapsed(runId);
     this.starts.delete(runId);
     this.payloadChars.delete(runId);
+    for (const key of [...this.itemChars.keys()]) {
+      if (key.startsWith(`tool:${runId}:`)) this.itemChars.delete(key);
+    }
     return elapsed;
   }
 
@@ -68,6 +72,7 @@ export class SubAgentObservationRecorder {
   clear(): void {
     this.starts.clear();
     this.payloadChars.clear();
+    this.itemChars.clear();
     this.liveRevisions.clear();
   }
 
@@ -149,10 +154,11 @@ export class SubAgentObservationRecorder {
   ): boolean {
     if (!item || item.sessionId !== sessionId || item.runId !== runId) return false;
     if (!isSubAgentStateId(item.id)) return false;
-    const observationId = `tool:${item.id}`;
+    const observationId = `tool:${runId}:${item.id}`;
+    if (!isSubAgentStateId(observationId)) return false;
     const previous = this.existing(observationId)?.payload as Row | null | undefined;
     if (kind === "tool-start" && previous && previous.status !== "pending") return false;
-    const used = this.payloadChars.get(runId) ?? 0;
+    const used = (this.payloadChars.get(runId) ?? 0) - (this.itemChars.get(observationId) ?? 0);
     const args = item.args ?? (previous?.args as SubAgentWorkflowItem["args"]);
     const capture = sanitizeSubAgentToolItem(args ? { ...item, args } : item, {
       redact: (text) => this.redact(text),
@@ -160,6 +166,7 @@ export class SubAgentObservationRecorder {
       remainingRunChars: MAX_RUN_PAYLOAD_CHARS - used,
     });
     this.payloadChars.set(runId, used + capture.payloadChars);
+    this.itemChars.set(observationId, capture.payloadChars);
     const sequence =
       typeof previous?.sequence === "number" ? previous.sequence : this.nextSequence(sessionId);
     const status =
@@ -179,12 +186,14 @@ export class SubAgentObservationRecorder {
 
   private nextSequence(sessionId: string): number {
     let last = 0;
+    let count = 0;
     for (const entry of this.parts.store.state?.observation ?? []) {
       if (entry.sessionId !== sessionId || !entry.observationId.startsWith("tool:")) continue;
+      count += 1;
       const sequence = (entry.payload as Row | null)?.sequence;
       if (typeof sequence === "number" && sequence > last) last = sequence;
     }
-    return last + 1;
+    return Math.max(last, count) + 1;
   }
 
   private existing(observationId: string): SubAgentObservationRecord | undefined {
