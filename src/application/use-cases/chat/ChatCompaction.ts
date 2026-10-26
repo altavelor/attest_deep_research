@@ -345,10 +345,16 @@ function researchTraceForPrompt(
   }
 
   for (const item of parentWorkflowChain(progress.chain)) {
-    lines.push(...chainItemTraceLines(item));
+    lines.push(...chainItemTraceLines(withoutNestedWork(item)));
   }
 
   return uniqueStrings(lines);
+}
+
+function withoutNestedWork(item: ChainItem): ChainItem {
+  if (item.kind !== "tool-call" || !item.children) return item;
+  const { children: _children, ...rest } = item;
+  return rest;
 }
 
 function chainItemTraceLines(item: ChainItem, depth = 0): string[] {
