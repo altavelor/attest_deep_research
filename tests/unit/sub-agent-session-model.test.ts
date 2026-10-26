@@ -213,11 +213,37 @@ describe("sub-agent session transitions", () => {
       ok: true,
       tombstonedImport: { runId: "run-1", generation: 1 },
     });
+    expect(
+      applyAll(importFailed, [{ type: "import-committed", generation: 1, at: AT }]).session,
+    ).toMatchObject({
+      status: "ready",
+      pendingImportRunId: null,
+      pendingImportGeneration: null,
+      lastImportGeneration: 1,
+    });
   });
 
   it("lets a model stop keep retry while user archive is final and idempotent", () => {
     const running = applyAll(readySubAgentRecord(), runToImport("run-1").slice(0, 2));
-    const stopped = applyAll(running, [
+    const importing = applyAll(readySubAgentRecord(), runToImport("run-1"));
+    expect(applySubAgentTransition(importing, { type: "stop-import", at: AT })).toMatchObject({
+      ok: true,
+      record: { session: { status: "archived" } },
+      tombstonedImport: { runId: "run-1", generation: 1 },
+    });
+    expect(
+      applySubAgentTransition(readySubAgentRecord(), { type: "stop-import", at: AT }),
+    ).toMatchObject({ ok: false, error: { code: "invalid-state" } });
+    const stopping = applyAll(running, [{ type: "stop-requested", runId: "run-1", at: AT }]);
+    expect([stopping.session.status, stopping.runs[0].status]).toEqual(["stopping", "stopping"]);
+    expect(
+      applySubAgentTransition(stopping, { type: "stop-requested", runId: "run-1", at: AT }).ok,
+    ).toBe(false);
+    expect(
+      applyAll(stopping, [{ type: "provider-failed", runId: "run-1", at: AT, reason: "x" }]).runs[0]
+        .status,
+    ).toBe("failed");
+    const stopped = applyAll(stopping, [
       { type: "model-stop", runId: "run-1", at: AT, reason: "timeout" },
     ]);
     const archived = applyAll(running, [{ type: "archive", reason: "user-archive", at: AT }]);
