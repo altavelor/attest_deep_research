@@ -53,10 +53,13 @@ export class SubAgentSessionCreation {
   ): Promise<SubAgentSessionSummary> {
     const normalized = normalizeCreate(binding, grant, input);
     const existing = this.parts.store.create(normalized.createRequestId);
-    if (existing && existing.normalizedInputDigest !== normalized.digest) {
-      throw sessionFailure("idempotency-conflict");
+    if (existing) {
+      this.assertOwner(binding, existing);
+      if (existing.normalizedInputDigest !== normalized.digest) {
+        throw sessionFailure("idempotency-conflict");
+      }
+      return this.resume(binding, existing, normalized);
     }
-    if (existing) return this.resume(binding, existing, normalized);
     const candidateSessionId = this.parts.context.createId("subagent-session");
     if (!isSubAgentStateId(candidateSessionId)) throw sessionFailure("invalid-state");
     const record: SubAgentCreateRecord = {
@@ -83,6 +86,15 @@ export class SubAgentSessionCreation {
       throw sessionFailure("not-authorized");
     }
     return this.resume(binding, existing, pending);
+  }
+
+  private assertOwner(binding: ParentRunBinding, existing: SubAgentCreateRecord): void {
+    if (existing.status === "published" && existing.publishedSessionId !== null) {
+      ownedRecord(this.parts.store, binding, existing.publishedSessionId);
+    } else if (existing.status === "pending") {
+      const pending = this.pendingInputs.get(existing.createRequestId);
+      if (!pending || !sameParent(pending.binding, binding)) throw sessionFailure("not-authorized");
+    }
   }
 
   private resume(

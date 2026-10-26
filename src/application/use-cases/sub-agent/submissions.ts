@@ -42,15 +42,15 @@ export class SubAgentSubmissions {
   ): Promise<SubAgentRunReceipt> {
     if (!isSubAgentStateId(submissionId)) throw sessionFailure("invalid-input");
     const digest = digestOf({ sessionId, submission });
+    const record = ownedRecord(this.parts.store, binding, sessionId);
     const existing = this.parts.store.submission(submissionId);
     if (existing) {
+      ownedRecord(this.parts.store, binding, existing.sessionId);
       if (existing.sessionId !== sessionId || existing.normalizedCommandDigest !== digest) {
         throw sessionFailure("idempotency-conflict");
       }
-      ownedRecord(this.parts.store, binding, sessionId);
       return this.inFlight.get(submissionId) ?? Promise.resolve(existing.receipt);
     }
-    const record = ownedRecord(this.parts.store, binding, sessionId);
     const runId = this.parts.context.createId("subagent-run");
     if (!isSubAgentStateId(runId)) throw sessionFailure("invalid-state");
     const at = timestamp(this.parts);
