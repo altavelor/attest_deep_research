@@ -480,35 +480,39 @@ describe("sub-agent inspection hardening", () => {
     expect((await card(harness, session.subAgentSessionId)).status).toBe("ready");
   });
 
-  it("publishes queued, failed, not-started, unload-interrupted and closed notices once each", async () => {
-    const harness = managerHarness();
-    const delegator = harness.delegator();
-    const launched = [];
-    for (const name of ["a", "b", "c", "d", "e"]) launched.push(await launchChild(delegator, name));
-    managerParts(harness.manager).sessionOptions.delete(launched[4].session.subAgentSessionId);
-    harness.execution.fail(0);
-    await settle();
-    await harness.manager.closeAll("parent-empty", "completed");
-    await harness.manager.closeAll("parent-1", "plugin-unload");
-    await harness.manager.closeAll("parent-1", "plugin-unload");
-    await settle();
+  it.each(["plugin-unload", "finalize-timeout"])(
+    "publishes queued, failed, not-started, %s interrupted and closed notices once each",
+    async (reason) => {
+      const harness = managerHarness();
+      const delegator = harness.delegator();
+      const launched = [];
+      for (const name of ["a", "b", "c", "d", "e"])
+        launched.push(await launchChild(delegator, name));
+      managerParts(harness.manager).sessionOptions.delete(launched[4].session.subAgentSessionId);
+      harness.execution.fail(0);
+      await settle();
+      await harness.manager.closeAll("parent-empty", "completed");
+      await harness.manager.closeAll("parent-1", reason);
+      await harness.manager.closeAll("parent-1", reason);
+      await settle();
 
-    const notices = harness.mainEvents.flatMap((intent) =>
-      intent.type === "notice" && intent.entry.kind !== "created" ? [intent.entry] : [],
-    );
-    expect(notices.map((entry) => entry.kind)).toEqual([
-      "queued",
-      "not-started",
-      "failed",
-      "interrupted",
-      "interrupted",
-      "interrupted",
-      "closed",
-    ]);
-    expect(notices[2]).toMatchObject({ reasonCode: "provider-failed" });
-    expect(notices[3]).toMatchObject({ reasonCode: "plugin-unload" });
-    expect(notices[6]).toMatchObject({ closedCount: 5, sessionId: null });
-  });
+      const notices = harness.mainEvents.flatMap((intent) =>
+        intent.type === "notice" && intent.entry.kind !== "created" ? [intent.entry] : [],
+      );
+      expect(notices.map((entry) => entry.kind)).toEqual([
+        "queued",
+        "not-started",
+        "failed",
+        "interrupted",
+        "interrupted",
+        "interrupted",
+        "closed",
+      ]);
+      expect(notices[2]).toMatchObject({ reasonCode: "provider-failed" });
+      expect(notices[3]).toMatchObject({ reasonCode: reason });
+      expect(notices[6]).toMatchObject({ closedCount: 5, sessionId: null });
+    },
+  );
 
   it("redacts run text in the detail and bounds untrusted result values", async () => {
     const harness = managerHarness({

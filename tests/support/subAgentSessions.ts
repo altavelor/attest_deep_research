@@ -673,9 +673,13 @@ export function resultBoard(parentRunId = "parent-1") {
   const listeners = new Set<() => void>();
   const closed: string[] = [];
   const reads: string[] = [];
-  const refs = () => [...states.keys()].map((runId) => ({ sessionId: `s-${runId}`, runId }));
+  const unreadable = new Set<string>();
+  const refs = () =>
+    [...states.keys(), ...unreadable].map((runId) => ({ sessionId: `s-${runId}`, runId }));
   const board = {
     closed,
+    unreadable,
+    closeFailure: null as Error | null,
     reads,
     onRead: (_runId: string): void => undefined,
     host: {
@@ -686,12 +690,14 @@ export function resultBoard(parentRunId = "parent-1") {
       listRunRefs: (id: string) => (id === parentRunId ? refs() : []),
       closeAll: async (_id: string, reason: string) => {
         closed.push(reason);
+        if (board.closeFailure) throw board.closeFailure;
         return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };
       },
     },
     delegator: {
       getResult: async (_sessionId: string, runId: string) => {
         reads.push(runId);
+        if (unreadable.has(runId)) throw new Error("Unreadable result.");
         const state = states.get(runId)!;
         board.onRead(runId);
         return state;

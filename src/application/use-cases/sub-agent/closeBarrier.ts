@@ -6,7 +6,7 @@ import type { SubAgentRunScheduler } from "./runScheduler";
 
 export const CLOSE_DEADLINE_MS = 2_000;
 export const PRIMARY_DRAIN_MS = 1_500;
-const INTERRUPTING_REASONS = new Set(["plugin-unload"]);
+const INTERRUPTING_REASONS = new Set(["plugin-unload", "finalize-timeout"]);
 
 interface CloseProgress {
   sessionIds: Set<string>;

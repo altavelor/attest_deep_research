@@ -10,11 +10,12 @@ vi.mock("@shared", async (importOriginal) => {
   return withGlobalTimers(await importOriginal<typeof import("@shared")>());
 });
 
-function coordinatorOver(board: ReturnType<typeof resultBoard>) {
+function coordinatorOver(board: ReturnType<typeof resultBoard>, logError?: (e: unknown) => void) {
   return new SubAgentParentCoordinator({
     delegator: board.delegator as never,
     host: board.host,
     parentRunId: "parent-1",
+    ...(logError ? { logError } : {}),
   });
 }
 
@@ -53,16 +54,26 @@ describe("SubAgentParentCoordinator", () => {
     expect(await fresh.beforeFinalize()).toBe("ready");
     coordinator.dispose();
     fresh.dispose();
+    const held = resultBoard();
+    held.set("r2", "pending");
+    const heldCoordinator = coordinatorOver(held);
+    const released = heldCoordinator.beforeFinalize();
+    await settle();
+    heldCoordinator.dispose();
+    expect(await released).toBe("ready");
 
     const bounded = resultBoard();
-    bounded.set("r3", "pending");
-    const boundedCoordinator = coordinatorOver(bounded);
+    bounded.unreadable.add("r3");
+    bounded.closeFailure = new Error("Close failed.");
+    const logged: unknown[] = [];
+    const boundedCoordinator = coordinatorOver(bounded, (error) => logged.push(error));
     expect(
       await runPastDeadline(SubAgentParentCoordinator.maxFinalizeWaitMs, () =>
         boundedCoordinator.beforeFinalize(),
       ),
     ).toBe("ready");
     expect(bounded.closed).toEqual(["finalize-timeout"]);
+    expect(logged).toEqual([bounded.closeFailure]);
     expect(bounded.listenerCount()).toBe(0);
     expect(board.closed).toEqual([]);
   });
