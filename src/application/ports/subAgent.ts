@@ -12,6 +12,7 @@ import type {
   SubAgentFlushReason,
   SubAgentImportItem,
   SubAgentDispatchEntry,
+  SubAgentEvidenceTool,
   SubAgentImportRecord,
   SubAgentNoticeEntry,
   SubAgentObservationEvent,
@@ -25,6 +26,7 @@ import type {
   ValidatedJsonValue,
 } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
+import type { SourceReference } from "@core/model";
 import type {
   SubAgentInspectionDetail,
   SubAgentInspectionSnapshot,
@@ -162,11 +164,21 @@ export interface SubAgentDelegationGrant {
   remainingWebCapacity?(): number;
 }
 
+export interface SubAgentPriorEvidenceItem {
+  id: string;
+  source: SourceReference;
+  text: string;
+  tool: SubAgentEvidenceTool;
+  collectedAt: string;
+}
+
 export interface SubAgentPriorContext {
   summary: string | null;
   previousResult: string | null;
   partialSummary: string | null;
+  continuesPartial: boolean;
   priorEvidence: readonly ImportedSubAgentEvidenceReference[];
+  priorEvidenceItems: readonly SubAgentPriorEvidenceItem[];
 }
 
 export interface SubAgentExecutionEvent {
@@ -200,8 +212,8 @@ export interface SubAgentExecutionResult {
 
 /**
  * Runs one child command. A continue-partial run must return the evidence it keeps from
- * the interrupted run in its own result evidence, because the manager stores only the
- * references of committed imports; such a result is imported as incomplete.
+ * the interrupted run, at least its resolved prior evidence items, in its own result
+ * evidence, because the manager stores only references of committed imports.
  */
 export interface SubAgentExecutionPort {
   run(request: SubAgentExecutionRequest): Promise<SubAgentExecutionResult>;

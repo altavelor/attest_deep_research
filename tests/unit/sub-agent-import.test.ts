@@ -27,7 +27,8 @@ import {
   runToImport,
   sourcePolicy,
 } from "../support/subAgentSessions";
-import { IMPORT_TIMEOUT_MS } from "@application/use-cases/sub-agent";
+import { IMPORT_TIMEOUT_MS, SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
+import { scriptedModelRounds } from "../support/researchFakes";
 import { runPastDeadline } from "../support/timers";
 
 vi.mock("@shared", async (importOriginal) => {
@@ -149,6 +150,46 @@ describe("sub-agent evidence import", () => {
         evidenceBudgetExhausted: true,
       });
     }
+  });
+
+  it("U1: resolves prior evidence into bounded redacted excerpts that a continue-partial run returns", async () => {
+    const harness = importHarness();
+    const { delegator, sessionId, runId } = await launchWith(harness, ["example.com"]);
+    const text = `SECRET ${"x".repeat(3000)}`;
+    harness.execution.finish(0, result("A [e1]", [childEvidence("e1", { text })]));
+    await settle();
+    const state = await delegator.getResult(sessionId, runId);
+    if (state.state !== "completed") throw new Error("The first run did not complete.");
+    const items = harness.bridge.priorEvidenceItems(state.outcome.evidence, (value) =>
+      value.replace("SECRET", "[redacted]"),
+    );
+    const tasks: string[] = [];
+    const adapter = new SubAgentExecutionAdapter({
+      selectModel: () => ({
+        model: { profileId: "p", providerId: "openai", modelId: "m", label: "M" },
+        modelRound: scriptedModelRounds(() => ({ items: [], stopReason: "complete" })),
+      }),
+      createRunner: () => ({
+        run: async (input) => {
+          tasks.push(input.task);
+          return { answerText: "Done", snapshot: { evidence: [], citations: [], provenance: [] } };
+        },
+      }),
+      now: () => new Date(AT),
+    });
+    const [first] = harness.execution.requests;
+    const run = await adapter.run({
+      ...first!,
+      priorContext: { ...first!.priorContext, continuesPartial: true, priorEvidenceItems: items },
+    });
+
+    expect(items.map((item) => [item.text.length, item.text.startsWith("[redacted]")])).toEqual([
+      [1000, true],
+    ]);
+    expect(tasks[0]).toContain(items[0]!.text);
+    expect(run.evidence).toEqual([
+      expect.objectContaining({ id: state.outcome.evidence[0]!.conversationEvidenceId }),
+    ]);
   });
 
   it("U2: replays a prepare with the same importId and registers its source once", async () => {

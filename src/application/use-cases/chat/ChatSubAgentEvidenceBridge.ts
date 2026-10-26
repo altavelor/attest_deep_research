@@ -6,6 +6,7 @@ import type {
   SubAgentImportResult,
   SubAgentPreparedImport,
   SubAgentPreparedImportRequest,
+  SubAgentPriorEvidenceItem,
 } from "@application/ports/subAgent";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
@@ -15,7 +16,7 @@ import {
   type ConversationSource,
   type ConversationSourceRegistry,
 } from "@core/chat/sourceRegistry";
-import type { RetrievedChunk } from "@core/model";
+import type { RetrievedChunk, SourceReference } from "@core/model";
 import {
   readSubAgentImportItems,
   subAgentAliasPrefix,
@@ -23,6 +24,7 @@ import {
   SubAgentSessionFailure,
   type ImportedSubAgentEvidenceReference,
   type ImportedSubAgentRunOutcome,
+  type SubAgentEvidenceTool,
   type SubAgentImportItem,
   type SubAgentRunSummary,
 } from "@core/research";
@@ -35,6 +37,9 @@ export interface ChatSubAgentEvidenceBridgeContext {
   writeRegistry(registry: ConversationSourceRegistry): void;
   saveRegistry(registry: ConversationSourceRegistry): Promise<void>;
 }
+
+const MAX_PRIOR_ITEMS = 20;
+const MAX_PRIOR_ITEM_CHARS = 1_000;
 
 interface LocatedChunk {
   source: ConversationSource;
@@ -107,6 +112,31 @@ export class ChatSubAgentEvidenceBridge
     });
   }
 
+  /**
+   * Resolves the references of earlier committed imports into at most twenty redacted
+   * evidence items of at most one thousand characters each; a missing alias is skipped.
+   */
+  priorEvidenceItems(
+    references: readonly ImportedSubAgentEvidenceReference[],
+    redact: (text: string) => string,
+  ): SubAgentPriorEvidenceItem[] {
+    const registry = this.context.readRegistry();
+    return references.slice(-MAX_PRIOR_ITEMS).flatMap((reference) => {
+      const located = locate(registry, reference.conversationEvidenceId);
+      if (!located) return [];
+      const { source } = located.chunk;
+      return [
+        {
+          id: reference.conversationEvidenceId,
+          source,
+          text: redact(located.chunk.text).slice(0, MAX_PRIOR_ITEM_CHARS),
+          tool: priorTool(source),
+          collectedAt: reference.collectedAt,
+        },
+      ];
+    });
+  }
+
   private isCurrent(prepared: SubAgentPreparedImport): boolean {
     return this.context.lookup()?.isCurrent(prepared) === true;
   }
@@ -139,6 +169,11 @@ function registeredOutcome(
     evidence,
     importId: prepared.importId,
   };
+}
+
+function priorTool(source: SourceReference): SubAgentEvidenceTool {
+  if (source.kind === "web") return source.wasContentFetched ? "fetch_web_page" : "search_web";
+  return source.kind === "markdown" ? "read_note" : "search_index";
 }
 
 function checkedItems(values: readonly unknown[], importId: string): SubAgentImportItem[] | null {

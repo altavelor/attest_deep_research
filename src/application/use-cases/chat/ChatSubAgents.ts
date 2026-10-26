@@ -182,7 +182,15 @@ export class ChatSubAgents {
   ): ReturnType<SubAgentExecutionPort["run"]> {
     const execution = this.execution;
     if (!execution) return Promise.reject(new Error("No parent run can execute sub-agent work."));
-    return execution.run(request);
+    const redact = this.options.services?.redact ?? ((text: string) => text);
+    const { priorContext } = request;
+    return execution.run({
+      ...request,
+      priorContext: {
+        ...priorContext,
+        priorEvidenceItems: this.evidence.priorEvidenceItems(priorContext.priorEvidence, redact),
+      },
+    });
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
