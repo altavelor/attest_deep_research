@@ -165,6 +165,25 @@ describe("debug-mode gating of the workflow transcript", () => {
       expect(labels).toEqual(["In", "Out"]);
       expect(container.textContent).toContain("private result");
     }
+
+    container.innerHTML = "";
+    const parentNote = assistantWithToolCall();
+    parentNote.researchProgress!.chain = [
+      {
+        kind: "tool-call",
+        id: "n1",
+        name: "create_note",
+        label: "Create",
+        status: "complete",
+        args: { path: "a.md", content: "**bold** note" },
+      },
+    ];
+    renderModel(container, toParentWorkflowModel(parentNote), true);
+    const out = container.querySelector(
+      ".attest-chat__tool-cell--out .attest-chat__tool-cell-body",
+    );
+    expect(out?.querySelector("code")).toBeNull();
+    expect(out?.textContent).toBe("**bold** note");
   });
 
   it("opens full output with the keyboard: parent through the callback, child as inline text closed on dispose", () => {

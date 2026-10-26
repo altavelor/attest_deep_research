@@ -299,8 +299,10 @@ describe("workflow timeline lifecycle", () => {
       pendingFetch,
     ]);
     container.scrollTop = 40;
+    const composer = container.createEl("input");
 
     renderWorkflowNodes(host, first, context);
+    composer.focus();
     pendingWrites.splice(0).forEach((write) => write());
     await Promise.resolve();
     expect(host.querySelector(".attest-chat__thinking")?.textContent).toContain("Step 0");
@@ -319,6 +321,8 @@ describe("workflow timeline lifecycle", () => {
       true,
     );
     expect(container.scrollTop).toBe(40);
+    expect(container.contains(host)).toBe(true);
+    expect(document.activeElement).toBe(composer);
     expect(pendingTimerCount()).toBe(1);
     const staleText = host.querySelector<HTMLElement>(
       ".attest-chat__thinking .attest-chat__workflow-text",
