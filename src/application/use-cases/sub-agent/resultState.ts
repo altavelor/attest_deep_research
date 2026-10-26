@@ -12,6 +12,7 @@ const RUN_FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   "provider-failed": "Дочерний агент завершился с ошибкой.",
   "scheduler-start-failed": "Не удалось запустить дочернего агента.",
   "acceptance-failed": "Команда дочернему агенту не была сохранена.",
+  "execution-denied": "Запуск дочернего агента отклонён.",
   stopped: "Дочерний агент остановлен.",
   "parent-terminal": "Родительский запуск завершён.",
   "import-cancelled": "Импорт результата дочернего агента отменён.",
@@ -58,6 +59,9 @@ export function resultStateOf(
     };
   }
   if (run.status !== "completed") return { state: "pending", resultRevision, run };
+  if (parts.unsavedImports.has(run.subAgentRunId)) {
+    return { state: "pending", resultRevision, run: { ...run, resultSummary: null } };
+  }
   const outcome = committedOutcome(parts, record, run);
   if (outcome) return { state: "completed", resultRevision, outcome };
   const { session } = record;

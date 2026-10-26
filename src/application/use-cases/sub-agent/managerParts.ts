@@ -18,6 +18,7 @@ export interface SubAgentManagerParts {
   fences: ParentFences;
   sessionOptions: Map<string, SubAgentSessionOptions>;
   outcomes: Map<string, ImportedSubAgentRunOutcome>;
+  unsavedImports: Set<string>;
   notifyResults(): void;
 }
 

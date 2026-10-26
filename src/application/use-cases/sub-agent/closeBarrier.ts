@@ -30,6 +30,8 @@ export async function closeParentRun(
     for (const runId of scheduler.fenceSession(record.session.subAgentSessionId)) {
       progress.fencedRunIds.add(runId);
     }
+    parts.sessionOptions.delete(record.session.subAgentSessionId);
+    for (const run of record.runs) parts.outcomes.delete(run.subAgentRunId);
   }
   if (parts.context.getChatId() === null && !parts.store.state) {
     return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };

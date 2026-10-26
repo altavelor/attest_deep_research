@@ -1,11 +1,15 @@
 import type { SubAgentExecutionResult } from "@application/ports/subAgent";
-import { applySubAgentTransition, type SubAgentTransition } from "@core/research";
+import {
+  applySubAgentTransition,
+  type ImportedSubAgentRunOutcome,
+  type SubAgentTransition,
+} from "@core/research";
 import { settleWithin } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 
 export const LOCAL_RUN_CAPACITY = 4;
-export const IMPORT_TIMEOUT_MS = 30_000;
+export const IMPORT_TIMEOUT_MS = 2_000;
 const RESULT_SUMMARY_CHARS = 1_000;
 
 interface QueuedRun {
@@ -101,6 +105,10 @@ export class SubAgentRunScheduler {
     ) {
       return;
     }
+    if (!this.parts.sessionOptions.has(entry.sessionId)) {
+      void this.deny(entry);
+      return;
+    }
     let revision: number | null;
     try {
       revision = this.transition(entry.sessionId, { type: "scheduler-start", runId: entry.runId });
@@ -128,7 +136,10 @@ export class SubAgentRunScheduler {
     }
     const record = this.parts.store.record(slot.sessionId);
     const run = record?.runs.find((entry) => entry.subAgentRunId === slot.runId);
-    if (slot.fenced || !record || !run) return;
+    if (slot.fenced || !record || !run) {
+      this.release(slot);
+      return;
+    }
     slot.controller = new AbortController();
     const request = buildExecutionRequest(
       this.parts,
@@ -198,11 +209,61 @@ export class SubAgentRunScheduler {
       outcome.status === "done" && outcome.value.outcome.run.subAgentRunId === slot.runId
         ? outcome.value.outcome
         : null;
-    if (imported) this.parts.outcomes.set(slot.runId, imported);
-    await this.settle(slot, {
-      type: imported ? "import-committed" : "import-failed",
-      generation,
-    });
+    if (!imported) {
+      await this.settle(slot, { type: "import-failed", generation });
+      return;
+    }
+    await this.commitImport(slot, generation, imported);
+  }
+
+  /**
+   * Publishes an imported outcome only after import-committed is durable. While the
+   * write is pending the run reads as pending; if it fails, the record is restored and
+   * the import fails instead of exposing an unsaved answer.
+   */
+  private async commitImport(
+    slot: RunSlot,
+    generation: number,
+    imported: ImportedSubAgentRunOutcome,
+  ): Promise<void> {
+    const before = this.parts.store.record(slot.sessionId);
+    this.parts.unsavedImports.add(slot.runId);
+    try {
+      const revision = this.transition(slot.sessionId, { type: "import-committed", generation });
+      if (revision === null) {
+        this.parts.unsavedImports.delete(slot.runId);
+        return;
+      }
+      await this.parts.store.flush(revision);
+      this.parts.outcomes.set(slot.runId, imported);
+    } catch {
+      try {
+        if (before) this.parts.store.putRecord(before);
+      } catch {
+        return;
+      } finally {
+        this.parts.unsavedImports.delete(slot.runId);
+      }
+      await this.abandonImport(slot, generation);
+      return;
+    }
+    this.parts.unsavedImports.delete(slot.runId);
+    this.parts.notifyResults();
+  }
+
+  /** Fails a queued run whose session has no host-owned options, so it never starts without limits. */
+  private async deny(entry: QueuedRun): Promise<void> {
+    try {
+      const revision = this.transition(entry.sessionId, {
+        type: "execution-denied",
+        runId: entry.runId,
+        reason: "execution-denied",
+      });
+      if (revision !== null) await this.parts.store.flush(revision);
+    } catch {
+      return;
+    }
+    this.parts.notifyResults();
   }
 
   /** Stages a terminal or import transition, waits for it to be durable and then notifies. */

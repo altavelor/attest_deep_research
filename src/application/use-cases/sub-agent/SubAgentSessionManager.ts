@@ -33,6 +33,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       fences: new ParentFences(),
       sessionOptions: new Map(),
       outcomes: new Map(),
+      unsavedImports: new Set(),
       notifyResults: () => this.notify(),
     };
     const scheduler = new SubAgentRunScheduler(this.parts);
@@ -81,6 +82,8 @@ export class SubAgentSessionManager implements SubAgentHost {
       this.parts.fences.disposeAll();
       this.services.scheduler.fenceAll();
       this.listeners.clear();
+      this.parts.sessionOptions.clear();
+      this.parts.outcomes.clear();
       this.disposal = Promise.resolve();
     }
     return this.disposal;
