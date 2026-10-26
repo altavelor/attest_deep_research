@@ -48,9 +48,9 @@ export {
 } from "./errors";
 export { deriveSubAgentTitle, findOwnRun, headRun, isBoundToParentRun } from "./identity";
 export { reduceSubAgentSourcePolicy, type SubAgentSourcePolicyReduction } from "./sourcePolicy";
+export { type SubAgentImportTombstone } from "./importState";
 export {
   applySubAgentTransition,
-  type SubAgentImportTombstone,
   type SubAgentTransition,
   type SubAgentTransitionResult,
 } from "./transitions";

@@ -1,6 +1,12 @@
 import type { ResearchMode } from "../researchMode";
 import { subAgentSessionError, type SubAgentSessionError } from "./errors";
 import { findOwnRun, headRun } from "./identity";
+import {
+  pendingImport,
+  runsWithCancelledImport,
+  withoutPendingImport,
+  type SubAgentImportTombstone,
+} from "./importState";
 import type {
   NormalizedUsage,
   RetrySubAgentCommand,
@@ -43,11 +49,6 @@ export type SubAgentTransition =
   | { type: "import-committed" | "import-failed"; generation: number; at: string }
   | { type: "stop-import"; at: string }
   | { type: "archive"; reason: "parent-terminal" | "user-archive"; at: string };
-
-export interface SubAgentImportTombstone {
-  runId: string;
-  generation: number;
-}
 
 export type SubAgentTransitionResult =
   | { ok: true; record: SubAgentSessionRecord; tombstonedImport: SubAgentImportTombstone | null }
@@ -217,7 +218,7 @@ function queueRun(
   };
   const tombstone = pendingImport(session);
   return accepted(
-    { session, runs: [...record.runs, run] },
+    { session, runs: [...runsWithCancelledImport(record), run] },
     {
       ...withoutPendingImport(session),
       status: "queued",
@@ -325,7 +326,7 @@ function archive(
   at: string,
   reason: string | null,
 ): SubAgentTransitionResult {
-  const runs = record.runs.map((run) =>
+  const runs = runsWithCancelledImport(record).map((run) =>
     NONTERMINAL_RUN_STATUSES.includes(run.status)
       ? {
           ...run,
@@ -347,24 +348,6 @@ function archive(
 
 function activeRun(record: SubAgentSessionRecord, runId: string): SubAgentRunSummary | undefined {
   return record.session.activeSubAgentRunId === runId ? findOwnRun(record, runId) : undefined;
-}
-
-function pendingImport(session: SubAgentSessionSummary): SubAgentImportTombstone | null {
-  return session.pendingImportRunId !== null && session.pendingImportGeneration !== null
-    ? { runId: session.pendingImportRunId, generation: session.pendingImportGeneration }
-    : null;
-}
-
-function withoutPendingImport(session: SubAgentSessionSummary): SubAgentSessionSummary {
-  return {
-    ...session,
-    pendingImportRunId: null,
-    pendingImportGeneration: null,
-    lastImportGeneration: Math.max(
-      session.lastImportGeneration,
-      session.pendingImportGeneration ?? 0,
-    ),
-  };
 }
 
 function replaceRun(

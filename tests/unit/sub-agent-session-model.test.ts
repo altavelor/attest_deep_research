@@ -201,6 +201,7 @@ describe("sub-agent session transitions", () => {
 
     expect(importFailed.session.activeSubAgentRunId).toBeNull();
     expect(retry.tombstonedImport).toEqual({ runId: "run-1", generation: 1 });
+    expect(retry.record.runs[0].resultRevision).toBe(importFailed.runs[0].resultRevision + 1);
     expect(retry.record.session).toMatchObject({
       pendingImportRunId: null,
       lastImportGeneration: 1,
@@ -213,6 +214,9 @@ describe("sub-agent session transitions", () => {
       ok: true,
       tombstonedImport: { runId: "run-1", generation: 1 },
     });
+    expect(archived.ok && archived.record.runs[0].resultRevision).toBe(
+      importFailed.runs[0].resultRevision + 1,
+    );
     expect(
       applyAll(importFailed, [{ type: "import-committed", generation: 1, at: AT }]).session,
     ).toMatchObject({
@@ -228,7 +232,10 @@ describe("sub-agent session transitions", () => {
     const importing = applyAll(readySubAgentRecord(), runToImport("run-1"));
     expect(applySubAgentTransition(importing, { type: "stop-import", at: AT })).toMatchObject({
       ok: true,
-      record: { session: { status: "archived" } },
+      record: {
+        session: { status: "archived" },
+        runs: [{ resultRevision: importing.runs[0].resultRevision + 1 }],
+      },
       tombstonedImport: { runId: "run-1", generation: 1 },
     });
     expect(
