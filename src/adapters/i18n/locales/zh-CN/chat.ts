@@ -116,6 +116,11 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.out": "输出",
   "chat.workflow.tool.openFullOutput": "查看完整输出",
   "chat.workflow.tool.fetching.aria": "正在抓取：{targets}",
+  "chat.workflow.tool.closeOutput": "关闭",
+  "chat.workflow.payload.disabled": "此调用未开启数据捕获。",
+  "chat.workflow.payload.evicted": "数据已从内存中移除。",
+  "chat.workflow.payload.truncated": "数据已被截断。",
+  "chat.workflow.attempt": "运行 {run} · 第 {round} 次尝试",
 
   "chat.toolCall.badge.keywordOnly": "仅关键词",
   "chat.toolCall.badge.semanticFailed": "语义（嵌入）搜索失败：{error}",

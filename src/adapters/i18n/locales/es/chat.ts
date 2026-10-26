@@ -126,6 +126,11 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.out": "Salida",
   "chat.workflow.tool.openFullOutput": "Abrir la salida completa",
   "chat.workflow.tool.fetching.aria": "Descargando: {targets}",
+  "chat.workflow.tool.closeOutput": "Cerrar",
+  "chat.workflow.payload.disabled": "La captura de datos estaba desactivada para esta llamada.",
+  "chat.workflow.payload.evicted": "Los datos se eliminaron de la memoria.",
+  "chat.workflow.payload.truncated": "Los datos se truncaron.",
+  "chat.workflow.attempt": "Ejecución {run} · intento {round}",
 
   "chat.toolCall.badge.keywordOnly": "solo palabras clave",
   "chat.toolCall.badge.semanticFailed": "Falló la búsqueda semántica (embeddings): {error}",

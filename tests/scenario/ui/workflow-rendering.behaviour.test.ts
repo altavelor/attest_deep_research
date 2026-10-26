@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { App, Component } from "obsidian";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App, Component, MarkdownRenderer } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
-import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
+import { renderWorkflowTimeline, toSubAgentWorkflowModel } from "@apps/obsidian/ui/chat/workflow";
+import {
+  captureWorkflowUiState,
+  disposeWorkflowNodes,
+  renderWorkflowNodes,
+} from "@apps/obsidian/ui/chat/workflowRenderer";
 import {
   finalizeLastAssistantReasoning,
   nextChainToolCallStart,
@@ -15,10 +20,12 @@ import type { ResearchMode } from "@core/research";
 import {
   advanceTime,
   createContainer,
+  pendingTimerCount,
   resetDom,
   restoreDomTimers,
   useDomFakeTimers,
 } from "../../support/domHarness";
+import type { Component as StubComponent } from "../../support/obsidian";
 
 const t = createTranslator("en").t;
 
@@ -104,6 +111,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   restoreDomTimers();
   resetDom();
 });
@@ -193,9 +201,32 @@ describe("early workflow indicator per research mode", () => {
     expect(container.querySelector(".attest-chat__workflow-node--finalizing")).not.toBeNull();
   });
 
-  it("keeps the Finalizing indicator of a Thinking run without chain nodes", () => {
-    expect(render(container, streaming([], true, "thinking"))).toBe(true);
-    expect(container.querySelector(".attest-chat__workflow-node--finalizing")).not.toBeNull();
+  it("keeps the legacy order and Finalizing indicator of a Thinking run without chain nodes", () => {
+    const legacy = (status: "finalizing" | "streaming"): ChatDisplayMessage => {
+      const message = streaming([], false, "thinking");
+      const progress = message.researchProgress!;
+      progress.reasoning.segments = [
+        { id: "s1", kind: "text", content: "Plan A" },
+        { id: "s2", kind: "text", content: "Plan B" },
+      ];
+      progress.checkpoints = [
+        { id: "c0", round: 0, content: "Interrupted note", status: "interrupted" },
+        { id: "c1", round: 1, content: "Wrapping up", status },
+      ];
+      return message;
+    };
+    const nodeTexts = (): string[] =>
+      Array.from(
+        container.querySelectorAll(".attest-chat__workflow > .attest-chat__workflow-node"),
+        (el) => el.textContent ?? "",
+      );
+
+    expect(render(container, legacy("finalizing"))).toBe(true);
+    expect(nodeTexts()).toEqual(["Plan A", "Plan B", "Interrupted note", "Finalizing…"]);
+
+    container.empty();
+    render(container, legacy("streaming"));
+    expect(nodeTexts()).toEqual(["Plan A", "Plan B", "Interrupted note", "Wrapping up"]);
   });
 
   it("keeps nodes and indicator when a Thinking run falls back to Instant", () => {
@@ -245,5 +276,115 @@ describe("fetch targets of a pending fetch", () => {
     expect(
       Array.from(container.querySelectorAll(".attest-chat__tool-fetch-target--active")),
     ).toEqual([items[1]]);
+  });
+});
+
+describe("workflow timeline lifecycle", () => {
+  it("keeps scroll and expansion across an update and releases everything on dispose", async () => {
+    const pendingWrites: Array<() => void> = [];
+    vi.spyOn(MarkdownRenderer, "render").mockImplementation((_app, markdown, el) => {
+      pendingWrites.push(() => {
+        el.textContent = markdown;
+      });
+      return Promise.resolve();
+    });
+    const markdownContext = new Component();
+    const onOpenToolOutput = vi.fn();
+    const context = { app: new App(), markdownContext, isDebugMode: true, t, onOpenToolOutput };
+    const host = container.createDiv();
+    const longThinking = Array.from({ length: 6 }, (_, i) => `Step ${i}`).join("\n");
+    const first = streaming([
+      { kind: "reasoning", segmentId: "s1", content: longThinking },
+      searchCall,
+      pendingFetch,
+    ]);
+    container.scrollTop = 40;
+    const composer = container.createEl("input");
+
+    renderWorkflowNodes(host, first, context);
+    composer.focus();
+    pendingWrites.splice(0).forEach((write) => write());
+    await Promise.resolve();
+    expect(host.querySelector(".attest-chat__thinking")?.textContent).toContain("Step 0");
+    host.querySelector<HTMLDetailsElement>("details[data-thinking-id='s1']")!.open = true;
+    const uiState = captureWorkflowUiState(host);
+    disposeWorkflowNodes(host);
+    host.empty();
+    renderWorkflowNodes(
+      host,
+      streaming([...first.researchProgress!.chain, searchCall]),
+      context,
+      uiState,
+    );
+
+    expect(host.querySelector<HTMLDetailsElement>("details[data-thinking-id='s1']")?.open).toBe(
+      true,
+    );
+    expect(container.scrollTop).toBe(40);
+    expect(container.contains(host)).toBe(true);
+    expect(document.activeElement).toBe(composer);
+    expect(pendingTimerCount()).toBe(1);
+    const staleText = host.querySelector<HTMLElement>(
+      ".attest-chat__thinking .attest-chat__workflow-text",
+    )!;
+    const cell = host.querySelector<HTMLElement>(".attest-chat__tool-cell")!;
+
+    disposeWorkflowNodes(container);
+    disposeWorkflowNodes(container);
+    pendingWrites.splice(0).forEach((write) => write());
+    await Promise.resolve();
+    cell.click();
+    await advanceTime(5_000);
+
+    expect(staleText.textContent).toBe("");
+    expect(onOpenToolOutput).not.toHaveBeenCalled();
+    expect(pendingTimerCount()).toBe(0);
+    expect((markdownContext as unknown as StubComponent).registrationCount()).toBe(0);
+  });
+});
+
+describe("sub-agent lifetime", () => {
+  it("separates runs and attempts once between groups and keeps the safe child badge", () => {
+    const call = (id: string, sequence: number, runId: string, round: number) => ({
+      id,
+      sessionId: "s",
+      runId,
+      name: "search_index",
+      label: "Search",
+      sequence,
+      round,
+      status: "complete" as const,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      payloadState: "captured" as const,
+      resultJson: JSON.stringify({ diagnostics: { usedKeywordFallback: true } }),
+      badge: { text: "child badge" },
+    });
+    renderWorkflowTimeline(
+      container,
+      toSubAgentWorkflowModel(
+        "s",
+        [
+          call("a", 0, "run-1", 1),
+          call("b", 1, "run-1", 1),
+          call("c", 2, "run-1", 2),
+          call("d", 3, "run-2", 1),
+        ],
+        "complete",
+      ),
+      {
+        app: new App(),
+        markdownContext: new Component(),
+        isDebugMode: false,
+        t,
+        onOpenToolOutput: () => {},
+      },
+    );
+
+    const rows = Array.from(
+      container.querySelectorAll(".attest-chat__workflow > *"),
+      (el) => el.getAttribute("data-tool-id") ?? el.textContent,
+    );
+    expect(rows).toEqual(["a", "b", "Run 1 · attempt 2", "c", "Run 2 · attempt 1", "d"]);
+    expect(container.querySelector(".attest-chat__tool-badge")?.textContent).toBe("child badge");
   });
 });

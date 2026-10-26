@@ -1,20 +1,45 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App, Component } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
-import { renderToolNode } from "@apps/obsidian/ui/chat/workflow/toolCallNodeRenderer";
+import { renderWorkflowTimeline, WorkflowTimelineHandle } from "@apps/obsidian/ui/chat/workflow";
+import type { ChainItem } from "@core/conversation";
 import { createContainer, installObsidianDomHelpers, resetDom } from "../support/domHarness";
 
 const t = createTranslator("en").t;
+const handles: WorkflowTimelineHandle[] = [];
+
+function renderTool(
+  list: HTMLElement,
+  item: ChainItem,
+  onOpenToolOutput: (item: ChainItem) => void,
+): void {
+  const handle = renderWorkflowTimeline(
+    list,
+    {
+      scopeId: "message-1",
+      items: [item],
+      phase: "complete",
+      reasoningSegments: [],
+      checkpoints: [],
+    },
+    { t, isDebugMode: true, onOpenToolOutput, app: new App(), markdownContext: new Component() },
+  );
+  handles.push(handle);
+}
 
 describe("tool workflow node renderer", () => {
   beforeEach(installObsidianDomHelpers);
-  afterEach(resetDom);
+  afterEach(() => {
+    handles.splice(0).forEach((handle) => handle.dispose());
+    resetDom();
+  });
 
   it("renders pending fetch targets, phase, badge, debug payloads, and nested calls", () => {
     const list = createContainer();
     const onOpenToolOutput = vi.fn();
-    renderToolNode(
+    renderTool(
       list,
       {
         kind: "tool-call",
@@ -36,14 +61,7 @@ describe("tool workflow node renderer", () => {
           },
         ],
       },
-      {
-        t,
-        isDebugMode: true,
-        onOpenToolOutput,
-        app: {} as never,
-        markdownContext: {} as never,
-      } as never,
-      ["docs.example.com"],
+      onOpenToolOutput,
     );
 
     expect(list.querySelector(".attest-chat__tool-fetch-target--active")?.textContent).toBe(
@@ -60,7 +78,7 @@ describe("tool workflow node renderer", () => {
   it("renders a note-edit diff and opens its full output with the keyboard", () => {
     const list = createContainer();
     const onOpenToolOutput = vi.fn();
-    renderToolNode(
+    renderTool(
       list,
       {
         kind: "tool-call",
@@ -70,13 +88,7 @@ describe("tool workflow node renderer", () => {
         status: "complete",
         resultJson: JSON.stringify({ before: "Old line", after: "New line" }),
       },
-      {
-        t,
-        isDebugMode: true,
-        onOpenToolOutput,
-        app: {} as never,
-        markdownContext: {} as never,
-      } as never,
+      onOpenToolOutput,
     );
 
     expect(list.querySelector(".attest-chat__diff-line--remove")?.textContent).toContain(

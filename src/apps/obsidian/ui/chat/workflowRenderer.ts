@@ -1,166 +1,53 @@
-import { App, Component } from "obsidian";
-
-import { ChainItem, ChatDisplayMessage } from "@core/conversation";
-import type { Translate } from "@adapters/i18n";
-import { fetchTargetsByResultId, fetchTargetsFor } from "./workflow/fetchTargetResolver";
+import type { ChatDisplayMessage } from "@core/conversation";
 import {
-  renderSummaryNode,
-  renderThinkingNode,
-  renderWorkflowIndicator,
-} from "./workflow/reasoningNodeRenderer";
-import { renderToolNode } from "./workflow/toolCallNodeRenderer";
+  captureWorkflowUiState,
+  renderWorkflowTimeline,
+  toParentWorkflowModel,
+  WorkflowRenderContext,
+  WorkflowTimelineHandle,
+  WorkflowUiState,
+} from "./workflow/index";
 
-export interface WorkflowRenderContext {
-  app: App;
-  markdownContext: Component;
-  isDebugMode: boolean;
-  t: Translate;
-  onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
-}
+export type { WorkflowRenderContext, WorkflowUiState };
+export { captureWorkflowUiState };
 
-export interface WorkflowUiState {
-  openThinking: Set<string>;
-}
+const handlesByOwner = new WeakMap<HTMLElement, Map<HTMLElement, WorkflowTimelineHandle>>();
 
-export function captureWorkflowUiState(hostEl: HTMLElement): WorkflowUiState {
-  const openThinking = new Set<string>();
-  hostEl.querySelectorAll<HTMLDetailsElement>("details[data-thinking-id]").forEach((el) => {
-    if (el.open && el.dataset.thinkingId) openThinking.add(el.dataset.thinkingId);
-  });
-  return { openThinking };
-}
-
+/**
+ * Renders a chat message's workflow through the shared timeline engine and keeps
+ * the handle with its transcript, replacing a previous handle of the same host.
+ * Only disposeWorkflowNodes or disposeChatTranscript release these handles, so
+ * other consumers such as a modal must hold the handle from renderWorkflowTimeline directly.
+ */
 export function renderWorkflowNodes(
   hostEl: HTMLElement,
   message: ChatDisplayMessage,
   context: WorkflowRenderContext,
   uiState?: WorkflowUiState,
 ): boolean {
-  const progress = message.researchProgress;
-  const segments = progress?.reasoning.segments ?? [];
-  const checkpoints = progress?.checkpoints ?? [];
-  const chain = progress?.chain ?? [];
-  const hasChain = chain.length > 0;
-  const showsPendingIndicator = progress?.mode !== "instant";
-  if (
-    segments.length === 0 &&
-    checkpoints.length === 0 &&
-    !hasChain &&
-    !(progress?.phase === "streaming" && showsPendingIndicator)
-  ) {
-    return false;
-  }
-
-  const isStreaming = progress?.phase === "streaming";
-  const isFinalizing =
-    isStreaming && checkpoints.some((checkpoint) => checkpoint.status === "finalizing");
-  const hasStreamingCheckpoint = checkpoints.some(
-    (checkpoint) => checkpoint.status === "streaming",
-  );
-  const listEl = hostEl.createDiv({ cls: "attest-chat__workflow" });
-
-  const state: WorkflowState = {
-    isStreaming,
-    isFinalizing,
-    hasStreamingCheckpoint,
-    showsPendingIndicator,
-    uiState,
-  };
-  if (hasChain) {
-    renderChainNodes(listEl, chain, context, state);
-  } else {
-    renderLegacyNodes(listEl, segments, checkpoints, context, state);
-  }
-
-  if (listEl.childElementCount === 0) {
-    listEl.remove();
-    return false;
-  }
-  return true;
+  const owner = ownerOf(hostEl);
+  const handles = handlesByOwner.get(owner) ?? new Map<HTMLElement, WorkflowTimelineHandle>();
+  handlesByOwner.set(owner, handles);
+  handles.get(hostEl)?.dispose();
+  const handle = renderWorkflowTimeline(hostEl, toParentWorkflowModel(message), context, uiState);
+  handles.set(hostEl, handle);
+  return handle.rendered;
 }
 
-function renderChainNodes(
-  listEl: HTMLElement,
-  chain: ChainItem[],
-  context: WorkflowRenderContext,
-  state: WorkflowState,
-): void {
-  const fetchTargets = fetchTargetsByResultId(chain);
-  const latestItem = chain.at(-1);
-  const activeReasoningId =
-    state.isStreaming &&
-    !state.isFinalizing &&
-    !state.hasStreamingCheckpoint &&
-    latestItem?.kind === "reasoning"
-      ? latestItem.segmentId
-      : undefined;
-
-  for (const item of chain) {
-    if (item.kind === "reasoning") {
-      renderThinkingNode(listEl, item.segmentId, item.content, {
-        active: item.segmentId === activeReasoningId,
-        renderContext: context,
-        uiState: state.uiState,
-      });
-    } else if (item.kind === "checkpoint") {
-      renderSummaryNode(listEl, item.content, context);
-    } else if (item.kind === "tool-call") {
-      renderToolNode(
-        listEl,
-        item,
-        context,
-        item.fetchTargets ?? fetchTargetsFor(item, fetchTargets),
-      );
-    }
+/** Disposes the timeline handles of one workflow host, or of every host when given the transcript. */
+export function disposeWorkflowNodes(containerEl: HTMLElement): void {
+  const owner = ownerOf(containerEl);
+  const handles = handlesByOwner.get(owner);
+  if (!handles) return;
+  if (containerEl !== owner) {
+    handles.get(containerEl)?.dispose();
+    handles.delete(containerEl);
+    return;
   }
-  if (state.showsPendingIndicator) {
-    renderWorkflowIndicator(
-      listEl,
-      state.isStreaming,
-      state.isFinalizing,
-      state.hasStreamingCheckpoint,
-      context.t,
-      activeReasoningId,
-    );
-  }
+  for (const handle of handles.values()) handle.dispose();
+  handles.clear();
 }
 
-function renderLegacyNodes(
-  listEl: HTMLElement,
-  segments: NonNullable<ChatDisplayMessage["researchProgress"]>["reasoning"]["segments"],
-  checkpoints: NonNullable<ChatDisplayMessage["researchProgress"]>["checkpoints"],
-  context: WorkflowRenderContext,
-  state: WorkflowState,
-): void {
-  segments.forEach((segment, index) => {
-    renderThinkingNode(listEl, segment.id, segment.content, {
-      active:
-        state.isStreaming &&
-        !state.isFinalizing &&
-        !state.hasStreamingCheckpoint &&
-        index === segments.length - 1,
-      renderContext: context,
-      uiState: state.uiState,
-    });
-  });
-  for (const checkpoint of checkpoints) {
-    if (checkpoint.status !== "finalizing") renderSummaryNode(listEl, checkpoint.content, context);
-  }
-  if (state.showsPendingIndicator) {
-    renderWorkflowIndicator(
-      listEl,
-      state.isStreaming,
-      state.isFinalizing,
-      state.hasStreamingCheckpoint,
-      context.t,
-    );
-  }
-}
-
-interface WorkflowState {
-  isStreaming: boolean;
-  isFinalizing: boolean;
-  hasStreamingCheckpoint: boolean;
-  showsPendingIndicator: boolean;
-  uiState?: WorkflowUiState;
+function ownerOf(el: HTMLElement): HTMLElement {
+  return el.closest<HTMLElement>(".attest-chat__transcript") ?? el;
 }

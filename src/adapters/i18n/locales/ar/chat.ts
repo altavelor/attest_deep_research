@@ -117,6 +117,11 @@ export const chat: EnChatMessages = {
   "chat.workflow.tool.out": "إخراج",
   "chat.workflow.tool.openFullOutput": "فتح الإخراج الكامل",
   "chat.workflow.tool.fetching.aria": "جارٍ الجلب: {targets}",
+  "chat.workflow.tool.closeOutput": "إغلاق",
+  "chat.workflow.payload.disabled": "كان التقاط البيانات معطّلًا لهذا الاستدعاء.",
+  "chat.workflow.payload.evicted": "أُزيلت البيانات من الذاكرة.",
+  "chat.workflow.payload.truncated": "تم اقتطاع البيانات.",
+  "chat.workflow.attempt": "التشغيل {run} · المحاولة {round}",
 
   "chat.toolCall.badge.keywordOnly": "كلمات مفتاحية فقط",
   "chat.toolCall.badge.semanticFailed": "أخفق البحث الدلالي (بالتضمين): {error}",
