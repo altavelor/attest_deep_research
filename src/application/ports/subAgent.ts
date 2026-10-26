@@ -10,6 +10,8 @@ import type {
   SubAgentBufferedValue,
   SubAgentCommand,
   SubAgentFlushReason,
+  SubAgentImportItem,
+  SubAgentImportRecord,
   SubAgentResultState,
   SubAgentRunReceipt,
   SubAgentRunRef,
@@ -19,6 +21,7 @@ import type {
   SubAgentTaskOrigin,
   ValidatedJsonValue,
 } from "@core/research";
+import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 
 export interface SubAgentSessionRepository {
   load(chatId: string): Promise<SubAgentStateSnapshot | null>;
@@ -145,6 +148,30 @@ export interface SubAgentImportResult {
 
 export interface SubAgentEvidenceImportPort {
   commit(request: SubAgentImportRequest): Promise<SubAgentImportResult>;
+}
+
+export interface SubAgentPreparedImport {
+  importId: string;
+  chatId: string;
+  sessionId: string;
+  runId: string;
+  generation: number;
+  attempt: number;
+  items: readonly SubAgentImportItem[];
+  answerText: string;
+}
+
+export interface SubAgentPreparedImportRequest extends SubAgentImportRequest {
+  prepared: SubAgentPreparedImport;
+}
+
+export interface SubAgentImportedEvidenceResolver {
+  resolve(outcome: ImportedSubAgentRunOutcome): Promise<ResearchEvidenceSnapshot>;
+}
+
+export interface SubAgentImportLookup {
+  isCurrent(prepared: SubAgentPreparedImport): boolean;
+  committed(outcome: ImportedSubAgentRunOutcome): SubAgentImportRecord | null;
 }
 
 export type SubAgentBudgetUnit =

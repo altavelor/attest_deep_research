@@ -6,6 +6,7 @@ import {
   type SubAgentRunSummary,
   type SubAgentSessionRecord,
 } from "@core/research";
+import { importedRunSummary } from "./importPlan";
 import type { SubAgentManagerParts } from "./managerParts";
 
 const RUN_FAILURE_MESSAGES: Readonly<Record<string, string>> = {
@@ -16,6 +17,7 @@ const RUN_FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   stopped: "Дочерний агент остановлен.",
   "parent-terminal": "Родительский запуск завершён.",
   "import-cancelled": "Импорт результата дочернего агента отменён.",
+  "checkpoint-corrupt": "Сохранённое состояние дочерних агентов повреждено.",
 };
 
 /** Returns the committed import outcome of a run from memory or from its committed import record. */
@@ -24,17 +26,18 @@ export function committedOutcome(
   record: SubAgentSessionRecord,
   run: SubAgentRunSummary,
 ): ImportedSubAgentRunOutcome | undefined {
-  const cached = parts.outcomes.get(run.subAgentRunId);
-  if (cached) return cached;
+  if (record.session.pendingImportRunId === run.subAgentRunId) return undefined;
   const entry = parts.store.state?.imports.find(
-    (row) =>
-      row.state === "committed" &&
-      row.runId === run.subAgentRunId &&
-      row.sessionId === record.session.subAgentSessionId,
+    (row) => row.runId === run.subAgentRunId && row.sessionId === record.session.subAgentSessionId,
   );
-  return entry
-    ? { run, answerText: entry.answerText, evidence: entry.aliases, importId: entry.importId }
-    : undefined;
+  if (!entry) return parts.outcomes.get(run.subAgentRunId);
+  if (entry.state !== "committed") return undefined;
+  return {
+    run: importedRunSummary(run, entry.answerText),
+    answerText: entry.answerText,
+    evidence: entry.aliases,
+    importId: entry.importId,
+  };
 }
 
 /**

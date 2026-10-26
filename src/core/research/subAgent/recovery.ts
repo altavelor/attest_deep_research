@@ -8,8 +8,8 @@ const CRASH_RECOVERY = "crash-recovery";
  * run becomes interrupted with reason crash-recovery and every session not yet
  * archived is archived, because no parent run survives a restart. Each affected
  * parent gets a recovery marker listing fenced runs, cancelled pending imports and
- * unsettled action keys; pending creates, imports and permits stay for later
- * reconciliation and no parent binding is created.
+ * unsettled action keys and its pending imports are tombstoned; pending creates and
+ * permits stay for later reconciliation and no parent binding is created.
  */
 export function recoverSubAgentState(
   snapshot: SubAgentStateSnapshot,
@@ -21,10 +21,20 @@ export function recoverSubAgentState(
     return archiveRecord(snapshot, record, completedAt, markers);
   });
   if (markers.size === 0) return snapshot;
+  const cancelled = new Set(
+    [...markers.values()].flatMap((marker) =>
+      marker.cancelledImports.map((entry) => entry.importId),
+    ),
+  );
   return {
     ...snapshot,
     revision: snapshot.revision + 1,
     records,
+    imports: snapshot.imports.map((entry) =>
+      cancelled.has(entry.importId)
+        ? { ...entry, state: "tombstoned" as const, tombstoneReason: CRASH_RECOVERY }
+        : entry,
+    ),
     recoveryMarkers: [...snapshot.recoveryMarkers, ...markers.values()],
   };
 }

@@ -1,4 +1,5 @@
 import { isChatStorageError, type ChatRepository } from "@application/ports/chat";
+import { removeOrphanSubAgentAliases } from "@core/chat/subAgentAliases";
 import { recoverSubAgentState } from "@core/research";
 
 import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
@@ -424,7 +425,9 @@ export class ChatSessionManager {
             lastAnswer: chat.lastAnswer,
             attachedContextPaths: chat.attachedContextPaths,
             chatSettings: chat.chatSettings,
-            sourceRegistry: chat.sourceRegistry,
+            sourceRegistry: subAgents
+              ? removeOrphanSubAgentAliases(chat.sourceRegistry, subAgents)
+              : chat.sourceRegistry,
             unreadCompletion: chat.unreadCompletion,
             lastRun,
           },

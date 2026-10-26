@@ -2,6 +2,7 @@ export * from "./ChatCompaction";
 export * from "./ContextAssembler";
 export * from "./ChatSessionManager";
 export * from "./ChatSessionRuntime";
+export * from "./ChatSubAgentEvidenceBridge";
 export * from "./chatSessionSnapshots";
 export * from "./chatSessionTypes";
 export * from "./ChatWriteBuffer";
