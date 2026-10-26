@@ -8,6 +8,7 @@ import {
   type SubAgentBufferedValue,
   type SubAgentCreateRecord,
   type SubAgentImportTombstone,
+  type SubAgentPendingAction,
   type SubAgentRecoveryMarker,
   type SubAgentSessionErrorCode,
   type SubAgentSessionRecord,
@@ -104,6 +105,10 @@ export class SubAgentStateStore {
 
   deleteSubmission(submissionId: string): number {
     return this.stage({ op: "delete", entity: "submission", id: submissionId });
+  }
+
+  putAction(action: SubAgentPendingAction): number {
+    return this.put("action", action.actionKey, action);
   }
 
   putMarker(marker: SubAgentRecoveryMarker): number {

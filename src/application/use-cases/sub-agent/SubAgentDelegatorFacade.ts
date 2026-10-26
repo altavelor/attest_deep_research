@@ -14,12 +14,12 @@ import {
   type SubAgentResultState,
   type SubAgentRunReceipt,
   type SubAgentRunRef,
-  type SubAgentSessionRecord,
   type SubAgentSessionSummary,
 } from "@core/research";
 import { authorizeCall, ownedRecord } from "./authorization";
 import type { SubAgentManagerParts } from "./managerParts";
 import { resultStateOf } from "./resultState";
+import { stopSessionWork } from "./scopeCleanup";
 import type { SubAgentRunScheduler } from "./runScheduler";
 import type { SubAgentSessionCreation } from "./sessionCreation";
 import type { SubAgentSubmissions } from "./submissions";
@@ -47,7 +47,13 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
   ) {}
 
   create(input: CreateSubAgentSessionInput): Promise<SubAgentSessionSummary> {
-    return this.call((grant) => this.services.creation.create(this.binding, grant, input));
+    return this.call(async (grant) => {
+      const session = await this.services.creation.create(this.binding, grant, input);
+      if (this.services.parts.context.getCurrentDeliveryEpoch() !== this.delivery.deliveryEpoch) {
+        throw sessionFailure("fenced-delivery");
+      }
+      return session;
+    });
   }
 
   getCreatedSession(createRequestId: string): Promise<SubAgentSessionSummary> {
@@ -109,7 +115,7 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
     return this.call(async () => {
       const { parts, scheduler } = this.services;
       const record = ownedRecord(parts.store, this.binding, sessionId);
-      const revision = stopTarget(scheduler, record);
+      const revision = stopSessionWork(scheduler, record, "stopped");
       await parts.store.flush(revision ?? parts.store.currentRevision);
       if (revision !== null) parts.notifyResults();
     });
@@ -156,19 +162,4 @@ export class SubAgentDelegatorFacade implements SubAgentDelegator {
       return operation(grant, fence);
     });
   }
-}
-
-/** Fences and terminates the session's current queued, running or importing work; null when idle. */
-function stopTarget(scheduler: SubAgentRunScheduler, record: SubAgentSessionRecord): number | null {
-  const { session } = record;
-  scheduler.fenceSession(session.subAgentSessionId);
-  if (session.status === "importing") {
-    return scheduler.transition(session.subAgentSessionId, { type: "stop-import" });
-  }
-  if (session.activeSubAgentRunId === null) return null;
-  return scheduler.transition(session.subAgentSessionId, {
-    type: "model-stop",
-    runId: session.activeSubAgentRunId,
-    reason: "stopped",
-  });
 }

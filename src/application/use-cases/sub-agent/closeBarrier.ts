@@ -8,6 +8,7 @@ export const CLOSE_DEADLINE_MS = 2_000;
 export const PRIMARY_DRAIN_MS = 1_500;
 
 interface CloseProgress {
+  sessionIds: Set<string>;
   fencedRunIds: Set<string>;
   cancelledImports: { importId: string; generation: number }[];
 }
@@ -24,9 +25,15 @@ export async function closeParentRun(
   terminalReason: string,
 ): Promise<SubAgentCloseResult> {
   parts.fences.revoke(parentRunId);
-  const progress: CloseProgress = { fencedRunIds: new Set(), cancelledImports: [] };
+  const unsettled = (): number => parts.budget.unsettledKeys(progress.sessionIds).length;
+  const progress: CloseProgress = {
+    sessionIds: new Set(),
+    fencedRunIds: new Set(),
+    cancelledImports: [],
+  };
   for (const record of parts.store.state?.records ?? []) {
     if (record.session.parentRunId !== parentRunId) continue;
+    progress.sessionIds.add(record.session.subAgentSessionId);
     for (const runId of scheduler.fenceSession(record.session.subAgentSessionId)) {
       progress.fencedRunIds.add(runId);
     }
@@ -34,7 +41,12 @@ export async function closeParentRun(
     for (const run of record.runs) parts.outcomes.delete(run.subAgentRunId);
   }
   if (parts.context.getChatId() === null && !parts.store.state) {
-    return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };
+    return {
+      durable: true,
+      recoveryMarkerPersisted: false,
+      unsettledPermits: unsettled(),
+      failures: [],
+    };
   }
   let expire = (): void => undefined;
   const overall = new Promise<void>((resolve) => (expire = resolve));
@@ -45,7 +57,12 @@ export async function closeParentRun(
       PRIMARY_DRAIN_MS,
     );
     if (primary.status === "done") {
-      return { durable: true, recoveryMarkerPersisted: false, unsettledPermits: 0, failures: [] };
+      return {
+        durable: true,
+        recoveryMarkerPersisted: false,
+        unsettledPermits: unsettled(),
+        failures: [],
+      };
     }
     const failures = [
       primary.status === "timeout" ? "primary-drain-timeout" : "primary-drain-failed",
@@ -56,12 +73,22 @@ export async function closeParentRun(
       abortOn(overall),
     );
     if (marker.status === "done") {
-      return { durable: true, recoveryMarkerPersisted: true, unsettledPermits: 0, failures };
+      return {
+        durable: true,
+        recoveryMarkerPersisted: true,
+        unsettledPermits: unsettled(),
+        failures,
+      };
     }
     failures.push(
       marker.status === "failed" ? "recovery-marker-failed" : "recovery-marker-timeout",
     );
-    return { durable: false, recoveryMarkerPersisted: false, unsettledPermits: 0, failures };
+    return {
+      durable: false,
+      recoveryMarkerPersisted: false,
+      unsettledPermits: unsettled(),
+      failures,
+    };
   } finally {
     deadline.cancel();
     expire();
@@ -80,6 +107,7 @@ async function drain(
   for (const record of state.records) {
     const { session } = record;
     if (session.parentRunId !== parentRunId || session.status === "archived") continue;
+    progress.sessionIds.add(session.subAgentSessionId);
     for (const runId of scheduler.fenceSession(session.subAgentSessionId)) {
       progress.fencedRunIds.add(runId);
     }
@@ -113,7 +141,7 @@ async function writeMarker(
     createdAt: timestamp(parts),
     fencedRunIds: [...progress.fencedRunIds],
     cancelledImports: progress.cancelledImports,
-    unresolvedActionKeys: [],
+    unresolvedActionKeys: parts.budget.unsettledKeys(progress.sessionIds),
   });
   await parts.store.flush(revision);
 }

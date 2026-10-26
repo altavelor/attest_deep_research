@@ -1,0 +1,47 @@
+import type { SubAgentSessionRecord } from "@core/research";
+import type { SubAgentManagerParts } from "./managerParts";
+import type { SubAgentRunScheduler } from "./runScheduler";
+
+/** Fences and terminates the session's current queued, running or importing work; null when idle. */
+export function stopSessionWork(
+  scheduler: SubAgentRunScheduler,
+  record: SubAgentSessionRecord,
+  reason: string,
+): number | null {
+  const { session } = record;
+  scheduler.fenceSession(session.subAgentSessionId);
+  if (session.status === "importing") {
+    return scheduler.transition(session.subAgentSessionId, { type: "stop-import" });
+  }
+  if (session.activeSubAgentRunId === null) return null;
+  return scheduler.transition(session.subAgentSessionId, {
+    type: "model-stop",
+    runId: session.activeSubAgentRunId,
+    reason,
+  });
+}
+
+/**
+ * Cleans up a closed budget scope once its cleanup claim was won: every session of the
+ * scope is fenced, its queued or running work is terminated and the terminal states are
+ * published, while sessions of other scopes stay untouched.
+ */
+export async function closeBudgetScope(
+  parts: SubAgentManagerParts,
+  scheduler: SubAgentRunScheduler,
+  scopeId: string,
+): Promise<void> {
+  let revision: number | null = null;
+  for (const record of parts.store.state?.records ?? []) {
+    const policy = record.session.budgetPolicy;
+    if (policy.type !== "required-scope" || policy.scopeId !== scopeId) continue;
+    try {
+      revision = stopSessionWork(scheduler, record, "budget-denied") ?? revision;
+    } catch {
+      continue;
+    }
+  }
+  if (revision === null) return;
+  await parts.store.flush(revision).catch(() => undefined);
+  parts.notifyResults();
+}

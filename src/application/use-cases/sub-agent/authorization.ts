@@ -12,10 +12,11 @@ import type { ParentFences } from "./parentFences";
 import { sessionFailure, type SubAgentStateStore } from "./SubAgentStateStore";
 
 const LOCAL_BUDGET_MODES: readonly string[] = ["thinking"];
+const SCOPED_BUDGET_MODES: readonly string[] = ["thinking", "deep-research"];
 
 type AuthorizationContext = Pick<
   SubAgentSessionManagerContext,
-  "getCurrentParentBinding" | "getCurrentDeliveryEpoch" | "resolveGrant"
+  "getCurrentParentBinding" | "getCurrentDeliveryEpoch" | "resolveGrant" | "budget"
 >;
 
 /**
@@ -37,8 +38,7 @@ export function authorizeCall(
     !sameBinding(context.getCurrentParentBinding(), binding) ||
     !grant ||
     !sameBinding(grant.binding, binding) ||
-    !LOCAL_BUDGET_MODES.includes(grant.callerMode) ||
-    grant.budgetPolicy.type !== "local"
+    !budgetAllowed(grant, context.budget !== undefined)
   ) {
     throw sessionFailure("not-authorized");
   }
@@ -61,6 +61,11 @@ export function ownedRecord(
   return record;
 }
 
+function budgetAllowed(grant: SubAgentDelegationGrant, hasBudgetPort: boolean): boolean {
+  if (grant.budgetPolicy.type === "local") return LOCAL_BUDGET_MODES.includes(grant.callerMode);
+  return hasBudgetPort && SCOPED_BUDGET_MODES.includes(grant.callerMode);
+}
+
 function sameBinding(left: ParentRunBinding | null, right: ParentRunBinding): boolean {
   return (
     left !== null &&
@@ -68,4 +73,19 @@ function sameBinding(left: ParentRunBinding | null, right: ParentRunBinding): bo
     left.parentRunId === right.parentRunId &&
     left.bindingGeneration === right.bindingGeneration
   );
+}
+
+/** Rejects a grant whose budget policy differs from the immutable policy of the session. */
+export function assertSessionBudget(
+  record: SubAgentSessionRecord,
+  grant: SubAgentDelegationGrant,
+): void {
+  const own = record.session.budgetPolicy;
+  const claimed = grant.budgetPolicy;
+  if (
+    own.type !== claimed.type ||
+    (own.type === "required-scope" && own.scopeId !== (claimed as typeof own).scopeId)
+  ) {
+    throw sessionFailure("not-authorized");
+  }
 }

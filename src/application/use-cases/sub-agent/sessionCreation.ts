@@ -1,5 +1,10 @@
-import type { SubAgentDelegationGrant } from "@application/ports/subAgent";
+import type {
+  SubAgentBudgetRegistration,
+  SubAgentBudgetRegistrationResult,
+  SubAgentDelegationGrant,
+} from "@application/ports/subAgent";
 import {
+  applySubAgentTransition,
   deriveSubAgentTitle,
   isSubAgentStateId,
   readSubAgentSearchBudget,
@@ -16,6 +21,7 @@ import {
 import { ownedRecord } from "./authorization";
 import { digestOf } from "./digest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
+import { scopeOf } from "./subAgentBudget";
 import { sessionFailure } from "./SubAgentStateStore";
 
 interface NormalizedCreate {
@@ -32,6 +38,7 @@ interface NormalizedCreate {
 const DENIAL_CODES: readonly SubAgentSessionErrorCode[] = [
   "budget-denied",
   "budget-port-error",
+  "persistence-failed",
   "source-scope-denied",
 ];
 
@@ -102,6 +109,8 @@ export class SubAgentSessionCreation {
     existing: SubAgentCreateRecord,
     normalized: NormalizedCreate | undefined,
   ): Promise<SubAgentSessionSummary> {
+    const joined = this.inFlight.get(existing.createRequestId);
+    if (joined) return joined;
     if (existing.status === "published" && existing.publishedSessionId !== null) {
       return Promise.resolve(
         ownedRecord(this.parts.store, binding, existing.publishedSessionId).session,
@@ -114,10 +123,9 @@ export class SubAgentSessionCreation {
     if (!normalized || !sameParent(normalized.binding, binding)) {
       throw sessionFailure("not-authorized");
     }
-    const joined = this.inFlight.get(existing.createRequestId);
-    return (
-      joined ??
-      this.track(existing, this.publish(existing, normalized, this.parts.store.currentRevision))
+    return this.track(
+      existing,
+      this.publish(existing, normalized, this.parts.store.currentRevision),
     );
   }
 
@@ -143,6 +151,8 @@ export class SubAgentSessionCreation {
     const { store, fences } = this.parts;
     await store.flush(pendingRevision);
     if (fences.isRevoked(normalized.binding.parentRunId)) throw sessionFailure("fenced-delivery");
+    const scopeId = scopeOf(normalized.grant.budgetPolicy);
+    const registration = scopeId === null ? null : await this.register(record, normalized, scopeId);
     const at = timestamp(this.parts);
     const session: SubAgentSessionSummary = {
       subAgentSessionId: record.candidateSessionId,
@@ -171,14 +181,113 @@ export class SubAgentSessionCreation {
       status: "published",
       publishedSessionId: session.subAgentSessionId,
     });
+    this.pendingInputs.delete(record.createRequestId);
+    try {
+      await store.flush(revision);
+    } catch (error) {
+      if (registration) {
+        void this.abortRegistration(registration);
+        await this.withdraw(record, session, "persistence-failed");
+      }
+      throw error;
+    }
+    if (registration) await this.finishRegistration(record, registration, session);
     this.parts.sessionOptions.set(session.subAgentSessionId, {
       grant: normalized.grant,
       resources: normalized.resources,
       maxSearches: normalized.maxSearches,
     });
-    this.pendingInputs.delete(record.createRequestId);
-    await store.flush(revision);
     return session;
+  }
+
+  /**
+   * Registers the pending create with the scope owner off-lock and then re-checks the
+   * create record and parent fence; a lost check aborts the registration so it finishes.
+   */
+  private async register(
+    record: SubAgentCreateRecord,
+    normalized: NormalizedCreate,
+    scopeId: string,
+  ): Promise<SubAgentBudgetRegistration> {
+    let begun: SubAgentBudgetRegistrationResult;
+    try {
+      begun = await this.parts.budget.register(scopeId, record.createRequestId);
+    } catch (error) {
+      await this.deny(record, "budget-port-error");
+      throw error;
+    }
+    if (begun.type === "denied") {
+      await this.deny(record, "budget-denied");
+      throw sessionFailure("budget-denied");
+    }
+    if (
+      this.parts.fences.isRevoked(normalized.binding.parentRunId) ||
+      this.parts.store.create(record.createRequestId)?.status !== "pending"
+    ) {
+      void this.abortRegistration(begun.registration);
+      throw sessionFailure("fenced-delivery");
+    }
+    return begun.registration;
+  }
+
+  /** Finishes a published registration; a closed scope or port error archives the unusable session. */
+  private async finishRegistration(
+    create: SubAgentCreateRecord,
+    registration: SubAgentBudgetRegistration,
+    session: SubAgentSessionSummary,
+  ): Promise<void> {
+    let code: "budget-denied" | "budget-port-error" | null;
+    try {
+      const finished = await this.parts.budget.finishRegistration(registration, {
+        type: "published",
+        sessionId: session.subAgentSessionId,
+      });
+      code = finished.type === "accepted" ? null : "budget-denied";
+    } catch {
+      code = "budget-port-error";
+    }
+    if (code === null) return;
+    await this.withdraw(create, session, code);
+    throw sessionFailure(code);
+  }
+
+  /** Archives a published session that may not be used and stores the denial on its create record. */
+  private async withdraw(
+    create: SubAgentCreateRecord,
+    session: SubAgentSessionSummary,
+    terminalReason: SubAgentSessionErrorCode,
+  ): Promise<void> {
+    const record = this.parts.store.record(session.subAgentSessionId);
+    try {
+      const archived =
+        record &&
+        applySubAgentTransition(record, {
+          type: "archive",
+          reason: "user-archive",
+          at: timestamp(this.parts),
+        });
+      if (record && archived?.ok) this.parts.store.putRecord(archived.record, record);
+    } catch {
+      return this.deny(create, terminalReason);
+    }
+    await this.deny(create, terminalReason);
+  }
+
+  private async abortRegistration(registration: SubAgentBudgetRegistration): Promise<void> {
+    await this.parts.budget
+      .finishRegistration(registration, { type: "aborted" })
+      .catch(() => undefined);
+  }
+
+  private async deny(record: SubAgentCreateRecord, terminalReason: string): Promise<void> {
+    this.pendingInputs.delete(record.createRequestId);
+    try {
+      await this.parts.store.flush(
+        this.parts.store.putCreate({ ...record, status: "denied", terminalReason }),
+      );
+    } catch {
+      return;
+    }
   }
 }
 

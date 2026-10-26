@@ -10,6 +10,7 @@ import { closeParentRun } from "./closeBarrier";
 import type { SubAgentManagerParts } from "./managerParts";
 import { ParentFences } from "./parentFences";
 import { SubAgentRunScheduler } from "./runScheduler";
+import { SubAgentBudgetCoordinator } from "./subAgentBudget";
 import { SubAgentSessionCreation } from "./sessionCreation";
 import { SubAgentStateStore } from "./SubAgentStateStore";
 import { SubAgentDelegatorFacade, type SubAgentFacadeServices } from "./SubAgentDelegatorFacade";
@@ -27,10 +28,13 @@ export class SubAgentSessionManager implements SubAgentHost {
   private disposal: Promise<void> | null = null;
 
   constructor(context: SubAgentSessionManagerContext) {
+    const store = new SubAgentStateStore(context);
+    const fences = new ParentFences();
     this.parts = {
       context,
-      store: new SubAgentStateStore(context),
-      fences: new ParentFences(),
+      store,
+      fences,
+      budget: new SubAgentBudgetCoordinator({ context, store, fences }),
       sessionOptions: new Map(),
       outcomes: new Map(),
       unsavedImports: new Set(),
