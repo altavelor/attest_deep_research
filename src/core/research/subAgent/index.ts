@@ -53,3 +53,27 @@ export {
   type SubAgentTransition,
   type SubAgentTransitionResult,
 } from "./transitions";
+export {
+  emptySubAgentState,
+  toValidatedJson,
+  type SubAgentBufferedValue,
+  type SubAgentEvictionMarker,
+  type SubAgentFlushReason,
+  type SubAgentImportRecord,
+  type SubAgentImportState,
+  type SubAgentObservationKind,
+  type SubAgentObservationRecord,
+  type SubAgentPendingAction,
+  type SubAgentPendingActionState,
+  type SubAgentRecoveryMarker,
+  type SubAgentStateEntity,
+  type SubAgentStateSnapshot,
+  type ValidatedJsonValue,
+} from "./stateSnapshot";
+export {
+  validateSubAgentState,
+  type SubAgentStateValidation,
+  type SubAgentStateValidationCode,
+} from "./stateValidation";
+export { recoverSubAgentState } from "./recovery";
+export { evictSubAgentDetails, type SubAgentDetailsEviction } from "./detailsRetention";

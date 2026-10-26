@@ -1,4 +1,5 @@
-import type { ChatRepository } from "@application/ports/chat";
+import { isChatStorageError, type ChatRepository } from "@application/ports/chat";
+import { recoverSubAgentState } from "@core/research";
 import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
 import { inferChatTitle } from "@core/chat/savedChat";
 import type { SavedChatSummary } from "@core/chat/savedChat";
@@ -387,30 +388,43 @@ export class ChatSessionManager {
   /**
    * Startup recovery. Converts persisted queued, running, or stopping runs into
    * interrupted ones with reason `crash-recovery`, preserving `updatedAt` so an
-   * old chat does not jump to the top of history.
+   * old chat does not jump to the top of history. The chat and its recovered
+   * sub-agent section are written in one commit; a chat changed meanwhile is skipped.
    */
   async normalizeStaleChats(): Promise<void> {
     const summaries = await this.options.repository.listChats();
     const completedAt = this.options.environment.now().toISOString();
     for (const summary of summaries) {
       if (!summary.lastRun || !isNonTerminalChatSessionStatus(summary.lastRun.status)) continue;
-      const chat = await this.options.repository.loadChat(summary.id);
-      if (!chat?.lastRun) continue;
+      const document = await this.options.repository.loadChatDocument(summary.id);
+      if (!document?.chat.lastRun) continue;
+      const { chat } = document;
       const lastRun = normalizeStaleRunState(chat.lastRun, completedAt);
       if (!lastRun) continue;
-      await this.options.repository.saveChat({
-        id: chat.id,
-        title: chat.title,
-        createdAt: chat.createdAt,
-        updatedAt: chat.updatedAt,
-        messages: interruptLastAssistantProgress(chat.messages),
-        lastAnswer: chat.lastAnswer,
-        attachedContextPaths: chat.attachedContextPaths,
-        chatSettings: chat.chatSettings,
-        sourceRegistry: chat.sourceRegistry,
-        unreadCompletion: chat.unreadCompletion,
-        lastRun,
-      });
+      const section = chat.subAgents?.status === "ready" ? chat.subAgents.snapshot : null;
+      const subAgents = section ? recoverSubAgentState(section, completedAt) : null;
+      try {
+        await this.options.repository.commitChatDocument({
+          chatId: chat.id,
+          base: document.base,
+          chat: {
+            id: chat.id,
+            title: chat.title,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            messages: interruptLastAssistantProgress(chat.messages),
+            lastAnswer: chat.lastAnswer,
+            attachedContextPaths: chat.attachedContextPaths,
+            chatSettings: chat.chatSettings,
+            sourceRegistry: chat.sourceRegistry,
+            unreadCompletion: chat.unreadCompletion,
+            lastRun,
+          },
+          ...(subAgents && subAgents !== section ? { subAgents } : {}),
+        });
+      } catch (error) {
+        if (!isChatStorageError(error) || error.code !== "document-conflict") throw error;
+      }
     }
   }
 
