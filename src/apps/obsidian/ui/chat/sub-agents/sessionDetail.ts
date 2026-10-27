@@ -49,6 +49,9 @@ export class SessionDetailView {
   private detail: SubAgentInspectionDetail | null = null;
   private state: DetailState | null = null;
   private elapsedEl: HTMLElement | null = null;
+  private runSignature: string | null = null;
+  private promptKey: string | null = null;
+  private stopKey: string | null = null;
 
   constructor(
     containerEl: HTMLElement,
@@ -69,7 +72,10 @@ export class SessionDetailView {
       cls: "attest-sub-agents__debug-badge",
       text: t("chat.subAgents.debug"),
     });
-    this.descriptionEl = rootEl.createEl("h3", { cls: "attest-sub-agents__description" });
+    this.descriptionEl = rootEl.createEl("h3", {
+      cls: "attest-sub-agents__description",
+      attr: { dir: "auto" },
+    });
     this.metricsEl = rootEl.createDiv({ cls: "attest-sub-agents__metrics" });
     this.runRowEl = rootEl.createDiv({ cls: "attest-sub-agents__run-row" });
     const sectionsEl = rootEl.createDiv({ cls: "attest-sub-agents__sections" });
@@ -91,8 +97,14 @@ export class SessionDetailView {
     const runIndex = detail.runs.findIndex((run) => run.subAgentRunId === state.selectedRunId);
     const prompt = detail.initialPrompts.find((entry) => entry.runId === state.selectedRunId);
     this.prompt.summaryEl.setText(promptSummary(prompt, runIndex + 1, t));
-    this.prompt.bodyEl.empty();
-    if (this.prompt.open) renderPromptBody(this.prompt.bodyEl, prompt, t);
+    const promptKey = this.prompt.open
+      ? `${state.selectedRunId}\u0000${JSON.stringify(prompt)}`
+      : null;
+    if (promptKey !== this.promptKey) {
+      this.promptKey = promptKey;
+      this.prompt.bodyEl.empty();
+      if (this.prompt.open) renderPromptBody(this.prompt.bodyEl, prompt, t);
+    }
     this.work.summaryEl.setText(
       t("chat.subAgents.work.summary", {
         runs: detail.runs.length,
@@ -104,7 +116,18 @@ export class SessionDetailView {
     if (this.work.open && previousRun !== undefined && previousRun !== state.selectedRunId) {
       this.workLog.revealSelectedRun();
     }
-    renderStopArea(this.stopEl, detail.card, detail.runs, state.stop, t, this.callbacks.onStop);
+    this.renderStop(detail, state);
+  }
+
+  private renderStop(detail: SubAgentInspectionDetail, state: DetailState): void {
+    const { card } = detail;
+    const runIndex = detail.runs.findIndex((run) => run.subAgentRunId === card.controlRunId);
+    const key = `${state.stop.phase}|${card.canStop}|${runIndex}`;
+    if (key === this.stopKey) return;
+    this.stopKey = key;
+    const hadFocus = this.stopEl.contains(this.stopEl.ownerDocument.activeElement);
+    renderStopArea(this.stopEl, card, detail.runs, state.stop, this.deps.t, this.callbacks.onStop);
+    if (hadFocus) this.stopEl.querySelector<HTMLButtonElement>("button")?.focus();
   }
 
   tick(): void {
@@ -172,7 +195,7 @@ export class SessionDetailView {
     model.createDiv({
       cls: "attest-sub-agents__metric-value",
       text: label,
-      attr: { title: label },
+      attr: { title: label, dir: "auto" },
     });
     if (modelsChanged(detail.runs)) {
       model.createDiv({
@@ -210,23 +233,33 @@ export class SessionDetailView {
     selectedRunId: string | null,
   ): void {
     const { t } = this.deps;
+    const labels = runs.map((run, index) =>
+      t("chat.subAgents.run.option", {
+        run: index + 1,
+        attempt: run.attempt,
+        state: t(`chat.subAgents.runStatus.${run.status}`),
+        model: modelLabel(run.model, t),
+      }),
+    );
+    const signature = JSON.stringify(runs.map((run, index) => [run.subAgentRunId, labels[index]]));
+    const existing = this.runRowEl.querySelector<HTMLSelectElement>("select");
+    if (signature === this.runSignature && existing) {
+      if (selectedRunId && existing.value !== selectedRunId) existing.value = selectedRunId;
+      return;
+    }
+    this.runSignature = signature;
+    const hadFocus = existing !== null && existing === existing.ownerDocument.activeElement;
     this.runRowEl.empty();
     this.runRowEl.toggleClass("is-hidden", runs.length < 2);
     if (runs.length < 2) return;
     const labelEl = this.runRowEl.createEl("label", { text: t("chat.subAgents.run.label") });
     const selectEl = labelEl.createEl("select", { cls: "dropdown attest-sub-agents__run-select" });
     runs.forEach((run, index) => {
-      const optionEl = selectEl.createEl("option", {
-        text: t("chat.subAgents.run.option", {
-          run: index + 1,
-          attempt: run.attempt,
-          state: t(`chat.subAgents.runStatus.${run.status}`),
-          model: modelLabel(run.model, t),
-        }),
-      });
+      const optionEl = selectEl.createEl("option", { text: labels[index], attr: { dir: "auto" } });
       optionEl.value = run.subAgentRunId;
     });
     if (selectedRunId) selectEl.value = selectedRunId;
     selectEl.addEventListener("change", () => this.callbacks.onSelectRun(selectEl.value));
+    if (hadFocus) selectEl.focus();
   }
 }
