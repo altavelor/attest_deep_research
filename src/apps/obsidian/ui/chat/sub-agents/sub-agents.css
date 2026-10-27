@@ -447,6 +447,11 @@
   min-height: 44px;
 }
 
+.attest-sub-agents__stop-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .attest-sub-agents__stop-icon {
   display: inline-flex;
 }

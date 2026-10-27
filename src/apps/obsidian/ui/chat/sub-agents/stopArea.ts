@@ -23,7 +23,7 @@ export function renderStopArea(
   containerEl.empty();
   if (stop.phase === "pending") {
     const button = stopButton(containerEl, t("chat.subAgents.stopping"), "loader", onStop);
-    button.disabled = true;
+    button.setAttr("aria-disabled", "true");
     button.setAttr("aria-busy", "true");
     containerEl.createDiv({
       cls: "attest-sub-agents__stop-hint",
