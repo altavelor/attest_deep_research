@@ -5,7 +5,13 @@ import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { mapOpenAiMessage } from "../providers/messageMappers";
 import { InlineReasoningParser } from "./InlineReasoningParser";
-import { parseOpenAiChatDelta, textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
+import {
+  parseOpenAiChatDelta,
+  parseOpenAiChatUsage,
+  textFromEvents,
+  ToolCallBuilder,
+  UsageEvent,
+} from "./chatStreamPrimitives";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
 
@@ -34,7 +40,10 @@ export async function* streamOpenAiCompatibleChat({
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
-  const reasoning = reasoningBody(request);
+  const optionalFields = {
+    stream_options: { include_usage: true },
+    ...reasoningBody(request),
+  };
 
   const open = (
     body: Record<string, unknown>,
@@ -45,7 +54,7 @@ export async function* streamOpenAiCompatibleChat({
     );
 
   let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-  let attempt = reasoning;
+  let attempt: Record<string, unknown> = optionalFields;
   let firstError: unknown;
   for (;;) {
     try {
@@ -68,7 +77,8 @@ export async function* streamOpenAiCompatibleChat({
   let reasoningOpen = false;
   const reasoningSegmentId = "reasoning-0";
   const inlineReasoning = new InlineReasoningParser();
-  let terminalStopReason: "complete" | "length" | "error" = "complete";
+  let terminalStopReason: "complete" | "length" | "error" | "tool_calls" = "complete";
+  let usage: UsageEvent | undefined;
   const observedDialects = new Set<string>();
   const observe = (dialect: string): void => {
     if (observedDialects.has(dialect)) return;
@@ -78,6 +88,8 @@ export async function* streamOpenAiCompatibleChat({
 
   try {
     for await (const chunk of stream) {
+      usage = parseOpenAiChatUsage(chunk) ?? usage;
+      if (terminalStopReason === "tool_calls") continue;
       const parsed = parseOpenAiChatDelta(chunk);
       if (parsed.finishReason === "length") terminalStopReason = "length";
       else if (
@@ -131,16 +143,7 @@ export async function* streamOpenAiCompatibleChat({
         });
       }
       if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
-        if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
-        events.push(...inlineReasoning.finish());
-        events.push({ type: "complete", stopReason: "tool_calls" });
-        yield {
-          content: textFromEvents(events),
-          isComplete: true,
-          toolCalls: toolCallBuilder.build(),
-          events,
-        };
-        return;
+        terminalStopReason = "tool_calls";
       }
       if (events.length > 0) {
         yield { content: textFromEvents(events), isComplete: false, events };
@@ -155,10 +158,11 @@ export async function* streamOpenAiCompatibleChat({
   const events: ModelStreamEvent[] = [];
   if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
   events.push(...inlineReasoning.finish());
+  if (usage) events.push(usage);
   events.push({ type: "complete", stopReason: terminalStopReason });
 
   let toolCalls = toolCallBuilder.build();
-  if (!sawNativeToolCall && toolCalls.length === 0) {
+  if (terminalStopReason !== "tool_calls" && !sawNativeToolCall && toolCalls.length === 0) {
     const textCalls = parseTextToolCalls(fullContent, request.tools);
     for (const textCall of textCalls) {
       toolCallBuilder.add({

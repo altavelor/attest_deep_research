@@ -9,7 +9,7 @@ import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { isRecord } from "@shared";
 import { mapOllamaMessage } from "../providers/messageMappers";
-import { textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
+import { textFromEvents, ToolCallBuilder, usageEvent } from "./chatStreamPrimitives";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
 
@@ -115,6 +115,8 @@ export async function* streamOllamaChat({
         if (reasoningOpen) {
           finalEvents.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
         }
+        const usage = usageEvent(part.prompt_eval_count, part.eval_count);
+        if (usage) finalEvents.push(usage);
         finalEvents.push({ type: "complete", stopReason: "complete" });
         let toolCalls = toolCallBuilder.build();
         if (!sawNativeToolCall && toolCalls.length === 0) {
