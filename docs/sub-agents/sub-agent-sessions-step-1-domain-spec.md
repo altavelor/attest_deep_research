@@ -104,22 +104,22 @@ validation.ts экспортирует validateSubAgentTaskInput, readSubAgentSe
 SubAgentSessionError без побочных эффектов. Record (новый SubAgentSessionRecord) содержит
 session: SubAgentSessionSummary и runs: readonly SubAgentRunSummary[].
 
-| Событие                      | Предусловие                                             | Run                                                                   | Сессия                         |
-| ---------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------ |
-| initial                      | ready, runCount=0                                       | новый queued, attempt=1                                               | queued                         |
-| scheduler-start              | queued, допуск к исполнению получен                     | running                                                               | running                        |
-| runner-completed             | running                                                 | completed, usage/result сохранены                                     | importing                      |
-| import-committed             | importing или failed с pending import, та же generation | completed                                                             | ready                          |
-| import-failed                | importing, та же generation                             | completed без изменения                                               | failed, pending-поля сохранены |
-| provider-failed              | running                                                 | failed                                                                | failed                         |
-| execution-denied/port-error  | queued                                                  | failed                                                                | failed                         |
-| model stop/timeout           | queued/running/stopping                                 | interrupted                                                           | interrupted                    |
-| stop import                  | importing                                               | completed без изменения                                               | archived с tombstone import    |
-| follow-up                    | ready, runCount>0                                       | новый queued, attempt=1                                               | queued                         |
-| retry                        | failed/interrupted, terminal head                       | новый queued, attempt=предыдущий+1, pending import получает tombstone | queued                         |
-| continue-partial             | failed/interrupted, terminal head                       | новый queued, attempt=1                                               | queued                         |
-| user-archive                 | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | archived                       |
-| parent-closed                | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | interrupted при прерванной работе, иначе без изменения |
+| Событие                     | Предусловие                                             | Run                                                                   | Сессия                                                 |
+| --------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| initial                     | ready, runCount=0                                       | новый queued, attempt=1                                               | queued                                                 |
+| scheduler-start             | queued, допуск к исполнению получен                     | running                                                               | running                                                |
+| runner-completed            | running                                                 | completed, usage/result сохранены                                     | importing                                              |
+| import-committed            | importing или failed с pending import, та же generation | completed                                                             | ready                                                  |
+| import-failed               | importing, та же generation                             | completed без изменения                                               | failed, pending-поля сохранены                         |
+| provider-failed             | running                                                 | failed                                                                | failed                                                 |
+| execution-denied/port-error | queued                                                  | failed                                                                | failed                                                 |
+| model stop/timeout          | queued/running/stopping                                 | interrupted                                                           | interrupted                                            |
+| stop import                 | importing                                               | completed без изменения                                               | archived с tombstone import                            |
+| follow-up                   | ready, runCount>0                                       | новый queued, attempt=1                                               | queued                                                 |
+| retry                       | failed/interrupted, terminal head                       | новый queued, attempt=предыдущий+1, pending import получает tombstone | queued                                                 |
+| continue-partial            | failed/interrupted, terminal head                       | новый queued, attempt=1                                               | queued                                                 |
+| user-archive                | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | archived                                               |
+| parent-closed               | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | interrupted при прерванной работе, иначе без изменения |
 
 Import-failed фиксирует исчерпанную попытку импорта (ошибка или deadline шага 5): сессия в failed,
 run остаётся completed, pendingImportRunId/pendingImportGeneration не очищаются, чтобы reconciliation
