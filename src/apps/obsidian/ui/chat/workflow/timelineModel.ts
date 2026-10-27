@@ -1,9 +1,10 @@
 import {
-  parentWorkflowChain,
+  parentDisplayChain,
   type AssistantResearchProgress,
   type ChainItem,
   type ChatDisplayMessage,
 } from "@core/conversation";
+import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import type { ResearchMode } from "@core/research";
 
 export interface WorkflowTimelineModel {
@@ -13,6 +14,7 @@ export interface WorkflowTimelineModel {
   mode?: ResearchMode;
   reasoningSegments: AssistantResearchProgress["reasoning"]["segments"];
   checkpoints: AssistantResearchProgress["checkpoints"];
+  events?: readonly ParentTimelineEvent[];
 }
 
 export interface WorkflowTimelineHandle {
@@ -20,15 +22,22 @@ export interface WorkflowTimelineHandle {
   dispose(): void;
 }
 
-/** Projects a chat message's research progress into the shared timeline model, without child details. */
-export function toParentWorkflowModel(message: ChatDisplayMessage): WorkflowTimelineModel {
+/**
+ * Projects a chat message's research progress into the shared timeline model, without
+ * child details, carrying the sub-agent events of the message's run.
+ */
+export function toParentWorkflowModel(
+  message: ChatDisplayMessage,
+  events: readonly ParentTimelineEvent[] = [],
+): WorkflowTimelineModel {
   const progress = message.researchProgress;
   return {
     scopeId: message.id ?? `message:${message.createdAt}`,
-    items: parentWorkflowChain(progress?.chain ?? []),
+    items: parentDisplayChain(progress?.chain ?? []),
     phase: progress?.phase ?? "idle",
     ...(progress?.mode ? { mode: progress.mode } : {}),
     reasoningSegments: progress?.reasoning.segments ?? [],
     checkpoints: progress?.checkpoints ?? [],
+    ...(events.length > 0 ? { events } : {}),
   };
 }
