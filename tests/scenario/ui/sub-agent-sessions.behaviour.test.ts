@@ -225,7 +225,8 @@ describe("sub-agent sessions button and modal", () => {
     port.emit(inspectionSnapshot([], { revision: 1, hasAgentRuns: true }));
     await settle();
     expect(content.textContent).toBe("12");
-    expect([textarea.value, document.activeElement]).toEqual(["half written", textarea]);
+    expect(textarea.value).toBe("half written");
+    expect(document.activeElement).toBe(textarea);
 
     port.emit(inspectionSnapshot([sessionCard("s1", { status: "failed" })], { revision: 3 }));
     await settle();
@@ -403,7 +404,8 @@ describe("sub-agent sessions button and modal", () => {
     port.emit(inspectionSnapshot([{ ...detail.card, elapsedMs: 80_000 }], { revision: 2 }));
     await settle();
     expect(prompt().querySelector(".attest-sub-agents__prompt")).toBe(promptList);
-    expect([promptList.scrollTop, document.activeElement]).toEqual([40, select]);
+    expect(promptList.scrollTop).toBe(40);
+    expect(document.activeElement).toBe(select);
     select.value = "run-1";
     select.dispatchEvent(new Event("change"));
     expect(prompt().textContent).toBe("The initial prompt was removed to keep the chat small.");
@@ -424,6 +426,16 @@ describe("sub-agent sessions button and modal", () => {
     expect(
       document.body.querySelector<HTMLSelectElement>(".attest-sub-agents__run-select")!.value,
     ).toBe("run-1");
+    document.body.querySelector<HTMLSelectElement>(".attest-sub-agents__run-select")!.focus();
+    port.emit(
+      inspectionSnapshot([detail.card, sessionCard("s2"), sessionCard("s3")], { revision: 4 }),
+      [{ ...detail, runs: [detail.runs[1]] }],
+    );
+    await settle();
+    expect(document.activeElement).toBe(
+      document.body.querySelector(".attest-sub-agents__description"),
+    );
+    port.details.set("s1", detail);
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__agent-open")!.click();
     await settle();
@@ -490,9 +502,23 @@ describe("sub-agent sessions button and modal", () => {
     const viewer = () => timeline().querySelector(".attest-chat__tool-output-viewer");
     expect(viewer()?.textContent).toContain("<script>steal()</script> token: [redacted]");
     expect(timeline().querySelector("script, b")).toBeNull();
+    const outCell = timeline().querySelectorAll<HTMLElement>(".attest-chat__tool-cell--out")[0];
+    outCell.focus();
     port.emit(inspectionSnapshot([detail.card], { revision: 3 }), [done]);
     await settle();
     expect(viewer()).not.toBeNull();
+    expect(document.activeElement).toBe(outCell);
+    const changed = { ...done, lifetime: [...done.lifetime, workItem("w3", "run-2", 3)] };
+    port.emit(inspectionSnapshot([detail.card], { revision: 4 }), [changed]);
+    await settle();
+    expect((document.activeElement as HTMLElement).dataset.toolCellId).toBe(
+      outCell.dataset.toolCellId,
+    );
+    expect(document.activeElement).not.toBe(outCell);
+    timeline().querySelector<HTMLElement>(".attest-chat__tool-output-viewer-close")!.focus();
+    port.emit(inspectionSnapshot([detail.card], { revision: 5 }), [done]);
+    await settle();
+    expect(document.activeElement?.className).toBe("attest-chat__tool-output-viewer-close");
 
     harness.state.debug = false;
     view.redisplay();
@@ -511,7 +537,11 @@ describe("sub-agent sessions button and modal", () => {
     const { port } = await openDetail(harness, detail);
     const ack = deferred<"stopped" | "already-terminal" | "stale">();
     port.stopReply = () => ack.promise;
-    clickByText("Stop agent");
+    const firstStop = document.body.querySelector<HTMLButtonElement>(
+      ".attest-sub-agents__stop-button",
+    )!;
+    firstStop.focus();
+    firstStop.click();
     port.emit(inspectionSnapshot([{ ...detail.card, controlRunId: "run-3" }], { revision: 2 }), [
       {
         ...detail,
@@ -524,14 +554,16 @@ describe("sub-agent sessions button and modal", () => {
       document.body.querySelector<HTMLButtonElement>(".attest-sub-agents__stop-button")!;
     expect([
       stopButton().textContent,
-      stopButton().disabled,
+      stopButton().getAttribute("aria-disabled"),
       stopButton().getAttribute("aria-busy"),
-    ]).toEqual(["Stopping…", true, "true"]);
+    ]).toEqual(["Stopping…", "true", "true"]);
+    expect(document.activeElement).toBe(stopButton());
     stopButton().click();
     expect(port.stopCalls).toEqual([["s1", "run-2"]]);
 
     ack.resolve("stale");
     await settle();
+    expect(document.activeElement).toBe(stopButton());
     expect(modalText()).toContain("New run 3 started; nothing was stopped.");
     port.stopReply = () => Promise.reject(new Error("disk full"));
     clickByText("Stop agent");
@@ -677,6 +709,19 @@ describe("sub-agent sessions button and modal", () => {
     expect(document.body.querySelector(".attest-sub-agents__description")?.textContent).toBe(
       "Other task",
     );
+    const again = deferred<void>();
+    port.sessionReply = async (sessionId) => {
+      await again.promise;
+      return port.details.get(sessionId) ?? null;
+    };
+    clickByText("Back to agents");
+    cards()[0].click();
+    document.body.querySelector<HTMLButtonElement>(".attest-sub-agents__back")!.focus();
+    again.resolve();
+    await settle();
+    expect(document.activeElement).toBe(
+      document.body.querySelector(".attest-sub-agents__detail-top .attest-sub-agents__back"),
+    );
   });
 
   it("S8 pages a long run of pending tool calls instead of rendering them all", async () => {
@@ -689,7 +734,9 @@ describe("sub-agent sessions button and modal", () => {
     sectionHeaders()[1].click();
     const nodes = () => document.body.querySelectorAll(".attest-chat__workflow-node--pending");
     expect(nodes()).toHaveLength(50);
+    document.body.querySelector<HTMLButtonElement>(".attest-sub-agents__more")!.focus();
     clickByText("Show more (70 more)");
     expect(nodes()).toHaveLength(100);
+    expect(document.activeElement?.textContent).toBe("Show more (20 more)");
   });
 });
