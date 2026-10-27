@@ -20,6 +20,7 @@ import {
 } from "./streaming/ollamaChatStream";
 import { streamAnthropicChat } from "./streaming/anthropicChatStream";
 import { streamOpenAiCompatibleChat } from "./streaming/openAiChatStream";
+import { RejectedFieldMemory } from "./streaming/optionalFieldRetry";
 
 export interface ChatModelClientOptions {
   apiFormat?: ApiFormat;
@@ -39,6 +40,7 @@ export class ChatModelClient implements ChatModelProvider {
   private readonly ollama?: Ollama;
   private readonly apiKey?: string;
   private readonly logger?: PluginRequestLogger;
+  private readonly rejectedFields = new RejectedFieldMemory();
   private readonly onReasoningObserved?: ChatModelClientOptions["onReasoningObserved"];
 
   constructor(options: ChatModelClientOptions) {
@@ -88,6 +90,7 @@ export class ChatModelClient implements ChatModelProvider {
           request,
           translateError: (error) => this.translateOpenAiError(error),
           onReasoningObserved: this.onReasoningObserved,
+          rejectedFields: this.rejectedFields,
         });
       }
     } catch (error) {

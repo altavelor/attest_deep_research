@@ -140,3 +140,50 @@ function parseToolArguments(value: string): Record<string, unknown> {
     return { raw: value };
   }
 }
+
+export type UsageEvent = Extract<ModelStreamEvent, { type: "usage" }>;
+
+/**
+ * Reads the token usage an OpenAI-compatible server reports on a stream chunk,
+ * with or without choices. Returns undefined when the chunk carries no usable
+ * input or output count, so a provider that reports nothing stays unreported.
+ */
+export function parseOpenAiChatUsage(chunk: unknown): UsageEvent | undefined {
+  if (!isRecord(chunk) || !isRecord(chunk.usage)) return undefined;
+  const details = isRecord(chunk.usage.completion_tokens_details)
+    ? chunk.usage.completion_tokens_details
+    : {};
+  return usageEvent(
+    chunk.usage.prompt_tokens,
+    chunk.usage.completion_tokens,
+    details.reasoning_tokens,
+  );
+}
+
+/**
+ * Builds a usage event from untrusted provider counts. Counts that are not
+ * finite non-negative safe integers are ignored, and the event is withheld
+ * when neither the input nor the output count is usable.
+ */
+export function usageEvent(
+  input: unknown,
+  output: unknown,
+  reasoning?: unknown,
+): UsageEvent | undefined {
+  const inputTokens = tokenCount(input);
+  const outputTokens = tokenCount(output);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  return {
+    type: "usage",
+    inputTokens: inputTokens ?? 0,
+    outputTokens: outputTokens ?? 0,
+    reasoningTokens: tokenCount(reasoning) ?? 0,
+  };
+}
+
+function tokenCount(value: unknown): number | undefined {
+  const parsed = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof parsed === "number" && Number.isSafeInteger(parsed) && parsed >= 0
+    ? parsed
+    : undefined;
+}

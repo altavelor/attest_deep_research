@@ -110,7 +110,18 @@ describe("sub-agent event cards", () => {
       meta(finished({ durationMs: 400, usage: { ...usage, source: "unavailable" } })),
       meta(finished({ durationMs: 2.5, usage: { ...usage, toolCalls: 2.5, totalTokens: 1e302 } })),
       meta(finished()),
-    ]).toEqual(["12s · Tool calls: 7 · 15.4k tokens · GPT-5", "0s", null, null]);
+      meta(
+        finished({
+          usage: { ...usage, totalTokens: undefined, inputTokens: 900, outputTokens: 300 },
+        }),
+      ),
+    ]).toEqual([
+      "12s · Tool calls: 7 · 15.4k tokens · GPT-5",
+      "0s",
+      null,
+      null,
+      "Tool calls: 7 · 1.2k tokens",
+    ]);
   });
 
   it("appends the terminal duration to a finished task status and leaves a live one bare", () => {

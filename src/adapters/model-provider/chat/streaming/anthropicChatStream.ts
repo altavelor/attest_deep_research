@@ -3,7 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { mapAnthropicMessages } from "../providers/messageMappers";
-import { textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
+import { textFromEvents, ToolCallBuilder, usageEvent } from "./chatStreamPrimitives";
 
 interface AnthropicChatStreamOptions {
   anthropic: Anthropic;
@@ -60,11 +60,16 @@ export async function* streamAnthropicChat({
   const reasoningSegmentId = "reasoning-0";
   let reasoningOpen = false;
   let terminalStopReason: "complete" | "length" | "error" | "tool_calls" = "complete";
+  let inputTokens: unknown;
+  let outputTokens: unknown;
 
   try {
     for await (const event of stream) {
       const events: ModelStreamEvent[] = [];
-      if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
+      if (event.type === "message_start") {
+        inputTokens = event.message.usage?.input_tokens;
+        outputTokens = event.message.usage?.output_tokens;
+      } else if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
         toolCallBuilder.add({
           index: event.index,
           id: event.content_block.id,
@@ -107,6 +112,7 @@ export async function* streamAnthropicChat({
           });
         }
       } else if (event.type === "message_delta") {
+        outputTokens = event.usage?.output_tokens ?? outputTokens;
         const reason = event.delta.stop_reason;
         if (reason === "tool_use") terminalStopReason = "tool_calls";
         else if (reason === "max_tokens") terminalStopReason = "length";
@@ -122,6 +128,8 @@ export async function* streamAnthropicChat({
 
   const finalEvents: ModelStreamEvent[] = [];
   if (reasoningOpen) finalEvents.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
+  const usage = usageEvent(inputTokens, outputTokens);
+  if (usage) finalEvents.push(usage);
   finalEvents.push({ type: "complete", stopReason: terminalStopReason });
   const toolCalls = toolCallBuilder.build();
   yield {

@@ -1,5 +1,13 @@
 import { ChatModelClient } from "@adapters/model-provider";
+import type { ChatRequest } from "@core/agent";
 import { AttestError } from "@core/errors";
+import { USAGE_GRACE_MS } from "@adapters/model-provider/chat/streaming/openAiChatStream";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -354,7 +362,7 @@ describe("ChatModelClient", () => {
     expect(bodies[2]).not.toHaveProperty("chat_template_kwargs");
   });
 
-  it("reports the original failure when the retry without reasoning fields also fails", async () => {
+  it("does not retry a refusal that names no optional field", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ error: { message: "bad request" } }, { status: 400 }));
@@ -373,7 +381,7 @@ describe("ChatModelClient", () => {
         void _chunk;
       }
     }).rejects.toBeInstanceOf(AttestError);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("leaves the Chat Completions body free of reasoning fields when the caller states no preference", async () => {
@@ -1009,5 +1017,317 @@ describe("ChatModelClient", () => {
     await expect(stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
       code: "MODEL_NOT_FOUND",
     } satisfies Partial<AttestError>);
+  });
+});
+
+describe("ChatModelClient token usage", () => {
+  const sse = (chunks: unknown[]) =>
+    streamResponse([
+      ...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
+      "data: [DONE]\n\n",
+    ]);
+  const openAiClient = (fetch: typeof globalThis.fetch) =>
+    new ChatModelClient({ provider: "lmStudio", baseUrl: "http://localhost:1234/v1", fetch });
+  const readNote = {
+    type: "function" as const,
+    function: { name: "read_note", description: "Read", parameters: { type: "object" } },
+  };
+  const toolFinish = {
+    choices: [
+      {
+        delta: {
+          tool_calls: [{ index: 0, id: "c1", function: { name: "read_note", arguments: "{}" } }],
+        },
+        finish_reason: "tool_calls",
+      },
+    ],
+  };
+  const openStream = (chunks: unknown[]) =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          }
+        },
+      }),
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  async function finalEvents(client: ChatModelClient, extra: Partial<ChatRequest> = {}) {
+    const chunks = [];
+    for await (const chunk of client.streamChat({
+      model: "m",
+      messages: [{ role: "user", content: "Hi" }],
+      ...extra,
+    })) {
+      chunks.push(chunk);
+    }
+    const events = chunks.flatMap((chunk) => chunk.events ?? []);
+    return {
+      last: chunks.at(-1),
+      text: chunks.map((chunk) => chunk.content).join(""),
+      usage: events.filter((event) => event.type === "usage"),
+      tail: events.slice(-2).map((event) => event.type),
+    };
+  }
+
+  it("requests usage and reports the choice-less final chunk after a tool call finish", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      sse([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: "c1", function: { name: "read_note", arguments: "{}" } },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+        { choices: [{ delta: { content: "late" } }] },
+        {
+          choices: [],
+          usage: {
+            prompt_tokens: 120,
+            completion_tokens: 30,
+            total_tokens: 150,
+            completion_tokens_details: { reasoning_tokens: 12 },
+            prompt_tokens_details: { cached_tokens: 100 },
+            cost: 0.0004,
+          },
+        },
+      ]),
+    );
+
+    const { last, text, usage, tail } = await finalEvents(openAiClient(fetchMock));
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).stream_options).toEqual({
+      include_usage: true,
+    });
+    expect(usage).toEqual([
+      { type: "usage", inputTokens: 120, outputTokens: 30, reasoningTokens: 12 },
+    ]);
+    expect([text, tail]).toEqual(["", ["usage", "complete"]]);
+    expect(last).toMatchObject({ isComplete: true, toolCalls: [{ id: "c1", name: "read_note" }] });
+    expect(last?.events?.at(-1)).toEqual({ type: "complete", stopReason: "tool_calls" });
+  });
+
+  it("keeps the last valid cumulative usage and ignores malformed counts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      sse([
+        {
+          choices: [{ delta: { content: "a" } }],
+          usage: { prompt_tokens: 9, completion_tokens: 1 },
+        },
+        {
+          choices: [{ delta: { content: "b" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: "9", completion_tokens: 4 },
+        },
+        { choices: [], usage: { prompt_tokens: -1, completion_tokens: 1e20, total_tokens: "x" } },
+      ]),
+    );
+
+    const { usage, tail } = await finalEvents(openAiClient(fetchMock));
+
+    expect(usage).toEqual([{ type: "usage", inputTokens: 9, outputTokens: 4, reasoningTokens: 0 }]);
+    expect(tail).toEqual(["usage", "complete"]);
+  });
+
+  it("reports no usage when the provider sends none", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(sse([{ choices: [{ delta: { content: "a" }, finish_reason: "stop" }] }]));
+
+    const { usage, last } = await finalEvents(openAiClient(fetchMock));
+
+    expect(usage).toEqual([]);
+    expect(last?.events).toEqual([{ type: "complete", stopReason: "complete" }]);
+  });
+
+  it("retries without stream_options when the server rejects it and keeps the reasoning body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "Unknown field: stream_options" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        sse([{ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }]),
+      );
+
+    const { usage } = await finalEvents(openAiClient(fetchMock), { reasoningEnabled: true });
+
+    const retried = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(retried).not.toHaveProperty("stream_options");
+    expect(retried.reasoning).toEqual({ enabled: true });
+    expect(usage).toEqual([]);
+  });
+
+  it("asks a server that refused stream_options only once per model", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "Unknown field: stream_options" } }, { status: 400 }),
+      )
+      .mockImplementation(async () =>
+        sse([{ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }]),
+      );
+    const client = openAiClient(fetchMock);
+
+    for (let round = 0; round < 5; round += 1) await finalEvents(client);
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(JSON.parse(String(fetchMock.mock.calls[5][1]?.body))).not.toHaveProperty(
+      "stream_options",
+    );
+  });
+
+  it("reports input-only usage with a zero output", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        sse([
+          { choices: [{ delta: { content: "a" }, finish_reason: "stop" }] },
+          { choices: [], usage: { prompt_tokens: "5", completion_tokens: "1e3" } },
+        ]),
+      );
+
+    const { usage } = await finalEvents(openAiClient(fetchMock));
+
+    expect(usage).toEqual([{ type: "usage", inputTokens: 5, outputTokens: 0, reasoningTokens: 0 }]);
+  });
+
+  it("does not parse textual tool calls after a native tool_calls finish", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      sse([
+        {
+          choices: [
+            {
+              delta: { content: '<tool_call>{"name": "read_note", "arguments": {}}</tool_call>' },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+      ]),
+    );
+
+    const { last } = await finalEvents(openAiClient(fetchMock), { tools: [readNote] });
+
+    expect(last).not.toHaveProperty("toolCalls");
+  });
+
+  it("completes a tool call round when the stream stays open after the finish", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(openStream([toolFinish]));
+
+    const { last } = await runPastDeadline(USAGE_GRACE_MS, () =>
+      finalEvents(openAiClient(fetchMock)),
+    );
+
+    expect(last).toMatchObject({ isComplete: true, toolCalls: [{ id: "c1" }] });
+  });
+
+  it("stops waiting once usage arrives on a stream that stays open", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        openStream([
+          toolFinish,
+          { choices: [], usage: { prompt_tokens: 3, completion_tokens: 2 } },
+        ]),
+      );
+
+    const { usage, last } = await finalEvents(openAiClient(fetchMock));
+
+    expect(usage).toEqual([{ type: "usage", inputTokens: 3, outputTokens: 2, reasoningTokens: 0 }]);
+    expect(last).toMatchObject({ isComplete: true, toolCalls: [{ id: "c1" }] });
+  });
+
+  it("throws the abort reason when the caller aborts while usage is awaited", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(openStream([toolFinish]));
+    const controller = new AbortController();
+    const reason = new Error("stopped");
+
+    const consume = async () => {
+      for await (const _chunk of openAiClient(fetchMock).streamChat({
+        model: "m",
+        messages: [{ role: "user", content: "Hi" }],
+        signal: controller.signal,
+      })) {
+        controller.abort(reason);
+      }
+    };
+
+    const thrown = await runPastDeadline(USAGE_GRACE_MS, () =>
+      consume().then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    );
+
+    expect(thrown).toBe(reason);
+  });
+
+  it("reports Ollama prompt and eval counts from the done chunk", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse(
+          [
+            '{"message":{"role":"assistant","content":"Hi"},"done":false}\n',
+            '{"message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":42,"eval_count":7}\n',
+          ],
+          "application/x-ndjson",
+        ),
+      );
+    const client = new ChatModelClient({
+      provider: "ollama",
+      baseUrl: "http://localhost:11434/api",
+      fetch: fetchMock,
+    });
+
+    const { usage, tail } = await finalEvents(client);
+
+    expect(usage).toEqual([
+      { type: "usage", inputTokens: 42, outputTokens: 7, reasoningTokens: 0 },
+    ]);
+    expect(tail).toEqual(["usage", "complete"]);
+  });
+
+  it("reports Anthropic input from message_start and the final output from message_delta", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      anthropicStream([
+        {
+          event: "message_start",
+          data: {
+            type: "message_start",
+            message: { content: [], usage: { input_tokens: 55, output_tokens: 1 } },
+          },
+        },
+        {
+          event: "message_delta",
+          data: {
+            type: "message_delta",
+            delta: { stop_reason: "end_turn" },
+            usage: { output_tokens: 17 },
+          },
+        },
+        { event: "message_stop", data: { type: "message_stop" } },
+      ]),
+    );
+    const client = new ChatModelClient({
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+      apiKey: "sk-ant",
+      fetch: fetchMock,
+    });
+
+    const { usage, tail } = await finalEvents(client);
+
+    expect(usage).toEqual([
+      { type: "usage", inputTokens: 55, outputTokens: 17, reasoningTokens: 0 },
+    ]);
+    expect(tail).toEqual(["usage", "complete"]);
   });
 });
