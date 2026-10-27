@@ -39,6 +39,7 @@ import { ThinkingResearchFailure } from "./ThinkingResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";
 import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
+import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger } from "@application/research/subAgentPort";
@@ -76,6 +77,7 @@ export interface ResearchServiceOptions {
   toolsetFactory: ResearchToolsetFactory;
 
   runToolLoop: ToolLoopRunner;
+  translate?: AnswerTranslate;
 
   modelRoundFactory: (chatModel: ChatModelProvider) => ModelRoundProvider;
   toolsEnabled?: boolean;
@@ -164,6 +166,7 @@ export class ResearchService implements ConversationEngine {
       persistFinalAnswer: options.persistFinalAnswer,
       noteTools: options.noteTools,
       runToolLoop: options.runToolLoop,
+      ...(options.translate ? { translate: options.translate } : {}),
     });
 
     this.now = now;
