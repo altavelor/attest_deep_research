@@ -141,12 +141,14 @@ fenced); перед узлом с sequence S выводятся все ожид�
 legacy) события не выталкивают, поэтому в legacy-чате события идут в конце timeline.
 Строки run_subagent/wait_subagents/get_subagent_result скрываются parentDisplayChain, кроме
 статуса failed (отказ capacity, неверный ввод) — такая строка остаётся видимой.
+Pending-строка такого вызова тоже скрыта, поэтому между tool-call-start и первым событием
+агента (created/queued/dispatch) в timeline для этого вызова ничего не показывается.
 parentWorkflowChain для ChatCompaction и model history не меняется.
 Карточка «Task sent to agent»: заголовок (description сессии) и бейдж вида команды, тело
 команды в приглушённом блоке, строка статуса и «Open details». Статус выводится из
 сохранённых notices: последний терминальный notice того же runId (finished/partial/failed/
-stopped/interrupted/import-failed/not-started) → его статус; иначе queued notice этого run
-(или сессии при runId=null) → «Queued»; иначе «Running». Карточка результата — с replyExcerpt
+stopped/interrupted/import-failed/not-started) → его статус; иначе queued notice того же runId → «Queued» (менеджер всегда пишет queued с runId;
+notice без runId другой run сессии не помечает); иначе «Running». Карточка результата — с replyExcerpt
 и «Show full reply» внутри лимита 4 KiB.
 Child phase/tools/progress/debug In/Out попадают только в child projection. Даже debug не
 показывает их или вывод run_subagent в основном workflow, tool output viewer, fallback/legacy
