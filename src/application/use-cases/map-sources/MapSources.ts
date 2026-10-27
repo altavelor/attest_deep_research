@@ -220,31 +220,36 @@ export class MapSources {
     if (record.state === "failed" || record.state === "interrupted") {
       const error =
         record.error ?? mapSourcesBatchError("batch-failed", "The batch did not finish.");
+      this.watcher.settle(record);
       throw new MapSourcesFailure(error.code, error.message);
     }
     if (record.state === "pending") this.watcher.watch(record.batchId);
     return receiptOf(record);
   }
 
+  /**
+   * Checks through the index inventory that a path is one indexed document, never a folder.
+   * A retriever without outlines admits the path, since the worker's exact scope still
+   * confines its reads to that path.
+   */
   private async isIndexedDocument(sourcePath: string): Promise<boolean> {
-    const metadata = this.deps.retriever.getSourceMetadata;
-    if (!metadata) return true;
+    const outline = this.deps.retriever.getIndexSourceOutline;
+    if (!outline) return true;
     try {
-      return (await metadata.call(this.deps.retriever, sourcePath)) !== null;
+      return (await outline.call(this.deps.retriever, sourcePath)) !== null;
     } catch {
       return false;
     }
   }
 
   private async stopBatch(record: MapSourcesBatchRecord, code: string): Promise<never> {
-    await this.deps.context.batches.put(
-      {
-        ...record,
-        state: "interrupted",
-        error: mapSourcesBatchError(code, "The parent run ended before the batch started."),
-      },
-      true,
-    );
+    const stopped: MapSourcesBatchRecord = {
+      ...record,
+      state: "interrupted",
+      error: mapSourcesBatchError(code, "The parent run ended before the batch started."),
+    };
+    await this.deps.context.batches.put(stopped, true);
+    this.watcher.settle(stopped);
     throw new MapSourcesFailure(code, "The parent run ended before the batch started.");
   }
 

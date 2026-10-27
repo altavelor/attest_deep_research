@@ -7,6 +7,7 @@ import {
   parseSourceAnswer,
 } from "@application/use-cases/map-sources";
 import type { ResearchRetriever } from "@application/contracts/research";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
 import type { RetrievedChunk } from "@core/model";
 import type { MapSourcesBatchReceipt } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
@@ -30,7 +31,8 @@ function snapshot(chunks: RetrievedChunk[]): ResearchEvidenceSnapshot {
 function retrieverOf(chunks: RetrievedChunk[] = [], folders: string[] = []): ResearchRetriever {
   return {
     search: vi.fn().mockResolvedValue({ chunks, citations: [], usedFallback: false }),
-    getSourceMetadata: async (path: string) => (folders.includes(path) ? null : { path }),
+    getSourceMetadata: async () => null,
+    getIndexSourceOutline: async (path: string) => (folders.includes(path) ? null : { path }),
   } as unknown as ResearchRetriever;
 }
 
@@ -45,9 +47,11 @@ function mapper(
     chunks?: RetrievedChunk[];
     folders?: string[];
     indexPaths?: string[];
+    notices?: MapSourcesRunContext["notices"];
   } = {},
 ) {
   const harness = mapSourcesContext({
+    ...(options.notices ? { notices: options.notices } : {}),
     ...(options.batches ? { batches: options.batches } : {}),
     ...(options.parentRunId ? { parentRunId: options.parentRunId } : {}),
   });
@@ -316,6 +320,9 @@ describe("MapSources batches", () => {
       error: { code: "parent-terminal", message: "The parent run ended before the batch started." },
     });
     expect(run.workers.inputs.map((input) => input.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
+    const lastCounters = (intents: typeof run.notices) =>
+      (intents.at(-1)?.entry as { batch?: unknown }).batch;
+    expect(lastCounters(run.notices)).toEqual({ total: 3, done: 0, running: 0, failed: 3 });
 
     const late = mapper();
     late.workers.beforeStart = async (input) => {
@@ -327,6 +334,7 @@ describe("MapSources batches", () => {
     ).rejects.toMatchObject({ code: "parent-terminal", message: "Ended." });
     expect(late.workers.inputs.map((input) => input.sourcePath)).toEqual(["a.pdf", "b.pdf"]);
     expect(late.listenerCount()).toBe(0);
+    expect(lastCounters(late.notices)).toEqual({ total: 3, done: 0, running: 0, failed: 3 });
 
     const delegator = vi.fn();
     const worker = { requestId: "r", task: "t", sourcePath: "a.pdf", maxRounds: 2 };
@@ -354,6 +362,32 @@ describe("MapSources batches", () => {
       again.mapper.start({ question: "q", sourcePaths: ["a.pdf"] }, "call-1"),
     ).rejects.toMatchObject(failure);
     expect(again.workers.inputs).toEqual([]);
+    expect((run.notices.at(-1)?.entry as { batch?: unknown }).batch).toEqual({
+      total: 1,
+      done: 0,
+      running: 0,
+      failed: 1,
+    });
+  });
+
+  it("keeps gathering a batch when the notice sink throws", async () => {
+    const run = mapper({
+      notices: {
+        publish: () => {
+          throw new Error("Sink closed.");
+        },
+      },
+    });
+    const receipt = await run.mapper.start({ question: "q", sourcePaths: ["a.pdf"] }, "call-1");
+    const a = run.workers.runIdOf("a.pdf");
+    run.workers.states.set(a, workerState(a, "completed", "STANCE: SUPPORTS"));
+    run.signal();
+    await settle();
+
+    expect([run.batches.get(receipt.batchId)?.state, run.listenerCount()]).toEqual([
+      "completed",
+      0,
+    ]);
   });
 
   it("fails a worker whose result cannot be read and keeps the last reading through a transient error", async () => {

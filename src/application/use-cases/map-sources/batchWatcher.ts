@@ -49,6 +49,12 @@ export class MapSourcesBatchWatcher {
     this.notice(record, NO_COUNTS);
   }
 
+  /** Publishes the last notice of a batch that ended while it registered and forgets its counters. */
+  settle(record: MapSourcesBatchRecord): void {
+    this.finalNotice(record);
+    this.latest.delete(record.batchId);
+  }
+
   counts(batchId: string): BatchCounts {
     return this.latest.get(batchId) ?? NO_COUNTS;
   }
@@ -177,6 +183,19 @@ export class MapSourcesBatchWatcher {
 
   private notice(record: MapSourcesBatchRecord, counts: BatchCounts): void {
     const { chatId, parentRunId } = this.deps;
+    try {
+      this.publish(record, counts, chatId, parentRunId);
+    } catch {
+      return;
+    }
+  }
+
+  private publish(
+    record: MapSourcesBatchRecord,
+    counts: BatchCounts,
+    chatId: string,
+    parentRunId: string,
+  ): void {
     this.deps.notices.publish([
       {
         type: "notice",
