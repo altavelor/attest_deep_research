@@ -8,6 +8,7 @@ import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import {
   applySubAgentTransition,
   recoverSubAgentState,
+  rewriteSubAgentCitations,
   type SubAgentImportRecord,
 } from "@core/research";
 import { settle } from "../support/async";
@@ -90,7 +91,6 @@ describe("sub-agent evidence import", () => {
     await settle();
 
     const state = await delegator.getResult(sessionId, runId);
-
     expect(state.state).toBe("completed");
     if (state.state !== "completed") return;
     const alias = state.outcome.evidence[0].conversationEvidenceId;
@@ -635,5 +635,12 @@ describe("sub-agent evidence import", () => {
       ["parent-chunk"],
     ]);
     expect(removeOrphanSubAgentAliases(registry, subAgentSection([record]))).toBe(registry);
+  });
+
+  it("U10: rewrites newline-free bracket floods in bounded work", () => {
+    for (const unit of ["[", "[a", "[a]("]) {
+      const text = unit.repeat(50_000);
+      expect(rewriteSubAgentCitations(text, new Map(), new Set())).toBe(text);
+    }
   });
 });

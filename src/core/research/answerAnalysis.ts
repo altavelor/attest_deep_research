@@ -1,4 +1,5 @@
 import { isMarkdownCodeIndex, markdownCodeRanges } from "./citationTokens";
+import { scanMarkdownBrackets } from "./markdownBracketScan";
 
 export interface AnswerCitationOccurrence {
   label: string;
@@ -32,11 +33,11 @@ export function markdownBracketOccurrences(
 ): AnswerCitationOccurrence[] {
   const codeRanges = markdownCodeRanges(text);
   const protectedStarts = markdownProtectedBracketStarts(text, citationLabels);
-  return [...text.matchAll(/\[([^\]\n]{1,200})\]/g)]
+  return scanMarkdownBrackets(text, "label")
     .map((match) => ({
-      label: match[1].trim(),
-      index: match.index ?? 0,
-      length: match[0].length,
+      label: match.labels[0].trim(),
+      index: match.index,
+      length: match.end - match.index,
     }))
     .filter(
       ({ index, length }) =>
@@ -101,25 +102,22 @@ function markdownProtectedBracketStarts(
     definitions.add(normalizeReferenceId(match[1]));
     protectedStarts.add((match.index ?? 0) + match[0].indexOf("["));
   }
-  for (const match of text.matchAll(/!?\[([^\]\n]*)\]\[([^\]\n]*)\]/g)) {
-    const firstStart = (match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0);
+  for (const match of scanMarkdownBrackets(text, "reference")) {
+    const image = text[match.index] === "!";
+    const firstStart = match.index + (image ? 1 : 0);
     const secondStart = text.indexOf("[", firstStart + 1);
-    const secondLabel = match[2].trim();
-    const referenceId = normalizeReferenceId(match[2] || match[1]);
-    if (
-      !allowedLabels.has(secondLabel) ||
-      definitions.has(referenceId) ||
-      match[0].startsWith("!")
-    ) {
+    const [firstLabel, secondLabel] = match.labels;
+    const referenceId = normalizeReferenceId(secondLabel || firstLabel);
+    if (!allowedLabels.has(secondLabel.trim()) || definitions.has(referenceId) || image) {
       protectedStarts.add(firstStart);
       if (secondStart !== -1) protectedStarts.add(secondStart);
     }
   }
-  for (const match of text.matchAll(/!?\[([^\]\n]*)\]\([^\n]*\)/g)) {
-    protectedStarts.add((match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0));
+  for (const match of scanMarkdownBrackets(text, "link")) {
+    protectedStarts.add(match.index + (text[match.index] === "!" ? 1 : 0));
   }
-  for (const match of text.matchAll(/!\[([^\]\n]*)\]/g)) {
-    protectedStarts.add((match.index ?? 0) + 1);
+  for (const match of scanMarkdownBrackets(text, "image")) {
+    protectedStarts.add(match.index + 1);
   }
   return protectedStarts;
 }
