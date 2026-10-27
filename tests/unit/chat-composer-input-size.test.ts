@@ -28,6 +28,7 @@ function renderComposer(): HTMLTextAreaElement {
     onUpdateIndex: () => {},
     onUpdateContextMode: () => {},
     onUpdateSearchMode: () => {},
+    onOpenSubAgents: () => {},
     onUpdateResearchMode: () => {},
   }).textareaEl;
 }

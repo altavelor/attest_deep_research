@@ -40,6 +40,10 @@ export class Modal {
     this.modalEl.addEventListener("keydown", (event) =>
       this.scope.handleKey(event as KeyboardEvent),
     );
+    this.scope.register([], "Escape", () => {
+      this.close();
+      return false;
+    });
   }
 
   open(): void {
