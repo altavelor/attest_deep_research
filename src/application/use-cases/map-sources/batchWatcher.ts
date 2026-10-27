@@ -171,6 +171,7 @@ export class MapSourcesBatchWatcher {
     const watch = this.watches.get(batchId);
     if (!watch) return;
     this.watches.delete(batchId);
+    this.latest.delete(batchId);
     watch.unsubscribe();
   }
 
