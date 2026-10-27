@@ -213,43 +213,63 @@ DeepSeek v4 Flash 0731
   ● › Thinking
   ● Search web   Searching the web
   ◎ Agent created   Find primary sources for NVIDIA's 1999 IPO date …
-  ➤ TASK SENT TO AGENT
-    ┌ Find primary sources for NVIDIA's …                    (initial) ┐
+    ┌                                 TASK SENT TO AGENT  (initial) ┐
     │ ▒ Find primary sources … Prefer SEC filings … (до 4 строк)       │
-    │ ● Running                                    [Open details]      │
+    │ ▸ Show full command                                              │
+    │ ● Finished · 51s                                 [Open details]  │
     └──────────────────────────────────────────────────────────────────┘
   ●  Two agents are researching in parallel. Meanwhile I'll check …
-  ✓ AGENT REPLY
-    ┌ ● Agent finished   0m 51s · 9.7k tokens · DeepSeek v4 Flash 0731 ┐
-    │ Compare TSMC and NVIDIA trillion-dollar milestone dates          │
-    │ ▒ Found two usable sources … [1] [2]                             │
-    │ [Show full reply]                            [Open details]      │
+  ✓ ┌ Agent finished                                                   ┐
+    │ Found two usable sources … source 1  source 2                    │
+    │ ▸ Show full reply                                                │
+    │ 51s · Tool calls: 7 · 9.7k tokens · DeepSeek        [Open details] │
     └──────────────────────────────────────────────────────────────────┘
   ●  Both agents finished and their sources are imported. Here is …
-  ✕ 2 agents closed with this answer · history stays in Agents
+  ✕ Agents closed with this answer: 1   (только если закрыт ещё не завершившийся агент)
 ```
 
 1. Уведомления — узлы той же вертикальной линии, что и обычный workflow, но вместо точки
    круглая отметка 20px с рамкой `--color-cyan` и иконкой: `bot` (created), `send` (task),
    `check` (finished), `x` (stopped, closed, failed), `alert-triangle` (partial,
    import-failed, not-started). Собственные инструменты родителя остаются фиолетовыми точками.
-2. Created — одна строка: «Agent created» и описание (до 80 символов, без переноса
-   карточки). Без дублирования задачи: задача идёт следующим узлом.
-3. «Task sent to agent» — подпись uppercase 11px и карточка: описание, бейдж вида команды
-   (initial, follow-up, retry, continue partial), текст команды до 4 строк с ellipsis,
-   строка со статусом и «Open details». Статус выводится из сохранённых notices того же run
-   (терминальный notice → его статус, queued → «Queued», иначе «Running»), поэтому
-   виден и после reload. Все узлы M6 — часть workflow-списка ответа своего run; старых
-   строк «Sub-agent»/«Wait for sub-agents» нет, кроме неуспешного вызова.
-4. «Agent reply» — карточка с рамкой по результату (зелёная для finished). Первая строка:
-   статус, длительность, tokens, модель; ниже описание задачи; ниже ответ агента до 4 строк
-   с chips цитат; «Show full reply» раскрывает ответ на месте до лимита 4 KiB.
-5. Неполные usage — «partial usage» цветом `--text-warning`, как в M2.
-6. «Open details» открывает modal сразу на деталях этой сессии (M3); кнопка скрыта, если
-   host не передал callback. Кнопки карточек ≥44px на Mobile.
-7. «N agents closed with this answer» — приглушённая строка без карточки, одна на завершение
-   основного ответа; показывается, только если закрыта хотя бы одна сессия.
-8. Все тексты — безопасный текст, не HTML; ответ агента и команда проходят redaction до записи.
+2. Created и первая команда initial той же сессии (общие parentRunId и sessionId) — один
+   узел с иконкой `bot`: строка «Agent created <title>», под ней карточка задачи. Узел берёт
+   sequence первого из пары. Title показан ровно один раз — в строке узла, обрезается CSS в
+   одну строку с ellipsis, полный текст в атрибуте `title`. Команда без created (follow-up,
+   continue partial, retry) — отдельный узел `send` со строкой «Task sent to agent <title>».
+   Created без команды (not-started, только queued) — прежняя строка со своим «Open details».
+3. Карточка задачи: в шапке справа подпись «Task sent to agent» (только в объединённом узле)
+   и бейдж вида команды (initial, follow-up, retry, continue partial), текст команды
+   (plain text) до 280 символов, футер со статусом слева и одной кнопкой «Open details»
+   справа. Статус выводится из сохранённых notices того же run (терминальный notice → его
+   статус и « · длительность» из durationMs, queued → «Queued», иначе «Running»).
+   Все узлы M6 — часть workflow-списка ответа своего run; старых строк
+   «Sub-agent»/«Wait for sub-agents» нет, кроме неуспешного вызова.
+4. Карточка ответа — рамка по результату (зелёная для finished). Шапка — только статус
+   («Agent finished» и т. п.), без title и описания. Ответ — безопасная разметка
+   (абзацы, `**bold**`, `*italic*`, `` `code` ``, списки, `#` как жирный абзац; ссылки и
+   картинки — только текст, HTML и `[[wikilinks]]` — литералом; evidence-токены
+   `[subagent:import-…:N]` — инертный chip «source N» с полным токеном в `title`).
+   Превью режет исходник на безопасной границе (абзац, строка, слово; не внутри маркера,
+   токена или суррогатной пары) и заканчивается «…»; «Show full reply» раскрывает весь
+   excerpt. Внизу приглушённая строка: длительность · tool calls · tokens (только если
+   usage.source ≠ unavailable) · модель; отсутствующие части опускаются.
+5. «Show full command/reply» и «Show less» — лёгкие ссылки-переключатели с chevron
+   (button, aria-expanded, клавиатура), без рамки кнопки.
+6. «Open details» открывает modal сразу на деталях этой сессии (M3); по одной кнопке на
+   карточку задачи и карточку ответа, в строке created её нет; кнопка скрыта, если host не
+   передал callback. Кнопки карточек ≥44px на Mobile.
+7. «Agents closed with this answer: N» — приглушённая строка без карточки; скрывается при
+   рендере, если у каждого отправленного run (initial, follow-up, retry, continue) и каждой
+   сессии этого parent run до неё уже есть терминальный notice (кроме interrupted).
+   Сохранённые данные не меняются.
+8. Длительность: до минуты только секунды («12s», меньше секунды — «0s»), дальше минуты и
+   секунды, после часа часы и минуты; тот же форматтер, что в modal. Части футера и
+   длительность показываются, только если значение — неотрицательное безопасное целое;
+   tool calls и tokens — только при usage.source ≠ unavailable. Title, описание и модель
+   очищаются от управляющих, bidi и невидимых символов; карточка ответа получает
+   aria-label с описанием агента.
+9. Все тексты — безопасный текст, не HTML; ответ агента и команда проходят redaction до записи.
    Уведомления не отправляются модели и не меняют её историю.
 
 ## M7. Каталог уведомлений
@@ -270,7 +290,7 @@ DeepSeek v4 Flash 0731
 | interrupted       | Agent interrupted                     | Текст зависит от reasonCode (Obsidian закрыт или причина остановки) | Open details    |
 | import-failed     | Agent finished, sources not imported  | Ответ доступен, источники не добавлены                              | Open details    |
 | not-started       | Agent not started                     | Причина: бюджет                                                     | Open details    |
-| closed            | N agents closed with this answer      | Одна строка, только если closedCount>0                              | Open agents     |
+| closed            | Agents closed with this answer: N     | Одна строка, только если closedCount>0                              | Open agents     |
 | map_sources batch | Map sources · N documents             | «9 done · 2 running · 1 failed»                                     | Open agents     |
 
 1. Рамка карточки: зелёная для finished, жёлтая для partial, красная для failed и

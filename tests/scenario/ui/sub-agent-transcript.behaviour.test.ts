@@ -193,7 +193,7 @@ describe("sub-agent events in a reloaded parent transcript", () => {
     expect(
       transcript.querySelectorAll(".attest-chat__agent-event a, .attest-chat__agent-event b"),
     ).toHaveLength(0);
-    expect(transcript.textContent).toContain("javascript:alert(1)");
+    expect(transcript.textContent).toContain("<b>bold</b>");
     expect(transcript.textContent).not.toContain("Legacy child answer");
     expect(transcript.textContent).not.toContain("Child fetch");
     expect(transcript.querySelector('[data-tool-id="own"]')).not.toBeNull();

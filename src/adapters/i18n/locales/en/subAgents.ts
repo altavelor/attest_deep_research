@@ -16,6 +16,7 @@ export const subAgents = {
   "chat.subAgents.card.aria": "{description}. {status}, {elapsed}, {model}, {tokens}",
   "chat.subAgents.noModel": "Model unknown",
   "chat.subAgents.elapsed.short": "{minutes}m {seconds}s",
+  "chat.subAgents.elapsed.seconds": "{seconds}s",
   "chat.subAgents.elapsed.long": "{hours}h {minutes}m",
   "chat.subAgents.tokens": "{count} tokens",
   "chat.subAgents.tokens.partial": "{count} · partial",

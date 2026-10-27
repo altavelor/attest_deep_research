@@ -141,6 +141,8 @@ export const chat: EnChatMessages = {
   "chat.agent.showFullCommand": "Показать команду целиком",
   "chat.agent.showFullReply": "Показать ответ целиком",
   "chat.agent.showLess": "Свернуть",
+  "chat.agent.evidence": "источник {ordinal}",
+  "chat.agent.meta.toolCalls": "Вызовов инструментов: {count}",
   "chat.agent.openDetails": "Подробнее",
   "chat.agent.openAgents": "Открыть агентов",
   "chat.agent.status.running": "Выполняется",

@@ -29,6 +29,8 @@ export type ParentTimelineEvent =
       dispatch: SubAgentDispatchEntry;
       title: string;
       status: SubAgentRunStatus;
+      durationMs?: number;
+      created?: SubAgentNoticeEntry;
     }
   | { kind: "agent-notice"; sequence: number; notice: SubAgentNoticeEntry };
 
@@ -50,6 +52,10 @@ const TERMINAL_KINDS = new Set<SubAgentNoticeKind>([
   "import-failed",
   "not-started",
 ]);
+
+const SETTLED_KINDS = new Set<SubAgentNoticeKind>(
+  [...TERMINAL_KINDS].filter((kind) => kind !== "interrupted"),
+);
 
 /**
  * Assigns each dispatch and notice to the assistant message of its parent run, in
@@ -90,7 +96,7 @@ export function placeSubAgentEvents(
     const event = { kind: "agent-notice" as const, sequence: notice.sequence, notice };
     if (!place(notice.parentRunId, event)) placement.orphanNotices.push(notice);
   }
-  for (const events of byMessageId.values()) events.sort((a, b) => a.sequence - b.sequence);
+  for (const [id, events] of byMessageId) byMessageId.set(id, arrangeRunEvents(events));
   return placement;
 }
 
@@ -111,6 +117,13 @@ export function subAgentRunStatus(
   dispatch: Pick<SubAgentDispatchEntry, "runId">,
   notices: readonly SubAgentNoticeEntry[],
 ): SubAgentRunStatus {
+  return runOutcome(dispatch, notices).status;
+}
+
+function runOutcome(
+  dispatch: Pick<SubAgentDispatchEntry, "runId">,
+  notices: readonly SubAgentNoticeEntry[],
+): { status: SubAgentRunStatus; durationMs?: number } {
   let terminal: SubAgentNoticeEntry | undefined;
   let queued = false;
   for (const notice of notices) {
@@ -120,8 +133,13 @@ export function subAgentRunStatus(
       terminal = notice;
     }
   }
-  if (terminal) return terminal.kind as SubAgentRunStatus;
-  return queued ? "queued" : "running";
+  if (terminal) {
+    const status = terminal.kind as SubAgentRunStatus;
+    return terminal.durationMs === undefined
+      ? { status }
+      : { status, durationMs: terminal.durationMs };
+  }
+  return { status: queued ? "queued" : "running" };
 }
 
 interface NoticeIndex {
@@ -157,8 +175,80 @@ function decorate(
     sequence: dispatch.sequence,
     dispatch,
     title: agentTitle(index.bySession.get(dispatch.sessionId) ?? []),
-    status: subAgentRunStatus(dispatch, index.byRun.get(dispatch.runId) ?? []),
+    ...runOutcome(dispatch, index.byRun.get(dispatch.runId) ?? []),
   };
+}
+
+/**
+ * Orders the events of one parent run, folds each session's created notice into its
+ * initial dispatch at the earlier sequence, and drops a closed notice when every dispatched
+ * run, and every session without a dispatch, already reported a settled outcome before it.
+ */
+function arrangeRunEvents(events: readonly ParentTimelineEvent[]): ParentTimelineEvent[] {
+  const created = new Map<string, Extract<ParentTimelineEvent, { kind: "agent-notice" }>>();
+  for (const event of events) {
+    const sessionId = event.kind === "agent-notice" ? event.notice.sessionId : null;
+    if (event.kind === "agent-notice" && event.notice.kind === "created" && sessionId !== null) {
+      if (!created.has(sessionId)) created.set(sessionId, event);
+    }
+  }
+  const merged = new Set<string>();
+  const arranged = events.map((event): ParentTimelineEvent => {
+    if (event.kind !== "agent-dispatch" || event.dispatch.commandKind !== "initial") return event;
+    const notice = created.get(event.dispatch.sessionId);
+    if (!notice || merged.has(notice.notice.eventKey)) return event;
+    merged.add(notice.notice.eventKey);
+    return {
+      ...event,
+      created: notice.notice,
+      sequence: Math.min(notice.sequence, event.sequence),
+    };
+  });
+  const settledBy = settledSequences(events);
+  return arranged
+    .filter(
+      (event) =>
+        !(event.kind === "agent-notice" && merged.has(event.notice.eventKey)) &&
+        !(
+          event.kind === "agent-notice" &&
+          event.notice.kind === "closed" &&
+          settledBy !== null &&
+          settledBy < event.sequence
+        ),
+    )
+    .sort((a, b) => a.sequence - b.sequence);
+}
+
+/**
+ * Returns the sequence by which every dispatched run and every session of one parent run
+ * has its first settled notice, or null when some never settles or none
+ * exists. Interrupted notices do not settle, since a close may cause them.
+ */
+function settledSequences(events: readonly ParentTimelineEvent[]): number | null {
+  const runs = new Set<string>();
+  const sessions = new Set<string>();
+  const firstByRun = new Map<string, number>();
+  const firstBySession = new Map<string, number>();
+  const first = (map: Map<string, number>, key: string, sequence: number) => {
+    map.set(key, Math.min(map.get(key) ?? sequence, sequence));
+  };
+  for (const event of events) {
+    if (event.kind === "agent-dispatch") {
+      runs.add(event.dispatch.runId);
+      continue;
+    }
+    const { sessionId, runId, kind } = event.notice;
+    if (sessionId !== null) sessions.add(sessionId);
+    if (!SETTLED_KINDS.has(kind)) continue;
+    if (runId !== null) first(firstByRun, runId, event.sequence);
+    if (sessionId !== null) first(firstBySession, sessionId, event.sequence);
+  }
+  const units = [
+    ...[...runs].map((runId) => firstByRun.get(runId)),
+    ...[...sessions].map((sessionId) => firstBySession.get(sessionId)),
+  ];
+  if (units.length === 0 || units.some((sequence) => sequence === undefined)) return null;
+  return (units as number[]).reduce((max, sequence) => Math.max(max, sequence), -Infinity);
 }
 
 /**

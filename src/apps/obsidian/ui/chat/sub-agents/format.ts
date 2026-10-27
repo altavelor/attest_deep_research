@@ -25,7 +25,7 @@ const STATUS_TONES: Record<SubAgentSessionStatus, string> = {
   archived: "queued",
 };
 
-/** Formats a duration as minutes and seconds, or hours and minutes past one hour. */
+/** Formats a duration as seconds below a minute, minutes and seconds, or hours and minutes past one hour. */
 export function formatElapsed(ms: number, t: Translate): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -34,7 +34,8 @@ export function formatElapsed(ms: number, t: Translate): string {
   if (hours > 0) {
     return t("chat.subAgents.elapsed.long", { hours, minutes: pad(minutes) });
   }
-  return t("chat.subAgents.elapsed.short", { minutes, seconds: pad(seconds) });
+  if (minutes > 0) return t("chat.subAgents.elapsed.short", { minutes, seconds: pad(seconds) });
+  return t("chat.subAgents.elapsed.seconds", { seconds });
 }
 
 function pad(value: number): string {
@@ -59,7 +60,8 @@ export function formatTokens(card: SubAgentSessionCard, t: Translate): TokenText
     : { text: t("chat.subAgents.tokens", { count }), tone: "normal" };
 }
 
-function compactCount(value: number): string {
+/** Formats a token count compactly, with k and M suffixes above a thousand. */
+export function compactCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 1_000_000) return `${(value / 1000).toFixed(1)}k`;
   return `${(value / 1_000_000).toFixed(1)}M`;

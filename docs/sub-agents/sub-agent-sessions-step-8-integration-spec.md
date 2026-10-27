@@ -148,12 +148,20 @@ Pending-строка такого вызова тоже скрыта, поэто
 агента (created/queued/dispatch) в timeline для этого вызова ничего не показывается.
 parentWorkflowChain для ChatCompaction и model history не меняется и поле timelineSequence в
 model trace не попадает.
-Карточка «Task sent to agent»: заголовок (description сессии) и бейдж вида команды, тело
-команды в приглушённом блоке, строка статуса и «Open details». Статус выводится из
+Created notice и initial dispatch одной сессии (общие parentRunId и sessionId) placement
+объединяет в один узел с sequence первого из пары: строка «Agent created <title>» и под ней
+карточка задачи; dispatch без created остаётся узлом «Task sent to agent <title>». Title
+выводится один раз — в строке узла. Карточка задачи: бейдж вида команды, тело команды plain
+text в приглушённом блоке, футер со статусом и одним «Open details». Статус выводится из
 сохранённых notices: последний терминальный notice того же runId (finished/partial/failed/
-stopped/interrupted/import-failed/not-started) → его статус; иначе queued notice того же runId → «Queued» (менеджер всегда пишет queued с runId;
-notice без runId другой run сессии не помечает); иначе «Running». Карточка результата — с replyExcerpt
-и «Show full reply» внутри лимита 4 KiB.
+stopped/interrupted/import-failed/not-started) → его статус и « · длительность» (durationMs); иначе queued notice того же runId → «Queued» (менеджер всегда пишет queued с runId;
+notice без runId другой run сессии не помечает); иначе «Running». Карточка результата — статус
+без title/описания, replyExcerpt как безопасная разметка (core-парсер safeInlineMarkup без
+backtracking regex, DOM только через createEl/textContent; evidence-токены — инертные chips)
+со сворачиванием на безопасной границе и «Show full reply» внутри лимита 4 KiB, строка
+длительность · tool calls · tokens · модель и одно «Open details». Closed notice скрывается при
+рендере, если каждый отправленный run и каждая сессия parent run уже сообщили терминальный
+исход (кроме interrupted) до него; продолжающийся follow-up оставляет его видимым; closedCount и event keys не меняются.
 Child phase/tools/progress/debug In/Out попадают только в child projection. Даже debug не
 показывает их или вывод run_subagent в основном workflow, tool output viewer, fallback/legacy
 rendering, diagnostic UI shortcut основного сообщения либо main export. Кнопка «Open details»
