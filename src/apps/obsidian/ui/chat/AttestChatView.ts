@@ -799,6 +799,9 @@ export class AttestChatView extends ItemView {
         resolveChatSettings(this.services, chat.chatSettings),
       );
       this.selectSession(adopted.sessionId);
+      if (adopted.recoveredFromPrevious) {
+        new Notice(this.t("chat.notice.chatRecoveredFromPrevious"));
+      }
     } else {
       this.selectSession(existing.sessionId);
     }

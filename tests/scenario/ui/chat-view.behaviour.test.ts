@@ -695,8 +695,8 @@ describe("chat view citation navigation", () => {
 });
 
 describe("saved chats from the chat view", () => {
-  it("loads a saved conversation selected from the empty-chat history", async () => {
-    const loadSavedChat = vi.fn(async () => savedChat);
+  it("loads a saved conversation selected from the empty-chat history and flags its recovery", async () => {
+    const loadSavedChat = vi.fn(async () => ({ ...savedChat, recoveredFrom: "previous" as const }));
     const { view, leaf } = await openView({ loadSavedChat });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
@@ -708,6 +708,9 @@ describe("saved chats from the chat view", () => {
       );
     });
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).toBeNull();
+    expect(takeNotices().map((notice) => notice.message)).toEqual([
+      "This chat was restored from its previous saved version because the latest file could not be read. Sub-agents stay off in it until the chat is saved again.",
+    ]);
     await leaf.detach();
   });
 

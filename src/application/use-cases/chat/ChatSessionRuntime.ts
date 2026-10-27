@@ -28,6 +28,7 @@ import {
 } from "@core/chat/sourceRegistry";
 import type { ChatRepository } from "@application/ports/chat";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
+import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
 import type { SaveChatInput } from "@core/chat/savedChat";
 import { scheduleTimeout } from "@shared";
 import { ChatSubAgents } from "./ChatSubAgents";
@@ -93,9 +94,15 @@ export class ChatSessionRuntime {
     });
   }
 
-  /** Commits a chat snapshot through the chat's single writer and waits until it is durable. */
-  persist(input: SaveChatInput): Promise<void> {
-    return this.writes.flushThrough(this.writes.markChatDirty(input), "barrier");
+  /**
+   * Commits a chat snapshot through the chat's single writer and waits until it is durable.
+   * A durable save other than a run start ends the recovered-from-previous lockout of child work.
+   */
+  async persist(input: SaveChatInput): Promise<void> {
+    await this.writes.flushThrough(this.writes.markChatDirty(input), "barrier");
+    if (!input.lastRun || !isNonTerminalChatSessionStatus(input.lastRun.status)) {
+      this.state.recoveredFromPrevious = false;
+    }
   }
 
   /** Buffers a chat snapshot for the next batched write without waiting for it. */

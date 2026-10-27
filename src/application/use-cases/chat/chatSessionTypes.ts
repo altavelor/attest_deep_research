@@ -32,6 +32,7 @@ export interface ChatSessionState {
   subAgentDispatches: readonly SubAgentDispatchEntry[];
   subAgentNotices: readonly SubAgentNoticeEntry[];
   timelineSequence: number;
+  recoveredFromPrevious: boolean;
 }
 
 export type ChatSessionChangeKind =

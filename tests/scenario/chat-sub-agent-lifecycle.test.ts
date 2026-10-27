@@ -237,4 +237,36 @@ describe("chat runtime and its child host", () => {
       "dispose:0",
     ]);
   });
+
+  it("keeps child work off a chat recovered from its previous version until a terminal save", async () => {
+    const children = fakeChildHosts();
+    const research = gatedResearch();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: research.service,
+      createSubAgentSessionManager: children.factory,
+    });
+    const saved = await repository.saveChat({
+      id: "chat-recovered",
+      title: "Chat",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      messages: [{ role: "user", content: "Q", createdAt: "2026-01-01T00:00:00.000Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: thinking,
+    });
+    const parent = manager.adoptChat({ ...saved, recoveredFrom: "previous" }, thinking);
+
+    await manager.start(parent.sessionId, request("First"));
+    await settle();
+    research.emit(0, completed);
+    research.end(0);
+    await settle();
+    await manager.start(parent.sessionId, request("Second"));
+    await settle();
+
+    expect(research.requests.map((entry) => entry.subAgentDelegator !== undefined)).toEqual([
+      false,
+      true,
+    ]);
+  });
 });

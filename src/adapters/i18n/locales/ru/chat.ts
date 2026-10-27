@@ -93,6 +93,7 @@ export const chat: EnChatMessages = {
 
   "chat.notice.chatDeleted": "Чат удалён.",
   "chat.notice.savedChatNotFound": "Сохранённый чат не найден.",
+  "chat.notice.chatRecoveredFromPrevious": "Чат восстановлен из предыдущей сохранённой версии, потому что последний файл не удалось прочитать. Субагенты в нём отключены до следующего сохранения чата.",
   "chat.notice.openIndexSettings": "Открыть настройки индекса",
 
   "chat.message.you": "Вы",

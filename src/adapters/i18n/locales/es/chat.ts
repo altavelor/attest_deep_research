@@ -94,6 +94,7 @@ export const chat: EnChatMessages = {
 
   "chat.notice.chatDeleted": "Chat eliminado.",
   "chat.notice.savedChatNotFound": "No se encontró el chat guardado.",
+  "chat.notice.chatRecoveredFromPrevious": "Este chat se restauró desde su versión guardada anterior porque no se pudo leer el archivo más reciente. Los subagentes quedan desactivados en él hasta que el chat se vuelva a guardar.",
   "chat.notice.openIndexSettings": "Abrir los ajustes del índice",
 
   "chat.message.you": "Tú",
