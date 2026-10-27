@@ -568,6 +568,26 @@ export function managerHarness(options: ManagerHarnessOptions = {}) {
   return { manager, binding, writer, execution, imports, grants, probes, delegator, mainEvents };
 }
 
+/**
+ * Moves the harness to a later parent run of the same chat: a new binding generation,
+ * delivery epoch and registered grant. Returns the binding and its delegator.
+ */
+export function nextParentRun(
+  harness: ReturnType<typeof managerHarness>,
+  parentRunId = "parent-2",
+  generation = 2,
+) {
+  const binding = { ...harness.binding, parentRunId, bindingGeneration: generation };
+  harness.probes.parent = binding;
+  harness.probes.epoch = generation;
+  harness.grants.set(`grant-${parentRunId}`, delegationGrant(binding));
+  const delegator = harness.manager.delegatorFor(binding, {
+    deliveryEpoch: generation,
+    grantId: `grant-${parentRunId}`,
+  });
+  return { binding, delegator };
+}
+
 /** Creates a session through the delegator and submits its initial command. */
 export async function launchChild(
   delegator: SubAgentDelegator,
