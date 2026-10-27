@@ -14,11 +14,18 @@ const MAX_LINK_TARGET_CHARS = 1000;
  * expression over single-line labels of bounded length. Precomputed stop positions keep
  * every scan linear in the text length, so newline-free bracket floods stay cheap.
  */
-export function scanMarkdownBrackets(
+export function markdownBracketScanner(
   text: string,
+): (pattern: MarkdownBracketPattern) => MarkdownBracketMatch[] {
+  const stops = scanStops(text);
+  return (pattern) => scanMarkdownBrackets(text, stops, pattern);
+}
+
+function scanMarkdownBrackets(
+  text: string,
+  stops: ScanStops,
   pattern: MarkdownBracketPattern,
 ): MarkdownBracketMatch[] {
-  const stops = scanStops(text);
   const matches: MarkdownBracketMatch[] = [];
   let cursor = 0;
   for (let open = text.indexOf("[", cursor); open !== -1; open = text.indexOf("[", cursor)) {

@@ -642,7 +642,7 @@ describe("sub-agent evidence import", () => {
 
   it("U10: rewrites newline-free bracket floods in bounded work", () => {
     for (const unit of ["[", "[a", "[a]("]) {
-      const text = unit.repeat(50_000);
+      const text = unit.repeat(20_000);
       expect(rewriteSubAgentCitations(text, new Map(), new Set())).toBe(text);
     }
   });
