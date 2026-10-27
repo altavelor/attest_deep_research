@@ -74,7 +74,7 @@ export class SessionDetailView {
     });
     this.descriptionEl = rootEl.createEl("h3", {
       cls: "attest-sub-agents__description",
-      attr: { dir: "auto" },
+      attr: { dir: "auto", tabindex: "-1" },
     });
     this.metricsEl = rootEl.createDiv({ cls: "attest-sub-agents__metrics" });
     this.runRowEl = rootEl.createDiv({ cls: "attest-sub-agents__run-row" });
@@ -251,7 +251,10 @@ export class SessionDetailView {
     const hadFocus = existing !== null && existing === existing.ownerDocument.activeElement;
     this.runRowEl.empty();
     this.runRowEl.toggleClass("is-hidden", runs.length < 2);
-    if (runs.length < 2) return;
+    if (runs.length < 2) {
+      if (hadFocus) this.descriptionEl.focus();
+      return;
+    }
     const labelEl = this.runRowEl.createEl("label", { text: t("chat.subAgents.run.label") });
     const selectEl = labelEl.createEl("select", { cls: "dropdown attest-sub-agents__run-select" });
     runs.forEach((run, index) => {

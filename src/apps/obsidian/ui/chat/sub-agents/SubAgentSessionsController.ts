@@ -238,6 +238,7 @@ export class SubAgentSessionsController {
     this.selectedRunId = null;
   }
 
+  /** Reads the open route's details; a read left over from an earlier visit is orphaned and fenced by routeToken. */
   private refreshDetail(): void {
     if (this.disposed || this.route.kind !== "detail") return;
     const token = this.routeToken;
@@ -280,6 +281,8 @@ export class SubAgentSessionsController {
     if (this.selectedRunId === null || !runIds.includes(this.selectedRunId)) {
       this.selectedRunId = detail.selectedRunId ?? runIds.at(-1) ?? null;
     }
+    const placeholderFocused =
+      !this.detailView && bodyEl.contains(bodyEl.ownerDocument.activeElement);
     if (!this.detailView) {
       bodyEl.empty();
       this.detailView = new SessionDetailView(
@@ -296,6 +299,7 @@ export class SubAgentSessionsController {
       );
     }
     this.renderDetail();
+    if (placeholderFocused) this.detailView.focusBack();
   }
 
   private renderBackOnly(bodyEl: HTMLElement): void {
