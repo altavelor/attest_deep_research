@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 
-import { isRecord } from "@shared";
+import { scheduleTimeout } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { mapOpenAiMessage } from "../providers/messageMappers";
@@ -12,6 +12,7 @@ import {
   ToolCallBuilder,
   UsageEvent,
 } from "./chatStreamPrimitives";
+import { fieldsAfterRefusal, RejectedFieldMemory } from "./optionalFieldRetry";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
 
@@ -20,13 +21,17 @@ interface OpenAiChatStreamOptions {
   request: ChatRequest;
   translateError: (error: unknown) => AttestError;
   onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
+  rejectedFields?: RejectedFieldMemory;
 }
+
+export const USAGE_GRACE_MS = 1500;
 
 export async function* streamOpenAiCompatibleChat({
   openai,
   request,
   translateError,
   onReasoningObserved,
+  rejectedFields = new RejectedFieldMemory(),
 }: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
   const baseBody = {
     model: request.model,
@@ -40,10 +45,10 @@ export async function* streamOpenAiCompatibleChat({
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
-  const optionalFields = {
+  const optionalFields = rejectedFields.accepted(request.model, {
     stream_options: { include_usage: true },
     ...reasoningBody(request),
-  };
+  });
 
   const open = (
     body: Record<string, unknown>,
@@ -63,10 +68,13 @@ export async function* streamOpenAiCompatibleChat({
     } catch (error) {
       throwIfAborted(request.signal);
       firstError ??= error;
-      if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
-        throw translateError(firstError);
-      }
-      attempt = withoutRejectedFields(attempt, error);
+      const kept = fieldsAfterRefusal(attempt, error);
+      if (!kept) throw translateError(firstError);
+      rejectedFields.remember(
+        request.model,
+        Object.keys(attempt).filter((key) => !(key in kept)),
+      );
+      attempt = kept;
     }
   }
 
@@ -87,9 +95,25 @@ export async function* streamOpenAiCompatibleChat({
   };
 
   try {
-    for await (const chunk of stream) {
-      usage = parseOpenAiChatUsage(chunk) ?? usage;
-      if (terminalStopReason === "tool_calls") continue;
+    const iterator = stream[Symbol.asyncIterator]();
+    for (;;) {
+      const next =
+        terminalStopReason === "tool_calls"
+          ? await nextWithin(iterator, USAGE_GRACE_MS)
+          : await iterator.next();
+      if (next === undefined) {
+        closeQuietly(iterator);
+        break;
+      }
+      if (next.done) break;
+      const chunk = next.value;
+      const reported = parseOpenAiChatUsage(chunk);
+      usage = reported ?? usage;
+      if (terminalStopReason === "tool_calls") {
+        if (!reported) continue;
+        closeQuietly(iterator);
+        break;
+      }
       const parsed = parseOpenAiChatDelta(chunk);
       if (parsed.finishReason === "length") terminalStopReason = "length";
       else if (
@@ -154,6 +178,7 @@ export async function* streamOpenAiCompatibleChat({
     throwIfAborted(request.signal);
     throw translateError(error);
   }
+  throwIfAborted(request.signal);
 
   const events: ModelStreamEvent[] = [];
   if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
@@ -181,6 +206,33 @@ export async function* streamOpenAiCompatibleChat({
   };
 }
 
+/**
+ * Waits for the next stream chunk for at most the given time, so a server that
+ * keeps the connection open after its last answer cannot stall the round.
+ * Resolves undefined when the time runs out.
+ */
+async function nextWithin<T>(
+  iterator: AsyncIterator<T>,
+  delayMs: number,
+): Promise<IteratorResult<T> | undefined> {
+  let timer: { cancel: () => void } | undefined;
+  const expiry = new Promise<undefined>((resolve) => {
+    timer = scheduleTimeout(() => resolve(undefined), delayMs);
+  });
+  try {
+    const pending = iterator.next();
+    pending.catch(() => undefined);
+    return await Promise.race([pending, expiry]);
+  } finally {
+    timer?.cancel();
+  }
+}
+
+/** Closes an abandoned stream without letting its late failure go unhandled. */
+function closeQuietly(iterator: AsyncIterator<unknown>): void {
+  iterator.return?.().catch(() => undefined);
+}
+
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (!signal?.aborted) return;
   throw signal.reason ?? new DOMException("The request was aborted.", "AbortError");
@@ -205,41 +257,6 @@ function reasoningBody(request: ChatRequest): Record<string, unknown> {
     },
     chat_template_kwargs: { enable_thinking: request.reasoningEnabled },
   };
-}
-
-/**
- * True when the provider refused the request body itself, which is how a server
- * with strict validation answers a field it does not know. Any other failure
- * belongs to the caller and must not be retried.
- */
-function rejectsUnknownField(error: unknown): boolean {
-  const status: unknown = isRecord(error) ? error.status : undefined;
-  return status === 400 || status === 422;
-}
-
-/**
- * Drops only the dialects the provider named in its refusal, so a gateway that
- * understands one of them still receives it on the retry. A refusal that names
- * none of them costs the whole reasoning body, which is the previous behaviour
- * and keeps the retry loop finite.
- */
-function withoutRejectedFields(
-  fields: Record<string, unknown>,
-  error: unknown,
-): Record<string, unknown> {
-  const message = refusalText(error).toLowerCase();
-  const kept = Object.fromEntries(
-    Object.entries(fields).filter(([key]) => !message.includes(key.toLowerCase())),
-  );
-  return Object.keys(kept).length === Object.keys(fields).length ? {} : kept;
-}
-
-function refusalText(error: unknown): string {
-  if (!isRecord(error)) {
-    return "";
-  }
-  const nested: unknown = isRecord(error.error) ? error.error.message : undefined;
-  return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
 function mapOpenAiToolChoice(request: ChatRequest): unknown {

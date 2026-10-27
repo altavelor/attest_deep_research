@@ -182,7 +182,7 @@ export function usageEvent(
 }
 
 function tokenCount(value: unknown): number | undefined {
-  const parsed = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  const parsed = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
   return typeof parsed === "number" && Number.isSafeInteger(parsed) && parsed >= 0
     ? parsed
     : undefined;
