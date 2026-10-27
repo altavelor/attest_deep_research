@@ -92,6 +92,12 @@ Sections не закрываются на live update; длинный prompt —
 запись в vault не происходит.
 Вытесненные/не записанные debug outputs помечены; повторного model call ради UI нет.
 
+Размер modal на desktop меняется ручками (pointer capture и клавиатура), чистые правила
+пределов, шагов и разбора сохранённого размера — в `sub-agents/modalSize.ts`, слушатели
+и drag — в `ModalResizeController`, который снимается при закрытии modal (в том числе
+посреди drag). Work log получает класс `attest-sub-agents__work-gutter` с отступом
+под rail. Подробности — M0 в mockups.
+
 ## 4. Остановка и lifecycle
 
 Под обеими секциями располагается «Остановить агента», если card.canStop=true.
