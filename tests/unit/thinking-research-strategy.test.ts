@@ -483,6 +483,13 @@ describe("ThinkingResearchStrategy sub-agent telemetry", () => {
     );
 
     expect(JSON.stringify(rounds.requests[0]?.messages)).toContain("- s-1 · Task · finished");
+    let listed = 0;
+    parent.listSessions = async () => {
+      listed += 1;
+      return [];
+    };
+    await drain(strategy(callingSubAgent()).execute(context({ subAgentParent: parent })));
+    expect(listed).toBe(0);
   });
 
   it("records no summary when the delegator refused the command", async () => {

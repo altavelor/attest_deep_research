@@ -9,6 +9,7 @@ import {
   type RetrySubAgentCommand,
   type SubAgentCommand,
   type SubAgentRunReceipt,
+  type SubAgentSessionSummary,
   type SubAgentTransition,
 } from "@core/research";
 import { assertSessionBudget, ownedRecord } from "./authorization";
@@ -42,9 +43,11 @@ export class SubAgentSubmissions {
     submissionId: string,
   ): Promise<SubAgentRunReceipt> {
     if (!isSubAgentStateId(submissionId)) throw sessionFailure("invalid-input");
-    const digest = digestOf({ sessionId, submission });
+    const digest = digestOf({ sessionId, submission, parentRunId: binding.parentRunId });
     const record = ownedRecord(this.parts.store, binding, sessionId);
     assertSessionBudget(record, grant);
+    const origin = record.runs[0]?.origin;
+    if (origin !== undefined && origin !== grant.origin) throw sessionFailure("not-authorized");
     const existing = this.parts.store.submission(submissionId);
     if (existing) {
       ownedRecord(this.parts.store, binding, existing.sessionId);
@@ -61,6 +64,7 @@ export class SubAgentSubmissions {
       at,
       callerMode: grant.callerMode as ResearchMode,
       owner: { parentRunId: binding.parentRunId, bindingGeneration: binding.bindingGeneration },
+      grantMaximum: grant.maximumSourcePolicy,
     };
     const transition: SubAgentTransition =
       submission.kind === "retry"
@@ -69,7 +73,7 @@ export class SubAgentSubmissions {
     const result = applySubAgentTransition(record, transition);
     if (!result.ok) throw new SubAgentSessionFailure(result.error);
     const { store } = this.parts;
-    this.rebindOptions(sessionId, grant);
+    this.rebindOptions(record.session, grant);
     store.putRecord(result.record, record);
     store.tombstoneImport(result.tombstonedImport);
     const receipt: SubAgentRunReceipt = { sessionId, runId, submissionId, acceptedAt: at };
@@ -88,13 +92,13 @@ export class SubAgentSubmissions {
     return accepted;
   }
 
-  private rebindOptions(sessionId: string, grant: SubAgentDelegationGrant): void {
-    const previous = this.parts.sessionOptions.get(sessionId);
-    this.parts.sessionOptions.set(sessionId, {
+  private rebindOptions(session: SubAgentSessionSummary, grant: SubAgentDelegationGrant): void {
+    const previous = this.parts.sessionOptions.get(session.subAgentSessionId);
+    const maxSearches = session.maxSearches ?? previous?.maxSearches ?? DEFAULT_SUB_AGENT_SEARCHES;
+    this.parts.sessionOptions.set(session.subAgentSessionId, {
       grant,
-      resources: previous?.resources ?? [],
-      maxSearches:
-        previous?.maxSearches ?? Math.min(DEFAULT_SUB_AGENT_SEARCHES, grant.limits.maxSearches),
+      resources: session.resources ?? previous?.resources ?? [],
+      maxSearches: Math.min(maxSearches, grant.limits.maxSearches),
     });
   }
 

@@ -47,7 +47,11 @@ export {
   type SubAgentSessionErrorCode,
 } from "./errors";
 export { deriveSubAgentTitle, findOwnRun, headRun } from "./identity";
-export { reduceSubAgentSourcePolicy, type SubAgentSourcePolicyReduction } from "./sourcePolicy";
+export {
+  intersectSubAgentSourcePolicy,
+  reduceSubAgentSourcePolicy,
+  type SubAgentSourcePolicyReduction,
+} from "./sourcePolicy";
 export { type SubAgentImportTombstone } from "./importState";
 export {
   buildSubAgentSessionsSection,

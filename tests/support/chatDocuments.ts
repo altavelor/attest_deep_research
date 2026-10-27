@@ -38,7 +38,13 @@ export function subAgentSection(
   records: readonly SubAgentSessionRecord[] = [readySubAgentRecord()],
   overrides: Partial<SubAgentStateSnapshot> = {},
 ): SubAgentStateSnapshot {
-  return { ...emptySubAgentState("chat-1"), revision: 1, records, ...overrides };
+  const chatId = overrides.chatId ?? "chat-1";
+  const owned = records.map((record) =>
+    record.session.chatSessionId === chatId
+      ? record
+      : { ...record, session: { ...record.session, chatSessionId: chatId } },
+  );
+  return { ...emptySubAgentState(chatId), revision: 1, records: owned, ...overrides };
 }
 
 /** Builds a delta that sets fields of one session. */

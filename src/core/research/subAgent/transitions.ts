@@ -18,7 +18,7 @@ import type {
   SubAgentSessionSummary,
   SubAgentSourcePolicy,
 } from "./sessionModel";
-import { reduceSubAgentSourcePolicy } from "./sourcePolicy";
+import { intersectSubAgentSourcePolicy, reduceSubAgentSourcePolicy } from "./sourcePolicy";
 import { validateSubAgentTaskInput, type SubAgentTaskOrigin } from "./validation";
 
 interface SubAgentRunLaunch {
@@ -26,6 +26,7 @@ interface SubAgentRunLaunch {
   at: string;
   callerMode: ResearchMode;
   owner?: SubAgentRunOwner;
+  grantMaximum?: SubAgentSourcePolicy;
 }
 
 export type SubAgentRunOwner = Pick<SubAgentSessionSummary, "parentRunId" | "bindingGeneration">;
@@ -200,7 +201,10 @@ function queueRun(
   if (record.runs.some((run) => run.subAgentRunId === launch.runId)) {
     return rejected("invalid-state");
   }
-  const policy = reduceSubAgentSourcePolicy(maximum, reduction);
+  const capped = launch.grantMaximum
+    ? intersectSubAgentSourcePolicy(maximum, launch.grantMaximum)
+    : maximum;
+  const policy = reduceSubAgentSourcePolicy(capped, reduction);
   if (!policy.ok) return policy;
   const { session } = record;
   const owner = launch.owner ?? session;

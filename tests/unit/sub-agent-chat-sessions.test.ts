@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SUB_AGENT_TOOL } from "@core/agent/toolNames";
 import {
   applySubAgentTransition,
+  buildSubAgentSessionsSection,
   buildThinkingPromptSections,
   listSubAgentPromptSessions,
   validateSubAgentState,
@@ -14,12 +15,15 @@ import { settle } from "../support/async";
 import { subAgentSection } from "../support/chatDocuments";
 import {
   AT,
+  delegationGrant,
   launchChild,
   managerHarness,
+  managerParts,
   nextParentRun,
   readySubAgentRecord,
   runToImport,
   applyAll,
+  sourcePolicy,
 } from "../support/subAgentSessions";
 
 async function failureOf(promise: Promise<unknown>): Promise<SubAgentSessionFailure> {
@@ -54,6 +58,13 @@ describe("chat-scoped sub-agent sessions", () => {
       "submit-turn-2",
     );
     const stale = await failureOf(first.getResult(session.subAgentSessionId, receipt.runId));
+    const replay = await failureOf(
+      delegator.run(
+        session.subAgentSessionId,
+        { type: "initial", task: "Investigate a" },
+        "submit-a",
+      ),
+    );
     await settle();
 
     const dispatches = harness.mainEvents.filter((intent) => intent.type === "dispatch");
@@ -66,6 +77,62 @@ describe("chat-scoped sub-agent sessions", () => {
       { sessionId: session.subAgentSessionId, runId: receipt.runId },
     ]);
     expect(stale.code).toBe("fenced-delivery");
+    expect(replay.code).toBe("idempotency-conflict");
+  });
+
+  it("narrows a continued session to the current grant's sources, active file and searches", async () => {
+    const harness = managerHarness();
+    const { session } = await launchChild(harness.delegator(), "a");
+    harness.execution.finish(0);
+    await settle();
+    await harness.manager.closeAll("parent-1", "completed");
+    const { binding, delegator } = nextParentRun(harness);
+    harness.grants.set(
+      "grant-parent-2",
+      delegationGrant(binding, {
+        maximumSourcePolicy: sourcePolicy({
+          searchMode: "webOnly",
+          contextPaths: ["Research/Sub"],
+          allowActiveFile: false,
+        }),
+        limits: { maxRounds: 6, maxResultChars: 4000, maxSearches: 2 },
+      }),
+    );
+
+    await delegator.continue(session.subAgentSessionId, { type: "follow-up", task: "More" }, "s-2");
+    await settle();
+    const request = harness.execution.requests[1];
+
+    expect(harness.execution.requests[0]?.limits.maxSearches).toBe(5);
+    expect(request?.sourcePolicy).toMatchObject({
+      searchMode: "webOnly",
+      contextPaths: ["Research/Sub"],
+      allowActiveFile: false,
+    });
+    expect(request?.activeFilePath).toBeUndefined();
+    expect(request?.limits.maxSearches).toBe(2);
+  });
+
+  it("refuses map_sources worker sessions and foreign records to a direct caller", async () => {
+    const harness = managerHarness();
+    harness.grants.set("grant-map", delegationGrant(harness.binding, { origin: "map_sources" }));
+    const worker = await launchChild(harness.delegator("grant-map"), "w");
+    harness.execution.finish(0);
+    await settle();
+    const foreign = applyAll(readySubAgentRecord("session-foreign"), runToImport("run-x"));
+    managerParts(harness.manager).store.putRecord({
+      ...foreign,
+      session: { ...foreign.session, chatSessionId: "chat-2" },
+    });
+
+    const direct = harness.delegator();
+    const follow = await failureOf(
+      direct.continue(worker.session.subAgentSessionId, { type: "follow-up", task: "x" }, "s-x"),
+    );
+    const read = await failureOf(direct.getResult("session-foreign", "run-x"));
+
+    expect(follow.code).toBe("not-authorized");
+    expect(read.code).toBe("not-authorized");
   });
 
   it("interrupts active work on parent terminal and lets a later run retry and continue it", async () => {
@@ -217,6 +284,10 @@ describe("sub-agent sessions in the parent prompt", () => {
     expect(listed.at(-1)?.sessionId).toBe("s-4");
     expect(JSON.stringify(listed)).not.toContain("child secret reply");
     expect(listed.map((entry) => entry.state)).toContain("finished");
+    const stopped = { ...hostile, session: { ...hostile.session, status: "archived" as const } };
+    const [archived] = listSubAgentPromptSessions([stopped], "chat-1");
+    expect(archived?.state).toBe("stopped");
+    expect(buildSubAgentSessionsSection([archived!])).toContain("stopped (cannot continue)");
   });
 
   it("adds the section only when sessions exist and run_subagent is available", () => {
@@ -243,13 +314,32 @@ describe("sub-agent sessions in the parent prompt", () => {
     ).toBe(false);
   });
 
-  it("accepts a saved session whose owner run differs from its earlier runs", () => {
-    const record = applyAll(readySubAgentRecord(), runToImport("run-1"));
-    const moved = {
-      ...record,
-      session: { ...record.session, parentRunId: "parent-2", bindingGeneration: 2 },
-    };
+  it("accepts an owner equal to the newest run and rejects a ghost owner or foreign chat", () => {
+    const record = applyAll(readySubAgentRecord(), [
+      ...runToImport("run-1"),
+      { type: "import-committed", generation: 1, at: AT },
+    ]);
+    const moved = applyAll(record, [
+      {
+        type: "command",
+        command: { type: "follow-up", task: "More" },
+        origin: "direct",
+        runId: "run-2",
+        at: AT,
+        callerMode: "thinking",
+        owner: { parentRunId: "parent-2", bindingGeneration: 2 },
+      },
+    ]);
+    const ghost = { ...moved, session: { ...moved.session, parentRunId: "parent-9" } };
+    const foreign = { ...moved, session: { ...moved.session, chatSessionId: "chat-2" } };
+    const options = { ...moved, session: { ...moved.session, resources: [" a "], maxSearches: 3 } };
 
     expect(validateSubAgentState(subAgentSection([moved])).ok).toBe(true);
+    expect(validateSubAgentState(subAgentSection([ghost]))).toMatchObject({
+      ok: false,
+      message: "Sub-agent state has an invalid field: records[0].session.parentRunId.",
+    });
+    expect(validateSubAgentState({ ...subAgentSection(), records: [foreign] }).ok).toBe(false);
+    expect(validateSubAgentState(subAgentSection([options])).ok).toBe(false);
   });
 });

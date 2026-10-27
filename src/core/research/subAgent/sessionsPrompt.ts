@@ -52,6 +52,7 @@ export function buildSubAgentSessionsSection(sessions: readonly SubAgentPromptSe
     ...sessions.map(
       (session) =>
         `- ${session.sessionId} · ${session.title} · ${session.state}` +
+        (session.state === "stopped" ? " (cannot continue)" : "") +
         (session.lastRunId === null
           ? ""
           : ` · last run ${session.lastRunId} attempt ${session.attempt}`),
