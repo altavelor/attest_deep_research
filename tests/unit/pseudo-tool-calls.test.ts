@@ -32,34 +32,38 @@ describe("stripPseudoToolCalls", () => {
     ].join("\n");
 
     expect(strip(text)).toEqual({
-      text: "Searching now.\n\nThen  done.",
+      text: "Searching now.\n\nThen done.",
       toolNames: ["search_web", "list_notes"],
     });
   });
 
-  it("removes tool_code fences and bare call objects but keeps other fences and inline code", () => {
-    const text = [
-      "Lead.",
-      "```tool_code",
-      'read_note(path="a.md")',
-      "```",
-      '{"name": "fetch_web_page", "arguments": {"url": "https://a.b"}}',
+  it("removes call fences and bare call objects but keeps other code and text byte-identical", () => {
+    const kept = [
       "```json",
-      '{"name": "run_subagent", "arguments": {}}',
+      '{"name": "run_subagent", "arguments": {}}  ',
+      "",
+      "",
+      "",
       "```",
       'Inline `<tool_call>{"name":"read_note"}</tool_call>` stays.',
     ].join("\n");
+    const text = [
+      "Lead with a hard break  ",
+      "next.",
+      "```tool_code",
+      'read_note(path="a.md")',
+      "```",
+      "```tool_call",
+      'search_notes(query="k")',
+      "```",
+      '{"name": "fetch_web_page", "arguments": {"url": "https://a.b"}}',
+      '{"tool": "list_notes", "args": {}}',
+      kept,
+    ].join("\n");
 
     expect(strip(text)).toEqual({
-      text: [
-        "Lead.",
-        "",
-        "```json",
-        '{"name": "run_subagent", "arguments": {}}',
-        "```",
-        'Inline `<tool_call>{"name":"read_note"}</tool_call>` stays.',
-      ].join("\n"),
-      toolNames: ["read_note", "fetch_web_page"],
+      text: `Lead with a hard break  \nnext.\n\n${kept}`,
+      toolNames: ["read_note", "search_notes", "fetch_web_page", "list_notes"],
     });
   });
 
@@ -69,14 +73,20 @@ describe("stripPseudoToolCalls", () => {
       '<tool_call>{"name": "get_weather"}</tool_call>',
       '{"name": "Kansas", "arguments": {}}',
       "Then call run_subagent(task) yourself.",
+      'Schema {"name": "run_subagent", "description": "delegate"} only.',
+      "a <tool_run_subagent foo=1>x</tool_run_subagent> b",
     ].join("\n");
 
     expect(strip(text)).toEqual({ text, toolNames: [] });
   });
 
-  it("drops an unclosed known tag to the end and a stray known closing tag", () => {
-    expect(strip('Before </tool_wait_subagents> mid <tool_map_sources> {"q": 1}')).toEqual({
-      text: "Before  mid",
+  it("drops a closing tag only after a removed call and an unclosed tag only to the blank line", () => {
+    const text =
+      "<tool_wait_subagents>30000</tool_wait_subagents></tool_wait_subagents>\nBefore " +
+      "<tool_map_sources> is the tag\n\nLong real answer.";
+
+    expect(strip(text)).toEqual({
+      text: "Before\n\nLong real answer.",
       toolNames: ["wait_subagents", "map_sources"],
     });
   });

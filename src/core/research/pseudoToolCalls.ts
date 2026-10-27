@@ -1,9 +1,11 @@
 export const PSEUDO_TOOL_SCAN_LIMIT = 1_000_000;
 const JSON_CANDIDATE_LIMIT = 8_192;
 const TAG_NAME_LIMIT = 64;
+const UNCLOSED_TAG_LIMIT = 2_048;
 const INLINE_CODE_RUN_LIMIT = 16;
 const CALL_FENCE_INFOS = new Set(["tool_code", "tool_call"]);
 const JSON_NAME_KEYS = ["name", "tool", "tool_name"] as const;
+const JSON_ARGUMENT_KEYS = ["arguments", "parameters", "args"] as const;
 
 export interface PseudoToolCallStrip {
   text: string;
@@ -35,6 +37,9 @@ class PseudoToolScanner {
   private readonly parts: string[] = [];
   private readonly toolNames: string[] = [];
   private copyFrom = 0;
+  private pendingBreaks = -1;
+  private pendingSpace = false;
+  private outputEmpty = true;
 
   constructor(
     private readonly text: string,
@@ -54,13 +59,8 @@ class PseudoToolScanner {
       index = Math.max(span.end, index + 1);
     }
     if (this.toolNames.length === 0) return { text, toolNames: [] };
-    this.parts.push(text.slice(this.copyFrom));
-    const cleaned = this.parts
-      .join("")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-    return { text: cleaned, toolNames: [...new Set(this.toolNames)] };
+    this.emit(text.slice(this.copyFrom));
+    return { text: this.parts.join(""), toolNames: [...new Set(this.toolNames)] };
   }
 
   private spanAt(index: number): Span | undefined {
@@ -132,18 +132,31 @@ class PseudoToolScanner {
     if (tag === "tool_call") {
       if (closing) return undefined;
       const close = this.firstOf(["</tool_call>", "<tool_call>"], bodyStart);
-      const bodyEnd = close < 0 ? text.length : close;
+      const bodyEnd = close < 0 ? this.unclosedEnd(bodyStart) : close;
       const toolName = this.callName(text.slice(bodyStart, bodyEnd));
       if (!toolName) return undefined;
-      if (close < 0) return { end: text.length, toolName };
+      if (close < 0) return { end: bodyEnd, toolName };
       return { end: close + (text[close + 1] === "/" ? 12 : 11), toolName };
     }
     const toolName = this.knownName(tag.slice("tool_".length));
     if (!toolName) return undefined;
-    if (closing) return { end: bodyStart, toolName };
+    if (closing) return this.followsRemoval(index) ? { end: bodyStart, toolName } : undefined;
     const closeTag = `</${tag}>`;
     const close = this.find(closeTag, bodyStart);
-    return { end: close < 0 ? text.length : close + closeTag.length, toolName };
+    return { end: close < 0 ? this.unclosedEnd(bodyStart) : close + closeTag.length, toolName };
+  }
+
+  private unclosedEnd(bodyStart: number): number {
+    const blankLine = this.find("\n\n", bodyStart);
+    const limit = Math.min(this.text.length, bodyStart + UNCLOSED_TAG_LIMIT);
+    return blankLine < 0 ? limit : Math.min(blankLine, limit);
+  }
+
+  private followsRemoval(index: number): boolean {
+    if (this.toolNames.length === 0) return false;
+    let cursor = index;
+    while (cursor > this.copyFrom && isGapChar(this.text[cursor - 1])) cursor -= 1;
+    return cursor === this.copyFrom;
   }
 
   private jsonAt(index: number): Span | undefined {
@@ -154,7 +167,7 @@ class PseudoToolScanner {
     if (!JSON_NAME_KEYS.some((key) => text.startsWith(`"${key}"`, keyStart))) return undefined;
     const end = balancedObjectEnd(text, index);
     if (end < 0) return { end: Math.min(index + JSON_CANDIDATE_LIMIT, text.length) };
-    return { end, toolName: this.callName(text.slice(index, end)) };
+    return { end, toolName: this.jsonCallName(text.slice(index, end), true) };
   }
 
   private callName(body: string): string | undefined {
@@ -164,7 +177,7 @@ class PseudoToolScanner {
     return match ? this.knownName(match[1]) : undefined;
   }
 
-  private jsonCallName(body: string): string | undefined {
+  private jsonCallName(body: string, requireArguments = false): string | undefined {
     let parsed: unknown;
     try {
       parsed = JSON.parse(body);
@@ -173,6 +186,7 @@ class PseudoToolScanner {
     }
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const record = parsed as Record<string, unknown>;
+    if (requireArguments && !JSON_ARGUMENT_KEYS.some((key) => key in record)) return undefined;
     const name = JSON_NAME_KEYS.map((key) => record[key]).find(
       (value) => typeof value === "string",
     );
@@ -198,10 +212,71 @@ class PseudoToolScanner {
   }
 
   private remove(start: number, end: number, toolName: string): void {
-    this.parts.push(this.text.slice(this.copyFrom, start));
+    const prefix = this.text.slice(this.copyFrom, start);
+    const trailing = trailingGap(prefix);
+    this.emit(prefix.slice(0, prefix.length - trailing.length));
+    if (this.pendingBreaks < 0) this.pendingBreaks = 0;
+    this.pendingBreaks += trailing.breaks;
+    this.pendingSpace ||= trailing.length > 0;
     this.copyFrom = end;
     this.toolNames.push(toolName);
   }
+
+  private emit(part: string): void {
+    if (this.pendingBreaks < 0) {
+      this.push(part);
+      return;
+    }
+    const leading = leadingGap(part);
+    this.pendingBreaks += leading.breaks;
+    this.pendingSpace ||= leading.length > 0;
+    if (leading.length === part.length) return;
+    if (!this.outputEmpty) this.push(joinSeparator(this.pendingBreaks, this.pendingSpace));
+    this.pendingBreaks = -1;
+    this.pendingSpace = false;
+    this.push(part.slice(leading.length));
+  }
+
+  private push(part: string): void {
+    if (part.length === 0) return;
+    this.parts.push(part);
+    this.outputEmpty = false;
+  }
+}
+
+interface Gap {
+  length: number;
+  breaks: number;
+}
+
+function leadingGap(text: string): Gap {
+  let length = 0;
+  let breaks = 0;
+  while (length < text.length && isGapChar(text[length])) {
+    if (text[length] === "\n") breaks += 1;
+    length += 1;
+  }
+  return { length, breaks };
+}
+
+function trailingGap(text: string): Gap {
+  let length = 0;
+  let breaks = 0;
+  while (length < text.length && isGapChar(text[text.length - 1 - length])) {
+    if (text[text.length - 1 - length] === "\n") breaks += 1;
+    length += 1;
+  }
+  return { length, breaks };
+}
+
+function isGapChar(char: string): boolean {
+  return char === " " || char === "\t" || char === "\n" || char === "\r";
+}
+
+function joinSeparator(breaks: number, space: boolean): string {
+  if (breaks >= 2) return "\n\n";
+  if (breaks === 1) return "\n";
+  return space ? " " : "";
 }
 
 function runLength(text: string, start: number, char: string): number {
