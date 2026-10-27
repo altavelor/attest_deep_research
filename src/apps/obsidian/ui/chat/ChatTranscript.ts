@@ -29,7 +29,8 @@ import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
 import { disposeAnswerArtifacts } from "./artifacts";
 import { disposeWorkflowNodes } from "./workflowRenderer";
-import { renderSubAgentDispatch, renderSubAgentNotice } from "./subAgentEvents";
+import { renderSubAgentTimelineItem, subAgentEventOptions } from "./subAgentEvents";
+import { applyScrollAnchor, captureScrollAnchor } from "./transcriptScroll";
 import { buildChatTimeline } from "@core/chat/subAgentTimeline";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
@@ -84,19 +85,12 @@ export function renderChatTranscript(
     subAgentDispatches: options.subAgentDispatches ?? [],
     subAgentNotices: options.subAgentNotices ?? [],
   });
-  const events = {
-    t: options.t,
-    ...(options.onOpenSubAgentSession
-      ? { onOpenSubAgentSession: options.onOpenSubAgentSession }
-      : {}),
-  };
+  const events = subAgentEventOptions(options.t, options.onOpenSubAgentSession);
   for (const item of timeline) {
     if (item.kind === "message") {
       renderMessage(transcriptEl, item.message, indexes.get(item.message)!, options);
-    } else if (item.kind === "agent-dispatch") {
-      renderSubAgentDispatch(transcriptEl, item.dispatch, events);
     } else {
-      renderSubAgentNotice(transcriptEl, item.notice, events);
+      renderSubAgentTimelineItem(transcriptEl, item, events);
     }
   }
   applyScrollAnchor(transcriptEl, scroll);
@@ -326,28 +320,6 @@ function patchMessageHeaderActions(
   if (!header) return;
   header.querySelector<HTMLElement>(".attest-chat__message-actions")?.remove();
   renderHeaderActions(header, message, index, options);
-}
-
-const STICK_TO_BOTTOM_THRESHOLD_PX = 60;
-
-interface ScrollAnchor {
-  stickToBottom: boolean;
-  previousScrollTop: number;
-}
-
-function captureScrollAnchor(transcriptEl: HTMLElement): ScrollAnchor {
-  const distanceFromBottom =
-    transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight;
-  return {
-    stickToBottom: distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX,
-    previousScrollTop: transcriptEl.scrollTop,
-  };
-}
-
-function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): void {
-  transcriptEl.scrollTop = anchor.stickToBottom
-    ? transcriptEl.scrollHeight
-    : anchor.previousScrollTop;
 }
 
 /** Releases everything the transcript owns before its DOM is emptied or replaced. */
