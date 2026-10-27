@@ -161,7 +161,7 @@ export class ChatSubAgents {
 
   /** Revokes and closes every child of a terminal parent run before its terminal save. */
   async closeParentRun(runId: string, reason: string): Promise<void> {
-    if (!this.host || !this.ownedRuns.has(runId)) return;
+    if (!this.host || !this.ownedRuns.has(runId) || this.closingRuns.has(runId)) return;
     this.closingRuns.add(runId);
     this.coordinators.get(runId)?.dispose();
     this.coordinators.delete(runId);

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatRunRequest } from "@application/use-cases/chat";
+import type { ChatSessionRuntime } from "@application/use-cases/chat/ChatSessionRuntime";
 import { TERMINAL_SAVE_WAIT_MS } from "@application/use-cases/chat/terminalSave";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
 import type { SavedChatSettings } from "@core/chat/savedChat";
@@ -167,8 +168,11 @@ describe("chat runtime and its child host", () => {
     log.length = 0;
     let releaseClose = (): void => undefined;
     children.hosts[0]!.closeGate = new Promise<void>((resolve) => (releaseClose = resolve));
+    const runtimes = (manager as unknown as { sessions: Map<string, ChatSessionRuntime> }).sessions;
+    const runtime = runtimes.get(parent.sessionId)!;
     const disposal = manager.dispose();
     await settle();
+    await Promise.race([runtime.closeSubAgents(followUpRunId, "again"), settle()]);
     expect(log).not.toContain("commit:interrupted");
     releaseClose();
     await disposal;
