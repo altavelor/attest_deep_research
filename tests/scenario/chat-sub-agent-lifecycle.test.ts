@@ -216,11 +216,15 @@ describe("chat runtime and its child host", () => {
     children.hosts[0]!.context.mainEvents?.publish([notice(parent.activeRunId!)]);
     expect(parent.subAgentNotices.map((entry) => entry.parentRunId)).toEqual([parent.activeRunId]);
     const failure = new Error("Close failed.");
-    children.hosts[0]!.closeGate = Promise.reject(failure);
+    let failClose = (_error: Error): void => undefined;
+    children.hosts[0]!.closeGate = new Promise<void>((_resolve, reject) => (failClose = reject));
     research.emit(0, completed);
     research.end(0);
     await settle();
-    expect(logged).toEqual([failure]);
+    expect(changes).not.toContain("status");
+    failClose(failure);
+    await settle();
+    expect([logged, changes.includes("status")]).toEqual([[failure], true]);
     await manager.start(parent.sessionId, request("Second"));
     await settle();
     children.hosts[0]!.closeGate = new Promise<void>(() => undefined);

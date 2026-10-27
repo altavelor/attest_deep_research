@@ -527,12 +527,12 @@ export class ChatSessionManager {
     state.activeRunId = null;
     state.progressLabel = null;
     this.pending.delete(sessionId);
-    this.emit(sessionId, "messages");
-    this.emit(sessionId, "status");
 
+    if (!runId) this.publishTerminal(sessionId);
     if (runId) {
       const budget = terminalBudget();
       await budget.within(closing);
+      this.publishTerminal(sessionId);
       const saving = runtime.persist({
         ...this.saveInput(state),
         unreadCompletion: state.unreadCompletion,
@@ -550,6 +550,11 @@ export class ChatSessionManager {
 
     if (failure !== undefined) this.emitError(sessionId, failure);
     this.releaseSlot(sessionId, runId);
+  }
+
+  private publishTerminal(sessionId: string): void {
+    this.emit(sessionId, "messages");
+    this.emit(sessionId, "status");
   }
 
   private terminalRunState(
