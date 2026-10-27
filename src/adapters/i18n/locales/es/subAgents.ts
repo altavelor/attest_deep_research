@@ -76,4 +76,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.retry": "Reintentar detención",
   "chat.subAgents.stop.failedNotice":
     "No se guardó la detención de un subagente. Abre los agentes para reintentarlo.",
+  "chat.subAgents.resize.width": "Cambiar el ancho",
+  "chat.subAgents.resize.height": "Cambiar la altura",
+  "chat.subAgents.resize.both": "Cambiar el ancho y la altura",
 };

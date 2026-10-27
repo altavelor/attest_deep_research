@@ -119,4 +119,14 @@ export class Workspace {
 export class App {
   readonly vault = new Vault();
   readonly workspace = new Workspace(this);
+  readonly localStorage = new Map<string, unknown>();
+
+  loadLocalStorage(key: string): unknown {
+    return this.localStorage.has(key) ? this.localStorage.get(key) : null;
+  }
+
+  saveLocalStorage(key: string, data: unknown): void {
+    if (data === null) this.localStorage.delete(key);
+    else this.localStorage.set(key, data);
+  }
 }

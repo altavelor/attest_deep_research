@@ -83,7 +83,9 @@ export class WorkLogView {
     const shown = sorted.filter(
       (item, index) => index < this.limit || keyOf(item) === uiState?.openOutputKey,
     );
-    const timelineEl = this.hostEl.createDiv({ cls: "attest-sub-agents__timeline" });
+    const timelineEl = this.hostEl.createDiv({
+      cls: "attest-sub-agents__timeline attest-sub-agents__work-gutter",
+    });
     this.timelineEl = timelineEl;
     this.handle = renderWorkflowTimeline(
       timelineEl,

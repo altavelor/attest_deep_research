@@ -76,4 +76,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.retry": "Повторить остановку",
   "chat.subAgents.stop.failedNotice":
     "Остановка субагента не сохранена. Откройте агентов, чтобы повторить.",
+  "chat.subAgents.resize.width": "Изменить ширину",
+  "chat.subAgents.resize.height": "Изменить высоту",
+  "chat.subAgents.resize.both": "Изменить ширину и высоту",
 };

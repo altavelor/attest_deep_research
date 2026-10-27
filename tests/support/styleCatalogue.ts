@@ -6,6 +6,9 @@ import { WebSourceHealthTracker } from "@application/web";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
 import { renderSubAgentEventContent } from "@apps/obsidian/ui/chat/subAgentEvents";
 import type { SubAgentNoticeEntry } from "@core/research";
+import { ModalResizeController } from "@apps/obsidian/ui/chat/sub-agents/ModalResizeController";
+import { WorkLogView } from "@apps/obsidian/ui/chat/sub-agents/workLog";
+import { workItem } from "./subAgentInspection";
 import { renderChatWindowActions } from "@apps/obsidian/ui/chat/ChatHeader";
 import {
   renderSavedChatsEmptyState,
@@ -254,6 +257,22 @@ function renderSettingsSurfaces(host: HTMLElement): void {
   }).render(host.createDiv());
 }
 
+function renderSubAgentModalSurfaces(host: HTMLElement): void {
+  const t = createTranslator("en").t;
+  const store = { loadLocalStorage: () => null, saveLocalStorage: () => {} };
+  new ModalResizeController(host.createDiv(), store, t).attach();
+  new WorkLogView(host.createDiv(), {
+    app: new App(),
+    markdownContext: new Component(),
+    t,
+  }).render({
+    sessionId: "s1",
+    items: [workItem("w1", "run-1", 1)],
+    selectedRunId: "run-1",
+    debug: false,
+  });
+}
+
 /**
  * Renders the UI surfaces whose stylesheets this repository ships and returns
  * every CSS class the renderers applied. New classes added inside these
@@ -263,6 +282,7 @@ export function renderStyleCatalogue(): Set<string> {
   const host = createContainer();
   renderWorkflowSurfaces(host);
   renderSubAgentEventSurfaces(host);
+  renderSubAgentModalSurfaces(host);
   renderIndexSearchSurfaces(host);
   renderSavedChatSurfaces(host);
   renderSettingsSurfaces(host);

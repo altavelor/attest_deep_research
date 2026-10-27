@@ -478,6 +478,7 @@ describe("sub-agent sessions button and modal", () => {
     const { view, port } = await openDetail(harness, detail);
     sectionHeaders()[1].click();
     const timeline = () => document.body.querySelector(".attest-sub-agents__timeline")!;
+    expect(timeline().classList.contains("attest-sub-agents__work-gutter")).toBe(true);
     expect(timeline().querySelector(".attest-chat__workflow-node--pending")).not.toBeNull();
     expect(timeline().querySelector(".attest-chat__workflow-separator")?.textContent).toBe(
       "Run 2 · attempt 1",

@@ -1,0 +1,68 @@
+.modal.attest-sub-agents-modal--resizable {
+  position: relative;
+  width: var(--attest-sub-agents-width, min(42.5rem, 92vw));
+  height: var(--attest-sub-agents-height, auto);
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+}
+
+.attest-sub-agents__resize {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  border-radius: var(--radius-s);
+}
+
+.attest-sub-agents__resize--right {
+  top: 0.75rem;
+  right: 0;
+  bottom: 0.75rem;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.attest-sub-agents__resize--bottom {
+  right: 0.75rem;
+  bottom: 0;
+  left: 0.75rem;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.attest-sub-agents__resize--corner {
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.attest-sub-agents__resize:hover,
+.attest-sub-agents__resize:focus-visible,
+.attest-sub-agents-modal.is-resizing .attest-sub-agents__resize {
+  background: var(--background-modifier-border-hover);
+  outline: none;
+}
+
+.attest-sub-agents__resize:focus-visible {
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+.attest-sub-agents-modal.is-resizing {
+  user-select: none;
+}
+
+.attest-sub-agents__work-gutter {
+  position: relative;
+  padding-left: calc(1.3rem + 6px);
+}
+
+.attest-sub-agents__work-gutter::before {
+  content: "";
+  position: absolute;
+  top: 0.55em;
+  bottom: 0.55em;
+  left: 10px;
+  width: 2px;
+  background: var(--background-modifier-border);
+}

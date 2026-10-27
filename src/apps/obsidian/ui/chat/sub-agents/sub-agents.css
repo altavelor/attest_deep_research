@@ -47,18 +47,28 @@
 }
 
 .modal.attest-sub-agents-modal {
+  display: flex;
+  flex-direction: column;
   width: min(42.5rem, 92vw);
   max-width: 92vw;
   max-height: 88vh;
-  overflow-x: hidden;
+  overflow: hidden;
+}
+
+.modal.attest-sub-agents-modal > .modal-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .attest-sub-agents {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
-  max-height: 72vh;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
 }
