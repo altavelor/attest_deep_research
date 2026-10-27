@@ -10,6 +10,7 @@ export interface WorkflowRenderContext {
   t: Translate;
   onOpenToolOutput(item: Extract<ChainItem, { kind: "tool-call" }>): void;
   outputViewerHost?: HTMLElement;
+  onOpenSubAgentSession?: (sessionId: string) => void;
 }
 
 export interface WorkflowUiState {

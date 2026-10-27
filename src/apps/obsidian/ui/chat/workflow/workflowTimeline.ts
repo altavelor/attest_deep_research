@@ -1,4 +1,6 @@
-import type { ChainItem } from "@core/conversation";
+import { interleaveWorkflowEvents, type ParentTimelineEvent } from "@core/chat/subAgentPlacement";
+import { parentDisplayChain, type ChainItem } from "@core/conversation";
+import { renderAgentEventNode } from "./agentEventNodeRenderer";
 import { fetchTargetsByResultId, fetchTargetsFor } from "./fetchTargetResolver";
 import {
   renderSummaryNode,
@@ -78,12 +80,14 @@ function renderModel(
   uiState?: WorkflowUiState,
 ): boolean {
   const { items, reasoningSegments: segments, checkpoints } = model;
+  const events = model.events ?? [];
   const isStreaming = model.phase === "streaming";
   const showsPendingIndicator = model.mode !== "instant";
   if (
     segments.length === 0 &&
     checkpoints.length === 0 &&
     items.length === 0 &&
+    events.length === 0 &&
     !(isStreaming && showsPendingIndicator)
   ) {
     return false;
@@ -100,7 +104,7 @@ function renderModel(
     cls: "attest-chat__workflow",
     attr: { "data-workflow-scope": model.scopeId },
   });
-  if (items.length > 0) renderChainNodes(listEl, items, scope, state);
+  if (items.length > 0) renderChainNodes(listEl, items, events, scope, state);
   else renderLegacyNodes(listEl, model, scope, state);
 
   if (listEl.childElementCount === 0) {
@@ -113,11 +117,13 @@ function renderModel(
 function renderChainNodes(
   listEl: HTMLElement,
   chain: readonly ChainItem[],
+  events: readonly ParentTimelineEvent[],
   scope: TimelineScope,
   state: WorkflowState,
 ): void {
-  const fetchTargets = fetchTargetsByResultId([...chain]);
-  const latestItem = chain.at(-1);
+  const visible = parentDisplayChain(chain);
+  const fetchTargets = fetchTargetsByResultId(visible);
+  const latestItem = visible.at(-1);
   const activeReasoningId =
     state.isStreaming &&
     !state.isFinalizing &&
@@ -127,7 +133,12 @@ function renderChainNodes(
       : undefined;
   const separators = attemptSeparators(scope);
 
-  for (const item of chain) {
+  for (const entry of interleaveWorkflowEvents(chain, events)) {
+    if (entry.type === "event") {
+      renderAgentEventNode(listEl, entry.event, scope);
+      continue;
+    }
+    const item = entry.item;
     if (item.kind === "reasoning") {
       renderThinkingNode(listEl, item.segmentId, item.content, {
         active: item.segmentId === activeReasoningId,
@@ -199,6 +210,7 @@ function renderLegacyNodes(
   for (const checkpoint of model.checkpoints) {
     if (checkpoint.status !== "finalizing") renderSummaryNode(listEl, checkpoint.content, scope);
   }
+  for (const event of model.events ?? []) renderAgentEventNode(listEl, event, scope);
   if (state.showsPendingIndicator) {
     renderWorkflowIndicator(
       listEl,

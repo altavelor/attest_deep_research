@@ -7,6 +7,7 @@ import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchAnswer } from "@core/answer";
 import {
+  answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
   completeAssistantCheckpoint,
   finalizeLastAssistantReasoning,
@@ -31,6 +32,7 @@ import type { SubAgentInspectionPort } from "@application/ports/subAgent";
 import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
 import type { SaveChatInput } from "@core/chat/savedChat";
 import { scheduleTimeout } from "@shared";
+import { stampRunChain } from "./chainStamping";
 import { ChatSubAgents } from "./ChatSubAgents";
 import { ChatWriteBuffer } from "./ChatWriteBuffer";
 import type {
@@ -167,7 +169,7 @@ export class ChatSessionRuntime {
     this.controller = new AbortController();
     const diagnostics = new AgentRunDiagnosticCollector({
       runId,
-      answerId: `answer-${runId}`,
+      answerId: answerMessageId(runId),
     });
     this.diagnostics = diagnostics;
     const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(request.question);
@@ -215,6 +217,7 @@ export class ChatSessionRuntime {
           diagnostics.complete(event.answer.contextDiagnostics);
         }
         this.applyEvent(event, runId, request.modelLabel);
+        if (!this.isFenced(runId)) stampRunChain(this.state, runId);
         if (event.type === "complete") completed = true;
       }
 

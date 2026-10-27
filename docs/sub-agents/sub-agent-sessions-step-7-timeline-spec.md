@@ -34,6 +34,11 @@ child adapter передаёт только tool calls из разрешённо
 Checkpoints участвуют в isFinalizing/hasStreamingCheckpoint независимо от наличия chain;
 streaming/interrupted/superseded статусы не теряются при нормализации.
 Legacy rendering, instant indicator suppression и parent checkpoint order сохраняются.
+Parent модель дополнительно несёт optional `events` (dispatch/notice своего run, шаг 8);
+engine вставляет их узлами рельса (agentEventNodeRenderer, иконка в кольце на линии) по
+interleaveWorkflowEvents над цепочкой со скрытыми sub-agent строками как якорями (сами строки
+не выводятся; sequence есть у tool call, reasoning и checkpoint), а при пустой цепочке — после legacy-узлов. Модель только с events
+тоже рендерит список. Child-модели (`sub-agent:`) events не получают.
 На этом шаге filtering child-активности в main ещё не включается — это шаг 8.
 
 Разделить pure projection и DOM orchestration. Renderer не читает manager, текущий chat,

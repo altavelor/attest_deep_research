@@ -20,6 +20,20 @@ export function parentWorkflowChain(chain: readonly ChainItem[]): ChainItem[] {
   });
 }
 
+/**
+ * Projects a parent workflow chain for the chat timeline: sub-agent tool rows are replaced
+ * by the agent events shown in their place, except a failed call, which stays visible so
+ * the user sees why no agent appeared.
+ */
+export function parentDisplayChain(chain: readonly ChainItem[]): ChainItem[] {
+  return parentWorkflowChain(chain).filter((item) => !isHiddenSubAgentRow(item));
+}
+
+/** True for a sub-agent tool row the chat timeline replaces with agent events: any status but failed. */
+export function isHiddenSubAgentRow(item: ChainItem): boolean {
+  return item.kind === "tool-call" && isSubAgentTool(item.name) && item.status !== "failed";
+}
+
 /** True for the parent tools whose output carries receipts or child answers. */
 export function isSubAgentTool(name: string): boolean {
   return name === SUB_AGENT_TOOL || name === SUB_AGENT_RESULT_TOOL || name === SUB_AGENT_WAIT_TOOL;

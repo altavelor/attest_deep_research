@@ -56,13 +56,14 @@ export interface ResearchProgressCheckpoint {
 }
 
 export type ChainItem =
-  | { kind: "reasoning"; segmentId: string; content: string }
+  | { kind: "reasoning"; segmentId: string; content: string; timelineSequence?: number }
   | {
       kind: "checkpoint";
       id: string;
       round: number;
       content: string;
       status: "streaming" | "complete" | "superseded";
+      timelineSequence?: number;
     }
   | {
       kind: "tool-call";
@@ -81,6 +82,7 @@ export type ChainItem =
       attempt?: { runId: string; round: number };
       untrusted?: true;
       payloadState?: "captured" | "disabled" | "evicted" | "truncated";
+      timelineSequence?: number;
 
       children?: ChainItem[];
     };

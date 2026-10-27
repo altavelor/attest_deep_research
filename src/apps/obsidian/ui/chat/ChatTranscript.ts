@@ -32,6 +32,8 @@ import { disposeWorkflowNodes } from "./workflowRenderer";
 import { renderSubAgentTimelineItem, subAgentEventOptions } from "./subAgentEvents";
 import { applyScrollAnchor, captureScrollAnchor } from "./transcriptScroll";
 import { buildChatTimeline } from "@core/chat/subAgentTimeline";
+import { dispatchEvent } from "@core/chat/subAgentPlacement";
+import { transcriptEventPlacement } from "./subAgentEventPlacement";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 export interface ChatTranscriptOptions {
@@ -80,15 +82,19 @@ export function renderChatTranscript(
   }
 
   const indexes = new Map(visibleMessages.map(({ message, index }) => [message, index]));
+  const placement = transcriptEventPlacement(options);
   const timeline = buildChatTimeline({
     messages: visibleMessages.map(({ message }) => message),
-    subAgentDispatches: options.subAgentDispatches ?? [],
-    subAgentNotices: options.subAgentNotices ?? [],
+    subAgentDispatches: placement.orphanDispatches,
+    subAgentNotices: placement.orphanNotices,
   });
   const events = subAgentEventOptions(options.t, options.onOpenSubAgentSession);
+  const notices = options.subAgentNotices ?? [];
   for (const item of timeline) {
     if (item.kind === "message") {
       renderMessage(transcriptEl, item.message, indexes.get(item.message)!, options);
+    } else if (item.kind === "agent-dispatch") {
+      renderSubAgentTimelineItem(transcriptEl, dispatchEvent(item.dispatch, notices), events);
     } else {
       renderSubAgentTimelineItem(transcriptEl, item, events);
     }

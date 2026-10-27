@@ -128,9 +128,32 @@ messages и сохраняет один stable eventKey/sequence. Фактиче
 Acknowledgement accepted command включает durable dispatch либо bounded recovery marker.
 Model/CoT и невыполненная из-за отказа команда не выдаются за отправленное сообщение.
 
-Уведомления жизненного цикла (шаг 6) отображаются отдельными узлами timeline по макетам M6/M7:
-карточка «Task sent to agent» с live-статусом из inspection snapshot (на reload без snapshot —
-без статуса) и карточка результата с replyExcerpt и «Show full reply» внутри лимита 4 KiB.
+Уведомления жизненного цикла (шаг 6) отображаются узлами timeline по макетам M6/M7
+внутри workflow-списка (`attest-chat__workflow`) того ассистентского сообщения, чей run их
+породил: placeSubAgentEvents (core/chat/subAgentPlacement.ts) сопоставляет parentRunId с
+id сообщения `answer-${runId}` (answerMessageId; placeholder ответа создаётся с этим id при
+старте run). События без отрисованного сообщения (удалённое, восстановленное, повреждённое
+или созданное до этого правила сообщение) остаются отдельными узлами транскрипта в порядке
+sequence, ничего не теряется. Внутри workflow порядок задаёт общий allocator: каждый новый
+верхнеуровневый элемент цепочки своего ответа (tool call, reasoning segment, checkpoint)
+получает optional ChainItem.timelineSequence один раз, когда впервые появляется в живом
+не fenced run (stampRunChain после каждого события потока; чужое сообщение не штампуется).
+Перед элементом с sequence S выводятся все ожидающие события с sequence < S, остальные —
+после последнего элемента цепочки до индикатора. Элементы без sequence (legacy) события не
+выталкивают, поэтому в legacy-чате события идут в конце timeline. Скрытые строки
+sub-agent инструментов участвуют в чередовании как якоря и отбрасываются только при выводе.
+Строки run_subagent/wait_subagents/get_subagent_result скрываются parentDisplayChain, кроме
+статуса failed (отказ capacity, неверный ввод) — такая строка остаётся видимой.
+Pending-строка такого вызова тоже скрыта, поэтому между tool-call-start и первым событием
+агента (created/queued/dispatch) в timeline для этого вызова ничего не показывается.
+parentWorkflowChain для ChatCompaction и model history не меняется и поле timelineSequence в
+model trace не попадает.
+Карточка «Task sent to agent»: заголовок (description сессии) и бейдж вида команды, тело
+команды в приглушённом блоке, строка статуса и «Open details». Статус выводится из
+сохранённых notices: последний терминальный notice того же runId (finished/partial/failed/
+stopped/interrupted/import-failed/not-started) → его статус; иначе queued notice того же runId → «Queued» (менеджер всегда пишет queued с runId;
+notice без runId другой run сессии не помечает); иначе «Running». Карточка результата — с replyExcerpt
+и «Show full reply» внутри лимита 4 KiB.
 Child phase/tools/progress/debug In/Out попадают только в child projection. Даже debug не
 показывает их или вывод run_subagent в основном workflow, tool output viewer, fallback/legacy
 rendering, diagnostic UI shortcut основного сообщения либо main export. Кнопка «Open details»

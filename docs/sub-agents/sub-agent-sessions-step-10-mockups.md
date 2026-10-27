@@ -237,8 +237,10 @@ DeepSeek v4 Flash 0731
    карточки). Без дублирования задачи: задача идёт следующим узлом.
 3. «Task sent to agent» — подпись uppercase 11px и карточка: описание, бейдж вида команды
    (initial, follow-up, retry, continue partial), текст команды до 4 строк с ellipsis,
-   строка со статусом и «Open details». Статус берётся из inspection snapshot сессии,
-   при reload без snapshot строка статуса не показывается.
+   строка со статусом и «Open details». Статус выводится из сохранённых notices того же run
+   (терминальный notice → его статус, queued → «Queued», иначе «Running»), поэтому
+   виден и после reload. Все узлы M6 — часть workflow-списка ответа своего run; старых
+   строк «Sub-agent»/«Wait for sub-agents» нет, кроме неуспешного вызова.
 4. «Agent reply» — карточка с рамкой по результату (зелёная для finished). Первая строка:
    статус, длительность, tokens, модель; ниже описание задачи; ниже ответ агента до 4 строк
    с chips цитат; «Show full reply» раскрывает ответ на месте до лимита 4 KiB.

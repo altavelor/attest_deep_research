@@ -1,14 +1,11 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Component } from "obsidian";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
-import {
-  renderChatTranscript,
-  type ChatTranscriptOptions,
-} from "@apps/obsidian/ui/chat/ChatTranscript";
-import { renderSubAgentDispatch } from "@apps/obsidian/ui/chat/subAgentEvents";
+import { renderChatTranscript } from "@apps/obsidian/ui/chat/ChatTranscript";
+import { renderSubAgentTimelineItem } from "@apps/obsidian/ui/chat/subAgentEvents";
+import { dispatchEvent } from "@core/chat/subAgentPlacement";
 import type { ChatRunRequest } from "@application/use-cases/chat";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import { settle } from "../../support/async";
@@ -19,6 +16,7 @@ import {
 } from "../../support/chatSessions";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { MemoryFileSystem } from "../../support/memoryFileSystem";
+import { transcriptOptions } from "../../support/transcriptOptions";
 
 const AT = "2026-10-26T10:00:00.000Z";
 const settings: SavedChatSettings = {
@@ -130,39 +128,6 @@ function legacyChatFile(): string {
   });
 }
 
-function transcriptOptions(
-  state: { messages: ChatTranscriptOptions["messages"] } & Pick<
-    ChatTranscriptOptions,
-    "subAgentDispatches" | "subAgentNotices"
-  >,
-  onOpenSubAgentSession: (sessionId: string) => void,
-): ChatTranscriptOptions {
-  return {
-    app: {} as never,
-    markdownContext: new Component(),
-    messages: state.messages,
-    subAgentDispatches: state.subAgentDispatches,
-    subAgentNotices: state.subAgentNotices,
-    onOpenSubAgentSession,
-    editingMessageIndex: null,
-    assistantLabel: "Attest",
-    isDebugMode: true,
-    t: ((key: string) => key) as never,
-    renderEmptyState: vi.fn(),
-    onEditQuestion: vi.fn(),
-    onSubmitEditedQuestion: vi.fn(),
-    onOpenCitationPopover: vi.fn(),
-    onScheduleCitationPopoverClose: vi.fn(),
-    onScrollCitationBlockIntoView: vi.fn(),
-    onOpenChunk: vi.fn(),
-    onOpenToolOutput: vi.fn(),
-    onHighlightCitation: vi.fn(),
-    onOpenDiagnosticReport: vi.fn(),
-    onSaveAnswerToNewNote: vi.fn(),
-    onAppendAnswerToActiveNote: vi.fn(),
-  };
-}
-
 function request(question: string, history: ChatRunRequest["chatHistory"]): ChatRunRequest {
   return {
     question,
@@ -237,7 +202,11 @@ describe("sub-agent events in a reloaded parent transcript", () => {
     const folded = document.createElement("div");
     const t = ((key: string) => key) as never;
     for (const body of ["a".repeat(280), "b".repeat(281)]) {
-      renderSubAgentDispatch(folded, { ...state.subAgentDispatches[0]!, body }, { t });
+      renderSubAgentTimelineItem(
+        folded,
+        dispatchEvent({ ...state.subAgentDispatches[0]!, body }, []),
+        { t },
+      );
     }
     const [short, long] = [...folded.querySelectorAll<HTMLElement>(".attest-chat__agent-card")];
     const toggle = long!.querySelector<HTMLButtonElement>(".attest-chat__agent-toggle")!;

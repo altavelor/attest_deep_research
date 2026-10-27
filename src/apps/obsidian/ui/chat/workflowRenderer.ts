@@ -1,3 +1,4 @@
+import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import type { ChatDisplayMessage } from "@core/conversation";
 import {
   captureWorkflowUiState,
@@ -24,12 +25,18 @@ export function renderWorkflowNodes(
   message: ChatDisplayMessage,
   context: WorkflowRenderContext,
   uiState?: WorkflowUiState,
+  events: readonly ParentTimelineEvent[] = [],
 ): boolean {
   const owner = ownerOf(hostEl);
   const handles = handlesByOwner.get(owner) ?? new Map<HTMLElement, WorkflowTimelineHandle>();
   handlesByOwner.set(owner, handles);
   handles.get(hostEl)?.dispose();
-  const handle = renderWorkflowTimeline(hostEl, toParentWorkflowModel(message), context, uiState);
+  const handle = renderWorkflowTimeline(
+    hostEl,
+    toParentWorkflowModel(message, events),
+    context,
+    uiState,
+  );
   handles.set(hostEl, handle);
   return handle.rendered;
 }
