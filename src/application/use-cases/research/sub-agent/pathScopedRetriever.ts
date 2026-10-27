@@ -3,9 +3,9 @@ import type { IndexCursorPage } from "@application/ports/retrieval";
 
 /**
  * Wraps a retriever so that every index read stays inside the granted paths: folders and
- * their documents, or with exact scope only the granted documents themselves. Queries are
- * narrowed to a single granted path, other documents read as nothing, and a page that lost
- * items keeps neither its cursor nor its count, so it reveals nothing about other documents.
+ * their documents, or with exact scope only the granted documents themselves. Inventory
+ * pages keep only granted items and count only those, without the underlying cursor, and
+ * any other page that lost items keeps neither cursor nor count.
  */
 export function pathScopedRetriever(
   retriever: ResearchRetriever,
@@ -27,6 +27,16 @@ export function pathScopedRetriever(
       ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
       ...(result.totalCount !== undefined ? { totalCount: result.totalCount } : {}),
     };
+  };
+  const prefixPage = <T extends { sourcePath: string }>(
+    result: IndexCursorPage<T>,
+  ): IndexCursorPage<T> => {
+    const items = result.items.filter((item) => allowed(item.sourcePath));
+    return { items, totalCount: items.length };
+  };
+  const byPrefix = <O extends { pathPrefix?: string; countOnly?: boolean }>(options: O): O => {
+    const { countOnly: _countOnly, ...rest } = options;
+    return (only !== undefined ? { ...rest, pathPrefix: only } : rest) as O;
   };
   const scoped: ResearchRetriever = {
     search: async (query, options) => {
@@ -58,21 +68,11 @@ export function pathScopedRetriever(
   }
   if (retriever.listIndexSources) {
     scoped.listIndexSources = async (options) =>
-      page(
-        await retriever.listIndexSources!(
-          only !== undefined ? { ...options, pathPrefix: only } : options,
-        ),
-        only !== undefined,
-      );
+      prefixPage(await retriever.listIndexSources!(byPrefix(options)));
   }
   if (retriever.searchIndexByMetadata) {
     scoped.searchIndexByMetadata = async (options) =>
-      page(
-        await retriever.searchIndexByMetadata!(
-          only !== undefined ? { ...options, pathPrefix: only } : options,
-        ),
-        only !== undefined,
-      );
+      prefixPage(await retriever.searchIndexByMetadata!(byPrefix(options)));
   }
   if (retriever.listIndexChunks) {
     scoped.listIndexChunks = async (options) =>

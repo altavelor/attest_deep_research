@@ -3,11 +3,19 @@ import { describe, expect, it } from "vitest";
 import type { ResearchRetriever } from "@application/contracts/research";
 import { pathScopedRetriever } from "@application/use-cases/research/sub-agent/pathScopedRetriever";
 
-const FOREIGN = ["Notes/a.md/child.md", "Other/x.md"];
+const FOREIGN = ["Notes/a.md/child.md", "Other/x.md", "Notes/a.md.bak"];
+
+interface PageOptions {
+  pathPrefix?: string;
+  cursor?: string;
+  limit: number;
+  countOnly?: boolean;
+}
 
 /**
- * A retriever that ignores every scope: each read answers for all of its documents, each
- * page carries a cursor and a count, and the options of every call are recorded.
+ * A retriever that ignores every scope: each read answers for all of its documents, an
+ * inventory page matches its path prefix by raw startsWith and pages by offset with the
+ * count of every match, and the options of every call are recorded.
  */
 function unscopedRetriever(paths: readonly string[]) {
   const calls: Record<string, unknown[]> = {};
@@ -24,6 +32,20 @@ function unscopedRetriever(paths: readonly string[]) {
     score: 1,
     source: { id: path, kind: "markdown", title: path, path, headingPath: [] },
   });
+  const inventory = (name: string) => async (options: PageOptions) => {
+    record(name, options);
+    const matches = [...paths]
+      .sort()
+      .filter((path) => !options.pathPrefix || path.startsWith(options.pathPrefix))
+      .map((sourcePath) => ({ sourcePath, chunkId: sourcePath }));
+    const offset = Number(options.cursor ?? 0);
+    const next = offset + options.limit;
+    return {
+      items: options.countOnly ? [] : matches.slice(offset, next),
+      ...(next < matches.length ? { nextCursor: String(next) } : {}),
+      totalCount: matches.length,
+    };
+  };
   const document = async (path: string) => ({ sourcePath: path });
   const retriever = {
     search: async (_query: string, options: unknown) => {
@@ -33,8 +55,8 @@ function unscopedRetriever(paths: readonly string[]) {
     },
     getLanguageInventory: async () => ["en"],
     listIndexedUrls: async () => ({ items: paths.map((path) => ({ source: { path } })) }),
-    listIndexSources: page("listIndexSources"),
-    searchIndexByMetadata: page("searchIndexByMetadata"),
+    listIndexSources: inventory("listIndexSources"),
+    searchIndexByMetadata: inventory("searchIndexByMetadata"),
     listIndexChunks: page("listIndexChunks"),
     findInIndex: page("findInIndex"),
     readIndexChunk: async () => ({ chunks: items() }),
@@ -70,12 +92,19 @@ describe("pathScopedRetriever", () => {
     expect(await scoped.listIndexedUrls!({ limit: 5, sourcePath: "Other/x.md" } as never)).toEqual({
       items: [],
     });
-    expect(await scoped.listIndexSources!({ limit: 5 })).toEqual(only);
-    expect(await scoped.searchIndexByMetadata!({ limit: 5 })).toEqual(only);
+    const counted = { ...only, totalCount: 1 };
+    expect(await scoped.listIndexSources!({ limit: 1 })).toEqual(counted);
+    expect(
+      await scoped.searchIndexByMetadata!({ limit: 1, cursor: "99", countOnly: true }),
+    ).toEqual({ items: [], totalCount: 0 });
     expect([calls.listIndexSources, calls.searchIndexByMetadata]).toEqual([
-      [{ limit: 5, pathPrefix: "Notes/a.md" }],
-      [{ limit: 5, pathPrefix: "Notes/a.md" }],
+      [{ limit: 1, pathPrefix: "Notes/a.md" }],
+      [{ limit: 1, cursor: "99", pathPrefix: "Notes/a.md" }],
     ]);
+    expect(await scoped.searchIndexByMetadata!({ limit: 5, countOnly: true })).toEqual({
+      ...only,
+      totalCount: 1,
+    });
     expect(await scoped.findInIndex!({ pattern: "x", mode: "literal", limit: 5 })).toEqual(only);
     expect(calls.findInIndex).toEqual([expect.objectContaining({ sourcePath: "Notes/a.md" })]);
     const findForeign = {
