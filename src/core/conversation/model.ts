@@ -81,6 +81,7 @@ export type ChainItem =
       attempt?: { runId: string; round: number };
       untrusted?: true;
       payloadState?: "captured" | "disabled" | "evicted" | "truncated";
+      timelineSequence?: number;
 
       children?: ChainItem[];
     };

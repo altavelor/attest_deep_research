@@ -10,10 +10,11 @@ import { createMessageId } from "./messageIds";
 export function startAssistantProgress(
   messages: ChatDisplayMessage[],
   mode: ResearchMode,
+  id: string = createMessageId(),
 ): ChatDisplayMessage[] {
   const createdAt = new Date().toISOString();
   const assistant: ChatDisplayMessage = {
-    id: createMessageId(),
+    id,
     role: "assistant",
     content: "",
     createdAt,

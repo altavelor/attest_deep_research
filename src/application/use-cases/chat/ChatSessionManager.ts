@@ -18,6 +18,7 @@ import {
   interruptLastAssistantProgress,
   nextAssistantMessage,
   nextUserMessage,
+  answerMessageId,
   startAssistantProgress,
 } from "@core/conversation";
 import { toUserMessage } from "@core/errors";
@@ -332,6 +333,7 @@ export class ChatSessionManager {
     const messages = startAssistantProgress(
       withQuestion,
       resolveRunMode(request.question, state.chatSettings),
+      answerMessageId(runId),
     );
 
     try {

@@ -8,6 +8,7 @@ import {
   type SubAgentNoticeEntry,
   type SubAgentNoticeKind,
 } from "@core/research/subAgent";
+import { chainSequenceFloor, sanitizeChainSequences } from "./chainSequence";
 
 export type ChatTimelineItem =
   | { kind: "message"; sequence: number; message: ChatDisplayMessage }
@@ -92,9 +93,10 @@ export function parseTimelineSequence(value: unknown): number {
  * Gives every timeline item a unique sequence without reordering messages. Messages
  * keep a valid increasing sequence and receive the next free one otherwise, from one
  * when no message has a sequence yet; colliding events move after the highest sequence
- * in event-key order, and the allocator ends above every sequence in use.
+ * in event-key order, and the allocator ends above every sequence in use, chain tool calls included.
  */
 export function normalizeSubAgentTimeline(state: SubAgentTimelineState): SubAgentTimelineState {
+  const sanitized = sanitizeChainSequences(state.messages);
   const events = [
     ...state.subAgentDispatches.map((entry) => ({ key: entry.eventKey, sequence: entry.sequence })),
     ...state.subAgentNotices.map((entry) => ({ key: entry.eventKey, sequence: entry.sequence })),
@@ -103,12 +105,13 @@ export function normalizeSubAgentTimeline(state: SubAgentTimelineState): SubAgen
   const allocated = Math.max(
     1,
     state.timelineSequence,
+    chainSequenceFloor(sanitized),
     ...events.map((event) => event.sequence + 1),
   );
-  const legacy = !state.messages.some((message) => isSequence(message.timelineSequence));
+  const legacy = !sanitized.some((message) => isSequence(message.timelineSequence));
   let next = legacy ? 1 : allocated;
   let previous = 0;
-  const messages = state.messages.map((message) => {
+  const messages = sanitized.map((message) => {
     if (message.kind === "compact-summary") return withoutSequence(message);
     const current = message.timelineSequence;
     if (isSequence(current) && current > previous && !used.has(current)) {

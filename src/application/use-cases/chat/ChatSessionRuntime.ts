@@ -6,7 +6,9 @@ import { chatHistoryForPrompt } from "./ChatCompaction";
 import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchAnswer } from "@core/answer";
+import { stampToolCallSequences } from "@core/chat/toolCallSequence";
 import {
+  answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
   completeAssistantCheckpoint,
   finalizeLastAssistantReasoning,
@@ -167,7 +169,7 @@ export class ChatSessionRuntime {
     this.controller = new AbortController();
     const diagnostics = new AgentRunDiagnosticCollector({
       runId,
-      answerId: `answer-${runId}`,
+      answerId: answerMessageId(runId),
     });
     this.diagnostics = diagnostics;
     const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(request.question);
@@ -259,6 +261,15 @@ export class ChatSessionRuntime {
     return boundAnswer;
   }
 
+  private stampToolCalls(): void {
+    const stamped = stampToolCallSequences(this.state);
+    if (!stamped) return;
+    this.state.messages = stamped.messages;
+    this.state.subAgentDispatches = stamped.subAgentDispatches;
+    this.state.subAgentNotices = stamped.subAgentNotices;
+    this.state.timelineSequence = stamped.timelineSequence;
+  }
+
   private applyEvent(event: ResearchStreamEvent, runId: string, modelLabel: string): void {
     if (this.isFenced(runId)) return;
 
@@ -302,6 +313,7 @@ export class ChatSessionRuntime {
         event.fetchTargets,
         event.searchSources,
       );
+      if (!event.parentId) this.stampToolCalls();
       this.emit(runId, "active-message");
       return;
     }
