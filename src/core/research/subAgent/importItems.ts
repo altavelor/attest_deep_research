@@ -1,5 +1,6 @@
 import type { RetrievedChunk, SourceReference } from "@core/model";
 import { markdownBracketOccurrences } from "../answerAnalysis";
+import { isCitationHandle } from "../citationTokens";
 import { SUB_AGENT_REDACTION_MARKER } from "./observationModel";
 import type { SubAgentSourcePolicy } from "./sessionModel";
 import type { ValidatedJsonValue } from "./stateSnapshot";
@@ -16,6 +17,7 @@ const MAX_QUERY_CHARS = 500;
 const SAFE_ITEM_ID = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_:./#?=&%+-]{0,399}$/u;
 const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u;
+const ALIAS_ORDINAL = /^[1-9]\d{0,5}$/u;
 const CITATION_LIKE = /^\S{1,200}$/u;
 const REDACTION_LABEL = SUB_AGENT_REDACTION_MARKER.slice(1, -1);
 
@@ -66,6 +68,28 @@ const TOOLS: readonly SubAgentEvidenceTool[] = [
 /** Returns the conversation alias prefix shared by every evidence alias of one import. */
 export function subAgentAliasPrefix(importId: string): string {
   return `subagent:${importId}:`;
+}
+
+/**
+ * Returns the item number of a sub-agent evidence alias such as `subagent:import-ab12:3`,
+ * or null for any other bracket label. The alias must have the shape that
+ * subAgentAliasPrefix builds and be a valid citation handle.
+ */
+export function subAgentAliasOrdinal(label: string): number | null {
+  const split = label.lastIndexOf(":");
+  const importId = label.slice(subAgentAliasPrefix("").length - 1, split);
+  const ordinal = label.slice(split + 1);
+  if (
+    split < 0 ||
+    importId.length === 0 ||
+    importId.includes(":") ||
+    !isCitationHandle(label) ||
+    !ALIAS_ORDINAL.test(ordinal) ||
+    label !== `${subAgentAliasPrefix(importId)}${ordinal}`
+  ) {
+    return null;
+  }
+  return Number(ordinal);
 }
 
 /** Returns the lower-cased domain resources a session may import web evidence from. */

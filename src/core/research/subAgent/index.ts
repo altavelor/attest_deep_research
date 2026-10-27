@@ -89,6 +89,7 @@ export {
   parseSubAgentChildEvidence,
   readSubAgentImportItems,
   rewriteSubAgentCitations,
+  subAgentAliasOrdinal,
   subAgentAliasPrefix,
   subAgentAllowedHosts,
   subAgentHostAllowed,
