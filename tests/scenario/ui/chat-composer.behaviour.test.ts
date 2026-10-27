@@ -68,6 +68,9 @@ function createComposer(overrides: Partial<ChatComposerControllerOptions> = {}):
     onUpdateContextMode: () => {},
     onUpdateSearchMode: () => {},
     onUpdateResearchMode: () => {},
+    getActiveSubAgentCount: () => 0,
+    hasSubAgentRuns: () => false,
+    onOpenSubAgents: () => {},
     ...overrides,
   });
 

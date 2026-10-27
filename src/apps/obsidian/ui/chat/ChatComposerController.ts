@@ -40,6 +40,9 @@ export interface ChatComposerControllerOptions {
   onUpdateContextMode: (contextMode: ContextMode) => void;
   onUpdateSearchMode: (searchMode: ResearchSearchMode) => void;
   onUpdateResearchMode: (mode: ResearchMode) => void;
+  getActiveSubAgentCount: () => number;
+  hasSubAgentRuns: () => boolean;
+  onOpenSubAgents: (sessionId?: string) => void;
 }
 
 /** Owns chat-composer DOM references, rendering, and submit availability. */
@@ -72,10 +75,35 @@ export class ChatComposerController {
         this.updateSubmitAvailability();
       },
       onUpdateResearchMode: this.options.onUpdateResearchMode,
+      onOpenSubAgents: () => this.options.onOpenSubAgents(),
     });
     this.refs.textareaEl.value = draft;
     this.renderAttachedContext();
     this.setFormRunning(this.options.isRunning());
+    this.updateSubAgentsButton();
+  }
+
+  /** Shows the agents button right after the research-mode selector once the chat has runs, or removes it from the DOM. */
+  updateSubAgentsButton(): void {
+    const refs = this.refs;
+    if (!refs) return;
+    const buttonEl = refs.subAgentsButtonEl;
+    if (!this.options.hasSubAgentRuns()) {
+      buttonEl.remove();
+      return;
+    }
+    refs.updateSubAgentCount(this.options.getActiveSubAgentCount());
+    if (buttonEl.nextElementSibling !== refs.contextIndicatorEl) {
+      refs.contextIndicatorEl.before(buttonEl);
+    }
+  }
+
+  /** Focuses the agents button when it is shown and reports whether it did. */
+  focusSubAgentsButton(): boolean {
+    const buttonEl = this.refs?.subAgentsButtonEl;
+    if (!buttonEl?.isConnected) return false;
+    buttonEl.focus();
+    return true;
   }
 
   getQuestionInput(): string {

@@ -60,6 +60,7 @@ import { renderSavedChatsEmptyState } from "./history/SavedChatsPanel";
 import { SavedChatSessionController } from "./history/SavedChatSessionController";
 import { SavedChatsPopoverController } from "./history/SavedChatsPopoverController";
 import { ChatComposerController } from "./ChatComposerController";
+import { SubAgentSessionsHost } from "./sub-agents/index";
 import { ChatSourcesModal } from "./sources/ChatSourcesModal";
 import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 
@@ -130,6 +131,7 @@ export class AttestChatView extends ItemView {
   private followUpsEl: HTMLElement | null = null;
   private readonly composer: ChatComposerController;
   private readonly savedChatsPopover: SavedChatsPopoverController;
+  private readonly subAgents: SubAgentSessionsHost;
   private activeMessageRenderFrame: number | null = null;
   private finalizingRenderFrame: number | null = null;
   private highlightTimer: number | null = null;
@@ -169,6 +171,19 @@ export class AttestChatView extends ItemView {
       onStopChat: (id) => this.stopChat(id),
       refreshSavedChats: () => this.savedChatSession.refresh(),
     });
+    this.subAgents = new SubAgentSessionsHost({
+      app: this.app,
+      t: this.t,
+      getPort: (sessionId) => this.sessions.getSubAgentInspection(sessionId),
+      getChatTitle: (sessionId) => this.chatTitleOf(sessionId),
+      getDirection: () => this.services.getTranslator().direction,
+      isDebugMode: () => this.services.isDebugMode(),
+      notify: (message) => new Notice(message),
+      onCountChange: () => this.composer.updateSubAgentsButton(),
+      restoreFocus: () => {
+        if (!this.composer.focusSubAgentsButton()) this.composer.focusQuestionInput();
+      },
+    });
     this.composer = new ChatComposerController({
       getSettings: () => this.currentChatSettings,
       getAvailableModels: () => this.services.getChatModelProfiles(),
@@ -205,6 +220,9 @@ export class AttestChatView extends ItemView {
       onUpdateContextMode: (contextMode) => void this.updateContextMode(contextMode),
       onUpdateSearchMode: (searchMode) => void this.updateSearchMode(searchMode),
       onUpdateResearchMode: (mode) => void this.updateResearchMode(mode),
+      getActiveSubAgentCount: () => this.subAgents.activeCount,
+      hasSubAgentRuns: () => this.subAgents.hasAgentRuns,
+      onOpenSubAgents: (sessionId) => this.subAgents.open(sessionId),
     });
     this.researchController = new ResearchQuestionController({
       getSessionId: () => this.session.sessionId,
@@ -297,6 +315,7 @@ export class AttestChatView extends ItemView {
 
   private selectSession(sessionId: string): void {
     this.selectedSessionId = sessionId;
+    this.subAgents.select(sessionId);
     this.sessions.noteDisplayed(sessionId);
   }
 
@@ -397,6 +416,7 @@ export class AttestChatView extends ItemView {
     this.citationPopover.close();
     this.diagnosticModal.close();
     this.savedChatsPopover.close();
+    this.subAgents.dispose();
     if (this.transcriptEl) {
       disposeChatTranscript(this.transcriptEl);
     }
@@ -487,7 +507,10 @@ export class AttestChatView extends ItemView {
     const results = chatPanel.createDiv({ cls: "attest-chat__results" });
     this.followUpsEl = results.createDiv({ cls: "attest-chat__followups" });
 
+    this.subAgents.select(this.session.sessionId);
+    this.subAgents.setDebugMode(this.services.isDebugMode());
     this.composer.render(chatPanel);
+    this.subAgents.composerRendered();
 
     if (this.services.isDebugMode()) {
       const indexSearchRoot = root.createDiv({
@@ -649,6 +672,7 @@ export class AttestChatView extends ItemView {
       onOpenRegistryRevision: (revisionId) => this.openSourcesModal(revisionId),
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       onOpenToolOutput: (item) => void this.openToolOutput(item),
+      onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
@@ -713,6 +737,7 @@ export class AttestChatView extends ItemView {
       return;
     }
 
+    const deletedSessionId = this.sessions.getSessionByChatId(id)?.sessionId;
     try {
       await this.sessions.deleteChat(id);
     } catch (error) {
@@ -725,6 +750,7 @@ export class AttestChatView extends ItemView {
       return;
     }
 
+    if (deletedSessionId !== undefined) this.subAgents.closeForChat(deletedSessionId);
     await this.savedChatSession.refresh();
     this.refreshSavedChatsDisplay();
     new Notice(this.t("chat.notice.chatDeleted"));
@@ -842,6 +868,7 @@ export class AttestChatView extends ItemView {
       return;
     }
     if (change.kind === "messages" || change.kind === "sub-agents") {
+      if (change.kind === "sub-agents") this.subAgents.select(change.sessionId);
       this.renderMessagesAfterFinalizingFrame();
       return;
     }
@@ -864,6 +891,11 @@ export class AttestChatView extends ItemView {
       this.finalizingRenderFrame = null;
       this.renderMessages();
     });
+  }
+
+  private chatTitleOf(sessionId: string): string {
+    const chatId = this.sessions.getSession(sessionId)?.chatId;
+    return this.savedChatSession.savedChats.find((summary) => summary.id === chatId)?.title ?? "";
   }
 
   /** Names the chat when the failure belongs to a session the reader is not viewing. */
