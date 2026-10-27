@@ -3,6 +3,7 @@ import { isSubAgentModelSnapshot } from "./observationModel";
 import { toValidatedJson } from "./stateSnapshot";
 import { isSubAgentStateId } from "./stateIds";
 import { checkMapSourcesBatches } from "./batchState";
+import { readSubAgentSearchBudget, validateSubAgentResources } from "./validation";
 
 export type SubAgentStateValidationCode = "unsupported-state-version" | "invalid-state-field";
 
@@ -79,6 +80,11 @@ function checkSnapshot(value: Rec): void {
     });
     runsBySession.set(sessionId, ownRuns);
     const session = record.session as Rec;
+    if (session.chatSessionId !== value.chatId) invalid(`${path}.session.chatSessionId`);
+    const newest = (record.runs as Rec[]).at(-1);
+    if (newest && newest.parentRunId !== session.parentRunId) {
+      invalid(`${path}.session.parentRunId`);
+    }
     for (const key of ["activeSubAgentRunId", "pendingImportRunId"]) {
       if (session[key] !== null && !ownRuns.includes(session[key] as string)) {
         invalid(`${path}.session.${key}`);
@@ -134,10 +140,23 @@ function checkSession(session: Rec, path: string): string {
   time(session.createdAt, `${path}.createdAt`);
   time(session.updatedAt, `${path}.updatedAt`);
   checkSourcePolicy(session.sourcePolicy, `${path}.sourcePolicy`);
+  checkRunOptions(session, path);
   const budget = rec(session.budgetPolicy, `${path}.budgetPolicy`);
   if (budget.type === "required-scope") id(budget.scopeId, `${path}.budgetPolicy.scopeId`);
   else if (budget.type !== "local") invalid(`${path}.budgetPolicy.type`);
   return session.subAgentSessionId as string;
+}
+
+function checkRunOptions(session: Rec, path: string): void {
+  if (session.resources !== undefined) {
+    const resources = validateSubAgentResources(session.resources);
+    if (!resources.ok || JSON.stringify(resources.value) !== JSON.stringify(session.resources)) {
+      invalid(`${path}.resources`);
+    }
+  }
+  if (session.maxSearches === undefined) return;
+  const searches = readSubAgentSearchBudget(session.maxSearches);
+  if (!searches.ok || searches.value !== session.maxSearches) invalid(`${path}.maxSearches`);
 }
 
 function checkRun(run: Rec, path: string): string {

@@ -98,7 +98,8 @@ export const SubAgentTool = defineTool<SubAgentToolDeps, SubAgentInput, SubAgent
     "sub-agent works in the background while you continue, and its result arrives before a " +
     "later round (or read it with get_subagent_result). Use it for a facet that needs its own " +
     "research loop, especially several independent facets in parallel. Pass sessionId to send " +
-    "a follow-up, continue-partial or retry command to an existing sub-agent.",
+    "a follow-up, continue-partial or retry command to an existing sub-agent of this chat, " +
+    "including one started in an earlier turn.",
   schema: {
     task: str(MAX_SUB_AGENT_TASK_CHARS, {
       required: true,
@@ -116,7 +117,8 @@ export const SubAgentTool = defineTool<SubAgentToolDeps, SubAgentInput, SubAgent
     }),
     sessionId: str(MAX_ID_CHARS, {
       description:
-        "An existing sub-agent session from an earlier receipt; omit to start a new one.",
+        "An existing sub-agent session of this chat, from any earlier receipt or turn; " +
+        "omit to start a new one.",
     }),
     command: enumOf(COMMANDS, {
       description: "With sessionId: follow-up (default), continue-partial or retry.",

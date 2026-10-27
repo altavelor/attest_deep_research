@@ -141,7 +141,7 @@ Create/metadata/progress/ответ ребёнка сами по себе не �
 Notice создаётся по переходу жизненного цикла: created (или queued при ожидании слота) —
 после durable create; not-started — при отказе бюджета до старта (очередь FIFO не отказывает); finished/partial/
 failed/stopped/interrupted/import-failed — один на terminal run, только после durable import
-или его bounded отказа; closed — один на parent terminal с closedCount, создаётся только если closedCount>0;
+или его bounded отказа; closed — один на parent terminal с closedCount (сессии, чья активная работа прервана), создаётся только если closedCount>0;
 batch — одна запись на batch map_sources, workers собственных notices не имеют.
 eventKey строится из полной identity и kind, повтор и replay идемпотентны: для closed это (parentRunId, closed),
 для batch — (chatId, parentRunId, batchId, batch), sessionId у них null. Batch-запись upsert по eventKey:
@@ -167,7 +167,8 @@ Null совпадает только с отсутствием любого run 
 остановке. Новый run/retry меняет controlRunId: stale, обновить карточку без stop новой попытки.
 При валидном запросе синхронно fences всю session, removes queue/aborts только её run,
 tombstones import и окончательно архивирует; будущий follow-up/retry запрещён.
-ready/failed/interrupted с живым parent также могут быть архивированы пользователем.
+canStop и stopFromUser требуют активный run или pending import сессии и nonterminal
+владеющий запуск; бездействующая сессия (в том числе из прежних ходов) — already-terminal.
 Повтор archive = already-terminal. Parent завершился одновременно — already-terminal.
 Ошибка durable archive = явная ошибка в modal; fence остаётся, retry acknowledgement
 идемпотентен. Публикация укладывается в close protocol шага 3, без зависания UI.

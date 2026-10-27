@@ -1,6 +1,7 @@
 import type { SubAgentDelegationGrant } from "@application/ports/subAgent";
 import {
   applySubAgentTransition,
+  DEFAULT_SUB_AGENT_SEARCHES,
   isSubAgentStateId,
   SubAgentSessionFailure,
   type ParentRunBinding,
@@ -8,6 +9,7 @@ import {
   type RetrySubAgentCommand,
   type SubAgentCommand,
   type SubAgentRunReceipt,
+  type SubAgentSessionSummary,
   type SubAgentTransition,
 } from "@core/research";
 import { assertSessionBudget, ownedRecord } from "./authorization";
@@ -41,9 +43,11 @@ export class SubAgentSubmissions {
     submissionId: string,
   ): Promise<SubAgentRunReceipt> {
     if (!isSubAgentStateId(submissionId)) throw sessionFailure("invalid-input");
-    const digest = digestOf({ sessionId, submission });
+    const digest = digestOf({ sessionId, submission, parentRunId: binding.parentRunId });
     const record = ownedRecord(this.parts.store, binding, sessionId);
     assertSessionBudget(record, grant);
+    const origin = record.runs[0]?.origin;
+    if (origin !== undefined && origin !== grant.origin) throw sessionFailure("not-authorized");
     const existing = this.parts.store.submission(submissionId);
     if (existing) {
       ownedRecord(this.parts.store, binding, existing.sessionId);
@@ -55,7 +59,13 @@ export class SubAgentSubmissions {
     const runId = this.parts.context.createId("subagent-run");
     if (!isSubAgentStateId(runId)) throw sessionFailure("invalid-state");
     const at = timestamp(this.parts);
-    const launch = { runId, at, callerMode: grant.callerMode as ResearchMode };
+    const launch = {
+      runId,
+      at,
+      callerMode: grant.callerMode as ResearchMode,
+      owner: { parentRunId: binding.parentRunId, bindingGeneration: binding.bindingGeneration },
+      grantMaximum: grant.maximumSourcePolicy,
+    };
     const transition: SubAgentTransition =
       submission.kind === "retry"
         ? { type: "retry", retry: submission.retry, ...launch }
@@ -63,6 +73,7 @@ export class SubAgentSubmissions {
     const result = applySubAgentTransition(record, transition);
     if (!result.ok) throw new SubAgentSessionFailure(result.error);
     const { store } = this.parts;
+    this.rebindOptions(record.session, grant);
     store.putRecord(result.record, record);
     store.tombstoneImport(result.tombstonedImport);
     const receipt: SubAgentRunReceipt = { sessionId, runId, submissionId, acceptedAt: at };
@@ -79,6 +90,16 @@ export class SubAgentSubmissions {
     const forget = (): void => void this.inFlight.delete(submissionId);
     accepted.then(forget, forget);
     return accepted;
+  }
+
+  private rebindOptions(session: SubAgentSessionSummary, grant: SubAgentDelegationGrant): void {
+    const previous = this.parts.sessionOptions.get(session.subAgentSessionId);
+    const maxSearches = session.maxSearches ?? previous?.maxSearches ?? DEFAULT_SUB_AGENT_SEARCHES;
+    this.parts.sessionOptions.set(session.subAgentSessionId, {
+      grant,
+      resources: session.resources ?? previous?.resources ?? [],
+      maxSearches: Math.min(maxSearches, grant.limits.maxSearches),
+    });
   }
 
   private async accept(

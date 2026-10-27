@@ -50,20 +50,20 @@ export async function abandonRunImport(
 ): Promise<void> {
   const { parts } = scheduler;
   const session = parts.store.record(slot.sessionId)?.session;
-  if (
-    session?.status !== "importing" ||
-    session.pendingImportRunId !== slot.runId ||
-    parts.fences.isRevoked(session.parentRunId)
-  )
-    return;
+  if (session?.status !== "importing" || session.pendingImportRunId !== slot.runId) return;
+  const closed = parts.fences.isRevoked(session.parentRunId);
   try {
-    const revision = scheduler.transition(slot.sessionId, { type: "import-failed", generation });
+    const revision = scheduler.transition(
+      slot.sessionId,
+      closed ? { type: "parent-closed" } : { type: "import-failed", generation },
+    );
     if (revision === null) return;
     await parts.store.flush(revision);
   } catch {
     parts.notifyResults();
     return;
   }
+  if (closed) return parts.notifyResults();
   parts.mainEvents.terminal(slot.sessionId, slot.runId, "import-failed");
   parts.notifyResults();
 }

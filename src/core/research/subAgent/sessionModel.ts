@@ -61,6 +61,8 @@ export interface SubAgentSessionSummary {
   evidenceRegistryId: string;
   createdAt: string;
   updatedAt: string;
+  resources?: readonly string[];
+  maxSearches?: number;
 }
 
 export interface SubAgentRunSummary {

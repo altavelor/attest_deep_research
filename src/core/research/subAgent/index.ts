@@ -46,9 +46,20 @@ export {
   type SubAgentSessionError,
   type SubAgentSessionErrorCode,
 } from "./errors";
-export { deriveSubAgentTitle, findOwnRun, headRun, isBoundToParentRun } from "./identity";
-export { reduceSubAgentSourcePolicy, type SubAgentSourcePolicyReduction } from "./sourcePolicy";
+export { deriveSubAgentTitle, findOwnRun, headRun } from "./identity";
+export {
+  intersectSubAgentSourcePolicy,
+  reduceSubAgentSourcePolicy,
+  type SubAgentSourcePolicyReduction,
+} from "./sourcePolicy";
 export { type SubAgentImportTombstone } from "./importState";
+export {
+  buildSubAgentSessionsSection,
+  listSubAgentPromptSessions,
+  MAX_PROMPT_SESSIONS,
+  type SubAgentPromptSession,
+  type SubAgentPromptSessionState,
+} from "./sessionsPrompt";
 export {
   applySubAgentTransition,
   type SubAgentTransition,

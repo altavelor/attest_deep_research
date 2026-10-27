@@ -164,7 +164,7 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.import-failed.body": "الرد متاح؛ لم تُضف مصادره.",
   "chat.agent.notice.not-started": "لم يبدأ الوكيل",
   "chat.agent.notice.not-started.body": "السبب: {reason}",
-  "chat.agent.notice.closed": "الوكلاء المغلقون مع هذه الإجابة: {count}",
+  "chat.agent.notice.closed": "أعمال الوكلاء التي توقفت مع هذه الإجابة: {count}",
   "chat.agent.notice.batch": "مطابقة المصادر · {total} مستندات",
   "chat.agent.notice.batch.body": "{done} منجزة · {running} قيد التشغيل · {failed} فاشلة",
   "chat.agent.notice.aria": "حدث وكيل: {title}",

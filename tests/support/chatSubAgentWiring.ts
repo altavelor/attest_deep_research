@@ -1,0 +1,68 @@
+import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
+import { ChatDocumentSubAgentRepository } from "@adapters/filesystem/sub-agent/ChatDocumentSubAgentRepository";
+import type { ResearchRequest } from "@application/contracts/research";
+import { ChatSessionManager, type ChatRunRequest } from "@application/use-cases/chat";
+import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
+import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry";
+import { settle } from "./async";
+import { gatedResearch } from "./chatSessions";
+import type { MemoryFileSystem } from "./memoryFileSystem";
+import type { FakeSubAgentExecution } from "./subAgentSessions";
+
+/** Builds a chat session manager whose sub-agent host is the real manager over the file system. */
+export function realSubAgentChat(fileSystem: MemoryFileSystem) {
+  const repository = new FileChatRepository({ fileSystem, folder: "chats" });
+  const research = gatedResearch();
+  let ids = 0;
+  const manager = new ChatSessionManager({
+    repository,
+    persistDiagnostics: () => false,
+    environment: {
+      createResearchService: research.service,
+      now: () => new Date("2026-10-26T10:00:00.000Z"),
+      createRunId: () => `run-${(ids += 1)}`,
+      buildRegistryPromptView: (registry, question) =>
+        selectConversationRegistryPromptView(registry, question),
+      createSubAgentSessionManager,
+      subAgentServices: {
+        repository: new ChatDocumentSubAgentRepository(repository),
+        redact: (text) => text,
+      },
+    },
+  });
+  return { manager, repository, research };
+}
+
+/** Starts a Thinking turn of the chat and binds the fake child execution to it. */
+export async function startTurn(
+  chat: ReturnType<typeof realSubAgentChat>,
+  sessionId: string,
+  question: string,
+  execution: FakeSubAgentExecution,
+): Promise<{ request: ResearchRequest; index: number; runId: string }> {
+  const run: ChatRunRequest = {
+    question,
+    chatHistory: [],
+    appendQuestion: true,
+    contextPaths: [],
+    includeActiveFile: false,
+    includeContextDiagnostics: false,
+    modelLabel: "Model",
+  };
+  await chat.manager.start(sessionId, run);
+  await settle();
+  const index = chat.research.requests.length - 1;
+  const request = chat.research.requests[index]!;
+  request.subAgentParent!.bindExecution(execution);
+  return { request, index, runId: request.subAgentParent!.parentRunId };
+}
+
+/** Completes a started turn and waits for its terminal save. */
+export async function endTurn(chat: ReturnType<typeof realSubAgentChat>, index: number) {
+  chat.research.emit(index, {
+    type: "complete",
+    answer: { question: "Q", answer: "A", citations: [], followUpQuestions: [], createdAt: "t" },
+  });
+  chat.research.end(index);
+  await settle();
+}

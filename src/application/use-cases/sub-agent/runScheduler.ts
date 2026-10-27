@@ -117,10 +117,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     } as SubAgentTransition);
     if (!result.ok) return null;
     const revision = this.parts.store.putRecord(result.record, record);
-    this.parts.store.tombstoneImport(
-      result.tombstonedImport,
-      event.type === "archive" ? event.reason : "stopped",
-    );
+    this.parts.store.tombstoneImport(result.tombstonedImport, tombstoneReasonOf(event));
     return revision;
   }
 
@@ -380,4 +377,9 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     this.slots.delete(slot.runId);
     this.pump();
   }
+}
+
+function tombstoneReasonOf(event: TransitionEvent): string {
+  if (event.type === "archive") return event.reason;
+  return event.type === "parent-closed" ? "parent-terminal" : "stopped";
 }

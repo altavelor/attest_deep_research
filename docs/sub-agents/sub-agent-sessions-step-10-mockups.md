@@ -241,7 +241,7 @@ DeepSeek v4 Flash 0731
     │ 51s · Tool calls: 7 · 9.7k tokens · DeepSeek        [Open details] │
     └──────────────────────────────────────────────────────────────────┘
   ●  Both agents finished and their sources are imported. Here is …
-  ✕ Agents closed with this answer: 1   (только если закрыт ещё не завершившийся агент)
+  ✕ Agent work stopped with this answer: 1   (только если закрыт ещё не завершившийся агент)
 ```
 
 1. Уведомления — узлы той же вертикальной линии, что и обычный workflow, но вместо точки
@@ -275,7 +275,7 @@ DeepSeek v4 Flash 0731
 6. «Open details» открывает modal сразу на деталях этой сессии (M3); по одной кнопке на
    карточку задачи и карточку ответа, в строке created её нет; кнопка скрыта, если host не
    передал callback. Кнопки карточек ≥44px на Mobile.
-7. «Agents closed with this answer: N» — приглушённая строка без карточки; скрывается при
+7. «Agent work stopped with this answer: N» — приглушённая строка без карточки; скрывается при
    рендере, если у каждого отправленного run (initial, follow-up, retry, continue) и каждой
    сессии этого parent run до неё уже есть терминальный notice (кроме interrupted).
    Сохранённые данные не меняются.
@@ -292,22 +292,22 @@ DeepSeek v4 Flash 0731
 
 Каждый вид — один узел timeline с кольцом и подписью статуса; цвет не единственный сигнал.
 
-| Вид               | Заголовок                             | Тело                                                                | Действие        |
-| ----------------- | ------------------------------------- | ------------------------------------------------------------------- | --------------- |
-| created, queued   | Agent created · queued                | Описание; «Waiting for a free agent slot»                           | Open details    |
-| task initial      | Task sent to agent · initial          | Текст команды                                                       | Open details    |
-| task follow-up    | Task sent to agent · follow-up        | Текст команды                                                       | Open details    |
-| task retry        | Task sent to agent · retry            | Текст и attempt                                                     | Open details    |
-| task continue     | Task sent to agent · continue partial | Текст команды                                                       | Open details    |
-| finished          | Agent finished                        | Ответ агента                                                        | Show full reply |
-| partial           | Agent finished with a partial result  | Ответ и пояснение о продолжении                                     | Show full reply |
-| failed            | Agent failed                          | Безопасная причина без текста провайдера                            | Open details    |
-| stopped           | Agent stopped by you                  | «Partial work is kept in the agent history»                         | Open details    |
-| interrupted       | Agent interrupted                     | Текст зависит от reasonCode (Obsidian закрыт или причина остановки) | Open details    |
-| import-failed     | Agent finished, sources not imported  | Ответ доступен, источники не добавлены                              | Open details    |
-| not-started       | Agent not started                     | Причина: бюджет                                                     | Open details    |
-| closed            | Agents closed with this answer: N     | Одна строка, только если closedCount>0                              | Open agents     |
-| map_sources batch | Map sources · N documents             | «9 done · 2 running · 1 failed»                                     | Open agents     |
+| Вид               | Заголовок                              | Тело                                                                | Действие        |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------- | --------------- |
+| created, queued   | Agent created · queued                 | Описание; «Waiting for a free agent slot»                           | Open details    |
+| task initial      | Task sent to agent · initial           | Текст команды                                                       | Open details    |
+| task follow-up    | Task sent to agent · follow-up         | Текст команды                                                       | Open details    |
+| task retry        | Task sent to agent · retry             | Текст и attempt                                                     | Open details    |
+| task continue     | Task sent to agent · continue partial  | Текст команды                                                       | Open details    |
+| finished          | Agent finished                         | Ответ агента                                                        | Show full reply |
+| partial           | Agent finished with a partial result   | Ответ и пояснение о продолжении                                     | Show full reply |
+| failed            | Agent failed                           | Безопасная причина без текста провайдера                            | Open details    |
+| stopped           | Agent stopped by you                   | «Partial work is kept in the agent history»                         | Open details    |
+| interrupted       | Agent interrupted                      | Текст зависит от reasonCode (Obsidian закрыт или причина остановки) | Open details    |
+| import-failed     | Agent finished, sources not imported   | Ответ доступен, источники не добавлены                              | Open details    |
+| not-started       | Agent not started                      | Причина: бюджет                                                     | Open details    |
+| closed            | Agent work stopped with this answer: N | Одна строка, только если closedCount>0                              | Open agents     |
+| map_sources batch | Map sources · N documents              | «9 done · 2 running · 1 failed»                                     | Open agents     |
 
 1. Рамка карточки: зелёная для finished, жёлтая для partial, красная для failed и
    import-failed, оранжевая для stopped, interrupted и not-started, нейтральная для

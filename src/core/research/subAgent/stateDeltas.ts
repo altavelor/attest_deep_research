@@ -36,6 +36,8 @@ const SESSION_FIELDS = [
   "evidenceRegistryId",
   "createdAt",
   "updatedAt",
+  "resources",
+  "maxSearches",
 ];
 const RUN_FIELDS = [
   "subAgentRunId",

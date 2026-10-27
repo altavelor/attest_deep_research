@@ -174,7 +174,7 @@ export const chat: EnChatMessages = {
     "Die Antwort ist verfügbar; ihre Quellen wurden nicht hinzugefügt.",
   "chat.agent.notice.not-started": "Agent nicht gestartet",
   "chat.agent.notice.not-started.body": "Grund: {reason}",
-  "chat.agent.notice.closed": "Mit dieser Antwort geschlossene Agenten: {count}",
+  "chat.agent.notice.closed": "Mit dieser Antwort gestoppte Agentenarbeit: {count}",
   "chat.agent.notice.batch": "Quellen abgleichen · {total} Dokumente",
   "chat.agent.notice.batch.body": "{done} fertig · {running} laufen · {failed} fehlgeschlagen",
   "chat.agent.notice.aria": "Agenten-Ereignis: {title}",

@@ -3,7 +3,6 @@ import type {
   SubAgentSessionManagerContext,
 } from "@application/ports/subAgent";
 import {
-  isBoundToParentRun,
   type ParentRunBinding,
   type ParentRunDeliveryContext,
   type SubAgentSessionRecord,
@@ -48,14 +47,22 @@ export function authorizeCall(
   return grant;
 }
 
-/** Returns the session record only when it belongs to the binding, otherwise not-authorized. */
+/**
+ * Returns the session record only when it belongs to the binding's chat, otherwise
+ * not-authorized. Sessions are chat-scoped, so any authorized parent run of the chat
+ * may continue a session created in an earlier run.
+ */
 export function ownedRecord(
   store: SubAgentStateStore,
   binding: ParentRunBinding,
   sessionId: string,
 ): SubAgentSessionRecord {
   const record = store.record(sessionId);
-  if (!record || !isBoundToParentRun(record.session, binding)) {
+  if (
+    !record ||
+    store.state?.chatId !== binding.chatSessionId ||
+    record.session.chatSessionId !== binding.chatSessionId
+  ) {
     throw sessionFailure("not-authorized");
   }
   return record;

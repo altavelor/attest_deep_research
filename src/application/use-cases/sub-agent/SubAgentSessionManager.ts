@@ -8,7 +8,13 @@ import type {
   SubAgentSessionManagerContext,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
-import type { ParentRunBinding, ParentRunDeliveryContext, SubAgentRunRef } from "@core/research";
+import {
+  listSubAgentPromptSessions,
+  type ParentRunBinding,
+  type ParentRunDeliveryContext,
+  type SubAgentPromptSession,
+  type SubAgentRunRef,
+} from "@core/research";
 import { SubAgentBatchRecords } from "./batchRecords";
 import { closeParentRun } from "./closeBarrier";
 import { SubAgentImportCoordinator } from "./importCoordinator";
@@ -104,6 +110,12 @@ export class SubAgentSessionManager implements SubAgentHost {
     return this.batchRecords;
   }
 
+  /** Lists the chat's sessions with host-owned fields for the parent's system prompt. */
+  async promptSessions(): Promise<readonly SubAgentPromptSession[]> {
+    const state = await this.parts.store.load();
+    return listSubAgentPromptSessions(state.records, state.chatId);
+  }
+
   delegatorFor(binding: ParentRunBinding, delivery: ParentRunDeliveryContext): SubAgentDelegator {
     return new SubAgentDelegatorFacade(this.services, { ...binding }, { ...delivery });
   }
@@ -118,16 +130,14 @@ export class SubAgentSessionManager implements SubAgentHost {
     const state = this.parts.store.state;
     if (!state) return [];
     return state.records
-      .filter(
-        (record) =>
-          record.session.parentRunId === parentRunId &&
-          record.session.chatSessionId === state.chatId,
-      )
+      .filter((record) => record.session.chatSessionId === state.chatId)
       .flatMap((record) =>
-        record.runs.map((run) => ({
-          sessionId: record.session.subAgentSessionId,
-          runId: run.subAgentRunId,
-        })),
+        record.runs
+          .filter((run) => run.parentRunId === parentRunId)
+          .map((run) => ({
+            sessionId: record.session.subAgentSessionId,
+            runId: run.subAgentRunId,
+          })),
       );
   }
 

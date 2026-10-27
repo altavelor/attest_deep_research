@@ -44,6 +44,48 @@ export function reduceSubAgentSourcePolicy(
   };
 }
 
+/**
+ * Intersects two source policies so a continued session never exceeds either the policy
+ * it was created with or the grant of the parent run that continues it. Search modes,
+ * paths and the active file are each narrowed to what both allow.
+ */
+export function intersectSubAgentSourcePolicy(
+  left: SubAgentSourcePolicy,
+  right: SubAgentSourcePolicy,
+): SubAgentSourcePolicy {
+  const searchMode = NARROWER_SEARCH_MODES[right.searchMode].includes(left.searchMode)
+    ? left.searchMode
+    : NARROWER_SEARCH_MODES[left.searchMode].includes(right.searchMode)
+      ? right.searchMode
+      : "none";
+  const scope = intersectScope(left, right);
+  return {
+    searchMode,
+    ...scope,
+    allowActiveFile: left.allowActiveFile && right.allowActiveFile,
+    allowNoteMutation: false,
+  };
+}
+
+function intersectScope(
+  left: SubAgentSourcePolicy,
+  right: SubAgentSourcePolicy,
+): Pick<SubAgentSourcePolicy, "contextPaths" | "indexScope"> {
+  if (left.indexScope === "all-allowed") return pick(right);
+  if (right.indexScope === "all-allowed") return pick(left);
+  const paths = [
+    ...left.contextPaths.filter((path) => pathGranted(right, path)),
+    ...right.contextPaths.filter((path) => pathGranted(left, path)),
+  ].filter((path, index, all) => all.indexOf(path) === index);
+  return { contextPaths: paths, indexScope: paths.length > 0 ? "paths" : "none" };
+}
+
+function pick(
+  policy: SubAgentSourcePolicy,
+): Pick<SubAgentSourcePolicy, "contextPaths" | "indexScope"> {
+  return { contextPaths: policy.contextPaths, indexScope: policy.indexScope };
+}
+
 function pathGranted(maximum: SubAgentSourcePolicy, path: string): boolean {
   if (maximum.indexScope === "all-allowed") return true;
   return maximum.contextPaths.some((granted) => path === granted || path.startsWith(`${granted}/`));

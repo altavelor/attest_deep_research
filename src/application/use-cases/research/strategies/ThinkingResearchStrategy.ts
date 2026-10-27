@@ -178,12 +178,16 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
         ? { ...policy, requiredTools: Object.freeze([...policy.requiredTools, SUB_AGENT_TOOL]) }
         : policy;
     const promptAssemblyIssues: string[] = [];
+    const subAgentSessions = created.tools.has(SUB_AGENT_TOOL)
+      ? await request.subAgentParent?.listSessions?.().catch(() => undefined)
+      : undefined;
     const messages = buildThinkingResearchMessages({
       question,
       chatHistory: request.chatHistory,
       requiredTools: effectivePolicy.requiredTools,
       explicitEvidence: [...(assembled?.explicitEvidence ?? []), ...activeNoteEvidence],
       conversationRegistry: request.conversationRegistry,
+      ...(subAgentSessions ? { subAgentSessions } : {}),
       attachedFiles: assembled?.attachments,
       toolContext: {
         availableTools: created.tools.definitions().map((d) => d.function.name),

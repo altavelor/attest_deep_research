@@ -6,8 +6,8 @@ const CRASH_RECOVERY = "crash-recovery";
 
 /**
  * Applies startup recovery to a persisted section: every queued, running or stopping
- * run becomes interrupted with reason crash-recovery and every session not yet
- * archived is archived, because no parent run survives a restart. Each affected
+ * run becomes interrupted with reason crash-recovery and a session whose work was cut
+ * off becomes interrupted, staying continuable by the next parent run. Each affected
  * parent gets a recovery marker listing fenced runs, cancelled pending imports and
  * unsettled action keys and its pending imports are tombstoned; pending creates and
  * permits stay for later reconciliation and no parent binding is created. Preparing and
@@ -19,8 +19,9 @@ export function recoverSubAgentState(
 ): SubAgentStateSnapshot {
   const markers = new Map<string, SubAgentRecoveryMarker>();
   const records = snapshot.records.map((record) => {
-    if (record.session.status === "archived") return record;
-    return archiveRecord(snapshot, record, completedAt, markers);
+    const { session } = record;
+    if (session.activeSubAgentRunId === null && session.pendingImportRunId === null) return record;
+    return interruptRecord(snapshot, record, completedAt, markers);
   });
   const recovered = recoverMapSourcesBatches(snapshot.batches);
   const batches = recovered.changed ? { batches: recovered.batches } : {};
@@ -48,7 +49,7 @@ export function recoverSubAgentState(
   };
 }
 
-function archiveRecord(
+function interruptRecord(
   snapshot: SubAgentStateSnapshot,
   record: SubAgentSessionRecord,
   completedAt: string,
@@ -93,7 +94,7 @@ function archiveRecord(
   return {
     session: {
       ...session,
-      status: "archived",
+      status: "interrupted",
       activeSubAgentRunId: null,
       pendingImportRunId: null,
       pendingImportGeneration: null,

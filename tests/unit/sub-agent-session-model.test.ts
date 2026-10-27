@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   applySubAgentTransition,
   deriveSubAgentTitle,
-  isBoundToParentRun,
   readSubAgentSearchBudget,
   reduceSubAgentSourcePolicy,
   type SubAgentSessionRecord,
@@ -309,20 +308,32 @@ describe("sub-agent session transitions", () => {
       ok: false,
       error: { code: "not-authorized", message: "Нет доступа к сессии." },
     });
+  });
+
+  it("ends parent work without archiving and moves the session to the next caller's run", () => {
+    const running = applyAll(readySubAgentRecord(), runToImport("run-1").slice(0, 2));
+    const closed = applyAll(running, [{ type: "parent-closed", at: AT }]);
+    const idle = readySubAgentRecord();
+    const owner = { parentRunId: "parent-2", bindingGeneration: 3 };
+    const retried = applyAll(closed, [
+      { type: "retry", retry: { runId: "run-1" }, runId: "run-2", ...launch, owner },
+    ]);
+
+    expect([closed.session.status, closed.runs[0].status]).toEqual(["interrupted", "interrupted"]);
+    expect(closed.runs[0].terminalReason).toBe("parent-terminal");
+    expect(applySubAgentTransition(idle, { type: "parent-closed", at: AT })).toEqual({
+      ok: true,
+      record: idle,
+      tombstonedImport: null,
+    });
     expect(
-      isBoundToParentRun(other.session, {
-        chatSessionId: "chat-1",
-        parentRunId: "parent-1",
-        bindingGeneration: 2,
-      }),
+      applySubAgentTransition(
+        applyAll(running, [{ type: "archive", reason: "user-archive", at: AT }]),
+        { type: "parent-closed", at: AT },
+      ).ok,
     ).toBe(false);
-    expect(
-      isBoundToParentRun(other.session, {
-        chatSessionId: "chat-1",
-        parentRunId: "parent-1",
-        bindingGeneration: 1,
-      }),
-    ).toBe(true);
+    expect(retried.session).toMatchObject({ ...owner, status: "queued" });
+    expect(retried.runs.map((run) => run.parentRunId)).toEqual(["parent-1", "parent-2"]);
   });
 });
 

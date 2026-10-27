@@ -174,6 +174,8 @@ export class SubAgentSessionCreation {
       evidenceRegistryId: `evidence:${record.candidateSessionId}`,
       createdAt: at,
       updatedAt: at,
+      resources: normalized.resources,
+      maxSearches: normalized.maxSearches,
     };
     store.putRecord({ session, runs: [] });
     const revision = store.putCreate({

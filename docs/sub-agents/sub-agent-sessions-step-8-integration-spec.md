@@ -68,6 +68,9 @@ terminal и прерывание при выгрузке — barrier; исклю
 
 Существующий input task/maxSearches/resources сохраняет смысл и границы. Новый wire-ответ
 run_subagent — {state:«accepted»;receipt:SubAgentRunReceipt}, без answer/snapshot.
+Сессии продолжаются из любого более позднего хода того же чата (решение 16 управляющей
+спецификации); описания run_subagent/wait_subagents говорят об этом, а system prompt получает
+раздел «Sub-agent sessions of this chat» (buildSubAgentSessionsPromptSection в core).
 Host-derived call identity задаёт createRequestId и submissionId из parentRunId, индекса model round и callId
 (callId сам по себе не уникален между rounds у text-parsed провайдеров: text_call_0). Initial создаёт session,
 run подтверждает durable queued; после receipt parent model loop сразу может сделать

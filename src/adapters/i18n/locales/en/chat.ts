@@ -163,7 +163,7 @@ export const chat = {
   "chat.agent.notice.import-failed.body": "The reply is available; its sources were not added.",
   "chat.agent.notice.not-started": "Agent not started",
   "chat.agent.notice.not-started.body": "Reason: {reason}",
-  "chat.agent.notice.closed": "Agents closed with this answer: {count}",
+  "chat.agent.notice.closed": "Agent work stopped with this answer: {count}",
   "chat.agent.notice.batch": "Map sources · {total} documents",
   "chat.agent.notice.batch.body": "{done} done · {running} running · {failed} failed",
   "chat.agent.notice.aria": "Sub-agent event: {title}",

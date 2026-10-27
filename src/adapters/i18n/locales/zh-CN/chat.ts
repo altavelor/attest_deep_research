@@ -163,7 +163,7 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.import-failed.body": "回复可用；其来源未添加。",
   "chat.agent.notice.not-started": "代理未启动",
   "chat.agent.notice.not-started.body": "原因：{reason}",
-  "chat.agent.notice.closed": "随此回答关闭的代理：{count}",
+  "chat.agent.notice.closed": "随此回答停止的代理工作：{count}",
   "chat.agent.notice.batch": "映射来源 · {total} 个文档",
   "chat.agent.notice.batch.body": "完成 {done} · 运行中 {running} · 失败 {failed}",
   "chat.agent.notice.aria": "代理事件：{title}",
