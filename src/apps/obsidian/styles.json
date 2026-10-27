@@ -10,6 +10,7 @@
   "src/apps/obsidian/ui/chat/workflow.css",
   "src/apps/obsidian/ui/chat/sub-agent-events.css",
   "src/apps/obsidian/ui/chat/sub-agents/sub-agents.css",
+  "src/apps/obsidian/ui/chat/sub-agents/sub-agents-resize.css",
   "src/apps/obsidian/ui/chat/assistant-content.css",
   "src/apps/obsidian/ui/chat/chat-composer.css",
   "src/apps/obsidian/ui/chat/citations/citations.css",
