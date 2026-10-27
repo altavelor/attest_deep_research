@@ -118,12 +118,16 @@ function renderCard(
   body.createDiv({
     cls: "attest-sub-agents__card-description",
     text: card.description,
-    attr: { title: card.description },
+    attr: { title: card.description, dir: "auto" },
   });
   const metrics = body.createDiv({ cls: "attest-sub-agents__card-metrics" });
   renderStatus(metrics, card, status);
   const elapsedEl = metrics.createSpan({ cls: "attest-sub-agents__card-elapsed", text: elapsed });
-  metrics.createSpan({ cls: "attest-sub-agents__card-model", text: model, attr: { title: model } });
+  metrics.createSpan({
+    cls: "attest-sub-agents__card-model",
+    text: model,
+    attr: { title: model, dir: "auto" },
+  });
   metrics.createSpan({
     cls: `attest-sub-agents__card-tokens attest-sub-agents__tokens--${tokens.tone}`,
     text: tokens.text,

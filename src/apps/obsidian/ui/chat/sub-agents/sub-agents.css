@@ -476,3 +476,9 @@
     flex-basis: 100%;
   }
 }
+
+[dir="rtl"] .attest-sub-agents__card-chevron svg,
+[dir="rtl"] .attest-sub-agents__back-icon svg,
+[dir="rtl"] .attest-sub-agents__section-chevron svg {
+  transform: scaleX(-1);
+}

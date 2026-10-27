@@ -41,8 +41,10 @@ export function renderPromptBody(
       cls: "attest-sub-agents__prompt-role",
       text: t(`chat.subAgents.role.${message.role}`),
     });
-    rowEl.createEl("pre", { cls: "attest-sub-agents__prompt-content" }).textContent =
-      message.content;
+    rowEl.createEl("pre", {
+      cls: "attest-sub-agents__prompt-content",
+      attr: { dir: "auto" },
+    }).textContent = message.content;
   }
   if (prompt.redacted) {
     listEl.createSpan({
