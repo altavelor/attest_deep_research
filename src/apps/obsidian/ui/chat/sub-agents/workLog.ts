@@ -59,8 +59,7 @@ export class WorkLogView {
     const scopeId = `sub-agent:${input.sessionId}`;
     const keyOf = (item: SubAgentWorkflowItem): string => `${scopeId}/${item.runId}/${item.id}`;
     const shown = sorted.filter(
-      (item, index) =>
-        index < this.limit || item.status === "pending" || keyOf(item) === uiState?.openOutputKey,
+      (item, index) => index < this.limit || keyOf(item) === uiState?.openOutputKey,
     );
     const timelineEl = this.hostEl.createDiv({ cls: "attest-sub-agents__timeline" });
     this.timelineEl = timelineEl;
