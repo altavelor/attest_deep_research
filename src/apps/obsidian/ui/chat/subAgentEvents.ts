@@ -5,7 +5,7 @@ import { cleanDisplayText } from "@core/chat/safeInlineMarkup";
 import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import type { SubAgentNoticeEntry } from "@core/research";
 import { renderFoldedMarkup, renderToggle } from "./safeMarkupView";
-import { compactCount, formatElapsed } from "./sub-agents/format";
+import { compactCount, formatElapsed, knownTokenTotal } from "./sub-agents/format";
 
 export interface SubAgentEventRenderOptions {
   t: Translate;
@@ -208,9 +208,8 @@ function replyMeta(entry: SubAgentNoticeEntry, t: Translate): string {
   if (isCount(usage?.toolCalls)) {
     parts.push(t("chat.agent.meta.toolCalls", { count: String(usage.toolCalls) }));
   }
-  if (isCount(usage?.totalTokens)) {
-    parts.push(t("chat.subAgents.tokens", { count: compactCount(usage.totalTokens) }));
-  }
+  const tokens = usage ? (knownTokenTotal(usage) ?? undefined) : undefined;
+  if (isCount(tokens)) parts.push(t("chat.subAgents.tokens", { count: compactCount(tokens) }));
   const model = cleanDisplayText(entry.modelLabel ?? "");
   if (model) parts.push(model);
   return parts.join(" · ");

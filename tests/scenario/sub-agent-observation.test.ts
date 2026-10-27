@@ -23,7 +23,11 @@ describe("sub-agent observation through the execution adapter", () => {
             stopReason: "tool_calls",
             usage: { inputTokens: 100, outputTokens: 20, reasoningTokens: 5 },
           }
-        : { items: [{ type: "text", text: "Final answer." }], stopReason: "complete" },
+        : {
+            items: [{ type: "text", text: "Final answer." }],
+            stopReason: "complete",
+            usage: { inputTokens: 300, outputTokens: 40, reasoningTokens: 0 },
+          },
     );
     const searchProvider = new FakeSearchProvider([
       {
@@ -66,9 +70,12 @@ describe("sub-agent observation through the execution adapter", () => {
       sent.slice(0, 3).map((message) => ({ role: message.role, content: message.content })),
     );
     expect(detail.card.model).toEqual(model);
-    expect(detail.card).toMatchObject({ usageIncomplete: true });
+    expect(detail.card).toMatchObject({ usageIncomplete: false });
     expect(detail.card.usage).toMatchObject({
-      totalTokens: 120,
+      source: "provider",
+      inputTokens: 400,
+      outputTokens: 60,
+      totalTokens: 460,
       reasoningTokens: 5,
       requestCount: 2,
     });
