@@ -319,13 +319,21 @@ describe("create_note tool", () => {
     expect(writer.files.has("Notes/Hello.md")).toBe(false);
   });
 
-  it("is not available when writer is absent", () => {
+  it("is not available when writer is absent and says why when called", async () => {
     const svc = new NoteToolService({
       files: new MemoryContextFiles({}),
       extractors: [],
       noteMutationAccess: true,
     });
     expect(svc.supports("create_note")).toBe(false);
+    const result = await svc.execute({ id: "c", name: "create_note", arguments: {} });
+    expect(JSON.parse(result.result).error).toMatchObject({
+      code: "tool-unavailable",
+      message:
+        'Tool "create_note" is not available: it is disabled by the current settings or ' +
+        "permissions. Available tools: read_note, search_notes, list_notes, get_active_note.",
+      details: { userMessageKey: "chat.toolUnavailable.not-permitted" },
+    });
   });
 });
 

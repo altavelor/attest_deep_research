@@ -3,7 +3,7 @@ import { ContextFileProvider } from "@application/ports";
 import { VaultWriter } from "@application/ports";
 import { normalizeVaultPath } from "@shared";
 import { Extractor } from "@application/ports";
-import { ChatToolCall, ChatToolDefinition } from "@core/agent";
+import { ChatToolCall, ChatToolDefinition, describeUnavailableTool } from "@core/agent";
 import { Citation } from "@core/model";
 import { ExtractedChunk, RetrievedChunk } from "@core/model";
 import { estimateTextTokens } from "@core/research";
@@ -136,9 +136,26 @@ export class NoteToolService {
     return false;
   }
 
+  private unavailable(name: string): NoteToolExecution {
+    const reason = MUTATION_TOOL_NAMES.has(name as NoteMutationToolName)
+      ? "not-permitted"
+      : "not-offered";
+    const available = this.definitions().map((definition) => definition.function.name);
+    const description = describeUnavailableTool(name, { reason, available });
+    return jsonResult(false, {
+      ok: false,
+      error: {
+        code: description.code,
+        message: description.modelMessage,
+        retryable: false,
+        details: { userMessageKey: description.userMessageKey, params: description.params },
+      },
+    });
+  }
+
   async execute(toolCall: ChatToolCall): Promise<NoteToolExecution> {
     if (!this.supports(toolCall.name)) {
-      return jsonResult(false, { ok: false, reason: "unknown-tool", tool: toolCall.name });
+      return this.unavailable(toolCall.name);
     }
 
     switch (toolCall.name) {
