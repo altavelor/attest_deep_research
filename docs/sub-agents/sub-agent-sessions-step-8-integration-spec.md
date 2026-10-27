@@ -160,8 +160,8 @@ notice без runId другой run сессии не помечает); ина
 backtracking regex, DOM только через createEl/textContent; evidence-токены — инертные chips)
 со сворачиванием на безопасной границе и «Show full reply» внутри лимита 4 KiB, строка
 длительность · tool calls · tokens · модель и одно «Open details». Closed notice скрывается при
-рендере, если все сессии parent run уже сообщили собственный терминальный исход (кроме
-interrupted) до него; closedCount и event keys не меняются.
+рендере, если каждый отправленный run и каждая сессия parent run уже сообщили терминальный
+исход (кроме interrupted) до него; продолжающийся follow-up оставляет его видимым; closedCount и event keys не меняются.
 Child phase/tools/progress/debug In/Out попадают только в child projection. Даже debug не
 показывает их или вывод run_subagent в основном workflow, tool output viewer, fallback/legacy
 rendering, diagnostic UI shortcut основного сообщения либо main export. Кнопка «Open details»

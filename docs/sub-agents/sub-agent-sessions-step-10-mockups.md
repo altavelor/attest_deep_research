@@ -216,13 +216,13 @@ DeepSeek v4 Flash 0731
     ┌                                 TASK SENT TO AGENT  (initial) ┐
     │ ▒ Find primary sources … Prefer SEC filings … (до 4 строк)       │
     │ ▸ Show full command                                              │
-    │ ● Finished · 0m 51s                              [Open details]  │
+    │ ● Finished · 51s                                 [Open details]  │
     └──────────────────────────────────────────────────────────────────┘
   ●  Two agents are researching in parallel. Meanwhile I'll check …
   ✓ ┌ Agent finished                                                   ┐
     │ Found two usable sources … source 1  source 2                    │
     │ ▸ Show full reply                                                │
-    │ 0m 51s · Tool calls: 7 · 9.7k tokens · DeepSeek     [Open details] │
+    │ 51s · Tool calls: 7 · 9.7k tokens · DeepSeek        [Open details] │
     └──────────────────────────────────────────────────────────────────┘
   ●  Both agents finished and their sources are imported. Here is …
   ✕ Agents closed with this answer: 1   (только если закрыт ещё не завершившийся агент)
@@ -260,9 +260,16 @@ DeepSeek v4 Flash 0731
    карточку задачи и карточку ответа, в строке created её нет; кнопка скрыта, если host не
    передал callback. Кнопки карточек ≥44px на Mobile.
 7. «Agents closed with this answer: N» — приглушённая строка без карточки; скрывается при
-   рендере, если у каждой сессии этого parent run до неё уже есть собственный терминальный
-   notice (кроме interrupted). Сохранённые данные не меняются.
-8. Все тексты — безопасный текст, не HTML; ответ агента и команда проходят redaction до записи.
+   рендере, если у каждого отправленного run (initial, follow-up, retry, continue) и каждой
+   сессии этого parent run до неё уже есть терминальный notice (кроме interrupted).
+   Сохранённые данные не меняются.
+8. Длительность: до минуты только секунды («12s», меньше секунды — «0s»), дальше минуты и
+   секунды, после часа часы и минуты; тот же форматтер, что в modal. Части футера и
+   длительность показываются, только если значение — неотрицательное безопасное целое;
+   tool calls и tokens — только при usage.source ≠ unavailable. Title, описание и модель
+   очищаются от управляющих, bidi и невидимых символов; карточка ответа получает
+   aria-label с описанием агента.
+9. Все тексты — безопасный текст, не HTML; ответ агента и команда проходят redaction до записи.
    Уведомления не отправляются модели и не меняют её историю.
 
 ## M7. Каталог уведомлений
