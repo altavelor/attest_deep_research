@@ -42,21 +42,50 @@ function size(): string {
   return `${style.getPropertyValue("--attest-sub-agents-width")} x ${style.getPropertyValue("--attest-sub-agents-height")}`;
 }
 
-function pointer(target: HTMLElement, type: string, x: number, y: number): void {
+function pointer(
+  target: HTMLElement,
+  type: string,
+  x: number,
+  y: number,
+  init: PointerEventInit = {},
+): void {
   target.dispatchEvent(
-    new PointerEvent(type, { pointerId: 1, button: 0, clientX: x, clientY: y, bubbles: true }),
+    new PointerEvent(type, {
+      pointerId: 1,
+      button: 0,
+      pointerType: "mouse",
+      clientX: x,
+      clientY: y,
+      bubbles: true,
+      ...init,
+    }),
   );
 }
 
-function key(target: HTMLElement, name: string, shiftKey = false): void {
-  target.dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey, bubbles: true }));
+function key(target: HTMLElement, name: string, shiftKey = false): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key: name,
+    shiftKey,
+    bubbles: true,
+    cancelable: true,
+  });
+  target.dispatchEvent(event);
+  return event;
 }
+
+function setWindowWidth(width: number): void {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+  window.dispatchEvent(new Event("resize"));
+}
+
+const initialWidth = window.innerWidth;
 
 beforeEach(() => {
   installObsidianDomHelpers();
 });
 
 afterEach(() => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: initialWidth });
   Platform.isMobile = false;
   resetDom();
   vi.restoreAllMocks();
@@ -73,6 +102,11 @@ describe("sub-agent sessions modal resizing", () => {
     expect(handle("corner").getAttribute("tabindex")).toBe("0");
     expect(handle("corner").getAttribute("aria-label")).toBe("Resize width and height");
     expect(size()).toBe("680px x 640px");
+    expect(handle("right").getAttribute("aria-valuemin")).toBe("352");
+    expect(handle("right").getAttribute("aria-valuemax")).toBe("992");
+    expect(handle("bottom").getAttribute("aria-valuenow")).toBe("640");
+    expect(handle("bottom").getAttribute("aria-valuemax")).toBe("736");
+    expect(handle("corner").hasAttribute("aria-valuenow")).toBe(false);
     modal.close();
 
     Platform.isMobile = true;
@@ -106,7 +140,8 @@ describe("sub-agent sessions modal resizing", () => {
   it("R3 resizes with arrow keys, resets with Home or double-click and restores on reopen", () => {
     const app = new App();
     const modal = openModal(app);
-    key(handle("bottom"), "ArrowDown");
+    expect(key(handle("bottom"), "ArrowDown").defaultPrevented).toBe(true);
+    expect(key(handle("bottom"), "Enter").defaultPrevented).toBe(false);
     key(handle("bottom"), "ArrowRight");
     expect(size()).toBe("680px x 656px");
     key(handle("right"), "ArrowLeft", true);
@@ -157,9 +192,16 @@ describe("sub-agent sessions modal resizing", () => {
     const right = handle("right");
     const removeHandle = vi.spyOn(right, "removeEventListener");
     key(right, "ArrowRight", true);
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 600 });
-    window.dispatchEvent(new Event("resize"));
+    setWindowWidth(600);
     expect(size()).toBe("568px x 640px");
+    expect(app.loadLocalStorage(KEY)).toEqual({ width: 744, height: 640 });
+    setWindowWidth(1024);
+    expect(size()).toBe("744px x 640px");
+    setWindowWidth(600);
+    key(right, "ArrowLeft");
+    setWindowWidth(1024);
+    expect(size()).toBe("552px x 640px");
+    setWindowWidth(600);
 
     pointer(right, "pointerdown", 0, 0);
     const el = modalEl();
@@ -172,7 +214,29 @@ describe("sub-agent sessions modal resizing", () => {
     expect(resizeRemoves.map(([, fn]) => fn)).toEqual(resizeAdds.map(([, fn]) => fn));
     expect(removeHandle.mock.calls.map(([type]) => type)).toContain("pointermove");
     pointer(right, "pointermove", 300, 0);
-    expect(el.style.getPropertyValue("--attest-sub-agents-width")).toBe("568px");
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    expect(el.style.getPropertyValue("--attest-sub-agents-width")).toBe("552px");
+  });
+
+  it("R6 follows only the first primary pointer and releases its capture", () => {
+    const app = new App();
+    openModal(app);
+    const right = handle("right");
+    const release = vi.fn();
+    Object.assign(right, { hasPointerCapture: () => true, releasePointerCapture: release });
+    pointer(right, "pointerdown", 0, 0, { button: 2 });
+    expect(modalEl().classList.contains("is-resizing")).toBe(false);
+
+    pointer(right, "pointerdown", 0, 0);
+    pointer(right, "pointerdown", 100, 0, { pointerId: 2, pointerType: "touch" });
+    pointer(right, "pointermove", 140, 0, { pointerId: 2, pointerType: "touch" });
+    pointer(right, "pointerup", 0, 0, { pointerId: 2, pointerType: "touch" });
+    pointer(right, "lostpointercapture", 0, 0, { pointerId: 2 });
+    expect(size()).toBe("680px x 640px");
+    expect(modalEl().classList.contains("is-resizing")).toBe(true);
+    pointer(right, "pointermove", 10, 0);
+    pointer(right, "pointerup", 10, 0);
+    expect(size()).toBe("700px x 640px");
+    expect(modalEl().classList.contains("is-resizing")).toBe(false);
+    expect(release).toHaveBeenCalledWith(1);
   });
 });

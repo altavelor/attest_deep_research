@@ -10,6 +10,8 @@ import {
   type ResizeAxis,
 } from "./modalSize";
 
+const PERSISTED_LIMIT = { width: 16384, height: 16384 };
+
 export const MODAL_SIZE_STORAGE_KEY = "attest-sub-agents-modal-size";
 
 export interface ModalSizeStore {
@@ -41,6 +43,7 @@ interface Drag {
 export class ModalResizeController {
   private readonly cleanups: Array<() => void> = [];
   private readonly handles = new Map<HTMLElement, HandleSpec["orientation"]>();
+  private preferred: ModalSize = { width: 0, height: 0 };
   private size: ModalSize = { width: 0, height: 0 };
   private drag: Drag | null = null;
 
@@ -52,7 +55,7 @@ export class ModalResizeController {
 
   attach(): void {
     this.modalEl.addClass("attest-sub-agents-modal--resizable");
-    this.size = this.restore();
+    this.preferred = this.restore();
     const specs: HandleSpec[] = [
       { axis: "x", cls: "right", label: "chat.subAgents.resize.width", orientation: "vertical" },
       {
@@ -66,7 +69,7 @@ export class ModalResizeController {
     for (const spec of specs) this.createHandle(spec);
     this.apply();
     const win = this.modalEl.win ?? window;
-    const onWindowResize = (): void => this.setSize(this.size, false);
+    const onWindowResize = (): void => this.apply();
     win.addEventListener("resize", onWindowResize);
     this.cleanups.push(() => win.removeEventListener("resize", onWindowResize));
   }
@@ -87,9 +90,11 @@ export class ModalResizeController {
     this.handles.set(handle, spec.orientation);
     this.listen(handle, "pointerdown", (event) => this.startDrag(handle, spec.axis, event));
     this.listen(handle, "pointermove", (event) => this.moveDrag(event));
-    this.listen(handle, "pointerup", () => this.endDrag(true));
-    this.listen(handle, "pointercancel", () => this.endDrag(true));
-    this.listen(handle, "lostpointercapture", () => this.endDrag(true));
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
+      this.listen(handle, type, (event) => {
+        if (event.pointerId === this.drag?.pointerId) this.endDrag(true);
+      });
+    }
     this.listen(handle, "dblclick", () => this.reset());
     this.listen(handle, "keydown", (event) => this.onKey(spec.axis, event));
   }
@@ -104,7 +109,7 @@ export class ModalResizeController {
   }
 
   private startDrag(handle: HTMLElement, axis: ResizeAxis, event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (this.drag || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
     this.drag = {
       handle,
@@ -147,29 +152,28 @@ export class ModalResizeController {
   }
 
   private reset(): void {
-    this.size = defaultSize(this.bounds());
+    this.preferred = defaultSize(this.bounds());
     this.apply();
     this.persist(null);
   }
 
   private setSize(size: ModalSize, persist: boolean): void {
-    this.size = clampSize(size, this.bounds());
+    this.preferred = clampSize(size, this.bounds());
     this.apply();
     if (persist) this.persist();
   }
 
   private restore(): ModalSize {
-    const bounds = this.bounds();
     let raw: unknown = null;
     try {
       raw = this.store.loadLocalStorage(MODAL_SIZE_STORAGE_KEY);
     } catch {
       raw = null;
     }
-    return parsePersistedSize(raw, bounds) ?? defaultSize(bounds);
+    return parsePersistedSize(raw, sizeBounds(PERSISTED_LIMIT)) ?? defaultSize(this.bounds());
   }
 
-  private persist(value: ModalSize | null = this.size): void {
+  private persist(value: ModalSize | null = this.preferred): void {
     try {
       this.store.saveLocalStorage(MODAL_SIZE_STORAGE_KEY, value && { ...value });
     } catch {
@@ -183,11 +187,16 @@ export class ModalResizeController {
   }
 
   private apply(): void {
+    const bounds = this.bounds();
+    this.size = clampSize(this.preferred, bounds);
     this.modalEl.style.setProperty("--attest-sub-agents-width", `${this.size.width}px`);
     this.modalEl.style.setProperty("--attest-sub-agents-height", `${this.size.height}px`);
     for (const [handle, orientation] of this.handles) {
-      const value = orientation === "vertical" ? this.size.width : this.size.height;
-      if (orientation) handle.setAttr("aria-valuenow", String(value));
+      if (!orientation) continue;
+      const vertical = orientation === "vertical";
+      handle.setAttr("aria-valuenow", String(vertical ? this.size.width : this.size.height));
+      handle.setAttr("aria-valuemin", String(vertical ? bounds.minWidth : bounds.minHeight));
+      handle.setAttr("aria-valuemax", String(vertical ? bounds.maxWidth : bounds.maxHeight));
     }
   }
 }
