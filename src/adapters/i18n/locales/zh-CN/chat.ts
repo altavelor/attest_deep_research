@@ -168,6 +168,13 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.batch.body": "完成 {done} · 运行中 {running} · 失败 {failed}",
   "chat.agent.notice.aria": "代理事件：{title}",
 
+  "chat.toolUnavailable.instant":
+    "模型尝试调用“{tool}”，但该工具在即时模式下不可用。请切换到深度思考模式后重新提问。",
+  "chat.toolUnavailable.no-tools": "模型尝试调用“{tool}”，但该工具在此回答中不可用。",
+  "chat.toolUnavailable.not-permitted": "“{tool}”已被当前设置或权限禁用。",
+  "chat.toolUnavailable.not-offered": "“{tool}”在本次运行中不可用。",
+  "chat.toolUnavailable.subAgents":
+    "模型尝试启动子代理（“{tool}”）。子代理仅在深度思考模式下可用。",
   "chat.toolCall.badge.keywordOnly": "仅关键词",
   "chat.toolCall.badge.semanticFailed": "语义（嵌入）搜索失败：{error}",
   "chat.toolCall.badge.semanticEmpty": "语义搜索无结果；结果仅按关键词排序。",

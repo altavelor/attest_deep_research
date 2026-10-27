@@ -14,15 +14,24 @@ describe("ToolManager", () => {
       execute: vi.fn(),
     } as unknown as NoteToolService;
 
-    const registry = new ToolManager(createNoteTools(service), new Set());
+    const registry = new ToolManager(createNoteTools(service), new Set([NOTE_PERMISSIONS.read]));
 
     const result = await registry.execute({
       id: "x",
-      name: "read_note",
+      name: "create_note",
       arguments: { path: "Private.md" },
     });
 
-    expect(result).toMatchObject({ ok: false, error: { code: "tool-not-permitted" } });
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "tool-unavailable",
+        message:
+          'Tool "create_note" is not available: it is disabled by the current settings or ' +
+          "permissions. Available tools: read_note, search_notes, list_notes.",
+        details: { userMessageKey: "chat.toolUnavailable.not-permitted" },
+      },
+    });
     expect(service.execute).not.toHaveBeenCalled();
   });
 
@@ -59,9 +68,15 @@ describe("ToolManager", () => {
     ).resolves.toEqual({
       ok: false,
       error: {
-        code: "unknown-tool",
-        message: "Unknown or unavailable tool: invented_tool.",
+        code: "tool-unavailable",
+        message:
+          'Tool "invented_tool" is not available: it is not offered in this run. ' +
+          "No tools are available; answer in plain text.",
         retryable: false,
+        details: {
+          userMessageKey: "chat.toolUnavailable.not-offered",
+          params: { tool: "invented_tool" },
+        },
       },
     });
   });

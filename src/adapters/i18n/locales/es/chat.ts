@@ -179,6 +179,15 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.batch.body": "{done} listos · {running} en curso · {failed} con error",
   "chat.agent.notice.aria": "Evento del agente: {title}",
 
+  "chat.toolUnavailable.instant":
+    "El modelo intentó llamar a «{tool}», que no está disponible en el modo Instantáneo. Cambia a Reflexivo y vuelve a preguntar.",
+  "chat.toolUnavailable.no-tools":
+    "El modelo intentó llamar a «{tool}», que no está disponible en esta respuesta.",
+  "chat.toolUnavailable.not-permitted":
+    "«{tool}» está desactivada por la configuración o los permisos actuales.",
+  "chat.toolUnavailable.not-offered": "«{tool}» no está disponible en esta ejecución.",
+  "chat.toolUnavailable.subAgents":
+    "El modelo intentó iniciar un subagente («{tool}»). Los subagentes solo están disponibles en el modo Reflexivo.",
   "chat.toolCall.badge.keywordOnly": "solo palabras clave",
   "chat.toolCall.badge.semanticFailed": "Falló la búsqueda semántica (embeddings): {error}",
   "chat.toolCall.badge.semanticEmpty":

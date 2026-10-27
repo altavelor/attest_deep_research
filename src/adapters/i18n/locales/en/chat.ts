@@ -168,6 +168,15 @@ export const chat = {
   "chat.agent.notice.batch.body": "{done} done · {running} running · {failed} failed",
   "chat.agent.notice.aria": "Sub-agent event: {title}",
 
+  "chat.toolUnavailable.instant":
+    'The model tried to call "{tool}", which is not available in Instant mode. Switch to Thinking and ask again.',
+  "chat.toolUnavailable.no-tools":
+    'The model tried to call "{tool}", which is not available in this answer.',
+  "chat.toolUnavailable.not-permitted":
+    '"{tool}" is disabled by the current settings or permissions.',
+  "chat.toolUnavailable.not-offered": '"{tool}" is not available in this run.',
+  "chat.toolUnavailable.subAgents":
+    'The model tried to start a sub-agent ("{tool}"). Sub-agents are available only in Thinking mode.',
   "chat.toolCall.badge.keywordOnly": "keyword-only",
   "chat.toolCall.badge.semanticFailed": "Semantic (embedding) search failed: {error}",
   "chat.toolCall.badge.semanticEmpty":

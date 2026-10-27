@@ -23,7 +23,7 @@ describe("ChatCompaction", () => {
         retrieved("web:https://example.com", webSource("https://example.com"), "Web"),
       ]),
       user("What changed next?"),
-      assistant("We need follow-up evidence."),
+      assistant("We need follow-up evidence.\n<tool_search_web>releases</tool_search_web>"),
       user("Continue."),
     ];
 

@@ -177,6 +177,14 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.batch.body": "готово {done} · выполняется {running} · ошибок {failed}",
   "chat.agent.notice.aria": "Событие агента: {title}",
 
+  "chat.toolUnavailable.instant":
+    "Модель попыталась вызвать «{tool}», но этот инструмент недоступен в режиме «Мгновенный». Переключитесь на «Размышление» и повторите вопрос.",
+  "chat.toolUnavailable.no-tools":
+    "Модель попыталась вызвать «{tool}», но этот инструмент недоступен в этом ответе.",
+  "chat.toolUnavailable.not-permitted": "«{tool}» отключён текущими настройками или разрешениями.",
+  "chat.toolUnavailable.not-offered": "«{tool}» недоступен в этом запуске.",
+  "chat.toolUnavailable.subAgents":
+    "Модель попыталась запустить субагента («{tool}»). Субагенты доступны только в режиме «Размышление».",
   "chat.toolCall.badge.keywordOnly": "только ключевые слова",
   "chat.toolCall.badge.semanticFailed": "Семантический поиск (по эмбеддингам) не удался: {error}",
   "chat.toolCall.badge.semanticEmpty":
