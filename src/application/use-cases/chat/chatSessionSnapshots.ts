@@ -28,6 +28,7 @@ export function createIdleSessionState(
     subAgentDispatches: [],
     subAgentNotices: [],
     timelineSequence: 0,
+    recoveredFromPrevious: false,
   };
 }
 
@@ -59,6 +60,7 @@ export function sessionStateFromSavedChat(
     completedAt: lastRun?.completedAt ?? null,
     unreadCompletion: chat.unreadCompletion,
     interruptionReason: lastRun?.status === "interrupted" ? lastRun.interruptionReason : null,
+    recoveredFromPrevious: chat.recoveredFrom === "previous",
   };
 }
 

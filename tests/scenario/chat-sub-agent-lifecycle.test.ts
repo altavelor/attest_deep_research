@@ -216,11 +216,15 @@ describe("chat runtime and its child host", () => {
     children.hosts[0]!.context.mainEvents?.publish([notice(parent.activeRunId!)]);
     expect(parent.subAgentNotices.map((entry) => entry.parentRunId)).toEqual([parent.activeRunId]);
     const failure = new Error("Close failed.");
-    children.hosts[0]!.closeGate = Promise.reject(failure);
+    let failClose = (_error: Error): void => undefined;
+    children.hosts[0]!.closeGate = new Promise<void>((_resolve, reject) => (failClose = reject));
     research.emit(0, completed);
     research.end(0);
     await settle();
-    expect(logged).toEqual([failure]);
+    expect(changes).not.toContain("status");
+    failClose(failure);
+    await settle();
+    expect([logged, changes.includes("status")]).toEqual([[failure], true]);
     await manager.start(parent.sessionId, request("Second"));
     await settle();
     children.hosts[0]!.closeGate = new Promise<void>(() => undefined);
@@ -231,6 +235,38 @@ describe("chat runtime and its child host", () => {
     expect(children.log.filter((entry) => !entry.startsWith("closeAll"))).toEqual([
       "interrupt:run-2",
       "dispose:0",
+    ]);
+  });
+
+  it("keeps child work off a chat recovered from its previous version until a terminal save", async () => {
+    const children = fakeChildHosts();
+    const research = gatedResearch();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: research.service,
+      createSubAgentSessionManager: children.factory,
+    });
+    const saved = await repository.saveChat({
+      id: "chat-recovered",
+      title: "Chat",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      messages: [{ role: "user", content: "Q", createdAt: "2026-01-01T00:00:00.000Z" }],
+      lastAnswer: null,
+      attachedContextPaths: [],
+      chatSettings: thinking,
+    });
+    const parent = manager.adoptChat({ ...saved, recoveredFrom: "previous" }, thinking);
+
+    await manager.start(parent.sessionId, request("First"));
+    await settle();
+    research.emit(0, completed);
+    research.end(0);
+    await settle();
+    await manager.start(parent.sessionId, request("Second"));
+    await settle();
+
+    expect(research.requests.map((entry) => entry.subAgentDelegator !== undefined)).toEqual([
+      false,
+      true,
     ]);
   });
 });

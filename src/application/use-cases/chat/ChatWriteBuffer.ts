@@ -1,7 +1,6 @@
 import {
   ChatStorageError,
   isChatStorageError,
-  type ChatDocumentChange,
   type ChatFileBaseline,
 } from "@application/ports/chat";
 import type { SubAgentDurableWriter } from "@application/ports/subAgent";
@@ -14,13 +13,18 @@ import {
 } from "@core/research";
 import {
   assembleSection,
+  carryUnsentRevisions,
+  chatDocumentChange,
+  chatMissing,
   deltaBytes,
   dropInapplicableDeltas,
+  isNewWork,
   type PendingDelta,
 } from "./chatWriteBatch";
 import {
   DEFAULT_CHAT_WRITE_LIMITS,
   type ChatWriteBufferLimits,
+  type ChatSnapshotEntry,
   type ChatWriteBufferOptions,
   type ChatWriteWaiter,
 } from "./chatWriteBufferTypes";
@@ -38,8 +42,8 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
   private readonly limits: ChatWriteBufferLimits;
   private readonly pending = new Map<string, PendingDelta>();
   private readonly keyRevisions = new Map<string, number>();
-  private chat: { input: SaveChatInput; revision: number } | null = null;
-  private batchChat: { input: SaveChatInput; revision: number } | null = null;
+  private chat: ChatSnapshotEntry | null = null;
+  private batchChat: ChatSnapshotEntry | null = null;
   private batchDeltas = new Set<PendingDelta>();
   private lastChat: SaveChatInput | null = null;
   private durable: SubAgentStateSnapshot | null;
@@ -269,7 +273,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
       this.retries = 0;
       this.retryAt = Number.NEGATIVE_INFINITY;
     } catch (error) {
-      this.carryUnsentRevisions(chat, deltas);
+      carryUnsentRevisions(this.chat, this.pending, chat, deltas);
       await this.handleFailure(error as Error, chatId, chat, subAgents !== undefined);
     } finally {
       this.batchChat = null;
@@ -288,19 +292,12 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
 
   private async write(
     chatId: string | null,
-    chat: { input: SaveChatInput; revision: number } | null,
+    chat: ChatSnapshotEntry | null,
     subAgents: SubAgentStateSnapshot | undefined,
   ): Promise<void> {
-    const change: ChatDocumentChange =
-      chatId === null
-        ? { chatId: null, chat: chat!.input }
-        : {
-            chatId,
-            ...(this.baseline ? { base: this.baseline } : {}),
-            ...(chat ? { chat: chat.input } : {}),
-            ...(subAgents ? { subAgents } : {}),
-          };
-    const commit = await this.options.repository.commitChatDocument(change);
+    const commit = await this.options.repository.commitChatDocument(
+      chatDocumentChange(chatId, this.baseline, chat, subAgents),
+    );
     this.baseline = commit.base;
     if (this.chat === chat) this.chat = null;
     if (chatId === null) this.options.onChatBound(commit.chat.id);
@@ -309,7 +306,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
   private async handleFailure(
     error: Error,
     chatId: string | null,
-    chat: { input: SaveChatInput; revision: number } | null,
+    chat: ChatSnapshotEntry | null,
     hadSection: boolean,
   ): Promise<void> {
     this.report(error);
@@ -335,26 +332,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
     this.rejectWaiters(error, chatId !== null);
   }
 
-  /** Keeps the oldest unacknowledged revision on entries that replaced a failed in-flight value. */
-  private carryUnsentRevisions(
-    chat: { input: SaveChatInput; revision: number } | null,
-    deltas: ReadonlyMap<string, PendingDelta>,
-  ): void {
-    if (chat && this.chat && this.chat !== chat) {
-      this.chat.revision = Math.min(this.chat.revision, chat.revision);
-    }
-    for (const [key, sent] of deltas) {
-      const current = this.pending.get(key);
-      if (current && current !== sent) {
-        current.firstRevision = Math.min(current.firstRevision, sent.firstRevision);
-      }
-    }
-  }
-
-  private async writeChatOnly(
-    chatId: string,
-    chat: { input: SaveChatInput; revision: number } | null,
-  ): Promise<void> {
+  private async writeChatOnly(chatId: string, chat: ChatSnapshotEntry | null): Promise<void> {
     if (!chat) return;
     try {
       await this.write(chatId, chat, undefined);
@@ -416,15 +394,4 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
   private nowMs(): number {
     return this.options.now().getTime();
   }
-}
-
-function isNewWork(payload: SubAgentBufferedValue): boolean {
-  return payload.op === "set" && (payload.entity === "create" || payload.entity === "run");
-}
-
-function chatMissing(): ChatStorageError {
-  return new ChatStorageError(
-    "chat-missing",
-    "The chat was deleted; nothing more is saved for it.",
-  );
 }

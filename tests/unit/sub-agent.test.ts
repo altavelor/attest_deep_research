@@ -1,4 +1,5 @@
 import {
+  isSubAgentStateId,
   parseSubAgentDirective,
   subAgentSessionError,
   SubAgentSessionFailure,
@@ -76,7 +77,12 @@ describe("SubAgentTool", () => {
     });
     expect(calls[0]?.args[0]).toMatchObject({ maxSearches: 5, resources: ["wikipedia.org"] });
     const [dotted, underscored] = ["a.b", "a_b"].map((id) => subAgentCallIdentity("p", 1, id));
-    expect(dotted).not.toBe(underscored);
+    const literal = subAgentCallIdentity("p", 1, dotted.slice("p-r1-".length));
+    expect([dotted === underscored, literal === dotted, isSubAgentStateId(dotted)]).toEqual([
+      false,
+      false,
+      true,
+    ]);
     expect(underscored).toBe("p-r1-a_b");
     expect(JSON.stringify(result)).not.toContain("answer");
     expect(events).toEqual([]);

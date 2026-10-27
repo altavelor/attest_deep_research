@@ -88,6 +88,8 @@ export const chat: EnChatMessages = {
 
   "chat.notice.chatDeleted": "聊天已删除。",
   "chat.notice.savedChatNotFound": "未找到已保存的聊天。",
+  "chat.notice.chatRecoveredFromPrevious":
+    "由于无法读取最新文件，此聊天已从上一个保存版本恢复。在聊天再次保存之前，其中的子代理保持关闭。",
   "chat.notice.openIndexSettings": "打开索引设置",
 
   "chat.message.you": "你",

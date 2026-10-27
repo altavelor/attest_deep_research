@@ -8,6 +8,7 @@ import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import {
   applySubAgentTransition,
   recoverSubAgentState,
+  rewriteSubAgentCitations,
   type SubAgentImportRecord,
 } from "@core/research";
 import { settle } from "../support/async";
@@ -82,21 +83,23 @@ describe("sub-agent evidence import", () => {
     const { delegator, sessionId, runId } = await launchWith(harness, ["example.com"]);
     harness.execution.finish(
       0,
-      result("A [e1] B [url:https://example.com/e1] C [parent-src] D [e2] [a note].", [
-        childEvidence("e1"),
-        childEvidence("e2", { source: { kind: "web", url: "https://other.org/x", title: "O" } }),
-      ]),
+      result(
+        "A [e1] B [url:https://example.com/e1] C [parent-src] D [e2] [a note] token=[redacted] [src-9].",
+        [
+          childEvidence("e1"),
+          childEvidence("e2", { source: { kind: "web", url: "https://other.org/x", title: "O" } }),
+        ],
+      ),
     );
     await settle();
 
     const state = await delegator.getResult(sessionId, runId);
-
     expect(state.state).toBe("completed");
     if (state.state !== "completed") return;
     const alias = state.outcome.evidence[0].conversationEvidenceId;
     expect(state.outcome.evidence).toHaveLength(1);
     expect(state.outcome.answerText).toBe(
-      `A [${alias}] B [${alias}] C [source unavailable] D [source unavailable] [a note].`,
+      `A [${alias}] B [${alias}] C [source unavailable] D [source unavailable] [a note] token=[redacted] [source unavailable].`,
     );
     expect(state.outcome.run.resultSummary).toBe(state.outcome.answerText);
     expect(JSON.stringify(state.outcome)).not.toMatch(/\[(e1|e2|parent-src|url:[^\]]*)\]/);
@@ -635,5 +638,12 @@ describe("sub-agent evidence import", () => {
       ["parent-chunk"],
     ]);
     expect(removeOrphanSubAgentAliases(registry, subAgentSection([record]))).toBe(registry);
+  });
+
+  it("U10: rewrites newline-free bracket floods in bounded work", () => {
+    for (const unit of ["[", "[a", "[a]("]) {
+      const text = unit.repeat(20_000);
+      expect(rewriteSubAgentCitations(text, new Map(), new Set())).toBe(text);
+    }
   });
 });

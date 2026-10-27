@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
+import type { ChatTimelineItem } from "@core/chat/subAgentTimeline";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 export interface SubAgentEventRenderOptions {
@@ -37,6 +38,24 @@ const TONES: Partial<Record<SubAgentNoticeEntry["kind"], string>> = {
  * body, folded to a preview with the full command one click away. Child text is never
  * parsed as Markdown or HTML, so links and markup in it stay inert.
  */
+/** Builds the event render options, adding the session opener only when the host has one. */
+export function subAgentEventOptions(
+  t: Translate,
+  onOpenSubAgentSession?: (sessionId: string) => void,
+): SubAgentEventRenderOptions {
+  return { t, ...(onOpenSubAgentSession ? { onOpenSubAgentSession } : {}) };
+}
+
+/** Renders a dispatch or notice item of the chat timeline. */
+export function renderSubAgentTimelineItem(
+  containerEl: HTMLElement,
+  item: Exclude<ChatTimelineItem, { kind: "message" }>,
+  options: SubAgentEventRenderOptions,
+): void {
+  if (item.kind === "agent-dispatch") renderSubAgentDispatch(containerEl, item.dispatch, options);
+  else renderSubAgentNotice(containerEl, item.notice, options);
+}
+
 export function renderSubAgentDispatch(
   parentEl: HTMLElement,
   entry: SubAgentDispatchEntry,

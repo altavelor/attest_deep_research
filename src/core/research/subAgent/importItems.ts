@@ -1,5 +1,6 @@
 import type { RetrievedChunk, SourceReference } from "@core/model";
 import { markdownBracketOccurrences } from "../answerAnalysis";
+import { SUB_AGENT_REDACTION_MARKER } from "./observationModel";
 import type { SubAgentSourcePolicy } from "./sessionModel";
 import type { ValidatedJsonValue } from "./stateSnapshot";
 
@@ -16,6 +17,7 @@ const SAFE_ITEM_ID = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_:./#?=&%+-]{0,399}$/u;
 const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u;
 const CITATION_LIKE = /^\S{1,200}$/u;
+const REDACTION_LABEL = SUB_AGENT_REDACTION_MARKER.slice(1, -1);
 
 export type SubAgentEvidenceTool =
   "search_index" | "search_web" | "fetch_web_page" | "read_note" | "get_active_note";
@@ -176,7 +178,7 @@ export function rewriteSubAgentCitations(
     const replacement =
       alias !== undefined
         ? `[${alias}]`
-        : aliases.has(label) || !CITATION_LIKE.test(label)
+        : aliases.has(label) || !isForeignCitation(label)
           ? text.slice(index, index + length)
           : UNAVAILABLE_CITATION;
     result += text.slice(copiedUpTo, index) + replacement;
@@ -189,7 +191,11 @@ export function rewriteSubAgentCitations(
 export function unresolvedSubAgentCitations(text: string, aliases: ReadonlySet<string>): string[] {
   return markdownBracketOccurrences(text, aliases)
     .map(({ label }) => label)
-    .filter((label) => CITATION_LIKE.test(label) && !aliases.has(label));
+    .filter((label) => isForeignCitation(label) && !aliases.has(label));
+}
+
+function isForeignCitation(label: string): boolean {
+  return label !== REDACTION_LABEL && CITATION_LIKE.test(label);
 }
 
 /**

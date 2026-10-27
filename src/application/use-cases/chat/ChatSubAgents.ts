@@ -120,7 +120,8 @@ export class ChatSubAgents {
     mode: ResearchMode,
   ): ChatSubAgentParentRun | null {
     const chatId = this.options.state.chatId;
-    if (!this.host || mode !== "thinking" || chatId === null) return null;
+    const { recoveredFromPrevious } = this.options.state;
+    if (!this.host || mode !== "thinking" || chatId === null || recoveredFromPrevious) return null;
     this.generation += 1;
     this.epoch += 1;
     const binding = {
