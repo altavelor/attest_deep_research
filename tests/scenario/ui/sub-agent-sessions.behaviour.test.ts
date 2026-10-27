@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App, View, takeNotices } from "../../support/obsidian";
+import { App, Component, View, takeNotices } from "../../support/obsidian";
 import type { WorkspaceLeaf as ObsidianWorkspaceLeaf } from "obsidian";
 
 import {
@@ -192,10 +192,9 @@ describe("sub-agent sessions button and modal", () => {
     };
     const view = await openView(harness);
     const port = harness.ports[0];
-    port.current = inspectionSnapshot([sessionCard("s1", { status: "queued" })]);
     expect(agentsButton(view)).toBeNull();
 
-    firstRead.resolve(port.current);
+    port.emit(inspectionSnapshot([sessionCard("s1", { status: "queued" })]));
     await settle();
     const button = agentsButton(view)!;
     expect(
@@ -223,6 +222,9 @@ describe("sub-agent sessions button and modal", () => {
     expect([content.textContent, content.classList.contains("is-active")]).toEqual(["12", true]);
     expect(button.className).toBe(buttonClass);
     expect(button.getAttribute("title")).toBe("Sub-agents · 12 running");
+    port.emit(inspectionSnapshot([], { revision: 1, hasAgentRuns: true }));
+    await settle();
+    expect(content.textContent).toBe("12");
     expect([textarea.value, document.activeElement]).toEqual(["half written", textarea]);
 
     port.emit(inspectionSnapshot([sessionCard("s1", { status: "failed" })], { revision: 3 }));
@@ -230,13 +232,30 @@ describe("sub-agent sessions button and modal", () => {
     expect([content.textContent, content.classList.contains("is-active")]).toEqual(["0", false]);
     expect(agentsButton(view)).toBe(button);
 
-    harness.state.prepare = () => {};
+    const nextRead = deferred<ReturnType<typeof inspectionSnapshot>>();
+    harness.state.prepare = (next) => {
+      next.snapshotReply = () => nextRead.promise;
+    };
     view.contentEl.querySelector<HTMLButtonElement>('[aria-label^="New chat"]')!.click();
     await settle();
     expect(agentsButton(view)).toBeNull();
+    firstRead.resolve(
+      inspectionSnapshot([sessionCard("late", { status: "running" })], { revision: 9 }),
+    );
     port.emit(inspectionSnapshot([sessionCard("late", { status: "running" })], { revision: 4 }));
     await settle();
     expect(agentsButton(view)).toBeNull();
+    harness.ports
+      .at(-1)!
+      .emit(
+        inspectionSnapshot([
+          sessionCard("n1", { status: "running" }),
+          sessionCard("n2", { status: "running" }),
+        ]),
+      );
+    nextRead.reject(new Error("store unreadable"));
+    await settle();
+    expect(agentsButton(view)?.textContent).toBe("2");
   });
 
   it("S2 lists the chat's sessions with loading, error, retry, empty and paged history states", async () => {
@@ -263,7 +282,7 @@ describe("sub-agent sessions button and modal", () => {
     await settle();
     expect(modalText()).toContain("No agent sessions to show");
 
-    const history = Array.from({ length: 58 }, (_, i) =>
+    const history = Array.from({ length: 120 }, (_, i) =>
       sessionCard(`h${i}`, { status: i === 0 ? "queued" : "ready" }),
     );
     history[1] = sessionCard("h1", {
@@ -285,7 +304,7 @@ describe("sub-agent sessions button and modal", () => {
     const groups = [...document.body.querySelectorAll(".attest-sub-agents__group")].map(
       (el) => el.textContent,
     );
-    expect(groups).toEqual(["Running · 2", "Queued and history · 58"]);
+    expect(groups).toEqual(["Running · 2", "Queued and history · 120"]);
     expect(cards()).toHaveLength(50);
     expect(
       cards()
@@ -302,9 +321,15 @@ describe("sub-agent sessions button and modal", () => {
     expect(
       cards()[4].querySelector(".attest-sub-agents__card-description")?.getAttribute("title"),
     ).toBe("x".repeat(400));
+    expect(
+      cards()[4].querySelector(".attest-sub-agents__card-description")?.getAttribute("dir"),
+    ).toBe("auto");
+    port.emit(inspectionSnapshot([], { revision: 2, hasAgentRuns: true }));
+    expect(cards()).toHaveLength(50);
 
-    clickByText("Show more (10 older)");
-    expect(cards()).toHaveLength(60);
+    clickByText("Show more (72 older)");
+    expect(cards()).toHaveLength(100);
+    expect(modalText()).toContain("Show more (22 older)");
     expect(modals()).toHaveLength(1);
   });
 
@@ -331,8 +356,10 @@ describe("sub-agent sessions button and modal", () => {
       timelineSequence: 5,
     });
     harness.state.prepare = (port) => {
-      port.current = inspectionSnapshot([detail.card, sessionCard("s2")]);
+      const single = sessionCard("s2", { usageIncomplete: true });
+      port.current = inspectionSnapshot([detail.card, single, sessionCard("s3")]);
       port.details.set("s1", detail);
+      port.details.set("s2", { ...detail, card: single, runs: [detail.runs[0]] });
     };
     const view = await openView(harness);
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[0].click();
@@ -349,6 +376,9 @@ describe("sub-agent sessions button and modal", () => {
       "Find primary <b>sources</b>",
     );
     expect(document.body.querySelector(".attest-sub-agents__description b")).toBeNull();
+    expect(
+      document.body.querySelector(".attest-sub-agents__description")?.getAttribute("dir"),
+    ).toBe("auto");
     expect(sectionHeaders().map((header) => header.getAttribute("aria-expanded"))).toEqual([
       "false",
       "false",
@@ -366,15 +396,25 @@ describe("sub-agent sessions button and modal", () => {
     ).toEqual(["System", "User"]);
     expect(prompt().querySelector("img")).toBeNull();
     expect(prompt().textContent).toContain("Truncated — the rest was not stored");
+    const port = harness.ports.at(-1)!;
+    const promptList = prompt().querySelector<HTMLElement>(".attest-sub-agents__prompt")!;
+    promptList.scrollTop = 40;
+    select.focus();
+    port.emit(inspectionSnapshot([{ ...detail.card, elapsedMs: 80_000 }], { revision: 2 }));
+    await settle();
+    expect(prompt().querySelector(".attest-sub-agents__prompt")).toBe(promptList);
+    expect([promptList.scrollTop, document.activeElement]).toEqual([40, select]);
     select.value = "run-1";
     select.dispatchEvent(new Event("change"));
     expect(prompt().textContent).toBe("The initial prompt was removed to keep the chat small.");
 
-    const port = harness.ports.at(-1)!;
     port.emit(
-      inspectionSnapshot([{ ...detail.card, elapsedMs: 90_000 }, sessionCard("s2")], {
-        revision: 2,
-      }),
+      inspectionSnapshot(
+        [{ ...detail.card, elapsedMs: 90_000 }, sessionCard("s2"), sessionCard("s3")],
+        {
+          revision: 3,
+        },
+      ),
     );
     await settle();
     expect(sectionHeaders().map((header) => header.getAttribute("aria-expanded"))).toEqual([
@@ -390,8 +430,24 @@ describe("sub-agent sessions button and modal", () => {
     expect(modals()).toHaveLength(1);
     clickByText("Back to agents");
     await settle();
-    expect(cards().map((card) => card.dataset.sessionId)).toEqual(["s1", "s2"]);
+    expect(cards().map((card) => card.dataset.sessionId)).toEqual(["s1", "s2", "s3"]);
     expect(document.activeElement).toBe(cards()[0]);
+    const list = document.body.querySelector<HTMLElement>(".attest-sub-agents")!;
+    list.scrollTop = 30;
+    cards()[1].click();
+    await settle();
+    list.scrollTop = 0;
+    expect(
+      document.body.querySelector(".attest-sub-agents__run-row")?.classList.contains("is-hidden"),
+    ).toBe(true);
+    expect(document.body.querySelector(".attest-sub-agents__metrics")?.textContent).toContain(
+      "Partial",
+    );
+    clickByText("Back to agents");
+    expect(list.scrollTop).toBe(30);
+    cards()[2].click();
+    await settle();
+    expect(modalText()).toContain("This agent session is not part of this chat.");
 
     view.contentEl.querySelectorAll<HTMLButtonElement>(".attest-chat__icon-button")[0].click();
     await settle();
@@ -444,6 +500,9 @@ describe("sub-agent sessions button and modal", () => {
     expect(timeline().querySelector(".attest-chat__tool-cell")).toBeNull();
     expect(timeline().textContent).not.toContain("steal()");
     expect(write).not.toHaveBeenCalled();
+    const released = vi.spyOn(Component.prototype, "removeChild");
+    modals()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(released).toHaveBeenCalledTimes(1);
   });
 
   it("S5 stops only the run the user saw and reports stale, failed and late results", async () => {
@@ -496,9 +555,24 @@ describe("sub-agent sessions button and modal", () => {
     port.details.set("s1", detail);
     port.emit(inspectionSnapshot([detail.card], { revision: 4 }));
     await settle();
+    const away = deferred<"stopped">();
+    port.stopReply = () => away.promise;
+    const stop = stopButton();
+    stop.focus();
+    port.emit(inspectionSnapshot([detail.card], { revision: 5 }));
+    await settle();
+    expect(document.activeElement).toBe(stop);
+    stop.click();
+    clickByText("Back to agents");
+    away.reject(new Error("disk full"));
+    await settle();
+    expect(takeNotices()).toEqual([]);
+    cards()[0].click();
+    await settle();
+    expect(modalText()).toContain("Stop not saved yet. The agent is halted.");
     const late = deferred<"stopped">();
     port.stopReply = () => late.promise;
-    clickByText("Stop agent");
+    clickByText("Retry stop");
     modals()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     late.reject(new Error("disk full"));
     await settle();
@@ -520,11 +594,32 @@ describe("sub-agent sessions button and modal", () => {
     expect(before.textContent).toBe("1m 05s");
     expect(pendingTimerCount()).toBe(1);
     await advanceTime(2000);
+    expect(before.textContent).toBe("1m 07s");
     expect(port.listeners.size).toBe(2);
+    const finished = {
+      ...detail,
+      card: { ...detail.card, status: "ready" as const, canStop: false },
+    };
+    port.emit(inspectionSnapshot([finished.card], { revision: 2 }), [finished]);
+    await settle();
+    await advanceTime(2000);
+    sectionHeaders()[0].click();
+    const frozen = document.body.querySelector(
+      ".attest-sub-agents__metric .attest-sub-agents__numeric",
+    )!;
+    expect([pendingTimerCount(), frozen.textContent]).toEqual([0, "1m 05s"]);
+    port.details.set("s1", detail);
+    port.emit(inspectionSnapshot([detail.card], { revision: 3 }));
+    await settle();
+    expect(pendingTimerCount()).toBe(1);
 
     modals()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect([modals().length, port.listeners.size, pendingTimerCount()]).toEqual([0, 1, 0]);
 
+    const nextRead = deferred<ReturnType<typeof inspectionSnapshot>>();
+    harness.state.prepare = (next) => {
+      next.snapshotReply = () => nextRead.promise;
+    };
     const gate = deferred<void>();
     port.sessionReply = async (sessionId) => {
       await gate.promise;
@@ -542,15 +637,59 @@ describe("sub-agent sessions button and modal", () => {
       port.listeners.size,
       document.body.querySelector(".attest-sub-agents__detail"),
     ]).toEqual([0, 0, null]);
-    expect(document.activeElement).toBe(view.contentEl.querySelector(".attest-chat__input"));
+    expect(document.activeElement).not.toBe(view.contentEl.querySelector(".attest-chat__input"));
     const next = harness.ports.at(-1)!;
-    next.emit(inspectionSnapshot([sessionCard("own")]));
+    next.current = inspectionSnapshot([sessionCard("own")]);
+    nextRead.resolve(next.current);
     await settle();
+    expect(document.activeElement).toBe(agentsButton(view));
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__agents-button")!.click();
     await settle();
     expect(cards().map((card) => card.dataset.sessionId)).toEqual(["own"]);
     expect(next.sessionCalls).toEqual([]);
     expect([port.stopCalls, next.stopCalls]).toEqual([[], []]);
     await eventually(() => expect(modals()).toHaveLength(1));
+  });
+  it("S7 renders another session while the first session's read is still held", async () => {
+    const harness = createHarness();
+    const view = await openView(harness);
+    const port = harness.ports[0];
+    const other = { ...runningDetail(), card: sessionCard("s2", { description: "Other task" }) };
+    port.emit(inspectionSnapshot([runningDetail().card, other.card]), [runningDetail(), other]);
+    await settle();
+    const held = deferred<void>();
+    port.sessionReply = async (sessionId) => {
+      if (sessionId === "s1") await held.promise;
+      return port.details.get(sessionId) ?? null;
+    };
+    agentsButton(view)!.click();
+    await settle();
+    cards()[0].click();
+    await settle();
+    clickByText("Back to agents");
+    cards()[1].click();
+    await settle();
+    expect(document.body.querySelector(".attest-sub-agents__description")?.textContent).toBe(
+      "Other task",
+    );
+    held.resolve();
+    await settle();
+    expect(document.body.querySelector(".attest-sub-agents__description")?.textContent).toBe(
+      "Other task",
+    );
+  });
+
+  it("S8 pages a long run of pending tool calls instead of rendering them all", async () => {
+    const harness = createHarness();
+    const detail = runningDetail();
+    const pending = Array.from({ length: 120 }, (_, i) =>
+      workItem(`p${i}`, "run-2", i + 1, { status: "pending" }),
+    );
+    await openDetail(harness, { ...detail, lifetime: pending });
+    sectionHeaders()[1].click();
+    const nodes = () => document.body.querySelectorAll(".attest-chat__workflow-node--pending");
+    expect(nodes()).toHaveLength(50);
+    clickByText("Show more (70 more)");
+    expect(nodes()).toHaveLength(100);
   });
 });

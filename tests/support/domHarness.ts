@@ -152,6 +152,7 @@ const FAKED_TIMERS = [
   "clearInterval",
   "requestAnimationFrame",
   "cancelAnimationFrame",
+  "performance",
 ] as const;
 
 /**
