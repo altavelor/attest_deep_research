@@ -7,9 +7,12 @@ import {
   renderWorkflowTimeline,
   toSubAgentWorkflowModel,
   type WorkflowTimelineHandle,
+  type WorkflowUiState,
 } from "../workflow/index";
 
 export const WORK_LOG_PAGE_SIZE = 50;
+
+type FocusTarget = { kind: "cell"; id: string } | { kind: "close" } | { kind: "more" };
 
 export interface WorkLogDeps {
   app: App;
@@ -34,6 +37,7 @@ export class WorkLogView {
   private timelineEl: HTMLElement | null = null;
   private limit = WORK_LOG_PAGE_SIZE;
   private last: WorkLogInput | null = null;
+  private signature: string | null = null;
 
   constructor(
     private readonly hostEl: HTMLElement,
@@ -41,12 +45,30 @@ export class WorkLogView {
   ) {}
 
   render(input: WorkLogInput): void {
+    const signature = JSON.stringify([
+      input.sessionId,
+      input.items,
+      input.selectedRunId,
+      input.debug,
+      this.limit,
+    ]);
+    if (signature === this.signature) {
+      this.last = input;
+      return;
+    }
+    const focus = this.captureFocus();
     const uiState =
       input.debug && this.last?.debug && this.timelineEl
         ? captureWorkflowUiState(this.timelineEl)
         : undefined;
     this.release();
+    this.signature = signature;
     this.last = input;
+    this.renderContent(input, uiState);
+    this.restoreFocus(focus);
+  }
+
+  private renderContent(input: WorkLogInput, uiState: WorkflowUiState | undefined): void {
     const { t } = this.deps;
     const sorted = [...input.items].sort((a, b) => a.sequence - b.sequence);
     if (sorted.length === 0) {
@@ -100,6 +122,34 @@ export class WorkLogView {
   dispose(): void {
     this.release();
     this.last = null;
+    this.signature = null;
+  }
+
+  private captureFocus(): FocusTarget | null {
+    const active = this.hostEl.ownerDocument.activeElement;
+    if (!(active instanceof HTMLElement) || !this.hostEl.contains(active)) return null;
+    if (active.dataset.toolCellId) return { kind: "cell", id: active.dataset.toolCellId };
+    if (active.hasClass("attest-chat__tool-output-viewer-close")) return { kind: "close" };
+    if (active.hasClass("attest-sub-agents__more")) return { kind: "more" };
+    return null;
+  }
+
+  private restoreFocus(focus: FocusTarget | null): void {
+    if (!focus) return;
+    const host = this.hostEl;
+    let target: HTMLElement | null | undefined;
+    if (focus.kind === "cell") {
+      target = [...host.querySelectorAll<HTMLElement>("[data-tool-cell-id]")].find(
+        (el) => el.dataset.toolCellId === focus.id,
+      );
+    } else if (focus.kind === "close") {
+      target = host.querySelector<HTMLElement>(".attest-chat__tool-output-viewer-close");
+    } else {
+      target =
+        host.querySelector<HTMLElement>(".attest-sub-agents__more") ??
+        host.querySelector<HTMLElement>("[data-tool-cell-id]");
+    }
+    target?.focus();
   }
 
   private release(): void {
