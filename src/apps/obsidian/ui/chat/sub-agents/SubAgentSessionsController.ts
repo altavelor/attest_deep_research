@@ -53,7 +53,8 @@ export class SubAgentSessionsController {
   private detailView: SessionDetailView | null = null;
   private detail: SubAgentInspectionDetail | null = null;
   private detailAt = 0;
-  private detailInFlight = false;
+  private routeToken = 0;
+  private detailInFlight: number | null = null;
   private detailAgain = false;
   private selectedRunId: string | null = null;
   private readonly stops = new Map<string, StopState>();
@@ -216,9 +217,11 @@ export class SubAgentSessionsController {
     this.leaveDetail();
     this.route = { kind: "detail", sessionId };
     this.options.setTitle("");
-    this.bodyEl?.empty();
     this.list = null;
-    this.bodyEl?.createDiv({
+    if (!this.bodyEl) return;
+    this.bodyEl.empty();
+    this.renderBackOnly(this.bodyEl);
+    this.bodyEl.createDiv({
       text: this.options.t("chat.subAgents.loading"),
       attr: { role: "status" },
     });
@@ -226,6 +229,9 @@ export class SubAgentSessionsController {
   }
 
   private leaveDetail(): void {
+    this.routeToken += 1;
+    this.detailInFlight = null;
+    this.detailAgain = false;
     this.detailView?.dispose();
     this.detailView = null;
     this.detail = null;
@@ -233,20 +239,19 @@ export class SubAgentSessionsController {
   }
 
   private refreshDetail(): void {
-    if (this.route.kind !== "detail") return;
-    if (this.detailInFlight) {
+    if (this.disposed || this.route.kind !== "detail") return;
+    const token = this.routeToken;
+    if (this.detailInFlight === token) {
       this.detailAgain = true;
       return;
     }
     const sessionId = this.route.sessionId;
-    const generation = this.generation;
-    this.detailInFlight = true;
+    this.detailInFlight = token;
     const settle = (detail: SubAgentInspectionDetail | null, failed: boolean): void => {
-      if (generation !== this.generation) return;
-      this.detailInFlight = false;
-      const current = this.route.kind === "detail" && this.route.sessionId === sessionId;
-      if (current && !failed) this.acceptDetail(sessionId, detail);
-      if (current && failed && !this.detail) this.renderReadError(() => this.refreshDetail());
+      if (this.disposed || token !== this.routeToken) return;
+      this.detailInFlight = null;
+      if (!failed) this.acceptDetail(sessionId, detail);
+      else if (!this.detail) this.renderReadError(() => this.refreshDetail());
       if (this.detailAgain) {
         this.detailAgain = false;
         this.refreshDetail();
@@ -326,14 +331,14 @@ export class SubAgentSessionsController {
     this.renderDetail();
     const finish = (state: StopState | null): void => {
       this.stopping.delete(sessionId);
-      const visible =
-        !this.disposed && this.route.kind === "detail" && this.route.sessionId === sessionId;
-      if (state === null) {
-        if (visible) this.stops.set(sessionId, { phase: "failed" });
-        else this.options.onStopFailedOutside(this.options.t("chat.subAgents.stop.failedNotice"));
-      } else if (!this.disposed) {
-        this.stops.set(sessionId, state);
+      if (this.disposed) {
+        if (state === null) {
+          this.options.onStopFailedOutside(this.options.t("chat.subAgents.stop.failedNotice"));
+        }
+        return;
       }
+      this.stops.set(sessionId, state ?? { phase: "failed" });
+      const visible = this.route.kind === "detail" && this.route.sessionId === sessionId;
       if (visible) {
         this.renderDetail();
         this.refreshDetail();
