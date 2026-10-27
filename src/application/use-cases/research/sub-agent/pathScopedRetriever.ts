@@ -2,24 +2,32 @@ import type { ResearchRetriever } from "@application/contracts/research";
 import type { IndexCursorPage } from "@application/ports/retrieval";
 
 /**
- * Wraps a retriever so that every index read stays inside the granted document paths.
- * Searches are filtered to those paths, reads of a chunk, section, outline or summary of
- * another document return nothing, inventories keep only granted documents, and
- * cross-document claims and shared references are not offered at all.
+ * Wraps a retriever so that every index read stays inside the granted paths: folders and
+ * their documents, or with exact scope only the granted documents themselves. Queries are
+ * narrowed to a single granted path, other documents read as nothing, and a page that lost
+ * items keeps neither its cursor nor its count, so it reveals nothing about other documents.
  */
 export function pathScopedRetriever(
   retriever: ResearchRetriever,
   paths: readonly string[],
+  exact = false,
 ): ResearchRetriever {
   const allowed = (path: string | undefined): boolean =>
     typeof path === "string" &&
-    paths.some((granted) => path === granted || path.startsWith(`${granted}/`));
+    paths.some((granted) => path === granted || (!exact && path.startsWith(`${granted}/`)));
+  const only = paths.length === 1 ? paths[0] : undefined;
   const page = <T extends { sourcePath: string }>(
     result: IndexCursorPage<T>,
-  ): IndexCursorPage<T> => ({
-    items: result.items.filter((item) => allowed(item.sourcePath)),
-    ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
-  });
+    narrowed: boolean,
+  ): IndexCursorPage<T> => {
+    const items = result.items.filter((item) => allowed(item.sourcePath));
+    if (items.length !== result.items.length || !narrowed) return { items };
+    return {
+      items,
+      ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+      ...(result.totalCount !== undefined ? { totalCount: result.totalCount } : {}),
+    };
+  };
   const scoped: ResearchRetriever = {
     search: async (query, options) => {
       const requested = options.sourcePaths?.filter(allowed) ?? [...paths];
@@ -36,9 +44,6 @@ export function pathScopedRetriever(
       };
     },
   };
-  if (retriever.getLanguageInventory) {
-    scoped.getLanguageInventory = () => retriever.getLanguageInventory!();
-  }
   if (retriever.listIndexedUrls) {
     scoped.listIndexedUrls = async (options) => {
       if (options.sourcePath !== undefined && !allowed(options.sourcePath)) return { items: [] };
@@ -52,11 +57,22 @@ export function pathScopedRetriever(
     };
   }
   if (retriever.listIndexSources) {
-    scoped.listIndexSources = async (options) => page(await retriever.listIndexSources!(options));
+    scoped.listIndexSources = async (options) =>
+      page(
+        await retriever.listIndexSources!(
+          only !== undefined ? { ...options, pathPrefix: only } : options,
+        ),
+        only !== undefined,
+      );
   }
   if (retriever.searchIndexByMetadata) {
     scoped.searchIndexByMetadata = async (options) =>
-      page(await retriever.searchIndexByMetadata!(options));
+      page(
+        await retriever.searchIndexByMetadata!(
+          only !== undefined ? { ...options, pathPrefix: only } : options,
+        ),
+        only !== undefined,
+      );
   }
   if (retriever.listIndexChunks) {
     scoped.listIndexChunks = async (options) =>
@@ -65,7 +81,13 @@ export function pathScopedRetriever(
   if (retriever.findInIndex) {
     scoped.findInIndex = async (options) => {
       if (options.sourcePath !== undefined && !allowed(options.sourcePath)) return { items: [] };
-      return page(await retriever.findInIndex!(options));
+      const sourcePath = options.sourcePath ?? only;
+      return page(
+        await retriever.findInIndex!(
+          sourcePath !== undefined ? { ...options, sourcePath } : options,
+        ),
+        sourcePath !== undefined,
+      );
     };
   }
   if (retriever.readIndexChunk) {

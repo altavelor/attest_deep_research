@@ -32,7 +32,7 @@ export function subAgentToolContext(
   const notes = origin === "direct" ? sources.noteTools : undefined;
   const retriever =
     sources.retriever && policy.indexScope === "paths"
-      ? pathScopedRetriever(sources.retriever, policy.contextPaths)
+      ? pathScopedRetriever(sources.retriever, policy.contextPaths, origin === "map_sources")
       : sources.retriever;
   return {
     availability: {
