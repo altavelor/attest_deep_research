@@ -5,6 +5,7 @@ import {
   emptySubAgentState,
   subAgentSessionError,
   SubAgentSessionFailure,
+  type MapSourcesBatchRecord,
   type SubAgentBufferedValue,
   type SubAgentCreateRecord,
   type SubAgentImportRecord,
@@ -97,6 +98,14 @@ export class SubAgentStateStore {
       revision = this.put("run", run.subAgentRunId, run);
     }
     return revision;
+  }
+
+  batch(batchId: string): MapSourcesBatchRecord | undefined {
+    return this.snapshot?.batches?.find((entry) => entry.batchId === batchId);
+  }
+
+  putBatch(batch: MapSourcesBatchRecord): number {
+    return this.put("batch", batch.batchId, batch);
   }
 
   putCreate(create: SubAgentCreateRecord): number {

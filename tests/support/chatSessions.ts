@@ -2,6 +2,7 @@ import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
 import type { ChatRepository } from "@application/ports";
 import type { ResearchRequest, ResearchStreamEvent } from "@application/contracts/research";
 import type {
+  SubAgentBatchStore,
   SubAgentCloseResult,
   SubAgentDelegator,
   SubAgentHost,
@@ -94,6 +95,17 @@ class FakeChildHost implements SubAgentHost {
 
   listRunRefs(): [] {
     return [];
+  }
+
+  batches(): SubAgentBatchStore {
+    return {
+      load: async () => undefined,
+      get: () => undefined,
+      batchOf: () => null,
+      pendingCount: () => 0,
+      put: async () => true,
+      interrupt: async (parentRunId) => void this.log.push(`interrupt:${parentRunId}`),
+    };
   }
 
   inspection(): SubAgentInspectionPort {

@@ -21,7 +21,6 @@ import {
   UrlStatusChecker,
 } from "@application/contracts/research";
 import { NoteToolService, ResearchToolsetFactory } from "@application/research/toolPorts";
-import { SubAgentPort } from "@application/research/subAgentPort";
 import { AnswerSynthesisService, AnswerSynthesisServiceOptions } from "../AnswerSynthesisService";
 import {
   ContextAssembler,
@@ -61,7 +60,6 @@ export interface ResearchStrategyDeps {
   downloadFolder?: string;
   toolsetFactory: ResearchToolsetFactory;
 
-  subAgentRunner?: SubAgentPort;
   toolsEnabled: boolean;
   toolCapabilities: ToolCallingCapabilities;
   toolCapabilityProvenance?: Record<string, string>;

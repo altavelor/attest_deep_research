@@ -11,6 +11,7 @@ export interface SubAgentParentCoordinatorDeps {
   delegator: Pick<SubAgentDelegator, "getResult">;
   host: Pick<SubAgentHost, "subscribeResults" | "listRunRefs" | "closeAll">;
   parentRunId: string;
+  pendingBatches?(): number;
   maxFinalizeWaitMs?: number;
   logError?(error: unknown): void;
 }
@@ -20,7 +21,8 @@ export interface SubAgentParentCoordinatorDeps {
  * and keeps the parent from publishing a final answer while children are pending. It
  * waits on result signals only, never polls, and bounds the whole finalize wait of the
  * parent run once; when that bound passes, every child is closed as finalize-timeout.
- * A child whose result cannot be read counts as pending until that bound.
+ * A child whose result cannot be read counts as pending until that bound, and so does
+ * an unfinished map_sources batch of the run until its matrix is published.
  */
 export class SubAgentParentCoordinator implements SubAgentParentCoordinatorPort {
   static readonly maxFinalizeWaitMs = 600_000;
@@ -78,7 +80,7 @@ export class SubAgentParentCoordinator implements SubAgentParentCoordinatorPort 
   private async scan(): Promise<{ undelivered: SubAgentDeliveredResult[]; pending: number }> {
     const refs = this.deps.host.listRunRefs(this.deps.parentRunId);
     const undelivered: SubAgentDeliveredResult[] = [];
-    let pending = 0;
+    let pending = this.deps.pendingBatches?.() ?? 0;
     for (const ref of refs) {
       const result = await this.deps.delegator
         .getResult(ref.sessionId, ref.runId)

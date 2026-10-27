@@ -110,23 +110,19 @@ export function createResearchToolRegistry(
   }
 
   if (
-    options.subAgentRunner &&
+    options.subAgentMapSources &&
+    options.subAgentParent &&
     options.retriever &&
     availability.retrieverAvailable &&
     (availability.searchMode === "indexOnly" || availability.searchMode === "indexAndWeb")
   ) {
     sources.register(
       new MapSourcesSource({
-        runner: options.subAgentRunner,
+        context: options.subAgentMapSources,
+        parent: options.subAgentParent,
         retriever: options.retriever,
         evidence,
-        toolContext: {
-          ...options,
-          subAgentRunner: undefined,
-          subAgentDelegator: undefined,
-          subAgentParent: undefined,
-          availability: { ...availability, noteMutationAccess: false },
-        },
+        ...(options.indexSourcePaths ? { indexPaths: options.indexSourcePaths } : {}),
       }),
     );
   }

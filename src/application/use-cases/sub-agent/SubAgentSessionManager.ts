@@ -1,4 +1,5 @@
 import type {
+  SubAgentBatchStore,
   SubAgentCloseResult,
   SubAgentDelegator,
   SubAgentHost,
@@ -8,6 +9,7 @@ import type {
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
 import type { ParentRunBinding, ParentRunDeliveryContext, SubAgentRunRef } from "@core/research";
+import { SubAgentBatchRecords } from "./batchRecords";
 import { closeParentRun } from "./closeBarrier";
 import { SubAgentImportCoordinator } from "./importCoordinator";
 import type { SubAgentManagerParts } from "./managerParts";
@@ -35,6 +37,7 @@ export class SubAgentSessionManager implements SubAgentHost {
   private readonly userStop: SubAgentUserStop;
   private readonly parts: SubAgentManagerParts;
   private readonly services: SubAgentFacadeServices;
+  private readonly batchRecords: SubAgentBatchRecords;
   private disposal: Promise<void> | null = null;
 
   constructor(context: SubAgentSessionManagerContext) {
@@ -63,6 +66,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       submissions: new SubAgentSubmissions(this.parts, scheduler),
       subscribe: (listener) => this.subscribeResults(listener),
     };
+    this.batchRecords = new SubAgentBatchRecords(parts);
     const userStop = new SubAgentUserStop(parts, scheduler);
     this.userStop = userStop;
     this.inspectionPort = new SubAgentInspectionService({
@@ -93,6 +97,11 @@ export class SubAgentSessionManager implements SubAgentHost {
   /** Returns the manager's import lookup that the chat evidence bridge uses to check imports. */
   importLookup(): SubAgentImportLookup {
     return this.parts.imports;
+  }
+
+  /** Returns the map_sources batch records of this chat's section. */
+  batches(): SubAgentBatchStore {
+    return this.batchRecords;
   }
 
   delegatorFor(binding: ParentRunBinding, delivery: ParentRunDeliveryContext): SubAgentDelegator {

@@ -26,6 +26,7 @@ import { SharedReference, SourceDocumentMetadata } from "@application/ports/docu
 import { SourceDocumentSummaries } from "@application/ports/documentSummaries";
 import { ClaimGroup, FindClaimsOptions } from "@application/ports/documentClaims";
 import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
 
 export interface IndexedUrlReference {
   id: string;
@@ -126,6 +127,7 @@ export interface ResearchRequest {
   signal?: AbortSignal;
   subAgentDelegator?: SubAgentDelegator;
   subAgentParent?: SubAgentParentRun;
+  subAgentMapSources?: MapSourcesRunContext;
 }
 
 export type ResearchStreamEvent =

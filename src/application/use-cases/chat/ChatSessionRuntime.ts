@@ -195,7 +195,11 @@ export class ChatSessionRuntime {
         finalizeAnswer: (answer: ResearchAnswer) => this.registerAnswerSources(answer, runId),
         signal: this.controller.signal,
         ...(subAgents
-          ? { subAgentDelegator: subAgents.delegator, subAgentParent: subAgents.parent }
+          ? {
+              subAgentDelegator: subAgents.delegator,
+              subAgentParent: subAgents.parent,
+              ...(subAgents.mapSources ? { subAgentMapSources: subAgents.mapSources } : {}),
+            }
           : {}),
       })) {
         if (this.isFenced(runId)) break;

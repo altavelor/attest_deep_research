@@ -19,6 +19,8 @@ import { ResearchRetriever } from "@application/contracts";
 import { SearchProvider } from "@application/ports";
 import { NoteToolService } from "@application/research";
 import { ResearchSearchMode } from "@core/research";
+import { mapSourcesContext } from "../support/mapSourcesFakes";
+import { fakeParentRun } from "../support/subAgentSessions";
 
 const retriever: ResearchRetriever = {
   search: vi.fn().mockResolvedValue({ chunks: [], citations: [], usedFallback: false }),
@@ -31,7 +33,6 @@ const provider: SearchProvider = {
   fetchMetadata: vi.fn().mockResolvedValue({ ok: false }),
 };
 const urlStatusChecker = { checkUrls: vi.fn().mockResolvedValue([]) };
-const subAgentRunner = { run: vi.fn() };
 
 const noteTools: NoteToolService = {
   setCitationProvider: () => {},
@@ -62,7 +63,8 @@ function registryFor(searchMode: ResearchSearchMode) {
     retriever,
     searchProvider: provider,
     urlStatusChecker,
-    subAgentRunner,
+    subAgentParent: fakeParentRun().parent,
+    subAgentMapSources: mapSourcesContext().context,
     noteTools,
     availability: {
       searchMode,

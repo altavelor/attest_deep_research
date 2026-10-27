@@ -1,5 +1,7 @@
 import type {
   CreateSubAgentSessionInput,
+  MapSourcesBatchError,
+  MapSourcesBatchRecord,
   ImportedSubAgentEvidenceReference,
   ImportedSubAgentRunOutcome,
   NormalizedUsage,
@@ -109,6 +111,21 @@ export interface SubAgentHost extends SubAgentLifecycle {
   listRunRefs(parentRunId: string): readonly SubAgentRunRef[];
   inspection(): SubAgentInspectionPort;
   importLookup?(): SubAgentImportLookup;
+  batches?(): SubAgentBatchStore;
+}
+
+/**
+ * The map_sources batches of one chat's sub-agent section. A put stages the record and,
+ * when durable, waits for its write; a terminal record is never replaced, which the put
+ * reports as false.
+ */
+export interface SubAgentBatchStore {
+  load(): Promise<void>;
+  get(batchId: string): MapSourcesBatchRecord | undefined;
+  batchOf(ref: SubAgentRunRef): string | null;
+  pendingCount(parentRunId: string): number;
+  put(record: MapSourcesBatchRecord, durable: boolean): Promise<boolean>;
+  interrupt(parentRunId: string, error: MapSourcesBatchError): Promise<void>;
 }
 
 export type SubAgentTerminalResult = Exclude<SubAgentResultState, { state: "pending" }>;
@@ -189,6 +206,7 @@ export interface SubAgentExecutionEvent {
 export interface SubAgentExecutionRequest {
   sessionId: string;
   runId: string;
+  origin?: SubAgentTaskOrigin;
   attempt: number;
   task: string;
   sourcePolicy: SubAgentSourcePolicy;

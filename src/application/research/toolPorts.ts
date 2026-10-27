@@ -2,8 +2,8 @@ import type { SearchProvider } from "@application/ports/web";
 import type { ImageSearchRegistry, ToolDocumentImageQuery } from "@application/ports/images";
 import type { AnswerArtifact, ImageCandidate } from "@core/media";
 import type { VaultWriter } from "@application/ports/vault";
-import type { SubAgentPort } from "./subAgentPort";
 import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
+import type { MapSourcesRunContext } from "@application/ports/mapSources";
 import type { ChatModelProvider } from "@core/agent";
 import type { ChatToolCall, ChatToolDefinition } from "@core/agent";
 import type { Citation } from "@core/model";
@@ -63,11 +63,11 @@ export interface ResearchToolsetOptions {
 
   onWebSourceSelection?(diagnostics: WebSourceSelectionDiagnostics): void;
 
-  subAgentRunner?: SubAgentPort;
-
   subAgentDelegator?: SubAgentDelegator;
 
   subAgentParent?: SubAgentParentRun;
+
+  subAgentMapSources?: MapSourcesRunContext;
 
   vaultWriter?: VaultWriter;
 

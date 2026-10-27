@@ -164,9 +164,11 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
               }),
           }
         : {}),
-      subAgentRunner: this.deps.subAgentRunner,
       ...(request.subAgentDelegator && request.subAgentParent
         ? { subAgentDelegator: request.subAgentDelegator, subAgentParent: request.subAgentParent }
+        : {}),
+      ...(request.subAgentParent && request.subAgentMapSources
+        ? { subAgentMapSources: request.subAgentMapSources }
         : {}),
       vaultWriter: this.deps.vaultWriter,
       downloadFolder: this.deps.downloadFolder,
@@ -265,7 +267,13 @@ export class ThinkingResearchStrategy implements ResearchStrategy {
             resultJson,
           }),
         ...(request.subAgentParent
-          ? { roundHooks: subAgentRoundHooks(request.subAgentParent, created.evidence) }
+          ? {
+              roundHooks: subAgentRoundHooks(
+                request.subAgentParent,
+                created.evidence,
+                request.subAgentMapSources ? { batches: request.subAgentMapSources.batches } : {},
+              ),
+            }
           : {}),
       }).run();
     }

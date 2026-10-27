@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatRunRequest } from "@application/use-cases/chat";
+import type { ChatSessionRuntime } from "@application/use-cases/chat/ChatSessionRuntime";
 import { TERMINAL_SAVE_WAIT_MS } from "@application/use-cases/chat/terminalSave";
 import { MAX_CONCURRENT_CHAT_SESSIONS } from "@core/chat/chatSession";
 import type { SavedChatSettings } from "@core/chat/savedChat";
@@ -78,6 +79,16 @@ describe("chat runtime and its child host", () => {
       parentRunId: runId,
       bindingGeneration: 1,
     });
+    const workers = research.requests[0]!.subAgentMapSources!.workers;
+    const work = { requestId: "w", task: "t", sourcePath: "a.md", maxResultChars: 20_000 };
+    await workers.runSource({ ...work, maxRounds: 3 }).catch(() => undefined);
+    const mapGrant = children.hosts[0]!.bindings.at(-1)!.delivery.grantId;
+    expect(children.hosts[0]!.context.resolveGrant(mapGrant)).toMatchObject({
+      callerMode: "thinking",
+      origin: "map_sources",
+      maximumSourcePolicy: { searchMode: "none", allowActiveFile: false, allowNoteMutation: false },
+      limits: { maxRounds: 3, maxResultChars: 20_000, maxSearches: 20 },
+    });
 
     const others = [];
     for (let index = 1; index <= MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
@@ -98,7 +109,14 @@ describe("chat runtime and its child host", () => {
       research.end(0);
       await settle();
     });
-    expect(log).toEqual([`closeAll:${runId}:completed`]);
+    expect(log).toEqual([`interrupt:${runId}`, `closeAll:${runId}:completed`]);
+    expect(children.hosts[0]!.context.resolveGrant(mapGrant)).toBeNull();
+    await workers.runSource({ ...work, maxRounds: 4 }).catch(() => undefined);
+    const closingGrant = children.hosts[0]!.bindings.at(-1)!.delivery.grantId;
+    expect([closingGrant, children.hosts[0]!.context.resolveGrant(closingGrant)]).toEqual([
+      `grant-${runId}-map-4-20000`,
+      null,
+    ]);
     expect(parent.status).toBe("completed");
     await settle();
     expect(queued.status).toBe("running");
@@ -106,7 +124,12 @@ describe("chat runtime and its child host", () => {
     hold = null;
     release();
     await settle();
-    expect(log).toEqual([`closeAll:${runId}:completed`, "commit:completed"]);
+    expect(log).toEqual([
+      `interrupt:${runId}`,
+      `closeAll:${runId}:completed`,
+      `delegator:${runId}`,
+      "commit:completed",
+    ]);
     for (let index = 1; index <= MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
       research.emit(index, completed);
       research.end(index);
@@ -117,8 +140,8 @@ describe("chat runtime and its child host", () => {
     await manager.start(parent.sessionId, request("Follow-up"));
     await settle();
     const followUpRunId = parent.activeRunId!;
-    expect(children.hosts[0]!.bindings[1]!.binding.bindingGeneration).toBe(2);
-    expect(children.hosts[0]!.bindings[1]!.delivery.deliveryEpoch).toBe(2);
+    expect(children.hosts[0]!.bindings.at(-1)!.binding.bindingGeneration).toBe(2);
+    expect(children.hosts[0]!.bindings.at(-1)!.delivery.deliveryEpoch).toBe(2);
 
     const idle = manager.createSession(thinking);
     await manager.start(idle.sessionId, request("Short"));
@@ -145,12 +168,16 @@ describe("chat runtime and its child host", () => {
     log.length = 0;
     let releaseClose = (): void => undefined;
     children.hosts[0]!.closeGate = new Promise<void>((resolve) => (releaseClose = resolve));
+    const runtimes = (manager as unknown as { sessions: Map<string, ChatSessionRuntime> }).sessions;
+    const runtime = runtimes.get(parent.sessionId)!;
     const disposal = manager.dispose();
     await settle();
+    await Promise.race([runtime.closeSubAgents(followUpRunId, "again"), settle()]);
     expect(log).not.toContain("commit:interrupted");
     releaseClose();
     await disposal;
     expect(log.filter((entry) => !/^dispose:[1-9]/u.test(entry))).toEqual([
+      `interrupt:${followUpRunId}`,
       `closeAll:${followUpRunId}:plugin-unload`,
       "commit:interrupted",
       "dispose:0",
@@ -201,6 +228,9 @@ describe("chat runtime and its child host", () => {
 
     await runPastDeadline(TERMINAL_SAVE_WAIT_MS, () => manager.dispose());
 
-    expect(children.log.filter((entry) => !entry.startsWith("closeAll"))).toEqual(["dispose:0"]);
+    expect(children.log.filter((entry) => !entry.startsWith("closeAll"))).toEqual([
+      "interrupt:run-2",
+      "dispose:0",
+    ]);
   });
 });

@@ -1,4 +1,10 @@
-import { INDEX_SEARCH_TOOL, MAP_SOURCES_TOOL, SUB_AGENT_TOOL, WEB_SEARCH_TOOL } from "@core/agent";
+import {
+  INDEX_SEARCH_TOOL,
+  MAP_SOURCES_RESULT_TOOL,
+  MAP_SOURCES_TOOL,
+  SUB_AGENT_TOOL,
+  WEB_SEARCH_TOOL,
+} from "@core/agent";
 import type {
   SubAgentGroupSummary,
   SubAgentRunSummary,
@@ -15,7 +21,8 @@ const DUPLICATE_RESULT_REASON = "duplicate-result-reused";
 /**
  * Aggregates the per-call sub-agent telemetry of one run. A cache replay counts once:
  * it is skipped by its duplicate reason and again by run id. Sub-agents launched
- * through map_sources are summarized in their own namespace.
+ * through map_sources, reported by a legacy map_sources call or by the batch result
+ * read, are summarized in their own namespace by their real run IDs.
  */
 export function summarizeSubAgentTelemetry(
   tools: readonly ToolCallDiagnostic[],
@@ -29,7 +36,7 @@ export function summarizeSubAgentTelemetry(
     if (call.name === WEB_SEARCH_TOOL || call.name === INDEX_SEARCH_TOOL) topLevelSearchCalls += 1;
     if (call.name === SUB_AGENT_TOOL) {
       collect(direct, call.metadata);
-    } else if (call.name === MAP_SOURCES_TOOL) {
+    } else if (call.name === MAP_SOURCES_TOOL || call.name === MAP_SOURCES_RESULT_TOOL) {
       for (const record of nestedRecords(call.metadata)) collect(mapped, record);
     }
   }

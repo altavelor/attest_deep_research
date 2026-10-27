@@ -41,6 +41,8 @@ export function toolCallChainLabel(name: string, args: Record<string, unknown>):
       return typeof args.question === "string" && args.question
         ? `Fan-out: ${truncate(args.question)}`
         : "Fan-out over sources";
+    case "get_map_sources_result":
+      return "Fan-out result";
     case "read_note":
       return basename(args.path) || humanizeToolName(name);
     case "get_active_note":
@@ -153,9 +155,10 @@ export function resolveResultSummary(name: string, resultJson: string): string |
       return sources === undefined ? undefined : `${sources} sources`;
     }
 
-    if (name === "map_sources") {
+    if (name === "map_sources" || name === "get_map_sources_result") {
       const value = root.value as Record<string, unknown> | undefined;
-      const rows = value?.rows;
+      const result = value?.result as Record<string, unknown> | undefined;
+      const rows = result?.rows ?? value?.rows;
       if (Array.isArray(rows)) {
         const failed = rows.filter((row) => (row as Record<string, unknown>).ok === false).length;
         return failed > 0 ? `${rows.length} docs (${failed} failed)` : `${rows.length} docs`;

@@ -1,3 +1,4 @@
+import type { MapSourcesBatchRecord } from "../mapSourcesOutput";
 import type {
   ImportedSubAgentEvidenceReference,
   SubAgentCreateRecord,
@@ -84,6 +85,7 @@ export interface SubAgentStateSnapshot {
   pendingActions: readonly SubAgentPendingAction[];
   recoveryMarkers: readonly SubAgentRecoveryMarker[];
   observation: readonly SubAgentObservationRecord[];
+  batches?: readonly MapSourcesBatchRecord[];
 }
 
 export type SubAgentStateEntity =

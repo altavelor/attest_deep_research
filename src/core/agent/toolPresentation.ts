@@ -16,6 +16,7 @@ import {
   LIST_INDEX_URLS_TOOL,
   LIST_NOTES_TOOL,
   LIST_SHARED_REFERENCES_TOOL,
+  MAP_SOURCES_RESULT_TOOL,
   MAP_SOURCES_TOOL,
   PRESENT_CHART_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
@@ -336,6 +337,10 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
         ? `Asking ${quoted(question)} of each document`
         : "Asking each document the same question";
     },
+  },
+  [MAP_SOURCES_RESULT_TOOL]: {
+    title: "Fan-out result",
+    intent: () => "Checking the fan-out matrix",
   },
   [IMAGE_SEARCH_TOOL]: {
     title: "Search images",

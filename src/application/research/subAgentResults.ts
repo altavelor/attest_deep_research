@@ -1,4 +1,5 @@
 import type {
+  SubAgentBatchStore,
   SubAgentDeliveredResult,
   SubAgentImportedEvidenceResolver,
 } from "@application/ports/subAgent";
@@ -6,6 +7,7 @@ import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import type { SubAgentResultState, SubAgentRunRef } from "@core/research";
 
 export interface SubAgentResultView {
+  batchId?: string;
   sessionId: string;
   runId: string;
   state: SubAgentResultState["state"];
@@ -75,7 +77,8 @@ export function selectDeliverableResults(
   let used = 0;
   for (const delivered of results) {
     const { result } = delivered;
-    const chars = result.state === "completed" ? result.outcome.answerText.length : 0;
+    const chars =
+      result.state === "completed" && !isWorker(delivered) ? result.outcome.answerText.length : 0;
     if (selected.length > 0 && used + chars > maxAnswerChars) break;
     selected.push(delivered);
     used += chars;
@@ -83,14 +86,42 @@ export function selectDeliverableResults(
   return selected;
 }
 
-/** Formats delivered child results as one service message for the next model round. */
+/**
+ * Formats delivered child results as one service message for the next model round. A
+ * map_sources worker is reported by its batch, ref and status only; its row is read with
+ * the batch matrix, so its answer and evidence are not repeated here.
+ */
 export async function formatDeliveredSubAgentResults(
   results: readonly SubAgentDeliveredResult[],
   resolver: SubAgentImportedEvidenceResolver,
   target: SubAgentEvidenceTarget,
+  batches?: Pick<SubAgentBatchStore, "batchOf">,
 ): Promise<string> {
   const views = await Promise.all(
-    results.map(({ ref, result }) => viewSubAgentResult(ref, result, resolver, target)),
+    results.map(({ ref, result }) =>
+      isWorker({ ref, result })
+        ? workerView(ref, result, batches?.batchOf(ref) ?? null)
+        : viewSubAgentResult(ref, result, resolver, target),
+    ),
   );
   return `${SUB_AGENT_RESULTS_PREAMBLE}\n${JSON.stringify(views)}`;
+}
+
+function isWorker({ result }: SubAgentDeliveredResult): boolean {
+  const run = result.state === "completed" ? result.outcome.run : result.run;
+  return run?.origin === "map_sources";
+}
+
+function workerView(
+  ref: SubAgentRunRef,
+  result: SubAgentDeliveredResult["result"],
+  batchId: string | null,
+): SubAgentResultView {
+  return {
+    ...(batchId ? { batchId } : {}),
+    ...ref,
+    state: result.state,
+    resultRevision: result.resultRevision,
+    status: result.state === "completed" ? result.outcome.run.status : result.run.status,
+  };
 }

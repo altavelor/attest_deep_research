@@ -7,6 +7,7 @@ import {
   INDEX_SEARCH_TOOL,
   LIST_INDEX_SOURCES_TOOL,
   LIST_NOTES_TOOL,
+  MAP_SOURCES_RESULT_TOOL,
   MAP_SOURCES_TOOL,
   PRESENT_CHART_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
@@ -95,7 +96,8 @@ export function buildMapSourcesSection(wanted: boolean): string {
   return [
     heading,
     `Where a *set* of documents stands on one issue — agreement, disagreement, coverage — is one ` +
-      `${MAP_SOURCES_TOOL} call, not many manual searches. It returns a row per document.`,
+      `${MAP_SOURCES_TOOL} call, not many manual searches. It returns a batch receipt at once; ` +
+      `read the matrix, a row per document, with ${MAP_SOURCES_RESULT_TOOL}.`,
     "- Omit `sourcePaths` to auto-select relevant documents; pass them when you already know " +
       "which to compare, and cap the fan-out with `maxSources`.",
     "- Render the rows as an evidence matrix: one row per document, its stance, and the finding " +

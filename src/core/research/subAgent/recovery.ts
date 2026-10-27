@@ -1,5 +1,6 @@
 import type { SubAgentRunSummary, SubAgentSessionRecord } from "./sessionModel";
 import type { SubAgentRecoveryMarker, SubAgentStateSnapshot } from "./stateSnapshot";
+import { recoverMapSourcesBatches } from "./batchState";
 
 const CRASH_RECOVERY = "crash-recovery";
 
@@ -9,7 +10,8 @@ const CRASH_RECOVERY = "crash-recovery";
  * archived is archived, because no parent run survives a restart. Each affected
  * parent gets a recovery marker listing fenced runs, cancelled pending imports and
  * unsettled action keys and its pending imports are tombstoned; pending creates and
- * permits stay for later reconciliation and no parent binding is created.
+ * permits stay for later reconciliation and no parent binding is created. Preparing and
+ * pending map_sources batches become interrupted with a safe crash-recovery error.
  */
 export function recoverSubAgentState(
   snapshot: SubAgentStateSnapshot,
@@ -20,7 +22,13 @@ export function recoverSubAgentState(
     if (record.session.status === "archived") return record;
     return archiveRecord(snapshot, record, completedAt, markers);
   });
-  if (markers.size === 0) return snapshot;
+  const recovered = recoverMapSourcesBatches(snapshot.batches);
+  const batches = recovered.changed ? { batches: recovered.batches } : {};
+  if (markers.size === 0) {
+    return recovered.changed
+      ? { ...snapshot, ...batches, revision: snapshot.revision + 1 }
+      : snapshot;
+  }
   const cancelled = new Set(
     [...markers.values()].flatMap((marker) =>
       marker.cancelledImports.map((entry) => entry.importId),
@@ -28,6 +36,7 @@ export function recoverSubAgentState(
   );
   return {
     ...snapshot,
+    ...batches,
     revision: snapshot.revision + 1,
     records,
     imports: snapshot.imports.map((entry) =>
