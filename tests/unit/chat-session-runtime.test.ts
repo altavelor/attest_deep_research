@@ -107,13 +107,15 @@ describe("chat session runtime streaming", () => {
     await harness.start();
     await settle();
 
-    expect(harness.state.messages.at(-1)?.researchProgress?.chain).toContainEqual({
-      kind: "checkpoint",
-      id: "c1",
-      round: 1,
-      content: "Draft",
-      status: "complete",
-    });
+    expect(harness.state.messages.at(-1)?.researchProgress?.chain).toContainEqual(
+      expect.objectContaining({
+        kind: "checkpoint",
+        id: "c1",
+        round: 1,
+        content: "Draft",
+        status: "complete",
+      }),
+    );
     expect(harness.state.messages.at(-1)?.content).toBe("Final");
     expect(harness.state.lastAnswer?.answer).toBe("Final");
     expect(harness.state.status).toBe("completed");
@@ -139,7 +141,13 @@ describe("chat session runtime streaming", () => {
 
     expect(harness.state.messages.at(-1)?.content).toBe("The answer, cited");
     expect(harness.state.messages.at(-1)?.researchProgress?.chain).toEqual([
-      { kind: "checkpoint", id: "c1", round: 1, content: "Looking around", status: "complete" },
+      expect.objectContaining({
+        kind: "checkpoint",
+        id: "c1",
+        round: 1,
+        content: "Looking around",
+        status: "complete",
+      }),
     ]);
   });
 

@@ -1,5 +1,5 @@
 import {
-  parentDisplayChain,
+  parentWorkflowChain,
   type AssistantResearchProgress,
   type ChainItem,
   type ChatDisplayMessage,
@@ -24,7 +24,8 @@ export interface WorkflowTimelineHandle {
 
 /**
  * Projects a chat message's research progress into the shared timeline model, without
- * child details, carrying the sub-agent events of the message's run.
+ * child details, carrying the sub-agent events of the message's run. Sub-agent rows stay in
+ * the items so they anchor the events; the timeline engine does not render them.
  */
 export function toParentWorkflowModel(
   message: ChatDisplayMessage,
@@ -33,7 +34,7 @@ export function toParentWorkflowModel(
   const progress = message.researchProgress;
   return {
     scopeId: message.id ?? `message:${message.createdAt}`,
-    items: parentDisplayChain(progress?.chain ?? []),
+    items: parentWorkflowChain(progress?.chain ?? []),
     phase: progress?.phase ?? "idle",
     ...(progress?.mode ? { mode: progress.mode } : {}),
     reasoningSegments: progress?.reasoning.segments ?? [],

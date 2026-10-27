@@ -7,6 +7,7 @@ import {
   patchActiveAssistantMessage,
   renderChatTranscript,
 } from "@apps/obsidian/ui/chat/ChatTranscript";
+import type { SubAgentMainEventSink } from "@application/ports/subAgent";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
@@ -21,6 +22,7 @@ import { MemoryFileSystem } from "../../support/memoryFileSystem";
 import { transcriptOptions } from "../../support/transcriptOptions";
 
 const AT = "2026-10-26T10:00:00.000Z";
+const THINKING = "attest-chat__workflow-node attest-chat__workflow-node--thinking";
 const settings: SavedChatSettings = {
   chatModelProfileId: "model",
   searchMode: "webOnly",
@@ -114,7 +116,7 @@ describe("sub-agent events inside the parent workflow timeline", () => {
           { kind: "reasoning", segmentId: "r", content: "Thinking" },
           tool("search", "search_web", 2),
           tool("run", "run_subagent", 5),
-          tool("wait", "wait_subagents", 8, "failed"),
+          tool("wait", "wait_subagents", undefined, "failed"),
           tool("fetch", "fetch_web_page", 9),
           tool("result", "get_subagent_result", 12),
         ]),
@@ -146,9 +148,9 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       "search",
       "notice:s1:created",
       "dispatch:s1",
+      "wait",
       "notice:s2:queued",
       "dispatch:s2",
-      "wait",
       "fetch",
       "notice:s1:finished",
     ]);
@@ -205,7 +207,7 @@ describe("sub-agent events inside the parent workflow timeline", () => {
     ]);
   });
 
-  it("stamps live tool calls and events from one allocator and keeps their order after reload", async () => {
+  it("places agent cards between the thinking steps of a live run and keeps that order after reload", async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.createFolder("chats");
     const repository = new FileChatRepository({ fileSystem, folder: "chats" });
@@ -228,23 +230,26 @@ describe("sub-agent events inside the parent workflow timeline", () => {
     });
     await settle();
     const runId = state.activeRunId!;
-    research.emit(0, {
-      type: "tool-call-start",
-      id: "search",
-      name: "search_web",
-      label: "S",
-      round: 1,
-    });
-    await settle();
+    const step = async (...events: Parameters<typeof research.emit>[1][]) => {
+      for (const event of events) research.emit(0, event);
+      await settle();
+    };
+    const publish = (entries: Parameters<SubAgentMainEventSink["publish"]>[0]) =>
+      children.hosts[0]!.context.mainEvents!.publish(entries);
     const { sequence: _sequence, ...entry } = dispatch(runId, "s1", 0);
-    children.hosts[0]!.context.mainEvents!.publish([{ type: "dispatch", entry }]);
-    research.emit(0, {
-      type: "tool-call-start",
-      id: "fetch",
-      name: "fetch_web_page",
-      label: "F",
-      round: 1,
-    });
+    const { sequence: _reply, ...reply } = notice(runId, "s1", "finished", 0);
+    await step(
+      { type: "reasoning", segmentId: "r1", content: "Plan" },
+      { type: "tool-call-start", id: "run", name: "run_subagent", label: "R", round: 1 },
+    );
+    publish([{ type: "dispatch", entry }]);
+    await step(
+      { type: "tool-call-end", id: "run", ok: true },
+      { type: "reasoning", segmentId: "r2", content: "Meanwhile" },
+      { type: "tool-call-start", id: "wait", name: "wait_subagents", label: "W", round: 1 },
+    );
+    publish([{ type: "notice", entry: reply }]);
+    await step({ type: "reasoning", segmentId: "r3", content: "Summing up" });
     research.emit(0, {
       type: "complete",
       answer: {
@@ -268,6 +273,12 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       transcriptOptions(reloaded, () => {}),
     );
 
-    expect(workflowKeys(transcript, `answer-${runId}`)).toEqual(["search", "dispatch:s1", "fetch"]);
+    expect(workflowKeys(transcript, `answer-${runId}`)).toEqual([
+      THINKING,
+      "dispatch:s1",
+      THINKING,
+      "notice:s1:finished",
+      THINKING,
+    ]);
   });
 });

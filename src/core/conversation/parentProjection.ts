@@ -26,9 +26,12 @@ export function parentWorkflowChain(chain: readonly ChainItem[]): ChainItem[] {
  * the user sees why no agent appeared.
  */
 export function parentDisplayChain(chain: readonly ChainItem[]): ChainItem[] {
-  return parentWorkflowChain(chain).filter(
-    (item) => item.kind !== "tool-call" || !isSubAgentTool(item.name) || item.status === "failed",
-  );
+  return parentWorkflowChain(chain).filter((item) => !isHiddenSubAgentRow(item));
+}
+
+/** True for a sub-agent tool row the chat timeline replaces with agent events: any status but failed. */
+export function isHiddenSubAgentRow(item: ChainItem): boolean {
+  return item.kind === "tool-call" && isSubAgentTool(item.name) && item.status !== "failed";
 }
 
 /** True for the parent tools whose output carries receipts or child answers. */

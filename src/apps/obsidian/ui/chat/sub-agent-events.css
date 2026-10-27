@@ -233,3 +233,10 @@ body.is-mobile .attest-chat__agent-open {
 .attest-chat__agent-status.is-not-started .attest-chat__agent-status-dot {
   background: var(--color-orange, #e8743b);
 }
+
+.attest-chat__agent-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

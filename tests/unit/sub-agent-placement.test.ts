@@ -6,7 +6,7 @@ import {
   subAgentRunStatus,
   type ParentTimelineEvent,
 } from "@core/chat/subAgentPlacement";
-import { stampToolCallSequences } from "@core/chat/toolCallSequence";
+import { stampChainSequences } from "@core/chat/chainItemSequence";
 import { normalizeSubAgentTimeline } from "@core/chat/subAgentTimeline";
 import { parentDisplayChain, type ChainItem, type ChatDisplayMessage } from "@core/conversation";
 import type { SubAgentNoticeEntry } from "@core/research";
@@ -106,7 +106,7 @@ describe("placing sub-agent events", () => {
     const placement = placeSubAgentEvents(
       [assistant("answer-p1", [])],
       [dispatch, { ...dispatch, eventKey: "dispatch:lost", parentRunId: "gone" }],
-      [notice("finished", 9), notice("created", 3)],
+      [notice("finished", 9), notice("created", 3), notice("finished", 9)],
     );
     expect(
       placement.byMessageId.get("answer-p1")!.map((event) => [event.kind, event.sequence]),
@@ -124,8 +124,8 @@ describe("placing sub-agent events", () => {
     expect(placement.orphanNotices).toEqual([]);
   });
 
-  it("flushes earlier events before each sequenced tool call and the rest at the end", () => {
-    const events = [9, 2, 5].map((sequence) => ({
+  it("flushes earlier events before each sequenced item, hidden anchors included, and the rest at the end", () => {
+    const events = [9, 2, 5, 7].map((sequence) => ({
       kind: "agent-notice" as const,
       sequence,
       notice: notice("created", sequence),
@@ -135,6 +135,8 @@ describe("placing sub-agent events", () => {
       tool("legacy"),
       tool("a", 3),
       tool("b", 5),
+      tool("wait", 6, { name: "wait_subagents" }),
+      { kind: "reasoning", segmentId: "late", content: "y" },
     ];
     expect(ids(interleaveWorkflowEvents(chain, events))).toEqual([
       "reasoning",
@@ -143,33 +145,43 @@ describe("placing sub-agent events", () => {
       "a",
       "b",
       5,
+      "reasoning",
+      7,
       9,
     ]);
   });
 });
 
-describe("tool-call sequences", () => {
-  it("stamps new top-level calls, sequences the message and raises the allocator above them", () => {
+describe("chain item sequences", () => {
+  it("stamps new top-level items, sequences the message and raises the allocator above them", () => {
     const state = {
-      messages: [assistant("answer-p1", [tool("a", 4), tool("b")])],
+      messages: [
+        assistant("answer-p1", [tool("a", 4), { kind: "reasoning", segmentId: "r", content: "x" }]),
+      ],
       subAgentDispatches: [],
       subAgentNotices: [],
       timelineSequence: 2,
     };
-    const stamped = stampToolCallSequences(state, "answer-p1")!;
+    const stamped = stampChainSequences(state, "answer-p1")!;
     const chain = stamped.messages[0]!.researchProgress!.chain;
     expect([
       stamped.messages[0]!.timelineSequence,
-      chain.map((item) => (item as { timelineSequence?: number }).timelineSequence),
+      chain.map((item) => item.timelineSequence),
       stamped.timelineSequence,
     ]).toEqual([1, [4, 5], 6]);
-    expect(stampToolCallSequences(stamped, "answer-p1")).toBeNull();
-    expect(stampToolCallSequences(state, "answer-other")).toBeNull();
+    expect(stampChainSequences(stamped, "answer-p1")).toBeNull();
+    expect(stampChainSequences(state, "answer-other")).toBeNull();
   });
 
   it("drops an unusable saved sequence and keeps the allocator above valid ones", () => {
     const normalized = normalizeSubAgentTimeline({
-      messages: [assistant("m", [tool("bad", -1), tool("big", 1.5), tool("ok", 8)])],
+      messages: [
+        assistant("m", [
+          tool("bad", -1),
+          tool("big", 1.5),
+          { kind: "reasoning", segmentId: "ok", content: "x", timelineSequence: 8 },
+        ]),
+      ],
       subAgentDispatches: [],
       subAgentNotices: [],
       timelineSequence: 0,

@@ -6,7 +6,6 @@ import { chatHistoryForPrompt } from "./ChatCompaction";
 import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchAnswer } from "@core/answer";
-import { stampToolCallSequences } from "@core/chat/toolCallSequence";
 import {
   answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
@@ -33,6 +32,7 @@ import type { SubAgentInspectionPort } from "@application/ports/subAgent";
 import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
 import type { SaveChatInput } from "@core/chat/savedChat";
 import { scheduleTimeout } from "@shared";
+import { stampRunChain } from "./chainStamping";
 import { ChatSubAgents } from "./ChatSubAgents";
 import { ChatWriteBuffer } from "./ChatWriteBuffer";
 import type {
@@ -217,6 +217,7 @@ export class ChatSessionRuntime {
           diagnostics.complete(event.answer.contextDiagnostics);
         }
         this.applyEvent(event, runId, request.modelLabel);
+        if (!this.isFenced(runId)) stampRunChain(this.state, runId);
         if (event.type === "complete") completed = true;
       }
 
@@ -259,15 +260,6 @@ export class ChatSessionRuntime {
       boundAnswer.answer,
     );
     return boundAnswer;
-  }
-
-  private stampToolCalls(runId: string): void {
-    const stamped = stampToolCallSequences(this.state, answerMessageId(runId));
-    if (!stamped) return;
-    this.state.messages = stamped.messages;
-    this.state.subAgentDispatches = stamped.subAgentDispatches;
-    this.state.subAgentNotices = stamped.subAgentNotices;
-    this.state.timelineSequence = stamped.timelineSequence;
   }
 
   private applyEvent(event: ResearchStreamEvent, runId: string, modelLabel: string): void {
@@ -313,7 +305,6 @@ export class ChatSessionRuntime {
         event.fetchTargets,
         event.searchSources,
       );
-      if (!event.parentId) this.stampToolCalls(runId);
       this.emit(runId, "active-message");
       return;
     }

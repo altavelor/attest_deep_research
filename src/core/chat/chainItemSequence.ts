@@ -2,12 +2,12 @@ import type { ChainItem } from "@core/conversation/model";
 import { normalizeSubAgentTimeline, type SubAgentTimelineState } from "./subAgentTimeline";
 
 /**
- * Gives each top-level tool call of the trailing assistant message that has no sequence
- * the next shared timeline sequence, after the timeline is normalized so the message
- * itself is sequenced first. Returns null when the trailing message is not `messageId` or
- * no tool call needs a sequence, so another run's message is never stamped.
+ * Gives each top-level chain item of the trailing assistant message that has no sequence
+ * the next shared timeline sequence, after the timeline is normalized so the message is
+ * sequenced first. Returns null when the trailing message is not `messageId` or nothing
+ * needs a sequence, so another run's message is never stamped and no item is restamped.
  */
-export function stampToolCallSequences(
+export function stampChainSequences(
   state: SubAgentTimelineState,
   messageId: string,
 ): SubAgentTimelineState | null {
@@ -32,5 +32,5 @@ export function stampToolCallSequences(
 }
 
 function isUnstamped(item: ChainItem): boolean {
-  return item.kind === "tool-call" && item.timelineSequence === undefined;
+  return item.timelineSequence === undefined;
 }

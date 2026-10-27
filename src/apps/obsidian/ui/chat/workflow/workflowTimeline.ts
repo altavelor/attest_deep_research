@@ -1,5 +1,5 @@
 import { interleaveWorkflowEvents, type ParentTimelineEvent } from "@core/chat/subAgentPlacement";
-import type { ChainItem } from "@core/conversation";
+import { parentDisplayChain, type ChainItem } from "@core/conversation";
 import { renderAgentEventNode } from "./agentEventNodeRenderer";
 import { fetchTargetsByResultId, fetchTargetsFor } from "./fetchTargetResolver";
 import {
@@ -121,8 +121,9 @@ function renderChainNodes(
   scope: TimelineScope,
   state: WorkflowState,
 ): void {
-  const fetchTargets = fetchTargetsByResultId([...chain]);
-  const latestItem = chain.at(-1);
+  const visible = parentDisplayChain(chain);
+  const fetchTargets = fetchTargetsByResultId(visible);
+  const latestItem = visible.at(-1);
   const activeReasoningId =
     state.isStreaming &&
     !state.isFinalizing &&
