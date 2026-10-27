@@ -163,7 +163,14 @@ describe("sub-agent section validation", () => {
         [completed([{ ...row, evidenceIds: ["../x"] }])],
         [completed([row], { diagnostics: {} })],
         [batchRecord({ error: { code: "Bad Code", message: "m" } })],
-        [completed([{ ...row, error: "provider-failed: m" }])],
+        [completed(Array.from({ length: 21 }, () => row))],
+        [completed([{ ...row, keyFindings: ["f".repeat(401)] }])],
+        [
+          completed([
+            ...Array.from({ length: 19 }, () => row),
+            { ...row, keyFindings: ["f".repeat(400)], error: "provider-failed: m" },
+          ]),
+        ],
       ].map(batchField),
     ).toEqual([
       "batches",
@@ -184,6 +191,8 @@ describe("sub-agent section validation", () => {
       "batches[0].result",
       "batches[0].result",
       "batches[0].error",
+      "batches[0].result",
+      "batches[0].result",
       "valid",
     ]);
   });
@@ -234,9 +243,30 @@ describe("sub-agent section validation", () => {
       "Field rows is not allowed for batch",
     );
     const linked = { ...withRun(subAgentSection(), () => undefined), batches: [batchRecord()] };
+    const { batchId, ...record } = batchRecord({ batchId: "batch-2" });
+    const fields = record as unknown as Readonly<Record<string, never>>;
+    const every = { ...fields, result: {} as never, error: {} as never };
     expect(
-      applySubAgentDelta(linked, { op: "delete", entity: "session", id: "session-1" })?.batches,
-    ).toEqual([]);
+      checkSubAgentDelta({ op: "set", entity: "batch", id: batchId, fields: every }),
+    ).toBeNull();
+    expect(
+      applySubAgentDelta(linked, { op: "set", entity: "batch", id: batchId, fields })?.batches,
+    ).toHaveLength(2);
+    const foreignRef = [{ sourcePath: "Notes/a.md", ref: { sessionId: "session-1", runId: "x" } }];
+    expect(
+      applySubAgentDelta(linked, {
+        op: "set",
+        entity: "batch",
+        id: batchId,
+        fields: { ...fields, refs: foreignRef as never },
+      }),
+    ).toBeNull();
+    expect(
+      [
+        applySubAgentDelta(linked, { op: "delete", entity: "session", id: "session-1" }),
+        applySubAgentDelta(linked, { op: "delete", entity: "run", id: "run-1" }),
+      ].map((next) => next?.batches),
+    ).toEqual([[], []]);
     expect(
       applySubAgentDelta(subAgentSection([]), {
         op: "set",
@@ -257,22 +287,30 @@ describe("recoverSubAgentState", () => {
     };
     const finished = batchRecord({ batchId: "batch-0", refs: [], state: "failed" });
     const snapshot = subAgentSection([live, done], {
-      batches: [finished, batchRecord({ refs: [], state: "preparing" })],
+      batches: [
+        finished,
+        batchRecord({ refs: [], state: "preparing" }),
+        batchRecord({ batchId: "batch-2", refs: [], state: "pending" }),
+      ],
     });
 
     const recovered = recoverSubAgentState(snapshot, LATER);
 
+    const interrupted = {
+      refs: [],
+      state: "interrupted" as const,
+      error: {
+        code: "crash-recovery",
+        message: "The batch was interrupted when the app restarted.",
+      },
+    };
     expect(recovered.batches).toEqual([
       finished,
-      batchRecord({
-        refs: [],
-        state: "interrupted",
-        error: {
-          code: "crash-recovery",
-          message: "The batch was interrupted when the app restarted.",
-        },
-      }),
+      batchRecord(interrupted),
+      batchRecord({ ...interrupted, batchId: "batch-2" }),
     ]);
+    const batchesOnly = subAgentSection([done], { batches: [batchRecord({ refs: [] })] });
+    expect(recoverSubAgentState(batchesOnly, LATER).revision).toBe(batchesOnly.revision + 1);
     expect(recovered.revision).toBe(2);
     expect(recovered.records[1]).toBe(done);
     expect(recovered.records[0]?.session).toMatchObject({
@@ -349,5 +387,18 @@ describe("evictSubAgentDetails", () => {
       detail("o3", "run-live", "live"),
     ]);
     expect(evicted.records).toBe(snapshot.records);
+
+    const newer = batchRecord({
+      batchId: "batch-new",
+      createdAt: "2026-10-26T11:00:00.000Z",
+      state: "completed",
+      result,
+    });
+    const older = { ...newer, batchId: "batch-old", createdAt: "2026-10-26T09:00:00.000Z" };
+    const two = evictSubAgentDetails({ ...old, batches: [newer, older] }, 30).snapshot;
+    expect(two.batches?.map((batch) => batch.result?.rows[0]?.keyFindings)).toEqual([
+      row.keyFindings,
+      ["[evicted: chat size limit]"],
+    ]);
   });
 });
