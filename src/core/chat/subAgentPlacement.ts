@@ -181,8 +181,8 @@ function decorate(
 
 /**
  * Orders the events of one parent run, folds each session's created notice into its
- * initial dispatch at the earlier sequence, and drops a closed notice that only closes
- * sessions which already reported their own outcome before it.
+ * initial dispatch at the earlier sequence, and drops a closed notice when every dispatched
+ * run, and every session without a dispatch, already reported a settled outcome before it.
  */
 function arrangeRunEvents(events: readonly ParentTimelineEvent[]): ParentTimelineEvent[] {
   const created = new Map<string, Extract<ParentTimelineEvent, { kind: "agent-notice" }>>();
@@ -204,33 +204,51 @@ function arrangeRunEvents(events: readonly ParentTimelineEvent[]): ParentTimelin
       sequence: Math.min(notice.sequence, event.sequence),
     };
   });
+  const settledBy = settledSequences(events);
   return arranged
     .filter(
       (event) =>
         !(event.kind === "agent-notice" && merged.has(event.notice.eventKey)) &&
-        !isRedundantClose(event, events),
+        !(
+          event.kind === "agent-notice" &&
+          event.notice.kind === "closed" &&
+          settledBy !== null &&
+          settledBy < event.sequence
+        ),
     )
     .sort((a, b) => a.sequence - b.sequence);
 }
 
-function isRedundantClose(event: ParentTimelineEvent, events: readonly ParentTimelineEvent[]) {
-  if (event.kind !== "agent-notice" || event.notice.kind !== "closed") return false;
+/**
+ * Returns the sequence by which every dispatched run and every session of one parent run
+ * has its first settled notice, or null when some never settles or none
+ * exists. Interrupted notices do not settle, since a close may cause them.
+ */
+function settledSequences(events: readonly ParentTimelineEvent[]): number | null {
+  const runs = new Set<string>();
   const sessions = new Set<string>();
-  const settled = new Set<string>();
-  for (const other of events) {
-    const sessionId =
-      other.kind === "agent-dispatch" ? other.dispatch.sessionId : other.notice.sessionId;
-    if (sessionId === null) continue;
-    sessions.add(sessionId);
-    if (
-      other.kind === "agent-notice" &&
-      other.sequence < event.sequence &&
-      SETTLED_KINDS.has(other.notice.kind)
-    ) {
-      settled.add(sessionId);
+  const firstByRun = new Map<string, number>();
+  const firstBySession = new Map<string, number>();
+  const first = (map: Map<string, number>, key: string, sequence: number) => {
+    map.set(key, Math.min(map.get(key) ?? sequence, sequence));
+  };
+  for (const event of events) {
+    if (event.kind === "agent-dispatch") {
+      runs.add(event.dispatch.runId);
+      continue;
     }
+    const { sessionId, runId, kind } = event.notice;
+    if (sessionId !== null) sessions.add(sessionId);
+    if (!SETTLED_KINDS.has(kind)) continue;
+    if (runId !== null) first(firstByRun, runId, event.sequence);
+    if (sessionId !== null) first(firstBySession, sessionId, event.sequence);
   }
-  return sessions.size > 0 && settled.size === sessions.size;
+  const units = [
+    ...[...runs].map((runId) => firstByRun.get(runId)),
+    ...[...sessions].map((sessionId) => firstBySession.get(sessionId)),
+  ];
+  if (units.length === 0 || units.some((sequence) => sequence === undefined)) return null;
+  return (units as number[]).reduce((max, sequence) => Math.max(max, sequence), -Infinity);
 }
 
 /**

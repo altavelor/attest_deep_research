@@ -17,6 +17,7 @@ const MAX_QUERY_CHARS = 500;
 const SAFE_ITEM_ID = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_:./#?=&%+-]{0,399}$/u;
 const DOMAIN_RESOURCE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u;
+const IMPORT_ID = /^import-[0-9a-f]{32}$/u;
 const ALIAS_ORDINAL = /^[1-9]\d{0,5}$/u;
 const CITATION_LIKE = /^\S{1,200}$/u;
 const REDACTION_LABEL = SUB_AGENT_REDACTION_MARKER.slice(1, -1);
@@ -71,9 +72,9 @@ export function subAgentAliasPrefix(importId: string): string {
 }
 
 /**
- * Returns the item number of a sub-agent evidence alias such as `subagent:import-ab12:3`,
- * or null for any other bracket label. The alias must have the shape that
- * subAgentAliasPrefix builds and be a valid citation handle.
+ * Returns the item number of a sub-agent evidence alias such as `subagent:import-<32 hex>:3`,
+ * or null for any other bracket label. The import id must have the shape the import plan
+ * generates and the alias the shape that subAgentAliasPrefix builds.
  */
 export function subAgentAliasOrdinal(label: string): number | null {
   const split = label.lastIndexOf(":");
@@ -81,8 +82,7 @@ export function subAgentAliasOrdinal(label: string): number | null {
   const ordinal = label.slice(split + 1);
   if (
     split < 0 ||
-    importId.length === 0 ||
-    importId.includes(":") ||
+    !IMPORT_ID.test(importId) ||
     !isCitationHandle(label) ||
     !ALIAS_ORDINAL.test(ordinal) ||
     label !== `${subAgentAliasPrefix(importId)}${ordinal}`

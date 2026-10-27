@@ -18,6 +18,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.card.aria": "{description}. {status}, {elapsed}, {model}, {tokens}",
   "chat.subAgents.noModel": "Модель неизвестна",
   "chat.subAgents.elapsed.short": "{minutes} мин {seconds} с",
+  "chat.subAgents.elapsed.seconds": "{seconds} с",
   "chat.subAgents.elapsed.long": "{hours} ч {minutes} мин",
   "chat.subAgents.tokens": "{count} токенов",
   "chat.subAgents.tokens.partial": "{count} · частично",

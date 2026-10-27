@@ -22,7 +22,7 @@ export const MAX_SAFE_MARKUP_CHARS = 128 * 1024;
 const MAX_INLINE_DEPTH = 2;
 const MAX_TOKEN_CHARS = 256;
 const UNSAFE_CHARS = new RegExp(
-  "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]",
+  "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200b\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069\\ufeff\\u{e0000}-\\u{e007f}]",
   "gu",
 );
 const WORD_CHAR = /[\p{L}\p{N}]/u;
@@ -39,6 +39,14 @@ interface LineStops {
 interface InlineMatch {
   nodes: SafeInline[];
   next: number;
+}
+
+/** Removes control, bidirectional, invisible and tag characters from a single-line display text. */
+export function cleanDisplayText(text: string): string {
+  return text
+    .replace(UNSAFE_CHARS, "")
+    .replace(/[\n\r\t]+/gu, " ")
+    .trim();
 }
 
 /**

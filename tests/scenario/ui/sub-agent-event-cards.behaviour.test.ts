@@ -9,7 +9,7 @@ import type { NormalizedUsage, SubAgentNoticeEntry } from "@core/research";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 
 const t = createTranslator("en").t;
-const TOKEN = "subagent:import-55e40e:1";
+const TOKEN = `subagent:import-${"55e40e01".repeat(4)}:1`;
 const usage: NormalizedUsage = {
   requestCount: 2,
   modelRounds: 2,
@@ -90,6 +90,7 @@ describe("sub-agent event cards", () => {
       true,
       1,
     ]);
+    expect(card.getAttribute("aria-label")).toBe("Find primary sources");
     const toggle = card.querySelector<HTMLButtonElement>(".attest-chat__agent-toggle")!;
     expect(toggle.querySelector(".attest-chat__agent-toggle-chevron")).not.toBeNull();
     toggle.click();
@@ -105,10 +106,11 @@ describe("sub-agent event cards", () => {
     const meta = (notice: SubAgentNoticeEntry) =>
       render(notice).querySelector(".attest-chat__agent-reply-meta")?.textContent ?? null;
     expect([
-      meta(finished({ durationMs: 12_000, usage, modelLabel: "GPT-5" })),
-      meta(finished({ usage: { ...usage, source: "unavailable" } })),
+      meta(finished({ durationMs: 12_000, usage, modelLabel: "GPT\u202e-5\n" })),
+      meta(finished({ durationMs: 400, usage: { ...usage, source: "unavailable" } })),
+      meta(finished({ durationMs: 2.5, usage: { ...usage, toolCalls: 2.5, totalTokens: 1e302 } })),
       meta(finished()),
-    ]).toEqual(["0m 12s · Tool calls: 7 · 15.4k tokens · GPT-5", "Tool calls: 7", null]);
+    ]).toEqual(["12s · Tool calls: 7 · 15.4k tokens · GPT-5", "0s", null, null]);
   });
 
   it("appends the terminal duration to a finished task status and leaves a live one bare", () => {
@@ -133,6 +135,18 @@ describe("sub-agent event cards", () => {
       status([finished({ kind: "failed", durationMs: 61_000 })]),
       status([finished({ kind: "queued", durationMs: 3_000 })]),
       status([]),
-    ]).toEqual(["Finished · 0m 12s", "Failed · 1m 01s", "Queued", "Running"]);
+    ]).toEqual(["Finished · 12s", "Failed · 1m 01s", "Queued", "Running"]);
+  });
+
+  it("gives a created node without a task card exactly one Open details and a clean title", () => {
+    const node = render(
+      finished({ kind: "created", description: "Find\u202e sources\u200b\nnow" }),
+    );
+    const line = node.querySelector<HTMLElement>(".attest-chat__agent-event-description")!;
+    expect([
+      node.querySelectorAll(".attest-chat__agent-open").length,
+      line.textContent,
+      line.title,
+    ]).toEqual([1, "Find sources now", "Find sources now"]);
   });
 });

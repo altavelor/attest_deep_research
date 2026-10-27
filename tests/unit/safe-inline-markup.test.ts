@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   cleanSafeMarkupSource,
-  MAX_SAFE_MARKUP_CHARS,
   parseSafeMarkup,
   type SafeBlock,
   type SafeInline,
 } from "@core/chat/safeInlineMarkup";
 import { foldSafeMarkup } from "@core/chat/safeMarkupFold";
 
-const TOKEN = "subagent:import-55e40e:1";
+const IMPORT = `import-${"55e40e01".repeat(4)}`;
+const TOKEN = `subagent:${IMPORT}:1`;
 
 function text(nodes: readonly SafeInline[]): string {
   return nodes
@@ -60,13 +60,13 @@ describe("safe inline markup", () => {
   it("keeps links, images, HTML and wikilinks inert and chips only real evidence tokens", () => {
     const source = [
       "[site](https://x.test) ![alt](https://x.test/i.png) <b>raw</b> <script>x</script>",
-      `[[Note]] [${TOKEN}] [subagent:import-55e40e:0] [subagent::1] [subagent:a:b:1]`,
+      `[[Note]] [${TOKEN}] [subagent:${IMPORT}:0] [subagent::1] [subagent:a:b:1] [subagent:import-55e40e:1]`,
       "[subagent:import 1:2] [source-123456] [subagent:import-x:1234567]",
     ].join("\n");
     expect(shape(parseSafeMarkup(source))).toEqual([
       [
         "p:site alt <b>raw</b> <script>x</script>/",
-        "[[Note]] <source 1> [subagent:import-55e40e:0] [subagent::1] [subagent:a:b:1]/",
+        `[[Note]] <source 1> [subagent:${IMPORT}:0] [subagent::1] [subagent:a:b:1] [subagent:import-55e40e:1]/`,
         "[subagent:import 1:2] [source-123456] [subagent:import-x:1234567]",
       ].join(""),
     ]);
@@ -87,7 +87,13 @@ describe("safe inline markup", () => {
   });
 
   it("strips control and bidirectional override characters", () => {
-    expect(shape(parseSafeMarkup("a\u202eb\u2066c\u0007d\r\ne\u200f"))).toEqual(["p:abcd/e"]);
+    expect(
+      shape(
+        parseSafeMarkup(
+          "a\u202eb\u2066c\u0007d\u0085e\u200bf\ufeffg\u{e0041}h\u2028i\r\nj\u200f👨\u200d👩 é\ufe0f",
+        ),
+      ),
+    ).toEqual(["p:abcdefghi/j👨\u200d👩 é\ufe0f"]);
   });
 
   it("parses a 100k-character adversarial flood into one literal paragraph", () => {
@@ -100,8 +106,8 @@ describe("safe inline markup", () => {
   });
 
   it("caps the cleaned source without splitting a surrogate pair", () => {
-    const capped = cleanSafeMarkupSource("x".repeat(MAX_SAFE_MARKUP_CHARS - 1) + "😀z");
-    expect(capped.length).toBe(MAX_SAFE_MARKUP_CHARS - 1);
+    const capped = cleanSafeMarkupSource("x".repeat(131_071) + "😀z");
+    expect(capped.length).toBe(131_071);
   });
 });
 
@@ -125,9 +131,16 @@ describe("safe markup folding", () => {
     const bold = foldSafeMarkup(`intro text **Не удалось найти источники** tail`, 24);
     const token = foldSafeMarkup(`intro text here [${TOKEN}] tail`, 22);
     const emoji = foldSafeMarkup(`${"x".repeat(19)}😀😀😀`, 20);
-    expect([shape(bold.blocks), shape(token.blocks), shape(emoji.blocks)]).toEqual([
+    const joined = foldSafeMarkup(`${"x".repeat(19)}e\u0301\u200d❤\ufe0fyyyy`, 20);
+    expect([
+      shape(bold.blocks),
+      shape(token.blocks),
+      shape(emoji.blocks),
+      shape(joined.blocks),
+    ]).toEqual([
       ["p:intro text…"],
       ["p:intro text here…"],
+      [`p:${"x".repeat(19)}…`],
       [`p:${"x".repeat(19)}…`],
     ]);
   });

@@ -141,7 +141,7 @@ function renderSubAgentEventSurfaces(host: HTMLElement): void {
       notice: notice("finished", {
         durationMs: 12_000,
         modelLabel: "Model",
-        replyExcerpt: "## Head\n**bold** `code` [subagent:import-ab12cd34:1]\n- item",
+        replyExcerpt: `## Head\n**bold** \`code\` [subagent:import-${"ab12cd34".repeat(4)}:1]\n- item`,
       }),
     },
     options,

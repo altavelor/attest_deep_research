@@ -9,7 +9,7 @@ import {
 import { stampChainSequences } from "@core/chat/chainItemSequence";
 import { normalizeSubAgentTimeline } from "@core/chat/subAgentTimeline";
 import { parentDisplayChain, type ChainItem, type ChatDisplayMessage } from "@core/conversation";
-import type { SubAgentNoticeEntry } from "@core/research";
+import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 function notice(
   kind: SubAgentNoticeEntry["kind"],
@@ -114,6 +114,7 @@ describe("placing sub-agent events", () => {
           commandKind: "follow-up",
           sequence: 11,
         },
+        { ...dispatch, eventKey: "dispatch:dup", sequence: 6 },
         { ...dispatch, eventKey: "dispatch:lost", parentRunId: "gone" },
       ],
       [
@@ -127,10 +128,11 @@ describe("placing sub-agent events", () => {
     expect(placed.map((event) => [event.kind, event.sequence])).toEqual([
       ["agent-dispatch", 3],
       ["agent-notice", 5],
+      ["agent-dispatch", 6],
       ["agent-notice", 9],
       ["agent-dispatch", 11],
     ]);
-    const [merged, , , follow] = placed as Extract<
+    const [merged, , duplicate, , follow] = placed as Extract<
       ParentTimelineEvent,
       { kind: "agent-dispatch" }
     >[];
@@ -140,15 +142,18 @@ describe("placing sub-agent events", () => {
       12_000,
       "created",
     ]);
-    expect(follow!.created).toBeUndefined();
+    expect([follow!.created, duplicate!.created]).toEqual([undefined, undefined]);
     expect(placement.orphanDispatches.map((entry) => entry.eventKey)).toEqual(["dispatch:lost"]);
     expect(placement.orphanNotices).toEqual([]);
   });
 
-  it("hides a closed notice only when every session of the run settled before it", () => {
+  it("hides a closed notice only when every dispatched run and undispatched session settled before it", () => {
     const closed = { ...notice("closed", 20, null), sessionId: null, eventKey: "closed" };
-    const kinds = (notices: SubAgentNoticeEntry[]) =>
-      placeSubAgentEvents([assistant("answer-p1", [])], [dispatch], notices)
+    const kinds = (
+      notices: SubAgentNoticeEntry[],
+      dispatches: SubAgentDispatchEntry[] = [dispatch],
+    ) =>
+      placeSubAgentEvents([assistant("answer-p1", [])], dispatches, notices)
         .byMessageId.get("answer-p1")!
         .map((event) => (event.kind === "agent-notice" ? event.notice.kind : "dispatch"));
     expect(kinds([notice("finished", 9), closed])).toEqual(["dispatch", "finished"]);
@@ -165,6 +170,19 @@ describe("placing sub-agent events", () => {
     expect(
       kinds([notice("finished", 9), { ...notice("created", 10), sessionId: "s2" }, closed]),
     ).toEqual(["dispatch", "finished", "created", "closed"]);
+    const followUp = {
+      ...dispatch,
+      eventKey: "dispatch:r2",
+      runId: "r2",
+      commandKind: "follow-up" as const,
+      sequence: 10,
+    };
+    expect(kinds([notice("finished", 9), closed], [dispatch, followUp])).toEqual([
+      "dispatch",
+      "finished",
+      "dispatch",
+      "closed",
+    ]);
   });
 
   it("flushes earlier events before each sequenced item, hidden anchors included, and the rest at the end", () => {

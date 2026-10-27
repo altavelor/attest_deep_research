@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
+import { cleanDisplayText } from "@core/chat/safeInlineMarkup";
 import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import type { SubAgentNoticeEntry } from "@core/research";
 import { renderFoldedMarkup, renderToggle } from "./safeMarkupView";
@@ -140,12 +141,15 @@ function statusText(
   t: Translate,
 ): string {
   const label = t(`chat.agent.status.${event.status}`);
-  return event.durationMs === undefined
-    ? label
-    : `${label} · ${formatElapsed(event.durationMs, t)}`;
+  return !isCount(event.durationMs) ? label : `${label} · ${formatElapsed(event.durationMs, t)}`;
 }
 
-function titleLine(parentEl: HTMLElement, label: string, title: string): void {
+function isCount(value: number | undefined): value is number {
+  return Number.isSafeInteger(value) && value! >= 0;
+}
+
+function titleLine(parentEl: HTMLElement, label: string, rawTitle: string): void {
+  const title = cleanDisplayText(rawTitle);
   const lineEl = parentEl.createDiv({ cls: "attest-chat__agent-event-line" });
   lineEl.createSpan({ cls: "attest-chat__agent-event-title", text: label });
   lineEl.createSpan({
@@ -181,6 +185,8 @@ function renderNoticeContent(
     return;
   }
   const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card" });
+  const agentTitle = cleanDisplayText(entry.description);
+  if (agentTitle) cardEl.setAttribute("aria-label", agentTitle);
   const tone = TONES[entry.kind];
   if (tone) cardEl.addClass(`is-${tone}`);
   cardEl.createDiv({ cls: "attest-chat__agent-card-head", text: noticeTitle(entry, t) });
@@ -197,14 +203,16 @@ function renderNoticeContent(
 
 function replyMeta(entry: SubAgentNoticeEntry, t: Translate): string {
   const parts: string[] = [];
-  if (entry.durationMs !== undefined) parts.push(formatElapsed(entry.durationMs, t));
-  if (entry.usage) {
-    parts.push(t("chat.agent.meta.toolCalls", { count: String(entry.usage.toolCalls) }));
-    if (entry.usage.source !== "unavailable" && entry.usage.totalTokens !== undefined) {
-      parts.push(t("chat.subAgents.tokens", { count: compactCount(entry.usage.totalTokens) }));
-    }
+  const usage = entry.usage?.source === "unavailable" ? undefined : entry.usage;
+  if (isCount(entry.durationMs)) parts.push(formatElapsed(entry.durationMs, t));
+  if (isCount(usage?.toolCalls)) {
+    parts.push(t("chat.agent.meta.toolCalls", { count: String(usage.toolCalls) }));
   }
-  if (entry.modelLabel) parts.push(entry.modelLabel);
+  if (isCount(usage?.totalTokens)) {
+    parts.push(t("chat.subAgents.tokens", { count: compactCount(usage.totalTokens) }));
+  }
+  const model = cleanDisplayText(entry.modelLabel ?? "");
+  if (model) parts.push(model);
   return parts.join(" · ");
 }
 
