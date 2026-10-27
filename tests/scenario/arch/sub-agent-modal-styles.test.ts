@@ -16,6 +16,9 @@ describe("sub-agent sessions modal stylesheet contract", () => {
     expect(styles).toMatch(
       /\.attest-sub-agents\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/s,
     );
+    expect(styles).toMatch(
+      /\.modal\.attest-sub-agents-modal > \.modal-content\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0/s,
+    );
     expect(styles).not.toMatch(/\.attest-sub-agents\s*\{[^}]*max-height:\s*72vh/s);
     expect(styles).toMatch(/\.attest-sub-agents__resize\s*\{[^}]*touch-action:\s*none/s);
   });
