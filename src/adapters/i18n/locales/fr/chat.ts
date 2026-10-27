@@ -95,7 +95,8 @@ export const chat: EnChatMessages = {
 
   "chat.notice.chatDeleted": "Chat supprimé.",
   "chat.notice.savedChatNotFound": "Le chat enregistré est introuvable.",
-  "chat.notice.chatRecoveredFromPrevious": "Ce chat a été restauré depuis sa version enregistrée précédente, car le dernier fichier était illisible. Les sous-agents y restent désactivés jusqu’au prochain enregistrement du chat.",
+  "chat.notice.chatRecoveredFromPrevious":
+    "Ce chat a été restauré depuis sa version enregistrée précédente, car le dernier fichier était illisible. Les sous-agents y restent désactivés jusqu’au prochain enregistrement du chat.",
   "chat.notice.openIndexSettings": "Ouvrir les paramètres d’index",
 
   "chat.message.you": "Vous",

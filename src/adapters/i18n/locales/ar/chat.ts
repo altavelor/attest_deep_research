@@ -89,7 +89,8 @@ export const chat: EnChatMessages = {
 
   "chat.notice.chatDeleted": "حُذفت المحادثة.",
   "chat.notice.savedChatNotFound": "لم يتم العثور على المحادثة المحفوظة.",
-  "chat.notice.chatRecoveredFromPrevious": "تمت استعادة هذه المحادثة من نسختها المحفوظة السابقة لتعذّر قراءة الملف الأحدث. تبقى الوكلاء الفرعيون معطّلين فيها حتى يتم حفظ المحادثة مجددًا.",
+  "chat.notice.chatRecoveredFromPrevious":
+    "تمت استعادة هذه المحادثة من نسختها المحفوظة السابقة لتعذّر قراءة الملف الأحدث. تبقى الوكلاء الفرعيون معطّلين فيها حتى يتم حفظ المحادثة مجددًا.",
   "chat.notice.openIndexSettings": "فتح إعدادات الفهرس",
 
   "chat.message.you": "أنت",

@@ -88,7 +88,8 @@ export const chat = {
 
   "chat.notice.chatDeleted": "Chat deleted.",
   "chat.notice.savedChatNotFound": "Saved chat was not found.",
-  "chat.notice.chatRecoveredFromPrevious": "This chat was restored from its previous saved version because the latest file could not be read. Sub-agents stay off in it until the chat is saved again.",
+  "chat.notice.chatRecoveredFromPrevious":
+    "This chat was restored from its previous saved version because the latest file could not be read. Sub-agents stay off in it until the chat is saved again.",
   "chat.notice.openIndexSettings": "Open index settings",
 
   "chat.message.you": "You",
