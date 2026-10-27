@@ -3,6 +3,8 @@ import { setIcon } from "obsidian";
 import type { Translate } from "@adapters/i18n";
 import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import type { SubAgentNoticeEntry } from "@core/research";
+import { renderFoldedMarkup, renderToggle } from "./safeMarkupView";
+import { compactCount, formatElapsed } from "./sub-agents/format";
 
 export interface SubAgentEventRenderOptions {
   t: Translate;
@@ -43,7 +45,8 @@ export function subAgentEventOptions(
 
 /** Returns the icon that marks a dispatch or notice event on the timeline rail. */
 export function subAgentEventIcon(event: ParentTimelineEvent): string {
-  return event.kind === "agent-dispatch" ? "send" : ICONS[event.notice.kind];
+  if (event.kind === "agent-notice") return ICONS[event.notice.kind];
+  return event.created ? ICONS.created : "send";
 }
 
 /** Renders a dispatch or notice that has no parent message as a standalone transcript node. */
@@ -80,9 +83,9 @@ export function renderSubAgentEventContent(
 }
 
 /**
- * Renders one outgoing command to a child agent as safe text: its title, kind, body
- * folded to a preview and the live run status. Child text is never parsed as Markdown
- * or HTML, so links and markup in it stay inert.
+ * Renders one outgoing command to a child agent as safe text under a line naming the
+ * agent once: a created line when the session's created notice was merged into it, else a
+ * sent line. The card carries the kind, the folded body, the run status and one opener.
  */
 function renderDispatchContent(
   nodeEl: HTMLElement,
@@ -91,11 +94,21 @@ function renderDispatchContent(
 ): void {
   const { t } = options;
   const entry = event.dispatch;
-  nodeEl.createDiv({ cls: "attest-chat__agent-event-label", text: t("chat.agent.dispatch.title") });
+  titleLine(
+    nodeEl,
+    t(event.created ? "chat.agent.notice.created" : "chat.agent.dispatch.title"),
+    event.title,
+  );
   const cardEl = nodeEl.createDiv({ cls: "attest-chat__agent-card" });
-  const headEl = cardEl.createDiv({ cls: "attest-chat__agent-card-head" });
-  headEl.createSpan({ cls: "attest-chat__agent-card-title", text: event.title });
-  const tagsEl = headEl.createSpan({ cls: "attest-chat__agent-card-tags" });
+  const tagsEl = cardEl
+    .createDiv({ cls: "attest-chat__agent-card-head attest-chat__agent-card-head--tags" })
+    .createSpan({ cls: "attest-chat__agent-card-tags" });
+  if (event.created) {
+    tagsEl.createSpan({
+      cls: "attest-chat__agent-card-label",
+      text: t("chat.agent.dispatch.title"),
+    });
+  }
   tagsEl.createSpan({
     cls: "attest-chat__agent-badge",
     text: t(`chat.agent.command.${entry.commandKind}`),
@@ -118,8 +131,28 @@ function renderDispatchContent(
     attr: { "data-status": event.status },
   });
   statusEl.createSpan({ cls: "attest-chat__agent-status-dot", attr: { "aria-hidden": "true" } });
-  statusEl.createSpan({ text: t(`chat.agent.status.${event.status}`) });
+  statusEl.createSpan({ text: statusText(event, t) });
   actions(footEl, entry.sessionId, options);
+}
+
+function statusText(
+  event: Extract<ParentTimelineEvent, { kind: "agent-dispatch" }>,
+  t: Translate,
+): string {
+  const label = t(`chat.agent.status.${event.status}`);
+  return event.durationMs === undefined
+    ? label
+    : `${label} · ${formatElapsed(event.durationMs, t)}`;
+}
+
+function titleLine(parentEl: HTMLElement, label: string, title: string): void {
+  const lineEl = parentEl.createDiv({ cls: "attest-chat__agent-event-line" });
+  lineEl.createSpan({ cls: "attest-chat__agent-event-title", text: label });
+  lineEl.createSpan({
+    cls: "attest-chat__agent-event-description",
+    text: title,
+    attr: { title },
+  });
 }
 
 function renderNoticeContent(
@@ -137,12 +170,7 @@ function renderNoticeContent(
     return;
   }
   if (entry.kind === "created" || entry.kind === "queued") {
-    const lineEl = nodeEl.createDiv({ cls: "attest-chat__agent-event-line" });
-    lineEl.createSpan({
-      cls: "attest-chat__agent-event-title",
-      text: t(`chat.agent.notice.${entry.kind}`),
-    });
-    lineEl.createSpan({ cls: "attest-chat__agent-event-description", text: entry.description });
+    titleLine(nodeEl, t(`chat.agent.notice.${entry.kind}`), entry.description);
     if (entry.kind === "queued") {
       nodeEl.createDiv({
         cls: "attest-chat__agent-event-body",
@@ -156,15 +184,28 @@ function renderNoticeContent(
   const tone = TONES[entry.kind];
   if (tone) cardEl.addClass(`is-${tone}`);
   cardEl.createDiv({ cls: "attest-chat__agent-card-head", text: noticeTitle(entry, t) });
-  if (entry.description) {
-    cardEl.createDiv({ cls: "attest-chat__agent-event-description", text: entry.description });
-  }
   const body = noticeBody(entry, t);
   if (body) cardEl.createDiv({ cls: "attest-chat__agent-event-body", text: body });
   if (entry.replyExcerpt) {
-    foldedText(cardEl, entry.replyExcerpt, t("chat.agent.showFullReply"), t);
+    renderFoldedMarkup(cardEl, entry.replyExcerpt, PREVIEW_CHARS, t("chat.agent.showFullReply"), t);
   }
-  actions(cardEl, entry.sessionId, options);
+  const footEl = cardEl.createDiv({ cls: "attest-chat__agent-card-foot" });
+  const meta = replyMeta(entry, t);
+  if (meta) footEl.createSpan({ cls: "attest-chat__agent-reply-meta", text: meta });
+  actions(footEl, entry.sessionId, options);
+}
+
+function replyMeta(entry: SubAgentNoticeEntry, t: Translate): string {
+  const parts: string[] = [];
+  if (entry.durationMs !== undefined) parts.push(formatElapsed(entry.durationMs, t));
+  if (entry.usage) {
+    parts.push(t("chat.agent.meta.toolCalls", { count: String(entry.usage.toolCalls) }));
+    if (entry.usage.source !== "unavailable" && entry.usage.totalTokens !== undefined) {
+      parts.push(t("chat.subAgents.tokens", { count: compactCount(entry.usage.totalTokens) }));
+    }
+  }
+  if (entry.modelLabel) parts.push(entry.modelLabel);
+  return parts.join(" · ");
 }
 
 function noticeTitle(entry: SubAgentNoticeEntry, t: Translate): string {
@@ -215,16 +256,8 @@ function interruptedKey(reason: string): Parameters<Translate>[0] {
 function foldedText(parentEl: HTMLElement, text: string, expandLabel: string, t: Translate): void {
   const textEl = parentEl.createDiv({ cls: "attest-chat__agent-text", text: preview(text) });
   if (text.length <= PREVIEW_CHARS) return;
-  const toggle = parentEl.createEl("button", {
-    cls: "attest-chat__agent-toggle",
-    text: expandLabel,
-    attr: { type: "button", "aria-expanded": "false" },
-  });
-  toggle.addEventListener("click", () => {
-    const expanded = toggle.getAttribute("aria-expanded") !== "true";
+  renderToggle(parentEl, expandLabel, t, (expanded) => {
     textEl.setText(expanded ? text : preview(text));
-    toggle.setText(expanded ? t("chat.agent.showLess") : expandLabel);
-    toggle.setAttribute("aria-expanded", String(expanded));
   });
 }
 

@@ -146,7 +146,6 @@ describe("sub-agent events inside the parent workflow timeline", () => {
 
     expect(workflowKeys(transcript, "answer-p1").slice(1)).toEqual([
       "search",
-      "notice:s1:created",
       "dispatch:s1",
       "wait",
       "notice:s2:queued",
@@ -172,15 +171,28 @@ describe("sub-agent events inside the parent workflow timeline", () => {
       ["running", "chat.agent.status.running"],
     ]);
     const card = transcript.querySelector('[data-event-key="dispatch:s1"]')!;
-    expect(card.querySelector(".attest-chat__agent-card-title")?.textContent).toBe("Agent s1");
-    expect(card.querySelector(".attest-chat__workflow-dot--agent")?.getAttribute("data-icon")).toBe(
-      "send",
-    );
+    const line = card.querySelector<HTMLElement>(".attest-chat__agent-event-description")!;
+    expect([
+      line.textContent,
+      line.title,
+      card.textContent!.split("Agent s1").length - 1,
+      card.querySelectorAll(".attest-chat__agent-open").length,
+      card.querySelector(".attest-chat__agent-card-foot .attest-chat__agent-open") !== null,
+      card.querySelector(".attest-chat__workflow-dot--agent")?.getAttribute("data-icon"),
+      transcript.querySelector('[data-event-key="dispatch:s2"] .attest-chat__agent-event-title')
+        ?.textContent,
+      transcript
+        .querySelector('[data-event-key="dispatch:s2"]')
+        ?.textContent?.includes("chat.agent.notice.created"),
+    ]).toEqual(["Agent s1", "Agent s1", 1, 1, true, "bot", "chat.agent.dispatch.title", false]);
     card.querySelector<HTMLButtonElement>(".attest-chat__agent-open")!.click();
     expect(opened).toEqual(["s1"]);
     const reply = transcript.querySelector('[data-event-key="notice:s1:finished"]')!;
-    expect(reply.querySelectorAll("a, b")).toHaveLength(0);
-    expect(reply.textContent).toContain("javascript:alert(1)");
+    expect(reply.querySelectorAll("a, b, img, script, .markdown-rendered")).toHaveLength(0);
+    expect([
+      reply.textContent!.includes("javascript"),
+      reply.textContent!.includes("Agent s1"),
+    ]).toEqual([false, false]);
   });
 
   it("adds an event to a streaming answer when the active message is patched", () => {

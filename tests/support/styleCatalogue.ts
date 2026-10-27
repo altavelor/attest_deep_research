@@ -4,6 +4,8 @@ import { createTranslator } from "@adapters/i18n";
 import { DEFAULT_SETTINGS } from "@adapters/settings";
 import { WebSourceHealthTracker } from "@application/web";
 import { renderWorkflowNodes } from "@apps/obsidian/ui/chat/workflowRenderer";
+import { renderSubAgentEventContent } from "@apps/obsidian/ui/chat/subAgentEvents";
+import type { SubAgentNoticeEntry } from "@core/research";
 import { renderChatWindowActions } from "@apps/obsidian/ui/chat/ChatHeader";
 import {
   renderSavedChatsEmptyState,
@@ -92,6 +94,58 @@ function renderWorkflowSurfaces(host: HTMLElement): void {
     context,
   );
   renderWorkflowNodes(transcript.createDiv(), workflowMessage([searchCall], true), context);
+}
+
+function renderSubAgentEventSurfaces(host: HTMLElement): void {
+  const notice = (kind: SubAgentNoticeEntry["kind"], extra: Partial<SubAgentNoticeEntry> = {}) => ({
+    eventKey: `notice:${kind}`,
+    parentRunId: "p1",
+    description: "Find sources",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    sessionId: "s1",
+    runId: "r1",
+    sequence: 2,
+    kind,
+    ...extra,
+  });
+  const options = { t, onOpenSubAgentSession: () => {} };
+  const created = notice("created");
+  renderSubAgentEventContent(
+    host.createDiv(),
+    {
+      kind: "agent-dispatch",
+      sequence: 1,
+      dispatch: {
+        eventKey: "dispatch",
+        sessionId: "s1",
+        runId: "r1",
+        parentRunId: "p1",
+        body: "Find sources ".repeat(40),
+        createdAt: created.createdAt,
+        commandKind: "initial",
+        attempt: 1,
+        sequence: 1,
+      },
+      title: "Find sources",
+      status: "finished",
+      durationMs: 12_000,
+      created,
+    },
+    options,
+  );
+  renderSubAgentEventContent(
+    host.createDiv(),
+    {
+      kind: "agent-notice",
+      sequence: 2,
+      notice: notice("finished", {
+        durationMs: 12_000,
+        modelLabel: "Model",
+        replyExcerpt: "## Head\n**bold** `code` [subagent:import-ab12cd34:1]\n- item",
+      }),
+    },
+    options,
+  );
 }
 
 function renderIndexSearchSurfaces(host: HTMLElement): void {
@@ -208,6 +262,7 @@ function renderSettingsSurfaces(host: HTMLElement): void {
 export function renderStyleCatalogue(): Set<string> {
   const host = createContainer();
   renderWorkflowSurfaces(host);
+  renderSubAgentEventSurfaces(host);
   renderIndexSearchSurfaces(host);
   renderSavedChatSurfaces(host);
   renderSettingsSurfaces(host);

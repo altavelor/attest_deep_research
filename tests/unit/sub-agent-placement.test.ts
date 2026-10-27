@@ -102,26 +102,69 @@ describe("sub-agent run status", () => {
 });
 
 describe("placing sub-agent events", () => {
-  it("puts events of a rendered run inside its answer and keeps the rest as orphans", () => {
+  it("puts events of a rendered run inside its answer, merging the created notice into the first dispatch", () => {
     const placement = placeSubAgentEvents(
       [assistant("answer-p1", [])],
-      [dispatch, { ...dispatch, eventKey: "dispatch:lost", parentRunId: "gone" }],
-      [notice("finished", 9), notice("created", 3), notice("finished", 9)],
+      [
+        dispatch,
+        {
+          ...dispatch,
+          eventKey: "dispatch:follow",
+          sessionId: "s2",
+          commandKind: "follow-up",
+          sequence: 11,
+        },
+        { ...dispatch, eventKey: "dispatch:lost", parentRunId: "gone" },
+      ],
+      [
+        { ...notice("finished", 9), durationMs: 12_000 },
+        notice("created", 3),
+        notice("finished", 9),
+        { ...notice("created", 5, null), sessionId: "s2", eventKey: "created:s2" },
+      ],
     );
-    expect(
-      placement.byMessageId.get("answer-p1")!.map((event) => [event.kind, event.sequence]),
-    ).toEqual([
-      ["agent-notice", 3],
-      ["agent-dispatch", 4],
+    const placed = placement.byMessageId.get("answer-p1")!;
+    expect(placed.map((event) => [event.kind, event.sequence])).toEqual([
+      ["agent-dispatch", 3],
+      ["agent-notice", 5],
       ["agent-notice", 9],
+      ["agent-dispatch", 11],
     ]);
-    const placed = placement.byMessageId.get("answer-p1")![1] as Extract<
+    const [merged, , , follow] = placed as Extract<
       ParentTimelineEvent,
       { kind: "agent-dispatch" }
-    >;
-    expect([placed.title, placed.status]).toEqual(["created title", "finished"]);
+    >[];
+    expect([merged!.title, merged!.status, merged!.durationMs, merged!.created?.kind]).toEqual([
+      "created title",
+      "finished",
+      12_000,
+      "created",
+    ]);
+    expect(follow!.created).toBeUndefined();
     expect(placement.orphanDispatches.map((entry) => entry.eventKey)).toEqual(["dispatch:lost"]);
     expect(placement.orphanNotices).toEqual([]);
+  });
+
+  it("hides a closed notice only when every session of the run settled before it", () => {
+    const closed = { ...notice("closed", 20, null), sessionId: null, eventKey: "closed" };
+    const kinds = (notices: SubAgentNoticeEntry[]) =>
+      placeSubAgentEvents([assistant("answer-p1", [])], [dispatch], notices)
+        .byMessageId.get("answer-p1")!
+        .map((event) => (event.kind === "agent-notice" ? event.notice.kind : "dispatch"));
+    expect(kinds([notice("finished", 9), closed])).toEqual(["dispatch", "finished"]);
+    expect(kinds([notice("interrupted", 9), closed])).toEqual([
+      "dispatch",
+      "interrupted",
+      "closed",
+    ]);
+    expect(kinds([{ ...notice("finished", 21) }, closed])).toEqual([
+      "dispatch",
+      "closed",
+      "finished",
+    ]);
+    expect(
+      kinds([notice("finished", 9), { ...notice("created", 10), sessionId: "s2" }, closed]),
+    ).toEqual(["dispatch", "finished", "created", "closed"]);
   });
 
   it("flushes earlier events before each sequenced item, hidden anchors included, and the rest at the end", () => {

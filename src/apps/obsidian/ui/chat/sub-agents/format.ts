@@ -59,7 +59,8 @@ export function formatTokens(card: SubAgentSessionCard, t: Translate): TokenText
     : { text: t("chat.subAgents.tokens", { count }), tone: "normal" };
 }
 
-function compactCount(value: number): string {
+/** Formats a token count compactly, with k and M suffixes above a thousand. */
+export function compactCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 1_000_000) return `${(value / 1000).toFixed(1)}k`;
   return `${(value / 1_000_000).toFixed(1)}M`;
