@@ -5,7 +5,11 @@ import type { ResearchRetriever } from "@application/contracts/research";
 import type { SubAgentMainEventIntent } from "@application/ports";
 import type { SubAgentSessionManager } from "@application/use-cases/sub-agent";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
-import { MapSources, MapSourcesWorkerAdapter } from "@application/use-cases/map-sources";
+import {
+  MapSources,
+  MapSourcesWorkerAdapter,
+  type MapSourcesWorkerLimits,
+} from "@application/use-cases/map-sources";
 import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 import { applySubAgentTimelineEvent } from "@core/chat/subAgentTimeline";
 import { researchModeRetrievalParameters, type MapSourcesBatchState } from "@core/research";
@@ -32,9 +36,9 @@ function indexChunk(path: string): RetrievedChunk {
   };
 }
 
-/** A retriever over two documents that answers every read regardless of its scope. */
+/** A retriever over three documents that answers every read regardless of its scope. */
 function twoDocumentRetriever(): ResearchRetriever {
-  const chunks = [indexChunk("Notes/b.md"), indexChunk("Notes/secret.md")];
+  const chunks = ["Notes/b.md", "Notes/secret.md", "Notes/b.md/child.md"].map(indexChunk);
   return {
     search: async () => ({ chunks, citations: [], usedFallback: false }),
     readIndexChunk: async ({ chunkId }) => ({
@@ -62,45 +66,52 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
     await launchChild(harness.delegator(), "direct-2");
     const intents: SubAgentMainEventIntent[] = [];
     const imported: ResearchEvidenceSnapshot[] = [];
-    const workers = new MapSourcesWorkerAdapter({
-      delegator: (limits) => {
-        const grantId = `grant-map-${limits.maxRounds}`;
-        grants.set(
-          grantId,
-          delegationGrant(binding, {
-            origin: "map_sources",
-            maximumSourcePolicy: sourcePolicy({
-              searchMode: "indexOnly",
-              contextPaths: ["Notes"],
-              allowActiveFile: false,
-            }),
-            limits: { ...limits, maxSearches: 20 },
+    const delegator = (limits: MapSourcesWorkerLimits) => {
+      const grantId = `grant-map-${limits.maxRounds}`;
+      grants.set(
+        grantId,
+        delegationGrant(binding, {
+          origin: "map_sources",
+          maximumSourcePolicy: sourcePolicy({
+            searchMode: "indexOnly",
+            contextPaths: ["Notes"],
+            allowActiveFile: false,
           }),
-        );
-        return manager.delegatorFor(binding, { deliveryEpoch: 1, grantId });
-      },
-    });
-    const mapper = new MapSources({
-      runner: workers,
-      retriever: twoDocumentRetriever(),
-      context: {
-        chatId: "chat-1",
-        parentRunId: "parent-1",
-        batches: manager.batches(),
-        notices: { publish: (published) => void intents.push(...published) },
-        subscribe: (listener) => manager.subscribeResults(listener),
-        now: () => new Date("2026-10-26T10:00:00.000Z"),
-        redact: (text) => text.replace(/secret/giu, "[redacted]"),
-      },
-      resolver: harness.bridge,
-      evidence: { importRegisteredSnapshot: (snapshot) => void imported.push(snapshot) },
-    });
+          limits: { ...limits, maxSearches: 20 },
+        }),
+      );
+      return manager.delegatorFor(binding, { deliveryEpoch: 1, grantId });
+    };
+    const mapperOf = (sink: (published: SubAgentMainEventIntent[]) => void) =>
+      new MapSources({
+        runner: new MapSourcesWorkerAdapter({ delegator }),
+        retriever: twoDocumentRetriever(),
+        context: {
+          chatId: "chat-1",
+          parentRunId: "parent-1",
+          batches: manager.batches(),
+          notices: { publish: sink },
+          subscribe: (listener) => manager.subscribeResults(listener),
+          now: () => new Date("2026-10-26T10:00:00.000Z"),
+          redact: (text) => text.replace(/secret/giu, "[redacted]"),
+        },
+        resolver: harness.bridge,
+        evidence: { importRegisteredSnapshot: (snapshot) => void imported.push(snapshot) },
+      });
+    const mapper = mapperOf((published) => void intents.push(...published));
 
     const receipt = await mapper.start(
       { question: "Is X true?", sourcePaths: DOCS },
       "parent-1-r1-c",
     );
+    const batches = manager.batches();
+    await batches.put({ ...batches.get(receipt.batchId)!, state: "preparing", refs: [] }, true);
+    const replayed = await mapperOf(() => undefined).start(
+      { question: "Is X true?", sourcePaths: DOCS },
+      "parent-1-r1-c",
+    );
 
+    expect(replayed).toEqual(receipt);
     expect(receipt.refs).toHaveLength(4);
     expect(execution.requests).toHaveLength(4);
     const [, , first, second] = execution.requests;
@@ -129,6 +140,12 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
       arguments: { chunkId: "chunk-Notes/secret.md" },
     });
     expect(otherDocument).toMatchObject({ ok: true, value: { chunks: [] } });
+    const childPath = await scoped.tools.execute({
+      id: "child",
+      name: "read_index_chunk",
+      arguments: { chunkId: "chunk-Notes/b.md/child.md" },
+    });
+    expect(childPath).toMatchObject({ ok: true, value: { chunks: [] } });
     expect([workerTools.noteTools, workerTools.availability.noteAccess]).toEqual([
       undefined,
       false,
@@ -136,6 +153,7 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
 
     execution.fail(2);
     await eventually(() => expect(execution.requests).toHaveLength(5));
+    expect(execution.requests[4]?.sourcePolicy.contextPaths).toEqual(["Notes/c.md"]);
     execution.finish(0);
     await eventually(() => expect(execution.requests).toHaveLength(6));
     const evidence = [
@@ -170,7 +188,6 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
       ...new Set(imported.flatMap((item) => item.evidence.map((chunk) => chunk.id))),
     ]).toEqual(rows[1]?.evidenceIds);
     expect(chat.saved).toHaveLength(savedImports);
-    const batches = manager.batches();
     const stored = batches.get(receipt.batchId)!;
     expect(await batches.put({ ...stored, state: "interrupted" }, true)).toBe(false);
     await batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." });
@@ -205,5 +222,25 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
     expect(
       harness.mainEvents.filter((intent) => workerSessions.has(intent.entry.sessionId ?? "")),
     ).toEqual([]);
+
+    const open = await mapper.start(
+      { question: "Is Y true?", sourcePaths: ["Notes/a.md"] },
+      "parent-1-r2-c",
+    );
+    expect(batches.pendingCount("parent-1")).toBe(1);
+    await batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." });
+    expect([batches.get(open.batchId), batches.pendingCount("parent-1")]).toEqual([
+      expect.objectContaining({
+        state: "interrupted",
+        error: { code: "parent-terminal", message: "Ended." },
+      }),
+      0,
+    ]);
+    await eventually(() =>
+      expect(intents.at(-1)?.entry).toMatchObject({
+        batchId: open.batchId,
+        batch: { total: 1, done: 0, running: 0, failed: 1 },
+      }),
+    );
   });
 });
