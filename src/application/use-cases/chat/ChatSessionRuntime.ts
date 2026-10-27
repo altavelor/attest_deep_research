@@ -261,8 +261,8 @@ export class ChatSessionRuntime {
     return boundAnswer;
   }
 
-  private stampToolCalls(): void {
-    const stamped = stampToolCallSequences(this.state);
+  private stampToolCalls(runId: string): void {
+    const stamped = stampToolCallSequences(this.state, answerMessageId(runId));
     if (!stamped) return;
     this.state.messages = stamped.messages;
     this.state.subAgentDispatches = stamped.subAgentDispatches;
@@ -313,7 +313,7 @@ export class ChatSessionRuntime {
         event.fetchTargets,
         event.searchSources,
       );
-      if (!event.parentId) this.stampToolCalls();
+      if (!event.parentId) this.stampToolCalls(runId);
       this.emit(runId, "active-message");
       return;
     }

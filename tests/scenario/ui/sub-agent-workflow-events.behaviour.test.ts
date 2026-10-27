@@ -3,7 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
-import { renderChatTranscript } from "@apps/obsidian/ui/chat/ChatTranscript";
+import {
+  patchActiveAssistantMessage,
+  renderChatTranscript,
+} from "@apps/obsidian/ui/chat/ChatTranscript";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import type { ChainItem, ChatDisplayMessage } from "@core/conversation";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
@@ -176,6 +179,30 @@ describe("sub-agent events inside the parent workflow timeline", () => {
     const reply = transcript.querySelector('[data-event-key="notice:s1:finished"]')!;
     expect(reply.querySelectorAll("a, b")).toHaveLength(0);
     expect(reply.textContent).toContain("javascript:alert(1)");
+  });
+
+  it("adds an event to a streaming answer when the active message is patched", () => {
+    const transcript = document.createElement("div");
+    transcript.className = "attest-chat__transcript";
+    const streaming = answer("p1", [tool("search", "search_web", 2)]);
+    streaming.researchProgress!.phase = "streaming";
+    renderChatTranscript(
+      transcript,
+      transcriptOptions({ messages: [streaming] }, () => {}),
+    );
+
+    const patched = patchActiveAssistantMessage(
+      transcript,
+      transcriptOptions(
+        { messages: [streaming], subAgentNotices: [notice("p1", "s1", "created", 3)] },
+        () => {},
+      ),
+    );
+
+    expect([patched, workflowKeys(transcript, "answer-p1").slice(0, 2)]).toEqual([
+      true,
+      ["search", "notice:s1:created"],
+    ]);
   });
 
   it("stamps live tool calls and events from one allocator and keeps their order after reload", async () => {

@@ -77,12 +77,17 @@ const ids = (entries: ReturnType<typeof interleaveWorkflowEvents>) =>
   );
 
 describe("sub-agent run status", () => {
-  it("prefers the latest terminal notice, then a queued run or session, then running", () => {
+  it("prefers the latest terminal notice, then a queued notice of the same run, then running", () => {
     expect(subAgentRunStatus(dispatch, [])).toBe("running");
     expect(subAgentRunStatus(dispatch, [notice("created", 3), notice("queued", 5, "other")])).toBe(
       "running",
     );
-    expect(subAgentRunStatus(dispatch, [notice("queued", 5, null)])).toBe("queued");
+    expect(
+      subAgentRunStatus({ ...dispatch, runId: "r2" }, [
+        notice("queued", 5),
+        notice("queued", 6, null),
+      ]),
+    ).toBe("running");
     expect(subAgentRunStatus(dispatch, [notice("queued", 5)])).toBe("queued");
     expect(
       subAgentRunStatus(dispatch, [
@@ -151,14 +156,15 @@ describe("tool-call sequences", () => {
       subAgentNotices: [],
       timelineSequence: 2,
     };
-    const stamped = stampToolCallSequences(state)!;
+    const stamped = stampToolCallSequences(state, "answer-p1")!;
     const chain = stamped.messages[0]!.researchProgress!.chain;
     expect([
       stamped.messages[0]!.timelineSequence,
       chain.map((item) => (item as { timelineSequence?: number }).timelineSequence),
       stamped.timelineSequence,
     ]).toEqual([1, [4, 5], 6]);
-    expect(stampToolCallSequences(stamped)).toBeNull();
+    expect(stampToolCallSequences(stamped, "answer-p1")).toBeNull();
+    expect(stampToolCallSequences(state, "answer-other")).toBeNull();
   });
 
   it("drops an unusable saved sequence and keeps the allocator above valid ones", () => {

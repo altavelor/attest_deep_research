@@ -101,10 +101,11 @@ export function dispatchEvent(
 
 /**
  * A run's status is its latest terminal notice, else queued while a queued notice names
- * the run or, without a run, its session, and running otherwise.
+ * the same run, and running otherwise. The manager always emits queued with its run, so a
+ * run-less queued notice never marks another run of the session as queued.
  */
 export function subAgentRunStatus(
-  dispatch: Pick<SubAgentDispatchEntry, "runId" | "sessionId">,
+  dispatch: Pick<SubAgentDispatchEntry, "runId">,
   notices: readonly SubAgentNoticeEntry[],
 ): SubAgentRunStatus {
   const terminal = notices
@@ -112,10 +113,7 @@ export function subAgentRunStatus(
     .sort((a, b) => b.sequence - a.sequence)[0];
   if (terminal) return terminal.kind as SubAgentRunStatus;
   const queued = notices.some(
-    (notice) =>
-      notice.kind === "queued" &&
-      (notice.runId === dispatch.runId ||
-        (notice.runId === null && notice.sessionId === dispatch.sessionId)),
+    (notice) => notice.kind === "queued" && notice.runId === dispatch.runId,
   );
   return queued ? "queued" : "running";
 }
