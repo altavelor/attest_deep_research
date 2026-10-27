@@ -8,7 +8,13 @@ import type {
   SubAgentSessionManagerContext,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
-import type { ParentRunBinding, ParentRunDeliveryContext, SubAgentRunRef } from "@core/research";
+import {
+  listSubAgentPromptSessions,
+  type ParentRunBinding,
+  type ParentRunDeliveryContext,
+  type SubAgentPromptSession,
+  type SubAgentRunRef,
+} from "@core/research";
 import { SubAgentBatchRecords } from "./batchRecords";
 import { closeParentRun } from "./closeBarrier";
 import { SubAgentImportCoordinator } from "./importCoordinator";
@@ -102,6 +108,12 @@ export class SubAgentSessionManager implements SubAgentHost {
   /** Returns the map_sources batch records of this chat's section. */
   batches(): SubAgentBatchStore {
     return this.batchRecords;
+  }
+
+  /** Lists the chat's sessions with host-owned fields for the parent's system prompt. */
+  async promptSessions(): Promise<readonly SubAgentPromptSession[]> {
+    const state = await this.parts.store.load();
+    return listSubAgentPromptSessions(state.records, state.chatId);
   }
 
   delegatorFor(binding: ParentRunBinding, delivery: ParentRunDeliveryContext): SubAgentDelegator {

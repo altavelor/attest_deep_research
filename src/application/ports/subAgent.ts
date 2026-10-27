@@ -26,6 +26,7 @@ import type {
   SubAgentStateSnapshot,
   SubAgentTaskOrigin,
   ValidatedJsonValue,
+  SubAgentPromptSession,
 } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import type { SourceReference } from "@core/model";
@@ -112,6 +113,7 @@ export interface SubAgentHost extends SubAgentLifecycle {
   inspection(): SubAgentInspectionPort;
   importLookup?(): SubAgentImportLookup;
   batches?(): SubAgentBatchStore;
+  promptSessions?(): Promise<readonly SubAgentPromptSession[]>;
 }
 
 /**
@@ -156,6 +158,7 @@ export interface SubAgentParentRun {
   resolver: SubAgentImportedEvidenceResolver;
   bindExecution(execution: SubAgentExecutionPort): void;
   attachEvidence(capacity: { remainingWebCapacity?(): number }): void;
+  listSessions?(): Promise<readonly SubAgentPromptSession[]>;
 }
 
 export type SubAgentMainEventIntent =

@@ -10,7 +10,11 @@ import type {
   SubAgentSessionManagerContext,
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
-import type { ParentRunBinding, ParentRunDeliveryContext } from "@core/research";
+import type {
+  ParentRunBinding,
+  ParentRunDeliveryContext,
+  SubAgentPromptSession,
+} from "@core/research";
 import { ChatSessionManager, type ChatSessionEnvironment } from "@application/use-cases/chat";
 import type { ResearchService } from "@application/use-cases/research";
 import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry";
@@ -91,6 +95,10 @@ class FakeChildHost implements SubAgentHost {
 
   subscribeResults(): () => void {
     return () => undefined;
+  }
+
+  async promptSessions(): Promise<readonly SubAgentPromptSession[]> {
+    return [{ sessionId: "s-1", title: "Task", state: "idle", lastRunId: null, attempt: null }];
   }
 
   listRunRefs(): [] {

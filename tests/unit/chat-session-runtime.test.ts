@@ -272,6 +272,7 @@ describe("chat session runtime delegation", () => {
     const [{ delegator, delivery }] = children.hosts[0]!.bindings;
     expect(requests[0]?.subAgentDelegator).toBe(delegator);
     expect(requests[0]?.subAgentParent?.parentRunId).toBe("run-1");
+    expect((await requests[0]?.subAgentParent?.listSessions?.())?.[0]?.sessionId).toBe("s-1");
     expect(grants[0]).toMatchObject({
       callerMode: "thinking",
       budgetPolicy: { type: "local" },

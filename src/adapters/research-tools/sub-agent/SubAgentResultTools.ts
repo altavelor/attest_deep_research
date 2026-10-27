@@ -113,7 +113,8 @@ export const SubAgentWaitTool = defineTool<
   name: SUB_AGENT_WAIT_TOOL,
   description:
     "Wait up to 30 seconds for sub-agent runs to finish without stopping them. Returns the " +
-    "refs that are ready and whether the wait timed out.",
+    "refs that are ready and whether the wait timed out. Refs may name runs of this chat's " +
+    "sub-agent sessions from earlier turns.",
   schema: {
     refs: raw(
       {

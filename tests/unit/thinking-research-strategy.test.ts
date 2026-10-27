@@ -469,6 +469,22 @@ describe("ThinkingResearchStrategy sub-agent telemetry", () => {
     expect(diagnostics?.thinking?.mapSources).toBeUndefined();
   });
 
+  it("shows the chat's sub-agent sessions to the parent model", async () => {
+    const rounds = callingSubAgent();
+    const { parent } = fakeParentRun();
+    parent.listSessions = async () => [
+      { sessionId: "s-1", title: "Task", state: "finished", lastRunId: "r-1", attempt: 1 },
+    ];
+
+    await drain(
+      strategy(rounds).execute(
+        context({ subAgentDelegator: recordingDelegator().delegator, subAgentParent: parent }),
+      ),
+    );
+
+    expect(JSON.stringify(rounds.requests[0]?.messages)).toContain("- s-1 · Task · finished");
+  });
+
   it("records no summary when the delegator refused the command", async () => {
     const { delegator } = recordingDelegator();
     delegator.create = async () => {

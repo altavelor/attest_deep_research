@@ -133,6 +133,7 @@ export class ChatSubAgents {
     this.binding = binding;
     this.ownedRuns.add(runId);
     this.grants.set(grantId, this.grant(binding, request));
+    const host = this.host;
     const delegator = this.host.delegatorFor(binding, { deliveryEpoch: this.epoch, grantId });
     const batches = this.host.batches?.();
     const coordinator = new SubAgentParentCoordinator({
@@ -156,6 +157,7 @@ export class ChatSubAgents {
         attachEvidence: (capacity) => {
           if (this.binding?.parentRunId === runId) this.capacity = capacity;
         },
+        ...(host.promptSessions ? { listSessions: () => host.promptSessions!() } : {}),
       },
     };
   }

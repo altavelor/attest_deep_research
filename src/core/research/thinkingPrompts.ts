@@ -23,6 +23,10 @@ import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { AttachedFileManifestEntry, buildAttachmentManifestSection } from "./attachments";
 import { currentDateLine, ResearchChatHistoryMessage } from "./prompts";
 import {
+  buildSubAgentSessionsSection,
+  type SubAgentPromptSession,
+} from "./subAgent/sessionsPrompt";
+import {
   ARTIFACT_DURABILITY_POLICY,
   buildDownloadSection,
   buildSafeMutationPolicy,
@@ -85,6 +89,7 @@ export interface BuildThinkingResearchMessagesOptions {
   requiredTools: readonly string[];
   explicitEvidence?: RetrievedChunk[];
   conversationRegistry?: ConversationRegistryPromptView;
+  subAgentSessions?: readonly SubAgentPromptSession[];
 
   attachedFiles?: AttachedFileManifestEntry[];
   toolContext: ThinkingToolContext;
@@ -285,6 +290,14 @@ function untrustedSections(
       "untrusted-data",
       Boolean(options.conversationRegistry?.catalog.length),
       () => buildConversationRegistrySection(options.conversationRegistry!),
+    ),
+    optionalSection(
+      "sub-agent-sessions",
+      "reference",
+      Boolean(options.subAgentSessions?.length) &&
+        options.toolContext.availableTools.includes(SUB_AGENT_TOOL),
+      () => buildSubAgentSessionsSection(options.subAgentSessions ?? []),
+      [SUB_AGENT_TOOL],
     ),
   ];
 }
