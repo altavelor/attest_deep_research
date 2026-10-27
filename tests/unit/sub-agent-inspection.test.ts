@@ -512,7 +512,7 @@ describe("sub-agent inspection hardening", () => {
       ]);
       expect(notices[2]).toMatchObject({ reasonCode: "provider-failed" });
       expect(notices[3]).toMatchObject({ reasonCode: reason });
-      expect(notices[6]).toMatchObject({ closedCount: 5, sessionId: null });
+      expect(notices[6]).toMatchObject({ closedCount: 3, sessionId: null });
     },
   );
 

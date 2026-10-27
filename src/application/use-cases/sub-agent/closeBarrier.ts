@@ -125,9 +125,9 @@ async function drain(
       progress.cancelledImports.push({ importId, generation: session.pendingImportGeneration });
     }
     const activeRunId = session.activeSubAgentRunId;
-    closed += 1;
     if (activeRunId === null && session.pendingImportRunId === null) continue;
     const ended = scheduler.transition(session.subAgentSessionId, { type: "parent-closed" });
+    if (ended !== null) closed += 1;
     if (ended !== null && activeRunId && INTERRUPTING_REASONS.has(terminalReason)) {
       interrupted.push({ sessionId: session.subAgentSessionId, runId: activeRunId });
     }

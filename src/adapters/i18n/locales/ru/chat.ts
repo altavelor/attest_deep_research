@@ -172,7 +172,7 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.import-failed.body": "Ответ доступен; его источники не добавлены.",
   "chat.agent.notice.not-started": "Агент не запущен",
   "chat.agent.notice.not-started.body": "Причина: {reason}",
-  "chat.agent.notice.closed": "Агентов закрыто вместе с этим ответом: {count}",
+  "chat.agent.notice.closed": "Работа агентов остановлена вместе с этим ответом: {count}",
   "chat.agent.notice.batch": "Сопоставление источников · документов: {total}",
   "chat.agent.notice.batch.body": "готово {done} · выполняется {running} · ошибок {failed}",
   "chat.agent.notice.aria": "Событие агента: {title}",
