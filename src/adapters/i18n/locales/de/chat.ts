@@ -182,7 +182,7 @@ export const chat: EnChatMessages = {
   "chat.toolUnavailable.instant":
     "Das Modell wollte „{tool}“ aufrufen, das im Modus „Sofort“ nicht verfügbar ist. Wechseln Sie zu „Denken“ und fragen Sie erneut.",
   "chat.toolUnavailable.no-tools":
-    "Das Modell wollte „{tool}“ aufrufen, aber für diese Antwort sind keine Werkzeuge verfügbar. Wechseln Sie zu „Denken“ und fragen Sie erneut.",
+    "Das Modell wollte „{tool}“ aufrufen, das in dieser Antwort nicht verfügbar ist.",
   "chat.toolUnavailable.not-permitted":
     "„{tool}“ ist durch die aktuellen Einstellungen oder Berechtigungen deaktiviert.",
   "chat.toolUnavailable.not-offered": "„{tool}“ ist in diesem Lauf nicht verfügbar.",

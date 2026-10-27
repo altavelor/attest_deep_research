@@ -170,8 +170,7 @@ export const chat: EnChatMessages = {
 
   "chat.toolUnavailable.instant":
     "模型尝试调用“{tool}”，但该工具在即时模式下不可用。请切换到深度思考模式后重新提问。",
-  "chat.toolUnavailable.no-tools":
-    "模型尝试调用“{tool}”，但此回答没有可用的工具。请切换到深度思考模式后重新提问。",
+  "chat.toolUnavailable.no-tools": "模型尝试调用“{tool}”，但该工具在此回答中不可用。",
   "chat.toolUnavailable.not-permitted": "“{tool}”已被当前设置或权限禁用。",
   "chat.toolUnavailable.not-offered": "“{tool}”在本次运行中不可用。",
   "chat.toolUnavailable.subAgents":

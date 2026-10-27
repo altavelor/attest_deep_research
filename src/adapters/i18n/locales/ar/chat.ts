@@ -171,8 +171,7 @@ export const chat: EnChatMessages = {
 
   "chat.toolUnavailable.instant":
     'حاول النموذج استدعاء "{tool}"، وهي غير متاحة في الوضع الفوري. انتقل إلى وضع التفكير واسأل مجددًا.',
-  "chat.toolUnavailable.no-tools":
-    'حاول النموذج استدعاء "{tool}"، لكن لا تتوفر أدوات لهذه الإجابة. انتقل إلى وضع التفكير واسأل مجددًا.',
+  "chat.toolUnavailable.no-tools": 'حاول النموذج استدعاء "{tool}"، وهي غير متاحة في هذه الإجابة.',
   "chat.toolUnavailable.not-permitted": '"{tool}" معطّلة بسبب الإعدادات أو الأذونات الحالية.',
   "chat.toolUnavailable.not-offered": '"{tool}" غير متاحة في هذا التشغيل.',
   "chat.toolUnavailable.subAgents":

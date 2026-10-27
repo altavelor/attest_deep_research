@@ -171,7 +171,7 @@ export const chat = {
   "chat.toolUnavailable.instant":
     'The model tried to call "{tool}", which is not available in Instant mode. Switch to Thinking and ask again.',
   "chat.toolUnavailable.no-tools":
-    'The model tried to call "{tool}", but no tools are available for this answer. Switch to Thinking and ask again.',
+    'The model tried to call "{tool}", which is not available in this answer.',
   "chat.toolUnavailable.not-permitted":
     '"{tool}" is disabled by the current settings or permissions.',
   "chat.toolUnavailable.not-offered": '"{tool}" is not available in this run.',

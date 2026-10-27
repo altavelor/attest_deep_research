@@ -181,7 +181,7 @@ export const chat: EnChatMessages = {
   "chat.toolUnavailable.instant":
     "Le modèle a tenté d’appeler « {tool} », qui n’est pas disponible en mode Instantané. Passez en mode Réflexion et reposez la question.",
   "chat.toolUnavailable.no-tools":
-    "Le modèle a tenté d’appeler « {tool} », mais aucun outil n’est disponible pour cette réponse. Passez en mode Réflexion et reposez la question.",
+    "Le modèle a tenté d’appeler « {tool} », qui n’est pas disponible dans cette réponse.",
   "chat.toolUnavailable.not-permitted":
     "« {tool} » est désactivé par les paramètres ou autorisations actuels.",
   "chat.toolUnavailable.not-offered": "« {tool} » n’est pas disponible pour cette exécution.",

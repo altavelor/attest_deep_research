@@ -182,7 +182,7 @@ export const chat: EnChatMessages = {
   "chat.toolUnavailable.instant":
     "El modelo intentó llamar a «{tool}», que no está disponible en el modo Instantáneo. Cambia a Reflexivo y vuelve a preguntar.",
   "chat.toolUnavailable.no-tools":
-    "El modelo intentó llamar a «{tool}», pero no hay herramientas disponibles para esta respuesta. Cambia a Reflexivo y vuelve a preguntar.",
+    "El modelo intentó llamar a «{tool}», que no está disponible en esta respuesta.",
   "chat.toolUnavailable.not-permitted":
     "«{tool}» está desactivada por la configuración o los permisos actuales.",
   "chat.toolUnavailable.not-offered": "«{tool}» no está disponible en esta ejecución.",

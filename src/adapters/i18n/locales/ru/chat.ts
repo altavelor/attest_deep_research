@@ -180,7 +180,7 @@ export const chat: EnChatMessages = {
   "chat.toolUnavailable.instant":
     "Модель попыталась вызвать «{tool}», но этот инструмент недоступен в режиме «Мгновенный». Переключитесь на «Размышление» и повторите вопрос.",
   "chat.toolUnavailable.no-tools":
-    "Модель попыталась вызвать «{tool}», но для этого ответа инструменты недоступны. Переключитесь на «Размышление» и повторите вопрос.",
+    "Модель попыталась вызвать «{tool}», но этот инструмент недоступен в этом ответе.",
   "chat.toolUnavailable.not-permitted": "«{tool}» отключён текущими настройками или разрешениями.",
   "chat.toolUnavailable.not-offered": "«{tool}» недоступен в этом запуске.",
   "chat.toolUnavailable.subAgents":
