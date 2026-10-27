@@ -59,6 +59,7 @@ export class ChatSubAgents {
   private readonly evidence: ChatSubAgentEvidenceBridge;
   private readonly grants = new Map<string, SubAgentDelegationGrant>();
   private readonly ownedRuns = new Set<string>();
+  private readonly closingRuns = new Set<string>();
   private readonly coordinators = new Map<string, SubAgentParentCoordinator>();
   private binding: ParentRunBinding | null = null;
   private generation = 0;
@@ -161,13 +162,10 @@ export class ChatSubAgents {
   /** Revokes and closes every child of a terminal parent run before its terminal save. */
   async closeParentRun(runId: string, reason: string): Promise<void> {
     if (!this.host || !this.ownedRuns.has(runId)) return;
+    this.closingRuns.add(runId);
     this.coordinators.get(runId)?.dispose();
     this.coordinators.delete(runId);
-    for (const grantId of [...this.grants.keys()]) {
-      if (grantId === `grant-${runId}` || grantId.startsWith(`grant-${runId}-map-`)) {
-        this.grants.delete(grantId);
-      }
-    }
+    this.revokeGrants(runId);
     if (this.binding?.parentRunId === runId) {
       this.binding = null;
       this.execution = null;
@@ -185,7 +183,17 @@ export class ChatSubAgents {
     } catch (error) {
       this.options.logError(error);
     } finally {
+      this.revokeGrants(runId);
       this.ownedRuns.delete(runId);
+      this.closingRuns.delete(runId);
+    }
+  }
+
+  private revokeGrants(runId: string): void {
+    for (const grantId of [...this.grants.keys()]) {
+      if (grantId === `grant-${runId}` || grantId.startsWith(`grant-${runId}-map-`)) {
+        this.grants.delete(grantId);
+      }
     }
   }
 
@@ -198,6 +206,7 @@ export class ChatSubAgents {
     this.coordinators.clear();
     this.grants.clear();
     this.ownedRuns.clear();
+    this.closingRuns.clear();
     this.binding = null;
     this.execution = null;
     this.bridge.dispose();
@@ -257,7 +266,12 @@ export class ChatSubAgents {
     const deliveryEpoch = this.epoch;
     const delegator = (limits: MapSourcesWorkerLimits): SubAgentDelegator => {
       const grantId = `grant-${binding.parentRunId}-map-${limits.maxRounds}-${limits.maxResultChars}`;
-      if (!this.grants.has(grantId) && this.ownedRuns.has(binding.parentRunId)) {
+      const { parentRunId } = binding;
+      if (
+        !this.grants.has(grantId) &&
+        this.ownedRuns.has(parentRunId) &&
+        !this.closingRuns.has(parentRunId)
+      ) {
         this.grants.set(grantId, this.mapGrant(binding, request, limits));
       }
       return this.host!.delegatorFor(binding, { deliveryEpoch, grantId });

@@ -110,6 +110,12 @@ describe("chat runtime and its child host", () => {
     });
     expect(log).toEqual([`interrupt:${runId}`, `closeAll:${runId}:completed`]);
     expect(children.hosts[0]!.context.resolveGrant(mapGrant)).toBeNull();
+    await workers.runSource({ ...work, maxRounds: 4 }).catch(() => undefined);
+    const closingGrant = children.hosts[0]!.bindings.at(-1)!.delivery.grantId;
+    expect([closingGrant, children.hosts[0]!.context.resolveGrant(closingGrant)]).toEqual([
+      `grant-${runId}-map-4-20000`,
+      null,
+    ]);
     expect(parent.status).toBe("completed");
     await settle();
     expect(queued.status).toBe("running");
@@ -117,7 +123,12 @@ describe("chat runtime and its child host", () => {
     hold = null;
     release();
     await settle();
-    expect(log).toEqual([`interrupt:${runId}`, `closeAll:${runId}:completed`, "commit:completed"]);
+    expect(log).toEqual([
+      `interrupt:${runId}`,
+      `closeAll:${runId}:completed`,
+      `delegator:${runId}`,
+      "commit:completed",
+    ]);
     for (let index = 1; index <= MAX_CONCURRENT_CHAT_SESSIONS; index += 1) {
       research.emit(index, completed);
       research.end(index);
