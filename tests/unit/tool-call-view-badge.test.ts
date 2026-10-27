@@ -46,4 +46,21 @@ describe("describeToolCall search_index badge", () => {
 
     expect(view.badge).toBeUndefined();
   });
+
+  it("ignores a failed result whose key is foreign or whose code is not tool-unavailable", () => {
+    const failed = (code: string, userMessageKey: string) =>
+      describeToolCall({
+        t,
+        name: "run_subagent",
+        label: "run_subagent",
+        status: "failed",
+        resultJson: JSON.stringify({
+          ok: false,
+          error: { code, details: { userMessageKey, params: { tool: "run_subagent" } } },
+        }),
+      }).badge;
+
+    expect(failed("tool-unavailable", "settings.title")).toBeUndefined();
+    expect(failed("unknown-tool", "chat.toolUnavailable.not-offered")).toBeUndefined();
+  });
 });
