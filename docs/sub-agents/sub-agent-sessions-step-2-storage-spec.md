@@ -271,7 +271,8 @@ Close/dispose снимает timer и пытается flush в общем deadl
 
 - commands, итоговые summary/usage/lineage/citation provenance, redacted initial prompt,
   tool records и phase records — срок жизни чата;
-- context summaries — последние три полных (ограничение по числу, не по времени);
+- context summaries — последние три полных (ограничение по числу, не по времени); реализация держит одну
+  скользящую contextSummary на сессию и resultSummary ≤1000 символов на запуск, что строже требуемого лимита;
 - raw provider responses, token deltas и chain-of-thought никогда не сохраняются;
 - временные downloads удаляются при terminal cleanup;
 - при удалении чата удаляется файл вместе с секцией, late flush его не воскрешает.
