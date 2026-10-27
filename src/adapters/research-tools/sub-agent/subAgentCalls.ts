@@ -16,7 +16,7 @@ export function subAgentCallIdentity(
   callId: string,
 ): string {
   const safe = callId.replace(UNSAFE_ID_CHARACTERS, "_").slice(0, MAX_CALL_PART_CHARS);
-  const call = safe === callId && safe ? safe : `${safe || "call"}-${fnv1a32(callId)}`;
+  const call = safe === callId && safe ? safe : `${safe || "call"}:${fnv1a32(callId)}`;
   return `${parentRunId.replace(UNSAFE_ID_CHARACTERS, "_")}-r${round ?? 0}-${call}`;
 }
 
