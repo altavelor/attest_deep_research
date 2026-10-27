@@ -118,16 +118,14 @@ export class SubAgentSessionManager implements SubAgentHost {
     const state = this.parts.store.state;
     if (!state) return [];
     return state.records
-      .filter(
-        (record) =>
-          record.session.parentRunId === parentRunId &&
-          record.session.chatSessionId === state.chatId,
-      )
+      .filter((record) => record.session.chatSessionId === state.chatId)
       .flatMap((record) =>
-        record.runs.map((run) => ({
-          sessionId: record.session.subAgentSessionId,
-          runId: run.subAgentRunId,
-        })),
+        record.runs
+          .filter((run) => run.parentRunId === parentRunId)
+          .map((run) => ({
+            sessionId: record.session.subAgentSessionId,
+            runId: run.subAgentRunId,
+          })),
       );
   }
 

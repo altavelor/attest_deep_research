@@ -345,16 +345,18 @@ describe("sub-agent user stop", () => {
       stoppedCard.revision,
     );
     expect(stateText(harness)).not.toContain(":late");
-    expect(await inspection.stopFromUser(idle.subAgentSessionId, null)).toBe("stopped");
-    const open = await delegator.create({ createRequestId: "create-open", title: "Open" });
+    expect(await inspection.stopFromUser(idle.subAgentSessionId, null)).toBe("already-terminal");
+    const open = await launchChild(delegator, "open");
     managerParts(harness.manager).fences.revoke("parent-1");
-    expect(await inspection.stopFromUser(open.subAgentSessionId, null)).toBe("already-terminal");
+    expect(await inspection.stopFromUser(open.session.subAgentSessionId, open.receipt.runId)).toBe(
+      "already-terminal",
+    );
     expect((await failureOf(inspection.stopFromUser("session-foreign", null))).error.code).toBe(
       "not-authorized",
     );
   });
 
-  it("archives idle, running and importing sessions and keeps the fence when the archive save fails", async () => {
+  it("archives running and importing sessions, leaves idle ones and keeps the fence when the archive save fails", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
     const inspection = harness.manager.inspection();
@@ -369,7 +371,7 @@ describe("sub-agent user stop", () => {
 
     expect(
       await inspection.stopFromUser(ready.session.subAgentSessionId, ready.receipt.runId),
-    ).toBe("stopped");
+    ).toBe("already-terminal");
     expect(
       await inspection.stopFromUser(importing.session.subAgentSessionId, importing.receipt.runId),
     ).toBe("stopped");
@@ -387,7 +389,7 @@ describe("sub-agent user stop", () => {
 
     const state = managerParts(harness.manager).store.state!;
     expect(state.records.map((record) => record.session.status)).toEqual([
-      "archived",
+      "ready",
       "archived",
       "archived",
     ]);
@@ -396,7 +398,7 @@ describe("sub-agent user stop", () => {
     ).toBe("user-archive");
     await expect(
       delegator.continue(
-        ready.session.subAgentSessionId,
+        importing.session.subAgentSessionId,
         { type: "follow-up", task: "More" },
         "submit-late",
       ),

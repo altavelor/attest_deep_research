@@ -135,7 +135,7 @@ describe("SubAgentSessionManager idempotency", () => {
       foreignDelegator(harness).create({ createRequestId: "create-1", title: "Other" }),
     );
     expect(conflict.code).toBe("idempotency-conflict");
-    expect(foreign.code).toBe("not-authorized");
+    expect(foreign.code).toBe("idempotency-conflict");
     expect(harness.writer.deltas.filter((delta) => delta.entity === "session")).toHaveLength(1);
   });
 
@@ -163,9 +163,15 @@ describe("SubAgentSessionManager idempotency", () => {
         "submit-a",
       ),
     );
+    const otherChat = await failureOf(
+      managerHarness({ chatId: "chat-2" })
+        .delegator()
+        .continue(session.subAgentSessionId, { type: "follow-up", task: "Other" }, "submit-b"),
+    );
     expect(replay).toEqual(receipt);
     expect(conflict.code).toBe("idempotency-conflict");
-    expect(foreign.error.message).toBe("Нет доступа к сессии.");
+    expect(foreign.code).toBe("idempotency-conflict");
+    expect(otherChat.error.message).toBe("Нет доступа к сессии.");
     expect(harness.execution.requests).toHaveLength(1);
   });
 });
@@ -198,17 +204,11 @@ describe("SubAgentSessionManager queue", () => {
     const restored = managerHarness({
       load: async () => subAgentSection([local as typeof record]),
     });
-    const denied = await restored
-      .delegator()
-      .run("restored", { type: "initial", task: "Task" }, "s-restored");
+    await restored.delegator().run("restored", { type: "initial", task: "Task" }, "s-restored");
     await settle();
 
     expect(second.code).toBe("invalid-state");
-    expect(restored.execution.requests).toEqual([]);
-    expect(await restored.delegator().getResult("restored", denied.runId)).toMatchObject({
-      state: "failed",
-      error: { code: "execution-denied" },
-    });
+    expect(restored.execution.requests.map((request) => request.task)).toEqual(["Task"]);
   });
 
   it("U5: gives no receipt when acceptance cannot be persisted", async () => {
@@ -275,7 +275,7 @@ describe("SubAgentSessionManager queue", () => {
     const sessionWrites = harness.writer.deltas.filter(
       (delta) => delta.entity === "session" && delta.id === raced.receipt.sessionId,
     );
-    expect(sessionWrites.at(-1)).toMatchObject({ fields: { status: "archived" } });
+    expect(sessionWrites.at(-1)).toMatchObject({ fields: { status: "interrupted" } });
   });
 
   it("U6: passes lineage-specific bounded context to follow-up, retry and partial runs", async () => {

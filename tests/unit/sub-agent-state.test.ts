@@ -279,12 +279,9 @@ describe("sub-agent section validation", () => {
 });
 
 describe("recoverSubAgentState", () => {
-  it("interrupts live runs, archives sessions and records a marker without binding", () => {
+  it("interrupts live runs, keeps sessions continuable and records a marker without binding", () => {
     const live = applyAll(readySubAgentRecord("live"), runToImport("run-live").slice(0, 2));
-    const done = {
-      ...readySubAgentRecord("done"),
-      session: { ...readySubAgentRecord("done").session, status: "archived" as const },
-    };
+    const done = readySubAgentRecord("done");
     const finished = batchRecord({ batchId: "batch-0", refs: [], state: "failed" });
     const snapshot = subAgentSection([live, done], {
       batches: [
@@ -314,7 +311,7 @@ describe("recoverSubAgentState", () => {
     expect(recovered.revision).toBe(2);
     expect(recovered.records[1]).toBe(done);
     expect(recovered.records[0]?.session).toMatchObject({
-      status: "archived",
+      status: "interrupted",
       activeSubAgentRunId: null,
       parentRunId: "parent-1",
       bindingGeneration: 1,

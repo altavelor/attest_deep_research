@@ -1,12 +1,12 @@
 import type { SubAgentUserStopResult } from "@application/ports/subAgent";
-import { controlRunIdOf } from "./inspectionView";
+import { controlRunIdOf, hasStoppableWork } from "./inspectionView";
 import type { SubAgentManagerParts } from "./managerParts";
 import type { SubAgentRunScheduler } from "./runScheduler";
 import { sessionFailure } from "./SubAgentStateStore";
 
 /**
- * Archives one session of this chat for the user. The request must name the run the user
- * saw; the session is then fenced, its queue entry, run and import cancelled and the
+ * Archives one session of this chat for the user while it has an active run or pending
+ * import owned by a live parent run. The request must name the run the user saw; the session is then fenced, its queue entry, run and import cancelled and the
  * archive staged in one synchronous step. A failed save keeps the fence and a repeated
  * request saves the same archive again.
  */
@@ -32,7 +32,7 @@ export class SubAgentUserStop {
     }
     if (this.unsaved.has(sessionId)) return this.save(sessionId);
     const { session } = record;
-    if (session.status === "archived" || parts.fences.isRevoked(session.parentRunId)) {
+    if (!hasStoppableWork(session, (runId) => parts.fences.isRevoked(runId))) {
       return "already-terminal";
     }
     const controlRunId = controlRunIdOf(record);

@@ -25,7 +25,10 @@ interface SubAgentRunLaunch {
   runId: string;
   at: string;
   callerMode: ResearchMode;
+  owner?: SubAgentRunOwner;
 }
+
+export type SubAgentRunOwner = Pick<SubAgentSessionSummary, "parentRunId" | "bindingGeneration">;
 
 interface SubAgentRunEvent {
   runId: string;
@@ -48,6 +51,7 @@ export type SubAgentTransition =
   | ({ type: "model-stop"; reason: string } & SubAgentRunEvent)
   | { type: "import-committed" | "import-failed"; generation: number; at: string }
   | { type: "stop-import"; at: string }
+  | { type: "parent-closed"; at: string }
   | {
       type: "archive";
       reason: "parent-terminal" | "user-archive" | "checkpoint-corrupt";
@@ -108,6 +112,8 @@ export function applySubAgentTransition(
       return record.session.status === "importing"
         ? archive(record, transition.at, null)
         : rejected("invalid-state");
+    case "parent-closed":
+      return closeForParent(record, transition.at);
     case "archive":
       return record.session.status === "archived"
         ? { ok: true, record, tombstonedImport: null }
@@ -197,10 +203,11 @@ function queueRun(
   const policy = reduceSubAgentSourcePolicy(maximum, reduction);
   if (!policy.ok) return policy;
   const { session } = record;
+  const owner = launch.owner ?? session;
   const run: SubAgentRunSummary = {
     subAgentRunId: launch.runId,
     subAgentSessionId: session.subAgentSessionId,
-    parentRunId: session.parentRunId,
+    parentRunId: owner.parentRunId,
     callerMode: launch.callerMode,
     command: task.value,
     origin: lineage.origin,
@@ -225,6 +232,8 @@ function queueRun(
     { session, runs: [...runsWithCancelledImport(record), run] },
     {
       ...withoutPendingImport(session),
+      parentRunId: owner.parentRunId,
+      bindingGeneration: owner.bindingGeneration,
       status: "queued",
       activeSubAgentRunId: run.subAgentRunId,
       runCount: session.runCount + 1,
@@ -332,6 +341,23 @@ function archive(
   at: string,
   reason: string | null,
 ): SubAgentTransitionResult {
+  return endWork(record, at, reason, "archived");
+}
+
+function closeForParent(record: SubAgentSessionRecord, at: string): SubAgentTransitionResult {
+  const { session } = record;
+  if (session.status === "archived") return rejected("invalid-state");
+  const working = session.activeSubAgentRunId !== null || session.pendingImportRunId !== null;
+  if (!working) return { ok: true, record, tombstonedImport: null };
+  return endWork(record, at, "parent-terminal", "interrupted");
+}
+
+function endWork(
+  record: SubAgentSessionRecord,
+  at: string,
+  reason: string | null,
+  status: "archived" | "interrupted",
+): SubAgentTransitionResult {
   const runs = runsWithCancelledImport(record).map((run) =>
     NONTERMINAL_RUN_STATUSES.includes(run.status)
       ? {
@@ -346,7 +372,7 @@ function archive(
   );
   return accepted(
     { session: record.session, runs },
-    { ...withoutPendingImport(record.session), status: "archived", activeSubAgentRunId: null },
+    { ...withoutPendingImport(record.session), status, activeSubAgentRunId: null },
     at,
     pendingImport(record.session),
   );

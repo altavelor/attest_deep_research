@@ -1,10 +1,5 @@
 import { condenseTitleText } from "@core/chat/titlePolicy";
-import type {
-  ParentRunBinding,
-  SubAgentRunSummary,
-  SubAgentSessionRecord,
-  SubAgentSessionSummary,
-} from "./sessionModel";
+import type { SubAgentRunSummary, SubAgentSessionRecord } from "./sessionModel";
 
 const UNSAFE_TITLE_CHARACTERS =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
@@ -16,18 +11,6 @@ const UNSAFE_TITLE_CHARACTERS =
  */
 export function deriveSubAgentTitle(task: string): string {
   return condenseTitleText(task.replace(UNSAFE_TITLE_CHARACTERS, "")) || "Untitled sub-agent";
-}
-
-/** True when the session belongs to exactly this chat, parent run and binding generation. */
-export function isBoundToParentRun(
-  session: SubAgentSessionSummary,
-  binding: ParentRunBinding,
-): boolean {
-  return (
-    session.chatSessionId === binding.chatSessionId &&
-    session.parentRunId === binding.parentRunId &&
-    session.bindingGeneration === binding.bindingGeneration
-  );
 }
 
 /** Finds a run that belongs to the record's own session, ignoring foreign run summaries. */

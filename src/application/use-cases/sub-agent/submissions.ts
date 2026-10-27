@@ -1,6 +1,7 @@
 import type { SubAgentDelegationGrant } from "@application/ports/subAgent";
 import {
   applySubAgentTransition,
+  DEFAULT_SUB_AGENT_SEARCHES,
   isSubAgentStateId,
   SubAgentSessionFailure,
   type ParentRunBinding,
@@ -55,7 +56,12 @@ export class SubAgentSubmissions {
     const runId = this.parts.context.createId("subagent-run");
     if (!isSubAgentStateId(runId)) throw sessionFailure("invalid-state");
     const at = timestamp(this.parts);
-    const launch = { runId, at, callerMode: grant.callerMode as ResearchMode };
+    const launch = {
+      runId,
+      at,
+      callerMode: grant.callerMode as ResearchMode,
+      owner: { parentRunId: binding.parentRunId, bindingGeneration: binding.bindingGeneration },
+    };
     const transition: SubAgentTransition =
       submission.kind === "retry"
         ? { type: "retry", retry: submission.retry, ...launch }
@@ -63,6 +69,7 @@ export class SubAgentSubmissions {
     const result = applySubAgentTransition(record, transition);
     if (!result.ok) throw new SubAgentSessionFailure(result.error);
     const { store } = this.parts;
+    this.rebindOptions(sessionId, grant);
     store.putRecord(result.record, record);
     store.tombstoneImport(result.tombstonedImport);
     const receipt: SubAgentRunReceipt = { sessionId, runId, submissionId, acceptedAt: at };
@@ -79,6 +86,16 @@ export class SubAgentSubmissions {
     const forget = (): void => void this.inFlight.delete(submissionId);
     accepted.then(forget, forget);
     return accepted;
+  }
+
+  private rebindOptions(sessionId: string, grant: SubAgentDelegationGrant): void {
+    const previous = this.parts.sessionOptions.get(sessionId);
+    this.parts.sessionOptions.set(sessionId, {
+      grant,
+      resources: previous?.resources ?? [],
+      maxSearches:
+        previous?.maxSearches ?? Math.min(DEFAULT_SUB_AGENT_SEARCHES, grant.limits.maxSearches),
+    });
   }
 
   private async accept(

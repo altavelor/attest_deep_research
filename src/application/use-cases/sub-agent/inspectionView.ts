@@ -10,6 +10,7 @@ import {
   type NormalizedUsage,
   type SubAgentInitialPrompt,
   type SubAgentObservationRecord,
+  type SubAgentSessionSummary,
   type SubAgentRunSummary,
   type SubAgentSessionRecord,
   type SubAgentStateSnapshot,
@@ -44,6 +45,18 @@ export function controlRunIdOf(record: SubAgentSessionRecord): string | null {
     session.pendingImportRunId ??
     record.runs[record.runs.length - 1]?.subAgentRunId ??
     null
+  );
+}
+
+/** True when the session has an active run or pending import whose owning parent run is live. */
+export function hasStoppableWork(
+  session: SubAgentSessionSummary,
+  isRevoked: (parentRunId: string) => boolean,
+): boolean {
+  return (
+    session.status !== "archived" &&
+    (session.activeSubAgentRunId !== null || session.pendingImportRunId !== null) &&
+    !isRevoked(session.parentRunId)
   );
 }
 
@@ -126,7 +139,7 @@ function buildCard(
     usageIncomplete: total.incomplete,
     elapsedMs: record.runs.reduce((sum, run) => sum + runElapsed(run, inputs), 0),
     updatedAt: session.updatedAt,
-    canStop: session.status !== "archived" && inputs.parentLive(session.parentRunId),
+    canStop: hasStoppableWork(session, (runId) => !inputs.parentLive(runId)),
     controlRunId,
   });
 }
