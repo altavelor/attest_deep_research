@@ -95,9 +95,21 @@ Thinking, будущий Deep Research и map_sources используют ег�
     и startup recovery больше не архивируют: nonterminal run становится interrupted, pending
     import получает tombstone, сессия с прерванной работой — interrupted (доступны retry и
     continue-partial), бездействующая сохраняет ready/failed/interrupted. Notices interrupted
-    и closed (closedCount — число затронутых неархивных сессий запуска) не изменились.
-    archived остаётся только за пользовательской остановкой, stop-import и checkpoint-corrupt
-    и не открывается снова. Схема не меняется: старые чаты с archived читаются как есть.
+    сохраняются; closedCount — число сессий, чью активную работу parent-closed действительно
+    прервал, при нуле notice closed не создаётся, текст — «Agent work stopped with this
+    answer: N». archived остаётся только за пользовательской остановкой («пользователь её
+    остановил», намеренно окончательно), stop-import и checkpoint-corrupt и не открывается снова.
+    Продолжение никогда не расширяет права: максимум нового run — пересечение source policy
+    сессии (или повторяемого run) с maximumSourcePolicy текущего grant
+    (intersectSubAgentSourcePolicy, затем reduceSubAgentSourcePolicy), активный файл — только
+    из текущего grant и только если оба разрешают, maxSearches = min(значение сессии, лимит
+    grant). resources и maxSearches сессии сохраняются в её записи (optional поля, проверяются
+    при загрузке); у старых сессий без них — resources [] и min(8, лимит grant). Ключ
+    идемпотентности submission включает parentRunId вызывающего, поэтому повтор submission id
+    из другого запуска — idempotency-conflict. Сессию workers map_sources (origin первого run
+    map_sources) прямой вызов не продолжает: not-authorized. Сохранённое состояние, где
+    session.parentRunId не равен parentRunId новейшего run или chatSessionId не равен chatId
+    секции, отклоняется валидацией. Схема не меняется: старые чаты с archived читаются как есть.
     Системный prompt родителя с инструментом run_subagent получает компактный раздел
     существующих сессий чата: sessionId · заголовок · состояние · последний run/attempt
     (только поля хоста, без текста ответа ребёнка; не больше 20 новейших, заголовки
