@@ -134,16 +134,20 @@ Model/CoT и невыполненная из-за отказа команда н
 id сообщения `answer-${runId}` (answerMessageId; placeholder ответа создаётся с этим id при
 старте run). События без отрисованного сообщения (удалённое, восстановленное, повреждённое
 или созданное до этого правила сообщение) остаются отдельными узлами транскрипта в порядке
-sequence, ничего не теряется. Внутри workflow порядок задаёт общий allocator: верхнеуровневый
-tool call получает optional ChainItem.timelineSequence при tool-call-start живого run (не
-fenced); перед узлом с sequence S выводятся все ожидающие события с sequence < S, остальные —
-после последнего узла цепочки до индикатора. Узлы без sequence (reasoning, checkpoints,
-legacy) события не выталкивают, поэтому в legacy-чате события идут в конце timeline.
+sequence, ничего не теряется. Внутри workflow порядок задаёт общий allocator: каждый новый
+верхнеуровневый элемент цепочки своего ответа (tool call, reasoning segment, checkpoint)
+получает optional ChainItem.timelineSequence один раз, когда впервые появляется в живом
+не fenced run (stampRunChain после каждого события потока; чужое сообщение не штампуется).
+Перед элементом с sequence S выводятся все ожидающие события с sequence < S, остальные —
+после последнего элемента цепочки до индикатора. Элементы без sequence (legacy) события не
+выталкивают, поэтому в legacy-чате события идут в конце timeline. Скрытые строки
+sub-agent инструментов участвуют в чередовании как якоря и отбрасываются только при выводе.
 Строки run_subagent/wait_subagents/get_subagent_result скрываются parentDisplayChain, кроме
 статуса failed (отказ capacity, неверный ввод) — такая строка остаётся видимой.
 Pending-строка такого вызова тоже скрыта, поэтому между tool-call-start и первым событием
 агента (created/queued/dispatch) в timeline для этого вызова ничего не показывается.
-parentWorkflowChain для ChatCompaction и model history не меняется.
+parentWorkflowChain для ChatCompaction и model history не меняется и поле timelineSequence в
+model trace не попадает.
 Карточка «Task sent to agent»: заголовок (description сессии) и бейдж вида команды, тело
 команды в приглушённом блоке, строка статуса и «Open details». Статус выводится из
 сохранённых notices: последний терминальный notice того же runId (finished/partial/failed/

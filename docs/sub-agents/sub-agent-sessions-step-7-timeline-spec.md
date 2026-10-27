@@ -36,7 +36,8 @@ streaming/interrupted/superseded статусы не теряются при н�
 Legacy rendering, instant indicator suppression и parent checkpoint order сохраняются.
 Parent модель дополнительно несёт optional `events` (dispatch/notice своего run, шаг 8);
 engine вставляет их узлами рельса (agentEventNodeRenderer, иконка в кольце на линии) по
-interleaveWorkflowEvents, а при пустой цепочке — после legacy-узлов. Модель только с events
+interleaveWorkflowEvents над цепочкой со скрытыми sub-agent строками как якорями (сами строки
+не выводятся; sequence есть у tool call, reasoning и checkpoint), а при пустой цепочке — после legacy-узлов. Модель только с events
 тоже рендерит список. Child-модели (`sub-agent:`) events не получают.
 На этом шаге filtering child-активности в main ещё не включается — это шаг 8.
 
