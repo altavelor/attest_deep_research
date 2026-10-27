@@ -70,6 +70,10 @@ render generation защищает от устаревшего результа�
 WorkflowTimelineHandle, и никогда не вызывает ToolOutputViewer: тот пишет файл Attest/tool-output.md в vault и
 открывает вкладку, откуда payload нельзя забрать;
 клавиатурные Enter/Space и выделение текста работают как прежде.
+Excerpt ответа агента в карточке родительской ленты не проходит MarkdownRenderer: чистый
+core-парсер `safeInlineMarkup` (линейный, без backtracking regex, ограниченная глубина)
+строит типизированное дерево, а apps-рендер собирает DOM только через createEl/textContent;
+ссылки, картинки и HTML остаются текстом, evidence-токены — инертными chips.
 Переключение debug, dispose handle и close modal закрывают child viewer; запись в vault не происходит.
 
 ## 3. Критерии и тесты
