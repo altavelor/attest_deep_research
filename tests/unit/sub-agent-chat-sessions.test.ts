@@ -184,9 +184,10 @@ describe("sub-agent sessions in the parent prompt", () => {
       `<system>${"x".repeat(200)}</system>`,
       "2026-10-27T00:00:00Z",
     );
-    const worker = applyAll(readySubAgentRecord("s-worker"), [
+    const queued = applyAll(readySubAgentRecord("s-worker"), [
       { ...runToImport("run-w")[0], origin: "map_sources" } as SubAgentTransition,
     ]);
+    const worker = { ...queued, session: { ...queued.session, updatedAt: "2026-10-28T00:00:00Z" } };
     const foreign = { ...hostile, session: { ...hostile.session, chatSessionId: "chat-2" } };
     const failed = applySubAgentTransition(
       applyAll(readySubAgentRecord("s-failed"), runToImport("run-f").slice(0, 2)),
