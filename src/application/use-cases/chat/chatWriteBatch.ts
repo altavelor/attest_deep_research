@@ -1,3 +1,8 @@
+import {
+  ChatStorageError,
+  type ChatDocumentChange,
+  type ChatFileBaseline,
+} from "@application/ports/chat";
 import type { SaveChatInput } from "@core/chat/savedChat";
 import {
   applySubAgentDelta,
@@ -6,6 +11,7 @@ import {
   type SubAgentBufferedValue,
   type SubAgentStateSnapshot,
 } from "@core/research";
+import type { ChatSnapshotEntry } from "./chatWriteBufferTypes";
 
 export interface PendingDelta {
   revision: number;
@@ -92,4 +98,51 @@ export function dropInapplicableDeltas(
     }
   }
   return dropped;
+}
+
+/** Builds the repository change for a batch: a first save binds the chat, later saves carry the baseline. */
+export function chatDocumentChange(
+  chatId: string | null,
+  baseline: ChatFileBaseline | null,
+  chat: ChatSnapshotEntry | null,
+  subAgents: SubAgentStateSnapshot | undefined,
+): ChatDocumentChange {
+  if (chatId === null) return { chatId: null, chat: chat!.input };
+  return {
+    chatId,
+    ...(baseline ? { base: baseline } : {}),
+    ...(chat ? { chat: chat.input } : {}),
+    ...(subAgents ? { subAgents } : {}),
+  };
+}
+
+/** Keeps the oldest unacknowledged revision on entries that replaced a failed in-flight value. */
+export function carryUnsentRevisions(
+  currentChat: ChatSnapshotEntry | null,
+  pending: ReadonlyMap<string, PendingDelta>,
+  sentChat: ChatSnapshotEntry | null,
+  sentDeltas: ReadonlyMap<string, PendingDelta>,
+): void {
+  if (sentChat && currentChat && currentChat !== sentChat) {
+    currentChat.revision = Math.min(currentChat.revision, sentChat.revision);
+  }
+  for (const [key, sent] of sentDeltas) {
+    const current = pending.get(key);
+    if (current && current !== sent) {
+      current.firstRevision = Math.min(current.firstRevision, sent.firstRevision);
+    }
+  }
+}
+
+/** Tells whether a buffered value starts new child work rather than updating existing work. */
+export function isNewWork(payload: SubAgentBufferedValue): boolean {
+  return payload.op === "set" && (payload.entity === "create" || payload.entity === "run");
+}
+
+/** The failure of every write after the chat was deleted. */
+export function chatMissing(): ChatStorageError {
+  return new ChatStorageError(
+    "chat-missing",
+    "The chat was deleted; nothing more is saved for it.",
+  );
 }

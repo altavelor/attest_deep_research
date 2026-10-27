@@ -1,4 +1,5 @@
 import type { ChatFileBaseline, ChatRepository } from "@application/ports/chat";
+import type { SaveChatInput } from "@core/chat/savedChat";
 import type { SubAgentStateSnapshot } from "@core/research";
 
 export interface ChatWriteBufferLimits {
@@ -22,6 +23,11 @@ export interface ChatWriteBufferOptions {
   scheduleTimeout(callback: () => void, delayMs: number): { cancel(): void };
   limits?: Partial<ChatWriteBufferLimits>;
   onStorageError?(error: Error): void;
+}
+
+export interface ChatSnapshotEntry {
+  input: SaveChatInput;
+  revision: number;
 }
 
 export interface ChatWriteWaiter {
