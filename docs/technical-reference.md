@@ -38,8 +38,12 @@ is generated from `src/apps/obsidian/styles.json`.
 Attest separates the stable `instant` and `thinking` strategies:
 
 - **Instant** assembles evidence and synthesizes a deterministic answer without an agent loop.
+  It offers no tools: tool-call markup the model writes as text for a known tool is removed from
+  the saved answer and replaced by one localized notice suggesting Thinking; nothing is executed.
 - **Thinking** uses capability-gated, multi-round tool calling. It falls back to Instant when the
-  selected model cannot satisfy the tool/reasoning policy.
+  selected model cannot satisfy the tool/reasoning policy. A call to a tool the run does not offer
+  or permit fails with `tool-unavailable`; the model receives the offered tool names and the
+  timeline row shows a localized reason.
 - **Deep Research** is intentionally not part of the current release flow. Its future lifecycle is
   `plan → user review → gather → verify → synthesize → export`.
 
