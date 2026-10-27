@@ -128,9 +128,26 @@ messages и сохраняет один stable eventKey/sequence. Фактиче
 Acknowledgement accepted command включает durable dispatch либо bounded recovery marker.
 Model/CoT и невыполненная из-за отказа команда не выдаются за отправленное сообщение.
 
-Уведомления жизненного цикла (шаг 6) отображаются отдельными узлами timeline по макетам M6/M7:
-карточка «Task sent to agent» с live-статусом из inspection snapshot (на reload без snapshot —
-без статуса) и карточка результата с replyExcerpt и «Show full reply» внутри лимита 4 KiB.
+Уведомления жизненного цикла (шаг 6) отображаются узлами timeline по макетам M6/M7
+внутри workflow-списка (`attest-chat__workflow`) того ассистентского сообщения, чей run их
+породил: placeSubAgentEvents (core/chat/subAgentPlacement.ts) сопоставляет parentRunId с
+id сообщения `answer-${runId}` (answerMessageId; placeholder ответа создаётся с этим id при
+старте run). События без отрисованного сообщения (удалённое, восстановленное, повреждённое
+или созданное до этого правила сообщение) остаются отдельными узлами транскрипта в порядке
+sequence, ничего не теряется. Внутри workflow порядок задаёт общий allocator: верхнеуровневый
+tool call получает optional ChainItem.timelineSequence при tool-call-start живого run (не
+fenced); перед узлом с sequence S выводятся все ожидающие события с sequence < S, остальные —
+после последнего узла цепочки до индикатора. Узлы без sequence (reasoning, checkpoints,
+legacy) события не выталкивают, поэтому в legacy-чате события идут в конце timeline.
+Строки run_subagent/wait_subagents/get_subagent_result скрываются parentDisplayChain, кроме
+статуса failed (отказ capacity, неверный ввод) — такая строка остаётся видимой.
+parentWorkflowChain для ChatCompaction и model history не меняется.
+Карточка «Task sent to agent»: заголовок (description сессии) и бейдж вида команды, тело
+команды в приглушённом блоке, строка статуса и «Open details». Статус выводится из
+сохранённых notices: последний терминальный notice того же runId (finished/partial/failed/
+stopped/interrupted/import-failed/not-started) → его статус; иначе queued notice этого run
+(или сессии при runId=null) → «Queued»; иначе «Running». Карточка результата — с replyExcerpt
+и «Show full reply» внутри лимита 4 KiB.
 Child phase/tools/progress/debug In/Out попадают только в child projection. Даже debug не
 показывает их или вывод run_subagent в основном workflow, tool output viewer, fallback/legacy
 rendering, diagnostic UI shortcut основного сообщения либо main export. Кнопка «Open details»
