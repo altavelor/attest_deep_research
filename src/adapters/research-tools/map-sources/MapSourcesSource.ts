@@ -13,6 +13,7 @@ export interface MapSourcesSourceOptions {
   retriever: ResearchRetriever;
   evidence: EvidenceRegistry;
   available?: boolean;
+  indexPaths?: readonly string[];
 }
 
 /** Offers the fan-out tools of one parent run over its session-backed document workers. */
@@ -28,6 +29,7 @@ export class MapSourcesSource implements DataSource {
       context,
       resolver: parent.resolver,
       evidence: options.evidence,
+      ...(options.indexPaths ? { indexPaths: options.indexPaths } : {}),
     });
     this.descriptor = {
       id: "map-sources",

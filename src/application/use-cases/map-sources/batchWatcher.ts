@@ -3,6 +3,7 @@ import type { SubAgentImportedEvidenceResolver } from "@application/ports/subAge
 import {
   deriveSubAgentTitle,
   isTerminalBatchState,
+  SubAgentSessionFailure,
   subAgentNoticeKey,
   type MapSourcesBatchRecord,
 } from "@core/research";
@@ -21,6 +22,8 @@ export interface MapSourcesBatchWatcherDeps extends Omit<MapSourcesRunContext, "
 }
 
 interface Watch {
+  record: MapSourcesBatchRecord | null;
+  readings: Map<string, WorkerReading>;
   unsubscribe(): void;
   running: boolean;
   again: boolean;
@@ -52,7 +55,13 @@ export class MapSourcesBatchWatcher {
 
   watch(batchId: string): void {
     if (this.watches.has(batchId)) return;
-    const watch: Watch = { unsubscribe: () => undefined, running: false, again: false };
+    const watch: Watch = {
+      record: null,
+      readings: new Map(),
+      unsubscribe: () => undefined,
+      running: false,
+      again: false,
+    };
     this.watches.set(batchId, watch);
     watch.unsubscribe = this.deps.subscribe(() => this.schedule(batchId));
     this.schedule(batchId);
@@ -80,17 +89,20 @@ export class MapSourcesBatchWatcher {
   }
 
   private async refresh(batchId: string): Promise<void> {
-    const record = this.deps.batches.get(batchId);
-    if (!record || isTerminalBatchState(record.state)) {
+    const watch = this.watches.get(batchId);
+    const record = this.deps.batches.get(batchId) ?? watch?.record ?? null;
+    if (!record) {
       this.stop(batchId);
       return;
     }
+    if (!watch || isTerminalBatchState(record.state) || !this.deps.batches.get(batchId)) {
+      this.finalNotice(record);
+      this.stop(batchId);
+      return;
+    }
+    watch.record = record;
     const readings = await Promise.all(
-      record.sourcePaths.map(async (sourcePath): Promise<WorkerReading> => {
-        const ref = record.refs.find((entry) => entry.sourcePath === sourcePath)?.ref ?? null;
-        const state = ref ? await this.deps.workers.getResult(ref).catch(() => null) : null;
-        return { sourcePath, ref, state };
-      }),
+      record.sourcePaths.map((sourcePath) => this.read(record, sourcePath, watch.readings)),
     );
     const counts = batchCounts(readings);
     const previous = this.latest.get(batchId);
@@ -114,6 +126,45 @@ export class MapSourcesBatchWatcher {
     await this.deps.batches.put(completed, true);
     this.notice(record, counts);
     this.stop(batchId);
+  }
+
+  /**
+   * Reads one worker of a batch. A typed session failure is a terminal unreadable worker;
+   * any other rejection keeps the previous reading, so counters never go back.
+   */
+  private async read(
+    record: MapSourcesBatchRecord,
+    sourcePath: string,
+    previous: Map<string, WorkerReading>,
+  ): Promise<WorkerReading> {
+    const ref = record.refs.find((entry) => entry.sourcePath === sourcePath)?.ref ?? null;
+    let reading: WorkerReading = { sourcePath, ref, state: null };
+    if (ref) {
+      try {
+        reading = { sourcePath, ref, state: await this.deps.workers.getResult(ref) };
+      } catch (error) {
+        reading =
+          error instanceof SubAgentSessionFailure
+            ? { sourcePath, ref, state: null, unreadable: error.code }
+            : (previous.get(sourcePath) ?? reading);
+      }
+    }
+    previous.set(sourcePath, reading);
+    return reading;
+  }
+
+  /** Publishes the last notice of a batch that ended elsewhere: nothing runs, unfinished workers failed. */
+  private finalNotice(record: MapSourcesBatchRecord): void {
+    const last = this.latest.get(record.batchId);
+    const done = record.result?.diagnostics.completed ?? last?.done ?? 0;
+    const counts: BatchCounts = {
+      done,
+      failed: Math.max(0, record.sourcePaths.length - done),
+      running: 0,
+      settled: true,
+    };
+    this.latest.set(record.batchId, counts);
+    if (!sameCounts(last, counts)) this.notice(record, counts);
   }
 
   private stop(batchId: string): void {

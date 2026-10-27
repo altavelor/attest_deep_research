@@ -17,6 +17,7 @@ export interface WorkerReading {
   sourcePath: string;
   ref: SubAgentRunRef | null;
   state: SubAgentResultState | null;
+  unreadable?: string;
 }
 
 export interface BatchCounts {
@@ -34,8 +35,8 @@ export function batchCounts(readings: readonly WorkerReading[]): BatchCounts {
   let failed = 0;
   let running = 0;
   let settled = true;
-  for (const { ref, state } of readings) {
-    if (!ref) {
+  for (const { ref, state, unreadable } of readings) {
+    if (!ref || unreadable !== undefined) {
       failed += 1;
     } else if (state?.state === "completed") {
       done += 1;
@@ -135,6 +136,14 @@ async function rowOf(
   startErrors: ReadonlyMap<string, string>,
 ): Promise<MapSourceRow> {
   const state = reading?.state;
+  if (reading?.unreadable !== undefined) {
+    return failedRow(
+      sourcePath,
+      reading.unreadable,
+      "The document worker's result could not be read.",
+      redact,
+    );
+  }
   if (!reading?.ref || !state) {
     const code = startErrors.get(sourcePath) ?? "not-started";
     return failedRow(sourcePath, code, "The document worker could not be started.", redact);

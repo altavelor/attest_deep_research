@@ -122,6 +122,7 @@ export function createResearchToolRegistry(
         parent: options.subAgentParent,
         retriever: options.retriever,
         evidence,
+        ...(options.indexSourcePaths ? { indexPaths: options.indexSourcePaths } : {}),
       }),
     );
   }

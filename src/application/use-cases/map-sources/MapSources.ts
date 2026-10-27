@@ -14,6 +14,7 @@ import {
   type MapSourcesBatchReceipt,
   type MapSourcesBatchRecord,
   type MapSourcesBatchState,
+  type SubAgentRunReceipt,
 } from "@core/research";
 import { sha256Hex } from "@shared";
 import { MapSourcesBatchWatcher } from "./batchWatcher";
@@ -38,6 +39,7 @@ export interface MapSourcesDeps {
   evidence?: SubAgentEvidenceTarget;
   defaultMaxSources?: number;
   sourceHardCap?: number;
+  indexPaths?: readonly string[];
 }
 
 const SELECTION_SEARCH_LIMIT = 5;
@@ -166,18 +168,20 @@ export class MapSources {
     input: NormalizedMapSourcesInput,
     signal?: AbortSignal,
   ): Promise<MapSourcesBatchReceipt> {
-    if (record.state !== "preparing") {
-      if (record.state === "pending") this.watcher.watch(record.batchId);
-      return receiptOf(record);
-    }
+    if (record.state !== "preparing") return this.settledReceipt(record);
     const { batches } = this.deps.context;
     const refs = [...record.refs];
     const errors = this.startErrors.get(record.batchId) ?? new Map<string, string>();
     this.startErrors.set(record.batchId, errors);
     for (const sourcePath of record.sourcePaths) {
       if (refs.some((entry) => entry.sourcePath === sourcePath)) continue;
+      if (!(await this.isIndexedDocument(sourcePath))) {
+        errors.set(sourcePath, "source-scope-denied");
+        continue;
+      }
+      let receipt: SubAgentRunReceipt;
       try {
-        const receipt = await this.deps.runner.runSource({
+        receipt = await this.deps.runner.runSource({
           requestId: workerRequestIdOf(record.batchId, sourcePath),
           task: buildSourceTask(input.question, sourcePath),
           sourcePath,
@@ -185,14 +189,17 @@ export class MapSources {
           maxResultChars: PER_SOURCE_RESULT_CHARS,
           ...(signal ? { signal } : {}),
         });
-        refs.push({ sourcePath, ref: { sessionId: receipt.sessionId, runId: receipt.runId } });
-        await batches.put({ ...record, refs: [...refs] }, false);
       } catch (error) {
         const code = error instanceof SubAgentSessionFailure ? error.code : "not-started";
         if (PARENT_GONE_CODES.has(code) || signal?.aborted) {
           await this.stopBatch({ ...record, refs }, "parent-terminal");
         }
         errors.set(sourcePath, code);
+        continue;
+      }
+      refs.push({ sourcePath, ref: { sessionId: receipt.sessionId, runId: receipt.runId } });
+      if (!(await batches.put({ ...record, refs: [...refs] }, false))) {
+        return this.settledReceipt(batches.get(record.batchId) ?? record);
       }
     }
     const next: MapSourcesBatchRecord =
@@ -204,9 +211,29 @@ export class MapSources {
             state: "failed",
             error: mapSourcesBatchError("workers-not-started", "No document worker could start."),
           };
-    await batches.put(next, true);
-    if (next.state === "pending") this.watcher.watch(next.batchId);
-    return receiptOf(next);
+    const stored = await batches.put(next, true);
+    return this.settledReceipt(stored ? next : (batches.get(record.batchId) ?? next));
+  }
+
+  /** Returns the receipt of a registered batch, or throws the stored error of a failed one. */
+  private settledReceipt(record: MapSourcesBatchRecord): MapSourcesBatchReceipt {
+    if (record.state === "failed" || record.state === "interrupted") {
+      const error =
+        record.error ?? mapSourcesBatchError("batch-failed", "The batch did not finish.");
+      throw new MapSourcesFailure(error.code, error.message);
+    }
+    if (record.state === "pending") this.watcher.watch(record.batchId);
+    return receiptOf(record);
+  }
+
+  private async isIndexedDocument(sourcePath: string): Promise<boolean> {
+    const metadata = this.deps.retriever.getSourceMetadata;
+    if (!metadata) return true;
+    try {
+      return (await metadata.call(this.deps.retriever, sourcePath)) !== null;
+    } catch {
+      return false;
+    }
   }
 
   private async stopBatch(record: MapSourcesBatchRecord, code: string): Promise<never> {
@@ -245,9 +272,11 @@ export class MapSources {
     if (input.sourcePaths.length > 0) return { sourcePaths: input.sourcePaths, kind: "explicit" };
     let chunks: RetrievedChunk[] = [];
     try {
+      const scope = this.deps.indexPaths ?? [];
       const retrieval = await this.deps.retriever.search(input.question, {
         limit: SELECTION_SEARCH_LIMIT,
         includeWebResults: false,
+        ...(scope.length > 0 ? { sourcePaths: [...scope] } : {}),
       });
       chunks = retrieval.chunks;
     } catch {
