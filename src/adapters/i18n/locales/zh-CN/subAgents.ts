@@ -74,4 +74,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.failed": "停止尚未保存。代理已暂停。",
   "chat.subAgents.stop.retry": "重试停止",
   "chat.subAgents.stop.failedNotice": "子代理的停止未保存。打开代理列表重试。",
+  "chat.subAgents.resize.width": "调整宽度",
+  "chat.subAgents.resize.height": "调整高度",
+  "chat.subAgents.resize.both": "调整宽度和高度",
 };

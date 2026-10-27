@@ -75,4 +75,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.failed": "لم يُحفظ الإيقاف بعد. الوكيل متوقف مؤقتًا.",
   "chat.subAgents.stop.retry": "إعادة محاولة الإيقاف",
   "chat.subAgents.stop.failedNotice": "لم يُحفظ إيقاف وكيل فرعي. افتح الوكلاء لإعادة المحاولة.",
+  "chat.subAgents.resize.width": "تغيير العرض",
+  "chat.subAgents.resize.height": "تغيير الارتفاع",
+  "chat.subAgents.resize.both": "تغيير العرض والارتفاع",
 };

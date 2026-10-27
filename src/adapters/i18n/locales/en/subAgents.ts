@@ -74,6 +74,9 @@ export const subAgents = {
   "chat.subAgents.stop.retry": "Retry stop",
   "chat.subAgents.stop.failedNotice":
     "A sub-agent stop was not saved. Open the agents to try again.",
+  "chat.subAgents.resize.width": "Resize width",
+  "chat.subAgents.resize.height": "Resize height",
+  "chat.subAgents.resize.both": "Resize width and height",
 };
 
 export type EnSubAgentMessages = Record<keyof typeof subAgents, string>;

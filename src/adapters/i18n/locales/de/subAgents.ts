@@ -78,4 +78,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.retry": "Stopp erneut versuchen",
   "chat.subAgents.stop.failedNotice":
     "Ein Sub-Agent-Stopp wurde nicht gespeichert. Öffne die Agenten, um es erneut zu versuchen.",
+  "chat.subAgents.resize.width": "Breite ändern",
+  "chat.subAgents.resize.height": "Höhe ändern",
+  "chat.subAgents.resize.both": "Breite und Höhe ändern",
 };

@@ -76,4 +76,7 @@ export const subAgents: EnSubAgentMessages = {
   "chat.subAgents.stop.retry": "Réessayer l'arrêt",
   "chat.subAgents.stop.failedNotice":
     "L'arrêt d'un sous-agent n'a pas été enregistré. Ouvrez les agents pour réessayer.",
+  "chat.subAgents.resize.width": "Redimensionner la largeur",
+  "chat.subAgents.resize.height": "Redimensionner la hauteur",
+  "chat.subAgents.resize.both": "Redimensionner la largeur et la hauteur",
 };
