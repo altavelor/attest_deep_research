@@ -169,6 +169,14 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.batch.body": "{done} منجزة · {running} قيد التشغيل · {failed} فاشلة",
   "chat.agent.notice.aria": "حدث وكيل: {title}",
 
+  "chat.toolUnavailable.instant":
+    'حاول النموذج استدعاء "{tool}"، وهي غير متاحة في الوضع الفوري. انتقل إلى وضع التفكير واسأل مجددًا.',
+  "chat.toolUnavailable.no-tools":
+    'حاول النموذج استدعاء "{tool}"، لكن لا تتوفر أدوات لهذه الإجابة. انتقل إلى وضع التفكير واسأل مجددًا.',
+  "chat.toolUnavailable.not-permitted": '"{tool}" معطّلة بسبب الإعدادات أو الأذونات الحالية.',
+  "chat.toolUnavailable.not-offered": '"{tool}" غير متاحة في هذا التشغيل.',
+  "chat.toolUnavailable.subAgents":
+    'حاول النموذج تشغيل وكيل فرعي ("{tool}"). الوكلاء الفرعيون متاحون فقط في وضع التفكير.',
   "chat.toolCall.badge.keywordOnly": "كلمات مفتاحية فقط",
   "chat.toolCall.badge.semanticFailed": "أخفق البحث الدلالي (بالتضمين): {error}",
   "chat.toolCall.badge.semanticEmpty":

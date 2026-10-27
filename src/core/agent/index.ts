@@ -6,3 +6,4 @@ export * from "./toolPresentation";
 export * from "./AgentLoop";
 export * from "./modelNames";
 export * from "./serverPresets";
+export * from "./unavailableTool";

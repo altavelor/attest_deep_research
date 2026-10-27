@@ -5,6 +5,8 @@ import {
   ToolDispatchContext,
   ToolExecution,
   ToolPermissions,
+  UnavailableToolReason,
+  describeUnavailableTool,
   executeTool,
   toolFailure,
 } from "@core/agent";
@@ -47,13 +49,18 @@ export class ToolManager {
     context: ToolDispatchContext = {},
   ): Promise<ToolExecution<unknown>> {
     const handler = this.handlers.get(call.name);
-    if (!handler) {
-      return toolFailure("unknown-tool", `Unknown or unavailable tool: ${call.name}.`);
-    }
-    if (!this.permits(handler)) {
-      return toolFailure("tool-not-permitted", `Tool not permitted for this run: ${call.name}.`);
-    }
+    if (!handler) return this.unavailable(call.name, "not-offered");
+    if (!this.permits(handler)) return this.unavailable(call.name, "not-permitted");
     return executeTool(handler, call, context);
+  }
+
+  private unavailable(name: string, reason: UnavailableToolReason): ToolExecution<never> {
+    const available = this.definitions().map((definition) => definition.function.name);
+    const description = describeUnavailableTool(name, { reason, available });
+    return toolFailure(description.code, description.modelMessage, false, {
+      userMessageKey: description.userMessageKey,
+      params: description.params,
+    });
   }
 
   private permits(tool: Tool<unknown, unknown>): boolean {

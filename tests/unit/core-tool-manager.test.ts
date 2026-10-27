@@ -44,7 +44,7 @@ describe("core ToolManager", () => {
     const result = await manager.execute({ id: "1", name: "missing", arguments: {} });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.code).toBe("unknown-tool");
+      expect(result.error.code).toBe("tool-unavailable");
     }
   });
 

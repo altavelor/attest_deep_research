@@ -179,6 +179,15 @@ export const chat: EnChatMessages = {
   "chat.agent.notice.batch.body": "{done} fertig · {running} laufen · {failed} fehlgeschlagen",
   "chat.agent.notice.aria": "Agenten-Ereignis: {title}",
 
+  "chat.toolUnavailable.instant":
+    "Das Modell wollte „{tool}“ aufrufen, das im Modus „Sofort“ nicht verfügbar ist. Wechseln Sie zu „Denken“ und fragen Sie erneut.",
+  "chat.toolUnavailable.no-tools":
+    "Das Modell wollte „{tool}“ aufrufen, aber für diese Antwort sind keine Werkzeuge verfügbar. Wechseln Sie zu „Denken“ und fragen Sie erneut.",
+  "chat.toolUnavailable.not-permitted":
+    "„{tool}“ ist durch die aktuellen Einstellungen oder Berechtigungen deaktiviert.",
+  "chat.toolUnavailable.not-offered": "„{tool}“ ist in diesem Lauf nicht verfügbar.",
+  "chat.toolUnavailable.subAgents":
+    "Das Modell wollte einen Sub-Agenten starten („{tool}“). Sub-Agenten sind nur im Modus „Denken“ verfügbar.",
   "chat.toolCall.badge.keywordOnly": "nur Schlagwörter",
   "chat.toolCall.badge.semanticFailed": "Semantische Suche (Embedding) fehlgeschlagen: {error}",
   "chat.toolCall.badge.semanticEmpty":
