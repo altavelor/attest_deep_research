@@ -136,3 +136,6 @@ npm run check. Проверить сохранение partial matrix и distinc
 
 UI запуск/продолжение workers, рекурсия и глобальный resource governor вне задачи.
 Подключение modal шага 10 использует те же данные origins direct/map_sources.
+
+Сессии workers не входят в раздел сессий чата system prompt родителя (решение 16
+управляющей спецификации); после parent terminal они не архивируются, но новых runs не получают.

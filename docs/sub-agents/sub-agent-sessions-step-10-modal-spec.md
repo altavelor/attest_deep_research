@@ -101,8 +101,8 @@ Sections не закрываются на live update; длинный prompt —
 ## 4. Остановка и lifecycle
 
 Под обеими секциями располагается «Остановить агента», если card.canStop=true.
-Готовая между командами session тоже живая, если parent nonterminal; archived/terminal parent
-не имеет активной кнопки. Running — не единственное условие права остановить.
+Кнопка есть только у сессии с активным run или pending import, владеющий запуск которого
+nonterminal; сессии прежних ходов показывают свой реальный статус, а не archived.
 Click передаёт только sessionId/expectedRunId (из card.controlRunId) в stopFromUser, немедленно блокирует
 повторный click до ack; показывает «Остановка…», обновляется по тому же snapshot stream.
 Обновление статистики не блокирует stop. Если stale из-за нового run — обновить карточку и предложить повторный осознанный click, не stop новый run.

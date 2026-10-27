@@ -167,7 +167,8 @@ Null совпадает только с отсутствием любого run 
 остановке. Новый run/retry меняет controlRunId: stale, обновить карточку без stop новой попытки.
 При валидном запросе синхронно fences всю session, removes queue/aborts только её run,
 tombstones import и окончательно архивирует; будущий follow-up/retry запрещён.
-ready/failed/interrupted с живым parent также могут быть архивированы пользователем.
+canStop и stopFromUser требуют активный run или pending import сессии и nonterminal
+владеющий запуск; бездействующая сессия (в том числе из прежних ходов) — already-terminal.
 Повтор archive = already-terminal. Parent завершился одновременно — already-terminal.
 Ошибка durable archive = явная ошибка в modal; fence остаётся, retry acknowledgement
 идемпотентен. Публикация укладывается в close protocol шага 3, без зависания UI.

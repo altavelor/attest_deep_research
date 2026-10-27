@@ -97,6 +97,8 @@ budgetPolicy или произвольный maximum scope. ID grant сам по
 Для Thinking — local, для будущего Deep Research — required-scope; строка в task это не меняет.
 
 Каждая mutation проверяет binding внутри serial transition: chat, текущий nonterminal parent run и bindingGeneration должны точно совпасть с private probe, generation не revoked.
+Сессия доступна любому такому вызову того же чата, в том числе созданная в более раннем
+запуске (решение 16 управляющей спецификации); ownedRecord сверяет только chatSessionId.
 Чужой ID и чужой binding дают одинаковый not-authorized ответ без раскрытия состояния.
 Продвижение deliveryEpoch не отзывает binding; старый facade только теряет delivery.
 Матрица source policy и retry — из шага 1, не повторяется в UI или адаптере.
@@ -165,7 +167,8 @@ Stop синхронно fences target queued/run/import; queued удаляетс
 Повторы не плодят события или saves. Stale/foreign stop не воздействует на другие сессии.
 
 closeAll сначала синхронно revoke binding и fences всё parent-owned work, затем асинхронно
-закрывает и сохраняет. Общий deadline закрытия — 2000 ms, включая load, primary drain,
+прерывает активную работу сессий, которыми запуск владеет (переход parent-closed, без archive),
+и сохраняет. Общий deadline закрытия — 2000 ms, включая load, primary drain,
 publication обязательных событий и fallback marker; последовательные этапы не получают
 каждый новый двухсекундный бюджет. Primary drain имеет до 1500 ms, последние 500 ms
 зарезервированы на marker в chat repository. При ранней ошибке marker стартует сразу.

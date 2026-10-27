@@ -32,8 +32,8 @@ Thinking, будущий Deep Research и map_sources используют ег�
 
 1. «Активный» для счётчика и верхней группы списка — ровно status=running.
    queued, importing, stopping и ready не увеличивают счётчик. Это уточнение пользователя.
-   «Живая» для остановки — сессия не archived и её родительский запуск ещё не terminal;
-   ready/failed/interrupted могут оставаться живыми между командами.
+   «Живая» для остановки — у сессии есть активный run (queued/running/stopping) или pending
+   import, а владеющий им родительский запуск ещё не terminal (решение 16).
 2. Если в этом чате никогда не принимался запуск дочернего агента, кнопка скрыта.
    После первого принятого запуска она остаётся доступной сразу справа от селектора режима:
    серые иконка и 0 при отсутствии running, иначе зелёные иконка и точное число; фон всегда
@@ -83,6 +83,28 @@ Thinking, будущий Deep Research и map_sources используют ег�
     или объёму. Команды, начала внешних действий, terminal/cancellation и import/budget
     barriers подтверждаются только после обязательной записи. UI не ждёт сброса прогресса.
 
+16. Сессии принадлежат чату и продолжаются любым более поздним родительским запуском того же
+    чата (уточнение пользователя). Доступ к сессии (ownedRecord) проверяет только
+    chatSessionId сессии и привязку store к чату; вызывающий по-прежнему проходит authorizeCall:
+    текущий nonterminal parent run, совпадающая generation, зарегистрированный grant, свежий
+    delivery epoch и правила budget port; чужая/отсутствующая сессия — неразличимый
+    not-authorized. Новый run (follow-up/continue-partial/retry) получает parentRunId и
+    bindingGeneration вызывающего запуска; сессия переносит на них свои parentRunId и
+    bindingGeneration («текущий владелец»), поэтому dispatch/notice попадают в текущий ответ,
+    а close/stop/fences старого запуска на неё больше не действуют. Parent terminal (closeAll)
+    и startup recovery больше не архивируют: nonterminal run становится interrupted, pending
+    import получает tombstone, сессия с прерванной работой — interrupted (доступны retry и
+    continue-partial), бездействующая сохраняет ready/failed/interrupted. Notices interrupted
+    и closed (closedCount — число затронутых неархивных сессий запуска) не изменились.
+    archived остаётся только за пользовательской остановкой, stop-import и checkpoint-corrupt
+    и не открывается снова. Схема не меняется: старые чаты с archived читаются как есть.
+    Системный prompt родителя с инструментом run_subagent получает компактный раздел
+    существующих сессий чата: sessionId · заголовок · состояние · последний run/attempt
+    (только поля хоста, без текста ответа ребёнка; не больше 20 новейших, заголовки
+    очищаются и ограничиваются; сессии workers map_sources, чей первый run имеет origin
+    map_sources, не перечисляются), без сессий раздел не выводится. Лимит одновременных
+    runs (4, FIFO) и бюджеты сессий не меняются.
+
 Отклонены: отдельный plugin-wide manager (утечка владения между чатами), управление через
 model facade из UI (расширение прав), второй renderer (расхождение debug/lifecycle),
 LLM-суммаризация заголовков (не соответствует уточнению и добавляет запросы).
@@ -92,13 +114,15 @@ LLM-суммаризация заголовков (не соответствуе
 - apps → adapters → application → core; core без I/O, DOM, Node и Obsidian.
 - Runtime создаёт manager через внедрённую фабрику ровно один раз и сам освобождает его.
   Общие top-level шесть слотов не используются как реестр или очередь дочерних запусков.
-- Session принадлежит chatId/parentRunId/bindingGeneration; run имеет отдельный ID/attempt.
+- Session принадлежит чату (решение 16); её parentRunId/bindingGeneration — последний
+  родительский запуск, поставивший run. Run имеет отдельный ID/attempt и свой parentRunId.
   Один ребёнок выполняет не больше одного run. Контекст bounded, рекурсия и mutation запрещены.
 - Нормальное завершение runner означает importing; ready и публичный успех только после
   durable import. Receipt команды не означает успех исполнения. Binding и delivery epoch различны; старый epoch не доставляет события.
 - Manager/chat/budget serializers не ожидают друг друга. Fences выставляются синхронно;
   внешние async-операции идут off-lock, результаты применяются через CAS полной идентичности.
-- Parent terminal закрывает все дочерние сессии до публикации terminal и освобождения слота.
+- Parent terminal до публикации terminal и освобождения слота прерывает активные runs и
+  pending imports своих сессий и отзывает binding/grants; сессии остаются продолжаемыми.
   View/modal close и переключение чатов не являются parent terminal.
 - Все записи живут столько же, сколько чат; рост ограничен размером, не временем: подробности
   не более 2 MiB на чат, старые terminal-запуски вытесняются, хранятся последние три context

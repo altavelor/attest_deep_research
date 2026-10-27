@@ -43,7 +43,9 @@ temp+atomic replace. Расширяет также FileSystemPort методом
 Новая чистая parseSavedChatSubAgents (core/chat/savedChat.ts) проверяет секцию отдельно
 от остального чата; validateSubAgentState (core/research/subAgent/) проверяет её содержимое.
 Новая чистая recoverSubAgentState(snapshot, completedAt) (core/research/subAgent/recovery.ts)
-переводит nonterminal run в interrupted/crash-recovery и архивирует сессии без живого parent,
+переводит nonterminal run в interrupted/crash-recovery, сессию с прерванной работой — в
+interrupted (бездействующая сохраняет статус, archived не ставится), и сессии продолжаемы
+следующим родительским запуском чата,
 добавляя pending import в cancelledImports и не создавая binding; её использует startup recovery (раздел 3).
 Все типы секции — core: SubAgentStateSnapshot и всё, что в него входит, включая
 MapSourcesBatchRecord (шаг 9), лежат в core и не импортируют application.

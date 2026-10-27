@@ -118,7 +118,8 @@ session: SubAgentSessionSummary и runs: readonly SubAgentRunSummary[].
 | follow-up                    | ready, runCount>0                                       | новый queued, attempt=1                                               | queued                         |
 | retry                        | failed/interrupted, terminal head                       | новый queued, attempt=предыдущий+1, pending import получает tombstone | queued                         |
 | continue-partial             | failed/interrupted, terminal head                       | новый queued, attempt=1                                               | queued                         |
-| parent-terminal/user-archive | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | archived                       |
+| user-archive                 | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | archived                       |
+| parent-closed                | любое не archived                                       | nonterminal → interrupted, pending import получает tombstone          | interrupted при прерванной работе, иначе без изменения |
 
 Import-failed фиксирует исчерпанную попытку импорта (ошибка или deadline шага 5): сессия в failed,
 run остаётся completed, pendingImportRunId/pendingImportGeneration не очищаются, чтобы reconciliation
@@ -131,6 +132,9 @@ Retry хранит retryOfRunId и повторяет исходную кома�
 read-only priorEvidence. Partial хранит continuedFromRunId и использует прежнюю summary/
 partial result. Обычный follow-up сохраняет session ID и использует bounded context.
 Ссылка на не-current terminal head, чужой run, importing или параллельный run отклоняется.
+Parent-closed (решение 16 управляющей спецификации) не архивирует: сессия продолжается
+следующим родительским запуском чата. Command/retry принимают parentRunId/bindingGeneration
+вызывающего запуска: новый run получает их, сессия переносит на них владельца.
 User-archive окончательно закрывает сессию; model stop может оставить право retry.
 Повтор user-archive не создаёт новый run, событие или изменение revision.
 Уточнения реализации: событие stop-requested переводит running в stopping у сессии и run;
