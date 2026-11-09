@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSavedChat } from "@core/chat/savedChat";
+import { parseSavedChat, parseSavedChatSubAgents } from "@core/chat/savedChat";
 import {
   applySubAgentDelta,
   checkSubAgentDelta,
@@ -39,6 +39,58 @@ function detail(observationId: string, runId: string, text: string, cited = fals
 }
 
 describe("sub-agent section validation", () => {
+  it("rejects malformed saved prompts while retaining valid and evicted observations", () => {
+    const prompt = {
+      runId: "run-1",
+      capturedAt: LATER,
+      state: "captured",
+      messages: [{ role: "user", content: "" }],
+      redacted: false,
+      truncated: false,
+    };
+    const observation = {
+      kind: "model-started",
+      observationId: "model:run-1",
+      sessionId: "session-1",
+      runId: "run-1",
+      cited: false,
+      payload: { prompt },
+    };
+    const state = withRun(subAgentSection(), () => undefined);
+    const validate = (entry: unknown) => validateSubAgentState({ ...state, observation: [entry] });
+    expect(validate(observation).ok).toBe(true);
+    expect(
+      validate({ ...observation, payload: null, evicted: { reason: "chat size limit" } }).ok,
+    ).toBe(true);
+    for (const [malformed, field] of [
+      [null, ""],
+      [{ ...prompt, runId: "../run" }, ".runId"],
+      [{ ...prompt, capturedAt: "yesterday" }, ".capturedAt"],
+      [{ ...prompt, state: "unknown" }, ".state"],
+      [{ ...prompt, redacted: "false" }, ".redacted"],
+      [{ ...prompt, truncated: null }, ".truncated"],
+      [{ ...prompt, unavailableReason: {} }, ".unavailableReason"],
+      [{ ...prompt, messages: null }, ".messages"],
+      [{ ...prompt, messages: [null] }, ".messages[0]"],
+      [{ ...prompt, messages: [{ role: "user", content: {} }] }, ".messages[0].content"],
+      [{ ...prompt, messages: [{ role: "unknown", content: "text" }] }, ".messages[0].role"],
+    ] as const) {
+      expect(validate({ ...observation, payload: { prompt: malformed } })).toMatchObject({
+        ok: false,
+        code: "invalid-state-field",
+        message: `Sub-agent state has an invalid field: observation[0].payload.prompt${field}.`,
+      });
+    }
+    const corrupt = {
+      ...state,
+      observation: [{ ...observation, payload: { prompt: { state: "captured", messages: null } } }],
+    };
+    expect(parseSavedChatSubAgents(corrupt, state.chatId)).toMatchObject({
+      status: "unreadable",
+      raw: corrupt,
+    });
+  });
+
   it("keeps a corrupt section verbatim as unreadable and rejects dangling references", () => {
     const section = { version: 1, chatId: "chat-1", revision: -1 };
     const chat = parseSavedChat({

@@ -259,9 +259,29 @@ function checkObservation(entry: Rec, path: string): void {
   ids(entry, ["observationId", "sessionId", "runId"], path);
   if (typeof entry.cited !== "boolean") invalid(`${path}.cited`);
   json(entry.payload, `${path}.payload`);
+  if (isRec(entry.payload) && entry.payload.prompt !== undefined) {
+    checkPrompt(entry.payload.prompt, `${path}.payload.prompt`);
+  }
   if (entry.evicted !== undefined && rec(entry.evicted, path).reason !== "chat size limit") {
     invalid(`${path}.evicted`);
   }
+}
+
+function checkPrompt(value: unknown, path: string): void {
+  const prompt = rec(value, path);
+  id(prompt.runId, `${path}.runId`);
+  nullable(prompt.capturedAt, `${path}.capturedAt`, time);
+  oneOf(prompt.state, ["captured", "not-started", "unavailable", "evicted"], `${path}.state`);
+  for (const key of ["redacted", "truncated"]) {
+    if (typeof prompt[key] !== "boolean") invalid(`${path}.${key}`);
+  }
+  if (prompt.unavailableReason !== undefined)
+    text(prompt.unavailableReason, `${path}.unavailableReason`);
+  list(prompt.messages, `${path}.messages`).forEach((message, index) => {
+    const messagePath = `${path}.messages[${index}]`;
+    oneOf(message.role, ["system", "user", "assistant", "tool"], `${messagePath}.role`);
+    if (typeof message.content !== "string") invalid(`${messagePath}.content`);
+  });
 }
 
 function list(value: unknown, path: string): Rec[];
