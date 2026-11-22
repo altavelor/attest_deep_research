@@ -65,6 +65,7 @@ describe("sub-agent section validation", () => {
     for (const [malformed, field] of [
       [null, ""],
       [{ ...prompt, runId: "../run" }, ".runId"],
+      [{ ...prompt, runId: "run-2" }, ".runId"],
       [{ ...prompt, capturedAt: "yesterday" }, ".capturedAt"],
       [{ ...prompt, state: "unknown" }, ".state"],
       [{ ...prompt, redacted: "false" }, ".redacted"],

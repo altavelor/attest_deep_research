@@ -268,6 +268,9 @@ function checkObservation(entry: Rec, path: string): void {
   json(entry.payload, `${path}.payload`);
   if (isRec(entry.payload) && entry.payload.prompt !== undefined) {
     checkPrompt(entry.payload.prompt, `${path}.payload.prompt`);
+    if (rec(entry.payload.prompt, path).runId !== entry.runId) {
+      invalid(`${path}.payload.prompt.runId`);
+    }
   }
   if (entry.evicted !== undefined && rec(entry.evicted, path).reason !== "chat size limit") {
     invalid(`${path}.evicted`);
