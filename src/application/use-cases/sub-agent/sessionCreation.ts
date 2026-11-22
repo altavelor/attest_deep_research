@@ -318,7 +318,8 @@ function normalizeCreate(
   const policy = reduceSubAgentSourcePolicy(grant.maximumSourcePolicy, input.scopeReduction);
   if (!policy.ok) throw new SubAgentSessionFailure(policy.error);
   const title = deriveSubAgentTitle(redact(input.title));
-  const safeResources = resources.value.map(redact);
+  const safeResources = validateSubAgentResources(resources.value.map(redact));
+  if (!safeResources.ok) throw sessionFailure("invalid-input");
   const maxSearches = Math.min(searches.value, grant.limits.maxSearches);
   const digest = digestOf({
     grant: {
@@ -330,7 +331,7 @@ function normalizeCreate(
     },
     title,
     maxSearches,
-    resources: safeResources,
+    resources: safeResources.value,
     scopeReduction: policy.policy,
   });
   return {
@@ -339,7 +340,7 @@ function normalizeCreate(
     createRequestId: input.createRequestId,
     title,
     maxSearches,
-    resources: safeResources,
+    resources: safeResources.value,
     sourcePolicy: policy.policy,
     digest,
   };

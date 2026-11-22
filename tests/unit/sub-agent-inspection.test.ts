@@ -92,6 +92,14 @@ describe("sub-agent inspection snapshot", () => {
     expect(stateText(harness)).toContain("example.org");
     expect(JSON.stringify(harness.writer.deltas)).not.toContain("hunter2");
     expect(harness.execution.requests[0].task).toContain("Log in with password=");
+    const grown = await failureOf(
+      delegator.create({
+        createRequestId: "create-grown",
+        title: "Grown",
+        resources: [`${"x".repeat(110)} token=a`],
+      }),
+    );
+    expect(grown.code).toBe("invalid-input");
   });
 
   it("counts only running sessions, sorts running first and derives hasAgentRuns from accepted runs", async () => {
