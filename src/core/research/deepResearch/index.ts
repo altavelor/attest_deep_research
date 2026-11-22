@@ -76,7 +76,6 @@ export {
 export { escapePromptText } from "./promptText";
 export type * from "./discoveryTypes";
 export {
-  MAX_HYPOTHESIS_TEXT_CHARS,
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
   boundNotes,
@@ -89,7 +88,6 @@ export {
 } from "./discovery";
 export {
   MAX_DISCOVERY_BYTES,
-  MAX_DISCOVERY_TEXT_CHARS,
   MAX_NOTE_TEXT_CHARS,
   MAX_OBSERVATION_QUOTE_CHARS,
   MAX_OBSERVATION_TOKENS,

@@ -6,14 +6,13 @@ import type {
   ResearchTest,
 } from "./discoveryTypes";
 import type { BranchExecution, ResearchDiscovery, ResearchPlan } from "./types";
-import { MAX_RESEARCH_NOTES } from "./limits";
+import { MAX_DISCOVERY_TEXT_CHARS, MAX_RESEARCH_NOTES } from "./limits";
 import { isResearchId, isRevision } from "./planValidation";
 import { readExecution } from "./executionValidation";
 import { USER_OBSERVATION_LIMITATION, reduceHypothesis } from "./discovery";
 import {
   MAX_DISCOVERY_BYTES,
   MAX_DISCOVERY_OMISSIONS,
-  MAX_DISCOVERY_TEXT_CHARS,
   MAX_NOTE_TEXT_CHARS,
   MAX_NOTE_TOKENS,
   MAX_OBSERVATION_QUOTE_CHARS,

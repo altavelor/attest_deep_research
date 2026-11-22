@@ -2,6 +2,8 @@ import {
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
   hypothesesSection,
+  parseHypothesisProposals,
+  validateResearchSection,
   hypothesisClaims,
   nextCycleDecision,
   reduceHypothesis,
@@ -302,5 +304,37 @@ describe("deep research discovery rules", () => {
         expected === "contradicts" ? "disconfirmed" : "inconclusive",
       );
     }
+  });
+
+  it("stores an over-long proposed claim within the bound the state reader accepts", () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const reply = JSON.stringify({
+      hypotheses: [
+        { ...hypothesis, branch: 1, claim: "c".repeat(280), test: { kind: "literature" } },
+      ],
+    });
+    const parsed = parseHypothesisProposals(reply, plan, [], 8);
+    const planned = new ResearchDiscoveryService({
+      chatModel: new FakeChatModel([]),
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [],
+      spendRound: () => true,
+      createId: (prefix) => `${prefix}-1`,
+      now: () => "2026-01-01T00:00:00.000Z",
+    }).plan(parsed.proposals, []);
+    const base = gatheringResearch(plan);
+    const state = {
+      ...base,
+      phase: "discovering" as const,
+      discovery: {
+        ...planned,
+        observations: [],
+        cycles: [{ ordinal: 1, workIds: [], decision: "continue" as const, reason: "Gathered" }],
+        notes: [],
+        omissions: [],
+      },
+    };
+    expect(validateResearchSection({ schema: 1, active: state, history: [] }).ok).toBe(true);
   });
 });

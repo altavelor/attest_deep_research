@@ -1,13 +1,13 @@
 import type { ResearchNote } from "./discoveryTypes";
 import type { BranchExecution, ResearchDiscovery } from "./types";
 import { boundNotes, currentHypotheses } from "./discovery";
+import { MAX_DISCOVERY_TEXT_CHARS } from "./limits";
 
 export const MAX_RESEARCH_HYPOTHESES = 10;
 export const MAX_RESEARCH_TESTS = 8;
 export const MAX_RESEARCH_OBSERVATIONS = 8;
 export const MAX_TEST_FINDING_CHARS = 600;
 export const MAX_TEST_FINDING_TOKENS = 4;
-export const MAX_DISCOVERY_TEXT_CHARS = 200;
 export const MAX_NOTE_TEXT_CHARS = 80;
 export const MAX_OBSERVATION_QUOTE_CHARS = 300;
 export const MAX_OBSERVATION_TOKENS = 2;

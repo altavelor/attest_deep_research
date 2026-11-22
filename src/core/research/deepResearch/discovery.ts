@@ -5,9 +5,8 @@ import type {
   ResearchObservation,
   ResearchTest,
 } from "./discoveryTypes";
-import { MAX_RESEARCH_NOTES } from "./limits";
+import { MAX_DISCOVERY_TEXT_CHARS, MAX_RESEARCH_NOTES } from "./limits";
 
-export const MAX_HYPOTHESIS_TEXT_CHARS = 300;
 export const USER_OBSERVATION_LIMITATION = "reported, not independently checked";
 
 export interface HypothesisDraft {
@@ -32,7 +31,7 @@ export function acceptHypothesisDraft(
   });
   if (values.some((value) => value === "")) return null;
   const [branchId, claim, alternative, prediction, disconfirmation] = values.map((value) =>
-    value.slice(0, MAX_HYPOTHESIS_TEXT_CHARS),
+    value.slice(0, MAX_DISCOVERY_TEXT_CHARS),
   ) as [string, string, string, string, string];
   return { branchId, claim, alternative, prediction, disconfirmation };
 }
