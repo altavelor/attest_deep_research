@@ -13,6 +13,7 @@ import {
   FakeBudgetOwner,
   launchChild,
   managerHarness,
+  managerParts,
   readySubAgentRecord,
   scopedGrant,
 } from "../support/subAgentSessions";
@@ -332,6 +333,22 @@ describe("required-scope denial and cleanup", () => {
     expect(harness.owner.calls.some((call) => call.startsWith("reserve:"))).toBe(true);
     expect(harness.owner.calls).toContain("claimClosureCleanup:closure-scope-1");
     expect(harness.execution.requests[1].signal.aborted).toBe(true);
+  });
+
+  it("U9 (disposed claim): a claim settling after dispose or asked after it cleans nothing up", async () => {
+    const harness = scopedHarness();
+    harness.owner.seal("scope-1");
+    const { budget } = managerParts(harness.manager);
+    const release = harness.owner.hold("claimClosureCleanup");
+    const during = budget.claimCleanup("scope-1", "closure-scope-1");
+    await settle();
+
+    await harness.manager.dispose();
+    release();
+    const after = await budget.claimCleanup("scope-1", "closure-scope-1");
+
+    expect([await during, after]).toEqual([false, false]);
+    expect(harness.owner.calls.filter((call) => call.startsWith("claim"))).toHaveLength(1);
   });
 
   it("U9: hung budget promises never block stop, close or dispose and a late grant is returned", async () => {

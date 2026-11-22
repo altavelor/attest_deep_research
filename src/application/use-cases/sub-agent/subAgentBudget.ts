@@ -205,7 +205,9 @@ export class SubAgentBudgetCoordinator {
     this.stage(grant.action, "settled", { settlement: outcome });
   }
 
+  /** Claims the cleanup of a closed scope; a disposed manager neither claims nor cleans up. */
   async claimCleanup(scopeId: string, closureId: string): Promise<boolean> {
+    if (this.disposed) return false;
     try {
       return (await this.port().claimClosureCleanup(scopeId, closureId)) && !this.disposed;
     } catch {
