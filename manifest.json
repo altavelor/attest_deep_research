@@ -1,7 +1,7 @@
 {
   "id": "attest",
   "name": "Attest AI Deep Research",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "minAppVersion": "1.8.7",
   "description": "Ask questions across your notes and the web, then open the note, heading, PDF page, or URL behind every answer. Use local models with Ollama or LM Studio, or connect a cloud API.",
   "author": "Ilya Burov",
