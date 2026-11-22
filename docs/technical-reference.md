@@ -59,8 +59,9 @@ Attest separates the stable `instant` and `thinking` strategies:
 - **Research export** writes a finished report as a new Markdown note on the report card's
   explicit Export action, independent of any running turn. The folder comes from the
   `researchExportFolder` setting (default `Attest/Research`) or a per-export override; both are
-  untrusted and rejected with `research-export-folder` when empty, absolute, using backslashes or
-  empty, `.` or `..` segments, or inside `.attest/`. The note is named
+  untrusted and rejected with `research-export-folder` when empty, absolute or using backslashes,
+  or when a segment is empty, padded with whitespace, or starts or ends with a dot (so `..`,
+  `.attest/`, `.obsidian/` and every hidden folder are refused); only the whole value is trimmed. The note is named
   `<sanitized question> - YYYY-MM-DD.md` by the local date; a taken name, also one taken between
   the check and the create, moves to ` (2)`, ` (3)` and so on up to 20 attempts
   (`research-export-name`), and no existing note is ever replaced. Front matter holds quoted
@@ -68,6 +69,10 @@ Attest separates the stable `instant` and `thinking` strategies:
   conversation registry become wikilinks for vault sources and Markdown links for http(s) web
   sources; other tokens stay as written. A failed export changes nothing and the card offers a
   retry.
+  The report body is untrusted model output: outside fenced blocks and inline code, embeds
+  `![[x]]` become wikilinks, images become ordinary links, a link whose target is not http(s)
+  keeps only its text, and HTML tag openers are escaped as `&lt;`; fenced blocks labelled
+  `dataview`, `dataviewjs`, `tp`, `templater` or `query` are relabelled `text`.
 
 Application dependencies flow inward: `apps → adapters → application → core`. Ports are declared in
 `src/application`; Obsidian, filesystem, HTTP, and provider implementations remain in adapters or

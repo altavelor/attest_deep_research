@@ -101,4 +101,32 @@ describe("research export", () => {
     expect(text).toContain("B [Site \\](x)](https://example.org/a%20b%28c%29) C");
     expect(text).toContain("C Bad D [unknown-token-1]");
   });
+
+  it("neutralises active markup outside code", () => {
+    const rows = [
+      ["![[Secret.md]]", "[[Secret.md]]"],
+      ["![pixel](https://t.example/p.png)", "[pixel](https://t.example/p.png)"],
+      ["[run](obsidian://open?vault=x) [f](file:///etc) [j](javascript:alert)", "run f j"],
+      ["[ok](https://example.org)", "[ok](https://example.org)"],
+      [
+        "<img src=x onerror=y> </div> <!-- c -->",
+        "&lt;img src=x onerror=y> &lt;/div> &lt;!-- c -->",
+      ],
+      ["```dataviewjs\napp.vault\n```", "```text\napp.vault\n```"],
+      ["~~~tp\n<% x %>\n~~~", "~~~text\n<% x %>\n~~~"],
+      ["```ts\n![[a]] <b>\n```", "```ts\n![[a]] <b>\n```"],
+      ["`![[a]] <b>` and <i>", "`![[a]] <b>` and &lt;i>"],
+    ];
+    const body = (markdown: string) => {
+      const text = serializeResearchExport({
+        report: finishedReport(markdown),
+        chatId: "chat-1",
+        researchId: "research-1",
+        sources: new Map(),
+      });
+      return text.slice(text.indexOf("---\n\n") + 5, -1);
+    };
+
+    expect(rows.map(([markdown]) => body(markdown!))).toEqual(rows.map(([, expected]) => expected));
+  });
 });

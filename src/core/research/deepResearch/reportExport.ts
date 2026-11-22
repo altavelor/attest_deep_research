@@ -1,5 +1,6 @@
 import type { SourceReference } from "@core/model";
 import { markdownCitationOccurrences } from "../answerAnalysis";
+import { neutralizeExportMarkdown } from "./exportMarkdown";
 import type { ResearchReport } from "./types";
 
 export const DEFAULT_RESEARCH_EXPORT_FOLDER = "Attest/Research";
@@ -43,10 +44,7 @@ export function checkExportFolder(value: string): ExportFolderCheck {
 
 function unsafeSegment(segment: string): boolean {
   return (
-    segment === "" ||
-    segment.trim() !== segment ||
-    segment.startsWith(".") ||
-    segment.endsWith(".")
+    segment === "" || segment.trim() !== segment || segment.startsWith(".") || segment.endsWith(".")
   );
 }
 
@@ -84,7 +82,7 @@ export function serializeResearchExport(input: ResearchExportInput): string {
     `quality: ${yamlString(report.quality)}`,
     "---",
   ].join("\n");
-  return `${frontMatter}\n\n${linkCitations(report.markdown, input.sources)}\n`;
+  return `${frontMatter}\n\n${linkCitations(neutralizeExportMarkdown(report.markdown), input.sources)}\n`;
 }
 
 function linkCitations(text: string, sources: ReadonlyMap<string, SourceReference>): string {
