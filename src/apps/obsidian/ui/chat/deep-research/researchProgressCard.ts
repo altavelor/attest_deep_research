@@ -152,6 +152,8 @@ function renderExport(
     ),
   });
   button.disabled = state.kind === "pending";
+  folderEl.value = exports.draft(researchId);
+  folderEl.addEventListener("input", () => exports.setDraft(researchId, folderEl.value));
   button.addEventListener("click", () => exports.start(researchId, folderEl.value));
   if (state.kind === "idle") return;
   const statusEl = cardEl.createDiv({ cls: "attest-research-card__meta" });

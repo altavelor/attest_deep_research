@@ -11,16 +11,25 @@ export interface ResearchExportControllerOptions {
 }
 
 /**
- * Owns the export state of each finished research of a view, so a redisplay keeps a pending,
- * finished or failed export. A start while that research's export is pending is ignored.
+ * Owns the export state and the typed folder draft of each finished research of a view, so a
+ * redisplay keeps both. A start while that research's export is pending is ignored.
  */
 export class ResearchExportController {
   private readonly states = new Map<string, ResearchExportState>();
+  private readonly drafts = new Map<string, string>();
 
   constructor(private readonly options: ResearchExportControllerOptions) {}
 
   state(researchId: string): ResearchExportState {
     return this.states.get(researchId) ?? { kind: "idle" };
+  }
+
+  draft(researchId: string): string {
+    return this.drafts.get(researchId) ?? "";
+  }
+
+  setDraft(researchId: string, folder: string): void {
+    this.drafts.set(researchId, folder);
   }
 
   defaultFolder(): string {

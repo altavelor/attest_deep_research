@@ -17,80 +17,81 @@ const t = createTranslator("en").t;
 beforeEach(() => installObsidianDomHelpers());
 afterEach(() => resetDom());
 
-describe("deep research export from the report card", () => {
-  it("keeps the report after a failed export and lets the retry write the note", async () => {
-    const report = finishedReport("Tides follow the moon.");
-    const { markdown: _markdown, ...summary } = report;
-    const entry: ResearchHistoryEntry = {
+function exportCard() {
+  const report = finishedReport("Tides follow the moon.");
+  const { markdown: _markdown, ...summary } = report;
+  const entry: ResearchHistoryEntry = {
+    researchId: "research-1",
+    question: "Why are there tides?",
+    phase: "completed",
+    terminalReason: null,
+    createdAt: report.createdAt,
+    updatedAt: report.createdAt,
+    report: summary,
+  };
+  const notes = new MemoryResearchNotes();
+  const service = new ResearchExportService({
+    writer: notes,
+    defaultFolder: () => "Attest/Research",
+    now: () => new Date(2026, 2, 4),
+    context: {
+      chatId: "chat-1",
       researchId: "research-1",
-      question: "Why are there tides?",
-      phase: "completed",
-      terminalReason: null,
-      createdAt: report.createdAt,
-      updatedAt: report.createdAt,
-      report: summary,
-    };
-    const before = JSON.stringify(entry);
-    const notes = new MemoryResearchNotes();
-    notes.failures = 1;
-    const service = new ResearchExportService({
-      writer: notes,
-      defaultFolder: () => "Attest/Research",
-      now: () => new Date(2026, 2, 4),
-      context: {
-        chatId: "chat-1",
-        researchId: "research-1",
-        title: entry.question,
-        registry: createConversationSourceRegistry(),
+      title: entry.question,
+      registry: createConversationSourceRegistry(),
+    },
+  });
+  const card = { host: document.createElement("div") };
+  const render = (): void => {
+    card.host = document.createElement("div");
+    renderResearchCard(
+      card.host,
+      { researchId: "research-1", artifact: "plan", revision: 1 },
+      {
+        view: { status: "ready", active: null, history: [entry] },
+        t,
+        sentTurns: new Set(),
+        onTurn: () => {},
+        exports,
       },
-    });
-    let host = document.createElement("div");
-    const render = (): void => {
-      host = document.createElement("div");
-      renderResearchCard(
-        host,
-        { researchId: "research-1", artifact: "plan", revision: 1 },
-        {
-          view: { status: "ready", active: null, history: [entry] },
-          t,
-          sentTurns: new Set(),
-          onTurn: () => {},
-          exports,
-        },
-      );
-    };
-    const exports = new ResearchExportController({
-      exportReport: (_researchId, folder) => service.export(report, folder),
-      defaultFolder: () => "Attest/Research",
-      requestRedisplay: render,
-    });
-    render();
-    const button = (): HTMLButtonElement =>
-      [...host.querySelectorAll("button")].find((candidate) =>
-        candidate.textContent?.includes("xport"),
-      )!;
-    const exportTo = (folder: string): void => {
-      host.querySelector<HTMLInputElement>("input")!.value = folder;
-      button().click();
-    };
-    expect(host.querySelector("input")!.placeholder).toBe("Attest/Research");
+    );
+  };
+  const exports = new ResearchExportController({
+    exportReport: (_researchId, folder) => service.export(report, folder),
+    defaultFolder: () => "Attest/Research",
+    requestRedisplay: render,
+  });
+  render();
+  const input = (): HTMLInputElement => card.host.querySelector<HTMLInputElement>("input")!;
+  const button = (): HTMLButtonElement =>
+    [...card.host.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.includes("xport"),
+    )!;
+  const exportTo = (folder: string): void => {
+    input().value = folder;
+    input().dispatchEvent(new Event("input"));
+    button().click();
+  };
+  return { card, entry, notes, exports, render, input, button, exportTo };
+}
+
+describe("deep research export from the report card", () => {
+  it("keeps the report after a failed export and lets the retry write the override", async () => {
+    const { card, entry, notes, render, input, button, exportTo } = exportCard();
+    const before = JSON.stringify(entry);
+    expect(input().placeholder).toBe("Attest/Research");
 
     exportTo(".attest/x");
     await settle();
     render();
-    expect(host.textContent).toContain("Export failed: The export folder leaves the vault");
+    expect(card.host.textContent).toContain("Export failed: The export folder leaves the vault");
     expect(button().textContent).toBe("Retry export");
 
-    const release = notes.hold();
+    notes.failures = 1;
     exportTo("Reports/Deep");
-    render();
-    expect(button().disabled).toBe(true);
-    exports.start("research-1", "Reports/Deep");
-    release();
     await settle();
     render();
-    expect(notes.creates).toBe(1);
-    expect(host.textContent).toContain("Export failed: Disk is full.");
+    expect(card.host.textContent).toContain("Export failed: Disk is full.");
     expect(button().textContent).toBe("Retry export");
     expect(button().disabled).toBe(false);
     expect(notes.files.size).toBe(0);
@@ -99,8 +100,24 @@ describe("deep research export from the report card", () => {
     exportTo("Reports/Deep");
     await settle();
     const path = "Reports/Deep/Why are there tides - 2026-03-04.md";
-    expect(host.textContent).toContain(`Exported to ${path}`);
+    expect(card.host.textContent).toContain(`Exported to ${path}`);
     expect(notes.files.get(path)).toContain("Tides follow the moon.");
     expect(JSON.stringify(entry)).toBe(before);
+  });
+
+  it("starts one export while one is pending, also across redisplays, and keeps the typed folder", async () => {
+    const { notes, exports, render, input, button, exportTo } = exportCard();
+    const release = notes.hold();
+
+    exportTo("Reports/Deep");
+    render();
+    expect(button().disabled).toBe(true);
+    expect(input().value).toBe("Reports/Deep");
+    exports.start("research-1", "Reports/Deep");
+    release();
+    await settle();
+
+    expect(notes.creates).toBe(1);
+    expect(notes.files.size).toBe(1);
   });
 });
