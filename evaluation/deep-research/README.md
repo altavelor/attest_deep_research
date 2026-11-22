@@ -40,7 +40,8 @@ node scripts/deep-research-eval.mjs evaluation/deep-research/runner.config.json 
 ```
 
 Exit code 0 means written and complete, 1 means written but some case is short of its
-repeats (listed under `missing`), 2 is a usage error, 4 means the scorer failed its own
+repeats (listed under `missing`), 2 is a usage error, 5 means a run file is not a JSON
+object (`unreadable run file: <name>`) and nothing was written, 4 means the scorer failed its own
 self-check and nothing was written.
 
 ## Metrics
@@ -55,7 +56,23 @@ self-check and nothing was written.
 | `rounds`, `searches`, …      | cost as reported by the run; absent fields stay `null`               |
 
 A metric that cannot be computed is `null` (unavailable), never zero. Fingerprints that a
-run does not report are `"unavailable"`.
+run does not report are `"unavailable"`. A run whose claims or citations are not objects
+(for example `claims: [null]` or a string `citations`) scores `null` on every claim metric.
+
+A citation supports a claim only through the gold `evidence` of the claim's own objective.
+A contradicting passage counts only where it is listed in that objective's `evidence`.
+
+### Known limitations
+
+- `unreportedConflicts` checks that the conflict markers co-occur in the answer text; it
+  does not detect whether the answer states that the sources disagree.
+- `copiedSourcesAsIndependent` counts one claim citing two or more copies, not separate
+  claims that each cite a different copy.
+- Markers and gold passages are case-insensitive substring matches.
+- Medians skip `null` samples, so a cost field reported by only some repeats is the median
+  of those repeats.
+- Syndicates are stored once at the top level of `cases.json` as a corpus property rather
+  than per case, because the copies are the same for every question.
 
 Before scoring, the scorer checks itself: every gold passage must occur in the corpus, a
 positive control (the gold answer) must score full coverage and support, and a negative
