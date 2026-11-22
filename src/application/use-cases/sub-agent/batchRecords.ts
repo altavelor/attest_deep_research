@@ -14,6 +14,7 @@ import type { SubAgentManagerParts } from "./managerParts";
  */
 export class SubAgentBatchRecords implements SubAgentBatchStore {
   private readonly unsaved = new Map<string, MapSourcesBatchRecord>();
+  private readonly interrupted = new Map<string, MapSourcesBatchError>();
 
   constructor(private readonly parts: SubAgentManagerParts) {}
 
@@ -53,7 +54,7 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     try {
       if (durable) await store.flush(revision);
     } catch (error) {
-      if (terminal) this.restore(existing);
+      if (terminal) this.reopen(existing ?? { ...record, state: "pending" }, record);
       throw error;
     } finally {
       if (terminal) this.unsaved.delete(record.batchId);
@@ -63,6 +64,7 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
   }
 
   async interrupt(parentRunId: string, error: MapSourcesBatchError): Promise<void> {
+    this.interrupted.set(parentRunId, error);
     const open = this.all().filter(
       (entry) => entry.parentRunId === parentRunId && !isTerminalBatchState(entry.state),
     );
@@ -76,9 +78,17 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     return this.unsaved.get(record.batchId) ?? record;
   }
 
-  /** Puts back the open record a failed terminal write replaced, so a retry or interrupt can settle it. */
-  private restore(previous: MapSourcesBatchRecord | undefined): void {
-    if (previous) this.parts.store.putBatch(previous);
+  /**
+   * Puts back the open record a failed terminal write replaced. When the parent run was
+   * interrupted meanwhile, its interruption skipped this batch, so it is written now.
+   */
+  private reopen(previous: MapSourcesBatchRecord, failed: MapSourcesBatchRecord): void {
+    this.parts.store.putBatch(previous);
+    const error = this.interrupted.get(previous.parentRunId);
+    if (!error || failed.state === "interrupted") return;
+    void this.put({ ...previous, state: "interrupted", error: { ...error } }, true).catch(
+      () => undefined,
+    );
   }
 
   private all(): readonly MapSourcesBatchRecord[] {

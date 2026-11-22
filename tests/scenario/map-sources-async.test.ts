@@ -16,6 +16,7 @@ import { researchModeRetrievalParameters, type MapSourcesBatchState } from "@cor
 import type { RetrievedChunk } from "@core/model";
 import { eventually, settle } from "../support/async";
 import {
+  batchRecord,
   childEvidence,
   delegationGrant,
   executionResult,
@@ -260,5 +261,30 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
         batch: { total: 1, done: 0, running: 0, failed: 1 },
       }),
     );
+  });
+
+  it("S2: interrupts a batch whose terminal write was held across the parent interrupt and failed", async () => {
+    const harness = importHarness();
+    const batches = (harness.manager as unknown as SubAgentSessionManager).batches();
+    const unsaved = batchRecord({ batchId: "batch-unsaved", refs: [], state: "completed" });
+    harness.writer.failNext(new Error("disk full"));
+    await expect(batches.put(unsaved, true)).rejects.toThrow();
+    expect(batches.get(unsaved.batchId)?.state).toBe("pending");
+    const open = batchRecord({ refs: [] });
+    await batches.put(open, true);
+    const release = harness.writer.holdNext();
+    harness.writer.failNext(new Error("disk full"));
+    const finishing = batches.put({ ...open, state: "completed" }, true);
+    await settle();
+
+    await batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." });
+    release();
+    await expect(finishing).rejects.toThrow();
+    await settle();
+
+    expect([batches.get(open.batchId)?.state, batches.pendingCount("parent-1")]).toEqual([
+      "interrupted",
+      0,
+    ]);
   });
 });
