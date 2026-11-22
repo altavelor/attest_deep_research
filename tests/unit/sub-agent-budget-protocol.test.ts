@@ -351,6 +351,35 @@ describe("required-scope denial and cleanup", () => {
     expect(harness.owner.calls.filter((call) => call.startsWith("claim"))).toHaveLength(1);
   });
 
+  it("U5: a grant whose start transition no longer applies returns the permit and the slot", async () => {
+    const harness = scopedHarness();
+    for (const name of ["a", "b", "c"]) await launchChild(harness.delegator("scope-1"), name);
+    const releaseGrant = harness.owner.hold("beginExecution");
+    const { session, receipt } = await launchChild(harness.delegator("scope-1"), "d");
+    await settle();
+    const { store } = managerParts(harness.manager);
+    const record = store.record(session.subAgentSessionId)!;
+    store.putRecord({
+      ...record,
+      runs: record.runs.map((run) =>
+        run.subAgentRunId === receipt.runId ? { ...run, status: "running" as const } : run,
+      ),
+    });
+
+    releaseGrant();
+    await settle();
+    await launchChild(harness.delegator("scope-1"), "e");
+    await settle();
+
+    expect([...harness.owner.settlements.values()]).toEqual(["not-started"]);
+    expect(harness.execution.requests.map((request) => request.task)).toEqual([
+      "Investigate a",
+      "Investigate b",
+      "Investigate c",
+      "Investigate e",
+    ]);
+  });
+
   it("U9: hung budget promises never block stop, close or dispose and a late grant is returned", async () => {
     const harness = scopedHarness();
     const releaseGrant = harness.owner.hold("beginExecution");
