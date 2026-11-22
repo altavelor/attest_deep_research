@@ -199,6 +199,12 @@ function renderSavedChatRow(
   const meta = button.createSpan({ cls: "attest-chat__saved-meta" });
   meta.createSpan({ text: formatMessageCount(chat.messageCount, options.t) });
   meta.createSpan({ text: formatRelativeTime(chat.updatedAt, options.t) });
+  if (chat.requiresUserAction) {
+    meta.createSpan({
+      cls: "attest-chat__saved-attention",
+      text: options.t("chat.history.requiresAction"),
+    });
+  }
   button.addEventListener("click", () => options.onOpenChat(chat.id));
 
   const status = options.getChatStatus?.(chat.id) ?? "idle";

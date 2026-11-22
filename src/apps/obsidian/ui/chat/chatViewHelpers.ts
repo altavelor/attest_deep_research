@@ -11,6 +11,7 @@ export interface ChatSettingsServices {
   getDefaultIndexProfileId(): string;
   getDefaultSearchMode(): ResearchSearchMode;
   getDefaultResearchMode(): ResearchMode;
+  isDeepResearchEnabled?(): boolean;
 }
 
 export function stripContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
@@ -140,6 +141,15 @@ export function resolveChatSettings(
     ),
     searchMode: settings.searchMode,
     contextMode: settings.contextMode ?? defaults.contextMode,
-    researchMode: settings.researchMode === "thinking" ? "thinking" : "instant",
+    researchMode: availableResearchMode(services, settings.researchMode),
   };
+}
+
+/** Keeps a saved research mode the composer can offer, falling back to Instant. */
+export function availableResearchMode(
+  services: Pick<ChatSettingsServices, "isDeepResearchEnabled">,
+  mode: ResearchMode | undefined,
+): ResearchMode {
+  if (mode === "deep-research" && services.isDeepResearchEnabled?.() === true) return mode;
+  return mode === "thinking" ? "thinking" : "instant";
 }

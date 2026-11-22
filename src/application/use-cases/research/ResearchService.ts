@@ -41,6 +41,8 @@ import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/Res
 import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
 import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
+import { DeepResearchStrategy } from "./deep-research";
+import { deepResearchRejected } from "@core/research/deepResearch";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger } from "@application/research/subAgentPort";
 import type { SubAgentExecutionPort } from "@application/ports/subAgent";
@@ -92,6 +94,7 @@ export interface ResearchServiceOptions {
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
 
   subAgentLogger?: SubAgentLogger;
+  deepResearchEnabled?: boolean;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -116,6 +119,8 @@ export class ResearchService implements ConversationEngine {
 
   private readonly thinking: ThinkingResearchStrategy;
   private readonly instant: InstantResearchStrategy;
+  private readonly deep: DeepResearchStrategy;
+  private readonly deepResearchEnabled: boolean;
   private readonly subAgentRunnerDeps: SubAgentRunnerDeps;
   private readonly subAgentSources: Pick<
     ResearchServiceOptions,
@@ -227,6 +232,16 @@ export class ResearchService implements ConversationEngine {
     };
     this.thinking = new ThinkingResearchStrategy(deps);
     this.instant = new InstantResearchStrategy(deps);
+    this.deepResearchEnabled = options.deepResearchEnabled === true;
+    this.deep = new DeepResearchStrategy({
+      chatModel: options.chatModel,
+      chatModelName: options.chatModelName,
+      chatOptions,
+      toolCapabilities,
+      hasIndex: options.retriever !== undefined,
+      hasWeb: options.searchProvider !== undefined,
+      now,
+    });
   }
 
   async *answer(request: ResearchRequest): AsyncIterable<ResearchStreamEvent> {
@@ -239,9 +254,6 @@ export class ResearchService implements ConversationEngine {
       capabilities: this.toolCapabilities,
       apiFormat: this.apiFormat,
     });
-    if (policy.strategy === "deep-research") {
-      throw new Error("Deep Research is not available yet.");
-    }
     const indexDescription =
       searchMode === "indexOnly" || searchMode === "indexAndWeb"
         ? this.indexDescription
@@ -258,6 +270,14 @@ export class ResearchService implements ConversationEngine {
       },
       indexDescription,
     };
+
+    if (policy.strategy === "deep-research") {
+      if (!this.deepResearchEnabled) {
+        throw deepResearchRejected("research-disabled", "Deep Research is not enabled.");
+      }
+      yield* this.deep.execute(ctx);
+      return;
+    }
 
     if (policy.strategy === "thinking") {
       request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));

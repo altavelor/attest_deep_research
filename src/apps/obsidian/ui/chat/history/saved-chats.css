@@ -422,3 +422,8 @@
     animation: none;
   }
 }
+
+.attest-chat__saved-attention {
+  color: var(--text-accent);
+  font-weight: var(--font-medium);
+}

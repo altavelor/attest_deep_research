@@ -26,6 +26,11 @@ import {
   ConversationSourceRegistry,
   createConversationSourceRegistry,
 } from "./sourceRegistry";
+import {
+  validateResearchSection,
+  type DeepResearchSection,
+  type ResearchSectionView,
+} from "@core/research/deepResearch";
 
 export const CHAT_SCHEMA_VERSION = 4;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
@@ -55,6 +60,7 @@ export interface SavedChat {
   isFavorite?: boolean;
   lastRun?: SavedChatRunState;
   subAgents?: SavedChatSubAgents;
+  deepResearch?: SavedChatDeepResearch;
   subAgentDispatches?: SubAgentDispatchEntry[];
   subAgentNotices?: SubAgentNoticeEntry[];
   timelineSequence?: number;
@@ -65,6 +71,10 @@ export type SavedChatSubAgents =
   | { status: "ready"; snapshot: SubAgentStateSnapshot }
   | { status: "unreadable"; raw: ValidatedJsonValue; reason: string };
 
+export type SavedChatDeepResearch =
+  | { status: "ready"; section: DeepResearchSection }
+  | { status: "unreadable"; raw: ValidatedJsonValue; reason: string };
+
 export interface SavedChatSummary {
   id: string;
   title: string;
@@ -73,6 +83,7 @@ export interface SavedChatSummary {
   isFavorite: boolean;
   unreadCompletion: boolean;
   lastRun?: SavedChatRunState;
+  requiresUserAction?: boolean;
 }
 
 export interface SaveChatInput {
@@ -90,6 +101,7 @@ export interface SaveChatInput {
   subAgentDispatches?: SubAgentDispatchEntry[];
   subAgentNotices?: SubAgentNoticeEntry[];
   timelineSequence?: number;
+  researchSection?: DeepResearchSection;
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
@@ -138,6 +150,7 @@ export function parseSavedChat(value: unknown): SavedChat | null {
     unreadCompletion: _unreadCompletion,
     lastRun: _lastRun,
     subAgents: _subAgents,
+    deepResearch: _deepResearch,
     recoveredFrom: _recoveredFrom,
     subAgentDispatches: _subAgentDispatches,
     subAgentNotices: _subAgentNotices,
@@ -145,6 +158,9 @@ export function parseSavedChat(value: unknown): SavedChat | null {
     ...rest
   } = chat;
   const subAgents = parseSavedChatSubAgents((value as { subAgents?: unknown }).subAgents, chat.id!);
+  const deepResearch = parseSavedChatDeepResearch(
+    (value as { deepResearch?: unknown }).deepResearch,
+  );
   const timeline = isCurrent ? parseSavedTimeline(value as Record<string, unknown>) : null;
 
   return {
@@ -160,6 +176,7 @@ export function parseSavedChat(value: unknown): SavedChat | null {
     unreadCompletion: isCurrent && chat.unreadCompletion === true,
     ...(lastRun ? { lastRun } : {}),
     ...(subAgents ? { subAgents } : {}),
+    ...(deepResearch ? { deepResearch } : {}),
     ...(timeline ?? {}),
   };
 }
@@ -209,6 +226,30 @@ export function parseSavedChatSubAgents(
     return { status: "unreadable", raw, reason: "Sub-agent state belongs to another chat." };
   }
   return { status: "ready", snapshot: validation.snapshot };
+}
+
+/**
+ * Reads the optional Deep Research section. An absent section yields undefined; an invalid
+ * one is kept verbatim as unreadable so the chat stays readable and the section is never reset.
+ */
+export function parseSavedChatDeepResearch(value: unknown): SavedChatDeepResearch | undefined {
+  if (value === undefined) return undefined;
+  const validation = validateResearchSection(value);
+  if (!validation.ok) {
+    return {
+      status: "unreadable",
+      raw: toValidatedJson(value) ?? null,
+      reason: validation.message,
+    };
+  }
+  return { status: "ready", section: validation.value };
+}
+
+/** Presents a saved Deep Research section; an absent section is an empty ready one. */
+export function researchSectionView(saved: SavedChatDeepResearch | undefined): ResearchSectionView {
+  if (!saved) return { status: "ready", active: null, history: [] };
+  if (saved.status === "unreadable") return { status: "unreadable", reason: saved.reason };
+  return { status: "ready", active: saved.section.active, history: saved.section.history };
 }
 
 function hasSavedChatBase(chat: Partial<SavedChat>): boolean {

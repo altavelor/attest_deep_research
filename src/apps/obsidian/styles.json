@@ -12,6 +12,7 @@
   "src/apps/obsidian/ui/chat/sub-agents/sub-agents.css",
   "src/apps/obsidian/ui/chat/sub-agents/sub-agents-resize.css",
   "src/apps/obsidian/ui/chat/assistant-content.css",
+  "src/apps/obsidian/ui/chat/deep-research/deep-research.css",
   "src/apps/obsidian/ui/chat/chat-composer.css",
   "src/apps/obsidian/ui/chat/citations/citations.css",
   "src/apps/obsidian/ui/chat/artifacts/artifacts.css",

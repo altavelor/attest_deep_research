@@ -5,6 +5,7 @@ import { settings } from "./settings";
 import { settingsIndexing } from "./settingsIndexing";
 import { settingsProfiles } from "./settingsProfiles";
 import { subAgents } from "./subAgents";
+import { deepResearch } from "./deepResearch";
 
 export const zhCN = {
   ...common,
@@ -13,5 +14,6 @@ export const zhCN = {
   ...settingsIndexing,
   ...chat,
   ...subAgents,
+  ...deepResearch,
   ...onboarding,
 };

@@ -35,6 +35,7 @@ import { buildChatTimeline } from "@core/chat/subAgentTimeline";
 import { dispatchEvent } from "@core/chat/subAgentPlacement";
 import { transcriptEventPlacement } from "./subAgentEventPlacement";
 import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
+import type { ResearchCardContext } from "./deep-research/researchPlanCard";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -64,6 +65,7 @@ export interface ChatTranscriptOptions {
   subAgentDispatches?: readonly SubAgentDispatchEntry[];
   subAgentNotices?: readonly SubAgentNoticeEntry[];
   onOpenSubAgentSession?: (sessionId: string) => void;
+  research?: ResearchCardContext;
 }
 
 export function renderChatTranscript(

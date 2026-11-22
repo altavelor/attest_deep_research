@@ -24,6 +24,9 @@ export function chatSaveInput(state: ChatSessionState, persistDiagnostics: boole
     subAgentDispatches: [...timeline.subAgentDispatches],
     subAgentNotices: [...timeline.subAgentNotices],
     timelineSequence: timeline.timelineSequence,
+    ...(state.deepResearch?.status === "ready"
+      ? { researchSection: state.deepResearch.section }
+      : {}),
   };
 }
 

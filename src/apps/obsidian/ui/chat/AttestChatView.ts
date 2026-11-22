@@ -1,6 +1,11 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 
-import { SavedChat, SavedChatSettings, SavedChatSummary } from "@core/chat/savedChat";
+import {
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+  researchSectionView,
+} from "@core/chat/savedChat";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
 import type {
@@ -46,6 +51,7 @@ import {
 } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
 import {
+  availableResearchMode,
   chatModelProfileLabel,
   createDefaultChatSettings,
   resolveChatSettings,
@@ -105,6 +111,7 @@ export interface AttestChatViewServices {
   getTranslator(): UiTranslator;
   logError?(error: unknown): void;
   isDebugMode(): boolean;
+  isDeepResearchEnabled?(): boolean;
   shouldIncludeActiveFileContext(): boolean;
 }
 
@@ -126,6 +133,7 @@ export class AttestChatView extends ItemView {
   private detachSessionView: (() => void) | null = null;
   private selectedSessionId: string | null = null;
   private toolbarEl: HTMLElement | null = null;
+  private readonly sentResearchTurns = new Set<string>();
 
   private transcriptEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
@@ -195,6 +203,7 @@ export class AttestChatView extends ItemView {
           .map((file) => file.path)
           .sort(),
       getResearchMode: () => this.currentResearchMode,
+      isDeepResearchEnabled: () => this.services.isDeepResearchEnabled?.() === true,
       getAttachedContextPaths: () => this.attachedContextPaths,
       getActiveFilePath: () => this.app.workspace.getActiveFile()?.path,
       shouldIncludeActiveFileContext: () => this.services.shouldIncludeActiveFileContext(),
@@ -647,6 +656,7 @@ export class AttestChatView extends ItemView {
   }
 
   private transcriptOptions(): ChatTranscriptOptions {
+    if (!this.isRunning) this.sentResearchTurns.clear();
     return {
       app: this.app,
       markdownContext: this,
@@ -673,6 +683,12 @@ export class AttestChatView extends ItemView {
       onOpenChunk: (chunk) => void this.openRetrievedChunk(chunk),
       onOpenToolOutput: (item) => void this.openToolOutput(item),
       onOpenSubAgentSession: (sessionId) => this.subAgents.open(sessionId),
+      research: {
+        view: researchSectionView(this.session.deepResearch),
+        t: this.t,
+        sentTurns: this.sentResearchTurns,
+        onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
+      },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
@@ -998,7 +1014,7 @@ export class AttestChatView extends ItemView {
   }
 
   private async updateResearchMode(mode: ResearchMode): Promise<void> {
-    const researchMode = mode === "thinking" ? "thinking" : "instant";
+    const researchMode = availableResearchMode(this.services, mode);
     this.currentChatSettings = { ...this.currentChatSettings, researchMode };
     await this.saveCurrentChat();
   }

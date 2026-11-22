@@ -2,6 +2,7 @@ import { RetrievedChunk } from "@core/model/source";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { ResearchMode } from "@core/research/researchMode";
+import type { ResearchArtifactReference } from "@core/research/deepResearch/types";
 
 export interface ConversationCompactionSummary {
   userGoals: string[];
@@ -30,6 +31,7 @@ export interface ChatDisplayMessage {
   isFallback?: true;
   fallbackReason?: string;
   timelineSequence?: number;
+  research?: ResearchArtifactReference;
 }
 
 export interface ReasoningSegment {
