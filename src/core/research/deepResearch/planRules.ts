@@ -1,6 +1,7 @@
 import { DEEP_RESEARCH_SCHEMA, MAX_PLAN_GENERATIONS, MAX_RESEARCH_TEXT_CHARS } from "./limits";
 import { boundedReason } from "./rejection";
 import { validatePlan } from "./planValidation";
+import { initialExecutions } from "./schedule";
 import type {
   PlanBranchEdit,
   PlanDecisionPayload,
@@ -44,6 +45,9 @@ export function startResearchState(
     terminalReason: null,
     createdAt: now,
     updatedAt: now,
+    budget: null,
+    executions: [],
+    report: null,
   };
 }
 
@@ -126,6 +130,7 @@ export function applyDecision(
         phase: "gathering",
         pending: null,
         plan: { ...plan, approvedAt: context.now },
+        executions: initialExecutions(plan),
         updatedAt: context.now,
       },
     };

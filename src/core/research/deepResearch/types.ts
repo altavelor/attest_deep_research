@@ -85,7 +85,68 @@ export interface ResearchState {
   terminalReason: string | null;
   createdAt: string;
   updatedAt: string;
+  budget: ResearchBudgetState | null;
+  executions: readonly BranchExecution[];
+  report: ResearchReport | null;
 }
+
+export type BudgetDimension = "branchAttempts" | "modelRounds" | "searches" | "evidenceItems";
+
+export interface ResearchBudgetState {
+  consumed: Readonly<Record<BudgetDimension, number>>;
+  attemptsByBranch: Readonly<Record<string, number>>;
+  activeMs: number;
+  openAllocations: readonly BranchAllocation[];
+  closed: { reason: "exhausted" | "time" | "user"; dimension: string | null } | null;
+  diagnostics: { inputTokens: number | null; outputTokens: number | null; fetches: number };
+}
+
+export interface BranchAllocation {
+  workId: string;
+  branchId: string;
+  attempt: number;
+  modelRounds: number;
+  searches: number;
+}
+
+export interface ResearchWork {
+  workId: string;
+  branchId: string;
+  cycle: number;
+  kind: "gather" | "follow-up" | "test";
+  task: string;
+}
+
+export type BranchExecutionState =
+  "pending" | "running" | "completed" | "failed" | "skipped" | "blocked";
+
+export interface BranchExecution {
+  workId: string;
+  branchId: string;
+  state: BranchExecutionState;
+  path: "main" | "sub-agent" | null;
+  attempts: number;
+  finding: BranchFinding | null;
+  terminalReason: string | null;
+}
+
+export interface BranchFinding {
+  text: string;
+  citationTokens: readonly string[];
+  partial: boolean;
+}
+
+export interface ResearchReport {
+  reportId: string;
+  quality: "complete" | "partial";
+  markdown: string;
+  completedBranches: readonly string[];
+  missingBranches: readonly { branchId: string; reason: string }[];
+  stopReason: string;
+  createdAt: string;
+}
+
+export type ResearchReportSummary = Omit<ResearchReport, "markdown">;
 
 export interface ResearchHistoryEntry {
   researchId: string;
@@ -94,6 +155,7 @@ export interface ResearchHistoryEntry {
   terminalReason: string | null;
   createdAt: string;
   updatedAt: string;
+  report: ResearchReportSummary | null;
 }
 
 export interface DeepResearchSection {
@@ -123,6 +185,8 @@ export interface PlanEdit {
   branches?: readonly PlanBranchEdit[];
   knownOmissions?: readonly string[];
 }
+
+export type StalePlanDecisionPayload = { action: "continue" | "replan" | "cancel" };
 
 export type PlanDecisionPayload =
   | { action: "approve" }
