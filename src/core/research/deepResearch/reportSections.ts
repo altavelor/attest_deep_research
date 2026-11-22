@@ -68,8 +68,8 @@ export function supportedClaimsSection(verification: ResearchVerification): stri
 
 /**
  * Builds the honest sections every verified report ends with: conflicts with both sides, claims
- * that are unsupported or unresolved, findings no claim was extracted from, uncovered objectives
- * and the stop reason. Empty sections are left out.
+ * that are unsupported or unresolved, findings of every work whose claims were not extracted,
+ * uncovered objectives and the stop reason. Empty sections are left out.
  */
 export function verificationSections(
   plan: ResearchPlan,
@@ -92,9 +92,9 @@ export function verificationSections(
         entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved",
     )
     .map((entry) => `- (${entry.assessment.verdict}) ${inline(entry.claim.text)}`);
-  const extracted = new Set(verification.claims.map((claim) => claim.branchId));
-  const unverified = executions
-    .filter((execution) => execution.finding && !extracted.has(execution.branchId))
+  const verified = new Set(verification.verifiedWorks);
+  const unverified = [...executions, ...verification.followUps]
+    .filter((execution) => execution.finding && !verified.has(execution.workId))
     .map(
       (execution) =>
         `### ${titleOf(plan, execution.branchId)}\n\n${execution.finding!.text.trim()}`,

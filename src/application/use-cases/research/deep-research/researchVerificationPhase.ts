@@ -1,4 +1,5 @@
 import {
+  MAX_RESEARCH_CLAIMS,
   followUpWorks,
   objectiveCoverage,
   resumeExecutions,
@@ -9,15 +10,20 @@ import {
   type VerificationSummary,
 } from "@core/research/deepResearch";
 
+export interface VerificationBounds {
+  followUpsRemaining: number;
+  cycle: number;
+  claimAllowance: number;
+}
+
 export interface VerificationPhaseDeps {
   plan: ResearchPlan;
   executions(): readonly BranchExecution[];
   verification: ResearchVerification | null;
   verify(
     findings: readonly BranchExecution[],
-    followUpsRemaining: number,
-    cycle: number,
-  ): Promise<VerificationSummary>;
+    bounds: VerificationBounds,
+  ): Promise<{ summary: VerificationSummary; extractedWorks: readonly string[] }>;
   runFollowUps(
     followUps: readonly BranchExecution[],
     works: readonly ResearchWork[],
@@ -69,14 +75,15 @@ export async function runVerificationPhase(
       (execution) => execution.state === "completed" && !verified.has(execution.workId),
     );
     if (changed.length === 0) return current;
-    const summary = await deps.verify(
-      changed,
-      cap - current.followUpsUsed,
-      current.followUpsUsed + 1,
-    );
+    const { summary, extractedWorks } = await deps.verify(changed, {
+      followUpsRemaining: cap - current.followUpsUsed,
+      cycle: current.followUpsUsed + 1,
+      claimAllowance: MAX_RESEARCH_CLAIMS - current.claims.length,
+    });
     if (deps.aborted()) return current;
-    current = merged(plan, current, summary, changed);
+    current = merged(plan, current, summary, extractedWorks);
     await deps.commit(current);
+    if (extractedWorks.length === 0) return current;
     if (summary.followUps.length === 0 || !deps.budgetOpen()) return current;
     const followUps = summary.followUps.map(pendingExecution);
     current = {
@@ -94,7 +101,7 @@ function merged(
   plan: ResearchPlan,
   previous: ResearchVerification,
   summary: VerificationSummary,
-  changed: readonly BranchExecution[],
+  extractedWorks: readonly string[],
 ): ResearchVerification {
   const claims = [...previous.claims, ...summary.claims];
   const assessments = [...previous.assessments, ...summary.assessments];
@@ -103,7 +110,7 @@ function merged(
     claims,
     assessments,
     coverage: objectiveCoverage(plan.objectives, claims, assessments),
-    verifiedWorks: [...previous.verifiedWorks, ...changed.map((execution) => execution.workId)],
+    verifiedWorks: [...previous.verifiedWorks, ...extractedWorks],
   };
 }
 

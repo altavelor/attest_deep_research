@@ -25,6 +25,8 @@ export interface EvidenceVerificationOptions {
   spendRound(): boolean;
   followUpsRemaining: number;
   followUpCycle: number;
+  claimAllowance: number;
+  onExtracted?(workIds: readonly string[]): void;
   signal?: AbortSignal;
 }
 
@@ -91,16 +93,34 @@ export class EvidenceVerificationService {
     };
   }
 
+  /**
+   * Extracts claims batch by batch within the claim allowance. A finding counts as extracted only
+   * when all its claims fit; the first finding that does not fit, and every finding left without a
+   * round, stays unextracted so a later verification can still take it up.
+   */
   private async extract(
     findings: readonly BranchExecution[],
     plan: ResearchPlan,
   ): Promise<ResearchClaim[]> {
     const claims: ResearchClaim[] = [];
+    const extracted: string[] = [];
+    let allowance = Math.min(this.options.claimAllowance, MAX_RESEARCH_CLAIMS);
     for (const batch of batches(findings.filter((execution) => execution.finding))) {
-      if (claims.length >= MAX_RESEARCH_CLAIMS || !this.options.spendRound()) break;
+      if (allowance <= 0 || !this.options.spendRound()) break;
       const reply = await this.call(EXTRACT_PROMPT, extractRequest(batch, plan));
-      claims.push(...parseClaims(reply, batch, plan).slice(0, MAX_RESEARCH_CLAIMS - claims.length));
+      const parsed = parseClaims(reply, batch, plan);
+      for (const execution of batch) {
+        const own = parsed.filter((claim) => claim.claimId.startsWith(`c-${execution.workId}-`));
+        if (own.length > allowance) {
+          allowance = 0;
+          break;
+        }
+        claims.push(...own);
+        extracted.push(execution.workId);
+        allowance -= own.length;
+      }
     }
+    this.options.onExtracted?.(extracted);
     return claims;
   }
 

@@ -52,6 +52,7 @@ describe("deep research claim verification", () => {
       spendRound: () => true,
       followUpsRemaining: 0,
       followUpCycle: 1,
+      claimAllowance: 40,
     }).verify([execution], plan);
 
     expect(summary.assessments).toMatchObject([{ verdict: "unsupported", quote: null }]);
@@ -94,6 +95,7 @@ describe("deep research claim verification", () => {
       spendRound: () => true,
       followUpsRemaining: 0,
       followUpCycle: 1,
+      claimAllowance: 40,
     }).verify([execution], plan);
 
     expect(summary.assessments.map((entry) => entry.verdict)).toEqual([
@@ -126,6 +128,7 @@ describe("deep research claim verification", () => {
       spendRound: () => true,
       followUpsRemaining: 0,
       followUpCycle: 1,
+      claimAllowance: 40,
     }).verify([execution], plan);
 
     const [extract, assess] = model.requests.map((request) =>
@@ -174,6 +177,7 @@ describe("deep research claim verification", () => {
       spendRound: () => true,
       followUpsRemaining: 0,
       followUpCycle: 1,
+      claimAllowance: 40,
     }).verify([execution], plan);
 
     expect(summary.claims).toMatchObject([{ branchId: "branch-2", objective: null }]);

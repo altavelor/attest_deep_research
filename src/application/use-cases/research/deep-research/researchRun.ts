@@ -27,7 +27,13 @@ import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 
 export type ResearchVerifierOptions = Pick<
   EvidenceVerificationOptions,
-  "resolveEvidence" | "spendRound" | "followUpsRemaining" | "followUpCycle" | "signal"
+  | "resolveEvidence"
+  | "spendRound"
+  | "followUpsRemaining"
+  | "followUpCycle"
+  | "claimAllowance"
+  | "onExtracted"
+  | "signal"
 >;
 
 export interface ResearchVerifier {
@@ -152,14 +158,19 @@ export async function runResearch(
         plan,
         executions: () => current.executions,
         verification: current.verification,
-        verify: (findings, followUpsRemaining, followUpCycle) =>
-          deps.createVerifier!({
+        verify: async (findings, bounds) => {
+          let extractedWorks: readonly string[] = [];
+          const summary = await deps.createVerifier!({
             resolveEvidence: deps.resolveEvidence ?? (() => []),
             spendRound: () => owner.spendFinalization(1),
-            followUpsRemaining,
-            followUpCycle,
+            followUpsRemaining: bounds.followUpsRemaining,
+            followUpCycle: bounds.cycle,
+            claimAllowance: bounds.claimAllowance,
+            onExtracted: (workIds) => (extractedWorks = workIds),
             signal: turn.signal,
-          }).verify(findings, plan),
+          }).verify(findings, plan);
+          return { summary, extractedWorks };
+        },
         runFollowUps: (followUps, works) =>
           runSchedulingPhase({
             ...phase,
