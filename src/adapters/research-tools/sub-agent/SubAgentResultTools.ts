@@ -61,11 +61,15 @@ interface WaitInput {
   timeoutMs: number;
 }
 
+const WAIT_KEYS = new Set(["refs", "mode", "timeoutMs"]);
+const REF_KEYS = new Set(["sessionId", "runId"]);
+
 function parseWaitInput(input: Record<string, unknown>): ToolParseResult<WaitInput> {
   const refs = Array.isArray(input.refs) ? input.refs.slice(0, MAX_WAIT_REFS + 1) : null;
   const parsed = refs?.map(readRef) ?? [];
   const timeoutMs = input.timeoutMs ?? MAX_WAIT_TIMEOUT_MS;
   if (
+    Object.keys(input).some((key) => !WAIT_KEYS.has(key)) ||
     !refs ||
     refs.length === 0 ||
     refs.length > MAX_WAIT_REFS ||
@@ -92,13 +96,13 @@ function parseWaitInput(input: Record<string, unknown>): ToolParseResult<WaitInp
 
 function readRef(value: unknown): SubAgentRunRef | null {
   if (typeof value !== "object" || value === null) return null;
+  if (Object.keys(value).some((key) => !REF_KEYS.has(key))) return null;
   const { sessionId, runId } = value as Record<string, unknown>;
-  return typeof sessionId === "string" &&
-    typeof runId === "string" &&
-    sessionId.length <= MAX_ID_CHARS &&
-    runId.length <= MAX_ID_CHARS
-    ? { sessionId, runId }
-    : null;
+  return isRefId(sessionId) && isRefId(runId) ? { sessionId, runId } : null;
+}
+
+function isRefId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_ID_CHARS;
 }
 
 /**

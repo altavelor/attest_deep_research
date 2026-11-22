@@ -6,6 +6,7 @@ import {
 } from "@core/research";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
+import { SubAgentWaitTool } from "@adapters/research-tools/sub-agent/SubAgentResultTools";
 import { subAgentCallIdentity } from "@adapters/research-tools/sub-agent/subAgentCalls";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
@@ -134,6 +135,22 @@ describe("SubAgentTool", () => {
     });
     const parsed = tool.parseInput({ task: "  " });
     expect(parsed.ok).toBe(false);
+  });
+});
+
+describe("SubAgentWaitTool", () => {
+  it("rejects unknown keys and empty ids instead of waiting on defaults", () => {
+    const tool = new SubAgentWaitTool({ delegator: recordingDelegator().delegator });
+    const ref = { sessionId: "s-1", runId: "r-1" };
+
+    expect(tool.parseInput({ refs: [ref], timeoutMs: 1000 }).ok).toBe(true);
+    for (const input of [
+      { refs: [ref], timeout: 1000 },
+      { refs: [{ ...ref, extra: true }] },
+      { refs: [{ ...ref, sessionId: "" }] },
+    ]) {
+      expect(tool.parseInput(input)).toMatchObject({ ok: false, error: { code: "invalid-wait" } });
+    }
   });
 });
 
