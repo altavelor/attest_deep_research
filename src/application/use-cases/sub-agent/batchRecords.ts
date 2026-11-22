@@ -51,12 +51,15 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     const terminal = durable && isTerminalBatchState(record.state);
     const open = existing ?? openRecord(record);
     if (terminal) this.unsaved.set(record.batchId, open);
+    let written = false;
     try {
       const revision = store.putBatch(record);
       if (durable) await store.flush(revision);
+      written = true;
       if (terminal) await this.interruptWritten(open, record);
     } catch (error) {
-      if (terminal) this.reopen(open, record);
+      if (terminal && !written) this.reopen(open, record);
+      if (written) this.parts.notifyResults();
       throw error;
     } finally {
       if (terminal) this.unsaved.delete(record.batchId);
@@ -95,7 +98,8 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
 
   /**
    * Replaces a durable terminal record with the interruption of its parent run when the
-   * parent was interrupted while the write was held; a failed replacement keeps the record.
+   * parent was interrupted while the write was held. A failed replacement stays visible,
+   * is flushed once more and fails the put so its caller takes the recovery path.
    */
   private async interruptWritten(
     open: MapSourcesBatchRecord,
@@ -104,10 +108,12 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     const error = this.interrupted.get(written.parentRunId);
     if (!error || written.state === "interrupted") return;
     const { store } = this.parts;
+    const revision = store.putBatch({ ...open, state: "interrupted", error: { ...error } });
     try {
-      await store.flush(store.putBatch({ ...open, state: "interrupted", error: { ...error } }));
-    } catch {
-      store.putBatch(written);
+      await store.flush(revision);
+    } catch (failure) {
+      void store.flush(revision).catch(() => undefined);
+      throw failure;
     }
   }
 

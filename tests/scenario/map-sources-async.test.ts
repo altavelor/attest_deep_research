@@ -267,7 +267,7 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
     );
   });
 
-  it("S2: settles a batch whose terminal write fails or is held across the parent interrupt", async () => {
+  it("S2: settles a batch whose terminal or interruption write fails or is held across the parent interrupt", async () => {
     const harness = importHarness();
     const batches = (harness.manager as unknown as SubAgentSessionManager).batches();
     const diagnostics = { selection: "explicit" as const, requested: 0, completed: 0, failed: 0 };
@@ -295,14 +295,29 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
     await batches.interrupt("parent-2", { code: "parent-terminal", message: "Ended." });
     releaseHeld();
     await succeeding;
+    const lost = batchRecord({ batchId: "batch-3", parentRunId: "parent-3", refs: [] });
+    await batches.put(lost, true);
+    const releaseLost = harness.writer.holdNext();
+    const losing = batches.put(finished(lost), true);
     await settle();
+    await batches.interrupt("parent-3", { code: "parent-terminal", message: "Ended." });
+    harness.writer.failNext(new Error("disk full"));
+    const flushes = harness.writer.flushes;
+    let wakes = 0;
+    const unsubscribe = harness.manager.subscribeResults(() => (wakes += 1));
+    releaseLost();
+    await expect(losing).rejects.toThrow();
+    await settle();
+    unsubscribe();
 
+    expect([harness.writer.flushes - flushes, wakes]).toEqual([2, 1]);
     expect(
-      [open, held].map((record) => {
+      [open, held, lost].map((record) => {
         const settled = batches.get(record.batchId);
         return [settled?.state, settled?.result, batches.pendingCount(record.parentRunId)];
       }),
     ).toEqual([
+      ["interrupted", undefined, 0],
       ["interrupted", undefined, 0],
       ["interrupted", undefined, 0],
     ]);
