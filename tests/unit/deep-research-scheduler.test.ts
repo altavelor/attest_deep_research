@@ -139,6 +139,59 @@ describe("deep research main-path fallback", () => {
     expect(owner.snapshot().openAllocations).toEqual([]);
   });
 
+  it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {
+    const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const limits = { ...fallbackPlan.limits, childSessions: 1 };
+    const owner = new ResearchBudgetOwner(limits, () => 0, 2);
+    owner.open(null);
+    const stop = new AbortController();
+    const main: BranchRunner = {
+      path: "main",
+      run: (_work, _allocation, signal) =>
+        new Promise((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError"))),
+        ),
+    };
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: () => Promise.reject(new UnusableBranchSessionError("s-2")),
+    };
+    const running = new ResearchScheduler({
+      plan: { ...fallbackPlan, limits },
+      executions: initialExecutions(fallbackPlan),
+      owner,
+      runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
+      waveSize: 2,
+      signal: stop.signal,
+      barrier: async () => undefined,
+    }).run(
+      ["branch-1", "branch-2"].map((branchId) => ({
+        workId: `${branchId}-gather-1`,
+        branchId,
+        cycle: 1,
+        kind: "gather" as const,
+        task: "T",
+      })),
+    );
+    await settle();
+    stop.abort();
+    await expect(running).rejects.toMatchObject({ name: "AbortError" });
+
+    const snapshot = owner.snapshot();
+    expect(snapshot.openAllocations.map((entry) => entry.branchId)).toEqual([
+      "branch-1",
+      "branch-2",
+    ]);
+    expect(snapshot.consumed).toMatchObject({ branchAttempts: 2, modelRounds: 0 });
+    const next = new ResearchBudgetOwner(limits, () => 0, 2);
+    next.open(snapshot);
+    expect(next.snapshot().consumed.modelRounds).toBe(
+      snapshot.openAllocations.reduce((total, entry) => total + entry.modelRounds, 0),
+    );
+  });
+
   it("refuses a mapped session that the chat lists as stopped without contacting it", async () => {
     const calls: string[] = [];
     const delegator = new Proxy({} as SubAgentDelegator, {
