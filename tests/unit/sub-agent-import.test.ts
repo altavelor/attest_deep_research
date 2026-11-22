@@ -575,7 +575,7 @@ describe("sub-agent evidence import", () => {
     expect(harness.chat.attempts).toBe(1);
   });
 
-  it("U9: startup tombstones a pending import and cleanup keeps cited artifacts", () => {
+  it("U9: startup tombstones the pending import generation and cleanup keeps cited artifacts", () => {
     const record = applyAll(readySubAgentRecord(), runToImport("run-1"));
     const pending: SubAgentImportRecord = {
       state: "prepared",
@@ -590,7 +590,17 @@ describe("sub-agent evidence import", () => {
       answerText: "",
       createdAt: AT,
     };
-    const recovered = recoverSubAgentState(subAgentSection([record], { imports: [pending] }), AT);
+    const stale = {
+      ...pending,
+      importId: "import-stale",
+      generation: record.session.pendingImportGeneration! - 1,
+    };
+    const recovered = recoverSubAgentState(
+      subAgentSection([record], {
+        imports: [{ ...pending, generation: record.session.pendingImportGeneration! }, stale],
+      }),
+      AT,
+    );
     const chunk = (id: string) => ({
       id,
       source: { id, kind: "markdown" as const, title: id, path: "Research/A.md", headingPath: [] },
@@ -632,6 +642,7 @@ describe("sub-agent evidence import", () => {
       state: "tombstoned",
       tombstoneReason: "crash-recovery",
     });
+    expect(recovered.imports[1]).toBe(stale);
     expect(cleaned.sources.map((source) => source.id)).toEqual(["source-1"]);
     expect(cleaned.sources[0].revisions.map((entry) => entry.chunks.map((c) => c.id))).toEqual([
       ["subagent:import-a:1"],

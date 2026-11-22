@@ -69,7 +69,8 @@ function interruptRecord(
       (entry) =>
         entry.state === "prepared" &&
         entry.sessionId === session.subAgentSessionId &&
-        entry.runId === session.pendingImportRunId,
+        entry.runId === session.pendingImportRunId &&
+        entry.generation === session.pendingImportGeneration,
     )
     .map((entry) => ({ importId: entry.importId, generation: entry.generation }));
   const unresolvedActionKeys = snapshot.pendingActions
