@@ -12,6 +12,7 @@ export type AttestErrorCode =
   | "SKILL_TOO_LARGE"
   | "WEB_SEARCH_DISABLED"
   | "WEB_SEARCH_FAILED"
+  | "DEEP_RESEARCH_REJECTED"
   | "UNKNOWN";
 
 const USER_MESSAGES: Record<AttestErrorCode, string> = {
@@ -28,6 +29,7 @@ const USER_MESSAGES: Record<AttestErrorCode, string> = {
   SKILL_TOO_LARGE: "The selected skill is too large for the current model context window.",
   WEB_SEARCH_DISABLED: "Web search is disabled in Attest settings.",
   WEB_SEARCH_FAILED: "Web search failed.",
+  DEEP_RESEARCH_REJECTED: "Deep Research could not continue.",
   UNKNOWN: "Something went wrong in Attest.",
 };
 
@@ -58,7 +60,11 @@ export function isAttestError(error: unknown): error is AttestError {
 
 export function toUserMessage(error: unknown): string {
   if (isAttestError(error)) {
-    if (error.code === "UNSUPPORTED_CAPABILITY" || error.code === "INVALID_SETTINGS") {
+    if (
+      error.code === "UNSUPPORTED_CAPABILITY" ||
+      error.code === "INVALID_SETTINGS" ||
+      error.code === "DEEP_RESEARCH_REJECTED"
+    ) {
       return error.message;
     }
     if (

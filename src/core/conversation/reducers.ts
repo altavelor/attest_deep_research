@@ -1,3 +1,4 @@
+import type { ResearchArtifactReference } from "@core/research/deepResearch/types";
 import { ContextDiagnostics } from "@core/diagnostics";
 import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model/source";
@@ -104,6 +105,16 @@ export function attachAnswerDetailsToLastAssistantMessage(
     ];
   }
   return messages;
+}
+
+/** Points the last assistant message at the research artifact its card renders. */
+export function attachResearchReference(
+  messages: ChatDisplayMessage[],
+  research: ResearchArtifactReference,
+): ChatDisplayMessage[] {
+  const index = messages.map((message) => message.role).lastIndexOf("assistant");
+  if (index < 0) return messages;
+  return messages.map((message, at) => (at === index ? { ...message, research } : message));
 }
 
 export function stampLastAssistantModel(

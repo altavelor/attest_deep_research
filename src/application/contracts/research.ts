@@ -27,6 +27,8 @@ import { SourceDocumentSummaries } from "@application/ports/documentSummaries";
 import { ClaimGroup, FindClaimsOptions } from "@application/ports/documentClaims";
 import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
 import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import type { ResearchStatePort } from "@application/ports/researchState";
+import type { ResearchArtifactReference, ResearchTurnInput } from "@core/research/deepResearch";
 
 export interface IndexedUrlReference {
   id: string;
@@ -128,6 +130,8 @@ export interface ResearchRequest {
   subAgentDelegator?: SubAgentDelegator;
   subAgentParent?: SubAgentParentRun;
   subAgentMapSources?: MapSourcesRunContext;
+  research?: ResearchTurnInput;
+  researchState?: ResearchStatePort;
 }
 
 export type ResearchStreamEvent =
@@ -162,6 +166,7 @@ export type ResearchStreamEvent =
     }
   | { type: "sub-agent-phase"; parentId: string; phase: string }
   | { type: "answer-reset" }
+  | { type: "research"; reference: ResearchArtifactReference }
   | { type: "context"; diagnostics: ContextDiagnostics }
   | { type: "complete"; answer: ResearchAnswer };
 

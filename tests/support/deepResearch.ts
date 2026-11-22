@@ -6,7 +6,14 @@ import {
   type ResearchPlan,
   type ResearchPreset,
   type ResearchState,
+  type ResearchTurnInput,
 } from "@core/research/deepResearch";
+import { ResearchService } from "@application/use-cases/research";
+import type { ChatRunRequest } from "@application/use-cases/chat";
+import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
+import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
+import { emptyRetrieval, fixedNow } from "./factories";
+import { FakeChatModel, FakeRetriever } from "./researchFakes";
 
 /** Builds an enabled required branch covering the first objective. */
 export function researchBranch(index: number, patch: Partial<ResearchBranch> = {}): ResearchBranch {
@@ -66,4 +73,37 @@ export function planReply(): string {
       { title: "Details", task: "Collect details", expectedOutput: "Notes", dependsOn: [1] },
     ],
   });
+}
+
+/** Builds a research service with tool calling and an index whose model answers with the given replies. */
+export function deepResearchService(model: FakeChatModel): ResearchService {
+  return new ResearchService({
+    toolsetFactory: createResearchToolRegistry,
+    runToolLoop,
+    modelRoundFactory: (chatModel) => new ChatCompletionsRoundAdapter(chatModel),
+    retriever: new FakeRetriever(emptyRetrieval()),
+    chatModel: model,
+    chatModelName: "model",
+    toolCapabilities: {
+      calls: true,
+      choiceRequired: true,
+      choiceSpecific: true,
+      parallelCalls: false,
+    },
+    now: fixedNow,
+  });
+}
+
+/** Builds a chat run request for one research turn. */
+export function researchTurn(question: string, research?: ResearchTurnInput): ChatRunRequest {
+  return {
+    question,
+    chatHistory: [],
+    appendQuestion: true,
+    contextPaths: [],
+    includeActiveFile: false,
+    includeContextDiagnostics: false,
+    modelLabel: "model",
+    ...(research ? { research } : {}),
+  };
 }
