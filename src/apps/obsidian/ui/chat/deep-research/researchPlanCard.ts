@@ -54,13 +54,15 @@ export function renderResearchCard(
   if (active.plan) renderPlan(cardEl, active.plan, t);
   if (active.pending?.kind === "plan" && active.plan) {
     renderPlanControls(cardEl, active, active.plan, context);
-  } else if (active.plan?.approvedAt) {
+    return;
+  }
+  if (active.plan?.approvedAt) {
     cardEl.createDiv({
       cls: "attest-research-card__notice",
       text: t("chat.deepResearch.approved"),
     });
-    renderActions(cardEl, active, context, [cancelAction(active, t)]);
   }
+  renderActions(cardEl, active, context, [cancelAction(active, t)]);
 }
 
 function renderPlan(cardEl: HTMLElement, plan: ResearchPlan, t: Translate): void {

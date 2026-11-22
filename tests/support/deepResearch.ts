@@ -13,7 +13,10 @@ import type { ChatRunRequest } from "@application/use-cases/chat";
 import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { emptyRetrieval, fixedNow } from "./factories";
-import { FakeChatModel, FakeRetriever } from "./researchFakes";
+import { FakeRetriever } from "./researchFakes";
+import type { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
+import type { ResearchStatePort } from "@application/ports";
+import type { ResearchSectionView } from "@core/research/deepResearch";
 
 /** Builds an enabled required branch covering the first objective. */
 export function researchBranch(index: number, patch: Partial<ResearchBranch> = {}): ResearchBranch {
@@ -76,7 +79,10 @@ export function planReply(): string {
 }
 
 /** Builds a research service with tool calling and an index whose model answers with the given replies. */
-export function deepResearchService(model: FakeChatModel): ResearchService {
+export function deepResearchService(
+  model: ChatModelProvider,
+  deepResearchEnabled = true,
+): ResearchService {
   return new ResearchService({
     toolsetFactory: createResearchToolRegistry,
     runToolLoop,
@@ -84,6 +90,7 @@ export function deepResearchService(model: FakeChatModel): ResearchService {
     retriever: new FakeRetriever(emptyRetrieval()),
     chatModel: model,
     chatModelName: "model",
+    deepResearchEnabled,
     toolCapabilities: {
       calls: true,
       choiceRequired: true,
@@ -106,4 +113,39 @@ export function researchTurn(question: string, research?: ResearchTurnInput): Ch
     modelLabel: "model",
     ...(research ? { research } : {}),
   };
+}
+
+/** A model whose first call waits until its request is aborted and whose later calls reply with a plan. */
+export class StallingPlanModel implements ChatModelProvider {
+  readonly requests: ChatRequest[] = [];
+
+  async listModels(): Promise<string[]> {
+    return ["model"];
+  }
+
+  async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    this.requests.push(request);
+    if (this.requests.length === 1) {
+      await new Promise<never>((_, reject) => {
+        request.signal?.addEventListener("abort", () =>
+          reject(new DOMException("Stopped", "AbortError")),
+        );
+      });
+    }
+    yield { content: planReply(), isComplete: true };
+  }
+}
+
+/** An in-memory research state port that applies every commit without revision checks. */
+export class MemoryResearchState implements ResearchStatePort {
+  readonly commits: ResearchState[] = [];
+
+  read(): ResearchSectionView {
+    const active = this.commits.at(-1) ?? null;
+    return { status: "ready", active, history: [] };
+  }
+
+  async commit(next: ResearchState): Promise<void> {
+    this.commits.push(next);
+  }
 }

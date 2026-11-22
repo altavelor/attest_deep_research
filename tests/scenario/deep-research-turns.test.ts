@@ -1,8 +1,20 @@
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
 import type { SavedChatSettings } from "@core/chat/savedChat";
+import type { ChatModelProvider } from "@core/agent";
+import { startResearchState } from "@core/research/deepResearch";
 import { eventually } from "../support/async";
+import { ChatWriteBuffer } from "@application/use-cases/chat";
+import { ChatResearchState } from "@application/use-cases/chat/ChatResearchState";
+import { chatSaveInput } from "@application/use-cases/chat/chatSaveInput";
+import { sessionStateFromSavedChat } from "@application/use-cases/chat/chatSessionSnapshots";
+import { ManualClock, chatInput } from "../support/chatDocuments";
 import { createTestSessionManager } from "../support/chatSessions";
-import { deepResearchService, planReply, researchTurn } from "../support/deepResearch";
+import {
+  StallingPlanModel,
+  deepResearchService,
+  planReply,
+  researchTurn,
+} from "../support/deepResearch";
 import { MemoryFileSystem } from "../support/memoryFileSystem";
 import { FakeChatModel } from "../support/researchFakes";
 
@@ -12,7 +24,7 @@ const SETTINGS: SavedChatSettings = {
   researchMode: "deep-research",
 };
 
-function reopen(fileSystem: MemoryFileSystem, model: FakeChatModel, errors: unknown[] = []) {
+function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: unknown[] = []) {
   const repository = new FileChatRepository({ fileSystem, folder: "chats" });
   const { manager } = createTestSessionManager({
     repository,
@@ -42,27 +54,53 @@ describe("deep research turns through the chat runtime", () => {
     expect((await second.repository.listChats())[0]?.requiresUserAction).toBe(true);
 
     const adopted = second.manager.adoptChat(saved!, SETTINGS);
-    await second.manager.start(
-      adopted.sessionId,
-      researchTurn("Approve", {
-        type: "decision",
-        decision: {
-          researchId: active.researchId,
-          decisionId: active.pending!.decisionId,
-          expectedRevision: active.revision,
-          payload: { action: "approve" },
-        },
-      }),
-    );
+    const approve = researchTurn("Approve", {
+      type: "decision",
+      decision: {
+        researchId: active.researchId,
+        decisionId: active.pending!.decisionId,
+        expectedRevision: active.revision,
+        payload: { action: "approve" },
+      },
+    });
+    await second.manager.start(adopted.sessionId, approve);
     await eventually(() => expect(adopted.status).toBe("completed"));
+    await second.manager.start(adopted.sessionId, approve);
+    await eventually(() => expect(adopted.status).toBe("failed"));
+    expect(adopted.messages.at(-1)?.content).toContain("no longer matches the research");
 
     const approved = await reopen(fileSystem, model).repository.loadChat(session.chatId!);
     const finalSection =
       approved?.deepResearch?.status === "ready" ? approved.deepResearch.section : null;
     expect(finalSection?.active).toMatchObject({ phase: "gathering", pending: null });
     expect(finalSection?.active?.plan?.approvedAt).not.toBeNull();
-    expect(approved?.messages.at(-1)?.research?.researchId).toBe(active.researchId);
+    expect(approved?.messages.at(-3)?.research?.researchId).toBe(active.researchId);
     expect(model.requests).toHaveLength(1);
+  });
+
+  it("ends a research stopped or abandoned while drafting and lets a plain message start anew", async () => {
+    const model = new StallingPlanModel();
+    const { manager } = reopen(new MemoryFileSystem(), model);
+    const session = manager.createSession(SETTINGS);
+    await manager.start(session.sessionId, researchTurn("First"));
+    await eventually(() => expect(model.requests).toHaveLength(1));
+    manager.stop(session.sessionId);
+    await eventually(() => expect(session.status).toBe("interrupted"));
+    const stopped = session.deepResearch?.status === "ready" ? session.deepResearch.section : null;
+    expect(stopped).toMatchObject({ active: null, history: [{ phase: "cancelled" }] });
+
+    const leftover = startResearchState("research-left", "Crashed", "2026-01-01T00:00:00.000Z");
+    session.deepResearch = { status: "ready", section: { ...stopped!, active: leftover } };
+    await manager.start(session.sessionId, researchTurn("Second"));
+    await eventually(() => expect(session.status).toBe("completed"));
+    const restarted =
+      session.deepResearch?.status === "ready" ? session.deepResearch.section : null;
+    expect(restarted?.active).toMatchObject({ question: "Second", phase: "awaiting-approval" });
+    expect(restarted?.history[0]).toMatchObject({
+      researchId: "research-left",
+      phase: "failed",
+      terminalReason: "Interrupted during planning.",
+    });
   });
 
   it("keeps a chat with an unreadable section readable and refuses its research turns", async () => {
@@ -96,5 +134,45 @@ describe("deep research turns through the chat runtime", () => {
       details: { reason: "research-state-unreadable" },
     });
     expect(JSON.parse(await fileSystem.readText(path)).deepResearch).toEqual({ schema: 99 });
+  });
+
+  it("does not let a retried batch write a section whose commit was rolled back", async () => {
+    const fileSystem = new MemoryFileSystem();
+    const repository = new FileChatRepository({ fileSystem, folder: "chats" });
+    const saved = await repository.saveChat(chatInput({ chatSettings: SETTINGS }));
+    let failNext = true;
+    const flaky = Object.create(repository) as FileChatRepository;
+    flaky.commitChatDocument = (change) => {
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error("Disk busy"));
+      }
+      return repository.commitChatDocument(change);
+    };
+    const clock = new ManualClock();
+    const state = sessionStateFromSavedChat("session-1", saved, SETTINGS);
+    const buffer = new ChatWriteBuffer({
+      repository: flaky,
+      getChatId: () => state.chatId,
+      onChatBound: () => undefined,
+      base: null,
+      baseline: null,
+      now: clock.now,
+      scheduleTimeout: clock.scheduleTimeout,
+    });
+    const research = new ChatResearchState({
+      state,
+      persist: () =>
+        buffer.flushThrough(buffer.markChatDirty(chatSaveInput(state, false)), "barrier"),
+      persistLater: () => void buffer.markChatDirty(chatSaveInput(state, false)),
+    });
+    const planning = startResearchState("research-1", "Q", "2026-01-01T00:00:00.000Z");
+
+    await expect(research.commit(planning, null)).rejects.toThrow("Disk busy");
+    await clock.advance(60_000);
+
+    expect(failNext).toBe(false);
+    expect(JSON.parse(await fileSystem.readText("chats/chat-1.json")).deepResearch).toBeUndefined();
+    expect(research.read()).toEqual({ status: "ready", active: null, history: [] });
   });
 });

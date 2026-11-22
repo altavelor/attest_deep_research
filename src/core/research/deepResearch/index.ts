@@ -16,4 +16,4 @@ export {
 } from "./planRules";
 export { parsePlanDraft, planGenerationPrompt, type PlanDraftContext } from "./planDraft";
 export { nextResearchSection, validateResearchSection } from "./sectionValidation";
-export { deepResearchRejected, type DeepResearchRejectionReason } from "./rejection";
+export { boundedReason, deepResearchRejected, type DeepResearchRejectionReason } from "./rejection";

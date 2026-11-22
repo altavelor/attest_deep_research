@@ -2,6 +2,7 @@ import type { ChatModelProvider, ChatRequest } from "@core/agent";
 import type { ResearchChatHistoryMessage } from "@core/research";
 import {
   RESEARCH_PRESET_LIMITS,
+  boundedReason,
   MAX_RESEARCH_BRANCHES,
   deepResearchRejected,
   parsePlanDraft,
@@ -56,7 +57,7 @@ export class ResearchPlanService {
       if ((error as { name?: unknown }).name === "AbortError") throw error;
       throw deepResearchRejected(
         "research-generation-failed",
-        `The plan could not be generated: ${error instanceof Error ? error.message : "model error"}`,
+        `The plan could not be generated: ${boundedReason(error instanceof Error ? error.message : "model error")}`,
       );
     }
     const parsed = parsePlanDraft(reply, {

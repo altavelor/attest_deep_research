@@ -85,6 +85,7 @@ export class ChatSessionRuntime {
     this.research = new ChatResearchState({
       state,
       persist: () => this.persist(host.saveInput(state)),
+      persistLater: () => this.persistLater(host.saveInput(state)),
     });
     this.subAgents = new ChatSubAgents({
       state,

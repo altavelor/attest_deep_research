@@ -40,6 +40,17 @@ export function resolveResearchTurn(
   );
 }
 
+/**
+ * Tells whether a turn abandons a research left in planning by a dead turn. A chat runs one turn
+ * at a time, so planning found at turn start is never live; a start or plain message replaces it.
+ */
+export function abandonsPlanning(
+  input: ResearchTurnInput | undefined,
+  active: ResearchState | null,
+): boolean {
+  return active?.phase === "planning" && (input === undefined || input.type === "start");
+}
+
 /** Checks tool calling and a readable source before any model contact and returns the scope. */
 export function preflightScope(
   searchMode: ResearchSearchMode,

@@ -13,6 +13,7 @@ import type { ChatSessionState } from "./chatSessionTypes";
 export interface ChatResearchStateOptions {
   state: ChatSessionState;
   persist(): Promise<void>;
+  persistLater(): void;
 }
 
 /**
@@ -52,19 +53,20 @@ export class ChatResearchState implements ResearchStatePort {
       previous?.status === "ready" ? previous.section : null,
       next,
     );
-    const validation = validateResearchSection(section);
-    if (!validation.ok) throw deepResearchRejected("research-invalid-plan", validation.message);
     if (new TextEncoder().encode(JSON.stringify(section)).length > MAX_RESEARCH_SECTION_BYTES) {
       throw deepResearchRejected(
         "research-section-too-large",
         "The research state is larger than 1 MB and was not saved.",
       );
     }
+    const validation = validateResearchSection(section);
+    if (!validation.ok) throw deepResearchRejected("research-invalid-plan", validation.message);
     this.options.state.deepResearch = { status: "ready", section };
     try {
       await this.options.persist();
     } catch (error) {
       this.options.state.deepResearch = previous;
+      this.options.persistLater();
       throw error;
     }
   }

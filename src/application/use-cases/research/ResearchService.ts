@@ -42,6 +42,7 @@ import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy"
 import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
 import { DeepResearchStrategy } from "./deep-research";
+import { deepResearchRejected } from "@core/research/deepResearch";
 import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
 import { SubAgentLogger } from "@application/research/subAgentPort";
 import type { SubAgentExecutionPort } from "@application/ports/subAgent";
@@ -93,6 +94,7 @@ export interface ResearchServiceOptions {
   reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
 
   subAgentLogger?: SubAgentLogger;
+  deepResearchEnabled?: boolean;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -118,6 +120,7 @@ export class ResearchService implements ConversationEngine {
   private readonly thinking: ThinkingResearchStrategy;
   private readonly instant: InstantResearchStrategy;
   private readonly deep: DeepResearchStrategy;
+  private readonly deepResearchEnabled: boolean;
   private readonly subAgentRunnerDeps: SubAgentRunnerDeps;
   private readonly subAgentSources: Pick<
     ResearchServiceOptions,
@@ -229,6 +232,7 @@ export class ResearchService implements ConversationEngine {
     };
     this.thinking = new ThinkingResearchStrategy(deps);
     this.instant = new InstantResearchStrategy(deps);
+    this.deepResearchEnabled = options.deepResearchEnabled === true;
     this.deep = new DeepResearchStrategy({
       chatModel: options.chatModel,
       chatModelName: options.chatModelName,
@@ -268,6 +272,9 @@ export class ResearchService implements ConversationEngine {
     };
 
     if (policy.strategy === "deep-research") {
+      if (!this.deepResearchEnabled) {
+        throw deepResearchRejected("research-disabled", "Deep Research is not enabled.");
+      }
       yield* this.deep.execute(ctx);
       return;
     }

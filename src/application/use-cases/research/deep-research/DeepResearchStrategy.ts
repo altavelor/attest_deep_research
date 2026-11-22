@@ -20,7 +20,12 @@ import type {
   ResearchStrategyOutcome,
 } from "../strategies/ResearchStrategy";
 import { ResearchPlanService } from "./ResearchPlanService";
-import { preflightScope, resolveResearchTurn, type ResearchSources } from "./deepResearchTurns";
+import {
+  abandonsPlanning,
+  preflightScope,
+  resolveResearchTurn,
+  type ResearchSources,
+} from "./deepResearchTurns";
 
 export interface DeepResearchStrategyDeps {
   chatModel: ChatModelProvider;
@@ -55,9 +60,14 @@ export class DeepResearchStrategy implements ResearchStrategy {
         `The saved research state of this chat is unreadable: ${view.reason}`,
       );
     }
-    const turn = resolveResearchTurn(ctx.request.research, view.active, ctx.question);
+    let active = view.active;
+    if (active && abandonsPlanning(ctx.request.research, active)) {
+      const reason = "Interrupted during planning.";
+      await port.commit(endResearch(active, "failed", reason, this.now()), active.revision);
+      active = null;
+    }
+    const turn = resolveResearchTurn(ctx.request.research, active, ctx.question);
     if (turn.type === "start") return yield* this.start(ctx, port);
-    const active = view.active;
     if (turn.type === "decision") {
       if (!active) throw stale();
       return yield* this.decide(ctx, port, active, turn.decision);
@@ -89,9 +99,15 @@ export class DeepResearchStrategy implements ResearchStrategy {
         `Research plan ready for review: ${plan.branches.length} branches.`,
       );
     } catch (error) {
-      if (isAbort(error)) throw error;
-      const reason = error instanceof Error ? error.message : "The plan could not be generated.";
-      await port.commit(endResearch(planning, "failed", reason, this.now()), planning.revision);
+      const ended = isAbort(error)
+        ? endResearch(planning, "cancelled", "Stopped while drafting the plan.", this.now())
+        : endResearch(
+            planning,
+            "failed",
+            error instanceof Error ? error.message : "The plan could not be generated.",
+            this.now(),
+          );
+      await port.commit(ended, planning.revision).catch(() => undefined);
       throw error;
     }
   }

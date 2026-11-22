@@ -1,4 +1,5 @@
 import { DEEP_RESEARCH_SCHEMA, MAX_PLAN_GENERATIONS } from "./limits";
+import { boundedReason } from "./rejection";
 import { validatePlan } from "./planValidation";
 import type {
   PlanBranchEdit,
@@ -75,7 +76,7 @@ export function endResearch(
     revision: state.revision + 1,
     phase,
     pending: null,
-    terminalReason: reason,
+    terminalReason: boundedReason(reason),
     updatedAt: now,
   };
 }
