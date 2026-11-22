@@ -3,7 +3,7 @@ import {
   type ResearchStreamEvent,
 } from "@application/use-cases/research";
 import { chatHistoryForPrompt } from "./ChatCompaction";
-import { parseSubAgentDirective, redactSubAgentJson } from "@core/research";
+import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchAnswer } from "@core/answer";
 import {
@@ -35,6 +35,7 @@ import { scheduleTimeout } from "@shared";
 import { stampRunChain } from "./chainStamping";
 import { ChatSubAgents } from "./ChatSubAgents";
 import { ChatWriteBuffer } from "./ChatWriteBuffer";
+import { redactToolEvent } from "./toolEventRedaction";
 import type {
   ChatRunRequest,
   ChatSessionChangeKind,
@@ -182,7 +183,7 @@ export class ChatSessionRuntime {
       const service = this.host.environment.createResearchService(this.state.chatSettings);
       let completed = false;
 
-      for await (const event of service.answer({
+      for await (const raw of service.answer({
         question: cleanedQuestion || request.question,
         forceSubAgent: forceSubAgent || undefined,
         mode,
@@ -212,6 +213,7 @@ export class ChatSessionRuntime {
           : {}),
       })) {
         if (this.isFenced(runId)) break;
+        const event = redactToolEvent(raw, this.host.environment.subAgentServices?.redact);
         diagnostics.record(event);
         if (event.type === "complete" && event.answer.contextDiagnostics) {
           diagnostics.complete(event.answer.contextDiagnostics);
@@ -300,7 +302,7 @@ export class ChatSessionRuntime {
         event.id,
         event.name,
         event.label,
-        this.redactArgs(event.args),
+        event.args,
         event.parentId,
         event.fetchTargets,
         event.searchSources,
@@ -380,12 +382,6 @@ export class ChatSessionRuntime {
   private emit(runId: string, kind: ChatSessionChangeKind): void {
     if (this.isFenced(runId)) return;
     this.host.emit(this.state.sessionId, kind);
-  }
-
-  /** Redacts credentials from tool call arguments before they enter the parent's history. */
-  private redactArgs(args?: Record<string, unknown>): Record<string, unknown> | undefined {
-    const redact = this.host.environment.subAgentServices?.redact;
-    return args && redact ? redactSubAgentJson(args, redact) : args;
   }
 }
 

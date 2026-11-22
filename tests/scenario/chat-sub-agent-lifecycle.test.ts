@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { toolCallChainLabel } from "@application/research";
 import type { ChatRunRequest } from "@application/use-cases/chat";
 import type { ChatSessionRuntime } from "@application/use-cases/chat/ChatSessionRuntime";
 import { TERMINAL_SAVE_WAIT_MS } from "@application/use-cases/chat/terminalSave";
@@ -247,32 +248,39 @@ describe("chat runtime and its child host", () => {
     ]);
   });
 
-  it("saves the parent's sub-agent tool call without the credentials of its arguments", async () => {
+  it("saves the parent's sub-agent tool call, label and diagnostics without the credentials of its arguments", async () => {
     const research = gatedResearch();
     const { manager, repository } = createTestSessionManager({
       createResearchService: research.service,
       createSubAgentSessionManager: fakeChildHosts().factory,
+      persistDiagnostics: true,
     });
     const parent = manager.createSession(thinking);
     await manager.start(parent.sessionId, request("First"));
     await settle();
+    const args = { task: "Log in with password=hunter2 and compare", title: "Compare" };
     research.emit(0, {
       type: "tool-call-start",
       id: "call-1",
       name: "run_subagent",
-      label: "Delegate",
+      label: toolCallChainLabel("run_subagent", args),
       round: 1,
-      args: { task: "Log in with password=hunter2 and compare", title: "Compare" },
+      args,
     });
-    research.emit(0, completed);
+    const tools = [{ id: "call-1", name: "run_subagent", status: "success", arguments: args }];
+    research.emit(0, {
+      ...completed,
+      answer: { ...completed.answer, contextDiagnostics: { tools } as never },
+    });
     research.end(0);
     await settle();
 
     const saved = JSON.stringify(await repository.loadChat(parent.chatId!));
-    expect([saved.includes("hunter2"), saved.includes("Log in with password=")]).toEqual([
-      false,
-      true,
-    ]);
+    expect([
+      saved.includes("hunter2"),
+      saved.includes('"label":"Sub-agent: Log in with password='),
+      saved.includes('"arguments":{"task":"Log in with password='),
+    ]).toEqual([false, true, true]);
   });
 
   it("keeps child work off a chat recovered from its previous version until a terminal save", async () => {
