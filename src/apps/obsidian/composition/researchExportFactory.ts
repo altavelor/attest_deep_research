@@ -9,11 +9,12 @@ import type { CompositionContext } from "./CompositionContext";
 export function createResearchExportService(
   ctx: CompositionContext,
   context: ResearchExportContext,
+  now: () => Date = () => new Date(),
 ): ResearchExportService {
   return new ResearchExportService({
     writer: new ObsidianResearchNoteWriter(ctx.app),
     defaultFolder: () => ctx.getSettings().researchExportFolder,
-    now: () => new Date(),
+    now,
     context,
   });
 }
