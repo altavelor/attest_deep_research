@@ -1,5 +1,4 @@
 import {
-  apiFormatLabel,
   fetchAvailableModels,
   fetchModelContextLength,
   modelRoleCountMessage,
@@ -28,12 +27,6 @@ function server(overrides: Partial<ServerProfile>): ServerProfile {
 }
 
 describe("model discovery", () => {
-  it("formats API format labels", () => {
-    expect(apiFormatLabel("openai-compatible")).toBe("OpenAI-compatible");
-    expect(apiFormatLabel("ollama")).toBe("Ollama");
-    expect(apiFormatLabel("anthropic")).toBe("Anthropic");
-  });
-
   it("fetches OpenAI-compatible chat models with default capabilities", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "qwen3" }] }));
 
@@ -258,15 +251,9 @@ describe("model discovery", () => {
       fetchAvailableModels(server({}), { fetch: openAiCompatible }),
     ).resolves.toMatchObject({ message: "Connected to OpenAI-compatible. Found 1 model." });
     await expect(
-      fetchAvailableModels(server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }), {
+      fetchAvailableModels(server({ baseUrl: "https://api.anthropic.com/v1" }), {
         fetch: openAiCompatible,
       }),
-    ).resolves.toMatchObject({ message: "Connected to Ollama. Found 1 model." });
-    await expect(
-      fetchAvailableModels(
-        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-        { fetch: openAiCompatible },
-      ),
     ).resolves.toMatchObject({ message: "Connected to Anthropic. Found 1 model." });
   });
 

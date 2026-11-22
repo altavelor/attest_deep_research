@@ -25,9 +25,6 @@ export async function probeResponsesCapabilities(
     ...new Set((options.efforts ?? []).map((value) => value.trim()).filter(Boolean)),
   ];
   const cacheKey = responsesProbeCacheKey(options.server, options.model, efforts);
-  if (options.server.apiFormat !== "openai-compatible") {
-    return failed(checkedAt, cacheKey);
-  }
   const base = { checkedAt, contractVersion: RESPONSES_PROBE_CONTRACT_VERSION };
   let lastFailureReason: string | undefined;
   let defaultEffort: string | undefined;

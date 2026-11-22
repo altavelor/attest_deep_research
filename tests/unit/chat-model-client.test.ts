@@ -57,7 +57,6 @@ describe("ChatModelClient", () => {
       throw new DOMException("The request was aborted.", "AbortError");
     });
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "https://api.example.test/v1",
       fetch: fetchMock,
     });
@@ -85,7 +84,6 @@ describe("ChatModelClient", () => {
       ),
     );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "https://api.example.test/v1",
       fetch: fetchMock,
     });
@@ -105,7 +103,6 @@ describe("ChatModelClient", () => {
       }),
     );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -132,7 +129,6 @@ describe("ChatModelClient", () => {
       );
     }) as typeof fetch;
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -144,7 +140,6 @@ describe("ChatModelClient", () => {
   it("omits Authorization for OpenAI-compatible servers without an API key", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "m" }] }));
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -158,7 +153,6 @@ describe("ChatModelClient", () => {
   it("forwards a configured API key as a bearer token", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "m" }] }));
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       apiKey: "secret-key",
       fetch: fetchMock,
@@ -181,7 +175,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -203,7 +196,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -239,7 +231,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -273,7 +264,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -311,7 +301,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -337,7 +326,6 @@ describe("ChatModelClient", () => {
       .fn()
       .mockResolvedValue(jsonResponse({ error: { message: "bad request" } }, { status: 400 }));
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -361,7 +349,6 @@ describe("ChatModelClient", () => {
         streamResponse(['data: {"choices":[{"delta":{}}]}\n\n', "data: [DONE]\n\n"]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -385,7 +372,6 @@ describe("ChatModelClient", () => {
       );
     const observed = vi.fn();
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
       onReasoningObserved: observed,
@@ -421,7 +407,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -453,7 +438,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -513,7 +497,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -553,7 +536,6 @@ describe("ChatModelClient", () => {
         ]),
       );
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -593,7 +575,6 @@ describe("ChatModelClient", () => {
   ] as const)("maps OpenAI tool choice %o", async (toolChoice, expected) => {
     const fetchMock = vi.fn().mockResolvedValue(streamResponse(["data: [DONE]\n\n"]));
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -618,7 +599,6 @@ describe("ChatModelClient", () => {
     async (baseUrl, maxTokens, expected) => {
       const fetchMock = vi.fn().mockResolvedValue(streamResponse(["data: [DONE]\n\n"]));
       const client = new ChatModelClient({
-        apiFormat: "openai-compatible",
         baseUrl,
         fetch: fetchMock,
       });
@@ -643,7 +623,6 @@ describe("ChatModelClient", () => {
     async (toolChoice) => {
       const fetchMock = vi.fn().mockResolvedValue(streamResponse(["data: [DONE]\n\n"]));
       const client = new ChatModelClient({
-        apiFormat: "openai-compatible",
         baseUrl: "https://api.anthropic.com/v1",
         fetch: fetchMock,
       });
@@ -661,7 +640,6 @@ describe("ChatModelClient", () => {
   it("rejects unsupported or invalid choices before HTTP", async () => {
     const fetchMock = vi.fn();
     const invalid = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -677,7 +655,6 @@ describe("ChatModelClient", () => {
         .next(),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
     const anthropicHost = new ChatModelClient({
-      apiFormat: "openai-compatible",
       baseUrl: "https://api.anthropic.com/v1",
       fetch: fetchMock,
     });
@@ -701,7 +678,6 @@ describe("ChatModelClient", () => {
   it("maps unavailable chat providers to recoverable errors", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const client = new ChatModelClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -716,7 +692,6 @@ describe("ChatModelClient", () => {
       .fn()
       .mockResolvedValue(jsonResponse({ error: "not found" }, { status: 404 }));
     const client = new ChatModelClient({
-      apiFormat: "openai-compatible",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });

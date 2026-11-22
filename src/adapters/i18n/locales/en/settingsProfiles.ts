@@ -62,11 +62,6 @@ export const settingsProfiles = {
   "settings.serverModal.name.name": "Name",
   "settings.serverModal.name.desc":
     "Human-readable name shown in settings and model selectors. Max {max} characters.",
-  "settings.serverModal.apiFormat.name": "API format",
-  "settings.serverModal.apiFormat.desc": "Request and response format used by this provider.",
-  "settings.serverModal.apiFormat.openaiCompatible": "OpenAI-compatible",
-  "settings.serverModal.apiFormat.ollama": "Ollama",
-  "settings.serverModal.apiFormat.anthropic": "Anthropic",
   "settings.serverModal.baseUrl.name": "Base URL",
   "settings.serverModal.baseUrl.desc":
     "Provider endpoint URL, for example an OpenRouter, Ollama, or Anthropic API base.",

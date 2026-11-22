@@ -1,19 +1,12 @@
 import { AttestError } from "@core/errors";
 import { isRecord } from "@shared";
-import {
-  ApiFormat,
-  EmbeddingProviderClient,
-  EmbeddingRequest,
-  EmbeddingResponse,
-} from "@core/agent";
+import { EmbeddingProviderClient, EmbeddingRequest, EmbeddingResponse } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import { isOpenAiModelsResponse, modelNamesFromOpenAiModels } from "../common/models";
 
 export interface EmbeddingClientOptions {
-  apiFormat?: ApiFormat;
-  provider?: ApiFormat | "lmStudio";
   baseUrl: string;
   apiKey?: string;
   fetch?: typeof fetch;

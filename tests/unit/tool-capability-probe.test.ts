@@ -44,12 +44,12 @@ describe("probeToolControlCapabilities", () => {
     expect(JSON.stringify(provider.requests)).not.toMatch(/vault|index|note|web/i);
   });
 
-  it("fails closed on text, wrong tools, and Ollama", async () => {
+  it("fails closed on text and wrong tools", async () => {
     const textProvider = new ProbeProvider(() => ({ content: "no", isComplete: true }));
     const result = await probeToolControlCapabilities({
       provider: textProvider,
       model: "m",
-      apiFormat: "anthropic",
+      apiFormat: "openai-compatible",
     });
     expect(result.calls).toBe(false);
     expect(result.choiceRequired).toBe(false);
@@ -57,20 +57,6 @@ describe("probeToolControlCapabilities", () => {
     expect(result.parallelCalls).toBe(false);
 
     expect(result.probeAuditData.results.auto).toEqual([]);
-
-    const unused = new ProbeProvider(() => {
-      throw new Error("must not run");
-    });
-    const ollamaResult = await probeToolControlCapabilities({
-      provider: unused,
-      model: "m",
-      apiFormat: "ollama",
-    });
-    expect(ollamaResult.calls).toBe(false);
-    expect(ollamaResult.choiceRequired).toBe(false);
-    expect(ollamaResult.choiceSpecific).toBe(false);
-    expect(ollamaResult.parallelCalls).toBe(false);
-    expect(unused.requests).toHaveLength(0);
   });
 
   it("rejects malformed synthetic arguments", async () => {

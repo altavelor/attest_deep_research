@@ -17,7 +17,6 @@ describe("EmbeddingClient", () => {
       }),
     );
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -37,7 +36,6 @@ describe("EmbeddingClient", () => {
       }),
     );
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -60,8 +58,7 @@ describe("EmbeddingClient", () => {
   it("maps unavailable embedding providers to recoverable errors", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const client = new EmbeddingClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
+      baseUrl: "http://localhost:11434/v1",
       fetch: fetchMock,
     });
 
@@ -73,7 +70,6 @@ describe("EmbeddingClient", () => {
   it("names the endpoint and cause when the request never reaches the provider", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -91,7 +87,6 @@ describe("EmbeddingClient", () => {
   it("keeps credentials out of the endpoint it reports", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "http://user:secret@localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -115,7 +110,6 @@ describe("EmbeddingClient", () => {
         ),
       );
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "https://openrouter.ai/api/v1",
       fetch: fetchMock,
     });
@@ -134,7 +128,6 @@ describe("EmbeddingClient", () => {
       .fn()
       .mockResolvedValue(jsonResponse({ error: "not found" }, { status: 404 }));
     const client = new EmbeddingClient({
-      provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
@@ -147,8 +140,7 @@ describe("EmbeddingClient", () => {
   it("rejects malformed embedding responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ embeddings: [[0.1], "bad"] }));
     const client = new EmbeddingClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
+      baseUrl: "http://localhost:11434/v1",
       fetch: fetchMock,
     });
 

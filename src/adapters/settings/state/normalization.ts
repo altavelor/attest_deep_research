@@ -153,10 +153,6 @@ function markInvalidProfilesSuspended(settings: AttestSettings): void {
     } else if (isProfileSuspended(server)) {
       suspend(profile, "Server profile is suspended.");
     } else {
-      if (server.apiFormat !== "openai-compatible") {
-        profile.reasoning = { mode: "off", summary: "off" };
-        profile.reasoningCapabilities = undefined;
-      }
       clearServerSuspension(profile, server);
     }
   }

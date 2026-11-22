@@ -1,7 +1,6 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 
 import {
-  ApiFormat,
   CUSTOM_SERVER_PRESET_ID,
   findServerPreset,
   matchServerPreset,
@@ -25,14 +24,12 @@ export interface ServerProfileModalOptions {
 
 export class ServerProfileModal extends Modal {
   private name = this.options.profile?.name ?? "";
-  private apiFormat: ApiFormat = this.options.profile?.apiFormat ?? "openai-compatible";
   private baseUrl = this.options.profile?.baseUrl ?? "";
   private apiKey = this.options.profile?.apiKey ?? "";
   private presetId =
     matchServerPreset(this.options.profile?.baseUrl ?? "")?.id ?? CUSTOM_SERVER_PRESET_ID;
   private nameInput?: HTMLInputElement;
   private baseUrlInput?: HTMLInputElement;
-  private apiFormatSelect?: HTMLSelectElement;
 
   constructor(
     app: App,
@@ -79,21 +76,6 @@ export class ServerProfileModal extends Modal {
       });
 
     new Setting(contentEl)
-      .setName(t("settings.serverModal.apiFormat.name"))
-      .setDesc(t("settings.serverModal.apiFormat.desc"))
-      .addDropdown((dropdown) => {
-        this.apiFormatSelect = dropdown.selectEl;
-        dropdown
-          .addOption("openai-compatible", t("settings.serverModal.apiFormat.openaiCompatible"))
-          .addOption("ollama", t("settings.serverModal.apiFormat.ollama"))
-          .addOption("anthropic", t("settings.serverModal.apiFormat.anthropic"))
-          .setValue(this.apiFormat)
-          .onChange((value) => {
-            this.apiFormat = value as ApiFormat;
-          });
-      });
-
-    new Setting(contentEl)
       .setName(t("settings.serverModal.baseUrl.name"))
       .setDesc(t("settings.serverModal.baseUrl.desc"))
       .addText((text) => {
@@ -123,7 +105,6 @@ export class ServerProfileModal extends Modal {
   onClose(): void {
     this.nameInput = undefined;
     this.baseUrlInput = undefined;
-    this.apiFormatSelect = undefined;
     this.contentEl.empty();
   }
 
@@ -141,12 +122,8 @@ export class ServerProfileModal extends Modal {
     }
 
     this.baseUrl = preset.baseUrl;
-    this.apiFormat = preset.apiFormat;
     if (this.baseUrlInput) {
       this.baseUrlInput.value = preset.baseUrl;
-    }
-    if (this.apiFormatSelect) {
-      this.apiFormatSelect.value = preset.apiFormat;
     }
     if (!this.name || this.name === previousLabel) {
       this.name = preset.label;
@@ -177,7 +154,7 @@ export class ServerProfileModal extends Modal {
     await this.options.onSave({
       id: this.options.profile?.id ?? createProfileId("server"),
       name: this.name,
-      apiFormat: this.apiFormat,
+      apiFormat: "openai-compatible",
       baseUrl: normalizeUrl(this.baseUrl, ""),
       ...(this.apiKey ? { apiKey: this.apiKey } : {}),
       isSuspended: this.options.profile?.isSuspended,

@@ -1,4 +1,4 @@
-import { ApiFormat, ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
+import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { ProviderHttpClient } from "../common/http";
 import { withLoggedErrors } from "../common/withLoggedErrors";
@@ -10,8 +10,6 @@ import { listOpenAiCompatibleModelIds } from "./streaming/chatCompletionsHttp";
 import { streamOpenAiCompatibleChat } from "./streaming/openAiChatStream";
 
 export interface ChatModelClientOptions {
-  apiFormat?: ApiFormat;
-  provider?: ApiFormat | "lmStudio";
   baseUrl: string;
   apiKey?: string;
   fetch?: typeof fetch;

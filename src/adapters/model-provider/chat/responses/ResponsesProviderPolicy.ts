@@ -21,11 +21,8 @@ function unsupported(message: string): never {
 export function resolveResponsesProviderPolicy(
   input: ResponsesPolicyInput,
 ): ResponsesPolicyDecision {
-  const { apiFormat, capabilities, isCapabilityCurrent, reasoning } = input;
+  const { capabilities, isCapabilityCurrent, reasoning } = input;
 
-  if (apiFormat !== "openai-compatible") {
-    unsupported("The Responses protocol requires an OpenAI-compatible server profile.");
-  }
   if (!capabilities) {
     unsupported("Responses capability detection has not completed for this model profile.");
   }

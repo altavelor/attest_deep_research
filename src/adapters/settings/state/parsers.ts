@@ -5,7 +5,6 @@ import {
   DEFAULT_PDF_CHUNK_SIZE,
   IndexProfile,
 } from "@adapters/indexing";
-import { ApiFormat } from "@core/agent";
 import { isRecord } from "@shared";
 import { isNonNegativeInteger, isPositiveInteger } from "@shared";
 import {
@@ -68,12 +67,6 @@ export function readStringList(value: unknown, fallback: string[]): string[] {
     .filter(Boolean);
 
   return items.length > 0 ? items : [...fallback];
-}
-
-export function readApiFormat(value: unknown): ApiFormat | null {
-  return value === "openai-compatible" || value === "ollama" || value === "anthropic"
-    ? value
-    : null;
 }
 
 export function readActiveIndexProfileId(value: unknown, profiles: IndexProfile[]): string {

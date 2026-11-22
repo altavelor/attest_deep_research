@@ -1,7 +1,6 @@
 import { EmbeddingClient } from "@adapters/model-provider/embeddings/EmbeddingClient";
 import { contextLengthFromModelMetadata } from "@adapters/model-provider/common/models";
 import { toUserMessage } from "@core/errors";
-import { ApiFormat } from "@core/agent";
 import { ModelCapability, ServerProfile } from "../types";
 import type { ModelCapabilitySnapshot } from "../capabilities";
 import { resolveCapabilityMetadata } from "../capabilities";
@@ -26,21 +25,8 @@ export interface ModelDiscoveryResult {
   models: DiscoveredModel[];
 }
 
-export function apiFormatLabel(apiFormat: ApiFormat): string {
-  switch (apiFormat) {
-    case "anthropic":
-      return "Anthropic";
-    case "ollama":
-      return "Ollama";
-    case "openai-compatible":
-      return "OpenAI-compatible";
-  }
-}
-
 export function providerLabel(serverProfile: ServerProfile): string {
-  return serverProfile.apiFormat === "openai-compatible"
-    ? resolveProviderDialect(serverProfile.baseUrl).label
-    : apiFormatLabel(serverProfile.apiFormat);
+  return resolveProviderDialect(serverProfile.baseUrl).label;
 }
 
 /**

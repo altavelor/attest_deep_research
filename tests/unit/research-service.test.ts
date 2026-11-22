@@ -876,7 +876,7 @@ describe("ResearchService", () => {
       chatModel,
       chatModelName: "qwen",
 
-      apiFormat: "ollama",
+      apiFormat: "openai-compatible",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({ "Tools/note.md": "Tool-provided context" }),
@@ -1183,7 +1183,7 @@ describe("ResearchService", () => {
       chatModel,
       chatModelName: "qwen",
 
-      apiFormat: "ollama",
+      apiFormat: "openai-compatible",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({
