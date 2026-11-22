@@ -4,6 +4,7 @@ import { canonicalSourceKey } from "@core/chat/sourceRegistry";
 import type { SourceReference } from "@core/model";
 import {
   admitSubAgentEvidence,
+  capSubAgentAnswer,
   MAX_IMPORTED_ANSWER_CHARS,
   MAX_IMPORTED_EVIDENCE_ITEMS,
   parseSubAgentChildEvidence,
@@ -84,10 +85,13 @@ export function planSubAgentImport(input: SubAgentImportPlanInput): SubAgentImpo
     return importItem(item, alias, item.collectedAt ?? input.now, input);
   });
   const aliases = new Set(replacements.values());
-  const answerText = rewriteSubAgentCitations(
-    input.result.answerText.slice(0, MAX_IMPORTED_ANSWER_CHARS),
-    replacements,
-    aliases,
+  const answerText = capSubAgentAnswer(
+    rewriteSubAgentCitations(
+      input.result.answerText.slice(0, MAX_IMPORTED_ANSWER_CHARS),
+      replacements,
+      aliases,
+    ),
+    MAX_IMPORTED_ANSWER_CHARS,
   );
   return {
     evidenceDigest,

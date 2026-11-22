@@ -93,6 +93,7 @@ export { evictSubAgentDetails, type SubAgentDetailsEviction } from "./detailsRet
 export { applySubAgentDelta, checkSubAgentDelta } from "./stateDeltas";
 export {
   admitSubAgentEvidence,
+  capSubAgentAnswer,
   MAX_IMPORTED_ANSWER_CHARS,
   MAX_IMPORTED_EVIDENCE_ITEMS,
   MAX_IMPORTED_WEB_SOURCES,

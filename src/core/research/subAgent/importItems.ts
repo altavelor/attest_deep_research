@@ -211,6 +211,14 @@ export function rewriteSubAgentCitations(
   return result + text.slice(copiedUpTo);
 }
 
+/** Cuts a rewritten answer to `maxChars` without leaving part of a bracketed citation at the end. */
+export function capSubAgentAnswer(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const open = cut.lastIndexOf("[");
+  return open > cut.lastIndexOf("]") ? cut.slice(0, open) : cut;
+}
+
 /** Lists the citation-like bracket labels of a text that are not aliases of the given set. */
 export function unresolvedSubAgentCitations(text: string, aliases: ReadonlySet<string>): string[] {
   return markdownBracketOccurrences(text, aliases)

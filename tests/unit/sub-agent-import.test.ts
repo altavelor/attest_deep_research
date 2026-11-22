@@ -8,6 +8,7 @@ import { removeOrphanSubAgentAliases } from "@core/chat/subAgentAliases";
 import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import {
   applySubAgentTransition,
+  MAX_IMPORTED_ANSWER_CHARS,
   recoverSubAgentState,
   rewriteSubAgentCitations,
   type SubAgentImportRecord,
@@ -108,6 +109,19 @@ describe("sub-agent evidence import", () => {
       state.outcome.evidence[0].conversationSourceId,
     );
     expect(JSON.stringify(harness.writer.deltas)).not.toMatch(/\[(e1|e2|parent-src|url:[^\]]*)\]/);
+  });
+
+  it("U1: keeps the rewritten answer within the cap and drops a citation cut at the end", async () => {
+    const harness = importHarness();
+    const { delegator, sessionId, runId } = await launchWith(harness, ["example.com"]);
+    harness.execution.finish(0, result("[e1]".repeat(12_500)));
+    await settle();
+
+    const state = await delegator.getResult(sessionId, runId);
+    if (state.state !== "completed") throw new Error(`expected completed, got ${state.state}`);
+    const alias = state.outcome.evidence[0].conversationEvidenceId;
+    const whole = Math.floor(MAX_IMPORTED_ANSWER_CHARS / (alias.length + 2));
+    expect(state.outcome.answerText).toBe(`[${alias}]`.repeat(whole));
   });
 
   it("U1: drops web sources beyond the parent's remaining capacity at prepare", async () => {
