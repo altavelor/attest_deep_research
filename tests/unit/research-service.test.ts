@@ -663,9 +663,22 @@ describe("ResearchService", () => {
       async *streamChat() {
         calls += 1;
         if (calls === 1) {
+          yield {
+            content: "",
+            isComplete: true,
+            toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
+            events: [usageEvent(500, 300), { type: "complete", stopReason: "tool_calls" }],
+          };
+          return;
+        }
+        if (calls === 2) {
           throw new Error("provider exploded during tool round");
         }
-        yield { content: "Deterministic fallback answer", isComplete: true };
+        yield {
+          content: "Deterministic fallback answer",
+          isComplete: true,
+          events: [usageEvent(100, 60), { type: "complete", stopReason: "complete" }],
+        };
       },
     };
     const service = new ResearchService({
@@ -675,6 +688,7 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
+      reasoningDiagnostics: { protocol: "chat-completions", summaryAvailable: false },
       toolCapabilities: {
         calls: true,
         choiceRequired: true,
@@ -700,6 +714,7 @@ describe("ResearchService", () => {
     expect(complete.answer.contextDiagnostics).toMatchObject({
       executionStrategy: "instant-fallback",
       thinking: { fallbackReason: "provider-error" },
+      reasoning: { inputTokens: 600, cachedInputTokens: 360 },
     });
   });
 
