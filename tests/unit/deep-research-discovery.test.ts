@@ -2,6 +2,7 @@ import {
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
   hypothesesSection,
+  hypothesisClaims,
   nextCycleDecision,
   reduceHypothesis,
   userObservation,
@@ -204,5 +205,21 @@ describe("deep research discovery rules", () => {
       },
     };
     expect(() => suppliedObservation(revised, decision)).toThrow("no longer matches the research");
+  });
+
+  it("sends only a supported hypothesis with source tokens to verification", () => {
+    const discovery = (status: ResearchHypothesis["status"]) => ({
+      hypotheses: [{ ...hypothesis, status, observationIds: ["o-1"] }],
+      tests: [],
+      observations: [observation("o-1", "supports")],
+      cycles: [],
+      notes: [],
+      executions: [],
+      omissions: [],
+    });
+    expect(hypothesisClaims(discovery("disconfirmed"), 40)).toEqual([]);
+    expect(hypothesisClaims(discovery("supported"), 40)).toMatchObject([
+      { kind: "hypothesis", workId: "t-1", citationTokens: ["e1"] },
+    ]);
   });
 });

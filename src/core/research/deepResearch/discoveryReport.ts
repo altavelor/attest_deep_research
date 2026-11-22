@@ -4,8 +4,8 @@ import { currentHypotheses } from "./discovery";
 import { MAX_CLAIM_TOKENS } from "./verification";
 
 /**
- * Returns the claims of kind hypothesis that enter verification: one per current hypothesis
- * revision with source observations, citing their tokens, at most `max` of them.
+ * Returns the claims of kind hypothesis that enter verification: one per current supported
+ * hypothesis revision with source observations, citing their tokens, at most `max` of them.
  */
 export function hypothesisClaims(
   discovery: ResearchDiscovery | null,
@@ -13,6 +13,7 @@ export function hypothesisClaims(
 ): ResearchClaim[] {
   if (!discovery || max <= 0) return [];
   return currentHypotheses(discovery.hypotheses)
+    .filter((hypothesis) => hypothesis.status === "supported")
     .flatMap((hypothesis) => {
       const sources = sourceObservations(discovery, hypothesis);
       const tokens = [...new Set(sources.flatMap((entry) => entry.citationTokens))];
