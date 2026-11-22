@@ -206,6 +206,7 @@ describe("deep research branches as child sessions", () => {
     const final = run.port.commits.find((entry) => entry.phase === "synthesizing")!;
     expect(final.executions).toMatchObject([{ state: "completed", path: "main", attempts: 1 }]);
     expect(final.budget!.consumed.branchAttempts).toBe(1);
+    expect(final.budget!.consumed.modelRounds).toBe(2);
   });
 
   it("revokes the branch grants of a research run when its parent run closes", async () => {
