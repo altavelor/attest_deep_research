@@ -224,13 +224,13 @@ describe("ChatModelClient", () => {
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
-  it("keeps the reasoning dialect the provider did not reject", async () => {
+  it("keeps the reasoning dialect a 422 refusal did not name", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         jsonResponse(
           { error: { message: "Unrecognized request argument supplied: chat_template_kwargs" } },
-          { status: 400 },
+          { status: 422 },
         ),
       )
       .mockResolvedValueOnce(
