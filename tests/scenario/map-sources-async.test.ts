@@ -227,6 +227,14 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
       { question: "Is Y true?", sourcePaths: ["Notes/a.md"] },
       "parent-1-r2-c",
     );
+    harness.writer.failNext(new Error("disk full"));
+    await expect(
+      batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." }),
+    ).rejects.toThrow();
+    expect([batches.get(open.batchId)?.state, batches.pendingCount("parent-1")]).toEqual([
+      "pending",
+      1,
+    ]);
     const release = harness.writer.holdNext();
     const interrupting = batches.interrupt("parent-1", {
       code: "parent-terminal",
