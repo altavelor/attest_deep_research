@@ -35,7 +35,7 @@ export interface VerificationPhaseDeps {
 
 /**
  * Verifies every completed finding not yet verified, then runs at most one follow-up work per
- * affected branch while the follow-up cap and the budget allow, and re-verifies only the findings
+ * branch the merged verification leaves uncovered or conflicted while the cap and budget allow, and re-verifies only the findings
  * the follow-ups produced. Pending follow-ups of an interrupted turn run before anything else.
  */
 export async function runVerificationPhase(
@@ -84,15 +84,22 @@ export async function runVerificationPhase(
     current = merged(plan, current, summary, extractedWorks);
     await deps.commit(current);
     if (extractedWorks.length === 0) return current;
-    if (summary.followUps.length === 0 || !deps.budgetOpen()) return current;
-    const followUps = summary.followUps.map(pendingExecution);
+    const works = followUpWorks(
+      plan,
+      current,
+      completedBranches([...deps.executions(), ...current.followUps]),
+      cap - current.followUpsUsed,
+      current.followUpsUsed + 1,
+    );
+    if (works.length === 0 || !deps.budgetOpen()) return current;
+    const followUps = works.map(pendingExecution);
     current = {
       ...current,
       followUps: [...current.followUps, ...followUps],
       followUpsUsed: current.followUpsUsed + followUps.length,
     };
     await deps.commit(current);
-    const settled = await deps.runFollowUps(current.followUps, summary.followUps);
+    const settled = await deps.runFollowUps(current.followUps, works);
     current = { ...current, followUps: [...settled] };
   }
 }
@@ -112,6 +119,16 @@ function merged(
     coverage: objectiveCoverage(plan.objectives, claims, assessments),
     verifiedWorks: [...previous.verifiedWorks, ...extractedWorks],
   };
+}
+
+function completedBranches(executions: readonly BranchExecution[]): string[] {
+  return [
+    ...new Set(
+      executions
+        .filter((execution) => execution.state === "completed")
+        .map((execution) => execution.branchId),
+    ),
+  ];
 }
 
 function pendingExecution(work: ResearchWork): BranchExecution {
