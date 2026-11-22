@@ -98,13 +98,14 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * Chat repository fake that records document commits. A test may queue failures,
- * hold the next commit until released, or set what loadChatDocument returns.
+ * Chat repository fake that records document commits. A test may queue failures, hold the
+ * next commit or the next load until released, or set what loadChatDocument returns.
  */
 export class ScriptedChatRepository implements ChatRepository {
   readonly commits: ChatDocumentChange[] = [];
   private failures: Error[] = [];
   private gate: Promise<void> | null = null;
+  private loadGate: Promise<void> | null = null;
   loaded: { chat: SavedChat; base: ChatFileBaseline } | null = null;
 
   failNext(...errors: Error[]): void {
@@ -133,7 +134,16 @@ export class ScriptedChatRepository implements ChatRepository {
     };
   }
 
+  holdNextLoad(): () => void {
+    let release = (): void => {};
+    this.loadGate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  }
+
   async loadChatDocument(): Promise<{ chat: SavedChat; base: ChatFileBaseline } | null> {
+    const gate = this.loadGate;
+    this.loadGate = null;
+    if (gate) await gate;
     return this.loaded;
   }
 

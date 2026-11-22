@@ -238,6 +238,7 @@ export class ChatWriteBuffer implements SubAgentDurableWriter {
         await this.handleFailure(error as Error, chatId, this.chat, false);
         return;
       }
+      if (this.fenced) return;
     }
     const chat = this.chat;
     const deltas = new Map(this.pending);

@@ -22,6 +22,7 @@ function setup(
   limits: Partial<ChatWriteBufferLimits> = {},
   chatId: string | null = "chat-1",
   base = subAgentSection(),
+  baseline: typeof BASE | null = BASE,
 ) {
   const repository = new ScriptedChatRepository();
   const clock = new ManualClock();
@@ -31,7 +32,7 @@ function setup(
     getChatId: () => chatId,
     onChatBound: () => undefined,
     base,
-    baseline: BASE,
+    baseline,
     now: clock.now,
     scheduleTimeout: clock.scheduleTimeout,
     limits,
@@ -248,6 +249,20 @@ describe("ChatWriteBuffer durability", () => {
     writer.reopen();
     await writer.flushThrough(writer.markChatDirty(chatInput({ title: "After" })), "barrier");
     expect(repository.commits.map((change) => change.chat?.title)).toEqual([undefined, "After"]);
+  });
+
+  it("writes nothing for a chat discarded while its stored document loads", async () => {
+    const { repository, writer } = setup({}, "chat-1", subAgentSection(), null);
+    repository.loaded = { chat: { id: "chat-1" } as SavedChat, base: BASE };
+    const releaseLoad = repository.holdNextLoad();
+    const flushed = writer.flushThrough(writer.markChatDirty(chatInput()), "barrier");
+
+    const discarded = writer.discard();
+    releaseLoad();
+    await discarded;
+
+    await expect(flushed).rejects.toMatchObject({ code: "chat-missing" });
+    expect(repository.commits).toEqual([]);
   });
 
   it("refuses sub-agent deltas before the chat has a durable id", () => {
