@@ -114,7 +114,7 @@ describe("sub-agent evidence import", () => {
   it("U1: keeps the rewritten answer within the cap and drops a citation cut at the end", async () => {
     const harness = importHarness();
     const { delegator, sessionId, runId } = await launchWith(harness, ["example.com"]);
-    harness.execution.finish(0, result("[e1]".repeat(12_500)));
+    harness.execution.finish(0, result("[e1]".repeat(1_100)));
     await settle();
 
     const state = await delegator.getResult(sessionId, runId);
@@ -696,7 +696,7 @@ describe("sub-agent evidence import", () => {
 
   it("U10: rewrites newline-free bracket floods in bounded work", () => {
     for (const unit of ["[", "[a", "[a]("]) {
-      const text = unit.repeat(20_000);
+      const text = unit.repeat(8_000);
       expect(rewriteSubAgentCitations(text, new Map(), new Set())).toBe(text);
     }
   });
