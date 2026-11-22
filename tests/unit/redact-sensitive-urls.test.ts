@@ -52,6 +52,10 @@ describe("redactSensitiveText", () => {
       'clientSecret: abc {"refreshToken":"xyz"}',
       'clientSecret=[redacted] {"refreshToken":"[redacted]"}',
     ],
+    [
+      '{"password": 123456, "pin_token": true, "note"',
+      '{"password": "[redacted]", "pin_token": "[redacted]", "note"',
+    ],
   ])("removes the credential of %s", (text, redacted) => {
     expect(redactSensitiveText(text)).toBe(redacted);
   });

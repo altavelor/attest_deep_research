@@ -1,9 +1,20 @@
 const SENSITIVE_KEY =
   /(^|[_-])(api[_-]?key|access[_-]?token|private[_-]?key|token|secret|password|authorization)($|[_-])/i;
-const SENSITIVE_ASSIGNMENT =
-  /\b((?:[a-z0-9]+[_-]?)?(?:api[_ -]?key|access[_ -]?token|private[_ -]?key|token|secret|password|authorization))\s*[:=]\s*(?:(?:Bearer|Basic|Token|Digest)\s+)?([^\s,;&]+)/gi;
-const SENSITIVE_JSON_FIELD =
-  /("(?:[a-z0-9]+[_-]?)?(?:api[_ -]?key|access[_ -]?token|private[_ -]?key|token|secret|password|authorization)"\s*:\s*"(?:(?:Bearer|Basic|Token|Digest)\s+)?)(?:\\.|[^"\\])*"/gi;
+const CREDENTIAL_NAME =
+  "(?:[a-z0-9]+[_-]?)?(?:api[_ -]?key|access[_ -]?token|private[_ -]?key|token|secret|password|authorization)";
+const AUTH_SCHEME = "(?:(?:Bearer|Basic|Token|Digest)\\s+)?";
+const SENSITIVE_ASSIGNMENT = new RegExp(
+  `\\b(${CREDENTIAL_NAME})\\s*[:=]\\s*${AUTH_SCHEME}([^\\s,;&]+)`,
+  "gi",
+);
+const SENSITIVE_JSON_FIELD = new RegExp(
+  `("${CREDENTIAL_NAME}"\\s*:\\s*"${AUTH_SCHEME})(?:\\\\.|[^"\\\\])*"`,
+  "gi",
+);
+const SENSITIVE_JSON_SCALAR = new RegExp(
+  `("${CREDENTIAL_NAME}"\\s*:\\s*)(?!["{[])[^,}\\]\\s]+`,
+  "gi",
+);
 
 /** Remove credential values from values that may be written to logs or diagnostics. */
 export function redactSensitiveData<T>(value: T): T {
@@ -43,6 +54,7 @@ function redactSensitiveString(value: string): string {
   return redactedUrl
     .replace(/\bBearer\s+[^\s,;"'<>`\\]+/gi, "Bearer [redacted]")
     .replace(SENSITIVE_JSON_FIELD, '$1[redacted]"')
+    .replace(SENSITIVE_JSON_SCALAR, '$1"[redacted]"')
     .replace(SENSITIVE_ASSIGNMENT, "$1=[redacted]");
 }
 
