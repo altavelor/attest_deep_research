@@ -238,6 +238,7 @@ export default class AttestPlugin extends Plugin {
           getDefaultIndexProfileId: () => this.settings.newChatDefaults.indexProfileId,
           getDefaultSearchMode: () => this.settings.newChatDefaults.searchMode,
           getDefaultResearchMode: () => this.settings.newChatDefaults.researchMode,
+          isDeepResearchEnabled: () => this.settings.deepResearchPreview,
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
               id: profile.id,

@@ -5,6 +5,7 @@ import { settings } from "./settings";
 import { settingsIndexing } from "./settingsIndexing";
 import { settingsProfiles } from "./settingsProfiles";
 import { subAgents } from "./subAgents";
+import { deepResearch } from "./deepResearch";
 
 export const ar = {
   ...common,
@@ -13,5 +14,6 @@ export const ar = {
   ...settingsIndexing,
   ...chat,
   ...subAgents,
+  ...deepResearch,
   ...onboarding,
 };

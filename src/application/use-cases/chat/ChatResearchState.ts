@@ -7,6 +7,7 @@ import {
   type ResearchSectionView,
   type ResearchState,
 } from "@core/research/deepResearch";
+import { researchSectionView } from "@core/chat/savedChat";
 import type { ChatSessionState } from "./chatSessionTypes";
 
 export interface ChatResearchStateOptions {
@@ -24,10 +25,7 @@ export class ChatResearchState implements ResearchStatePort {
   constructor(private readonly options: ChatResearchStateOptions) {}
 
   read(): ResearchSectionView {
-    const section = this.options.state.deepResearch;
-    if (!section) return { status: "ready", active: null, history: [] };
-    if (section.status === "unreadable") return { status: "unreadable", reason: section.reason };
-    return { status: "ready", active: section.section.active, history: section.section.history };
+    return researchSectionView(this.options.state.deepResearch);
   }
 
   async commit(next: ResearchState, expectedRevision: number | null): Promise<void> {

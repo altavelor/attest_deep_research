@@ -62,6 +62,7 @@ export interface ChatComposerOptions {
   availableIndexes: IndexProfileSelectOption[];
   contextFilePaths: string[];
   researchMode: ResearchMode;
+  deepResearchEnabled?: boolean;
   t: Translate;
   onSubmit: () => void;
   onStop: () => void;
@@ -91,11 +92,19 @@ function contextModeItems(t: Translate): DropdownItem[] {
   ];
 }
 
-function researchModeItems(t: Translate): DropdownItem[] {
+function researchModeItems(t: Translate, deepResearch: boolean): DropdownItem[] {
   return [
     { id: "instant", name: t("chat.composer.researchMode.instant") },
     { id: "thinking", name: t("chat.composer.researchMode.thinking") },
+    ...(deepResearch
+      ? [{ id: "deep-research", name: t("chat.composer.researchMode.deepResearch") }]
+      : []),
   ];
+}
+
+function composerResearchMode(id: string, deepResearch: boolean): ResearchMode {
+  if (id === "deep-research" && deepResearch) return "deep-research";
+  return id === "thinking" ? "thinking" : "instant";
 }
 
 export function renderChatComposer(
@@ -231,17 +240,17 @@ export function renderChatComposer(
   }
   syncIndexButton();
 
-  let currentResearchMode: Extract<ResearchMode, "instant" | "thinking"> =
-    options.researchMode === "thinking" ? "thinking" : "instant";
+  const deepResearch = options.deepResearchEnabled === true;
+  let currentResearchMode = composerResearchMode(options.researchMode, deepResearch);
   const researchModeDropdown = createMenuDropdown(modelRow, {
     cls: "attest-chat__dropdown--research-mode",
     menuCls: "attest-chat__research-menu",
     ariaLabel: t("chat.composer.researchMode.aria"),
     placeholder: t("chat.composer.researchMode.instant"),
-    items: researchModeItems(t),
+    items: researchModeItems(t, deepResearch),
     initialId: currentResearchMode,
     onSelect: (id) => {
-      currentResearchMode = id === "thinking" ? "thinking" : "instant";
+      currentResearchMode = composerResearchMode(id, deepResearch);
       options.onUpdateResearchMode(currentResearchMode);
     },
   });
@@ -281,11 +290,10 @@ export function renderChatComposer(
     const supportsAgent =
       options.availableModels.find((model) => model.id === currentModel)?.supportsAgentMode ===
       true;
-    researchModeDropdown.setItemDisabled(
-      "thinking",
-      supportsAgent ? undefined : t("chat.composer.researchMode.thinkingBlocked"),
-    );
-    if (!supportsAgent && currentResearchMode === "thinking") {
+    const blocked = supportsAgent ? undefined : t("chat.composer.researchMode.thinkingBlocked");
+    researchModeDropdown.setItemDisabled("thinking", blocked);
+    if (deepResearch) researchModeDropdown.setItemDisabled("deep-research", blocked);
+    if (!supportsAgent && currentResearchMode !== "instant") {
       currentResearchMode = "instant";
       researchModeDropdown.setValue("instant");
       options.onUpdateResearchMode("instant");

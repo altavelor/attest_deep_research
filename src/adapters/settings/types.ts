@@ -130,6 +130,7 @@ export interface AttestSettings {
   expandSearchQuery: boolean;
   downloadFolder: string;
   debugMode: boolean;
+  deepResearchPreview: boolean;
   onboardingCompleted: boolean;
   onboardingProfileIds: OnboardingProfileIds;
   modelCapabilityCache: Record<string, ModelCapabilitySnapshot>;

@@ -6,6 +6,7 @@ import { ResearchService } from "@application/use-cases/research";
 import { estimateResearchRequestTokens } from "@core/research";
 import { ChatDisplayMessage } from "@core/conversation";
 import type { Translate } from "@adapters/i18n";
+import type { ResearchTurnInput } from "@core/research/deepResearch";
 import { ChatHistoryCompactor } from "./ChatHistoryCompactor";
 
 export interface ResearchQuestionControllerOptions {
@@ -185,6 +186,19 @@ export class ResearchQuestionController {
     });
   }
 
+  /** Starts a Deep Research turn from a card action; the label becomes the user message. */
+  async submitResearchTurn(research: ResearchTurnInput, label: string): Promise<void> {
+    const sessionId = this.options.getSessionId();
+    if (this.isRunning()) return;
+    await this.runQuestion(sessionId, label, this.options.getModelInputValue(), {
+      appendQuestion: true,
+      chatHistory: this.options.getMessages(sessionId),
+      activeFilePath: undefined,
+      includeActiveFile: false,
+      research,
+    });
+  }
+
   stopRunningQuestion(): void {
     this.options.stopRun();
   }
@@ -199,6 +213,7 @@ export class ResearchQuestionController {
       contextPaths?: string[];
       activeFilePath: string | undefined;
       includeActiveFile: boolean;
+      research?: ResearchTurnInput;
     },
   ): Promise<void> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
@@ -214,6 +229,7 @@ export class ResearchQuestionController {
       includeActiveFile: options.includeActiveFile,
       includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
       modelLabel: this.options.getCurrentModelLabel(sessionId),
+      ...(options.research ? { research: options.research } : {}),
     });
 
     if (!result.started) {

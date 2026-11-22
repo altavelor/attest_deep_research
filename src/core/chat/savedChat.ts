@@ -26,7 +26,11 @@ import {
   ConversationSourceRegistry,
   createConversationSourceRegistry,
 } from "./sourceRegistry";
-import { validateResearchSection, type DeepResearchSection } from "@core/research/deepResearch";
+import {
+  validateResearchSection,
+  type DeepResearchSection,
+  type ResearchSectionView,
+} from "@core/research/deepResearch";
 
 export const CHAT_SCHEMA_VERSION = 4;
 const SAFE_CHAT_ID = /^[a-zA-Z0-9_-]+$/;
@@ -239,6 +243,13 @@ export function parseSavedChatDeepResearch(value: unknown): SavedChatDeepResearc
     };
   }
   return { status: "ready", section: validation.value };
+}
+
+/** Presents a saved Deep Research section; an absent section is an empty ready one. */
+export function researchSectionView(saved: SavedChatDeepResearch | undefined): ResearchSectionView {
+  if (!saved) return { status: "ready", active: null, history: [] };
+  if (saved.status === "unreadable") return { status: "unreadable", reason: saved.reason };
+  return { status: "ready", active: saved.section.active, history: saved.section.history };
 }
 
 function hasSavedChatBase(chat: Partial<SavedChat>): boolean {
