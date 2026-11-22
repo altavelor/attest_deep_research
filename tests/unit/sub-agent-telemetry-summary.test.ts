@@ -122,19 +122,22 @@ describe("summarizeSubAgentTelemetry", () => {
     expect(summary.subAgents).toMatchObject({ roundLimitHits: 1, synthesisFallbacks: 1 });
   });
 
-  it("keeps map_sources launches in their own namespace", () => {
+  it("keeps map_sources launches of legacy calls and repeated batch reads in their own namespace", () => {
+    const batchRead = (id: string) =>
+      call({
+        id,
+        name: "get_map_sources_result",
+        metadata: { mapSources: [telemetry({ runId: "map-2", durationMs: 700, searchCalls: 2 })] },
+      });
     const summary = summarizeSubAgentTelemetry([
       call({ id: "a", metadata: telemetry({ runId: "run-1", durationMs: 1_000 }) }),
       call({
         id: "m",
         name: "map_sources",
-        metadata: {
-          mapSources: [
-            telemetry({ runId: "map-1", durationMs: 300, searchCalls: 1 }),
-            telemetry({ runId: "map-2", durationMs: 700, searchCalls: 2 }),
-          ],
-        },
+        metadata: { mapSources: [telemetry({ runId: "map-1", durationMs: 300, searchCalls: 1 })] },
       }),
+      batchRead("r1"),
+      batchRead("r2"),
     ]);
 
     expect(summary.subAgents?.count).toBe(1);

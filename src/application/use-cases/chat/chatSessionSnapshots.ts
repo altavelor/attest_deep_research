@@ -1,5 +1,6 @@
 import { createConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import type { SavedChat, SavedChatSettings } from "@core/chat/savedChat";
+import { normalizeSubAgentTimeline } from "@core/chat/subAgentTimeline";
 import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import type { ChatSessionState } from "./chatSessionTypes";
@@ -24,6 +25,10 @@ export function createIdleSessionState(
     completedAt: null,
     unreadCompletion: false,
     interruptionReason: null,
+    subAgentDispatches: [],
+    subAgentNotices: [],
+    timelineSequence: 0,
+    recoveredFromPrevious: false,
   };
 }
 
@@ -34,11 +39,20 @@ export function sessionStateFromSavedChat(
   chatSettings: SavedChatSettings,
 ): ChatSessionState {
   const lastRun = chat.lastRun;
+  const timeline = normalizeSubAgentTimeline({
+    messages: chat.messages,
+    subAgentDispatches: chat.subAgentDispatches ?? [],
+    subAgentNotices: chat.subAgentNotices ?? [],
+    timelineSequence: chat.timelineSequence ?? 0,
+  });
   return {
     ...createIdleSessionState(sessionId, chatSettings),
     chatId: chat.id,
     status: terminalStatusOf(chat),
-    messages: chat.messages,
+    messages: timeline.messages,
+    subAgentDispatches: timeline.subAgentDispatches,
+    subAgentNotices: timeline.subAgentNotices,
+    timelineSequence: timeline.timelineSequence,
     lastAnswer: chat.lastAnswer,
     sourceRegistry: chat.sourceRegistry,
     attachedContextPaths: [...chat.attachedContextPaths],
@@ -46,6 +60,7 @@ export function sessionStateFromSavedChat(
     completedAt: lastRun?.completedAt ?? null,
     unreadCompletion: chat.unreadCompletion,
     interruptionReason: lastRun?.status === "interrupted" ? lastRun.interruptionReason : null,
+    recoveredFromPrevious: chat.recoveredFrom === "previous",
   };
 }
 

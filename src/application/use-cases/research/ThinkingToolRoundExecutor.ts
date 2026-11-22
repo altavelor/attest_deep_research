@@ -1,3 +1,4 @@
+import { isSubAgentTool } from "@core/conversation";
 import { ChatMessage, ChatToolCall, ModelToolOutput, ToolEvent } from "@core/agent";
 import { ToolCallDiagnostic } from "@core/diagnostics";
 import { ToolManager } from "@application/tools/ToolManager";
@@ -11,7 +12,7 @@ import {
   contentBearingTool,
   extractEvidenceIds,
   launchParallelToolPool,
-  mutationTool,
+  uncachedTool,
   normalizedCallKey,
   searchTool,
   serializeExecution,
@@ -160,6 +161,7 @@ export class ThinkingToolRoundExecutor {
       (id, event) => this.options.onToolEvent?.(id, event),
       this.options.maxParallelSubAgents,
       this.options.maxParallelToolCalls,
+      options.round,
     );
 
     let roundDuplicates = 0;
@@ -176,7 +178,7 @@ export class ThinkingToolRoundExecutor {
         call.name === options.repairTool &&
         cachedExecution?.ok === false &&
         cachedExecution.retryable;
-      const bypassCache = mutationTool(call.name);
+      const bypassCache = uncachedTool(call.name);
       const cacheHit = !!cachedExecution && !retryMandatory && !bypassCache;
       let execution: CachedExecution;
       if (cacheHit) {
@@ -188,6 +190,7 @@ export class ThinkingToolRoundExecutor {
         const raw = pooled
           ? await pooled
           : await this.options.tools.execute(call, {
+              round: options.round,
               signal: this.options.signal,
               emit: (event) => this.options.onToolEvent?.(call.id, event),
             });
@@ -300,9 +303,11 @@ export class ThinkingToolRoundExecutor {
       name: call.name,
       status: execution.ok ? "success" : "failed",
       arguments: call.arguments,
-      resultPreview: contentBearingTool(call.name)
-        ? "[redacted tool content]"
-        : execution.result.slice(0, PREVIEW_CHARS),
+      resultPreview: isSubAgentTool(call.name)
+        ? "[withheld sub-agent output]"
+        : contentBearingTool(call.name)
+          ? "[redacted tool content]"
+          : execution.result.slice(0, PREVIEW_CHARS),
       resultBytes: execution.result.length,
       round: options.round,
       ...(this.cache.get(key) === execution &&

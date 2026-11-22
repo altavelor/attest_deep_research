@@ -89,7 +89,8 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
       : [];
     if (!continuation && request.toolOutputs?.length)
       throw unsupported("Tool outputs require a Responses continuation.");
-    const input = [...bootstrapInput, ...toolOutputs.map(mapToolOutput)];
+    const serviceInput = continuation ? mapMessages(request.continuationMessages ?? []) : [];
+    const input = [...bootstrapInput, ...toolOutputs.map(mapToolOutput), ...serviceInput];
     const body = {
       model: request.model,
       ...(instructions ? { instructions } : {}),

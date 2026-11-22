@@ -146,26 +146,31 @@ function parseToolArguments(value: string): Record<string, unknown> {
 }
 
 /**
- * Reads the token usage a Chat Completions chunk reports, or undefined when the
- * chunk carries none. Missing or invalid counts become 0, and cached prompt tokens
- * never exceed the prompt tokens they are part of.
+ * Reads the token usage a Chat Completions chunk reports. A count counts only as a non-negative safe
+ * integer, digit strings included, and a chunk without a usable prompt or completion count yields
+ * undefined so an earlier report stands; cached prompt tokens never exceed the prompt tokens.
  */
 export function parseChatCompletionsUsage(chunk: unknown): ModelRoundResult["usage"] {
   if (!isRecord(chunk) || !isRecord(chunk.usage)) return undefined;
   const usage = chunk.usage;
+  const inputTokens = tokenCount(usage.prompt_tokens);
+  const outputTokens = tokenCount(usage.completion_tokens);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
   const completionDetails = isRecord(usage.completion_tokens_details)
     ? usage.completion_tokens_details
     : {};
   const promptDetails = isRecord(usage.prompt_tokens_details) ? usage.prompt_tokens_details : {};
-  const inputTokens = countOrZero(usage.prompt_tokens);
   return {
-    inputTokens,
-    outputTokens: countOrZero(usage.completion_tokens),
-    reasoningTokens: countOrZero(completionDetails.reasoning_tokens),
-    cachedInputTokens: Math.min(countOrZero(promptDetails.cached_tokens), inputTokens),
+    inputTokens: inputTokens ?? 0,
+    outputTokens: outputTokens ?? 0,
+    reasoningTokens: tokenCount(completionDetails.reasoning_tokens) ?? 0,
+    cachedInputTokens: Math.min(tokenCount(promptDetails.cached_tokens) ?? 0, inputTokens ?? 0),
   };
 }
 
-function countOrZero(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+function tokenCount(value: unknown): number | undefined {
+  const parsed = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof parsed === "number" && Number.isSafeInteger(parsed) && parsed >= 0
+    ? parsed
+    : undefined;
 }

@@ -247,6 +247,7 @@ export class InstantResearchStrategy implements ResearchStrategy {
       contextDiagnostics: request.includeContextDiagnostics === true ? diagnostics : undefined,
       evidenceLimit,
       toolsEnabled: policy.reason === "instant-selected" ? false : this.deps.toolsEnabled,
+      toollessReason: policy.reason === "instant-selected" ? "instant" : "no-tools",
       retrievalDiagnostics: isRagDebugIntent(question)
         ? buildRagDiagnosticSnapshot(diagnostics)
         : undefined,

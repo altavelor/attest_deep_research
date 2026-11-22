@@ -28,7 +28,13 @@ import {
 import { citationEvidence } from "./citations/citationEvidence";
 import { messageDisplayContent } from "./conversationFormatting";
 import { disposeAnswerArtifacts } from "./artifacts";
-import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
+import { disposeWorkflowNodes } from "./workflowRenderer";
+import { renderSubAgentTimelineItem, subAgentEventOptions } from "./subAgentEvents";
+import { applyScrollAnchor, captureScrollAnchor } from "./transcriptScroll";
+import { buildChatTimeline } from "@core/chat/subAgentTimeline";
+import { dispatchEvent } from "@core/chat/subAgentPlacement";
+import { transcriptEventPlacement } from "./subAgentEventPlacement";
+import type { SubAgentDispatchEntry, SubAgentNoticeEntry } from "@core/research";
 
 export interface ChatTranscriptOptions {
   app: App;
@@ -55,6 +61,9 @@ export interface ChatTranscriptOptions {
   onAppendAnswerToActiveNote: (answer: ResearchAnswer) => void;
 
   documentImages?: DocumentImageResolver;
+  subAgentDispatches?: readonly SubAgentDispatchEntry[];
+  subAgentNotices?: readonly SubAgentNoticeEntry[];
+  onOpenSubAgentSession?: (sessionId: string) => void;
 }
 
 export function renderChatTranscript(
@@ -72,9 +81,24 @@ export function renderChatTranscript(
     return;
   }
 
-  visibleMessages.forEach(({ message, index }) =>
-    renderMessage(transcriptEl, message, index, options),
-  );
+  const indexes = new Map(visibleMessages.map(({ message, index }) => [message, index]));
+  const placement = transcriptEventPlacement(options);
+  const timeline = buildChatTimeline({
+    messages: visibleMessages.map(({ message }) => message),
+    subAgentDispatches: placement.orphanDispatches,
+    subAgentNotices: placement.orphanNotices,
+  });
+  const events = subAgentEventOptions(options.t, options.onOpenSubAgentSession);
+  const notices = options.subAgentNotices ?? [];
+  for (const item of timeline) {
+    if (item.kind === "message") {
+      renderMessage(transcriptEl, item.message, indexes.get(item.message)!, options);
+    } else if (item.kind === "agent-dispatch") {
+      renderSubAgentTimelineItem(transcriptEl, dispatchEvent(item.dispatch, notices), events);
+    } else {
+      renderSubAgentTimelineItem(transcriptEl, item, events);
+    }
+  }
   applyScrollAnchor(transcriptEl, scroll);
 }
 
@@ -304,31 +328,9 @@ function patchMessageHeaderActions(
   renderHeaderActions(header, message, index, options);
 }
 
-const STICK_TO_BOTTOM_THRESHOLD_PX = 60;
-
-interface ScrollAnchor {
-  stickToBottom: boolean;
-  previousScrollTop: number;
-}
-
-function captureScrollAnchor(transcriptEl: HTMLElement): ScrollAnchor {
-  const distanceFromBottom =
-    transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight;
-  return {
-    stickToBottom: distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX,
-    previousScrollTop: transcriptEl.scrollTop,
-  };
-}
-
-function applyScrollAnchor(transcriptEl: HTMLElement, anchor: ScrollAnchor): void {
-  transcriptEl.scrollTop = anchor.stickToBottom
-    ? transcriptEl.scrollHeight
-    : anchor.previousScrollTop;
-}
-
 /** Releases everything the transcript owns before its DOM is emptied or replaced. */
 export function disposeChatTranscript(transcriptEl: HTMLElement): void {
-  disposeFetchTargetAnimations(transcriptEl);
+  disposeWorkflowNodes(transcriptEl);
   disposeAnswerArtifacts(transcriptEl);
 }
 

@@ -39,9 +39,14 @@ import { ThinkingResearchFailure } from "./ThinkingResearchRunner";
 import { resolveSearchMode } from "./strategies/searchMode";
 import { ResearchExecutionContext, ResearchStrategyDeps } from "./strategies/ResearchStrategy";
 import { ThinkingResearchStrategy } from "./strategies/ThinkingResearchStrategy";
+import type { AnswerTranslate } from "./pseudoToolCallCleanup";
 import { InstantResearchStrategy } from "./strategies/InstantResearchStrategy";
-import { SubAgentRunner } from "./sub-agent/SubAgentRunner";
-import { SubAgentLogger, SubAgentPort } from "@application/research/subAgentPort";
+import { SubAgentRunner, type SubAgentRunnerDeps } from "./sub-agent/SubAgentRunner";
+import { SubAgentLogger } from "@application/research/subAgentPort";
+import type { SubAgentExecutionPort } from "@application/ports/subAgent";
+import { SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
+import type { ResearchModeWebParameters } from "@core/research";
+import { subAgentToolContext } from "./sub-agent/subAgentToolContext";
 
 export type { ResearchRequest, ResearchRetriever, ResearchSearchMode, ResearchStreamEvent };
 
@@ -72,6 +77,7 @@ export interface ResearchServiceOptions {
   toolsetFactory: ResearchToolsetFactory;
 
   runToolLoop: ToolLoopRunner;
+  translate?: AnswerTranslate;
 
   modelRoundFactory: (chatModel: ChatModelProvider) => ModelRoundProvider;
   toolsEnabled?: boolean;
@@ -110,6 +116,12 @@ export class ResearchService implements ConversationEngine {
 
   private readonly thinking: ThinkingResearchStrategy;
   private readonly instant: InstantResearchStrategy;
+  private readonly subAgentRunnerDeps: SubAgentRunnerDeps;
+  private readonly subAgentSources: Pick<
+    ResearchServiceOptions,
+    "noteTools" | "retriever" | "searchProvider" | "urlStatusChecker"
+  >;
+  private readonly now: () => Date;
 
   constructor(options: ResearchServiceOptions) {
     const evidenceLimit = options.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT;
@@ -154,9 +166,11 @@ export class ResearchService implements ConversationEngine {
       persistFinalAnswer: options.persistFinalAnswer,
       noteTools: options.noteTools,
       runToolLoop: options.runToolLoop,
+      ...(options.translate ? { translate: options.translate } : {}),
     });
 
-    const subAgentRunner: SubAgentPort = new SubAgentRunner({
+    this.now = now;
+    this.subAgentRunnerDeps = {
       toolsetFactory: options.toolsetFactory,
       ...(options.searchProvider ? { searchProvider: options.searchProvider } : {}),
       modelRound: options.modelRound ?? options.modelRoundFactory(options.chatModel),
@@ -165,7 +179,13 @@ export class ResearchService implements ConversationEngine {
       maxTokens: chatOptions.maxTokens,
       reasoning: options.reasoning,
       ...(options.subAgentLogger ? { logger: options.subAgentLogger } : {}),
-    });
+    };
+    this.subAgentSources = {
+      noteTools: options.noteTools,
+      retriever: options.retriever,
+      searchProvider: options.searchProvider,
+      urlStatusChecker: options.urlStatusChecker,
+    };
 
     const deps: ResearchStrategyDeps = {
       chatModel: options.chatModel,
@@ -196,7 +216,6 @@ export class ResearchService implements ConversationEngine {
       vaultWriter: options.vaultWriter,
       downloadFolder: options.downloadFolder,
       toolsetFactory: options.toolsetFactory,
-      subAgentRunner,
       toolsEnabled: options.toolsEnabled === true && options.noteTools !== undefined,
       toolCapabilities,
       toolCapabilityProvenance: options.toolCapabilityProvenance,
@@ -239,6 +258,10 @@ export class ResearchService implements ConversationEngine {
       },
       indexDescription,
     };
+
+    if (policy.strategy === "thinking") {
+      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
+    }
 
     let executionStrategy: ResearchExecutionStrategy = policy.strategy;
     let failedThinkingAttempt: ThinkingResearchFailure | undefined;
@@ -289,6 +312,30 @@ export class ResearchService implements ConversationEngine {
       existingSummary,
       temperature: 0,
       maxTokens: this.chatOptions.maxTokens,
+    });
+  }
+
+  /**
+   * Builds the child execution of this research service for one Thinking parent run: a
+   * runner with the same model configuration is created only when a child run starts,
+   * with tools limited by that run's source policy.
+   */
+  private subAgentExecution(web: ResearchModeWebParameters): SubAgentExecutionPort {
+    const label = this.chatModelName;
+    return new SubAgentExecutionAdapter({
+      selectModel: () => ({
+        model: {
+          profileId: label,
+          providerId: this.apiFormat ?? "model",
+          modelId: label,
+          label,
+        },
+        modelRound: this.subAgentRunnerDeps.modelRound,
+      }),
+      createRunner: (modelRound) => new SubAgentRunner({ ...this.subAgentRunnerDeps, modelRound }),
+      toolContext: (request) =>
+        subAgentToolContext(this.subAgentSources, request.sourcePolicy, web, request.origin),
+      now: this.now,
     });
   }
 }

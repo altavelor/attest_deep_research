@@ -1,4 +1,4 @@
-import { isRecord, scheduleTimeout, type ScheduledTimeout } from "@shared";
+import { scheduleTimeout, type ScheduledTimeout } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelRoundResult, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import type { ProviderHttpClient } from "../../common/http";
@@ -14,15 +14,17 @@ import {
 } from "./chatStreamPrimitives";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
+import { fieldsAfterRefusal, RejectedFieldMemory } from "./optionalFieldRetry";
 
 interface OpenAiChatStreamOptions {
   http: ProviderHttpClient;
   request: ChatRequest;
   dialect: ChatCompletionsDialect;
   onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
+  rejectedFields?: RejectedFieldMemory;
 }
 
-const USAGE_TRAILER_TIMEOUT_MS = 2_000;
+export const USAGE_GRACE_MS = 1_500;
 
 /**
  * Streams one Chat Completions round as chat chunks. The stream is read under its own
@@ -40,7 +42,13 @@ export async function* streamOpenAiCompatibleChat(
 }
 
 async function* readChatCompletionsRound(
-  { http, request, dialect, onReasoningObserved }: OpenAiChatStreamOptions,
+  {
+    http,
+    request,
+    dialect,
+    onReasoningObserved,
+    rejectedFields = new RejectedFieldMemory(),
+  }: OpenAiChatStreamOptions,
   streamAbort: AbortController,
 ): AsyncIterable<ChatResponseChunk> {
   const baseBody = {
@@ -55,10 +63,10 @@ async function* readChatCompletionsRound(
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
-  const optionalFields = {
+  const optionalFields = rejectedFields.accepted(request.model, {
     ...(dialect.sendsReasoningFields ? reasoningBody(request) : {}),
     ...(dialect.requestsStreamUsage ? { stream_options: { include_usage: true } } : {}),
-  };
+  });
 
   const open = (body: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> =>
     openChatCompletionsStream(http, body, streamAbort.signal);
@@ -73,10 +81,13 @@ async function* readChatCompletionsRound(
     } catch (error) {
       throwIfAborted(request.signal);
       firstError ??= error;
-      if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
-        throw firstError;
-      }
-      attempt = withoutRejectedFields(attempt, error);
+      const kept = fieldsAfterRefusal(attempt, error);
+      if (!kept) throw firstError;
+      rejectedFields.remember(
+        request.model,
+        Object.keys(attempt).filter((key) => !(key in kept)),
+      );
+      attempt = kept;
     }
   }
 
@@ -168,7 +179,7 @@ async function* readChatCompletionsRound(
         usageTrailerDeadline = scheduleTimeout(() => {
           usageTrailerExpired = true;
           streamAbort.abort(new DOMException("The usage trailer did not arrive.", "TimeoutError"));
-        }, USAGE_TRAILER_TIMEOUT_MS);
+        }, USAGE_GRACE_MS);
       }
       if (repetition.isRepeating()) break;
     }
@@ -251,42 +262,6 @@ function reasoningBody(request: ChatRequest): Record<string, unknown> {
     },
     chat_template_kwargs: { enable_thinking: request.reasoningEnabled },
   };
-}
-
-/**
- * True when the provider refused the request body itself, which is how a server
- * with strict validation answers a field it does not know. Any other failure
- * belongs to the caller and must not be retried.
- */
-function rejectsUnknownField(error: unknown): boolean {
-  const status: unknown =
-    error instanceof AttestError && isRecord(error.details) ? error.details.status : undefined;
-  return status === 400 || status === 422;
-}
-
-/**
- * Drops only the dialects the provider named in its refusal, so a gateway that
- * understands one of them still receives it on the retry. A refusal that names
- * none of them costs every optional field, which is the previous behaviour
- * and keeps the retry loop finite.
- */
-function withoutRejectedFields(
-  fields: Record<string, unknown>,
-  error: unknown,
-): Record<string, unknown> {
-  const message = refusalText(error).toLowerCase();
-  const kept = Object.fromEntries(
-    Object.entries(fields).filter(([key]) => !message.includes(key.toLowerCase())),
-  );
-  return Object.keys(kept).length === Object.keys(fields).length ? {} : kept;
-}
-
-function refusalText(error: unknown): string {
-  if (!(error instanceof AttestError)) {
-    return "";
-  }
-  const nested: unknown = isRecord(error.details) ? error.details.providerMessage : undefined;
-  return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
 /**

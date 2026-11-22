@@ -2,6 +2,7 @@ import { FileChatRepository as FileChatStore } from "@adapters/filesystem/FileCh
 import { inferChatTitle } from "@core/chat/savedChat";
 
 import { MemoryFileSystem } from "../support/memoryFileSystem";
+import { chatInput, subAgentSection } from "../support/chatDocuments";
 
 const CHAT_SETTINGS = {
   chatModelProfileId: "chat-model",
@@ -229,28 +230,79 @@ describe("FileChatStore", () => {
     });
   });
 
-  it("writes JSON atomically without leaving temporary files", async () => {
+  it("writes compact JSON in fixed field order and skips an unchanged document", async () => {
     const store = new FileChatStore({
       fileSystem,
       folder,
       now: () => new Date("2026-06-10T10:00:00.000Z"),
-      createId: () => "atomic",
+      createId: () => "chat-1",
+    });
+    const created = await store.commitChatDocument({ chatId: null, chat: chatInput() });
+    const withSection = await store.commitChatDocument({
+      chatId: "chat-1",
+      base: created.base,
+      subAgents: subAgentSection(),
     });
 
-    await store.saveChat({
-      messages: [{ role: "user", content: "Atomic write", createdAt: "2026-06-10T10:00:00.000Z" }],
-      lastAnswer: null,
-      attachedContextPaths: [],
-      chatSettings: CHAT_SETTINGS,
-    });
+    const raw = await fileSystem.readText(`${folder}/chat-1.json`);
+    expect(raw).toBe(`${JSON.stringify(JSON.parse(raw))}\n`);
+    expect(Object.keys(JSON.parse(raw))).toEqual([
+      "schemaVersion",
+      "id",
+      "title",
+      "createdAt",
+      "updatedAt",
+      "messages",
+      "lastAnswer",
+      "attachedContextPaths",
+      "chatSettings",
+      "sourceRegistry",
+      "unreadCompletion",
+      "isFavorite",
+      "subAgentDispatches",
+      "subAgentNotices",
+      "timelineSequence",
+      "subAgents",
+    ]);
+    await expect(fileSystem.exists(`${folder}/chat-1.json.tmp`)).resolves.toBe(false);
+    const same = { chatId: "chat-1", base: withSection.base, chat: chatInput() };
+    await expect(store.commitChatDocument(same)).resolves.toMatchObject({ written: false });
+    await expect(
+      store.commitChatDocument({ ...same, chat: chatInput({ title: "Changed" }) }),
+    ).resolves.toMatchObject({ written: true });
+  });
 
-    await expect(fileSystem.exists(`${folder}/atomic.json.tmp`)).resolves.toBe(false);
-    const raw = await fileSystem.readText(`${folder}/atomic.json`);
-    expect(JSON.parse(raw)).toMatchObject({
-      id: "atomic",
-      schemaVersion: 4,
-      sourceRegistry: { sources: [] },
+  it("rebuilds cached sections when the file changed with the same length", async () => {
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "chat-1" });
+    await store.commitChatDocument({ chatId: null, chat: chatInput() });
+    const path = `${folder}/chat-1.json`;
+    const external = (await fileSystem.readText(path)).replace(
+      '"content":"Question?"',
+      '"content":"Questiom?"',
+    );
+    await fileSystem.writeText(path, external);
+
+    await store.setChatFavorite("chat-1", true);
+
+    expect(JSON.parse(await fileSystem.readText(path)).messages[0].content).toBe("Questiom?");
+  });
+
+  it("refuses an invalid sub-agent section before writing", async () => {
+    const store = new FileChatStore({ fileSystem, folder, createId: () => "chat-1" });
+    const created = await store.commitChatDocument({ chatId: null, chat: chatInput() });
+    const before = await fileSystem.readText(`${folder}/chat-1.json`);
+
+    await expect(
+      store.commitChatDocument({
+        chatId: "chat-1",
+        base: created.base,
+        subAgents: subAgentSection(undefined, { revision: -1 }),
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid-snapshot",
+      message: "Sub-agent state was not saved: Sub-agent state has an invalid field: revision.",
     });
+    expect(await fileSystem.readText(`${folder}/chat-1.json`)).toBe(before);
   });
 
   it("saves compact summary markers while counting only visible messages", async () => {
@@ -385,10 +437,18 @@ describe("FileChatStore", () => {
       },
     });
 
+    const document = await store.loadChatDocument("v4");
+    await store.commitChatDocument({
+      chatId: "v4",
+      base: document!.base,
+      subAgents: subAgentSection(undefined, { chatId: "v4" }),
+    });
+
     expect(await store.loadChat("v4")).toMatchObject({
       schemaVersion: 4,
       unreadCompletion: true,
       lastRun: { runId: "run-1", status: "completed" },
+      subAgents: { status: "ready", snapshot: subAgentSection(undefined, { chatId: "v4" }) },
     });
     expect(await store.listChats()).toEqual([
       expect.objectContaining({

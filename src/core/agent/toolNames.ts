@@ -26,8 +26,11 @@ export const PRESENT_IMAGE_GALLERY_TOOL = "present_image_gallery";
 export const PRESENT_CHART_TOOL = "present_chart";
 
 export const SUB_AGENT_TOOL = "run_subagent";
+export const SUB_AGENT_RESULT_TOOL = "get_subagent_result";
+export const SUB_AGENT_WAIT_TOOL = "wait_subagents";
 
 export const MAP_SOURCES_TOOL = "map_sources";
+export const MAP_SOURCES_RESULT_TOOL = "get_map_sources_result";
 
 export const PROBE_DOCUMENT_URL_TOOL = "probe_document_url";
 export const DOWNLOAD_DOCUMENT_TOOL = "download_document";
@@ -60,7 +63,10 @@ export const PROMPT_TOOL_NAMES = [
   WEB_SEARCH_TOOL,
   WEB_FETCH_TOOL,
   SUB_AGENT_TOOL,
+  SUB_AGENT_RESULT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
   MAP_SOURCES_TOOL,
+  MAP_SOURCES_RESULT_TOOL,
   FIND_CLAIMS_TOOL,
   LIST_INDEX_URLS_TOOL,
   CHECK_URLS_TOOL,
@@ -72,3 +78,24 @@ export const PROMPT_TOOL_NAMES = [
   ...NOTE_EDIT_TOOLS,
   ...NOTE_MUTATION_TOOLS,
 ] as const;
+
+export const SUB_AGENT_TOOLS = [
+  SUB_AGENT_TOOL,
+  SUB_AGENT_RESULT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
+] as const;
+
+export const CATALOGUE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...PROMPT_TOOL_NAMES,
+  LIST_INDEX_SOURCES_TOOL,
+  LIST_INDEX_CHUNKS_TOOL,
+  FIND_IN_INDEX_TOOL,
+  SUMMARIZE_INDEX_SOURCE_TOOL,
+  GET_INDEX_SOURCE_OUTLINE_TOOL,
+  SEARCH_INDEX_BY_METADATA_TOOL,
+  GET_SOURCE_METADATA_TOOL,
+  LIST_SHARED_REFERENCES_TOOL,
+  WEB_FETCH_URL_TOOL,
+  WEB_FETCH_SECTION_TOOL,
+  WEB_PAGE_METADATA_TOOL,
+]);

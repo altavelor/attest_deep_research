@@ -35,6 +35,7 @@ export interface ThinkingModelRound {
     reasoningTokens: number;
     cachedInputTokens: number;
   };
+  reportedUsage?: { input: boolean; output: boolean; reasoning: boolean };
   streamedText: boolean;
 }
 
@@ -48,6 +49,7 @@ export async function collectThinkingModelRound(
   toolOutputs?: ModelToolOutput[],
   round = 1,
   allowedTools?: readonly string[],
+  continuationMessages?: ChatMessage[],
 ): Promise<ThinkingModelRound> {
   let streamedText = false;
   let streamedReasoning = false;
@@ -67,6 +69,7 @@ export async function collectThinkingModelRound(
     signal: options.signal,
     continuation,
     toolOutputs,
+    ...(continuationMessages?.length ? { continuationMessages } : {}),
     reasoning: options.reasoning,
     onDelta: (delta) => {
       if (delta.type === "text") streamedText = true;
@@ -113,6 +116,19 @@ export async function collectThinkingModelRound(
       reasoningTokens: 0,
       cachedInputTokens: 0,
     },
+    ...(result.usage
+      ? {
+          reportedUsage: {
+            input: reportedCount(result.usage.inputTokens),
+            output: reportedCount(result.usage.outputTokens),
+            reasoning: reportedCount(result.usage.reasoningTokens),
+          },
+        }
+      : {}),
     streamedText,
   };
+}
+
+function reportedCount(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }

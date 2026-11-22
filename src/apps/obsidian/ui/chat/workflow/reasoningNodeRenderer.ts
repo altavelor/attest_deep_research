@@ -1,7 +1,8 @@
-import { MarkdownRenderer, setIcon } from "obsidian";
+import { setIcon } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
-import type { WorkflowRenderContext, WorkflowUiState } from "../workflowRenderer";
+import type { WorkflowUiState } from "./renderContext";
+import type { TimelineScope } from "./timelineResources";
 
 const LONG_THINKING_CHARS = 280;
 
@@ -9,9 +10,10 @@ export function renderThinkingNode(
   listEl: HTMLElement,
   id: string,
   content: string,
-  context: { active: boolean; renderContext: WorkflowRenderContext; uiState?: WorkflowUiState },
+  context: { active: boolean; scope: TimelineScope; uiState?: WorkflowUiState },
 ): void {
-  const { active, renderContext, uiState } = context;
+  const { active, scope, uiState } = context;
+  const renderContext = scope.context;
   const node = listEl.createDiv({
     cls: "attest-chat__workflow-node attest-chat__workflow-node--thinking",
   });
@@ -29,12 +31,9 @@ export function renderThinkingNode(
       cls: "attest-chat__thinking-summary-label",
       text: renderContext.t("chat.workflow.thinking"),
     });
-    void MarkdownRenderer.render(
-      renderContext.app,
+    scope.resources.renderMarkdown(
       content,
-      details.createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
-      "",
-      renderContext.markdownContext,
+      details.createDiv({ cls: "attest-chat__workflow-text" }),
     );
     return;
   }
@@ -44,32 +43,23 @@ export function renderThinkingNode(
       text: renderContext.t("chat.workflow.thinkingActive"),
     });
   }
-  void MarkdownRenderer.render(
-    renderContext.app,
-    content,
-    body.createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
-    "",
-    renderContext.markdownContext,
-  );
+  scope.resources.renderMarkdown(content, body.createDiv({ cls: "attest-chat__workflow-text" }));
 }
 
 export function renderSummaryNode(
   listEl: HTMLElement,
   content: string,
-  context: WorkflowRenderContext,
+  scope: TimelineScope,
 ): void {
   const node = listEl.createDiv({
     cls: "attest-chat__workflow-node attest-chat__workflow-node--summary",
   });
   node.createSpan({ cls: "attest-chat__workflow-dot attest-chat__workflow-dot--thinking" });
-  void MarkdownRenderer.render(
-    context.app,
+  scope.resources.renderMarkdown(
     content,
     node
       .createDiv({ cls: "attest-chat__workflow-body" })
-      .createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
-    "",
-    context.markdownContext,
+      .createDiv({ cls: "attest-chat__workflow-text" }),
   );
 }
 

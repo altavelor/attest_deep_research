@@ -8,6 +8,7 @@ import {
 } from "./streaming/chatCompletionsDialect";
 import { listOpenAiCompatibleModelIds } from "./streaming/chatCompletionsHttp";
 import { streamOpenAiCompatibleChat } from "./streaming/openAiChatStream";
+import { RejectedFieldMemory } from "./streaming/optionalFieldRetry";
 
 export interface ChatModelClientOptions {
   baseUrl: string;
@@ -22,6 +23,7 @@ export class ChatModelClient implements ChatModelProvider {
   private readonly http: ProviderHttpClient;
   private readonly dialect: ChatCompletionsDialect;
   private readonly logger?: PluginRequestLogger;
+  private readonly rejectedFields = new RejectedFieldMemory();
   private readonly onReasoningObserved?: ChatModelClientOptions["onReasoningObserved"];
 
   constructor(options: ChatModelClientOptions) {
@@ -51,6 +53,7 @@ export class ChatModelClient implements ChatModelProvider {
         request,
         dialect: this.dialect,
         onReasoningObserved: this.onReasoningObserved,
+        rejectedFields: this.rejectedFields,
       });
     } catch (error) {
       this.logger?.logError(error);

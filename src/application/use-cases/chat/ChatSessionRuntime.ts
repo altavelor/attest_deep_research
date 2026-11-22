@@ -7,6 +7,7 @@ import { parseSubAgentDirective } from "@core/research";
 import type { ResearchMode } from "@core/research";
 import { ResearchAnswer } from "@core/answer";
 import {
+  answerMessageId,
   attachAnswerDetailsToLastAssistantMessage,
   completeAssistantCheckpoint,
   finalizeLastAssistantReasoning,
@@ -26,6 +27,15 @@ import {
   recordConversationCitationUsages,
   registerConversationEvidence,
 } from "@core/chat/sourceRegistry";
+import type { ChatRepository } from "@application/ports/chat";
+import type { SubAgentInspectionPort } from "@application/ports/subAgent";
+import { isNonTerminalChatSessionStatus } from "@core/chat/chatSession";
+import type { SaveChatInput } from "@core/chat/savedChat";
+import { scheduleTimeout } from "@shared";
+import { stampRunChain } from "./chainStamping";
+import { ChatSubAgents } from "./ChatSubAgents";
+import { ChatWriteBuffer } from "./ChatWriteBuffer";
+import { redactToolEvent } from "./toolEventRedaction";
 import type {
   ChatRunRequest,
   ChatSessionChangeKind,
@@ -35,7 +45,9 @@ import type {
 
 export interface ChatSessionRuntimeHost {
   environment: ChatSessionEnvironment;
+  repository: ChatRepository;
   emit(sessionId: string, kind: ChatSessionChangeKind): void;
+  saveInput(state: ChatSessionState): SaveChatInput;
 }
 
 /**
@@ -47,11 +59,87 @@ export class ChatSessionRuntime {
   private controller: AbortController | null = null;
   private diagnostics: AgentRunDiagnosticCollector | null = null;
   private fencedRunIds = new Set<string>();
+  private readonly writes: ChatWriteBuffer;
+  private readonly subAgents: ChatSubAgents;
 
   constructor(
     readonly state: ChatSessionState,
     private readonly host: ChatSessionRuntimeHost,
-  ) {}
+  ) {
+    const { environment } = host;
+    this.writes = new ChatWriteBuffer({
+      repository: host.repository,
+      getChatId: () => state.chatId,
+      onChatBound: (chatId) => {
+        if (state.chatId === null) state.chatId = chatId;
+      },
+      base: null,
+      baseline: null,
+      now: () => environment.now(),
+      scheduleTimeout: environment.scheduleTimeout ?? scheduleTimeout,
+      onStorageError: (error) => environment.logError?.(error),
+    });
+    this.subAgents = new ChatSubAgents({
+      state,
+      ...(environment.createSubAgentSessionManager
+        ? { createManager: environment.createSubAgentSessionManager }
+        : {}),
+      ...(environment.subAgentServices ? { services: environment.subAgentServices } : {}),
+      writer: this.writes,
+      now: () => environment.now(),
+      createId: () => environment.createRunId(),
+      logError: (error) => environment.logError?.(error),
+      saveRegistry: () => this.persist(host.saveInput(state)),
+      onTimelineChanged: () => {
+        this.persistLater(host.saveInput(state));
+        host.emit(state.sessionId, "sub-agents");
+      },
+    });
+  }
+
+  /**
+   * Commits a chat snapshot through the chat's single writer and waits until it is durable.
+   * A durable save other than a run start ends the recovered-from-previous lockout of child work.
+   */
+  async persist(input: SaveChatInput): Promise<void> {
+    await this.writes.flushThrough(this.writes.markChatDirty(input), "barrier");
+    if (!input.lastRun || !isNonTerminalChatSessionStatus(input.lastRun.status)) {
+      this.state.recoveredFromPrevious = false;
+    }
+  }
+
+  /** Buffers a chat snapshot for the next batched write without waiting for it. */
+  persistLater(input: SaveChatInput): void {
+    try {
+      this.writes.markChatDirty(input);
+    } catch (error) {
+      this.host.environment.logError?.(error);
+    }
+  }
+
+  /** Closes the children of a terminal parent run before its terminal save. */
+  closeSubAgents(runId: string, reason: string): Promise<void> {
+    return this.subAgents.closeParentRun(runId, reason);
+  }
+
+  subAgentInspection(): SubAgentInspectionPort | null {
+    return this.subAgents.inspection();
+  }
+
+  /** Fences the writer of a chat being deleted; reopen undoes it when deletion fails. */
+  discardWrites(): Promise<void> {
+    return this.writes.discard();
+  }
+
+  reopenWrites(): void {
+    this.writes.reopen();
+  }
+
+  /** Releases this chat's sub-agent manager and flushes or drops its writer. */
+  async dispose(): Promise<void> {
+    await this.subAgents.dispose();
+    await this.writes.dispose();
+  }
 
   get abortSignal(): AbortSignal | null {
     return this.controller?.signal ?? null;
@@ -82,7 +170,7 @@ export class ChatSessionRuntime {
     this.controller = new AbortController();
     const diagnostics = new AgentRunDiagnosticCollector({
       runId,
-      answerId: `answer-${runId}`,
+      answerId: answerMessageId(runId),
     });
     this.diagnostics = diagnostics;
     const { forceSubAgent, cleanedQuestion } = parseSubAgentDirective(request.question);
@@ -90,11 +178,12 @@ export class ChatSessionRuntime {
       ? "thinking"
       : (this.state.chatSettings.researchMode ?? "instant");
 
+    const subAgents = this.subAgents.beginParentRun(runId, request, mode);
     try {
       const service = this.host.environment.createResearchService(this.state.chatSettings);
       let completed = false;
 
-      for await (const event of service.answer({
+      for await (const raw of service.answer({
         question: cleanedQuestion || request.question,
         forceSubAgent: forceSubAgent || undefined,
         mode,
@@ -115,13 +204,22 @@ export class ChatSessionRuntime {
           : {}),
         finalizeAnswer: (answer: ResearchAnswer) => this.registerAnswerSources(answer, runId),
         signal: this.controller.signal,
+        ...(subAgents
+          ? {
+              subAgentDelegator: subAgents.delegator,
+              subAgentParent: subAgents.parent,
+              ...(subAgents.mapSources ? { subAgentMapSources: subAgents.mapSources } : {}),
+            }
+          : {}),
       })) {
         if (this.isFenced(runId)) break;
+        const event = redactToolEvent(raw, this.host.environment.subAgentServices?.redact);
         diagnostics.record(event);
         if (event.type === "complete" && event.answer.contextDiagnostics) {
           diagnostics.complete(event.answer.contextDiagnostics);
         }
         this.applyEvent(event, runId, request.modelLabel);
+        if (!this.isFenced(runId)) stampRunChain(this.state, runId);
         if (event.type === "complete") completed = true;
       }
 

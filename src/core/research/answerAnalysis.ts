@@ -1,4 +1,9 @@
 import { isMarkdownCodeIndex, markdownCodeRanges } from "./citationTokens";
+import {
+  markdownBracketScanner,
+  type MarkdownBracketMatch,
+  type MarkdownBracketPattern,
+} from "./markdownBracketScan";
 
 export interface AnswerCitationOccurrence {
   label: string;
@@ -31,12 +36,13 @@ export function markdownBracketOccurrences(
   citationLabels: ReadonlySet<string>,
 ): AnswerCitationOccurrence[] {
   const codeRanges = markdownCodeRanges(text);
-  const protectedStarts = markdownProtectedBracketStarts(text, citationLabels);
-  return [...text.matchAll(/\[([^\]\n]{1,200})\]/g)]
+  const scan = markdownBracketScanner(text);
+  const protectedStarts = markdownProtectedBracketStarts(text, citationLabels, scan);
+  return scan("label")
     .map((match) => ({
-      label: match[1].trim(),
-      index: match.index ?? 0,
-      length: match[0].length,
+      label: match.labels[0].trim(),
+      index: match.index,
+      length: match.end - match.index,
     }))
     .filter(
       ({ index, length }) =>
@@ -94,6 +100,7 @@ export function analyzeAnswerText(
 function markdownProtectedBracketStarts(
   text: string,
   allowedLabels: ReadonlySet<string>,
+  scan: (pattern: MarkdownBracketPattern) => MarkdownBracketMatch[],
 ): Set<number> {
   const protectedStarts = new Set<number>();
   const definitions = new Set<string>();
@@ -101,25 +108,22 @@ function markdownProtectedBracketStarts(
     definitions.add(normalizeReferenceId(match[1]));
     protectedStarts.add((match.index ?? 0) + match[0].indexOf("["));
   }
-  for (const match of text.matchAll(/!?\[([^\]\n]*)\]\[([^\]\n]*)\]/g)) {
-    const firstStart = (match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0);
+  for (const match of scan("reference")) {
+    const image = text[match.index] === "!";
+    const firstStart = match.index + (image ? 1 : 0);
     const secondStart = text.indexOf("[", firstStart + 1);
-    const secondLabel = match[2].trim();
-    const referenceId = normalizeReferenceId(match[2] || match[1]);
-    if (
-      !allowedLabels.has(secondLabel) ||
-      definitions.has(referenceId) ||
-      match[0].startsWith("!")
-    ) {
+    const [firstLabel, secondLabel] = match.labels;
+    const referenceId = normalizeReferenceId(secondLabel || firstLabel);
+    if (!allowedLabels.has(secondLabel.trim()) || definitions.has(referenceId) || image) {
       protectedStarts.add(firstStart);
       if (secondStart !== -1) protectedStarts.add(secondStart);
     }
   }
-  for (const match of text.matchAll(/!?\[([^\]\n]*)\]\([^\n]*\)/g)) {
-    protectedStarts.add((match.index ?? 0) + (match[0].startsWith("!") ? 1 : 0));
+  for (const match of scan("link")) {
+    protectedStarts.add(match.index + (text[match.index] === "!" ? 1 : 0));
   }
-  for (const match of text.matchAll(/!\[([^\]\n]*)\]/g)) {
-    protectedStarts.add((match.index ?? 0) + 1);
+  for (const match of scan("image")) {
+    protectedStarts.add(match.index + 1);
   }
   return protectedStarts;
 }

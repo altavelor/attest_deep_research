@@ -1,3 +1,4 @@
+import type { MessageKey } from "@adapters/i18n";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import {
   LlmClaimExtractor,
@@ -130,6 +131,7 @@ export function createResearchService(
     toolsetFactory: (options) => createResearchToolRegistry(options, { fetch: nativeWindowFetch }),
     modelRoundFactory: (model) => new ChatCompletionsRoundAdapter(model),
     runToolLoop,
+    translate: (key, params) => ctx.translator.t(key as MessageKey, params),
     chatModel: createChatModelClient(ctx, chatServer, chatProfile),
     ...(modelRound ? { modelRound } : {}),
     reasoning,

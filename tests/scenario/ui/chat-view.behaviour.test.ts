@@ -304,7 +304,9 @@ describe("conversation sources action", () => {
       ],
       lastAnswer: completedAnswer,
     };
-    const { view, leaf } = await openView({ loadSavedChat: async () => completedChat });
+    const { manager: sessions, repository } = createTestSessionManager();
+    await repository.saveChat(completedChat);
+    const { view, leaf } = await openView({ sessions, loadSavedChat: async () => completedChat });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
     await eventually(() => expect(sourcesButton(view)).not.toBeNull());
@@ -456,7 +458,8 @@ describe("chat command actions", () => {
 
   it("persists attached command context for an existing saved chat", async () => {
     const { manager: sessions, repository } = createTestSessionManager();
-    const saveChat = vi.spyOn(repository, "saveChat");
+    await repository.saveChat(savedChat);
+    const saveChat = vi.spyOn(repository, "commitChatDocument");
     const { app, view, leaf } = await openView({ sessions });
     app.vault.setFiles([new TFile("Notes/Current.md")]);
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
@@ -470,8 +473,8 @@ describe("chat command actions", () => {
 
     expect(saveChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: savedChat.id,
-        attachedContextPaths: ["Notes/Current.md"],
+        chatId: savedChat.id,
+        chat: expect.objectContaining({ attachedContextPaths: ["Notes/Current.md"] }),
       }),
     );
     await leaf.detach();
@@ -692,8 +695,8 @@ describe("chat view citation navigation", () => {
 });
 
 describe("saved chats from the chat view", () => {
-  it("loads a saved conversation selected from the empty-chat history", async () => {
-    const loadSavedChat = vi.fn(async () => savedChat);
+  it("loads a saved conversation selected from the empty-chat history and flags its recovery", async () => {
+    const loadSavedChat = vi.fn(async () => ({ ...savedChat, recoveredFrom: "previous" as const }));
     const { view, leaf } = await openView({ loadSavedChat });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
@@ -705,6 +708,9 @@ describe("saved chats from the chat view", () => {
       );
     });
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).toBeNull();
+    expect(takeNotices().map((notice) => notice.message)).toEqual([
+      "This chat was restored from its previous saved version because the latest file could not be read. Sub-agents stay off in it until the chat is saved again.",
+    ]);
     await leaf.detach();
   });
 
@@ -765,7 +771,8 @@ describe("saved chats from the chat view", () => {
 
   it("saves the loaded conversation before starting a clean chat", async () => {
     const { manager, repository } = createTestSessionManager();
-    const saveChat = vi.spyOn(repository, "saveChat");
+    await repository.saveChat(savedChat);
+    const saveChat = vi.spyOn(repository, "commitChatDocument");
     const { view, leaf } = await openView({ sessions: manager });
 
     view.contentEl.querySelector<HTMLButtonElement>(".attest-chat__saved-open")?.click();
@@ -777,7 +784,7 @@ describe("saved chats from the chat view", () => {
 
     view.contentEl.querySelector<HTMLButtonElement>('[aria-label="New chat"]')?.click();
     await eventually(() => {
-      expect(saveChat).toHaveBeenCalledWith(expect.objectContaining({ id: savedChat.id }));
+      expect(saveChat).toHaveBeenCalledWith(expect.objectContaining({ chatId: savedChat.id }));
       expect(view.contentEl.querySelector(".attest-chat__message")).toBeNull();
     });
     expect(view.contentEl.querySelector(".attest-chat__empty-state")).not.toBeNull();

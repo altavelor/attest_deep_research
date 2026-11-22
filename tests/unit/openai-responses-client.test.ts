@@ -305,6 +305,7 @@ describe("OpenAiResponsesClient", () => {
         { callId: "call-2", output: "second" },
         { callId: "call-1", output: "first" },
       ],
+      continuationMessages: [{ role: "user", content: "child results" }],
       reasoning: { enabled: true, effort: "high", summary: "auto" },
     });
 
@@ -327,10 +328,11 @@ describe("OpenAiResponsesClient", () => {
       strict: false,
     });
     const secondBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
-    expect(secondBody.input.slice(-2)).toEqual([
+    expect(secondBody.input.slice(-3, -1)).toEqual([
       { type: "function_call_output", id: "fco_call-1", call_id: "call-1", output: "first" },
       { type: "function_call_output", id: "fco_call-2", call_id: "call-2", output: "second" },
     ]);
+    expect(JSON.stringify(secondBody.input.at(-1))).toContain("child results");
     expect(JSON.stringify(secondBody.input)).toContain("encrypted-sentinel");
     first.continuation?.dispose();
     second.continuation?.dispose();

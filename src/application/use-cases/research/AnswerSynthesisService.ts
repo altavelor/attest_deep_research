@@ -36,6 +36,7 @@ import { formatCitation } from "@core/retrieval";
 import { ResearchStreamEvent } from "@application/contracts/research";
 import { createAsyncEventChannel } from "@application/AsyncEventChannel";
 import { NoteToolService, ToolLoopEvent, ToolLoopRunner } from "@application/research/toolPorts";
+import { AnswerTranslate, cleanToollessAnswer } from "./pseudoToolCallCleanup";
 
 export interface AnswerSynthesisServiceOptions {
   chatModel: ChatModelProvider;
@@ -53,6 +54,7 @@ export interface AnswerSynthesisServiceOptions {
   noteTools?: NoteToolService;
 
   runToolLoop: ToolLoopRunner;
+  translate?: AnswerTranslate;
 }
 
 export interface AnswerSynthesisInput {
@@ -70,6 +72,7 @@ export interface AnswerSynthesisInput {
   contextDiagnostics?: ContextDiagnostics;
   evidenceLimit: number;
   toolsEnabled?: boolean;
+  toollessReason?: "instant" | "no-tools";
   retrievalDiagnostics?: string;
   indexDescription?: IndexDescriptionPromptContext;
   signal?: AbortSignal;
@@ -90,6 +93,7 @@ export class AnswerSynthesisService {
   private readonly modelRound?: ModelRoundProvider;
   private readonly reasoning?: AnswerSynthesisServiceOptions["reasoning"];
   private readonly reasoningDiagnostics?: AnswerSynthesisServiceOptions["reasoningDiagnostics"];
+  private readonly translate?: AnswerTranslate;
 
   constructor(options: AnswerSynthesisServiceOptions) {
     this.chatModel = options.chatModel;
@@ -103,6 +107,7 @@ export class AnswerSynthesisService {
     this.modelRound = options.modelRound;
     this.reasoning = options.reasoning;
     this.reasoningDiagnostics = options.reasoningDiagnostics;
+    this.translate = options.translate;
   }
 
   async *synthesize(input: AnswerSynthesisInput): AsyncIterable<ResearchStreamEvent> {
@@ -290,6 +295,13 @@ export class AnswerSynthesisService {
       }
     }
 
+    if (!toolLoopEnabled) {
+      answerText = cleanToollessAnswer(
+        answerText,
+        input.toollessReason ?? "no-tools",
+        this.translate,
+      );
+    }
     const { byLabel } = labelResearchEvidence(promptOptions);
     const rewrite = rewriteCitationLabels(answerText, byLabel);
     const registryEvidence = input.conversationRegistry?.relevantEvidence ?? [];

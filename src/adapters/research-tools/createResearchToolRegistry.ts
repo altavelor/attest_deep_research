@@ -99,36 +99,30 @@ export function createResearchToolRegistry(
     (options.searchProvider !== undefined && availability.webProviderAvailable) ||
     (options.retriever !== undefined && availability.retrieverAvailable) ||
     (options.noteTools !== undefined && availability.noteAccess);
-  if (options.subAgentRunner && hasAnyReadSource) {
+  if (options.subAgentDelegator && options.subAgentParent && hasAnyReadSource) {
     sources.register(
       new SubAgentSource({
-        runner: options.subAgentRunner,
+        delegator: options.subAgentDelegator,
+        parent: options.subAgentParent,
         evidence,
-        toolContext: {
-          ...options,
-          subAgentRunner: undefined,
-          availability: { ...availability, noteMutationAccess: false },
-        },
       }),
     );
   }
 
   if (
-    options.subAgentRunner &&
+    options.subAgentMapSources &&
+    options.subAgentParent &&
     options.retriever &&
     availability.retrieverAvailable &&
     (availability.searchMode === "indexOnly" || availability.searchMode === "indexAndWeb")
   ) {
     sources.register(
       new MapSourcesSource({
-        runner: options.subAgentRunner,
+        context: options.subAgentMapSources,
+        parent: options.subAgentParent,
         retriever: options.retriever,
         evidence,
-        toolContext: {
-          ...options,
-          subAgentRunner: undefined,
-          availability: { ...availability, noteMutationAccess: false },
-        },
+        ...(options.indexSourcePaths ? { indexPaths: options.indexSourcePaths } : {}),
       }),
     );
   }

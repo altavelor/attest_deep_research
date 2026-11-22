@@ -19,6 +19,7 @@ import {
   retrieved,
   webSource,
 } from "../support/factories";
+import { fakeParentRun, recordingDelegator } from "../support/subAgentSessions";
 import { collectAsync, settle } from "../support/async";
 import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/researchFakes";
 import type { SearchProvider, SearchProviderResult } from "@application/ports/web";
@@ -567,7 +568,13 @@ describe("ResearchService", () => {
     });
 
     await collectAsync(
-      service.answer({ question: "Delegate this", forceSubAgent: true, searchMode: "indexOnly" }),
+      service.answer({
+        question: "Delegate this",
+        forceSubAgent: true,
+        searchMode: "indexOnly",
+        subAgentDelegator: recordingDelegator().delegator,
+        subAgentParent: fakeParentRun().parent,
+      }),
     );
 
     expect(chatModel.requests).toHaveLength(3);

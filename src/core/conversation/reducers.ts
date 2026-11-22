@@ -3,6 +3,8 @@ import { ResearchAnswer } from "@core/answer";
 import { RetrievedChunk } from "@core/model/source";
 import { createMessageId } from "./messageIds";
 
+export { answerMessageId } from "./messageIds";
+
 import { ChatDisplayMessage } from "./model";
 
 export {
@@ -11,6 +13,7 @@ export {
   shouldShowAnswerNoteActions,
   shouldShowDiagnosticAction,
   stripCitationsSection,
+  stripChainDisplayFields,
   stripFollowUpSection,
   stripMessageDiagnostics,
 } from "./messageContent";

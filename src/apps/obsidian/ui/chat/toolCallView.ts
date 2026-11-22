@@ -1,5 +1,5 @@
-import { humanizeToolName, toolIntent } from "@core/agent";
-import type { Translate } from "@adapters/i18n";
+import { humanizeToolName, TOOL_UNAVAILABLE_CODE, toolIntent } from "@core/agent";
+import type { MessageKey, Translate } from "@adapters/i18n";
 import { computeLineDiff, DiffHunk, diffHasChanges } from "@apps/obsidian/ui/shared/lineDiff";
 
 export type ToolCell =
@@ -42,9 +42,11 @@ export function describeToolCall(input: ToolCallViewInput): ToolCallView {
   const intent = describeIntent(name, args, input.label, fetchTargets.length, input.searchSources);
 
   if (status === "failed") {
+    const badge = unavailableToolBadge(input.t, resultJson);
     return {
       intent,
       fetchTargets,
+      ...(badge ? { badge } : {}),
       inCell: argsCell(args),
       outCell: resultJson ? { kind: "code", text: compactJson(resultJson) } : undefined,
     };
@@ -106,6 +108,27 @@ function keywordFallbackBadge(
         ? t("chat.toolCall.badge.semanticFailed", { error: diagnostics.semanticError })
         : t("chat.toolCall.badge.semanticEmpty"),
     };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Localizes the failure of a call to a tool the run did not offer, read from its result payload. */
+function unavailableToolBadge(t: Translate, resultJson?: string): { text: string } | undefined {
+  if (!resultJson) return undefined;
+  try {
+    const parsed = JSON.parse(resultJson) as {
+      error?: {
+        code?: unknown;
+        details?: { userMessageKey?: unknown; params?: { tool?: unknown } };
+      };
+    };
+    const error = parsed.error;
+    const key = error?.details?.userMessageKey;
+    const tool = error?.details?.params?.tool;
+    if (error?.code !== TOOL_UNAVAILABLE_CODE || typeof key !== "string") return undefined;
+    if (!key.startsWith("chat.toolUnavailable.") || typeof tool !== "string") return undefined;
+    return { text: t(key as MessageKey, { tool }) };
   } catch {
     return undefined;
   }

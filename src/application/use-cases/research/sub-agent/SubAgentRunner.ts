@@ -131,17 +131,19 @@ export class SubAgentRunner implements SubAgentPort {
       maxRounds,
       maxResultChars,
       maxSearchCalls: maxSearches,
-      onToolCall: (id, name, label, round) => {
+      onToolCall: (id, name, label, round, args) => {
         log({ type: "tool-call", round, name, label });
         emit?.({ type: SUB_AGENT_PHASE, message: phaseForTool(name) });
         emit?.({ type: SUB_AGENT_TOOL_START, data: { id, name, label, round } });
+        input.onToolCall?.({ id, name, label, round, ...(args ? { args } : {}) });
       },
-      onToolResult: (id, ok, resolvedLabel, resultSummary) => {
+      onToolResult: (id, ok, resolvedLabel, resultSummary, resultJson) => {
         log({ type: "tool-result", name: resolvedLabel ?? "", ok, summary: resultSummary });
         emit?.({
           type: SUB_AGENT_TOOL_END,
           data: { id, ok, resolvedLabel, resultSummary },
         });
+        input.onToolResult?.({ id, ok, resolvedLabel, resultSummary, resultJson });
       },
     }).run();
 

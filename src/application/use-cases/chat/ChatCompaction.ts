@@ -1,7 +1,16 @@
-import { ChatModelProvider } from "@core/agent";
+import { CATALOGUE_TOOL_NAMES, ChatModelProvider } from "@core/agent";
 import { sourceLabel } from "@core/retrieval";
-import { estimateResearchRequestTokens, ResearchChatHistoryMessage } from "@core/research";
-import { ChainItem, ChatDisplayMessage, ConversationCompactionSummary } from "@core/conversation";
+import {
+  estimateResearchRequestTokens,
+  ResearchChatHistoryMessage,
+  stripPseudoToolCalls,
+} from "@core/research";
+import {
+  ChainItem,
+  ChatDisplayMessage,
+  ConversationCompactionSummary,
+  parentWorkflowChain,
+} from "@core/conversation";
 
 export const COMPACTION_RECENT_MESSAGE_COUNT = 4;
 
@@ -311,17 +320,15 @@ function existingCompactionSummary(
 }
 
 function formatMessageContentForPrompt(message: ChatDisplayMessage): string {
-  if (message.role !== "assistant" || !message.researchProgress) {
-    return message.content;
-  }
-
-  const trace = researchTraceForPrompt(message.researchProgress);
+  if (message.role !== "assistant") return message.content;
+  const content = stripPseudoToolCalls(message.content, CATALOGUE_TOOL_NAMES).text;
+  const trace = message.researchProgress ? researchTraceForPrompt(message.researchProgress) : [];
 
   if (trace.length === 0) {
-    return message.content;
+    return content;
   }
 
-  return [message.content, "", "Research trace:", ...trace].join("\n");
+  return [content, "", "Research trace:", ...trace].join("\n");
 }
 
 function researchTraceForPrompt(
@@ -339,11 +346,17 @@ function researchTraceForPrompt(
     lines.push(`Checkpoint round ${checkpoint.round}: ${checkpoint.content}`);
   }
 
-  for (const item of progress.chain) {
-    lines.push(...chainItemTraceLines(item));
+  for (const item of parentWorkflowChain(progress.chain)) {
+    lines.push(...chainItemTraceLines(withoutNestedWork(item)));
   }
 
   return uniqueStrings(lines);
+}
+
+function withoutNestedWork(item: ChainItem): ChainItem {
+  if (item.kind !== "tool-call" || !item.children) return item;
+  const { children: _children, ...rest } = item;
+  return rest;
 }
 
 function chainItemTraceLines(item: ChainItem, depth = 0): string[] {

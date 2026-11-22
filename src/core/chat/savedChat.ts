@@ -4,6 +4,21 @@ import { ResearchSearchMode } from "@core/research/searchMode";
 import { ResearchMode } from "@core/research/researchMode";
 import { ContextMode } from "@core/diagnostics";
 import { parseSavedChatRunState, type SavedChatRunState } from "./chatSession";
+import { condenseTitleText } from "./titlePolicy";
+import {
+  toValidatedJson,
+  validateSubAgentState,
+  type SubAgentDispatchEntry,
+  type SubAgentNoticeEntry,
+  type SubAgentStateSnapshot,
+  type ValidatedJsonValue,
+} from "@core/research/subAgent";
+import {
+  normalizeSubAgentTimeline,
+  parseSubAgentDispatches,
+  parseSubAgentNotices,
+  parseTimelineSequence,
+} from "./subAgentTimeline";
 import {
   canonicalSourceKey,
   ConversationEvidenceRevision,
@@ -39,7 +54,16 @@ export interface SavedChat {
 
   isFavorite?: boolean;
   lastRun?: SavedChatRunState;
+  subAgents?: SavedChatSubAgents;
+  subAgentDispatches?: SubAgentDispatchEntry[];
+  subAgentNotices?: SubAgentNoticeEntry[];
+  timelineSequence?: number;
+  recoveredFrom?: "previous";
 }
+
+export type SavedChatSubAgents =
+  | { status: "ready"; snapshot: SubAgentStateSnapshot }
+  | { status: "unreadable"; raw: ValidatedJsonValue; reason: string };
 
 export interface SavedChatSummary {
   id: string;
@@ -63,17 +87,14 @@ export interface SaveChatInput {
   unreadCompletion?: boolean;
   lastRun?: SavedChatRunState;
   updatedAt?: string;
+  subAgentDispatches?: SubAgentDispatchEntry[];
+  subAgentNotices?: SubAgentNoticeEntry[];
+  timelineSequence?: number;
 }
 
 export function inferChatTitle(messages: ChatDisplayMessage[]): string {
-  const firstUserMessage = messages.find((message) => message.role === "user")?.content.trim();
-
-  if (!firstUserMessage) {
-    return "Untitled chat";
-  }
-
-  const singleLine = firstUserMessage.replace(/\s+/g, " ");
-  return singleLine.length <= 80 ? singleLine : `${singleLine.slice(0, 77)}...`;
+  const firstUserMessage = messages.find((message) => message.role === "user")?.content ?? "";
+  return condenseTitleText(firstUserMessage) || "Untitled chat";
 }
 
 export function normalizeTitle(title: string): string {
@@ -116,8 +137,15 @@ export function parseSavedChat(value: unknown): SavedChat | null {
     sourceRegistry: _sourceRegistry,
     unreadCompletion: _unreadCompletion,
     lastRun: _lastRun,
+    subAgents: _subAgents,
+    recoveredFrom: _recoveredFrom,
+    subAgentDispatches: _subAgentDispatches,
+    subAgentNotices: _subAgentNotices,
+    timelineSequence: _timelineSequence,
     ...rest
   } = chat;
+  const subAgents = parseSavedChatSubAgents((value as { subAgents?: unknown }).subAgents, chat.id!);
+  const timeline = isCurrent ? parseSavedTimeline(value as Record<string, unknown>) : null;
 
   return {
     ...(rest as Omit<
@@ -131,7 +159,56 @@ export function parseSavedChat(value: unknown): SavedChat | null {
         : sanitizeConversationSourceRegistry(chat.sourceRegistry),
     unreadCompletion: isCurrent && chat.unreadCompletion === true,
     ...(lastRun ? { lastRun } : {}),
+    ...(subAgents ? { subAgents } : {}),
+    ...(timeline ?? {}),
   };
+}
+
+/**
+ * Reads the optional main-transcript sub-agent events of a v4 chat. They are validated
+ * separately from the messages, so a damaged event is dropped without losing a message.
+ */
+function parseSavedTimeline(
+  value: Record<string, unknown>,
+): Pick<SavedChat, "subAgentDispatches" | "subAgentNotices" | "timelineSequence"> | null {
+  if (
+    value.subAgentDispatches === undefined &&
+    value.subAgentNotices === undefined &&
+    value.timelineSequence === undefined
+  ) {
+    return null;
+  }
+  const normalized = normalizeSubAgentTimeline({
+    messages: [],
+    subAgentDispatches: parseSubAgentDispatches(value.subAgentDispatches),
+    subAgentNotices: parseSubAgentNotices(value.subAgentNotices),
+    timelineSequence: parseTimelineSequence(value.timelineSequence),
+  });
+  return {
+    subAgentDispatches: [...normalized.subAgentDispatches],
+    subAgentNotices: [...normalized.subAgentNotices],
+    timelineSequence: normalized.timelineSequence,
+  };
+}
+
+/**
+ * Reads the optional sub-agent section separately from the rest of the chat. An
+ * absent section yields undefined; a section of another version, another chat or
+ * with invalid content is kept verbatim as unreadable so it is never overwritten
+ * with an empty state, while the chat itself stays readable.
+ */
+export function parseSavedChatSubAgents(
+  value: unknown,
+  chatId: string,
+): SavedChatSubAgents | undefined {
+  if (value === undefined) return undefined;
+  const raw = toValidatedJson(value) ?? null;
+  const validation = validateSubAgentState(value);
+  if (!validation.ok) return { status: "unreadable", raw, reason: validation.message };
+  if (validation.snapshot.chatId !== chatId) {
+    return { status: "unreadable", raw, reason: "Sub-agent state belongs to another chat." };
+  }
+  return { status: "ready", snapshot: validation.snapshot };
 }
 
 function hasSavedChatBase(chat: Partial<SavedChat>): boolean {

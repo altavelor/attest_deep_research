@@ -8,6 +8,7 @@ import type { Translate } from "@adapters/i18n";
 import { nextHorizontalWheelScrollLeft } from "./horizontalWheelScroll";
 import { createMentionAutocomplete } from "./mentionAutocompleteController";
 import { createMenuDropdown, DropdownItem, showDropdownMenu } from "./chatDropdown";
+import { createSubAgentsButton } from "./sub-agents/index";
 
 export interface ChatModelSelectOption {
   id: string;
@@ -49,8 +50,10 @@ export interface ChatComposerRefs {
   textareaEl: HTMLTextAreaElement;
   submitButtonEl: HTMLButtonElement;
   attachedContextEl: HTMLElement;
+  subAgentsButtonEl: HTMLButtonElement;
   controls: ComposerControls;
   resizeQuestionInput(): void;
+  updateSubAgentCount(count: number): void;
 }
 
 export interface ChatComposerOptions {
@@ -69,6 +72,7 @@ export interface ChatComposerOptions {
   onUpdateContextMode: (contextMode: ContextMode) => void;
   onUpdateSearchMode: (searchMode: ResearchSearchMode) => void;
   onUpdateResearchMode: (mode: ResearchMode) => void;
+  onOpenSubAgents: () => void;
 }
 
 function searchModeItems(t: Translate): DropdownItem[] {
@@ -242,6 +246,12 @@ export function renderChatComposer(
     },
   });
 
+  const subAgentsButton = createSubAgentsButton(
+    containerEl.ownerDocument,
+    t,
+    options.onOpenSubAgents,
+  );
+
   const contextIndicatorEl = modelRow.createSpan({
     cls: "attest-chat__context-indicator",
     attr: {
@@ -336,8 +346,10 @@ export function renderChatComposer(
     textareaEl,
     submitButtonEl,
     attachedContextEl,
+    subAgentsButtonEl: subAgentsButton.buttonEl,
     controls,
     resizeQuestionInput,
+    updateSubAgentCount: subAgentsButton.updateCount,
   };
 }
 

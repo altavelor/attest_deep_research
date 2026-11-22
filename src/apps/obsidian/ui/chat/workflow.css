@@ -367,3 +367,42 @@
 .attest-chat__answer-content:empty {
   display: none;
 }
+
+.attest-chat__workflow-separator {
+  margin: 0.4rem 0;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}
+
+.attest-chat__tool-output-viewer {
+  margin-top: 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.attest-chat__tool-output-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding: 0.25rem 0.5rem;
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.attest-chat__tool-output-viewer-text {
+  margin: 0;
+  padding: 0.5rem;
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.attest-chat__tool-payload-state {
+  margin-top: 0.25rem;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}

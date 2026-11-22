@@ -253,6 +253,25 @@ export class VaultFileSystem implements FileSystemPort {
     await this.adapter.remove(this.resolve(path));
   }
 
+  /**
+   * Removes a file together with the backup copy an interrupted replace may have
+   * left. The backup goes first, so a later read cannot restore the deleted file.
+   */
+  async removeReplaceable(path: string): Promise<void> {
+    const target = this.resolve(path);
+    const backup = `${target}.${BACKUP_SUFFIX}`;
+
+    await this.withTargetLock(target, async () => {
+      if (await this.adapter.exists(backup)) {
+        await this.adapter.remove(backup);
+      }
+
+      if (await this.adapter.exists(target)) {
+        await this.adapter.remove(target);
+      }
+    });
+  }
+
   async removeFolder(path: string, options?: { recursive?: boolean }): Promise<void> {
     await this.adapter.rmdir(this.resolve(path), options?.recursive === true);
   }

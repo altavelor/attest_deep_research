@@ -1,13 +1,15 @@
 import type { ChatRepository } from "@application/ports/chat";
-import type { SaveChatInput, SavedChat, SavedChatSettings } from "@core/chat/savedChat";
-import { inferChatTitle } from "@core/chat/savedChat";
-import type { SavedChatSummary } from "@core/chat/savedChat";
+import type {
+  SaveChatInput,
+  SavedChat,
+  SavedChatSettings,
+  SavedChatSummary,
+} from "@core/chat/savedChat";
 import {
   chatHistoryActivity,
   isNonTerminalChatSessionStatus,
   MAX_CONCURRENT_CHAT_SESSIONS,
   nextRunStatus,
-  normalizeStaleRunState,
   type ChatHistoryActivity,
   type ChatSessionStatus,
   type SavedChatRunState,
@@ -16,12 +18,15 @@ import {
   interruptLastAssistantProgress,
   nextAssistantMessage,
   nextUserMessage,
+  answerMessageId,
   startAssistantProgress,
-  stripMessageDiagnostics,
 } from "@core/conversation";
 import { toUserMessage } from "@core/errors";
-import type { ResearchAnswer } from "@core/answer";
-import { ChatSessionRuntime } from "./ChatSessionRuntime";
+import type { SubAgentInspectionPort } from "@application/ports/subAgent";
+import { chatSaveInput } from "./chatSaveInput";
+import { ChatSessionRuntime, type ChatSessionRuntimeHost } from "./ChatSessionRuntime";
+import { normalizeStaleChats } from "./staleChatRecovery";
+import { terminalBudget } from "./terminalSave";
 import {
   createIdleSessionState,
   resolveRunMode,
@@ -142,7 +147,9 @@ export class ChatSessionManager {
     const state = this.getSession(sessionId);
     if (!state || state.chatId !== null || isNonTerminalChatSessionStatus(state.status)) return;
     if (this.starting.has(sessionId)) return;
+    const runtime = this.sessions.get(sessionId);
     this.sessions.delete(sessionId);
+    void runtime?.dispose().catch((error: unknown) => this.options.environment.logError?.(error));
   }
 
   update(
@@ -182,12 +189,17 @@ export class ChatSessionManager {
   }
 
   private async persistSession(sessionId: string): Promise<void> {
-    const state = this.getSession(sessionId);
-    if (!state || state.messages.length === 0) return;
+    const runtime = this.sessions.get(sessionId);
+    const state = runtime?.state;
+    if (!runtime || !state || state.messages.length === 0) return;
     if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) return;
     if (state.chatId !== null && this.deleting.has(state.chatId)) return;
-    const saved = await this.options.repository.saveChat(this.saveInput(state));
-    state.chatId = saved.id;
+    await runtime.persist(this.saveInput(state));
+  }
+
+  /** Returns the read and user-stop port of one chat's child sessions, or null. */
+  getSubAgentInspection(sessionId: string): SubAgentInspectionPort | null {
+    return this.sessions.get(sessionId)?.subAgentInspection() ?? null;
   }
 
   /** Records a presentation update against the run's diagnostics collector. */
@@ -247,13 +259,19 @@ export class ChatSessionManager {
     }
 
     this.deleting.add(chatId);
+    const session = this.getSessionByChatId(chatId);
+    const runtime = session ? this.sessions.get(session.sessionId) : undefined;
     try {
+      await runtime?.discardWrites();
       await this.options.repository.deleteChat(chatId);
+    } catch (error) {
+      runtime?.reopenWrites();
+      throw error;
     } finally {
       this.deleting.delete(chatId);
     }
-    const session = this.getSessionByChatId(chatId);
     if (session) this.sessions.delete(session.sessionId);
+    await runtime?.dispose().catch((error: unknown) => this.options.environment.logError?.(error));
   }
 
   private async awaitPendingWrites(chatId: string): Promise<void> {
@@ -315,15 +333,16 @@ export class ChatSessionManager {
     const messages = startAssistantProgress(
       withQuestion,
       resolveRunMode(request.question, state.chatSettings),
+      answerMessageId(runId),
     );
 
     try {
-      const saved = await this.options.repository.saveChat({
+      await runtime.persist({
         ...this.saveInput({ ...state, messages }),
         unreadCompletion: false,
         lastRun: { runId, startedAt, status },
       });
-      state.chatId = saved.id;
+      if (state.chatId === null) throw new Error("The chat was not saved before its run started.");
     } catch (error) {
       this.starting.delete(sessionId);
       this.releaseSlot(sessionId, runId);
@@ -384,34 +403,9 @@ export class ChatSessionManager {
     runtime.abort();
   }
 
-  /**
-   * Startup recovery. Converts persisted queued, running, or stopping runs into
-   * interrupted ones with reason `crash-recovery`, preserving `updatedAt` so an
-   * old chat does not jump to the top of history.
-   */
-  async normalizeStaleChats(): Promise<void> {
-    const summaries = await this.options.repository.listChats();
-    const completedAt = this.options.environment.now().toISOString();
-    for (const summary of summaries) {
-      if (!summary.lastRun || !isNonTerminalChatSessionStatus(summary.lastRun.status)) continue;
-      const chat = await this.options.repository.loadChat(summary.id);
-      if (!chat?.lastRun) continue;
-      const lastRun = normalizeStaleRunState(chat.lastRun, completedAt);
-      if (!lastRun) continue;
-      await this.options.repository.saveChat({
-        id: chat.id,
-        title: chat.title,
-        createdAt: chat.createdAt,
-        updatedAt: chat.updatedAt,
-        messages: interruptLastAssistantProgress(chat.messages),
-        lastAnswer: chat.lastAnswer,
-        attachedContextPaths: chat.attachedContextPaths,
-        chatSettings: chat.chatSettings,
-        sourceRegistry: chat.sourceRegistry,
-        unreadCompletion: chat.unreadCompletion,
-        lastRun,
-      });
-    }
+  /** Startup recovery of runs a crash left non-terminal; see `normalizeStaleChats`. */
+  normalizeStaleChats(): Promise<void> {
+    return normalizeStaleChats(this.options.repository, this.options.environment.now());
   }
 
   /**
@@ -424,34 +418,46 @@ export class ChatSessionManager {
     this.queue = [];
     const writes: Promise<unknown>[] = [];
     const completedAt = this.options.environment.now().toISOString();
+    const logError = (error: unknown): void => this.options.environment.logError?.(error);
 
     for (const runtime of this.sessions.values()) {
       const state = runtime.state;
-      if (!isNonTerminalChatSessionStatus(state.status)) continue;
+      if (!isNonTerminalChatSessionStatus(state.status)) {
+        writes.push(runtime.dispose().catch(logError));
+        continue;
+      }
       const runId = state.activeRunId;
       if (runId) runtime.fence(runId);
       runtime.abort();
+      const closing = runId ? runtime.closeSubAgents(runId, "plugin-unload") : Promise.resolve();
       state.status = "interrupted";
       state.interruptionReason = "plugin-unload";
       state.completedAt = completedAt;
       state.messages = interruptLastAssistantProgress(state.messages);
       state.activeRunId = null;
-      if (state.chatId && runId) {
-        writes.push(
-          Promise.resolve(
-            this.options.repository.saveChat({
-              ...this.saveInput(state),
-              lastRun: {
-                runId,
-                startedAt: state.startedAt ?? completedAt,
-                completedAt,
-                status: "interrupted",
-                interruptionReason: "plugin-unload",
-              },
-            }),
-          ).catch((error: unknown) => this.options.environment.logError?.(error)),
-        );
-      }
+      const lastRun = runId
+        ? {
+            runId,
+            startedAt: state.startedAt ?? completedAt,
+            completedAt,
+            status: "interrupted" as const,
+            interruptionReason: "plugin-unload" as const,
+          }
+        : null;
+      const budget = terminalBudget();
+      writes.push(
+        budget
+          .within(closing)
+          .then(() =>
+            state.chatId && lastRun
+              ? runtime.persist({ ...this.saveInput(state), lastRun })
+              : undefined,
+          )
+          .catch(logError)
+          .finally(() => budget.cancel())
+          .then(() => runtime.dispose())
+          .catch(logError),
+      );
     }
 
     this.slots.clear();
@@ -498,6 +504,7 @@ export class ChatSessionManager {
     const state = runtime.state;
     const runId = state.activeRunId;
     if (runId) runtime.fence(runId);
+    const closing = runId ? runtime.closeSubAgents(runId, result.outcome) : Promise.resolve();
     const completedAt = this.options.environment.now().toISOString();
     let failure: unknown;
 
@@ -522,24 +529,34 @@ export class ChatSessionManager {
     state.activeRunId = null;
     state.progressLabel = null;
     this.pending.delete(sessionId);
-    this.emit(sessionId, "messages");
-    this.emit(sessionId, "status");
 
+    if (!runId) this.publishTerminal(sessionId);
     if (runId) {
-      try {
-        await this.options.repository.saveChat({
-          ...this.saveInput(state),
-          unreadCompletion: state.unreadCompletion,
-          lastRun: this.terminalRunState(state, runId, completedAt),
-        });
-      } catch (error) {
-        this.options.environment.logError?.(error);
-        failure = failure ?? error;
+      const budget = terminalBudget();
+      await budget.within(closing);
+      this.publishTerminal(sessionId);
+      const saving = runtime.persist({
+        ...this.saveInput(state),
+        unreadCompletion: state.unreadCompletion,
+        lastRun: this.terminalRunState(state, runId, completedAt),
+      });
+      const outcome = await budget.within(saving);
+      budget.cancel();
+      if (outcome.status === "failed") {
+        this.options.environment.logError?.(outcome.error);
+        failure = failure ?? outcome.error;
+      } else if (outcome.status === "timeout") {
+        saving.catch((error: unknown) => this.options.environment.logError?.(error));
       }
     }
 
     if (failure !== undefined) this.emitError(sessionId, failure);
     this.releaseSlot(sessionId, runId);
+  }
+
+  private publishTerminal(sessionId: string): void {
+    this.emit(sessionId, "messages");
+    this.emit(sessionId, "status");
   }
 
   private terminalRunState(
@@ -604,26 +621,15 @@ export class ChatSessionManager {
   }
 
   private saveInput(state: ChatSessionState): SaveChatInput {
-    const messages = this.options.persistDiagnostics()
-      ? state.messages
-      : stripMessageDiagnostics(state.messages);
-    return {
-      id: state.chatId ?? undefined,
-      title: inferChatTitle(state.messages),
-      messages,
-      lastAnswer: this.options.persistDiagnostics()
-        ? state.lastAnswer
-        : stripAnswerContextDiagnostics(state.lastAnswer),
-      attachedContextPaths: state.attachedContextPaths,
-      chatSettings: state.chatSettings,
-      sourceRegistry: state.sourceRegistry,
-    };
+    return chatSaveInput(state, this.options.persistDiagnostics());
   }
 
-  private runtimeHost() {
+  private runtimeHost(): ChatSessionRuntimeHost {
     return {
       environment: this.options.environment,
+      repository: this.options.repository,
       emit: (sessionId: string, kind: ChatSessionChangeKind) => this.emit(sessionId, kind),
+      saveInput: (state) => this.saveInput(state),
     };
   }
 
@@ -641,12 +647,6 @@ export class ChatSessionManager {
       listener({ sessionId, chatId, kind: "error", error });
     }
   }
-}
-
-function stripAnswerContextDiagnostics(answer: ResearchAnswer | null): ResearchAnswer | null {
-  if (!answer?.contextDiagnostics) return answer;
-  const { contextDiagnostics: _contextDiagnostics, ...rest } = answer;
-  return rest;
 }
 
 function persistedStatus(lastRun: SavedChatRunState | undefined): ChatSessionStatus {

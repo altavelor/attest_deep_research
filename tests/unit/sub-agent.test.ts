@@ -1,12 +1,18 @@
-import { parseSubAgentDirective } from "@core/research";
+import {
+  isSubAgentStateId,
+  parseSubAgentDirective,
+  researchModeRetrievalParameters,
+  subAgentSessionError,
+  SubAgentSessionFailure,
+} from "@core/research";
 import { SubAgentRunner } from "@application/use-cases/research/sub-agent/SubAgentRunner";
 import { SubAgentTool } from "@adapters/research-tools/sub-agent/SubAgentTool";
-import { SubAgentPort, SubAgentTelemetry } from "@application/research";
+import { SubAgentWaitTool } from "@adapters/research-tools/sub-agent/SubAgentResultTools";
+import { subAgentCallIdentity } from "@adapters/research-tools/sub-agent/subAgentCalls";
 import { createResearchToolRegistry } from "@adapters/research-tools/createResearchToolRegistry";
-import { ResearchEvidenceRegistry } from "@adapters/research-tools/ResearchEvidenceRegistry";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
 import { FakeChatModel, FakeSearchProvider } from "../support/researchFakes";
-import { markdownSource, retrieved, webSource } from "../support/factories";
+import { webSource } from "../support/factories";
 import type {
   ModelRoundProvider,
   ModelRoundRequest,
@@ -15,6 +21,8 @@ import type {
 } from "@core/agent";
 import { SUB_AGENT_PHASE, SUB_AGENT_TOOL_END, SUB_AGENT_TOOL_START } from "@application/research";
 import { SYNTHESIS_TOOL_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
+import { fakeParentRun, recordingDelegator, sourcePolicy } from "../support/subAgentSessions";
+import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -50,96 +58,101 @@ describe("parseSubAgentDirective", () => {
 });
 
 describe("SubAgentTool", () => {
-  function stubRunner(
-    answerText: string,
-    snapshot: ReturnType<typeof buildSnapshot>,
-  ): SubAgentPort {
-    return {
-      run: async (input) => {
-        input.onEvent?.({ type: "sub-agent-phase", message: "Searching…" });
-        return { answerText, snapshot };
-      },
-    };
-  }
-
-  function buildSnapshot(
-    entries: {
-      chunk: ReturnType<typeof retrieved>;
-      tool: "search_web" | "search_index" | "read_note";
-    }[],
-  ) {
-    return {
-      evidence: entries.map((entry) => entry.chunk),
-      citations: [],
-      provenance: entries.map((entry) => ({
-        evidenceId: entry.chunk.id,
-        calls: [
-          entry.tool === "search_web" || entry.tool === "search_index"
-            ? { callId: "sub-call-1", query: "q", tool: entry.tool }
-            : { callId: "sub-call-1", tool: entry.tool },
-        ],
-      })),
-    };
-  }
-
-  it("merges web evidence into the parent registry and returns the answer verbatim", async () => {
-    const snapshot = buildSnapshot([
-      {
-        chunk: retrieved("web:sub-1", webSource("https://e.com/x"), "X benchmark text"),
-        tool: "search_web",
-      },
-    ]);
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({
-      runner: stubRunner("Fast [url:https://e.com/x].", snapshot),
-      evidence,
-    });
-
-    const result = await tool.execute({ task: "How fast is X?", maxSearches: 8 }, toolContext());
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.sourceCount).toBe(1);
-    expect(result.value.answer).toBe("Fast [url:https://e.com/x].");
-    expect(evidence.snapshot().evidence).toHaveLength(1);
-  });
-
-  it("merges note evidence via registerNoteEvidence, keyed by provenance tool", async () => {
-    const noteChunk = retrieved("note-1", markdownSource("Notes/X.md"), "Note content");
-    const snapshot = buildSnapshot([{ chunk: noteChunk, tool: "read_note" }]);
-    const evidence = new ResearchEvidenceRegistry();
-    const tool = new SubAgentTool({ runner: stubRunner("Per [note-1].", snapshot), evidence });
-
-    const result = await tool.execute({ task: "Summarize X", maxSearches: 8 }, toolContext());
-
-    expect(result.ok).toBe(true);
-    expect(evidence.snapshot().evidence).toHaveLength(1);
-    expect(evidence.snapshot().evidence[0].id).toBe("note-1");
-  });
-
-  it("forwards sub-agent progress through the tool's emit channel", async () => {
-    const snapshot = buildSnapshot([]);
+  it("starts a session and returns its accepted receipt instead of an answer", async () => {
+    const { delegator, calls } = recordingDelegator();
+    const tool = new SubAgentTool({ delegator, parent: fakeParentRun().parent });
     const events: unknown[] = [];
-    const tool = new SubAgentTool({
-      runner: stubRunner("Answer.", snapshot),
-      evidence: new ResearchEvidenceRegistry(),
-    });
 
-    await tool.execute(
-      { task: "q", maxSearches: 8 },
-      toolContext({ emit: (event) => events.push(event) }),
+    const result = await tool.execute(
+      { task: "How fast is X?", maxSearches: 5, resources: ["wikipedia.org"] },
+      toolContext({ round: 2, emit: (event) => events.push(event) }),
     );
 
-    expect(events).toContainEqual({ type: "sub-agent-phase", message: "Searching…" });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        state: "accepted",
+        receipt: {
+          sessionId: "session-of-create-parent-1-r2-call-1",
+          runId: "run-of-submit-parent-1-r2-call-1",
+        },
+      },
+    });
+    expect(calls[0]?.args[0]).toMatchObject({ maxSearches: 5, resources: ["wikipedia.org"] });
+    const [dotted, underscored] = ["a.b", "a_b"].map((id) => subAgentCallIdentity("p", 1, id));
+    const literal = subAgentCallIdentity("p", 1, dotted.slice("p-r1-".length));
+    expect([dotted === underscored, literal === dotted, isSubAgentStateId(dotted)]).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(underscored).toBe("p-r1-a_b");
+    expect(JSON.stringify(result)).not.toContain("answer");
+    expect(events).toEqual([]);
+  });
+
+  it("sends follow-up, continue-partial and retry commands to the named session", async () => {
+    const { delegator, calls } = recordingDelegator();
+    const tool = new SubAgentTool({ delegator, parent: fakeParentRun().parent });
+    const parse = (input: Record<string, unknown>) => {
+      const parsed = tool.parseInput({ task: "More", ...input });
+      if (!parsed.ok) throw new Error(parsed.error.message);
+      return parsed.value;
+    };
+
+    await tool.execute(parse({ sessionId: "s1" }), toolContext());
+    await tool.execute(
+      parse({ sessionId: "s1", command: "continue-partial", runId: "r1" }),
+      toolContext(),
+    );
+    await tool.execute(parse({ sessionId: "s1", command: "retry", runId: "r1" }), toolContext());
+
+    expect(calls.map((call) => [call.method, call.args[1]])).toEqual([
+      ["continue", { type: "follow-up", task: "More" }],
+      ["continue", { type: "continue-partial", task: "More", fromRunId: "r1" }],
+      ["retry", { runId: "r1" }],
+    ]);
+    expect(tool.parseInput({ task: "More", command: "retry", sessionId: "s1" })).toMatchObject({
+      ok: false,
+      error: { code: "invalid-command" },
+    });
+  });
+
+  it("returns a delegator refusal as its failure code", async () => {
+    const { delegator } = recordingDelegator();
+    delegator.create = async () => {
+      throw new SubAgentSessionFailure(subAgentSessionError("not-authorized"));
+    };
+    const tool = new SubAgentTool({ delegator, parent: fakeParentRun().parent });
+
+    const result = await tool.execute({ task: "q", maxSearches: 8 }, toolContext());
+
+    expect(result).toMatchObject({ ok: false, error: { code: "not-authorized" } });
   });
 
   it("rejects an empty task", () => {
     const tool = new SubAgentTool({
-      runner: stubRunner("", buildSnapshot([])),
-      evidence: new ResearchEvidenceRegistry(),
+      delegator: recordingDelegator().delegator,
+      parent: fakeParentRun().parent,
     });
     const parsed = tool.parseInput({ task: "  " });
     expect(parsed.ok).toBe(false);
+  });
+});
+
+describe("SubAgentWaitTool", () => {
+  it("rejects unknown keys and empty ids instead of waiting on defaults", () => {
+    const tool = new SubAgentWaitTool({ delegator: recordingDelegator().delegator });
+    const ref = { sessionId: "s-1", runId: "r-1" };
+
+    expect(tool.parseInput({ refs: [ref], timeoutMs: 1000 }).ok).toBe(true);
+    for (const input of [
+      { refs: [ref], timeout: 1000 },
+      { refs: [{ ...ref, extra: true }] },
+      { refs: [{ ...ref, sessionId: "" }] },
+    ]) {
+      expect(tool.parseInput(input)).toMatchObject({ ok: false, error: { code: "invalid-wait" } });
+    }
   });
 });
 
@@ -448,25 +461,28 @@ describe("SubAgentRunner cancellation and budgets", () => {
       model: "m",
     });
 
+    const payloads: unknown[] = [];
     const result = await runner.run({
       task: "What is X?",
       onEvent: (event) => events.push(event),
+      onToolCall: (call) => payloads.push(call.args),
+      onToolResult: (toolResult) => payloads.push(toolResult.resultJson),
     });
 
     expect(result.answerText).toBe("Answer despite the failure.");
     expect(events.find((event) => event.type === SUB_AGENT_TOOL_END)?.data).toMatchObject({
       ok: false,
     });
+    expect(payloads[0]).toEqual({ query: "q-1", limit: 3 });
+    expect(payloads[1]).toEqual(expect.stringContaining("error"));
     expect(result.snapshot.evidence).toHaveLength(0);
   });
 });
 
 describe("createResearchToolRegistry run_subagent gating", () => {
-  const runner: SubAgentPort = {
-    run: async () => ({
-      answerText: "",
-      snapshot: { evidence: [], citations: [], provenance: [] },
-    }),
+  const delegation = {
+    subAgentDelegator: recordingDelegator().delegator,
+    subAgentParent: fakeParentRun().parent,
   };
   const webAvailability = {
     searchMode: "indexAndWeb" as const,
@@ -481,27 +497,56 @@ describe("createResearchToolRegistry run_subagent gating", () => {
     const webOnly = createResearchToolRegistry({
       availability: webAvailability,
       searchProvider: new FakeSearchProvider([]),
-      subAgentRunner: runner,
+      ...delegation,
     });
     const indexOnly = createResearchToolRegistry({
       availability: { ...webAvailability, searchMode: "indexOnly", retrieverAvailable: true },
       retriever: { search: async () => ({ chunks: [], citations: [], usedFallback: false }) },
-      subAgentRunner: runner,
+      ...delegation,
     });
 
     expect(webOnly.tools.has("run_subagent")).toBe(true);
-    expect(indexOnly.tools.has("run_subagent")).toBe(true);
+    expect(webOnly.tools.has("get_subagent_result")).toBe(true);
+    expect(indexOnly.tools.has("wait_subagents")).toBe(true);
+  });
+
+  it("gives a child run read tools only, with no delegation, note mutation or active note", () => {
+    const child = createResearchToolRegistry(
+      subAgentToolContext(
+        {
+          noteTools: { setCitationProvider: () => undefined } as never,
+          retriever: { search: async () => ({ chunks: [], citations: [], usedFallback: false }) },
+          searchProvider: new FakeSearchProvider([]),
+        },
+        sourcePolicy({ indexScope: "all-allowed" }),
+        researchModeRetrievalParameters("thinking").web,
+      ),
+    );
+    const names = child.tools.definitions().map((definition) => definition.function.name);
+
+    expect(names).toEqual(expect.arrayContaining(["read_note", "search_index", "search_web"]));
+    for (const forbidden of [
+      "run_subagent",
+      "map_sources",
+      "get_subagent_result",
+      "create_note",
+      "update_note",
+      "delete_note",
+      "get_active_note",
+    ]) {
+      expect(names).not.toContain(forbidden);
+    }
   });
 
   it("omits run_subagent in a fully empty profile (no web/index/notes)", () => {
     const created = createResearchToolRegistry({
       availability: { ...webAvailability, searchMode: "none", webProviderAvailable: false },
-      subAgentRunner: runner,
+      ...delegation,
     });
     expect(created.tools.has("run_subagent")).toBe(false);
   });
 
-  it("omits run_subagent without a runner", () => {
+  it("omits run_subagent without a delegator of the parent run", () => {
     const created = createResearchToolRegistry({
       availability: webAvailability,
       searchProvider: new FakeSearchProvider([]),
@@ -642,96 +687,18 @@ describe("SubAgentRunner telemetry", () => {
 });
 
 describe("SubAgentTool telemetry", () => {
-  const emptySnapshot = { evidence: [], citations: [], provenance: [] };
-
-  function telemetry(overrides: Partial<SubAgentTelemetry> = {}): SubAgentTelemetry {
-    return {
-      runId: "run-1",
-      durationMs: 120,
-      loopDurationMs: 100,
-      rounds: 3,
-      maxRounds: 12,
-      hitRoundLimit: false,
-      toolCalls: 4,
-      duplicateToolCalls: 1,
-      searchCalls: 2,
-      maxSearches: 8,
-      searchBudgetRejections: 0,
-      usedSynthesisFallback: false,
-      answerChars: 7,
-      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0, cachedInputTokens: 0 },
-      ...overrides,
-    };
-  }
-
-  it("returns one telemetry record in diagnostic, never in the model-visible value", async () => {
-    const runner: SubAgentPort = {
-      run: async () => ({ answerText: "Answer.", snapshot: emptySnapshot, telemetry: telemetry() }),
-    };
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
+  it("keeps one telemetry record per child run in diagnostic", async () => {
+    const tool = new SubAgentTool({
+      delegator: recordingDelegator().delegator,
+      parent: fakeParentRun().parent,
+    });
 
     const result = await tool.execute({ task: "What is X?", maxSearches: 8 }, toolContext());
 
-    expect(result.ok).toBe(true);
-    expect(result.diagnostic).toMatchObject({
-      runId: "run-1",
-      durationMs: 120,
-      loopDurationMs: 100,
-      searchCalls: 2,
-      sourceCount: 0,
-      droppedSourceCount: 0,
-      evidenceBudgetExhausted: false,
+    expect(result.diagnostic).toEqual({
+      runId: "run-of-submit-parent-1-r0-call-1",
+      sessionId: "session-of-create-parent-1-r0-call-1",
+      accepted: true,
     });
-    expect(JSON.stringify(result.ok ? result.value : {})).not.toContain("runId");
-  });
-
-  it("still reports one telemetry record when the runner throws", async () => {
-    let now = 1_000;
-    vi.spyOn(Date, "now").mockImplementation(() => now);
-    const runner: SubAgentPort = {
-      run: async () => {
-        now += 3;
-        throw new Error("sub-agent exploded");
-      },
-    };
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
-
-    const result = await tool.execute({ task: "What is X?", maxSearches: 8 }, toolContext());
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostic).toMatchObject({
-      runId: "call-1",
-      failureReason: "tool-exception",
-      rounds: 0,
-      toolCalls: 0,
-      duplicateToolCalls: 0,
-      searchCalls: 0,
-      searchBudgetRejections: 0,
-      hitRoundLimit: false,
-      usedSynthesisFallback: false,
-      answerChars: 0,
-      sourceCount: 0,
-      usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 },
-    });
-    expect(result.diagnostic?.durationMs).toBeGreaterThan(0);
-  });
-
-  it("reports a cancelled run as cancelled, not as a tool exception", async () => {
-    const controller = new AbortController();
-    const runner: SubAgentPort = {
-      run: async () => {
-        controller.abort();
-        throw new Error("aborted");
-      },
-    };
-    const tool = new SubAgentTool({ runner, evidence: new ResearchEvidenceRegistry() });
-
-    const result = await tool.execute(
-      { task: "What is X?", maxSearches: 8 },
-      toolContext({ signal: controller.signal }),
-    );
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostic).toMatchObject({ failureReason: "cancelled" });
   });
 });

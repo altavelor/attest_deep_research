@@ -1,6 +1,13 @@
 import { RetrievalResult } from "@adapters/retrieval";
 import { SearchProvider, SearchProviderResult } from "@application/ports";
-import { ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
+import {
+  ChatModelProvider,
+  ChatRequest,
+  ChatResponseChunk,
+  type ModelRoundProvider,
+  type ModelRoundRequest,
+  type ModelRoundResult,
+} from "@core/agent";
 import { LanguageInventoryItem } from "@core/model";
 
 export class FakeRetriever {
@@ -87,4 +94,21 @@ export class FakeChatModel implements ChatModelProvider {
       yield chunk;
     }
   }
+}
+
+/** Model round provider that answers each request with the scripted result for its 1-based index. */
+export function scriptedModelRounds(
+  handler: (request: ModelRoundRequest, index: number) => ModelRoundResult,
+): ModelRoundProvider & { requests: ModelRoundRequest[] } {
+  const requests: ModelRoundRequest[] = [];
+  return {
+    requests,
+    async listModels() {
+      return ["m"];
+    },
+    async runRound(request: ModelRoundRequest) {
+      requests.push(request);
+      return handler(request, requests.length);
+    },
+  };
 }

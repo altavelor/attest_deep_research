@@ -9,3 +9,5 @@ export * from "./retrieval";
 export * from "./translation";
 export * from "./vault";
 export * from "./web";
+export * from "./subAgent";
+export * from "./mapSources";

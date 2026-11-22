@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { createResearchToolRegistry } from "@adapters/research-tools";
 import type { ChatToolDefinition } from "@core/agent";
+import { mapSourcesContext } from "../../support/mapSourcesFakes";
+import { fakeParentRun } from "../../support/subAgentSessions";
 
 /**
  * Every tool the model can see, with every capability switched on. A tool that
@@ -32,7 +34,8 @@ function allToolDefinitions(): ChatToolDefinition[] {
     searchProvider: provider,
     noteTools,
     urlStatusChecker: { checkUrls: async () => [] },
-    subAgentRunner: () => {},
+    subAgentParent: fakeParentRun().parent,
+    subAgentMapSources: mapSourcesContext().context,
     vaultWriter: { write: async () => {} },
     imageSearch: { enabledImageSources: () => [] },
     documentImageCandidates: async () => [],

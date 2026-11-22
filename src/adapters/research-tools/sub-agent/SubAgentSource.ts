@@ -1,42 +1,39 @@
 import { Tool } from "@core/agent";
 import { DataSource, DataSourceDescriptor } from "@application/sources";
-import { ResearchToolsetOptions, SubAgentPort } from "@application/research";
+import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
 import { EvidenceRegistry } from "@application/sources";
+import { SubAgentResultTool, SubAgentWaitTool } from "./SubAgentResultTools";
 import { SubAgentTool } from "./SubAgentTool";
 
 export interface SubAgentSourceOptions {
-  runner: SubAgentPort;
+  delegator: SubAgentDelegator;
+  parent: SubAgentParentRun;
   evidence: EvidenceRegistry;
-
-  toolContext: ResearchToolsetOptions;
   available?: boolean;
 }
 
+/** Offers the session-backed delegation tools of one parent run and its evidence registry. */
 export class SubAgentSource implements DataSource {
   readonly descriptor: DataSourceDescriptor;
-  private readonly runner: SubAgentPort;
-  private readonly evidence: EvidenceRegistry;
-  private readonly toolContext: ResearchToolsetOptions;
 
-  constructor(options: SubAgentSourceOptions) {
-    this.runner = options.runner;
-    this.evidence = options.evidence;
-    this.toolContext = options.toolContext;
+  constructor(private readonly options: SubAgentSourceOptions) {
     this.descriptor = {
       id: "sub-agent",
       kind: "sub-agent",
       title: "Sub-agent",
       available: options.available ?? true,
     };
+    options.parent.attachEvidence({
+      remainingWebCapacity: () => options.evidence.remainingWebCapacity?.() ?? 0,
+    });
   }
 
   tools(): Tool[] {
+    const { delegator, parent, evidence } = this.options;
     return [
-      new SubAgentTool({
-        runner: this.runner,
-        evidence: this.evidence,
-        toolContext: this.toolContext,
-      }),
+      new SubAgentTool({ delegator, parent }),
+      new SubAgentResultTool({ delegator, parent, evidence }),
+      new SubAgentWaitTool({ delegator }),
     ];
   }
 }

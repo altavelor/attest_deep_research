@@ -16,6 +16,7 @@ import {
   LIST_INDEX_URLS_TOOL,
   LIST_NOTES_TOOL,
   LIST_SHARED_REFERENCES_TOOL,
+  MAP_SOURCES_RESULT_TOOL,
   MAP_SOURCES_TOOL,
   PRESENT_CHART_TOOL,
   PRESENT_IMAGE_GALLERY_TOOL,
@@ -25,7 +26,9 @@ import {
   READ_NOTE_TOOL,
   SEARCH_INDEX_BY_METADATA_TOOL,
   SEARCH_NOTES_TOOL,
+  SUB_AGENT_RESULT_TOOL,
   SUB_AGENT_TOOL,
+  SUB_AGENT_WAIT_TOOL,
   SUMMARIZE_INDEX_SOURCE_TOOL,
   UPDATE_NOTE_TOOL,
   WEB_FETCH_SECTION_TOOL,
@@ -318,6 +321,14 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
       return task ? `Delegating to a sub-agent: ${quoted(task)}` : "Running a sub-agent";
     },
   },
+  [SUB_AGENT_RESULT_TOOL]: {
+    title: "Sub-agent result",
+    intent: () => "Checking a sub-agent result",
+  },
+  [SUB_AGENT_WAIT_TOOL]: {
+    title: "Wait for sub-agents",
+    intent: () => "Waiting for sub-agents",
+  },
   [MAP_SOURCES_TOOL]: {
     title: "Fan-out over sources",
     intent: ({ args }) => {
@@ -326,6 +337,10 @@ export const TOOL_PRESENTATIONS: Readonly<Record<string, ToolPresentation>> = {
         ? `Asking ${quoted(question)} of each document`
         : "Asking each document the same question";
     },
+  },
+  [MAP_SOURCES_RESULT_TOOL]: {
+    title: "Fan-out result",
+    intent: () => "Checking the fan-out matrix",
   },
   [IMAGE_SEARCH_TOOL]: {
     title: "Search images",

@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { App, Component, MarkdownRenderer } from "obsidian";
+import { afterEach, beforeEach, expect, it } from "vitest";
+import { App, Component } from "obsidian";
 
 import { createTranslator } from "@adapters/i18n";
 import { renderAssistantMessageContent } from "@apps/obsidian/ui/chat/assistantMessageRenderer";
 import type { ChatTranscriptOptions } from "@apps/obsidian/ui/chat/ChatTranscript";
 import type { ChatDisplayMessage } from "@core/conversation";
+import { settle } from "../../support/async";
 import { createContainer, installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 
 const t = createTranslator("en").t;
@@ -47,17 +48,29 @@ const message: ChatDisplayMessage = {
 };
 
 beforeEach(installObsidianDomHelpers);
-afterEach(() => {
-  vi.restoreAllMocks();
-  resetDom();
+afterEach(resetDom);
+
+it("renders every chat markdown target with Obsidian reading-view styling", async () => {
+  const container = createContainer();
+
+  renderAssistantMessageContent(container, message, renderOptions);
+  await settle();
+
+  const sources = [
+    message.content,
+    "one\ntwo\nthree\nfour\nfive",
+    "Narration",
+    "Note body",
+    "Done",
+  ];
+  const targets = sources.map((source) => renderedTarget(container, source));
+  for (const target of targets) expect(target?.classList).toContain("markdown-rendered");
 });
 
-it("renders every chat markdown target with Obsidian reading-view styling", () => {
-  const render = vi.spyOn(MarkdownRenderer, "render");
-
-  renderAssistantMessageContent(createContainer(), message, renderOptions);
-
-  const targets = render.mock.calls.map(([, , element]) => element);
-  expect(targets).toHaveLength(5);
-  for (const target of targets) expect(target.classList).toContain("markdown-rendered");
-});
+function renderedTarget(container: HTMLElement, markdown: string): HTMLElement | null {
+  const walker = container.ownerDocument.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.textContent === markdown) return node.parentElement;
+  }
+  return null;
+}

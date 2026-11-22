@@ -4,6 +4,7 @@ import { onboarding } from "./onboarding";
 import { settings } from "./settings";
 import { settingsIndexing } from "./settingsIndexing";
 import { settingsProfiles } from "./settingsProfiles";
+import { subAgents } from "./subAgents";
 
 export const de = {
   ...common,
@@ -11,5 +12,6 @@ export const de = {
   ...settingsProfiles,
   ...settingsIndexing,
   ...chat,
+  ...subAgents,
   ...onboarding,
 };

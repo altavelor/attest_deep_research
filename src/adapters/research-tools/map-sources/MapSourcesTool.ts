@@ -1,8 +1,20 @@
-import { MAP_SOURCES_TOOL, toolFailure } from "@core/agent";
-import { SUB_AGENT_PHASE } from "@application/research";
-import { MapSources, MapSourceRow } from "@application/use-cases/map-sources";
-import { EvidenceRegistry } from "@application/sources";
+import {
+  MAP_SOURCES_RESULT_TOOL,
+  MAP_SOURCES_TOOL,
+  toolFailure,
+  type ToolExecution,
+} from "@core/agent";
+import {
+  MAX_MAP_SOURCES_PATH_CHARS,
+  MAX_MAP_SOURCES_QUESTION_CHARS,
+  MAX_MAP_SOURCES_ROWS,
+  SubAgentSessionFailure,
+  type MapSourcesBatchReceipt,
+  type MapSourcesBatchState,
+} from "@core/research";
+import { MapSources, MapSourcesFailure } from "@application/use-cases/map-sources";
 import { defineTool, int, str, strArray } from "@application/sources/tools";
+import { subAgentCallIdentity } from "../sub-agent/subAgentCalls";
 
 export interface MapSourcesInputDto {
   question: string;
@@ -11,50 +23,45 @@ export interface MapSourcesInputDto {
   perSourceBudget?: number;
 }
 
-interface MatrixRow {
-  sourcePath: string;
-  ok: boolean;
-  stance: string;
-  keyFindings: string[];
-  evidenceIds: string[];
-  error?: string;
+export interface MapSourcesAccepted {
+  state: "accepted";
+  receipt: MapSourcesBatchReceipt;
 }
 
-export interface MapSourcesOutput {
-  question: string;
-  rows: MatrixRow[];
-  diagnostics: {
-    selection: "explicit" | "relevance";
-    requested: number;
-    completed: number;
-    failed: number;
-  };
+export interface MapSourcesToolDeps {
+  mapper: MapSources;
+  parentRunId: string;
 }
 
-const MAX_QUESTION_CHARS = 1_000;
-const MAX_SOURCE_PATHS = 20;
-const MAX_SOURCE_PATH_CHARS = 500;
+const MAX_BATCH_ID_CHARS = 200;
 
+/**
+ * Starts a fan-out batch with one sub-agent per document and returns its accepted receipt
+ * at once; the evidence matrix is read later with get_map_sources_result. The batch
+ * identity derives from the parent run, model round and call, so a replay reuses it.
+ */
 export const MapSourcesTool = defineTool<
-  { mapper: MapSources; evidence: EvidenceRegistry },
+  MapSourcesToolDeps,
   MapSourcesInputDto,
-  MapSourcesOutput
+  MapSourcesAccepted
 >({
   name: MAP_SOURCES_TOOL,
   description:
-    "Fan out one sub-agent per indexed document to answer a corpus-wide question, then " +
-    "return an evidence matrix (document × stance with [evidenceId] citations). Omit " +
-    "sourcePaths to auto-select the most relevant documents. Prefer this over many " +
-    "run_subagent calls when comparing a question across several documents.",
+    "Start one sub-agent per indexed document to answer a corpus-wide question. It returns " +
+    "immediately with an accepted batch receipt while the documents are analysed in the " +
+    "background; read the evidence matrix (document × stance with [evidenceId] citations) " +
+    "with get_map_sources_result. Omit sourcePaths to auto-select the most relevant " +
+    "documents. Prefer this over many run_subagent calls when comparing a question across " +
+    "several documents.",
   schema: {
-    question: str(MAX_QUESTION_CHARS, {
+    question: str(MAX_MAP_SOURCES_QUESTION_CHARS, {
       required: true,
       description: "The corpus-wide question each document is judged against.",
     }),
-    sourcePaths: strArray(MAX_SOURCE_PATHS, MAX_SOURCE_PATH_CHARS, {
+    sourcePaths: strArray(MAX_MAP_SOURCES_ROWS, MAX_MAP_SOURCES_PATH_CHARS, {
       description: "Specific document paths to fan out over; omit to auto-select by relevance.",
     }),
-    maxSources: int(1, MAX_SOURCE_PATHS, 8, {
+    maxSources: int(1, MAX_MAP_SOURCES_ROWS, 8, {
       description: "Cap on how many documents to fan out over (default 8).",
     }),
     perSourceBudget: int(2, 12, 6, {
@@ -62,72 +69,61 @@ export const MapSourcesTool = defineTool<
     }),
   },
   execute: async (deps, input, context) => {
-    let result;
+    const requestId = subAgentCallIdentity(deps.parentRunId, context.round, context.callId);
     try {
-      result = await deps.mapper.run({
-        question: input.question,
-        sourcePaths: input.sourcePaths,
-        maxSources: input.maxSources,
-        perSourceRounds: input.perSourceBudget,
-        signal: context.signal,
-        onProgress: (event) => {
-          if (event.type === "source-start") {
-            context.emit({
-              type: SUB_AGENT_PHASE,
-              message: `Analyzing ${baseName(event.sourcePath)} (${event.index + 1}/${event.total})…`,
-            });
-          }
+      const receipt = await deps.mapper.start(
+        {
+          question: input.question,
+          sourcePaths: input.sourcePaths,
+          maxSources: input.maxSources,
+          perSourceRounds: input.perSourceBudget,
+          signal: context.signal,
         },
-      });
-    } catch {
-      return toolFailure("map-sources-failed", "Fan-out over sources failed.", true);
-    }
-
-    if (result.rows.length === 0) {
-      return toolFailure(
-        "map-sources-empty",
-        "No documents matched — provide sourcePaths or broaden the question.",
+        requestId,
       );
+      return { ok: true, value: { state: "accepted", receipt } };
+    } catch (error) {
+      return mapSourcesFailure(error);
     }
-
-    for (const row of result.rows) {
-      mergeRowEvidence(deps.evidence, row, context.callId);
-    }
-
-    const { selection, requested, completed, failed, subAgents } = result.diagnostics;
-    const telemetry = Array.isArray(subAgents) ? subAgents : [];
-    return {
-      ok: true,
-      value: {
-        question: result.question,
-        rows: result.rows.map((row) => ({
-          sourcePath: row.sourcePath,
-          ok: row.ok,
-          stance: row.stance,
-          keyFindings: row.keyFindings,
-          evidenceIds: row.evidenceIds,
-          ...(row.error ? { error: row.error } : {}),
-        })),
-        diagnostics: { selection, requested, completed, failed },
-      },
-      ...(telemetry.length > 0 ? { diagnostic: { mapSources: telemetry } } : {}),
-    };
   },
 });
 
-function mergeRowEvidence(evidence: EvidenceRegistry, row: MapSourceRow, callId: string): void {
-  for (const chunk of row.snapshot.evidence) {
-    if (chunk.source.kind === "web") {
-      continue;
-    }
+/**
+ * Reads the state of a fan-out batch: pending with counters, the completed evidence matrix
+ * in selection order, or a failure. It never waits for documents and is safe to repeat.
+ */
+export const MapSourcesResultTool = defineTool<
+  MapSourcesToolDeps,
+  { batchId: string },
+  MapSourcesBatchState
+>({
+  name: MAP_SOURCES_RESULT_TOOL,
+  description:
+    "Read a map_sources batch by batchId from its receipt: pending with progress counters, " +
+    "completed with the evidence matrix, or failed. Safe to call again; it never restarts work. " +
+    "Report rows flagged with an error as unanalysed rather than as silence.",
+  schema: {
+    batchId: str(MAX_BATCH_ID_CHARS, { required: true, description: "batchId from the receipt." }),
+  },
+  execute: async (deps, input) => {
     try {
-      evidence.registerIndexChunk(chunk, { callId, query: row.sourcePath });
-    } catch {
-      continue;
+      const state = await deps.mapper.getResult(input.batchId);
+      const telemetry = state.state === "completed" ? deps.mapper.telemetryOf(input.batchId) : [];
+      return {
+        ok: true,
+        value: state,
+        ...(telemetry.length > 0 ? { diagnostic: { mapSources: [...telemetry] } } : {}),
+      };
+    } catch (error) {
+      return mapSourcesFailure(error);
     }
-  }
-}
+  },
+});
 
-function baseName(path: string): string {
-  return path.split("/").pop() ?? path;
+function mapSourcesFailure(error: unknown): ToolExecution<never> {
+  if (error instanceof MapSourcesFailure) {
+    return toolFailure(error.code, error.message, error.retryable);
+  }
+  if (error instanceof SubAgentSessionFailure) return toolFailure(error.code, error.message);
+  return toolFailure("map-sources-failed", "Fan-out over sources failed.", true);
 }

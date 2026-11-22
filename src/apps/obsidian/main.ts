@@ -180,6 +180,7 @@ export default class AttestPlugin extends Plugin {
       createResearchService: (chatModelProfileId, indexProfileId, searchMode) =>
         createResearchService(this.composition, chatModelProfileId, indexProfileId, searchMode),
       persistDiagnostics: () => this.settings.debugMode,
+      isDebugCapture: () => this.settings.debugMode,
       logError: (error) => this.logger.logError(error, { url: "chat:session" }),
     });
     return this.chatSessionManager;

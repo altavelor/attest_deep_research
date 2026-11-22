@@ -1,5 +1,6 @@
 import { MarkdownRenderer, setIcon } from "obsidian";
 
+import type { ParentTimelineEvent } from "@core/chat/subAgentPlacement";
 import { ChatDisplayMessage } from "@core/conversation";
 import { messageMarkdownContent } from "@core/conversation";
 import { linkifyUrlCitations, shortUrlCitationLabel } from "@application/use-cases/research";
@@ -9,12 +10,13 @@ import { citationEvidence } from "./citations/citationEvidence";
 import { renderInlineCitationAnchors } from "./citationAnchorRenderer";
 import type { ChatTranscriptOptions } from "./ChatTranscript";
 import { RenderVersionTracker } from "./renderVersion";
+import { transcriptEventPlacement } from "./subAgentEventPlacement";
 import {
   captureWorkflowUiState,
+  disposeWorkflowNodes,
   renderWorkflowNodes,
   WorkflowRenderContext,
 } from "./workflowRenderer";
-import { disposeFetchTargetAnimations } from "./fetchTargetAnimator";
 import { disposeAnswerArtifacts, renderAnswerArtifacts } from "./artifacts";
 
 const renderVersionsByAnswer = new WeakMap<HTMLElement, RenderVersionTracker>();
@@ -29,6 +31,8 @@ export function renderAssistantMessageContent(
     progressEl,
     message,
     createWorkflowRenderContext(options),
+    undefined,
+    messageEvents(message, options),
   );
   contentEl.toggleClass("attest-chat__message-content--workflow", hasWorkflow);
   if (message.isFallback) {
@@ -49,13 +53,14 @@ export function patchAssistantMessageContent(
 
   const contentEl = progressEl.parentElement;
   const uiState = captureWorkflowUiState(progressEl);
-  disposeFetchTargetAnimations(progressEl);
+  disposeWorkflowNodes(progressEl);
   progressEl.empty();
   const hasWorkflow = renderWorkflowNodes(
     progressEl,
     message,
     createWorkflowRenderContext(options),
     uiState,
+    messageEvents(message, options),
   );
   contentEl?.toggleClass("attest-chat__message-content--workflow", hasWorkflow);
   messageEl.querySelector<HTMLElement>(".attest-chat__fallback-notice")?.remove();
@@ -75,7 +80,18 @@ function createWorkflowRenderContext(options: ChatTranscriptOptions): WorkflowRe
     isDebugMode: options.isDebugMode,
     t: options.t,
     onOpenToolOutput: options.onOpenToolOutput,
+    ...(options.onOpenSubAgentSession
+      ? { onOpenSubAgentSession: options.onOpenSubAgentSession }
+      : {}),
   };
+}
+
+function messageEvents(
+  message: ChatDisplayMessage,
+  options: ChatTranscriptOptions,
+): readonly ParentTimelineEvent[] {
+  if (message.id === undefined) return [];
+  return transcriptEventPlacement(options).byMessageId.get(message.id) ?? [];
 }
 
 function renderAssistantAnswer(
