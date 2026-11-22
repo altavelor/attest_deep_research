@@ -87,6 +87,7 @@ export interface ResearchState {
   updatedAt: string;
   budget: ResearchBudgetState | null;
   executions: readonly BranchExecution[];
+  sessionByBranch: Readonly<Record<string, string>>;
   report: ResearchReport | null;
 }
 
@@ -128,6 +129,13 @@ export interface BranchExecution {
   attempts: number;
   finding: BranchFinding | null;
   terminalReason: string | null;
+  runRef?: BranchRunRef;
+}
+
+export interface BranchRunRef {
+  sessionId: string;
+  runId: string;
+  resultRevision: number;
 }
 
 export interface BranchFinding {

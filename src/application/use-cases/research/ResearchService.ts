@@ -279,6 +279,7 @@ export class ResearchService implements ConversationEngine {
       if (!this.deepResearchEnabled) {
         throw deepResearchRejected("research-disabled", "Deep Research is not enabled.");
       }
+      request.subAgentParent?.bindExecution(this.subAgentExecution(ctx.retrieval.web));
       yield* this.deep.execute(ctx);
       return;
     }

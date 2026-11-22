@@ -25,7 +25,11 @@ import {
 import { SharedReference, SourceDocumentMetadata } from "@application/ports/documentMetadata";
 import { SourceDocumentSummaries } from "@application/ports/documentSummaries";
 import { ClaimGroup, FindClaimsOptions } from "@application/ports/documentClaims";
-import type { SubAgentDelegator, SubAgentParentRun } from "@application/ports/subAgent";
+import type {
+  ResearchSubAgentContext,
+  SubAgentDelegator,
+  SubAgentParentRun,
+} from "@application/ports/subAgent";
 import type { MapSourcesRunContext } from "@application/ports/mapSources";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { ResearchArtifactReference, ResearchTurnInput } from "@core/research/deepResearch";
@@ -130,6 +134,7 @@ export interface ResearchRequest {
   signal?: AbortSignal;
   subAgentDelegator?: SubAgentDelegator;
   subAgentParent?: SubAgentParentRun;
+  subAgentResearch?: ResearchSubAgentContext;
   subAgentMapSources?: MapSourcesRunContext;
   research?: ResearchTurnInput;
   researchState?: ResearchStatePort;

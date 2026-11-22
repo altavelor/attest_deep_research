@@ -7,6 +7,7 @@ import {
   reportDecision,
   resumeExecutions,
   stopReasonOf,
+  waveSize,
   type BranchExecution,
   type ResearchReport,
   type ResearchState,
@@ -15,11 +16,15 @@ import type { ResearchStatePort } from "@application/ports/researchState";
 import type { BranchRunner } from "./branchRunner";
 import type { ReportSynthesisService } from "./ReportSynthesisService";
 import { ResearchScheduler } from "./ResearchScheduler";
+import { ResearchBudgetPermits } from "./ResearchBudgetPermits";
+import type { AttachedResearchBudget } from "./ResearchScopeRouter";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 
 export interface ResearchRunDeps {
   port: ResearchStatePort;
   runner: BranchRunner;
+  subAgents?: ResearchRunSubAgents;
+  parallelRequests?: boolean;
   synthesis: ReportSynthesisService;
   signal?: AbortSignal;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
@@ -29,6 +34,11 @@ export interface ResearchRunDeps {
   createId(prefix: string): string;
   onState(state: ResearchState): void;
   onStatus(message: string): void;
+}
+
+export interface ResearchRunSubAgents {
+  attach(port: AttachedResearchBudget): () => void;
+  createRunner(sessionOf: (branchId: string) => string | null): BranchRunner;
 }
 
 export interface ResearchRunResult {
@@ -53,6 +63,14 @@ export async function runResearch(
     plan.branches.filter((branch) => branch.enabled).length,
   );
   owner.open(start.budget);
+  const work = new AbortController();
+  const permits = new ResearchBudgetPermits({
+    researchId: start.researchId,
+    owner,
+    sessionCeiling: plan.limits.childSessions,
+    sessionByBranch: start.sessionByBranch,
+    now: deps.now,
+  });
   let current = start;
   const commit = async (patch: Partial<ResearchState>): Promise<ResearchState> => {
     const next: ResearchState = {
@@ -60,6 +78,7 @@ export async function runResearch(
       ...patch,
       revision: current.revision + 1,
       budget: owner.snapshot(),
+      sessionByBranch: permits.sessionByBranch(),
       updatedAt: deps.now().toISOString(),
     };
     await deps.port.commit(next, current.revision);
@@ -69,7 +88,6 @@ export async function runResearch(
   };
   await commit({ phase: "gathering", executions: resumeExecutions(start.executions) });
 
-  const work = new AbortController();
   const stopWork = (): void => work.abort(deps.signal?.reason);
   deps.signal?.addEventListener("abort", stopWork);
   const closeOnTime = (): void => {
@@ -77,19 +95,33 @@ export async function runResearch(
     work.abort(new DOMException("Research time limit reached", "AbortError"));
   };
   const cancelTimer = deps.setTimer(Math.max(0, owner.remainingMs()), closeOnTime);
+  const detach = deps.subAgents?.attach(permits);
+  const subAgent = deps.subAgents?.createRunner(
+    (branchId) => permits.sessionByBranch()[branchId] ?? null,
+  );
+  const scheduler = new ResearchScheduler({
+    plan,
+    executions: current.executions,
+    owner,
+    runners: {
+      main: deps.runner,
+      ...(subAgent ? { subAgent } : {}),
+      sessionByBranch: () => permits.sessionByBranch(),
+    },
+    waveSize: waveSize(plan.limits, deps.parallelRequests === true),
+    signal: work.signal,
+    barrier: async (next) => void (await commit({ executions: next })),
+    onStatus: deps.onStatus,
+  });
   let executions;
   try {
     if (owner.remainingMs() <= 0) closeOnTime();
-    executions = await new ResearchScheduler({
-      plan,
-      executions: current.executions,
-      owner,
-      runner: deps.runner,
-      signal: work.signal,
-      barrier: async (next) => void (await commit({ executions: next })),
-      onStatus: deps.onStatus,
-    }).run(openWorks(current));
+    executions = await scheduler.run(openWorks(current));
   } finally {
+    if (!work.signal.aborted)
+      work.abort(new DOMException("Research scheduling ended", "AbortError"));
+    await scheduler.drain();
+    detach?.();
     cancelTimer();
     deps.signal?.removeEventListener("abort", stopWork);
   }

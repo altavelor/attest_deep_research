@@ -27,6 +27,7 @@ import type {
 import type { ResearchAnswer } from "@core/answer";
 import { ResearchPlanService } from "./ResearchPlanService";
 import { MainBranchRunner } from "./MainBranchRunner";
+import { SubAgentBranchRunner } from "./SubAgentBranchRunner";
 import { ReportSynthesisService } from "./ReportSynthesisService";
 import { pumpEvents } from "./eventPump";
 import { runResearch, type ResearchRunResult } from "./researchRun";
@@ -253,7 +254,12 @@ export class DeepResearchStrategy implements ResearchStrategy {
       null,
     );
     const review = withPlanForReview(
-      { ...active, executions: [], budget: reopenedBudget(active, this.deps.now) },
+      {
+        ...active,
+        executions: [],
+        sessionByBranch: {},
+        budget: reopenedBudget(active, this.deps.now),
+      },
       { ...regenerated, revision: plan.revision + 1 },
       this.createId("decision"),
       this.now(),
@@ -281,9 +287,27 @@ export class DeepResearchStrategy implements ResearchStrategy {
         onEvent: push,
         now: this.deps.now,
       });
+      const delegated = ctx.request.subAgentResearch;
+      const parent = ctx.request.subAgentParent;
       return runResearch(approved, {
         port,
         runner,
+        ...(delegated && parent
+          ? {
+              subAgents: {
+                attach: (permits) => delegated.attachBudget(permits),
+                createRunner: (sessionOf) =>
+                  new SubAgentBranchRunner({
+                    branches: approved.plan!.branches,
+                    delegator: (branch, allocation) => delegated.delegator(branch, allocation),
+                    resolver: parent.resolver,
+                    sessionOf,
+                    ...(parent.listSessions ? { listSessions: parent.listSessions } : {}),
+                  }),
+              },
+            }
+          : {}),
+        parallelRequests: this.deps.toolCapabilities.parallelCalls,
         synthesis: new ReportSynthesisService({
           chatModel: this.deps.chatModel,
           model: this.deps.chatModelName,

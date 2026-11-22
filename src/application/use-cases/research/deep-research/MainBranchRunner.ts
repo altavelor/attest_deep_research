@@ -19,7 +19,7 @@ import {
   removeUnknownCitationTokens,
   webUrlEvidenceIndex,
 } from "../strategies/citations";
-import type { BranchRunner } from "./branchRunner";
+import { BranchUnavailableError, type BranchRunner } from "./branchRunner";
 import { subAgentToolContext, type SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 
 export interface MainBranchRunnerDeps {
@@ -52,7 +52,8 @@ export class MainBranchRunner implements BranchRunner {
   ): Promise<BranchFinding> {
     const branch = this.deps.branches.find((entry) => entry.branchId === work.branchId);
     const scope = branch ? intersectScope(branch.sourceScope, this.deps.chatScope) : null;
-    if (!scope) throw new Error("The branch has no source available in this chat.");
+    if (!scope)
+      throw new BranchUnavailableError("The branch has no source available in this chat.");
     this.usages.delete(work.workId);
     const emit = this.deps.onEvent;
     const result = await this.deps.engine.run({

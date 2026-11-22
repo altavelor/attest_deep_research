@@ -87,12 +87,37 @@ function budgetRows(): [string, unknown][] {
     withBudget("searches over the limit with the open allocation", {
       consumed: { ...budget.consumed, searches: 95 },
     }),
-    withBudget("open allocation on a closed budget", {
-      closed: { reason: "time", dimension: null },
-    }),
     withBudget("closure the owner never writes", {
       openAllocations: [],
       closed: { reason: "user", dimension: null },
+    }),
+  ];
+}
+
+function sessionRows(): [string, unknown][] {
+  const ref = { sessionId: "session-1", runId: "run-1", resultRevision: 2 };
+  const child = { ...done!, path: "sub-agent", runRef: ref };
+  const withSessions = (label: string, patch: object): [string, unknown] => [
+    label,
+    section({ ...approved, sessionByBranch: { "branch-1": "session-1" }, ...patch }),
+  ];
+  return [
+    withSessions("session of an unplanned branch", { sessionByBranch: { x: "session-1" } }),
+    withSessions("one session for two branches", {
+      sessionByBranch: { "branch-1": "session-1", "branch-2": "session-1" },
+    }),
+    withSessions("sessions over the ceiling", {
+      plan: { ...approved.plan, limits: { ...approved.plan.limits, childSessions: 1 } },
+      sessionByBranch: { "branch-1": "session-1", "branch-2": "session-2" },
+    }),
+    ["session before approval", section({ ...pending, sessionByBranch: { "branch-1": "s-1" } })],
+    withSessions("malformed session id", { sessionByBranch: { "branch-1": 7 } }),
+    withSessions("run ref on the main path", { executions: [{ ...child, path: "main" }, running] }),
+    withSessions("run ref of another session", {
+      executions: [{ ...child, runRef: { ...ref, sessionId: "session-2" } }, running],
+    }),
+    withSessions("malformed run ref", {
+      executions: [{ ...child, runRef: { ...ref, resultRevision: -1 } }, running],
     }),
   ];
 }
@@ -194,6 +219,7 @@ describe("deep research section validation", () => {
         }),
       ],
       ...budgetRows(),
+      ...sessionRows(),
       [
         "more tokens than the bound",
         section({
@@ -238,6 +264,24 @@ describe("deep research section validation", () => {
   it("accepts consistent sections and drops unknown keys", () => {
     const rebuilt = validateResearchSection(section(approved, [ended]));
     expect(rebuilt.ok && rebuilt.value).toEqual(section(approved, [ended]));
+    const wave = {
+      ...approved,
+      sessionByBranch: { "branch-1": "session-1" },
+      executions: [
+        {
+          ...done!,
+          path: "sub-agent",
+          runRef: { sessionId: "session-1", runId: "run-1", resultRevision: 2 },
+        },
+        running,
+      ],
+      budget: { ...approved.budget, closed: { reason: "time", dimension: null } },
+    };
+    const midWave = validateResearchSection(section(wave));
+    expect(midWave.ok && midWave.value).toEqual(section(wave));
+    const legacy = { ...approved } as Partial<typeof approved>;
+    delete (legacy as { sessionByBranch?: unknown }).sessionByBranch;
+    expect(validateResearchSection(section(legacy)).ok).toBe(true);
     const result = validateResearchSection({
       ...section({ ...pending, extra: 1, plan: { ...pending.plan!, extra: 2 } }, [
         { ...ended, extra: 3 },

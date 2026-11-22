@@ -1,6 +1,10 @@
 export { DeepResearchStrategy, type DeepResearchStrategyDeps } from "./DeepResearchStrategy";
 export { ResearchPlanService, type ResearchPlanServiceOptions } from "./ResearchPlanService";
-export type { BranchRunner } from "./branchRunner";
+export {
+  BranchUnavailableError,
+  UnusableBranchSessionError,
+  type BranchRunner,
+} from "./branchRunner";
 export { MainBranchRunner, type MainBranchRunnerDeps } from "./MainBranchRunner";
 export { ResearchScheduler, type ResearchSchedulerDeps } from "./ResearchScheduler";
 export {
@@ -10,3 +14,6 @@ export {
   type SynthesizedReport,
 } from "./ReportSynthesisService";
 export { finishedResearchReport } from "./researchReportLookup";
+export { SubAgentBranchRunner, type SubAgentBranchRunnerDeps } from "./SubAgentBranchRunner";
+export { ResearchBudgetPermits, type ResearchBudgetPermitsOptions } from "./ResearchBudgetPermits";
+export { ResearchScopeRouter, type AttachedResearchBudget } from "./ResearchScopeRouter";
