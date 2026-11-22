@@ -594,6 +594,30 @@ describe("sub-agent evidence import", () => {
     expect(harness.chat.attempts).toBe(1);
   });
 
+  it("U8: a reloaded committed import whose evidence fails its digest reads as import-failed", async () => {
+    const harness = importHarness();
+    const { sessionId, runId } = await launchWith(harness);
+    harness.execution.finish(0, result("Answer [e1]"));
+    await settle();
+    const saved = managerParts(harness.manager).store.state!;
+    const committed = saved.imports.at(-1)!;
+    const item = committed.evidence[0] as unknown as { chunk: Record<string, unknown> };
+    const tampered = {
+      ...committed,
+      evidence: [
+        { ...item, chunk: { ...item.chunk, text: "Forged", contentHash: sha256Hex("Forged") } },
+      ] as never,
+    };
+    const reloaded = importHarness({
+      load: async () => subAgentSection([...saved.records], { imports: [tampered] }),
+    });
+
+    const state = await reloaded.delegator().getResult(sessionId, runId);
+
+    expect(committed.state).toBe("committed");
+    expect(state).toMatchObject({ state: "failed", error: { code: "import-failed" } });
+  });
+
   it("U9: startup tombstones the pending import generation and cleanup keeps cited artifacts", () => {
     const record = applyAll(readySubAgentRecord(), runToImport("run-1"));
     const pending: SubAgentImportRecord = {

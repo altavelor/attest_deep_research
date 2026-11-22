@@ -12,6 +12,7 @@ import {
   subAgentAliasPrefix,
   toValidatedJson,
   type ImportedSubAgentRunOutcome,
+  type SubAgentImportItem,
   type SubAgentImportRecord,
 } from "@core/research";
 import { settleWithin } from "./deadline";
@@ -206,9 +207,11 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     return this.offsets.get(runId) ?? 0;
   }
 
-  /** True when a committed import lost an alias that one repair could not restore. */
+  /** True when a committed import lost an alias that one repair could not restore or its stored evidence no longer matches its digest. */
   isBroken(importId: string): boolean {
-    return this.broken.has(importId);
+    if (this.broken.has(importId)) return true;
+    const entry = this.importRecord(importId);
+    return entry?.state === "committed" && !this.intact(entry);
   }
 
   /** Drops the repair bookkeeping of a parent's imports when the parent run closes. */
@@ -317,12 +320,21 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     return entry?.state === "prepared" ? this.preparedOf(entry) : null;
   }
 
-  private preparedOf(entry: SubAgentImportRecord): SubAgentPreparedImport | null {
-    const items = readSubAgentImportItems(
+  private intact(entry: SubAgentImportRecord): boolean {
+    const items = this.itemsOf(entry);
+    return items !== null && matchesImportDigest(entry, items);
+  }
+
+  private itemsOf(entry: SubAgentImportRecord): SubAgentImportItem[] | null {
+    return readSubAgentImportItems(
       entry.evidence,
       subAgentAliasPrefix(entry.importId),
       normalizeWebUrl,
     );
+  }
+
+  private preparedOf(entry: SubAgentImportRecord): SubAgentPreparedImport | null {
+    const items = this.itemsOf(entry);
     const run = this.parts.store
       .record(entry.sessionId)
       ?.runs.find((row) => row.subAgentRunId === entry.runId);
