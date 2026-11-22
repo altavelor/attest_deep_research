@@ -10,8 +10,17 @@ async function collect(stream: ReadableStream<Uint8Array>): Promise<string[]> {
 describe("parseServerSentEvents", () => {
   it("separates events on CRLF and CR line endings, including a CRLF split across chunks", async () => {
     await expect(
-      collect(chunkedStream(["data: a\r", "\ndata: b\r\n\r\ndata: c\r\rdata: [DONE]\r\n\r\n"])),
+      collect(chunkedStream(["data: a\r", "", "\ndata: b\r\n\r\ndata: c\r\rdata: [DONE]\r\n\r\n"])),
     ).resolves.toEqual(["a\nb", "c", "[DONE]"]);
+  });
+
+  it("dispatches a CR-terminated event without waiting for more bytes", async () => {
+    const iterator = parseServerSentEvents(chunkedStream(["data: ok\r\r"], vi.fn()))[
+      Symbol.asyncIterator
+    ]();
+
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: "ok" });
+    await iterator.return?.();
   });
 
   it("ignores comment lines and comment-only events", async () => {

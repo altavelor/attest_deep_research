@@ -1,5 +1,6 @@
 /**
  * Yields the `data` payload of each server-sent event, accepting any line ending and skipping comments.
+ * A CR ends its line at once, and the LF that may follow it in the next chunk is dropped.
  * Aborting `signal` cancels the body and rejects with its reason, even between buffered events.
  */
 export async function* parseServerSentEvents(
@@ -9,6 +10,7 @@ export async function* parseServerSentEvents(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let afterCarriageReturn = false;
   let finished = false;
   try {
     while (true) {
@@ -16,7 +18,11 @@ export async function* parseServerSentEvents(
       const { done, value } = await readUnlessAborted(reader, signal);
       if (done) break;
 
-      buffer = normalizeLineEndings(buffer + decoder.decode(value, { stream: true }));
+      const text = decoder.decode(value, { stream: true });
+      if (text.length === 0) continue;
+      const unpaired = afterCarriageReturn && text.startsWith("\n") ? text.slice(1) : text;
+      afterCarriageReturn = text.endsWith("\r");
+      buffer += normalizeLineEndings(unpaired);
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
 
@@ -28,7 +34,7 @@ export async function* parseServerSentEvents(
       }
     }
 
-    const data = parseServerSentEventData((buffer + decoder.decode()).replace(/\r\n?/g, "\n"));
+    const data = parseServerSentEventData(buffer + normalizeLineEndings(decoder.decode()));
     finished = true;
     if (data) yield data;
   } catch (error) {
@@ -65,13 +71,8 @@ function abortReason(signal: AbortSignal | undefined): unknown {
     : new DOMException("The request was aborted.", "AbortError");
 }
 
-function normalizeLineEndings(buffer: string): string {
-  const trailingCarriageReturn = buffer.endsWith("\r");
-  const normalized = (trailingCarriageReturn ? buffer.slice(0, -1) : buffer).replace(
-    /\r\n?/g,
-    "\n",
-  );
-  return trailingCarriageReturn ? `${normalized}\r` : normalized;
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
 }
 
 function parseServerSentEventData(event: string): string {
