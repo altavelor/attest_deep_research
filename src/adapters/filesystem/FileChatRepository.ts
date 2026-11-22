@@ -23,6 +23,7 @@ import {
   baselineOf,
   encodeChatDocument,
   withChatSections,
+  withResearchSection,
   withSubAgentSection,
   type ChatDocument,
 } from "./chatDocumentCodec";
@@ -75,6 +76,9 @@ export class FileChatRepository implements ChatRepository {
         isFavorite: chat.isFavorite === true,
         unreadCompletion: chat.unreadCompletion === true,
         ...(chat.lastRun ? { lastRun: chat.lastRun } : {}),
+        ...(chat.deepResearch?.status === "ready" && chat.deepResearch.section.active?.pending
+          ? { requiresUserAction: true }
+          : {}),
       });
     }
 
@@ -189,6 +193,16 @@ export class FileChatRepository implements ChatRepository {
     const existing = current?.document;
     let chat = input ? this.buildChat(id, input, existing?.chat) : existing!.chat;
     let sections = withChatSections(existing?.sections ?? new Map(), chat);
+    if (input?.researchSection) {
+      if (existing?.chat.deepResearch?.status === "unreadable") {
+        throw new ChatStorageError(
+          "unreadable-section",
+          "The saved research state of this chat is unreadable and was left unchanged.",
+        );
+      }
+      sections = withResearchSection(sections, input.researchSection);
+      chat = { ...chat, deepResearch: { status: "ready", section: input.researchSection } };
+    }
     if (subAgents) {
       sections = withSubAgentSection(sections, subAgents);
       chat = { ...chat, subAgents: { status: "ready", snapshot: subAgents } };
@@ -238,6 +252,7 @@ export class FileChatRepository implements ChatRepository {
       subAgentNotices: input.subAgentNotices ?? existing?.subAgentNotices ?? [],
       timelineSequence: input.timelineSequence ?? existing?.timelineSequence ?? 0,
       ...(existing?.subAgents ? { subAgents: existing.subAgents } : {}),
+      ...(existing?.deepResearch ? { deepResearch: existing.deepResearch } : {}),
     };
   }
 

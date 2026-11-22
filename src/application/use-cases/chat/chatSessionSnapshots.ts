@@ -61,6 +61,7 @@ export function sessionStateFromSavedChat(
     unreadCompletion: chat.unreadCompletion,
     interruptionReason: lastRun?.status === "interrupted" ? lastRun.interruptionReason : null,
     recoveredFromPrevious: chat.recoveredFrom === "previous",
+    ...(chat.deepResearch ? { deepResearch: chat.deepResearch } : {}),
   };
 }
 
