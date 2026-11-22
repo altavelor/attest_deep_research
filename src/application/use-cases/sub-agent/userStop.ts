@@ -3,6 +3,7 @@ import { controlRunIdOf, hasStoppableWork } from "./inspectionView";
 import type { SubAgentManagerParts } from "./managerParts";
 import type { SubAgentRunScheduler } from "./runScheduler";
 import { sessionFailure } from "./SubAgentStateStore";
+import { publishedRecord, revertUnsavedImport } from "./unsavedImports";
 
 /**
  * Archives one session of this chat for the user while it has an active run or pending
@@ -26,11 +27,12 @@ export class SubAgentUserStop {
     const { parts } = this;
     if (parts.fences.disposed) throw sessionFailure("not-authorized");
     const state = await parts.store.load();
-    const record = parts.store.record(sessionId);
-    if (!record || record.session.chatSessionId !== state.chatId) {
+    const stored = parts.store.record(sessionId);
+    if (!stored || stored.session.chatSessionId !== state.chatId) {
       throw sessionFailure("not-authorized");
     }
     if (this.unsaved.has(sessionId)) return this.save(sessionId);
+    const record = publishedRecord(parts, stored);
     const { session } = record;
     if (!hasStoppableWork(session, (runId) => parts.fences.isRevoked(runId))) {
       return "already-terminal";
@@ -38,6 +40,7 @@ export class SubAgentUserStop {
     const controlRunId = controlRunIdOf(record);
     if (controlRunId !== expectedRunId) return "stale";
     this.scheduler.fenceSession(sessionId);
+    revertUnsavedImport(parts, sessionId);
     parts.sessionOptions.delete(sessionId);
     const revision = this.scheduler.transition(sessionId, {
       type: "archive",

@@ -2,7 +2,11 @@ import type {
   SubAgentDelegationGrant,
   SubAgentSessionManagerContext,
 } from "@application/ports/subAgent";
-import type { ImportedSubAgentRunOutcome } from "@core/research";
+import type {
+  ImportedSubAgentRunOutcome,
+  SubAgentImportRecord,
+  SubAgentSessionRecord,
+} from "@core/research";
 import type { SubAgentImportCoordinator } from "./importCoordinator";
 import type { SubAgentMainEvents } from "./mainEvents";
 import type { SubAgentObservationRecorder } from "./observationRecorder";
@@ -16,6 +20,11 @@ export interface SubAgentSessionOptions {
   maxSearches: number;
 }
 
+export interface UnsavedImport {
+  before: SubAgentSessionRecord;
+  marker: SubAgentImportRecord | null;
+}
+
 export interface SubAgentManagerParts {
   context: SubAgentSessionManagerContext;
   store: SubAgentStateStore;
@@ -24,7 +33,7 @@ export interface SubAgentManagerParts {
   imports: SubAgentImportCoordinator;
   sessionOptions: Map<string, SubAgentSessionOptions>;
   outcomes: Map<string, ImportedSubAgentRunOutcome>;
-  unsavedImports: Set<string>;
+  unsavedImports: Map<string, UnsavedImport>;
   observation: SubAgentObservationRecorder;
   mainEvents: SubAgentMainEvents;
   notifyResults(): void;

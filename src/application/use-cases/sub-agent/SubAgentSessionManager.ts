@@ -29,6 +29,7 @@ import { SubAgentSessionCreation } from "./sessionCreation";
 import { SubAgentStateStore } from "./SubAgentStateStore";
 import { SubAgentDelegatorFacade, type SubAgentFacadeServices } from "./SubAgentDelegatorFacade";
 import { SubAgentSubmissions } from "./submissions";
+import { publishedRecord } from "./unsavedImports";
 import { SubAgentUserStop } from "./userStop";
 
 /**
@@ -56,7 +57,7 @@ export class SubAgentSessionManager implements SubAgentHost {
       budget: new SubAgentBudgetCoordinator({ context, store, fences }),
       sessionOptions: new Map(),
       outcomes: new Map(),
-      unsavedImports: new Set(),
+      unsavedImports: new Map(),
       notifyResults: () => this.notify(),
       notifyObservation: () => this.notifyChanges(),
     } as Partial<SubAgentManagerParts> as SubAgentManagerParts;
@@ -78,7 +79,10 @@ export class SubAgentSessionManager implements SubAgentHost {
     this.inspectionPort = new SubAgentInspectionService({
       load: () => parts.store.load(),
       inputs: () => ({
-        state: parts.store.state,
+        state: parts.store.state && {
+          ...parts.store.state,
+          records: parts.store.state.records.map((record) => publishedRecord(parts, record)),
+        },
         revision:
           parts.store.currentRevision +
           (parts.store.state?.records ?? []).reduce(

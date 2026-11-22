@@ -464,6 +464,40 @@ describe("sub-agent user stop", () => {
       ),
     ).rejects.toBeDefined();
   });
+  it("keeps a session importing and stoppable until its import-committed write is durable", async () => {
+    const harness = managerHarness();
+    const delegator = harness.delegator();
+    const inspection = harness.manager.inspection();
+    const saved = await launchChild(delegator, "saved");
+    const stopped = await launchChild(delegator, "stopped");
+    const holdCommit = async (index: number) => {
+      harness.imports.mode = "hold";
+      harness.execution.finish(index);
+      await settle();
+      const release = harness.writer.holdNext();
+      harness.imports.release();
+      await settle();
+      return release;
+    };
+
+    const releaseSaved = await holdCommit(0);
+    const pending = await card(harness, saved.session.subAgentSessionId);
+    releaseSaved();
+    await settle();
+    const durable = await card(harness, saved.session.subAgentSessionId);
+    const releaseStopped = await holdCommit(1);
+    const stop = inspection.stopFromUser(stopped.session.subAgentSessionId, stopped.receipt.runId);
+    releaseStopped();
+
+    expect(pending).toMatchObject({ status: "importing", canStop: true });
+    expect(durable.status).toBe("ready");
+    expect(await stop).toBe("stopped");
+    const result = await delegator.getResult(
+      stopped.session.subAgentSessionId,
+      stopped.receipt.runId,
+    );
+    expect(result.state).toBe("interrupted");
+  });
 });
 
 describe("sub-agent main-visible events", () => {

@@ -2,7 +2,6 @@ import type { SubAgentExecutionResult, SubAgentImportResult } from "@application
 import {
   applySubAgentTransition,
   type ImportedSubAgentRunOutcome,
-  type SubAgentImportRecord,
   type SubAgentSessionRecord,
   type SubAgentTransition,
 } from "@core/research";
@@ -10,7 +9,7 @@ import { settleWithin, type DeadlineOutcome } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
 import { IMPORT_TIMEOUT_MS, type SubAgentImportCommitter } from "./importCoordinator";
 import { importedSummary } from "./importPlan";
-import { timestamp, type SubAgentManagerParts } from "./managerParts";
+import { timestamp, type SubAgentManagerParts, type UnsavedImport } from "./managerParts";
 import { admitScopedRun, cleanUpMeteredClosure } from "./scopedAdmission";
 import { redactExecutionResult } from "./resultRedaction";
 import { abandonRunImport, denyRun, settleRun } from "./runSettlement";
@@ -317,9 +316,11 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
     imported: ImportedSubAgentRunOutcome,
   ): Promise<void> {
     const before = this.parts.store.record(slot.sessionId);
+    if (!before) return;
     let staged: SubAgentSessionRecord | undefined;
-    let marker: SubAgentImportRecord | null = null;
-    this.parts.unsavedImports.add(slot.runId);
+    const unsaved: UnsavedImport = { before, marker: null };
+    this.parts.unsavedImports.set(slot.runId, unsaved);
+    const current = () => this.parts.unsavedImports.get(slot.runId) === unsaved;
     try {
       if (
         !this.parts.imports.hasPrepared(slot.sessionId, slot.runId, generation) ||
@@ -327,16 +328,17 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       )
         return;
       staged = this.parts.store.record(slot.sessionId);
-      marker = this.parts.imports.markCommitted(slot.sessionId, slot.runId, generation);
+      unsaved.marker = this.parts.imports.markCommitted(slot.sessionId, slot.runId, generation);
       await this.parts.store.flush(this.parts.store.currentRevision);
+      if (!current()) return;
       const session = this.parts.store.record(slot.sessionId)?.session;
       if (session && !this.parts.fences.isRevoked(session.parentRunId))
         this.parts.outcomes.set(slot.runId, imported);
     } catch {
-      if (!before || !staged || this.parts.store.record(slot.sessionId) !== staged) return;
+      if (!current() || !staged || this.parts.store.record(slot.sessionId) !== staged) return;
       try {
         this.parts.store.putRecord(before);
-        if (marker) this.parts.imports.unmarkCommitted(marker);
+        if (unsaved.marker) this.parts.imports.unmarkCommitted(unsaved.marker);
       } catch {
         return;
       }
@@ -344,7 +346,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       await abandonRunImport(this, slot, generation);
       return;
     } finally {
-      this.parts.unsavedImports.delete(slot.runId);
+      if (current()) this.parts.unsavedImports.delete(slot.runId);
     }
     const kind = this.incompleteRuns.delete(slot.runId) ? "partial" : "finished";
     this.parts.mainEvents.terminal(slot.sessionId, slot.runId, kind, imported.answerText);
