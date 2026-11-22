@@ -225,17 +225,32 @@ function sourceKey(chunk: RetrievedChunk): string {
   return `path:${chunk.source.path.toLowerCase()}`;
 }
 
+/**
+ * Normalizes a URL to its source identity: scheme, userinfo, `www.`, a trailing host dot, the
+ * default port, a trailing slash, `utm_*` parameters and the fragment are dropped and the host is
+ * lowercased. Different remaining query strings stay different sources.
+ */
 function normalizeUrl(url: string): string {
-  const match = /^[a-z]+:\/\/(?:www\.)?([^/?#]+)([^?#]*)(\?[^#]*)?/iu.exec(url.trim());
+  const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?/iu.exec(url.trim());
   if (!match) return url.trim().toLowerCase();
-  const query = (match[3] ?? "")
+  const scheme = match[1]!.toLowerCase();
+  const authority = match[2]!.slice(match[2]!.lastIndexOf("@") + 1).toLowerCase();
+  const port = /:(\d+)$/u.exec(authority)?.[1];
+  const defaultPort =
+    (scheme === "http" && port === "80") || (scheme === "https" && port === "443");
+  const host = (
+    port !== undefined && defaultPort ? authority.slice(0, -port.length - 1) : authority
+  )
+    .replace(/^www\./u, "")
+    .replace(/\.(?=$|:)/u, "");
+  const query = (match[4] ?? "")
     .slice(1)
     .split("&")
     .filter((part) => part !== "" && !part.toLowerCase().startsWith("utm_"))
     .sort()
     .join("&");
-  const path = (match[2] ?? "").replace(/\/+$/u, "");
-  return `${match[1]!.toLowerCase()}${path}${query ? `?${query}` : ""}`;
+  const path = (match[3] ?? "").replace(/\/+$/u, "");
+  return `${host}${path}${query ? `?${query}` : ""}`;
 }
 
 function unescaped(text: string): string {
