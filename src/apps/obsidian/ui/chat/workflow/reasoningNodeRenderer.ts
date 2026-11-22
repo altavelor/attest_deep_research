@@ -32,7 +32,7 @@ export function renderThinkingNode(
     void MarkdownRenderer.render(
       renderContext.app,
       content,
-      details.createDiv({ cls: "attest-chat__workflow-text" }),
+      details.createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
       "",
       renderContext.markdownContext,
     );
@@ -47,7 +47,7 @@ export function renderThinkingNode(
   void MarkdownRenderer.render(
     renderContext.app,
     content,
-    body.createDiv({ cls: "attest-chat__workflow-text" }),
+    body.createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
     "",
     renderContext.markdownContext,
   );
@@ -67,7 +67,7 @@ export function renderSummaryNode(
     content,
     node
       .createDiv({ cls: "attest-chat__workflow-body" })
-      .createDiv({ cls: "attest-chat__workflow-text" }),
+      .createDiv({ cls: "attest-chat__workflow-text markdown-rendered" }),
     "",
     context.markdownContext,
   );

@@ -174,6 +174,7 @@ function renderToolCellBody(
     return;
   }
   if (cell.kind === "text") {
+    bodyEl.addClass("markdown-rendered");
     void MarkdownRenderer.render(context.app, cell.text, bodyEl, "", context.markdownContext);
     return;
   }
