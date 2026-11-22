@@ -15,6 +15,7 @@ import {
 } from "@core/research/deepResearch";
 import {
   MAX_SUB_AGENT_SEARCHES,
+  SubAgentSessionFailure,
   replaceMarkdownCitationTokens,
   type ImportedSubAgentRunOutcome,
   type SubAgentResultState,
@@ -24,7 +25,7 @@ import {
 } from "@core/research";
 import { citationIdsFromText, removeUnknownCitationTokens } from "../strategies/citations";
 import { MAX_WAIT_MS } from "@application/use-cases/sub-agent";
-import type { BranchRunner } from "./branchRunner";
+import { UnusableBranchSessionError, type BranchRunner } from "./branchRunner";
 
 export interface SubAgentBranchRunnerDeps {
   branches: readonly ResearchBranch[];
@@ -88,7 +89,14 @@ export class SubAgentBranchRunner implements BranchRunner {
   ): Promise<SubAgentRunReceipt> {
     const submissionId = `${work.workId}-a${allocation.attempt}`;
     const existing = this.deps.sessionOf(branch.branchId);
-    if (existing) return this.continueSession(delegator, existing, work.task, submissionId);
+    if (existing) {
+      try {
+        return await this.continueSession(delegator, existing, work.task, submissionId);
+      } catch (error) {
+        if (refusesSession(error)) throw new UnusableBranchSessionError(existing);
+        throw error;
+      }
+    }
     const session = await delegator.create({
       createRequestId: `${submissionId}-create`,
       title: branch.title,
@@ -114,6 +122,9 @@ export class SubAgentBranchRunner implements BranchRunner {
   ): Promise<SubAgentRunReceipt> {
     const sessions = (await this.deps.listSessions?.()) ?? [];
     const session = sessions.find((entry) => entry.sessionId === sessionId);
+    if (session?.state === "stopped") {
+      throw new UnusableBranchSessionError(sessionId);
+    }
     if (session?.lastRunId === null) {
       return delegator.run(sessionId, { type: "initial", task }, submissionId);
     }
@@ -183,4 +194,11 @@ function measuredUsage(run: SubAgentRunSummary | undefined): BranchUsage | null 
 
 function isCount(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function refusesSession(error: unknown): boolean {
+  return (
+    error instanceof SubAgentSessionFailure &&
+    (error.code === "not-authorized" || error.code === "invalid-state")
+  );
 }

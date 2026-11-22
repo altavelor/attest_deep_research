@@ -21,3 +21,19 @@ export interface BranchRunner {
   usage?(workId: string): BranchUsage | null;
   runRef?(workId: string): BranchRunRef | null;
 }
+
+/** A branch attempt that cannot succeed on retry, such as a branch sharing no source with the chat. */
+export class BranchUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BranchUnavailableError";
+  }
+}
+
+/** The branch's mapped child session refused the attempt before it started; the main path takes it. */
+export class UnusableBranchSessionError extends Error {
+  constructor(readonly sessionId: string) {
+    super("The branch session can no longer be continued.");
+    this.name = "UnusableBranchSessionError";
+  }
+}

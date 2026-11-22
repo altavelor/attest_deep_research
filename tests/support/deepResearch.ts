@@ -174,15 +174,21 @@ export class MemoryResearchState implements ResearchStatePort {
 /**
  * Model rounds of branch attempts: a first round searches the index for the branch task and the
  * next one answers with a finding citing the evidence id from the tool result. A task listed in
- * `hang` waits until its request is aborted, after calling `onHang`. The peak number of rounds in
- * flight at once is recorded.
+ * `hang` waits until its request is aborted or `releaseHangs` is called, after calling `onHang`.
+ * The rounds started and the peak number of rounds in flight at once are recorded.
  */
 export class BranchModelRounds implements ModelRoundProvider {
   readonly tasks: string[] = [];
   readonly hang = new Set<string>();
   onHang: () => void = () => undefined;
   peakConcurrentRounds = 0;
+  startedRounds = 0;
   private activeRounds = 0;
+  private releases: (() => void)[] = [];
+
+  releaseHangs(): void {
+    for (const release of this.releases.splice(0)) release();
+  }
 
   async listModels(): Promise<string[]> {
     return ["model"];
@@ -190,6 +196,7 @@ export class BranchModelRounds implements ModelRoundProvider {
 
   async runRound(request: ModelRoundRequest): Promise<ModelRoundResult> {
     this.activeRounds += 1;
+    this.startedRounds += 1;
     this.peakConcurrentRounds = Math.max(this.peakConcurrentRounds, this.activeRounds);
     try {
       await Promise.resolve();
@@ -213,10 +220,11 @@ export class BranchModelRounds implements ModelRoundProvider {
     );
     this.tasks.push(task);
     if ([...this.hang].some((entry) => task.includes(entry))) {
-      await new Promise<never>((_, reject) => {
+      await new Promise<void>((resolve, reject) => {
         request.signal?.addEventListener("abort", () =>
           reject(new DOMException("Stopped", "AbortError")),
         );
+        this.releases.push(resolve);
         this.onHang();
       });
     }

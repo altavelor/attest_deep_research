@@ -20,7 +20,6 @@ export interface ResearchBudgetPermitsOptions {
   sessionCeiling: number;
   sessionByBranch: Readonly<Record<string, string>>;
   now(): Date;
-  onClosed(): void;
 }
 
 interface Closure {
@@ -120,9 +119,7 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     const replay = this.reserved.get(request.actionKey);
     if (replay) return { type: "granted", permit: replay };
     const items = request.action === "evidence-append" ? (request.units.evidenceItems ?? 0) : 0;
-    const wasOpen = this.options.owner.snapshot().closed === null;
     const granted = this.options.owner.chargeEvidence(items);
-    if (wasOpen && this.options.owner.snapshot().closed) this.options.onClosed();
     if (!granted)
       return { type: "denied", actionKey: request.actionKey, ...this.currentClosure()! };
     const permit = {

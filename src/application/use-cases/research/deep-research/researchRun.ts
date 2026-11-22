@@ -70,7 +70,6 @@ export async function runResearch(
     sessionCeiling: plan.limits.childSessions,
     sessionByBranch: start.sessionByBranch,
     now: deps.now,
-    onClosed: () => work.abort(new DOMException("Research budget exhausted", "AbortError")),
   });
   let current = start;
   const commit = async (patch: Partial<ResearchState>): Promise<ResearchState> => {
@@ -100,24 +99,28 @@ export async function runResearch(
   const subAgent = deps.subAgents?.createRunner(
     (branchId) => permits.sessionByBranch()[branchId] ?? null,
   );
+  const scheduler = new ResearchScheduler({
+    plan,
+    executions: current.executions,
+    owner,
+    runners: {
+      main: deps.runner,
+      ...(subAgent ? { subAgent } : {}),
+      sessionByBranch: () => permits.sessionByBranch(),
+    },
+    waveSize: waveSize(plan.limits, deps.parallelRequests === true),
+    signal: work.signal,
+    barrier: async (next) => void (await commit({ executions: next })),
+    onStatus: deps.onStatus,
+  });
   let executions;
   try {
     if (owner.remainingMs() <= 0) closeOnTime();
-    executions = await new ResearchScheduler({
-      plan,
-      executions: current.executions,
-      owner,
-      runners: {
-        main: deps.runner,
-        ...(subAgent ? { subAgent } : {}),
-        sessionByBranch: () => permits.sessionByBranch(),
-      },
-      waveSize: waveSize(plan.limits, deps.parallelRequests === true),
-      signal: work.signal,
-      barrier: async (next) => void (await commit({ executions: next })),
-      onStatus: deps.onStatus,
-    }).run(openWorks(current));
+    executions = await scheduler.run(openWorks(current));
   } finally {
+    if (!work.signal.aborted)
+      work.abort(new DOMException("Research scheduling ended", "AbortError"));
+    await scheduler.drain();
     detach?.();
     cancelTimer();
     deps.signal?.removeEventListener("abort", stopWork);

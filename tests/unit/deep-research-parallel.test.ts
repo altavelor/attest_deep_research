@@ -1,12 +1,26 @@
 import {
+  BranchUnavailableError,
   ResearchBudgetPermits,
+  ResearchScheduler,
   ResearchScopeRouter,
+  type BranchRunner,
 } from "@application/use-cases/research/deep-research";
+import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
+import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
+import { researchGrant } from "@application/use-cases/chat/researchGrant";
+import {
+  MemoryResearchState,
+  gatheringResearch,
+  researchBranch,
+  researchPlan,
+} from "../support/deepResearch";
 import {
   ResearchBudgetOwner,
   branchPath,
+  initialExecutions,
   presetLimits,
   researchScopeId,
+  type ResearchState,
 } from "@core/research/deepResearch";
 
 const limits = presetLimits("balanced");
@@ -19,7 +33,6 @@ function permits(owner = new ResearchBudgetOwner(limits, () => 0, 2)) {
     sessionCeiling: limits.childSessions,
     sessionByBranch: {},
     now: () => new Date("2026-01-01T00:00:00.000Z"),
-    onClosed: () => undefined,
   });
 }
 
@@ -73,6 +86,7 @@ describe("deep research budget scopes", () => {
     ];
 
     expect(claims).toEqual([true, true, false]);
+    expect(await port.beginExecution(b!, "key-after")).toMatchObject({ type: "denied", closureId });
   });
 });
 
@@ -86,5 +100,114 @@ describe("deep research branch path", () => {
 
   it("runs every branch on the main path with a ceiling of zero", () => {
     expect(branchPath({}, "branch-1", 0, 0)).toBe("main");
+  });
+});
+
+describe("deep research waves", () => {
+  it("aborts and waits for sibling attempts when a barrier commit fails mid-wave", async () => {
+    const state = gatheringResearch(
+      researchPlan([researchBranch(1), researchBranch(2)], "balanced"),
+    );
+    const signals: AbortSignal[] = [];
+    let siblingSettled = false;
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: (work, _allocation, signal) => {
+        signals.push(signal);
+        if (work.branchId === "branch-1") {
+          return Promise.resolve({ text: "F", citationTokens: [], partial: false });
+        }
+        return new Promise((_resolve, reject) =>
+          signal.addEventListener("abort", () => {
+            siblingSettled = true;
+            reject(new DOMException("Stopped", "AbortError"));
+          }),
+        );
+      },
+    };
+    const port = new MemoryResearchState();
+    port.commit = async (next: ResearchState) => {
+      if (next.executions.some((entry) => entry.state === "completed")) throw new Error("conflict");
+      port.commits.push(next);
+    };
+    const run = runResearch(state, {
+      port,
+      runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+      subAgents: { attach: () => () => undefined, createRunner: () => child },
+      parallelRequests: true,
+      synthesis: {} as ReportSynthesisService,
+      now: () => new Date("2026-01-01T01:00:00.000Z"),
+      setTimer: () => () => undefined,
+      createId: (prefix) => `${prefix}-1`,
+      onState: () => undefined,
+      onStatus: () => undefined,
+    });
+
+    await expect(run).rejects.toThrow("conflict");
+    expect(siblingSettled).toBe(true);
+    expect(signals).toHaveLength(2);
+  });
+
+  it("fails a branch without a source in the chat once, without a retry", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const owner = new ResearchBudgetOwner(plan.limits, () => 0, 1);
+    owner.open(null);
+    const executions = await new ResearchScheduler({
+      plan,
+      executions: initialExecutions(plan),
+      owner,
+      runners: {
+        main: {
+          path: "main",
+          run: () => Promise.reject(new BranchUnavailableError("No source for this branch.")),
+        },
+        sessionByBranch: () => ({}),
+      },
+      waveSize: 1,
+      signal: new AbortController().signal,
+      barrier: async () => undefined,
+    }).run([
+      { workId: "branch-1-gather-1", branchId: "branch-1", cycle: 1, kind: "gather", task: "T" },
+    ]);
+
+    expect(executions).toMatchObject([
+      { state: "failed", attempts: 1, terminalReason: "No source for this branch." },
+    ]);
+  });
+});
+
+describe("research branch grant", () => {
+  it("narrows a web branch of an index and web chat to the branch scope and allocation", () => {
+    const binding = { chatSessionId: "chat-1", parentRunId: "run-1", bindingGeneration: 1 };
+    const grant = researchGrant(
+      binding,
+      {
+        searchMode: "indexAndWeb",
+        contextPaths: ["Notes"],
+        indexScope: "paths",
+        allowActiveFile: true,
+        allowNoteMutation: true as false,
+      },
+      researchBranch(1, { sourceScope: "webOnly" }),
+      { workId: "w-1", branchId: "branch-1", attempt: 1, modelRounds: 7, searches: 30 },
+      "research-1",
+    );
+
+    expect(grant).toEqual({
+      binding,
+      callerMode: "deep-research",
+      budgetPolicy: { type: "required-scope", scopeId: "research:research-1:branch-1" },
+      maximumSourcePolicy: {
+        searchMode: "webOnly",
+        contextPaths: ["Notes"],
+        indexScope: "none",
+        allowActiveFile: false,
+        allowNoteMutation: false,
+      },
+      origin: "direct",
+      limits: { maxRounds: 7, maxResultChars: 30_000, maxSearches: 20 },
+    });
   });
 });

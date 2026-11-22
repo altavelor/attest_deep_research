@@ -1,6 +1,10 @@
 export { DeepResearchStrategy, type DeepResearchStrategyDeps } from "./DeepResearchStrategy";
 export { ResearchPlanService, type ResearchPlanServiceOptions } from "./ResearchPlanService";
-export type { BranchRunner } from "./branchRunner";
+export {
+  BranchUnavailableError,
+  UnusableBranchSessionError,
+  type BranchRunner,
+} from "./branchRunner";
 export { MainBranchRunner, type MainBranchRunnerDeps } from "./MainBranchRunner";
 export { ResearchScheduler, type ResearchSchedulerDeps } from "./ResearchScheduler";
 export {

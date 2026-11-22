@@ -1,4 +1,5 @@
 import type { SubAgentDelegationGrant } from "@application/ports/subAgent";
+import { BranchUnavailableError } from "@application/use-cases/research/deep-research";
 import {
   MAX_SUB_AGENT_SEARCHES,
   type ParentRunBinding,
@@ -27,7 +28,8 @@ export function researchGrant(
 ): SubAgentDelegationGrant {
   const chat = chatPolicy.searchMode === "none" ? null : chatPolicy.searchMode;
   const searchMode = chat ? intersectScope(branch.sourceScope, chat) : null;
-  if (!searchMode) throw new Error("The branch has no source available in this chat.");
+  if (!searchMode)
+    throw new BranchUnavailableError("The branch has no source available in this chat.");
   return {
     binding,
     callerMode: "deep-research",

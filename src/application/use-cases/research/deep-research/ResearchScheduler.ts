@@ -9,7 +9,11 @@ import {
   type ResearchPlan,
   type ResearchWork,
 } from "@core/research/deepResearch";
-import type { BranchRunner } from "./branchRunner";
+import {
+  BranchUnavailableError,
+  UnusableBranchSessionError,
+  type BranchRunner,
+} from "./branchRunner";
 
 export interface ResearchSchedulerRunners {
   main: BranchRunner;
@@ -46,6 +50,8 @@ interface Flight {
 export class ResearchScheduler {
   private executions: BranchExecution[];
   private readonly flights = new Map<string, Flight>();
+  private readonly mainOnly = new Set<string>();
+  private readonly fallbacks: Flight[] = [];
 
   constructor(private readonly deps: ResearchSchedulerDeps) {
     this.executions = [...deps.executions];
@@ -67,6 +73,11 @@ export class ResearchScheduler {
       const stopped = await this.settle(settled);
       if (stopped && userStop === null) userStop = settled.error;
     }
+    for (const flight of this.fallbacks.splice(0)) {
+      if (userStop !== null) continue;
+      this.deps.owner.settle(flight.allocation, null);
+      await this.update(flight.work.workId, { state: "pending" });
+    }
     if (userStop !== null) {
       await this.commit(this.executions);
       throw userStop;
@@ -74,8 +85,18 @@ export class ResearchScheduler {
     return this.executions;
   }
 
+  /** Waits until every attempt still in flight has settled after the caller aborted the signal. */
+  async drain(): Promise<void> {
+    await Promise.all([...this.flights.values()].map((flight) => flight.done));
+  }
+
   private async launch(byId: ReadonlyMap<string, ResearchWork>): Promise<void> {
     const { plan, owner, runners } = this.deps;
+    const fallback = this.fallbacks[0];
+    if (fallback && !this.mainBusy() && this.flights.size < this.deps.waveSize) {
+      this.fallbacks.shift();
+      await this.start(fallback.work, fallback.allocation, runners.main);
+    }
     while (this.flights.size < this.deps.waveSize) {
       const next = nextReadyExecution(
         this.executions.filter(
@@ -98,45 +119,58 @@ export class ResearchScheduler {
         );
         continue;
       }
-      const { allocation } = admitted;
-      await this.update(next.workId, {
-        state: "running",
-        path: runner.path,
-        attempts: allocation.attempt,
-        terminalReason: null,
-        runRef: undefined,
-      });
-      this.deps.onStatus?.(`Researching: ${titleOf(plan, work.branchId)}`);
-      const flight: Flight = {
-        work,
-        allocation,
-        runner,
-        newSession:
-          runner.path === "sub-agent" && runners.sessionByBranch()[work.branchId] === undefined,
-        done: null as unknown as Flight["done"],
-      };
-      flight.done = runner.run(work, allocation, this.deps.signal).then(
-        (finding) => ({ flight, finding, error: null }),
-        (error: unknown) => ({ flight, finding: null, error: error ?? new Error("failed") }),
-      );
-      this.flights.set(work.workId, flight);
+      await this.start(work, admitted.allocation, runner);
     }
+  }
+
+  private async start(
+    work: ResearchWork,
+    allocation: BranchAllocation,
+    runner: BranchRunner,
+  ): Promise<void> {
+    await this.update(work.workId, {
+      state: "running",
+      path: runner.path,
+      attempts: allocation.attempt,
+      terminalReason: null,
+      runRef: undefined,
+    });
+    this.deps.onStatus?.(`Researching: ${titleOf(this.deps.plan, work.branchId)}`);
+    const flight: Flight = {
+      work,
+      allocation,
+      runner,
+      newSession:
+        runner.path === "sub-agent" &&
+        this.deps.runners.sessionByBranch()[work.branchId] === undefined,
+      done: null as unknown as Flight["done"],
+    };
+    flight.done = runner.run(work, allocation, this.deps.signal).then(
+      (finding) => ({ flight, finding, error: null }),
+      (error: unknown) => ({ flight, finding: null, error: error ?? new Error("failed") }),
+    );
+    this.flights.set(work.workId, flight);
+  }
+
+  private mainBusy(): boolean {
+    return [...this.flights.values()].some((flight) => flight.runner.path === "main");
   }
 
   /** Returns null when no runner may take the branch now: the main path is already busy. */
   private runnerFor(branchId: string): BranchRunner | null {
     const { runners } = this.deps;
     const inFlight = [...this.flights.values()];
-    const path = runners.subAgent
-      ? branchPath(
-          runners.sessionByBranch(),
-          branchId,
-          inFlight.filter((flight) => flight.newSession).length,
-          this.deps.plan.limits.childSessions,
-        )
-      : "main";
+    const path =
+      this.mainOnly.has(branchId) || !runners.subAgent
+        ? "main"
+        : branchPath(
+            runners.sessionByBranch(),
+            branchId,
+            inFlight.filter((flight) => flight.newSession).length,
+            this.deps.plan.limits.childSessions,
+          );
     if (path === "sub-agent") return runners.subAgent!;
-    return inFlight.some((flight) => flight.runner.path === "main") ? null : runners.main;
+    return this.mainBusy() || this.fallbacks.length > 0 ? null : runners.main;
   }
 
   /** Commits the branch barrier of one finished attempt; true when a user stop ended it. */
@@ -151,6 +185,11 @@ export class ResearchScheduler {
       return false;
     }
     if (signal.aborted && owner.snapshot().closed === null) return true;
+    if (result.error instanceof UnusableBranchSessionError && !signal.aborted) {
+      this.mainOnly.add(work.branchId);
+      this.fallbacks.push(result.flight);
+      return false;
+    }
     owner.settle(allocation, runner.usage?.(work.workId) ?? null);
     if (signal.aborted || owner.snapshot().closed) {
       await this.update(work.workId, { state: "pending", ...ref });
@@ -158,7 +197,9 @@ export class ResearchScheduler {
     }
     const error = result.error;
     const reason = boundedReason(error instanceof Error ? error.message : "The attempt failed.");
-    const retry = allocation.attempt < plan.limits.attemptsPerBranch;
+    const retry =
+      !(error instanceof BranchUnavailableError) &&
+      allocation.attempt < plan.limits.attemptsPerBranch;
     const current = this.executions.find((entry) => entry.workId === work.workId)!;
     await this.update(work.workId, {
       ...(retry ? { state: "pending", terminalReason: reason } : exhausted(plan, current, reason)),
