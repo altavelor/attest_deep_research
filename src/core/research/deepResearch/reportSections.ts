@@ -94,7 +94,7 @@ export function verificationSections(
     .map((entry) => `- (${entry.assessment.verdict}) ${inline(entry.claim.text)}`);
   const assessed = new Set(entries.map((entry) => entry.claim.claimId));
   const checked = (workId: string): boolean => {
-    const own = verification.claims.filter((claim) => claim.claimId.startsWith(`c-${workId}-`));
+    const own = verification.claims.filter((claim) => claim.workId === workId);
     return (
       verification.verifiedWorks.includes(workId) &&
       (own.length === 0 || own.some((claim) => assessed.has(claim.claimId)))

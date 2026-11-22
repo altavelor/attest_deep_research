@@ -110,6 +110,7 @@ export function readVerification(
   );
   if (
     !value.verifiedWorks.every((workId) => works.has(workId as string)) ||
+    !claims.every((claim) => works.has(claim!.workId)) ||
     JSON.stringify(coverage) !== JSON.stringify(value.coverage)
   ) {
     return undefined;
@@ -147,6 +148,7 @@ function readClaim(value: unknown, plan: ResearchPlan): ResearchClaim | undefine
   if (
     !isRecord(value) ||
     !isResearchId(value.claimId) ||
+    !isResearchId(value.workId) ||
     !plan.branches.some((branch) => branch.branchId === value.branchId) ||
     !(
       value.objective === null ||
@@ -163,6 +165,7 @@ function readClaim(value: unknown, plan: ResearchPlan): ResearchClaim | undefine
   }
   return {
     claimId: value.claimId,
+    workId: value.workId,
     branchId: value.branchId as string,
     objective: value.objective as string | null,
     text: value.text,

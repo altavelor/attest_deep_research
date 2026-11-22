@@ -77,6 +77,7 @@ const clarifying = {
 };
 const claim = {
   claimId: "c-w-1-1",
+  workId: "w-1",
   branchId: "branch-1",
   objective: "Objective",
   text: "Found",
@@ -214,6 +215,7 @@ function briefAndVerificationRows(): [string, unknown][] {
     ],
     ["verification before approval", section({ ...pending, verification })],
     withVerification("claim of an unplanned branch", { claims: [{ ...claim, branchId: "x" }] }),
+    withVerification("claim of an unknown work", { claims: [{ ...claim, workId: "w-9" }] }),
     withVerification("claim of an unplanned objective", { claims: [{ ...claim, objective: "Z" }] }),
     withVerification("assessment of an unknown claim", {
       assessments: [{ ...verification.assessments[0], claimId: "c-x" }],

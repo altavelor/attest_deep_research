@@ -112,6 +112,7 @@ export type ClarificationDecisionPayload =
 
 export interface ResearchClaim {
   claimId: string;
+  workId: string;
   branchId: string;
   objective: string | null;
   text: string;

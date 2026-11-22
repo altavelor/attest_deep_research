@@ -110,7 +110,7 @@ export class EvidenceVerificationService {
       const reply = await this.call(EXTRACT_PROMPT, extractRequest(batch, plan));
       const parsed = parseClaims(reply, batch, plan);
       for (const execution of batch) {
-        const own = parsed.filter((claim) => claim.claimId.startsWith(`c-${execution.workId}-`));
+        const own = parsed.filter((claim) => claim.workId === execution.workId);
         if (own.length > allowance) {
           allowance = 0;
           break;
@@ -256,6 +256,7 @@ function parseClaims(
       ?.objectives.includes(objective ?? "");
     claims.push({
       claimId: `c-${execution.workId}-${count}`,
+      workId: execution.workId,
       branchId: execution.branchId,
       objective: served && objective !== undefined ? objective : null,
       text: text.slice(0, MAX_CLAIM_TEXT_CHARS),
