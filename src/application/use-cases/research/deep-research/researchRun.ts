@@ -219,6 +219,7 @@ export async function runResearch(
             decisionId: deps.createId("decision"),
             kind: "observation",
             artifactRevision: test.hypothesisRevision,
+            subjectId: test.testId,
           },
         });
         return { state, report: null };

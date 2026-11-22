@@ -53,24 +53,28 @@ export function isAbort(error: unknown): boolean {
 }
 
 /**
- * Reads the free-text observation a pending observation decision carries and names the test it
- * answers. A malformed payload is rejected; a test of a superseded hypothesis revision is stale.
+ * Reads the free-text observation a pending observation decision carries for the test the pending
+ * decision names. A malformed payload is rejected; a payload naming another test, or a test of a
+ * superseded hypothesis revision, is stale.
  */
 export function suppliedObservation(
   active: ResearchState,
   decision: ResearchDecision,
 ): { testId: string; text: string } {
-  const payload = decision.payload as { text?: unknown } | null;
+  const payload = decision.payload as { text?: unknown; testId?: unknown } | null;
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
   if (text === "") {
     throw deepResearchRejected("research-invalid-decision", "The decision is malformed.");
   }
+  const pending = active.pending!;
+  if (payload?.testId !== undefined && payload.testId !== pending.subjectId) throw stale();
   const discovery = active.discovery!;
   const current = currentHypotheses(discovery.hypotheses);
   const test = discovery.tests.find(
     (entry) =>
+      entry.testId === pending.subjectId &&
       entry.status === "awaiting-input" &&
-      entry.hypothesisRevision === active.pending!.artifactRevision &&
+      entry.hypothesisRevision === pending.artifactRevision &&
       current.some(
         (hypothesis) =>
           hypothesis.hypothesisId === entry.hypothesisId &&

@@ -78,11 +78,7 @@ function renderObservationRequest(
   context: ResearchCardContext,
 ): void {
   const { t } = context;
-  const test = discovery.tests.find(
-    (entry) =>
-      entry.status === "awaiting-input" &&
-      entry.hypothesisRevision === state.pending!.artifactRevision,
-  );
+  const test = discovery.tests.find((entry) => entry.testId === state.pending!.subjectId);
   if (!test) return;
   const requestEl = parentEl.createDiv({ cls: "attest-research-card__observation" });
   requestEl.createDiv({
@@ -106,7 +102,7 @@ function renderObservationRequest(
         researchId: state.researchId,
         decisionId: state.pending!.decisionId,
         expectedRevision: state.revision,
-        payload: { action: "observe", text: field.value.trim() },
+        payload: { action: "observe", testId: test.testId, text: field.value.trim() },
       },
     },
     primary: true,

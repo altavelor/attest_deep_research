@@ -122,7 +122,12 @@ describe("deep research plan card", () => {
     const state = {
       ...pending,
       phase: "awaiting-observation" as const,
-      pending: { decisionId: "decision-o", kind: "observation" as const, artifactRevision: 1 },
+      pending: {
+        decisionId: "decision-o",
+        kind: "observation" as const,
+        artifactRevision: 1,
+        subjectId: "t-1",
+      },
       plan: { ...pending.plan!, approvedAt: "2026-01-01T00:00:00.000Z" },
       discovery: {
         hypotheses: [hypothesis],
@@ -166,7 +171,7 @@ describe("deep research plan card", () => {
           researchId: state.researchId,
           decisionId: "decision-o",
           expectedRevision: state.revision,
-          payload: { action: "observe", text: "Tides followed the moon" },
+          payload: { action: "observe", testId: "t-1", text: "Tides followed the moon" },
         },
       },
       "Send the observation",

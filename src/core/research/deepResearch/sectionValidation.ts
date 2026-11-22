@@ -198,7 +198,9 @@ function discoveryPhaseConsistent(
   return (
     discovery?.tests.some(
       (test) =>
-        test.status === "awaiting-input" && test.hypothesisRevision === pending?.artifactRevision,
+        test.testId === pending?.subjectId &&
+        test.status === "awaiting-input" &&
+        test.hypothesisRevision === pending.artifactRevision,
     ) === true
   );
 }
@@ -240,7 +242,9 @@ function readPending(value: unknown): PendingDecision | undefined {
     !isRecord(value) ||
     !isResearchId(value.decisionId) ||
     !DECISION_KINDS.includes(value.kind as PendingDecision["kind"]) ||
-    !isRevision(value.artifactRevision)
+    !isRevision(value.artifactRevision) ||
+    !(value.subjectId === undefined || isResearchId(value.subjectId)) ||
+    (value.kind === "observation") !== (value.subjectId !== undefined)
   ) {
     return undefined;
   }
@@ -248,6 +252,7 @@ function readPending(value: unknown): PendingDecision | undefined {
     decisionId: value.decisionId,
     kind: value.kind as PendingDecision["kind"],
     artifactRevision: value.artifactRevision,
+    ...(value.subjectId !== undefined ? { subjectId: value.subjectId } : {}),
   };
 }
 

@@ -209,6 +209,13 @@ const userReport = {
   verdict: "contradicts",
   limitations: ["reported, not independently checked"],
 };
+const observationPending = {
+  decisionId: "decision-o",
+  kind: "observation",
+  artifactRevision: 1,
+  subjectId: "t-2",
+};
+
 function discoveryStages(): unknown[] {
   const received = {
     ...assessedDiscovery,
@@ -260,7 +267,7 @@ function discoveryStages(): unknown[] {
     {
       ...discovering,
       phase: "awaiting-observation",
-      pending: { decisionId: "decision-o", kind: "observation", artifactRevision: 1 },
+      pending: observationPending,
       budget: assessedBudget,
       discovery: assessedDiscovery,
     },
@@ -298,8 +305,28 @@ function discoveryRows(): [string, unknown][] {
       section({
         ...discovering,
         phase: "awaiting-observation",
-        pending: { decisionId: "decision-o", kind: "observation", artifactRevision: 1 },
+        pending: observationPending,
         discovery: proposedDiscovery,
+      }),
+    ],
+    [
+      "observation decision without its test",
+      section({
+        ...discovering,
+        phase: "awaiting-observation",
+        pending: { ...observationPending, subjectId: undefined },
+        budget: assessedBudget,
+        discovery: assessedDiscovery,
+      }),
+    ],
+    [
+      "observation decision naming another test",
+      section({
+        ...discovering,
+        phase: "awaiting-observation",
+        pending: { ...observationPending, subjectId: "t-1" },
+        budget: assessedBudget,
+        discovery: assessedDiscovery,
       }),
     ],
     withDiscovery("status its observations do not give", {

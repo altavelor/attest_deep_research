@@ -10,7 +10,9 @@ import {
   type ResearchTest,
 } from "@core/research/deepResearch";
 import { ResearchDiscoveryService } from "@application/use-cases/research/deep-research";
+import { suppliedObservation } from "@application/use-cases/research/deep-research/strategyHelpers";
 import { FakeChatModel } from "../support/researchFakes";
+import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 
 const hypothesis: ResearchHypothesis = {
   hypothesisId: "h-1",
@@ -154,5 +156,53 @@ describe("deep research discovery rules", () => {
       quote: "Tides followed the moon",
     });
     expect(model.requests).toHaveLength(0);
+  });
+
+  it("answers the test the pending decision names and rejects a superseded revision as stale", () => {
+    const awaiting = (testId: string, hypothesisId: string): ResearchTest => ({
+      ...proposed,
+      testId,
+      hypothesisId,
+      kind: "supplied-observation",
+      status: "awaiting-input",
+    });
+    const base = gatheringResearch(researchPlan([researchBranch(1)], "balanced"));
+    const state = {
+      ...base,
+      phase: "awaiting-observation" as const,
+      pending: {
+        decisionId: "d-1",
+        kind: "observation" as const,
+        artifactRevision: 1,
+        subjectId: "t-2",
+      },
+      discovery: {
+        hypotheses: [hypothesis, { ...hypothesis, hypothesisId: "h-2" }],
+        tests: [awaiting("t-1", "h-1"), awaiting("t-2", "h-2")],
+        observations: [],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
+      },
+    };
+    const decision = {
+      researchId: state.researchId,
+      decisionId: "d-1",
+      expectedRevision: state.revision,
+      payload: { action: "observe", text: "Seen" },
+    };
+    expect(suppliedObservation(state, decision)).toEqual({ testId: "t-2", text: "Seen" });
+    const revised = {
+      ...state,
+      discovery: {
+        ...state.discovery,
+        hypotheses: [
+          ...state.discovery.hypotheses,
+          { ...hypothesis, hypothesisId: "h-2", revision: 2 },
+        ],
+      },
+    };
+    expect(() => suppliedObservation(revised, decision)).toThrow("no longer matches the research");
   });
 });

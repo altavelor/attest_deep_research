@@ -40,6 +40,7 @@ export interface PendingDecision {
   decisionId: string;
   kind: "plan" | "clarification" | "observation" | "stale-plan";
   artifactRevision: number;
+  subjectId?: string;
 }
 
 export interface ResearchDecision {
