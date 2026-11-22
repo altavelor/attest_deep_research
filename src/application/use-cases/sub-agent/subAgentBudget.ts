@@ -160,6 +160,7 @@ export class SubAgentBudgetCoordinator {
     if (admission.type === "refused") {
       throw sessionFailure(
         admission.reason === "budget-port-error" ? "budget-port-error" : "budget-denied",
+        admission.closureId === null ? undefined : { closureId: admission.closureId },
       );
     }
     const started = await this.start(admission.grant, isCurrent);

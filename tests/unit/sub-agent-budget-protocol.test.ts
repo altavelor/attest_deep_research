@@ -7,7 +7,9 @@ import {
   applyAll,
   AT,
   budgetCoordinator,
+  childEvidence,
   delegationGrant,
+  executionResult,
   FakeBudgetOwner,
   launchChild,
   managerHarness,
@@ -315,6 +317,21 @@ describe("required-scope denial and cleanup", () => {
     expect(stopped.map((entry) => [entry.runId, entry.reasonCode])).toEqual([
       [running.receipt.runId, "budget-denied"],
     ]);
+  });
+
+  it("U8 (metered): a closure first met by an evidence append stops the rest of the scope", async () => {
+    const harness = scopedHarness();
+    await launchChild(harness.delegator("scope-1"), "first");
+    await launchChild(harness.delegator("scope-1"), "sibling");
+    await settle();
+    harness.owner.seal("scope-1");
+
+    harness.execution.finish(0, { ...executionResult(), evidence: [childEvidence("e1")] });
+    await settle();
+
+    expect(harness.owner.calls.some((call) => call.startsWith("reserve:"))).toBe(true);
+    expect(harness.owner.calls).toContain("claimClosureCleanup:closure-scope-1");
+    expect(harness.execution.requests[1].signal.aborted).toBe(true);
   });
 
   it("U9: hung budget promises never block stop, close or dispose and a late grant is returned", async () => {

@@ -1,7 +1,13 @@
+import { isRecord } from "@shared";
+import { SubAgentSessionFailure } from "@core/research";
 import { denyRun } from "./runSettlement";
 import type { RunSlot, SubAgentRunScheduler } from "./runScheduler";
 import { closeBudgetScope } from "./scopeCleanup";
-import type { SubAgentBudgetAdmission, SubAgentBudgetIdentity } from "./subAgentBudget";
+import {
+  scopeOf,
+  type SubAgentBudgetAdmission,
+  type SubAgentBudgetIdentity,
+} from "./subAgentBudget";
 
 /**
  * Waits for the execution permit of a required-scope run off-lock. A refusal fails
@@ -29,11 +35,8 @@ export async function admitScopedRun(
   if (admission.type === "refused") {
     scheduler.release(slot);
     await denyRun(scheduler, slot, admission.reason);
-    if (
-      admission.closureId !== null &&
-      (await scheduler.parts.budget.claimCleanup(identity.scopeId, admission.closureId))
-    ) {
-      await closeBudgetScope(scheduler.parts, scheduler, identity.scopeId);
+    if (admission.closureId !== null) {
+      await cleanUpClosure(scheduler, identity.scopeId, admission.closureId);
     }
     return;
   }
@@ -50,4 +53,33 @@ export async function admitScopedRun(
     return;
   }
   void scheduler.execute(slot, revision);
+}
+
+/** Cleans up a globally closed scope once this caller wins its single cleanup claim. */
+async function cleanUpClosure(
+  scheduler: SubAgentRunScheduler,
+  scopeId: string,
+  closureId: string,
+): Promise<void> {
+  if (await scheduler.parts.budget.claimCleanup(scopeId, closureId)) {
+    await closeBudgetScope(scheduler.parts, scheduler, scopeId);
+  }
+}
+
+/**
+ * Cleans up the scope of a session whose metered action failed on a global closure, so a
+ * closure first met by an evidence append stops the whole scope like a refused admission.
+ */
+export async function cleanUpMeteredClosure(
+  scheduler: SubAgentRunScheduler,
+  sessionId: string,
+  failure: unknown,
+): Promise<void> {
+  const details = failure instanceof SubAgentSessionFailure ? failure.error.details : undefined;
+  const closureId = isRecord(details) ? details.closureId : undefined;
+  const record = scheduler.parts.store.record(sessionId);
+  const scopeId = record ? scopeOf(record.session.budgetPolicy) : null;
+  if (typeof closureId === "string" && scopeId !== null) {
+    await cleanUpClosure(scheduler, scopeId, closureId);
+  }
 }

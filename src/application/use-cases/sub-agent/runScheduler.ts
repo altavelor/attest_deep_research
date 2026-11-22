@@ -1,4 +1,4 @@
-import type { SubAgentExecutionResult } from "@application/ports/subAgent";
+import type { SubAgentExecutionResult, SubAgentImportResult } from "@application/ports/subAgent";
 import {
   applySubAgentTransition,
   type ImportedSubAgentRunOutcome,
@@ -6,12 +6,12 @@ import {
   type SubAgentSessionRecord,
   type SubAgentTransition,
 } from "@core/research";
-import { settleWithin } from "./deadline";
+import { settleWithin, type DeadlineOutcome } from "./deadline";
 import { buildExecutionRequest } from "./executionRequest";
 import { IMPORT_TIMEOUT_MS, type SubAgentImportCommitter } from "./importCoordinator";
 import { importedSummary } from "./importPlan";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
-import { admitScopedRun } from "./scopedAdmission";
+import { admitScopedRun, cleanUpMeteredClosure } from "./scopedAdmission";
 import { redactExecutionResult } from "./resultRedaction";
 import { abandonRunImport, denyRun, settleRun } from "./runSettlement";
 import { scopeOf, type SubAgentBudgetGrant } from "./subAgentBudget";
@@ -274,6 +274,16 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
       fence.signal,
     );
     if (this.imports.get(slot.sessionId) === fence) this.imports.delete(slot.sessionId);
+    await this.afterImport(slot, generation, outcome);
+    if (outcome.status === "failed")
+      await cleanUpMeteredClosure(this, slot.sessionId, outcome.error);
+  }
+
+  private async afterImport(
+    slot: RunSlot,
+    generation: number,
+    outcome: DeadlineOutcome<SubAgentImportResult>,
+  ): Promise<void> {
     const session = this.parts.store.record(slot.sessionId)?.session;
     if (
       outcome.status === "fenced" ||
