@@ -7,6 +7,7 @@ import {
   reportDecision,
   resumeExecutions,
   stopReasonOf,
+  type BranchExecution,
   type ResearchReport,
   type ResearchState,
 } from "@core/research/deepResearch";
@@ -14,12 +15,15 @@ import type { ResearchStatePort } from "@application/ports/researchState";
 import type { BranchRunner } from "./branchRunner";
 import type { ReportSynthesisService } from "./ReportSynthesisService";
 import { ResearchScheduler } from "./ResearchScheduler";
+import { removeUnknownCitationTokens } from "../strategies/citations";
 
 export interface ResearchRunDeps {
   port: ResearchStatePort;
-  runner: BranchRunner & { citedEvidence?(): RetrievedChunk[] };
+  runner: BranchRunner;
   synthesis: ReportSynthesisService;
   signal?: AbortSignal;
+  resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
+  finalizeReport?(markdown: string): string;
   now(): Date;
   setTimer(delayMs: number, callback: () => void): () => void;
   createId(prefix: string): string;
@@ -43,7 +47,11 @@ export async function runResearch(
   deps: ResearchRunDeps,
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
-  const owner = new ResearchBudgetOwner(plan.limits, () => deps.now().getTime());
+  const owner = new ResearchBudgetOwner(
+    plan.limits,
+    () => deps.now().getTime(),
+    plan.branches.filter((branch) => branch.enabled).length,
+  );
   owner.open(start.budget);
   let current = start;
   const commit = async (patch: Partial<ResearchState>): Promise<ResearchState> => {
@@ -95,25 +103,33 @@ export async function runResearch(
     return { state, report: null };
   }
   deps.onStatus("Writing the research report…");
-  let markdown = formatWithoutModel(plan, executions, stopReason);
+  const cited = registryCitedFindings(executions, deps.resolveEvidence);
+  let markdown = withCitationNotes(formatWithoutModel(plan, cited.executions, stopReason), {
+    removedTokens: cited.removedTokens,
+    unverifiedTokens: 0,
+  });
   if (owner.spendFinalization(1)) {
     try {
       const synthesized = await deps.synthesis.synthesize({
         question: start.question,
         plan,
-        executions,
-        evidence: deps.runner.citedEvidence?.() ?? [],
+        executions: cited.executions,
+        evidence: cited.evidence,
         ...(deps.signal ? { signal: deps.signal } : {}),
       });
-      markdown = withCitationNotes(synthesized.markdown, synthesized);
+      markdown = withCitationNotes(synthesized.markdown, {
+        removedTokens: synthesized.removedTokens + cited.removedTokens,
+        unverifiedTokens: synthesized.unverifiedTokens,
+      });
     } catch (error) {
       if (deps.signal?.aborted) throw error;
     }
   }
+  const finalMarkdown = withMissingNote(markdown, decision.missingBranches, plan);
   const report: ResearchReport = {
     reportId: deps.createId("report"),
     quality: decision.quality,
-    markdown: withMissingNote(markdown, decision.missingBranches, plan),
+    markdown: deps.finalizeReport?.(finalMarkdown) ?? finalMarkdown,
     completedBranches: decision.completedBranches,
     missingBranches: decision.missingBranches,
     stopReason,
@@ -121,6 +137,36 @@ export async function runResearch(
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };
+}
+
+/**
+ * Keeps only the finding citations that resolve in the conversation source registry: unresolved
+ * tokens leave the finding text and its listed sources and are counted, and the resolved revisions
+ * become the evidence the report is verified against.
+ */
+function registryCitedFindings(
+  executions: readonly BranchExecution[],
+  resolve: ResearchRunDeps["resolveEvidence"],
+): { executions: BranchExecution[]; evidence: RetrievedChunk[]; removedTokens: number } {
+  const stored = executions.flatMap((execution) => execution.finding?.citationTokens ?? []);
+  const evidence = resolve?.(stored) ?? [];
+  const known = new Set(evidence.map((chunk) => chunk.id));
+  let removedTokens = 0;
+  const cited = executions.map((execution) => {
+    const finding = execution.finding;
+    if (!finding) return execution;
+    const unknown = new Set(finding.citationTokens.filter((token) => !known.has(token)));
+    removedTokens += unknown.size;
+    return {
+      ...execution,
+      finding: {
+        ...finding,
+        text: removeUnknownCitationTokens(finding.text, known),
+        citationTokens: finding.citationTokens.filter((token) => known.has(token)),
+      },
+    };
+  });
+  return { executions: cited, evidence, removedTokens };
 }
 
 function withCitationNotes(

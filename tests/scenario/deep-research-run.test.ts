@@ -1,10 +1,11 @@
-import type { ResearchStreamEvent } from "@application/contracts/research";
+import type { ResearchRequest, ResearchStreamEvent } from "@application/contracts/research";
 import { validateResearchSection, type ResearchState } from "@core/research/deepResearch";
 import { collectAsync } from "../support/async";
 import {
   BranchModelRounds,
   MemoryResearchState,
   PlanAndReportModel,
+  ResearchRegistry,
   deepResearchService,
 } from "../support/deepResearch";
 import { markdownSource, retrieved } from "../support/factories";
@@ -14,7 +15,7 @@ const retriever = () =>
   new FakeRetriever({
     chunks: [
       retrieved(
-        "chunk-1",
+        "chunk-tides-1",
         markdownSource("Notes/tides.md"),
         "The moon pulls the oceans and causes tides twice a day.",
       ),
@@ -23,27 +24,31 @@ const retriever = () =>
     usedFallback: false,
   });
 
-function service(
-  model: PlanAndReportModel,
-  rounds: BranchModelRounds,
-  timer?: (delayMs: number, callback: () => void) => () => void,
-) {
-  return deepResearchService(model, true, {
-    retriever: retriever(),
-    modelRound: rounds,
-    ...(timer ? { researchTimer: timer } : {}),
-  });
+interface Harness {
+  model: PlanAndReportModel;
+  rounds: BranchModelRounds;
+  registry: ResearchRegistry;
+  timer?: (delayMs: number, callback: () => void) => () => void;
 }
 
-async function approvedResearch(model: PlanAndReportModel, rounds: BranchModelRounds) {
-  const port = new MemoryResearchState();
-  await collectAsync(
-    service(model, rounds).answer({
-      question: "Tides?",
+function answer(harness: Harness, request: Omit<ResearchRequest, "mode">) {
+  return collectAsync(
+    deepResearchService(harness.model, true, {
+      retriever: retriever(),
+      modelRound: harness.rounds,
+      ...(harness.timer ? { researchTimer: harness.timer } : {}),
+    }).answer({
+      ...request,
       mode: "deep-research",
-      researchState: port,
+      finalizeAnswer: harness.registry.finalizeAnswer,
+      resolveEvidence: harness.registry.resolveEvidence,
     }),
   );
+}
+
+async function approvedResearch(harness: Harness) {
+  const port = new MemoryResearchState();
+  await answer(harness, { question: "Tides?", researchState: port });
   const pending = port.commits.at(-1)!;
   const decision = {
     type: "decision" as const,
@@ -57,6 +62,14 @@ async function approvedResearch(model: PlanAndReportModel, rounds: BranchModelRo
   return { port, decision };
 }
 
+function harness(): Harness {
+  return {
+    model: new PlanAndReportModel(),
+    rounds: new BranchModelRounds(),
+    registry: new ResearchRegistry(),
+  };
+}
+
 function reloaded(state: ResearchState): MemoryResearchState {
   const stored = validateResearchSection(
     JSON.parse(JSON.stringify({ schema: 1, active: state, history: [] })),
@@ -66,63 +79,63 @@ function reloaded(state: ResearchState): MemoryResearchState {
   return port;
 }
 
+function completeAnswer(events: readonly ResearchStreamEvent[]) {
+  const last = events.at(-1);
+  return last?.type === "complete" ? last.answer : null;
+}
+
 describe("deep research run", () => {
   it("runs three approved branches one after another and ends in a cited report", async () => {
-    const model = new PlanAndReportModel();
-    const rounds = new BranchModelRounds();
-    const { port, decision } = await approvedResearch(model, rounds);
-    const events = await collectAsync(
-      service(model, rounds).answer({
-        question: "Approve",
-        mode: "deep-research",
-        researchState: port,
-        research: decision,
-      }),
-    );
+    const run = harness();
+    const { port, decision } = await approvedResearch(run);
+    let commitsAtSynthesis = -1;
+    run.model.onReport = () => (commitsAtSynthesis = port.commits.length);
+    const events = await answer(run, {
+      question: "Approve",
+      researchState: port,
+      research: decision,
+    });
 
-    const statuses = events.flatMap((event: ResearchStreamEvent) =>
-      event.type === "status" ? [event.message] : [],
-    );
+    const statuses = events.flatMap((event) => (event.type === "status" ? [event.message] : []));
     expect(statuses).toEqual([
       "Researching: Background",
       "Researching: Details",
       "Researching: Context",
       "Writing the research report…",
     ]);
-    const lastSettle = port.commits.findIndex((state) =>
-      state.executions.every((execution) => execution.state === "completed"),
+    const lastSettle = port.commits.findIndex(
+      (state) =>
+        state.executions.length > 0 &&
+        state.executions.every((execution) => execution.state === "completed"),
     );
-    const synthesizing = port.commits.findIndex((state) => state.phase === "synthesizing");
-    expect(lastSettle).toBeLessThan(synthesizing);
+    expect(commitsAtSynthesis).toBeGreaterThan(lastSettle + 1);
     const final = port.commits.at(-1)!;
     expect(final.report).toMatchObject({
       quality: "complete",
       completedBranches: ["branch-1", "branch-2", "branch-3"],
     });
-    const complete = events.at(-1);
-    expect(complete?.type === "complete" && complete.answer.answer).toMatch(
-      /causes tides \[\S+\]/u,
-    );
-    expect(model.requests).toHaveLength(2);
+    const report = completeAnswer(events)!;
+    expect(report.answer).toBe(final.report!.markdown);
+    expect(report.answer).not.toContain("source-9:revision-9");
+    expect(report.answer).toContain("1 citation(s) without a source in the findings were removed.");
+    const cited = /causes tides \[(\S+)\]/u.exec(report.answer)?.[1];
+    expect(run.registry.resolveEvidence([cited!])).toHaveLength(1);
+    expect(report.evidence?.map((chunk) => chunk.id)).toEqual([cited]);
   });
 
   it("continues a stopped research without rerunning completed branches and keeps its budget", async () => {
-    const model = new PlanAndReportModel();
-    const rounds = new BranchModelRounds();
-    const { port, decision } = await approvedResearch(model, rounds);
-    rounds.hang.add("Collect details");
+    const run = harness();
+    const { port, decision } = await approvedResearch(run);
+    run.rounds.hang.add("Collect details");
     const stop = new AbortController();
-    rounds.onHang = () => stop.abort();
+    run.rounds.onHang = () => stop.abort();
     await expect(
-      collectAsync(
-        service(model, rounds).answer({
-          question: "Approve",
-          mode: "deep-research",
-          researchState: port,
-          research: decision,
-          signal: stop.signal,
-        }),
-      ),
+      answer(run, {
+        question: "Approve",
+        researchState: port,
+        research: decision,
+        signal: stop.signal,
+      }),
     ).rejects.toMatchObject({ name: "AbortError" });
     const paused = port.commits.at(-1)!;
     expect(paused.executions.map((execution) => execution.state)).toEqual([
@@ -131,56 +144,67 @@ describe("deep research run", () => {
       "pending",
     ]);
 
-    rounds.hang.clear();
-    rounds.tasks.length = 0;
-    const resumed = reloaded(paused);
-    await collectAsync(
-      service(model, rounds).answer({
-        question: "Continue",
-        mode: "deep-research",
-        researchState: resumed,
-        research: { type: "continue", researchId: paused.researchId },
-      }),
-    );
+    run.rounds.hang.clear();
+    run.rounds.tasks.length = 0;
+    const [first, ...rest] = paused.executions;
+    const tampered = {
+      ...first!,
+      finding: {
+        ...first!.finding!,
+        text: `${first!.finding!.text} Forged [source-7:revision-7].`,
+        citationTokens: [...first!.finding!.citationTokens, "source-7:revision-7"],
+      },
+    };
+    const resumed = reloaded({ ...paused, executions: [tampered, ...rest] });
+    const events = await answer(run, {
+      question: "Continue",
+      researchState: resumed,
+      research: { type: "continue", researchId: paused.researchId },
+    });
 
-    expect(rounds.tasks.map((task) => task.includes("Collect background"))).not.toContain(true);
+    expect(run.rounds.tasks.map((task) => task.includes("Collect background"))).not.toContain(true);
     const final = resumed.commits.at(-1)!;
     expect(final.phase).toBe("completed");
     expect(final.budget!.consumed.branchAttempts).toBe(4);
     expect(final.budget!.consumed.modelRounds).toBeGreaterThanOrEqual(
       paused.budget!.consumed.modelRounds + 12,
     );
+    const synthesis = String(run.model.requests.at(-1)?.messages.at(-1)?.content);
+    expect(synthesis).toContain(first!.finding!.citationTokens[0]);
+    expect(synthesis).not.toContain("source-7:revision-7");
+    expect(completeAnswer(events)?.answer).toContain("citation(s) without a source");
   });
 
   it("closes the budget at the time limit, aborts the running branch and reports without a model", async () => {
-    const model = new PlanAndReportModel();
-    const rounds = new BranchModelRounds();
-    const { port, decision } = await approvedResearch(model, rounds);
+    const run = harness();
+    const { port, decision } = await approvedResearch(run);
     let fire: () => void = () => undefined;
-    rounds.hang.add("Collect details");
-    rounds.onHang = () => fire();
-    const events = await collectAsync(
-      service(model, rounds, (_delay, callback) => {
-        fire = callback;
-        return () => undefined;
-      }).answer({
-        question: "Approve",
-        mode: "deep-research",
-        researchState: port,
-        research: decision,
-      }),
-    );
+    let cancelled = false;
+    run.timer = (_delay, callback) => {
+      fire = callback;
+      return () => (cancelled = true);
+    };
+    run.rounds.hang.add("Collect details");
+    run.rounds.onHang = () => fire();
+    const events = await answer(run, {
+      question: "Approve",
+      researchState: port,
+      research: decision,
+    });
 
-    const final = port.commits.at(-1)!;
-    expect(final.budget!.closed).toEqual({ reason: "time", dimension: null });
-    expect(final.report).toMatchObject({
+    const synthesizing = port.commits.findIndex((state) => state.phase === "synthesizing");
+    expect(port.commits[synthesizing - 1]).toMatchObject({
+      executions: [{ state: "completed" }, { state: "pending" }, { state: "pending" }],
+      budget: { openAllocations: [], closed: { reason: "time", dimension: null } },
+    });
+    expect(cancelled).toBe(true);
+    expect(port.commits.at(-1)!.report).toMatchObject({
       quality: "partial",
       missingBranches: [{ branchId: "branch-2" }, { branchId: "branch-3" }],
     });
-    const complete = events.at(-1);
-    expect(complete?.type === "complete" && complete.answer.answer).toContain(
+    expect(completeAnswer(events)?.answer).toContain(
       "The active execution time limit was reached.",
     );
-    expect(model.requests).toHaveLength(1);
+    expect(run.model.requests).toHaveLength(1);
   });
 });

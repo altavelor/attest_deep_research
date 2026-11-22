@@ -94,7 +94,7 @@ function synthesisRequest(input: ReportSynthesisInput): string {
     .filter((execution) => execution.finding)
     .map(
       (execution) =>
-        `<finding branch="${titleOf(execution.branchId)}">\n${execution.finding!.text.replaceAll("</finding>", "</ finding>")}\n</finding>`,
+        `<finding branch="${escapeAttribute(titleOf(execution.branchId))}">\n${execution.finding!.text.replaceAll("</finding>", "</ finding>")}\n</finding>`,
     );
   return [
     `Question: ${input.question}`,
@@ -102,4 +102,12 @@ function synthesisRequest(input: ReportSynthesisInput): string {
     `Report outline:\n${input.plan.reportOutline.map((heading) => `- ${heading}`).join("\n")}`,
     `Findings:\n${findings.join("\n\n")}`,
   ].join("\n\n");
+}
+
+function escapeAttribute(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }

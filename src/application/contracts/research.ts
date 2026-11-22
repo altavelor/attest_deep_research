@@ -3,7 +3,7 @@ import { RetrievalOptions, RetrievalQueryVariant } from "@core/retrieval";
 import { ResearchAnswer } from "@core/answer";
 import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { ContextDiagnostics, ContextMode } from "@core/diagnostics";
-import { LanguageInventoryItem } from "@core/model";
+import { LanguageInventoryItem, type RetrievedChunk } from "@core/model";
 import { SourceReference } from "@core/model";
 import { ResearchChatHistoryMessage } from "@core/research";
 import {
@@ -126,6 +126,7 @@ export interface ResearchRequest {
   chatHistory?: ResearchChatHistoryMessage[];
   conversationRegistry?: ConversationRegistryPromptView;
   finalizeAnswer?: (answer: ResearchAnswer) => ResearchAnswer;
+  resolveEvidence?: (revisionIds: readonly string[]) => RetrievedChunk[];
   signal?: AbortSignal;
   subAgentDelegator?: SubAgentDelegator;
   subAgentParent?: SubAgentParentRun;

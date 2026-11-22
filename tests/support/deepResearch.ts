@@ -1,4 +1,6 @@
 import {
+  emptyBudgetState,
+  initialExecutions,
   presetLimits,
   withPlanForReview,
   startResearchState,
@@ -24,6 +26,14 @@ import type {
 } from "@core/agent";
 import type { ResearchStatePort } from "@application/ports";
 import type { ResearchSectionView } from "@core/research/deepResearch";
+import type { ResearchAnswer } from "@core/answer";
+import type { RetrievedChunk } from "@core/model";
+import {
+  bindAnswerToConversationRegistry,
+  createConversationSourceRegistry,
+  registerConversationEvidence,
+  resolveConversationEvidence,
+} from "@core/chat/sourceRegistry";
 
 /** Builds an enabled required branch covering the first objective. */
 export function researchBranch(index: number, patch: Partial<ResearchBranch> = {}): ResearchBranch {
@@ -212,9 +222,13 @@ export class BranchModelRounds implements ModelRoundProvider {
   }
 }
 
-/** A chat model that drafts a three-branch plan first and then writes a report citing the first finding token. */
+/**
+ * A chat model that drafts a three-branch plan first and then writes a report citing the first
+ * finding token and one token that no finding holds.
+ */
 export class PlanAndReportModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
+  onReport: () => void = () => undefined;
 
   async listModels(): Promise<string[]> {
     return ["model"];
@@ -226,11 +240,61 @@ export class PlanAndReportModel implements ChatModelProvider {
       yield { content: planReply(3), isComplete: true };
       return;
     }
+    this.onReport();
     const findings = String(request.messages.at(-1)?.content);
     const token = /\[([^\]\s]+)\]/u.exec(findings.slice(findings.indexOf("Findings:")))?.[1];
     yield {
-      content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}].`,
+      content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}]. Waves exist [source-9:revision-9].`,
       isComplete: true,
     };
   }
+}
+
+/** A conversation source registry with the answer registration and evidence lookup of a chat turn. */
+export class ResearchRegistry {
+  registry = createConversationSourceRegistry();
+
+  readonly finalizeAnswer = (answer: ResearchAnswer): ResearchAnswer => {
+    const registered = registerConversationEvidence(
+      this.registry,
+      answer.evidence ?? [],
+      answer.createdAt,
+    );
+    this.registry = registered.registry;
+    return bindAnswerToConversationRegistry(
+      answer,
+      registered.registry,
+      registered.revisionIdByEvidenceId,
+    );
+  };
+
+  readonly resolveEvidence = (revisionIds: readonly string[]): RetrievedChunk[] =>
+    resolveConversationEvidence(this.registry, revisionIds);
+}
+
+/** Builds an approved research paused in gathering, optionally waiting on a stale-plan decision. */
+export function pausedResearch(
+  staleDecision = false,
+  plan: Partial<ResearchPlan> = {},
+): ResearchState {
+  const pending = pendingResearch(
+    researchPlan(undefined, "balanced", { approvedAt: "2026-01-01T00:00:00.000Z", ...plan }),
+  );
+  return {
+    ...pending,
+    phase: "gathering",
+    pending: staleDecision
+      ? {
+          decisionId: "decision-stale",
+          kind: "stale-plan",
+          artifactRevision: pending.plan!.revision,
+        }
+      : null,
+    executions: initialExecutions(pending.plan!),
+    budget: {
+      ...emptyBudgetState(),
+      consumed: { branchAttempts: 1, modelRounds: 5, searches: 2, evidenceItems: 1 },
+      attemptsByBranch: { "branch-1": 1 },
+    },
+  };
 }

@@ -9,3 +9,4 @@ export {
   type ReportSynthesisOptions,
   type SynthesizedReport,
 } from "./ReportSynthesisService";
+export { finishedResearchReport } from "./researchReportLookup";

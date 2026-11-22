@@ -1,8 +1,8 @@
 import type { ResearchAnswer } from "@core/answer";
-import type { RetrievedChunk } from "@core/model";
 import type { ResearchModeWebParameters } from "@core/research";
 import {
-  MAX_BRANCH_FINDING_CHARS,
+  MAX_FINDING_CITATION_TOKENS,
+  boundFindingText,
   intersectScope,
   type BranchAllocation,
   type BranchFinding,
@@ -14,6 +14,7 @@ import {
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import {
+  citationIdsFromText,
   normalizeCitationTokens,
   removeUnknownCitationTokens,
   webUrlEvidenceIndex,
@@ -41,7 +42,6 @@ export interface MainBranchRunnerDeps {
 export class MainBranchRunner implements BranchRunner {
   readonly path = "main" as const;
   private readonly usages = new Map<string, BranchUsage>();
-  private readonly chunks = new Map<string, RetrievedChunk>();
 
   constructor(private readonly deps: MainBranchRunnerDeps) {}
 
@@ -102,24 +102,19 @@ export class MainBranchRunner implements BranchRunner {
       followUpQuestions: [],
       createdAt: this.deps.now().toISOString(),
     };
-    const registered = this.deps.registerAnswer?.(answer) ?? {
-      ...answer,
-      evidence: evidence.filter((chunk) => normalized.ids.has(chunk.id)),
-    };
-    for (const chunk of registered.evidence ?? []) this.chunks.set(chunk.id, chunk);
+    const registered = this.deps.registerAnswer?.(answer) ?? answer;
+    const bounded = boundFindingText(registered.answer);
+    const cited = citationIdsFromText(bounded);
     return {
-      text: registered.answer.slice(0, MAX_BRANCH_FINDING_CHARS),
-      citationTokens: [...new Set((registered.evidence ?? []).map((chunk) => chunk.id))],
+      text: bounded,
+      citationTokens: [...new Set((registered.evidence ?? []).map((chunk) => chunk.id))]
+        .filter((id) => cited.has(id))
+        .slice(0, MAX_FINDING_CITATION_TOKENS),
       partial: telemetry?.failureReason !== undefined,
     };
   }
 
   usage(workId: string): BranchUsage | null {
     return this.usages.get(workId) ?? null;
-  }
-
-  /** Returns the evidence chunks cited by the findings of this turn, for citation verification. */
-  citedEvidence(): RetrievedChunk[] {
-    return [...this.chunks.values()];
   }
 }

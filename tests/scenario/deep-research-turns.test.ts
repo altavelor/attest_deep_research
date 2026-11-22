@@ -1,5 +1,6 @@
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
-import type { SavedChatSettings } from "@core/chat/savedChat";
+import { researchSectionView, type SavedChatSettings } from "@core/chat/savedChat";
+import { finishedResearchReport } from "@application/use-cases/research/deep-research";
 import type { ChatModelProvider } from "@core/agent";
 import { startResearchState } from "@core/research/deepResearch";
 import { eventually } from "../support/async";
@@ -76,7 +77,14 @@ describe("deep research turns through the chat runtime", () => {
       active: null,
       history: [{ researchId: active.researchId, phase: "completed" }],
     });
-    expect(approved?.messages.at(-3)?.research?.researchId).toBe(active.researchId);
+    const reportMessage = approved!.messages.at(-3)!;
+    expect(reportMessage.research?.researchId).toBe(active.researchId);
+    const view = researchSectionView(approved!.deepResearch);
+    expect(finishedResearchReport(view, approved!.messages, active.researchId)).toMatchObject({
+      quality: "complete",
+      markdown: reportMessage.content,
+    });
+    expect(finishedResearchReport(view, approved!.messages, "research-other")).toBeNull();
   });
 
   it("ends a research stopped or abandoned while drafting and lets a plain message start anew", async () => {

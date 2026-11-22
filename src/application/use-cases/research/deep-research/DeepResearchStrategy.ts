@@ -6,7 +6,6 @@ import type { SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 import {
   DEFAULT_RESEARCH_PRESET,
   MAX_PLAN_GENERATIONS,
-  ResearchBudgetOwner,
   applyDecision,
   canRegenerate,
   parseStalePlanPayload,
@@ -26,12 +25,19 @@ import type {
   ResearchStrategyOutcome,
 } from "../strategies/ResearchStrategy";
 import type { ResearchAnswer } from "@core/answer";
-import { scheduleTimeout } from "@shared";
 import { ResearchPlanService } from "./ResearchPlanService";
 import { MainBranchRunner } from "./MainBranchRunner";
 import { ReportSynthesisService } from "./ReportSynthesisService";
 import { pumpEvents } from "./eventPump";
 import { runResearch, type ResearchRunResult } from "./researchRun";
+import {
+  defaultTimer,
+  isAbort,
+  isExecuting,
+  referenceEvent,
+  reopenedBudget,
+  stale,
+} from "./strategyHelpers";
 import {
   abandonsPlanning,
   checkTurnText,
@@ -209,6 +215,9 @@ export class DeepResearchStrategy implements ResearchStrategy {
     decision: ResearchDecision,
   ): TurnEvents {
     const action = parseStalePlanPayload(decision.payload);
+    if (action === null) {
+      throw deepResearchRejected("research-invalid-decision", "The decision is malformed.");
+    }
     if (action === "cancel") {
       const cancelled = endResearch(active, "cancelled", "Cancelled by the user.", this.now());
       await port.commit(cancelled, active.revision);
@@ -229,6 +238,12 @@ export class DeepResearchStrategy implements ResearchStrategy {
       throw deepResearchRejected(
         "research-generation-limit",
         "No plan generations remain; continue the old plan or cancel the research.",
+      );
+    }
+    if (active.budget?.closed) {
+      throw deepResearchRejected(
+        "research-generation-limit",
+        "The research budget is closed, so a new plan could not run; continue or cancel instead.",
       );
     }
     const scope = preflightScope(ctx.searchMode, this.sources());
@@ -254,6 +269,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
   ): TurnEvents {
     const scope = preflightScope(ctx.searchMode, this.sources());
     const signal = ctx.request.signal;
+    let finalAnswer: ResearchAnswer | null = null;
     const result = yield* pumpEvents<ResearchStreamEvent, ResearchRunResult>((push) => {
       const runner = new MainBranchRunner({
         engine: this.deps.createBranchEngine(),
@@ -274,6 +290,19 @@ export class DeepResearchStrategy implements ResearchStrategy {
           chatOptions: this.deps.chatOptions,
         }),
         ...(signal ? { signal } : {}),
+        ...(ctx.request.resolveEvidence ? { resolveEvidence: ctx.request.resolveEvidence } : {}),
+        finalizeReport: (markdown) => {
+          const answer: ResearchAnswer = {
+            question: approved.question,
+            answer: markdown,
+            citations: [],
+            evidence: [],
+            followUpQuestions: [],
+            createdAt: this.now(),
+          };
+          finalAnswer = ctx.request.finalizeAnswer?.(answer) ?? answer;
+          return finalAnswer.answer;
+        },
         now: this.deps.now,
         setTimer: this.deps.setTimer ?? defaultTimer,
         createId: (prefix) => this.createId(prefix),
@@ -284,15 +313,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
     if (!result.report) {
       return yield* finish(ctx, result.state, `Research failed: ${result.state.terminalReason}`);
     }
-    const answer: ResearchAnswer = {
-      question: approved.question,
-      answer: result.report.markdown,
-      citations: [],
-      evidence: [],
-      followUpQuestions: [],
-      createdAt: result.report.createdAt,
-    };
-    return yield* finish(ctx, result.state, "", ctx.request.finalizeAnswer?.(answer) ?? answer);
+    return yield* finish(ctx, result.state, result.report.markdown, finalAnswer ?? undefined);
   }
 
   private planService(
@@ -347,37 +368,4 @@ async function* finish(
   yield { type: "delta", content: answer.answer };
   yield { type: "complete", answer };
   return { kind: "completed" };
-}
-
-function referenceEvent(state: ResearchState): ResearchStreamEvent {
-  return {
-    type: "research",
-    reference: { researchId: state.researchId, artifact: "plan", revision: state.revision },
-  };
-}
-
-function isExecuting(state: ResearchState): boolean {
-  return state.phase === "gathering" || state.phase === "synthesizing";
-}
-
-function reopenedBudget(state: ResearchState, now: () => Date): ResearchState["budget"] {
-  if (!state.budget) return null;
-  const owner = new ResearchBudgetOwner(state.plan!.limits, () => now().getTime());
-  owner.open(state.budget);
-  return { ...owner.snapshot(), activeMs: state.budget.activeMs };
-}
-
-function defaultTimer(delayMs: number, callback: () => void): () => void {
-  return scheduleTimeout(callback, delayMs).cancel;
-}
-
-function stale(): Error {
-  return deepResearchRejected(
-    "research-stale-decision",
-    "This decision no longer matches the research; review the current plan.",
-  );
-}
-
-function isAbort(error: unknown): boolean {
-  return (error as { name?: unknown } | null)?.name === "AbortError";
 }

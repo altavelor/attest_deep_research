@@ -206,6 +206,17 @@ export function recordConversationCitationUsages(
   return { sources };
 }
 
+/** Returns the registry revisions of the given ids as evidence chunks; unknown ids are skipped. */
+export function resolveConversationEvidence(
+  registry: ConversationSourceRegistry,
+  revisionIds: readonly string[],
+): RetrievedChunk[] {
+  return [...new Set(revisionIds)].flatMap((revisionId) => {
+    const revision = findRevision(registry, revisionId);
+    return revision ? [revisionAsEvidence(revision)] : [];
+  });
+}
+
 export function revisionContentHash(chunks: readonly RetrievedChunk[]): string {
   return chunks
     .map((chunk) => chunk.contentHash)
