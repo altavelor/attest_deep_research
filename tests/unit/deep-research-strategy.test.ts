@@ -86,16 +86,33 @@ describe("deep research strategy", () => {
     expect(port.commits).toHaveLength(0);
   });
 
-  it("rejects an over-long plain-text plan instruction readably", async () => {
-    const port = new MemoryResearchState();
-    port.commits.push(pendingResearch());
-    const answer = deepResearchService(new FakeChatModel()).answer({
-      question: "i".repeat(4001),
-      mode: "deep-research",
-      researchState: port,
-    });
-    await expect(collectAsync(answer)).rejects.toThrow("plan instruction is too long");
-    expect(port.commits).toHaveLength(1);
+  it("rejects an over-long plain-text decision readably, named by its pending decision", async () => {
+    const asking = {
+      ...pendingResearch(),
+      phase: "awaiting-clarification" as const,
+      plan: null,
+      pending: { decisionId: "decision-c", kind: "clarification" as const, artifactRevision: 1 },
+      brief: {
+        questions: [{ questionId: "question-1", prompt: "Q?", suggestions: [] }],
+        answers: {},
+        assumptions: [],
+      },
+    };
+    const rows: [ResearchState, string][] = [
+      [pendingResearch(), "The research plan instruction is too long"],
+      [asking, "The research clarification reply is too long"],
+    ];
+    for (const [state, message] of rows) {
+      const port = new MemoryResearchState();
+      port.commits.push(state);
+      const answer = deepResearchService(new FakeChatModel()).answer({
+        question: "i".repeat(4001),
+        mode: "deep-research",
+        researchState: port,
+      });
+      await expect(collectAsync(answer)).rejects.toThrow(message);
+      expect(port.commits).toHaveLength(1);
+    }
   });
 });
 

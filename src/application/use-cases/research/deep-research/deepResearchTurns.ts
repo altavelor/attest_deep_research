@@ -87,18 +87,22 @@ export function preflightScope(
   );
 }
 
-/** Rejects a start question or a plain-text plan instruction over its stored bound, before any commit. */
+/** Rejects a start question, a plan instruction or a clarification reply over its stored bound, before any commit. */
 export function checkTurnText(turn: ResearchTurnInput, text: string): void {
   const payload =
     turn.type === "decision"
       ? (turn.decision.payload as { instruction?: unknown; text?: unknown })
       : null;
-  const instruction = payload?.instruction ?? payload?.text;
+  const reply = typeof payload?.text === "string" ? payload.text : null;
+  const instruction = payload?.instruction;
   if (turn.type === "start" && text.length > MAX_RESEARCH_QUESTION_CHARS) {
     throw tooLong("question", MAX_RESEARCH_QUESTION_CHARS);
   }
   if (typeof instruction === "string" && instruction.length > MAX_RESEARCH_TEXT_CHARS) {
     throw tooLong("plan instruction", MAX_RESEARCH_TEXT_CHARS);
+  }
+  if (reply !== null && reply.length > MAX_RESEARCH_TEXT_CHARS) {
+    throw tooLong("clarification reply", MAX_RESEARCH_TEXT_CHARS);
   }
 }
 
