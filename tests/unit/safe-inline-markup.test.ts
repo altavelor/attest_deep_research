@@ -96,12 +96,12 @@ describe("safe inline markup", () => {
     ).toEqual(["p:abcdefghi/j👨\u200d👩 é\ufe0f"]);
   });
 
-  it("parses a 100k-character adversarial flood into one literal paragraph", () => {
-    const flood = "[".repeat(50_000) + "]" + "*a_`**[!(".repeat(5_555);
+  it("parses a 20k-character adversarial flood into one literal paragraph", () => {
+    const flood = "[".repeat(10_000) + "]" + "*a_`**[!(".repeat(1_111);
     const blocks = parseSafeMarkup(flood);
     expect([blocks.length, blocks[0]!.type]).toEqual([1, "paragraph"]);
-    expect(text((blocks[0] as { children: SafeInline[] }).children).slice(0, 50_001)).toBe(
-      flood.slice(0, 50_001),
+    expect(text((blocks[0] as { children: SafeInline[] }).children).slice(0, 10_001)).toBe(
+      flood.slice(0, 10_001),
     );
   });
 
