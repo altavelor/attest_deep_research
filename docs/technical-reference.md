@@ -69,10 +69,13 @@ Attest separates the stable `instant` and `thinking` strategies:
   conversation registry become wikilinks for vault sources and Markdown links for http(s) web
   sources; other tokens stay as written. A failed export changes nothing and the card offers a
   retry.
-  The report body is untrusted model output: outside fenced blocks and inline code, embeds
-  `![[x]]` become wikilinks, images become ordinary links, a link whose target is not http(s)
-  keeps only its text, and HTML tag openers are escaped as `&lt;`; fenced blocks labelled
-  `dataview`, `dataviewjs`, `tp`, `templater` or `query` are relabelled `text`.
+  The report body is untrusted model output. Citations are linked first; then any fence line
+  labelled `dataview`, `dataviewjs`, `tp`, `templater` or `query` is relabelled `text`, also inside
+  blockquotes, callouts and lists. Outside code, embeds `![[x]]` become wikilinks and images become
+  ordinary links; every `](target)` whose target is not http(s) is broken to `]\(target)`, whatever
+  its label holds; a link reference definition with a non-http(s) target gets an escaped opening
+  bracket; and `<` before a letter, `/` or `!` is escaped as `&lt;` except in `<http(s)://…>`
+  autolinks.
 
 Application dependencies flow inward: `apps → adapters → application → core`. Ports are declared in
 `src/application`; Obsidian, filesystem, HTTP, and provider implementations remain in adapters or

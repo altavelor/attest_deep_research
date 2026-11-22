@@ -106,7 +106,19 @@ describe("research export", () => {
     const rows = [
       ["![[Secret.md]]", "[[Secret.md]]"],
       ["![pixel](https://t.example/p.png)", "[pixel](https://t.example/p.png)"],
-      ["[run](obsidian://open?vault=x) [f](file:///etc) [j](javascript:alert)", "run f j"],
+      [
+        "[run](obsidian://open?vault=x) [f](file:///etc) [j](javascript:alert)",
+        "[run]\\(obsidian://open?vault=x) [f]\\(file:///etc) [j]\\(javascript:alert)",
+      ],
+      ["[a [b] c](obsidian://x)", "[a [b] c]\\(obsidian://x)"],
+      ["[x][r]\n\n[r]: file:///etc/passwd", "[x][r]\n\n\\[r]: file:///etc/passwd"],
+      ["> [r]: obsidian://x", "> \\[r]: obsidian://x"],
+      ["[w]: https://example.org", "[w]: https://example.org"],
+      ["Claim [source-1](2019)", "Claim [[Notes/a.md|A]]\\(2019)"],
+      ["<https://example.org> <obsidian://x>", "<https://example.org> &lt;obsidian://x>"],
+      ["> ```dataviewjs\n> app\n> ```", "> ```text\n> app\n> ```"],
+      ["- > 1. ~~~dataview\n  x\n  ~~~", "- > 1. ~~~text\n  x\n  ~~~"],
+      ["- ```ts\n  ![[a]]\n  ```", "- ```ts\n  [[a]]\n  ```"],
       ["[ok](https://example.org)", "[ok](https://example.org)"],
       [
         "<img src=x onerror=y> </div> <!-- c -->",
@@ -122,7 +134,7 @@ describe("research export", () => {
         report: finishedReport(markdown),
         chatId: "chat-1",
         researchId: "research-1",
-        sources: new Map(),
+        sources: new Map([["source-1", { ...markdownSource("Notes/a.md"), title: "A" }]]),
       });
       return text.slice(text.indexOf("---\n\n") + 5, -1);
     };

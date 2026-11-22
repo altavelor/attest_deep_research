@@ -1,5 +1,5 @@
 import type { SourceReference } from "@core/model";
-import { markdownCitationOccurrences } from "../answerAnalysis";
+import { CITATION_TOKEN_SOURCE, isMarkdownCodeIndex, markdownCodeRanges } from "../citationTokens";
 import { neutralizeExportMarkdown } from "./exportMarkdown";
 import type { ResearchReport } from "./types";
 
@@ -82,19 +82,20 @@ export function serializeResearchExport(input: ResearchExportInput): string {
     `quality: ${yamlString(report.quality)}`,
     "---",
   ].join("\n");
-  return `${frontMatter}\n\n${linkCitations(neutralizeExportMarkdown(report.markdown), input.sources)}\n`;
+  return `${frontMatter}\n\n${neutralizeExportMarkdown(linkCitations(report.markdown, input.sources))}\n`;
 }
 
 function linkCitations(text: string, sources: ReadonlyMap<string, SourceReference>): string {
-  const occurrences = markdownCitationOccurrences(text, new Set(sources.keys()));
-  let result = "";
-  let copiedUpTo = 0;
-  for (const occurrence of occurrences) {
-    result += text.slice(copiedUpTo, occurrence.index);
-    result += citationMarkup(sources.get(occurrence.label)!);
-    copiedUpTo = occurrence.index + occurrence.length;
-  }
-  return result + text.slice(copiedUpTo);
+  const codeRanges = markdownCodeRanges(text);
+  return text.replace(
+    new RegExp(CITATION_TOKEN_SOURCE, "gu"),
+    (token, label: string, index: number) => {
+      const source = sources.get(label);
+      if (!source || text[index - 1] === "[" || isMarkdownCodeIndex(index, codeRanges))
+        return token;
+      return citationMarkup(source);
+    },
+  );
 }
 
 function citationMarkup(source: SourceReference): string {
