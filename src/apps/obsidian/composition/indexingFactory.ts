@@ -76,7 +76,6 @@ export function createEmbeddingClientForProfile(
 ): EmbeddingClient {
   const server = requireServerProfile(ctx.getSettings(), ctx.translator.t, profile.serverProfileId);
   return new EmbeddingClient({
-    apiFormat: server.apiFormat,
     baseUrl: server.baseUrl,
     apiKey: server.apiKey,
     fetch: resolveProviderFetch(server, "buffered", ctx.isMobile === true),

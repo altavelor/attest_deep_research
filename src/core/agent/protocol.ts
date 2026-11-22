@@ -1,8 +1,7 @@
 import { ChatToolCall, ChatToolChoice, ChatToolDefinition } from "./tool";
 
-export type ApiFormat = "openai-compatible" | "ollama" | "anthropic";
+export type ApiFormat = "openai-compatible";
 export type ChatApiProtocol = "chat-completions" | "responses";
-export type LocalModelProvider = ApiFormat;
 
 export interface ReasoningCapabilities {
   enabled: boolean;
@@ -28,6 +27,7 @@ export interface ModelRoundResult {
     inputTokens: number;
     outputTokens: number;
     reasoningTokens: number;
+    cachedInputTokens: number;
   };
   reasoningItemCount?: number;
 }
@@ -54,6 +54,7 @@ export type ModelStreamEvent =
       inputTokens: number;
       outputTokens: number;
       reasoningTokens: number;
+      cachedInputTokens: number;
     }
   | { type: "complete"; stopReason: "complete" | "tool_calls" | "length" | "error" };
 

@@ -263,6 +263,7 @@ export interface ReasoningDiagnostics {
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
+  cachedInputTokens: number;
 }
 
 export interface ReasoningSegmentAttribution {

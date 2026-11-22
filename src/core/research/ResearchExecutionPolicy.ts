@@ -4,11 +4,7 @@ import { ResearchExecutionStrategy } from "@core/diagnostics";
 import { ResearchMode } from "./researchMode";
 
 export type ResearchPolicyReason =
-  | "instant-selected"
-  | "thinking-eligible"
-  | "deep-research-selected"
-  | "tool-calls-unavailable"
-  | "provider-tool-control-unsupported";
+  "instant-selected" | "thinking-eligible" | "deep-research-selected" | "tool-calls-unavailable";
 
 export interface ResearchExecutionPolicyInput {
   mode: ResearchMode;
@@ -41,13 +37,6 @@ export function resolveResearchExecutionPolicy(
   }
   if (input.mode === "deep-research") {
     return freeze({ ...base, strategy: "deep-research", reason: "deep-research-selected" });
-  }
-  if (input.apiFormat === "ollama") {
-    return freeze({
-      ...base,
-      strategy: "instant-fallback",
-      reason: "provider-tool-control-unsupported",
-    });
   }
   if (!input.capabilities.calls) {
     return freeze({

@@ -3,6 +3,7 @@ import { runToolLoop } from "@adapters/research-tools";
 import { AnswerSynthesisService } from "@application/use-cases/research/AnswerSynthesisService";
 import { VaultResearchPipeline } from "@application/use-cases/research/VaultResearchPipeline";
 import { WebResearchPipeline } from "@application/use-cases/research/WebResearchPipeline";
+import type { ContextDiagnostics } from "@core/diagnostics";
 import { AttestError } from "@core/errors";
 import { collectAsync } from "../support/async";
 import { citation, fixedNow, markdownSource, retrieved, webSource } from "../support/factories";
@@ -531,6 +532,62 @@ describe("AnswerSynthesisService", () => {
     finishRound();
     while (!(await stream.next()).done) {}
   });
+
+  it.each([
+    [
+      [
+        {
+          type: "usage" as const,
+          inputTokens: 100,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          cachedInputTokens: 60,
+        },
+      ],
+      {
+        protocol: "chat-completions",
+        inputTokens: 100,
+        cachedInputTokens: 60,
+        reasoningItemCount: 0,
+      },
+    ],
+    [[], undefined],
+  ])(
+    "records Chat Completions usage of an instant synthesis without tools %#",
+    async (usage, reasoning) => {
+      const chatModel = new FakeChatModel([
+        { content: "Answer.", isComplete: false },
+        {
+          content: "",
+          isComplete: true,
+          events: [...usage, { type: "complete", stopReason: "complete" }],
+        },
+      ]);
+      const service = new AnswerSynthesisService({
+        runToolLoop,
+        chatModel,
+        reasoningDiagnostics: { protocol: "chat-completions", summaryAvailable: false },
+        chatModelName: "qwen",
+        chatOptions: {},
+        now: fixedNow,
+      });
+      const contextDiagnostics = {} as ContextDiagnostics;
+
+      await collectAsync(
+        service.synthesize({
+          question: "Why?",
+          evidence: [],
+          citations: [],
+          evidenceLimit: 8,
+          contextDiagnostics,
+        }),
+      );
+
+      expect(contextDiagnostics.reasoning).toEqual(
+        reasoning ? expect.objectContaining(reasoning) : undefined,
+      );
+    },
+  );
 
   it("streams deltas and completes with a persisted research answer", async () => {
     const persisted: unknown[] = [];

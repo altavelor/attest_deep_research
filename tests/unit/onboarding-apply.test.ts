@@ -30,7 +30,11 @@ const chat = {
 };
 
 const localEmbedding = {
-  server: { name: "Ollama", apiFormat: "ollama" as const, baseUrl: "http://localhost:11434" },
+  server: {
+    name: "Ollama",
+    apiFormat: "openai-compatible" as const,
+    baseUrl: "http://localhost:11434",
+  },
   modelName: "nomic-embed-text",
   verified: true,
 };

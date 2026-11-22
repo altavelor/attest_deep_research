@@ -208,7 +208,6 @@ export class SettingsCapabilityProber {
       modelName: savedProfile.modelName,
     };
     const shouldProbeResponses =
-      server.apiFormat === "openai-compatible" &&
       (force || savedProfile.reasoning.mode !== "off") &&
       (force ||
         !isResponsesCapabilityCurrent(
@@ -226,7 +225,6 @@ export class SettingsCapabilityProber {
       probeReasoning: () =>
         probeReasoningVisibility({
           provider: new ChatModelClient({
-            apiFormat: server.apiFormat,
             baseUrl: server.baseUrl,
             apiKey: server.apiKey,
             logger: this.plugin.logger,
@@ -415,7 +413,6 @@ export class SettingsCapabilityProber {
   ): Promise<ToolCapabilityProbeResult> {
     return probeToolControlCapabilities({
       provider: new ChatModelClient({
-        apiFormat: server.apiFormat,
         baseUrl: server.baseUrl,
         apiKey: server.apiKey,
         logger: this.plugin.logger,

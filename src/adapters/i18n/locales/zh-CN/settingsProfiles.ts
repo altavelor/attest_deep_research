@@ -58,11 +58,6 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
   "settings.serverModal.preset.custom": "自定义",
   "settings.serverModal.name.name": "名称",
   "settings.serverModal.name.desc": "显示在设置和模型选择器中的可读名称。最多 {max} 个字符。",
-  "settings.serverModal.apiFormat.name": "API 格式",
-  "settings.serverModal.apiFormat.desc": "该服务商使用的请求与响应格式。",
-  "settings.serverModal.apiFormat.openaiCompatible": "OpenAI 兼容",
-  "settings.serverModal.apiFormat.ollama": "Ollama",
-  "settings.serverModal.apiFormat.anthropic": "Anthropic",
   "settings.serverModal.baseUrl.name": "基础 URL",
   "settings.serverModal.baseUrl.desc":
     "服务商接入点 URL，例如 OpenRouter、Ollama 或 Anthropic 的 API 基址。",

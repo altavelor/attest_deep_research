@@ -36,18 +36,6 @@ export interface ToolCapabilityProbeResult extends Pick<
 export async function probeToolControlCapabilities(
   options: ToolCapabilityProbeOptions,
 ): Promise<ToolCapabilityProbeResult> {
-  const failed: ToolCapabilityProbeResult = {
-    calls: false,
-    choiceRequired: false,
-    choiceSpecific: false,
-    parallelCalls: false,
-    probeAuditData: {
-      ranAt: new Date().toISOString(),
-      results: { required: [], specific: [], auto: [] },
-    },
-  };
-  if (options.apiFormat === "ollama") return failed;
-
   const ranAt = new Date().toISOString();
   throwIfAborted(options.signal);
   const required = await runProbe(options, { type: "required" });

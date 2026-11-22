@@ -186,7 +186,7 @@ describe("parseResponsesTerminalEvent tolerates partial payloads", () => {
       parseResponsesTerminalEvent(
         completed([], { input_tokens: -3, output_tokens: "many", output_tokens_details: null }),
       )!.result.usage,
-    ).toEqual({ inputTokens: 0, outputTokens: 0, reasoningTokens: 0 });
+    ).toEqual({ inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 });
   });
 
   it("reports a tool-call stop when a valid function call is present", () => {

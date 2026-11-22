@@ -122,6 +122,12 @@ export function summaryMetrics(report: DiagnosticReportV3): SummaryMetric[] {
       value: `${formatCount(tokens.inputTokens)} / ${formatCount(tokens.outputTokens)} / ${formatCount(tokens.reasoningTokens)}`,
     });
   }
+  if (tokens.inputTokens > 0) {
+    metrics.push({
+      label: "Cached input tokens",
+      value: `${formatCount(tokens.cachedInputTokens)} (${Math.round((tokens.cachedInputTokens / tokens.inputTokens) * 100)}%)`,
+    });
+  }
   metrics.push({
     label: "Context tokens",
     value: formatCount(report.preflight.context.budget.usedTokens),

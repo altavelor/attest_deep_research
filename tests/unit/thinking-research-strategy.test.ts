@@ -448,7 +448,7 @@ describe("ThinkingResearchStrategy sub-agent telemetry", () => {
       searchBudgetRejections: 0,
       usedSynthesisFallback: false,
       answerChars: 17,
-      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0 },
+      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0, cachedInputTokens: 0 },
       ...overrides,
     };
   }

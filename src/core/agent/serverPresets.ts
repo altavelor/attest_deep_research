@@ -18,7 +18,7 @@ const preset = (
 
 export const SERVER_PRESETS: readonly ServerPreset[] = [
   preset("openai", "OpenAI", "https://api.openai.com/v1"),
-  preset("anthropic", "Anthropic", "https://api.anthropic.com/v1", "anthropic"),
+  preset("anthropic", "Anthropic", "https://api.anthropic.com/v1"),
   preset("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"),
   preset("mistral", "Mistral", "https://api.mistral.ai/v1"),
   preset("groq", "Groq", "https://api.groq.com/openai/v1"),
@@ -29,7 +29,7 @@ export const SERVER_PRESETS: readonly ServerPreset[] = [
   preset("cerebras", "Cerebras", "https://api.cerebras.ai/v1"),
   preset("nebius", "Nebius AI Studio", "https://api.studio.nebius.com/v1"),
   preset("novita", "Novita AI", "https://api.novita.ai/v3/openai"),
-  preset("ollama", "Ollama (local)", "http://localhost:11434", "ollama"),
+  preset("ollama", "Ollama (local)", "http://localhost:11434/v1"),
   preset("lmstudio", "LM Studio (local)", "http://localhost:1234/v1"),
 ];
 

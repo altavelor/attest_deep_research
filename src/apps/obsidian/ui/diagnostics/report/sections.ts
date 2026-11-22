@@ -222,8 +222,9 @@ export function buildReasoningSection(d: ContextDiagnostics): ReasoningSection {
           inputTokens: d.reasoning.inputTokens,
           outputTokens: d.reasoning.outputTokens,
           reasoningTokens: d.reasoning.reasoningTokens,
+          cachedInputTokens: d.reasoning.cachedInputTokens,
         }
-      : { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+      : { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 },
     reasoningItemCount: d.reasoning?.reasoningItemCount ?? 0,
     continuationRounds: d.reasoning?.continuationRounds ?? 0,
   };

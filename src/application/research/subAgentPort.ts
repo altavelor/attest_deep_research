@@ -57,6 +57,7 @@ export interface SubAgentUsage {
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
+  cachedInputTokens: number;
 }
 
 export type SubAgentLogEvent =

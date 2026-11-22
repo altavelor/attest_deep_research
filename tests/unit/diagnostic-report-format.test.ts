@@ -4,6 +4,7 @@ import {
   groupToolCalls,
   isEmptySearchResult,
   isNoteworthyRound,
+  summaryMetrics,
   toolCallSummary,
   webSourceSelectionHtml,
   webSourceSelectionsHtml,
@@ -12,7 +13,7 @@ import {
   buildReasoningSection,
   buildRequestSection,
 } from "@apps/obsidian/ui/diagnostics/report/sections";
-import { ThinkingLoopRound } from "@apps/obsidian/ui/diagnostics/report/types";
+import { DiagnosticReportV3, ThinkingLoopRound } from "@apps/obsidian/ui/diagnostics/report/types";
 import {
   ContextDiagnostics,
   ToolCallDiagnostic,
@@ -134,6 +135,23 @@ describe("diagnostic report format helpers", () => {
     expect(formatCount(999)).toBe("999");
     expect(formatCount(74_499)).toBe("74.5k");
     expect(formatCount(1_048_576)).toBe("1.0M");
+  });
+
+  it("shows the cached share of input tokens whenever any input was sent", () => {
+    const report = (inputTokens: number, cachedInputTokens: number) =>
+      ({
+        reasoning: {
+          thinkingLoop: null,
+          tokens: { inputTokens, outputTokens: 10, reasoningTokens: 0, cachedInputTokens },
+        },
+        stats: { durationMs: 0 },
+        preflight: { context: { budget: { usedTokens: 0 } } },
+      }) as unknown as DiagnosticReportV3;
+    const cachedRow = (metrics: ReturnType<typeof summaryMetrics>) =>
+      metrics.find((metric) => metric.label === "Cached input tokens");
+
+    expect(cachedRow(summaryMetrics(report(200, 50)))?.value).toBe("50 (25%)");
+    expect(cachedRow(summaryMetrics(report(0, 0)))).toBeUndefined();
   });
 });
 

@@ -517,7 +517,7 @@ function emptyThinkingFailure(
     reasoningItemCount: 0,
     reasoningSegments: [],
     continuationRounds: 0,
-    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 },
   };
 }
 
