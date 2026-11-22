@@ -146,6 +146,23 @@ export class ResearchBudgetOwner {
     return granted;
   }
 
+  /**
+   * Spends main-path model rounds of hypothesis proposal and assessment from the gather pool, so
+   * they never eat the finalization reserve; false when the budget is closed or no round remains.
+   */
+  spendDiscovery(rounds: number): boolean {
+    if (!this.state.closed && this.remainingMs() <= 0) this.close("time");
+    if (this.state.closed) return false;
+    const available =
+      this.limits.modelRoundsTotal -
+      this.limits.finalizationReserveRounds -
+      this.state.consumed.modelRounds -
+      sum(this.state.openAllocations, "modelRounds");
+    if (available < rounds) return false;
+    this.state = { ...this.state, consumed: addUse(this.state.consumed, rounds, 0, 0) };
+    return true;
+  }
+
   /** Spends finalization rounds for verification or synthesis; false when none remain. */
   spendFinalization(rounds: number): boolean {
     if (this.state.closed?.reason === "time" || this.remainingMs() <= 0) return false;

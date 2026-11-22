@@ -74,3 +74,16 @@ export {
   type VerifiedClaim,
 } from "./reportSections";
 export { escapePromptText } from "./promptText";
+export type * from "./discoveryTypes";
+export {
+  MAX_HYPOTHESIS_TEXT_CHARS,
+  USER_OBSERVATION_LIMITATION,
+  acceptHypothesisDraft,
+  boundNotes,
+  currentHypotheses,
+  nextCycleDecision,
+  reduceHypothesis,
+  userObservation,
+  type CycleDecisionInput,
+  type HypothesisDraft,
+} from "./discovery";
