@@ -4,6 +4,7 @@ import {
   boundTestExecution,
   boundedReason,
   hypothesesSection,
+  isPlanStale,
   openWorks,
   reportDecision,
   resumeExecutions,
@@ -143,6 +144,16 @@ export async function runResearch(
     executions: resumeExecutions(start.executions),
     discovery: observed,
   });
+  if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
+    const state = await commit({
+      pending: {
+        decisionId: deps.createId("decision"),
+        kind: "stale-plan",
+        artifactRevision: plan.revision,
+      },
+    });
+    return { state, report: null };
+  }
 
   const stopTurn = (): void => turn.abort(deps.signal?.reason);
   deps.signal?.addEventListener("abort", stopTurn);

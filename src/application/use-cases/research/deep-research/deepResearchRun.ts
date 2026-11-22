@@ -110,6 +110,13 @@ export async function* runApprovedTurn(
       onStatus: (message) => push({ type: "status", message }),
     });
   });
+  if (result.state.pending?.kind === "stale-plan") {
+    return yield* finish(
+      ctx,
+      result.state,
+      "Observation recorded. The approved plan is old; continue anyway, replan or cancel the research.",
+    );
+  }
   if (result.state.phase === "awaiting-observation") {
     const test = result.state.discovery!.tests.find((entry) => entry.status === "awaiting-input")!;
     return yield* finish(

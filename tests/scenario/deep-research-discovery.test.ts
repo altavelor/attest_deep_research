@@ -25,6 +25,7 @@ function answer(
   registry: ResearchRegistry,
   request: Omit<ResearchRequest, "mode">,
   rounds = new BranchModelRounds(),
+  now: () => Date = fixedNow,
 ) {
   return collectAsync(
     deepResearchService(model, true, {
@@ -40,6 +41,7 @@ function answer(
         usedFallback: false,
       }),
       modelRound: rounds,
+      now,
     }).answer({
       ...request,
       mode: "deep-research",
@@ -214,5 +216,26 @@ describe("deep research discovery", () => {
         state.phase,
       ).toBe(true);
     }
+  });
+
+  it("records a supplied observation on a stale plan and asks about the plan before scheduling", async () => {
+    const model = new DiscoveryModel(["observation"], ["supports"]);
+    const registry = new ResearchRegistry();
+    const port = stored("balanced");
+    const researchId = port.commits[0]!.researchId;
+    await answer(model, registry, {
+      question: "Continue",
+      researchState: port,
+      research: { type: "continue", researchId },
+    });
+    const resumed = reloaded(port.commits.at(-1)!);
+    const rounds = new BranchModelRounds();
+    const later = () => new Date(fixedNow().getTime() + 30 * 24 * 3_600_000);
+    await answer(model, registry, { question: "It held.", researchState: resumed }, rounds, later);
+
+    const final = resumed.commits.at(-1)!;
+    expect(final.pending).toMatchObject({ kind: "stale-plan" });
+    expect(final.discovery!.observations).toMatchObject([{ producer: "user", quote: "It held." }]);
+    expect(rounds.tasks).toEqual([]);
   });
 });
