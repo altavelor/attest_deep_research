@@ -77,6 +77,10 @@ describe("deep research discovery", () => {
       { question: "Continue", researchState: port, research: { type: "continue", researchId } },
       rounds,
     );
+    const tests = rounds.tasks.filter((task) => task.startsWith("Test this hypothesis"));
+    expect(tests).toHaveLength(2);
+    expect(tests[0]).toContain("Claim: The moon causes tides");
+    expect(tests[0]).toContain("Disconfirmed if: Tides ignore the moon");
 
     const discovery = [...port.commits].reverse().find((state) => state.discovery)!.discovery!;
     expect(discovery.hypotheses).toMatchObject([

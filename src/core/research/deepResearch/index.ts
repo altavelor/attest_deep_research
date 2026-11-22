@@ -105,6 +105,7 @@ export {
 export {
   parseHypothesisProposals,
   parseObservationVerdict,
+  testWorkTask,
   type HypothesisProposal,
   type ParsedProposals,
 } from "./discoveryDraft";

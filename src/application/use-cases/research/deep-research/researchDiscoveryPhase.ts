@@ -8,6 +8,7 @@ import {
   nextCycleDecision,
   reduceHypothesis,
   resumeExecutions,
+  testWorkTask,
   type BranchExecution,
   type CycleDecision,
   type ResearchDiscovery,
@@ -84,7 +85,7 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
         await commit(withCycle(discovery, ordinal, "exhausted", "No discovery round remains."));
         continue;
       }
-      const planned = deps.service.plan(proposed.proposals, current, ordinal);
+      const planned = deps.service.plan(proposed.proposals, current);
       revised = planned.hypotheses.some((hypothesis) => hypothesis.revision > 1);
       discovery = {
         ...discovery,
@@ -175,12 +176,16 @@ async function runOpenTests(
   if (open.length === 0 || deps.budgetClosed()) return;
   const works: ResearchWork[] = open.map((execution) => {
     const test = discovery.tests.find((entry) => entry.testId === execution.workId)!;
+    const hypothesis = discovery.hypotheses.find(
+      (entry) =>
+        entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
+    )!;
     return {
       workId: execution.workId,
       branchId: execution.branchId,
       cycle: discovery.cycles.length + 1,
       kind: "test",
-      task: `Test: ${test.method}`,
+      task: testWorkTask(hypothesis, test),
     };
   });
   const settled = await deps.runTests(executions, works);

@@ -235,7 +235,7 @@ export class BranchModelRounds implements ModelRoundProvider {
           call: {
             id: `call-${this.tasks.length}`,
             name: "search_index",
-            arguments: { query: task },
+            arguments: { query: task.slice(0, 200) },
           },
         },
       ],

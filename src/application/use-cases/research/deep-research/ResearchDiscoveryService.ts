@@ -14,7 +14,6 @@ import {
   type ResearchObservation,
   type ResearchPlan,
   type ResearchTest,
-  type ResearchWork,
 } from "@core/research/deepResearch";
 
 export interface ResearchDiscoveryOptions {
@@ -31,7 +30,6 @@ export interface ResearchDiscoveryOptions {
 export interface PlannedTests {
   hypotheses: ResearchHypothesis[];
   tests: ResearchTest[];
-  works: ResearchWork[];
   executions: BranchExecution[];
 }
 
@@ -94,13 +92,12 @@ export class ResearchDiscoveryService {
     return parseHypothesisProposals(reply, plan, current, max);
   }
 
-  /** Turns proposals into hypothesis revisions, tests and the branch works of literature checks. */
+  /** Turns proposals into hypothesis revisions, tests and the pending executions of literature checks. */
   plan(
     proposals: readonly HypothesisProposal[],
     current: readonly ResearchHypothesis[],
-    cycle: number,
   ): PlannedTests {
-    const planned: PlannedTests = { hypotheses: [], tests: [], works: [], executions: [] };
+    const planned: PlannedTests = { hypotheses: [], tests: [], executions: [] };
     for (const proposal of proposals) {
       const previous = current.find((entry) => entry.hypothesisId === proposal.revises);
       const hypothesis: ResearchHypothesis = {
@@ -124,19 +121,6 @@ export class ResearchDiscoveryService {
       planned.hypotheses.push(hypothesis);
       planned.tests.push(test);
       if (!literature) continue;
-      planned.works.push({
-        workId: test.testId,
-        branchId: hypothesis.branchId,
-        cycle,
-        kind: "test",
-        task: [
-          `Test the hypothesis: ${hypothesis.claim}`,
-          `Prediction: ${hypothesis.prediction}`,
-          `It is disconfirmed if: ${hypothesis.disconfirmation}`,
-          `Method: ${test.method}`,
-          "Cite the passages that support or contradict it.",
-        ].join("\n"),
-      });
       planned.executions.push({
         workId: test.testId,
         branchId: hypothesis.branchId,
