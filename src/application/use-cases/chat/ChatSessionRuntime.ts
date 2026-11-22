@@ -27,6 +27,7 @@ import {
   bindAnswerToConversationRegistry,
   recordConversationCitationUsages,
   registerConversationEvidence,
+  resolveConversationEvidence,
 } from "@core/chat/sourceRegistry";
 import type { ChatRepository } from "@application/ports/chat";
 import type { SubAgentInspectionPort } from "@application/ports/subAgent";
@@ -213,6 +214,8 @@ export class ChatSessionRuntime {
             }
           : {}),
         finalizeAnswer: (answer: ResearchAnswer) => this.registerAnswerSources(answer, runId),
+        resolveEvidence: (revisionIds) =>
+          resolveConversationEvidence(this.state.sourceRegistry, revisionIds),
         signal: this.controller.signal,
         ...(mode === "deep-research"
           ? {

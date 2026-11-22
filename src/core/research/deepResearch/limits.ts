@@ -7,9 +7,13 @@ export const MAX_CLARIFICATION_ROUNDS = 1;
 export const MAX_CLARIFICATION_QUESTIONS = 3;
 export const MAX_RESEARCH_NOTES = 50;
 export const MAX_BRANCH_FINDING_CHARS = 30_000;
+export const MAX_BRANCH_FINDING_BYTES = 48 * 1024;
+export const MAX_FINDING_CITATION_TOKENS = 200;
 export const MAX_RESEARCH_SECTION_BYTES = 1024 * 1024;
 export const MAX_RESEARCH_HISTORY = 10;
 export const MAX_PLAN_LIST_ITEMS = 12;
+export const MAX_RESEARCH_QUESTION_CHARS = 20_000;
+export const MAX_RESEARCH_TEXT_CHARS = 4000;
 export const DEFAULT_RESEARCH_PRESET: ResearchPreset = "balanced";
 
 const MINUTE_MS = 60_000;

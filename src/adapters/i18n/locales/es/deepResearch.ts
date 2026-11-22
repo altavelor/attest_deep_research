@@ -14,7 +14,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.cancel": "Cancelar investigación",
   "chat.deepResearch.superseded":
     "Una revisión anterior de este plan; consulta la tarjeta más reciente.",
-  "chat.deepResearch.approved": "Plan aprobado.",
   "chat.deepResearch.ended": "Esta investigación ha terminado.",
   "chat.deepResearch.unreadable":
     "El estado de investigación de este chat no se puede leer: {reason}",
@@ -22,5 +21,26 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.turn.edit": "Editar el plan de investigación",
   "chat.deepResearch.turn.regenerate": "Regenerar el plan de investigación",
   "chat.deepResearch.turn.cancel": "Cancelar la investigación",
+  "chat.deepResearch.progress.title": "Progreso de la investigación",
+  "chat.deepResearch.progress.budget":
+    "Rondas {rounds} de {maxRounds} · intentos {attempts} de {maxAttempts} · {minutes} de {maxMinutes} min",
+  "chat.deepResearch.paused":
+    "En pausa. Continúa desde el último paso completado o cancela la investigación.",
+  "chat.deepResearch.stale":
+    "El plan aprobado es antiguo. Continúa igualmente, replanifica o cancela.",
+  "chat.deepResearch.report.title": "Informe de investigación",
+  "chat.deepResearch.report.complete": "Completo: {completed} de {total} ramas",
+  "chat.deepResearch.report.partial": "Parcial: {completed} de {total} ramas",
+  "chat.deepResearch.report.missing": "Falta {branch}: {reason}",
+  "chat.deepResearch.action.continue": "Continuar",
+  "chat.deepResearch.action.continueAnyway": "Continuar igualmente",
+  "chat.deepResearch.action.replan": "Replanificar",
+  "chat.deepResearch.turn.continue": "Continuar la investigación",
+  "chat.deepResearch.state.pending": "En espera",
+  "chat.deepResearch.state.running": "En curso",
+  "chat.deepResearch.state.completed": "Completada",
+  "chat.deepResearch.state.failed": "Fallida",
+  "chat.deepResearch.state.skipped": "Omitida",
+  "chat.deepResearch.state.blocked": "Bloqueada",
   "chat.history.requiresAction": "Esperando tu decisión",
 };

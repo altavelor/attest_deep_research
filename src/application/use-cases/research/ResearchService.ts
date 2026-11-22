@@ -95,6 +95,7 @@ export interface ResearchServiceOptions {
 
   subAgentLogger?: SubAgentLogger;
   deepResearchEnabled?: boolean;
+  researchTimer?: (delayMs: number, callback: () => void) => () => void;
 }
 
 const DEFAULT_EVIDENCE_LIMIT = 8;
@@ -241,6 +242,9 @@ export class ResearchService implements ConversationEngine {
       hasIndex: options.retriever !== undefined,
       hasWeb: options.searchProvider !== undefined,
       now,
+      createBranchEngine: () => new SubAgentRunner(this.subAgentRunnerDeps),
+      branchSources: this.subAgentSources,
+      ...(options.researchTimer ? { setTimer: options.researchTimer } : {}),
     });
   }
 

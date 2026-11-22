@@ -1,5 +1,6 @@
 import { FileChatRepository } from "@adapters/filesystem/FileChatRepository";
-import type { SavedChatSettings } from "@core/chat/savedChat";
+import { researchSectionView, type SavedChatSettings } from "@core/chat/savedChat";
+import { finishedResearchReport } from "@application/use-cases/research/deep-research";
 import type { ChatModelProvider } from "@core/agent";
 import { startResearchState } from "@core/research/deepResearch";
 import { eventually } from "../support/async";
@@ -35,7 +36,7 @@ function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: 
 }
 
 describe("deep research turns through the chat runtime", () => {
-  it("starts a research, keeps its pending plan across a reload and approves it", async () => {
+  it("starts a research, keeps its pending plan across a reload and runs it on approval", async () => {
     const fileSystem = new MemoryFileSystem();
     const model = new FakeChatModel([
       { content: planReply(), isComplete: false },
@@ -72,10 +73,18 @@ describe("deep research turns through the chat runtime", () => {
     const approved = await reopen(fileSystem, model).repository.loadChat(session.chatId!);
     const finalSection =
       approved?.deepResearch?.status === "ready" ? approved.deepResearch.section : null;
-    expect(finalSection?.active).toMatchObject({ phase: "gathering", pending: null });
-    expect(finalSection?.active?.plan?.approvedAt).not.toBeNull();
-    expect(approved?.messages.at(-3)?.research?.researchId).toBe(active.researchId);
-    expect(model.requests).toHaveLength(1);
+    expect(finalSection).toMatchObject({
+      active: null,
+      history: [{ researchId: active.researchId, phase: "completed" }],
+    });
+    const reportMessage = approved!.messages.at(-3)!;
+    expect(reportMessage.research?.researchId).toBe(active.researchId);
+    const view = researchSectionView(approved!.deepResearch);
+    expect(finishedResearchReport(view, approved!.messages, active.researchId)).toMatchObject({
+      quality: "complete",
+      markdown: reportMessage.content,
+    });
+    expect(finishedResearchReport(view, approved!.messages, "research-other")).toBeNull();
   });
 
   it("ends a research stopped or abandoned while drafting and lets a plain message start anew", async () => {

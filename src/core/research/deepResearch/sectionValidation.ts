@@ -1,5 +1,18 @@
-import { DEEP_RESEARCH_SCHEMA, MAX_RESEARCH_HISTORY, isTerminalResearchPhase } from "./limits";
+import {
+  DEEP_RESEARCH_SCHEMA,
+  MAX_RESEARCH_HISTORY,
+  MAX_RESEARCH_QUESTION_CHARS,
+  MAX_RESEARCH_TEXT_CHARS,
+  isTerminalResearchPhase,
+} from "./limits";
 import { isResearchId, isRevision, validatePlan } from "./planValidation";
+import {
+  executionConsistent,
+  readBudget,
+  readExecutions,
+  readReportSummary,
+  reportSummary,
+} from "./executionValidation";
 import type {
   DeepResearchSection,
   PendingDecision,
@@ -46,8 +59,8 @@ const DECISION_KINDS: readonly PendingDecision["kind"][] = [
 ];
 const SCOPES: readonly ResearchBranch["sourceScope"][] = ["indexOnly", "webOnly", "indexAndWeb"];
 const PRESETS: readonly ResearchPreset[] = ["conservative", "balanced", "thorough"];
-const MAX_QUESTION = 20_000;
-const MAX_TEXT = 4000;
+const MAX_QUESTION = MAX_RESEARCH_QUESTION_CHARS;
+const MAX_TEXT = MAX_RESEARCH_TEXT_CHARS;
 const MAX_TIMESTAMP = 40;
 
 /**
@@ -93,6 +106,7 @@ export function nextResearchSection(
     terminalReason: next.terminalReason,
     createdAt: next.createdAt,
     updatedAt: next.updatedAt,
+    report: reportSummary(next.report),
   };
   return {
     schema: DEEP_RESEARCH_SCHEMA,
@@ -106,6 +120,8 @@ function readState(value: unknown): ResearchState | undefined {
   const phase = value.phase as ResearchPhase;
   const pending = value.pending === null ? null : readPending(value.pending);
   const plan = value.plan === null ? null : readPlan(value.plan);
+  const budget = readBudget(value.budget);
+  const executions = readExecutions(value.executions);
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||
@@ -118,7 +134,10 @@ function readState(value: unknown): ResearchState | undefined {
     !(value.terminalReason === null || isText(value.terminalReason, MAX_TEXT)) ||
     !isTimestamp(value.createdAt) ||
     !isTimestamp(value.updatedAt) ||
-    !consistent(phase, pending, plan)
+    !consistent(phase, pending, plan) ||
+    budget === undefined ||
+    executions === undefined ||
+    !executionConsistent(plan, executions, budget, value.report)
   ) {
     return undefined;
   }
@@ -133,6 +152,9 @@ function readState(value: unknown): ResearchState | undefined {
     terminalReason: value.terminalReason as string | null,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+    budget,
+    executions,
+    report: null,
   };
 }
 
@@ -234,6 +256,7 @@ function readBranch(value: unknown): ResearchBranch | undefined {
 }
 
 function readHistoryEntry(value: unknown): ResearchHistoryEntry | null {
+  const report = isRecord(value) ? readReportSummary(value.report) : undefined;
   if (
     !isRecord(value) ||
     !isResearchId(value.researchId) ||
@@ -242,11 +265,13 @@ function readHistoryEntry(value: unknown): ResearchHistoryEntry | null {
     !isTerminalResearchPhase(value.phase as ResearchPhase) ||
     !(value.terminalReason === null || isText(value.terminalReason, MAX_TEXT)) ||
     !isTimestamp(value.createdAt) ||
-    !isTimestamp(value.updatedAt)
+    !isTimestamp(value.updatedAt) ||
+    report === undefined
   ) {
     return null;
   }
   return {
+    report,
     researchId: value.researchId,
     question: value.question,
     phase: value.phase as ResearchPhase,
