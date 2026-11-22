@@ -310,17 +310,27 @@ describe("sub-agent inspection snapshot", () => {
       type: "tool-end",
       item: toolItem(harness, 0, "c1", {
         status: "complete",
-        args: { apiKey: "abc123", headers: { "x-auth": 7, password: 12345 }, q: "news" },
+        args: {
+          apiKey: "abc123",
+          clientSecret: "cs-9",
+          headers: { "x-auth": 7, password: 12345 },
+          q: "news",
+        },
         resultJson: '{"access_token":"tok-xyz","password":987654,"items":[1]}',
       }),
     });
 
     const detail = await harness.manager.inspection().getSession(session.subAgentSessionId);
     expect(detail!.lifetime[0]).toMatchObject({
-      args: { apiKey: "[redacted]", headers: { password: "[redacted]" }, q: "news" },
+      args: {
+        apiKey: "[redacted]",
+        clientSecret: "[redacted]",
+        headers: { password: "[redacted]" },
+        q: "news",
+      },
       resultJson: '{"access_token":"[redacted]","password":"[redacted]","items":[1]}',
     });
-    expect(stateText(harness)).not.toMatch(/abc123|12345|tok-xyz|987654/);
+    expect(stateText(harness)).not.toMatch(/abc123|cs-9|12345|tok-xyz|987654/);
   });
 });
 

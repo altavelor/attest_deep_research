@@ -48,6 +48,10 @@ describe("redactSensitiveText", () => {
   it.each([
     ['{"api_key":"sk-live-\\"abc","ok":true}', '{"api_key":"[redacted]","ok":true}'],
     ["Authorization: Basic dXNlcjpwYXNz", "Authorization=[redacted]"],
+    [
+      'clientSecret: abc {"refreshToken":"xyz"}',
+      'clientSecret=[redacted] {"refreshToken":"[redacted]"}',
+    ],
   ])("removes the credential of %s", (text, redacted) => {
     expect(redactSensitiveText(text)).toBe(redacted);
   });

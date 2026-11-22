@@ -1,9 +1,9 @@
 const SENSITIVE_KEY =
-  /(^|[_-])(api[_-]?key|access[_-]?token|token|secret|password|authorization)($|[_-])/i;
+  /(^|[_-])(api[_-]?key|access[_-]?token|private[_-]?key|token|secret|password|authorization)($|[_-])/i;
 const SENSITIVE_ASSIGNMENT =
-  /\b((?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization))\s*[:=]\s*(?:(?:Bearer|Basic|Token|Digest)\s+)?([^\s,;&]+)/gi;
+  /\b((?:[a-z0-9]+[_-]?)?(?:api[_ -]?key|access[_ -]?token|private[_ -]?key|token|secret|password|authorization))\s*[:=]\s*(?:(?:Bearer|Basic|Token|Digest)\s+)?([^\s,;&]+)/gi;
 const SENSITIVE_JSON_FIELD =
-  /("(?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization)"\s*:\s*"(?:(?:Bearer|Basic|Token|Digest)\s+)?)(?:\\.|[^"\\])*"/gi;
+  /("(?:[a-z0-9]+[_-]?)?(?:api[_ -]?key|access[_ -]?token|private[_ -]?key|token|secret|password|authorization)"\s*:\s*"(?:(?:Bearer|Basic|Token|Digest)\s+)?)(?:\\.|[^"\\])*"/gi;
 
 /** Remove credential values from values that may be written to logs or diagnostics. */
 export function redactSensitiveData<T>(value: T): T {
@@ -12,7 +12,7 @@ export function redactSensitiveData<T>(value: T): T {
 
 /** Redacts credentials in `text`; a value stored under a credential-like `key` is replaced whole. */
 export function redactSensitiveText(text: string, key?: string): string {
-  return key !== undefined && SENSITIVE_KEY.test(key) ? "[redacted]" : redactSensitiveString(text);
+  return key !== undefined && isSensitiveKey(key) ? "[redacted]" : redactSensitiveString(text);
 }
 
 function redactValue(value: unknown): unknown {
@@ -28,9 +28,14 @@ function redactValue(value: unknown): unknown {
 
   const redacted: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    redacted[key] = SENSITIVE_KEY.test(key) ? "[redacted]" : redactValue(item);
+    redacted[key] = isSensitiveKey(key) ? "[redacted]" : redactValue(item);
   }
   return redacted;
+}
+
+/** True for a credential-like key, also when its words are joined in camelCase. */
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2"));
 }
 
 function redactSensitiveString(value: string): string {
@@ -53,7 +58,7 @@ function redactUrlQuerySecrets(value: string): string {
   url.password = "";
 
   for (const [key] of Array.from(url.searchParams)) {
-    if (SENSITIVE_KEY.test(key)) {
+    if (isSensitiveKey(key)) {
       url.searchParams.set(key, "[redacted]");
     }
   }
