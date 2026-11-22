@@ -11,8 +11,9 @@ import { MainBranchRunner } from "./MainBranchRunner";
 import { SubAgentBranchRunner } from "./SubAgentBranchRunner";
 import { ReportSynthesisService } from "./ReportSynthesisService";
 import { EvidenceVerificationService } from "./EvidenceVerificationService";
+import { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { pumpEvents } from "./eventPump";
-import { runResearch, type ResearchRunResult } from "./researchRun";
+import { runResearch, type ResearchRunResult, type SuppliedObservation } from "./researchRun";
 import { defaultTimer, referenceEvent } from "./strategyHelpers";
 import { preflightScope } from "./deepResearchTurns";
 
@@ -29,6 +30,7 @@ export async function* runApprovedTurn(
   port: ResearchStatePort,
   approved: ResearchState,
   createId: (prefix: string) => string,
+  observation?: SuppliedObservation,
 ): TurnEvents {
   const scope = preflightScope(ctx.searchMode, sourcesOf(deps));
   const signal = ctx.request.signal;
@@ -77,6 +79,16 @@ export async function* runApprovedTurn(
           chatOptions: deps.chatOptions,
           ...options,
         }),
+      createDiscovery: (options) =>
+        new ResearchDiscoveryService({
+          chatModel: deps.chatModel,
+          model: deps.chatModelName,
+          chatOptions: deps.chatOptions,
+          createId,
+          now: () => deps.now().toISOString(),
+          ...options,
+        }),
+      ...(observation ? { observation } : {}),
       ...(signal ? { signal } : {}),
       ...(ctx.request.resolveEvidence ? { resolveEvidence: ctx.request.resolveEvidence } : {}),
       finalizeReport: (markdown) => {
@@ -98,6 +110,14 @@ export async function* runApprovedTurn(
       onStatus: (message) => push({ type: "status", message }),
     });
   });
+  if (result.state.phase === "awaiting-observation") {
+    const test = result.state.discovery!.tests.find((entry) => entry.status === "awaiting-input")!;
+    return yield* finish(
+      ctx,
+      result.state,
+      `The research needs an observation you supply: ${test.method}`,
+    );
+  }
   if (!result.report) {
     return yield* finish(ctx, result.state, `Research failed: ${result.state.terminalReason}`);
   }

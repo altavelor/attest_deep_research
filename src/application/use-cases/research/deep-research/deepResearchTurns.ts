@@ -17,7 +17,7 @@ export interface ResearchSources {
 /**
  * Resolves the turn a Deep Research message stands for. Explicit input wins; plain text starts a
  * research when none is active, is the regeneration instruction of a pending plan decision and the
- * free-text answer of a pending clarification.
+ * free-text answer of a pending clarification or observation.
  */
 export function resolveResearchTurn(
   input: ResearchTurnInput | undefined,
@@ -45,6 +45,17 @@ export function resolveResearchTurn(
         decisionId: active.pending.decisionId,
         expectedRevision: active.revision,
         payload: { action: "reply", text },
+      },
+    };
+  }
+  if (!input && active.pending?.kind === "observation") {
+    return {
+      type: "decision",
+      decision: {
+        researchId: active.researchId,
+        decisionId: active.pending.decisionId,
+        expectedRevision: active.revision,
+        payload: { action: "observe", text },
       },
     };
   }
@@ -91,7 +102,7 @@ export function preflightScope(
 export function checkTurnText(turn: ResearchTurnInput, text: string): void {
   const payload =
     turn.type === "decision"
-      ? (turn.decision.payload as { instruction?: unknown; text?: unknown })
+      ? (turn.decision.payload as { action?: unknown; instruction?: unknown; text?: unknown })
       : null;
   const reply = typeof payload?.text === "string" ? payload.text : null;
   const instruction = payload?.instruction;
@@ -102,7 +113,8 @@ export function checkTurnText(turn: ResearchTurnInput, text: string): void {
     throw tooLong("plan instruction", MAX_RESEARCH_TEXT_CHARS);
   }
   if (reply !== null && reply.length > MAX_RESEARCH_TEXT_CHARS) {
-    throw tooLong("clarification reply", MAX_RESEARCH_TEXT_CHARS);
+    const subject = payload?.action === "observe" ? "observation" : "clarification reply";
+    throw tooLong(subject, MAX_RESEARCH_TEXT_CHARS);
   }
 }
 

@@ -24,7 +24,13 @@ import { ResearchPlanService } from "./ResearchPlanService";
 import { ResearchClarificationService } from "./ResearchClarificationService";
 import { clarificationTurn, startTurn, type PlanningTurnContext } from "./researchPlanningTurn";
 import { finish, runApprovedTurn, type TurnEvents } from "./deepResearchRun";
-import { isAbort, isExecuting, reopenedBudget, stale } from "./strategyHelpers";
+import {
+  isAbort,
+  isExecuting,
+  reopenedBudget,
+  stale,
+  suppliedObservation,
+} from "./strategyHelpers";
 import {
   abandonsPlanning,
   checkTurnText,
@@ -123,6 +129,17 @@ export class DeepResearchStrategy implements ResearchStrategy {
     if (decisionMismatch(active, decision)) throw stale();
     if (active.pending?.kind === "stale-plan") {
       return yield* this.decideStale(ctx, port, active, decision);
+    }
+    if (active.pending?.kind === "observation") {
+      const supplied = suppliedObservation(active, decision);
+      return yield* runApprovedTurn(
+        this.deps,
+        ctx,
+        port,
+        active,
+        (prefix) => this.createId(prefix),
+        supplied,
+      );
     }
     if (active.pending?.kind === "clarification") {
       const scope = preflightScope(ctx.searchMode, this.sources());
