@@ -134,17 +134,20 @@ describe("deep research discovery", () => {
     await expect(
       answer(model, registry, { question: "Late", researchState: resumed, research: stale }),
     ).rejects.toThrow("no longer matches the research");
-    await answer(model, registry, {
-      question: "Tides followed the moon every day I watched.",
-      researchState: resumed,
-    });
+    const report = "Tides followed the moon every day I watched [source-1:revision-1].";
+    await answer(model, registry, { question: report, researchState: resumed });
 
     const final = resumed.commits.at(-1)!;
     expect(final.phase).toBe("completed");
     const discovery = [...resumed.commits].reverse().find((state) => state.discovery)!.discovery!;
     expect(discovery.cycles.map((cycle) => cycle.decision)).toEqual(["continue", "finish"]);
     expect(discovery.observations).toMatchObject([
-      { producer: "user", limitations: ["reported, not independently checked"] },
+      {
+        producer: "user",
+        citationTokens: [],
+        quote: report,
+        limitations: ["reported, not independently checked"],
+      },
     ]);
     expect(
       model.requests.filter((request) =>

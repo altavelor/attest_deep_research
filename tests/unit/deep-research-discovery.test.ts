@@ -9,6 +9,8 @@ import {
   type ResearchObservation,
   type ResearchTest,
 } from "@core/research/deepResearch";
+import { ResearchDiscoveryService } from "@application/use-cases/research/deep-research";
+import { FakeChatModel } from "../support/researchFakes";
 
 const hypothesis: ResearchHypothesis = {
   hypothesisId: "h-1",
@@ -97,8 +99,7 @@ describe("deep research discovery rules", () => {
       observationId: "o-3",
       testId: "t-2",
       verdict: "supports",
-      quote: null,
-      citationTokens: [],
+      quote: "Tides followed the moon",
       receivedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(reported).toMatchObject({ producer: "user", citationTokens: [] });
@@ -110,8 +111,7 @@ describe("deep research discovery rules", () => {
       observationId: "o-1",
       testId: "t-1",
       verdict: "supports",
-      quote: null,
-      citationTokens: [],
+      quote: "Tides followed the moon",
       receivedAt: "2026-01-01T00:00:00.000Z",
     });
     const section = hypothesesSection({
@@ -134,7 +134,25 @@ describe("deep research discovery rules", () => {
     });
     expect(section).toContain("(disconfirmed) The moon drives tides. (revision 1)");
     expect(section).toContain(
-      `(supported by a user observation, ${USER_OBSERVATION_LIMITATION}) The moon drives tides. (revision 2). Alternative: Wind drives tides.`,
+      `(supported by a user observation — ${USER_OBSERVATION_LIMITATION}) The moon drives tides. (revision 2). Alternative: Wind drives tides.`,
     );
+  });
+
+  it("keeps a late user report as inconclusive text when no discovery round remains", async () => {
+    const model = new FakeChatModel([]);
+    const observation = await new ResearchDiscoveryService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [],
+      spendRound: () => false,
+      createId: (prefix) => `${prefix}-1`,
+      now: () => "2026-01-01T00:00:00.000Z",
+    }).assessReport(hypothesis, proposed, "Tides  followed the moon");
+    expect(observation).toMatchObject({
+      verdict: "inconclusive",
+      quote: "Tides followed the moon",
+    });
+    expect(model.requests).toHaveLength(0);
   });
 });

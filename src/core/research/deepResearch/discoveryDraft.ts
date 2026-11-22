@@ -106,6 +106,12 @@ export function testWorkTask(hypothesis: ResearchHypothesis, test: ResearchTest)
   ].join("\n");
 }
 
+/** Parses the untrusted classification of a user report; anything else is inconclusive. */
+export function parseReportVerdict(reply: string): ObservationVerdict {
+  const verdict = firstJsonObject(reply)?.verdict;
+  return verdict === "supports" || verdict === "contradicts" ? verdict : "inconclusive";
+}
+
 function firstJsonObject(text: string): Record<string, unknown> | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");

@@ -73,7 +73,7 @@ function labelOf(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): 
   const limitations = [...new Set(user.flatMap((entry) => entry.limitations))];
   return limitations.length === 0
     ? "supported by a user observation"
-    : `supported by a user observation, ${limitations.join("; ")}`;
+    : `supported by a user observation — ${limitations.join("; ")}`;
 }
 
 function sourceObservations(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis) {

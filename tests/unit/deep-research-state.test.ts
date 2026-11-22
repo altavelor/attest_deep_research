@@ -199,17 +199,17 @@ const assessedBudget = {
   attemptsByBranch: { "branch-1": 2, "branch-2": 1 },
 };
 
+const userReport = {
+  ...sourceObservation,
+  observationId: "o-2",
+  testId: "t-2",
+  producer: "user",
+  citationTokens: [],
+  quote: null,
+  verdict: "contradicts",
+  limitations: ["reported, not independently checked"],
+};
 function discoveryStages(): unknown[] {
-  const userObservation = {
-    ...sourceObservation,
-    observationId: "o-2",
-    testId: "t-2",
-    producer: "user",
-    citationTokens: [],
-    quote: null,
-    verdict: "contradicts",
-    limitations: ["reported, not independently checked"],
-  };
   const received = {
     ...assessedDiscovery,
     hypotheses: [{ ...hypothesis, status: "disconfirmed", observationIds: ["o-1", "o-2"] }],
@@ -217,7 +217,7 @@ function discoveryStages(): unknown[] {
       { ...literature, status: "observed" },
       { ...supplied, status: "observed" },
     ],
-    observations: [sourceObservation, userObservation],
+    observations: [sourceObservation, userReport],
   };
   const revised = {
     ...received,
@@ -321,6 +321,25 @@ function discoveryRows(): [string, unknown][] {
     }),
     withDiscovery("supporting source observation without a quote", {
       observations: [{ ...sourceObservation, quote: null }],
+    }),
+    withDiscovery("supporting source observation without a token", {
+      observations: [{ ...sourceObservation, citationTokens: [] }],
+    }),
+    withDiscovery("user observation with tokens", {
+      tests: [
+        { ...literature, status: "observed" },
+        { ...supplied, status: "observed" },
+      ],
+      observations: [sourceObservation, { ...userReport, citationTokens: ["s1r1"] }],
+      hypotheses: [{ ...hypothesis, status: "disconfirmed", observationIds: ["o-1", "o-2"] }],
+    }),
+    withDiscovery("user observation without its limitation", {
+      tests: [
+        { ...literature, status: "observed" },
+        { ...supplied, status: "observed" },
+      ],
+      observations: [sourceObservation, { ...userReport, limitations: [] }],
+      hypotheses: [{ ...hypothesis, status: "disconfirmed", observationIds: ["o-1", "o-2"] }],
     }),
     withDiscovery("test work reusing a gather work id", {
       executions: [{ ...assessedDiscovery.executions[0], workId: "w-1" }],

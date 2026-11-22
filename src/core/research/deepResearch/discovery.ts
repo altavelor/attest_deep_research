@@ -110,25 +110,24 @@ export function nextCycleDecision(input: CycleDecisionInput): CycleDecision {
 }
 
 /**
- * Builds the observation a user reports. Text alone carries the limitation that it was reported
- * and not independently checked; tokens of registered evidence make it checkable.
+ * Builds the observation a user reports. It is text only: no citation tokens and always the
+ * limitation that it was reported and not independently checked.
  */
 export function userObservation(input: {
   observationId: string;
   testId: string;
   verdict: ResearchObservation["verdict"];
-  quote: string | null;
-  citationTokens: readonly string[];
+  quote: string;
   receivedAt: string;
 }): ResearchObservation {
   return {
     observationId: input.observationId,
     testId: input.testId,
     producer: "user",
-    citationTokens: [...input.citationTokens],
+    citationTokens: [],
     verdict: input.verdict,
     quote: input.quote,
-    limitations: input.citationTokens.length === 0 ? [USER_OBSERVATION_LIMITATION] : [],
+    limitations: [USER_OBSERVATION_LIMITATION],
     observedAt: null,
     receivedAt: input.receivedAt,
   };

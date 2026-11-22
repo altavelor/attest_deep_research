@@ -215,9 +215,7 @@ async function assessTests(
       (entry) =>
         entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
     )!;
-    const observation = await deps.service.assess(hypothesis, test, {
-      finding: execution.finding,
-    });
+    const observation = await deps.service.assess(hypothesis, test, execution.finding);
     if (observation === null) break;
     discovery = withObservation(discovery, observation);
     progressed = true;

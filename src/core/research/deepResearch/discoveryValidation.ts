@@ -9,7 +9,7 @@ import type { BranchExecution, ResearchDiscovery, ResearchPlan } from "./types";
 import { MAX_RESEARCH_NOTES } from "./limits";
 import { isResearchId, isRevision } from "./planValidation";
 import { readExecution } from "./executionValidation";
-import { reduceHypothesis } from "./discovery";
+import { USER_OBSERVATION_LIMITATION, reduceHypothesis } from "./discovery";
 import {
   MAX_DISCOVERY_BYTES,
   MAX_DISCOVERY_OMISSIONS,
@@ -156,7 +156,11 @@ function discoveryConsistent(
     return (
       test !== undefined &&
       (entry.producer === "source") === (test.kind === "literature-check") &&
-      (entry.producer === "user" || entry.verdict === "inconclusive" || entry.quote !== null) &&
+      (entry.producer === "user"
+        ? entry.citationTokens.length === 0 &&
+          entry.limitations.includes(USER_OBSERVATION_LIMITATION)
+        : entry.verdict === "inconclusive" ||
+          (entry.quote !== null && entry.citationTokens.length > 0)) &&
       hypotheses.some((hypothesis) => hypothesis.observationIds.includes(entry.observationId))
     );
   });

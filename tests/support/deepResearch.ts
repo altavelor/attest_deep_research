@@ -406,7 +406,7 @@ export class CitingReportModel implements ChatModelProvider {
 /**
  * A research model that answers planning, verification and the report like `PlanAndReportModel`
  * and replies to hypothesis proposals and assessments from scripted queues. A proposal revises the
- * first open hypothesis it is shown; an assessment quotes the first passage or the user report.
+ * first open hypothesis it is shown; an assessment quotes the first passage.
  */
 export class DiscoveryModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -444,11 +444,13 @@ export class DiscoveryModel implements ChatModelProvider {
       yield { content: JSON.stringify({ hypotheses }), isComplete: true };
       return;
     }
+    if (system.startsWith("You classify one result")) {
+      const verdict = this.verdicts.shift() ?? "inconclusive";
+      yield { content: JSON.stringify({ verdict }), isComplete: true };
+      return;
+    }
     if (system.startsWith("You judge one hypothesis")) {
-      const passage =
-        /<passage token="[^"]+">\n([\s\S]*?)\n<\/passage>/u.exec(user)?.[1] ??
-        /<report>\n([\s\S]*?)\n<\/report>/u.exec(user)?.[1] ??
-        "";
+      const passage = /<passage token="[^"]+">\n([\s\S]*?)\n<\/passage>/u.exec(user)?.[1] ?? "";
       const verdict = this.verdicts.shift() ?? "inconclusive";
       yield {
         content: JSON.stringify({ verdict, quote: passage.slice(0, 40) }),

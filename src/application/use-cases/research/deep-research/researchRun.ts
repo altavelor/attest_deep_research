@@ -16,7 +16,6 @@ import {
   type ResearchDiscovery,
   type ResearchState,
   type VerificationSummary,
-  userObservation,
 } from "@core/research/deepResearch";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { BranchRunner } from "./branchRunner";
@@ -136,7 +135,7 @@ export async function runResearch(
   });
   const observed =
     deps.observation && discovery && start.discovery
-      ? await suppliedObservation(start, deps.observation, discovery, deps.now)
+      ? await suppliedObservation(start, deps.observation, discovery)
       : start.discovery;
   await commit({
     phase: verifying ? "verifying" : discovering ? "discovering" : "gathering",
@@ -336,7 +335,6 @@ async function suppliedObservation(
   start: ResearchState,
   supplied: SuppliedObservation,
   service: ResearchDiscoveryService,
-  now: () => Date,
 ): Promise<ResearchDiscovery> {
   const discovery = start.discovery!;
   const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
@@ -344,16 +342,7 @@ async function suppliedObservation(
     (entry) =>
       entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
   )!;
-  const observation =
-    (await service.assess(hypothesis, test, { userText: supplied.text })) ??
-    userObservation({
-      observationId: `observation-${test.testId}`.slice(0, 64),
-      testId: test.testId,
-      verdict: "inconclusive",
-      quote: null,
-      citationTokens: [],
-      receivedAt: now().toISOString(),
-    });
+  const observation = await service.assessReport(hypothesis, test, supplied.text);
   return withObservation(discovery, observation);
 }
 

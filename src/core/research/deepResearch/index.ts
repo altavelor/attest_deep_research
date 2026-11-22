@@ -105,6 +105,7 @@ export {
 export {
   parseHypothesisProposals,
   parseObservationVerdict,
+  parseReportVerdict,
   testWorkTask,
   type HypothesisProposal,
   type ParsedProposals,
