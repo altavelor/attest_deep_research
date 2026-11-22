@@ -3,6 +3,7 @@ import { scheduleTimeout } from "@shared";
 import { settleWithin } from "./deadline";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import type { SubAgentRunScheduler } from "./runScheduler";
+import { revertUnsavedImport } from "./unsavedImports";
 
 export const CLOSE_DEADLINE_MS = 2_000;
 export const PRIMARY_DRAIN_MS = 1_500;
@@ -16,8 +17,8 @@ interface CloseProgress {
 
 /**
  * Ends the work of a terminal parent run while its sessions stay continuable by later runs
- * of the chat. The binding is revoked and all parent-owned work fenced synchronously
- * before the first await; then the interrupting drain
+ * of the chat. The binding is revoked, an unsaved import put back to importing and all
+ * parent-owned work fenced synchronously before the first await; then the interrupting drain
  * gets up to 1500 ms and a recovery marker the rest of one shared 2000 ms deadline.
  */
 export async function closeParentRun(
@@ -35,6 +36,7 @@ export async function closeParentRun(
   };
   for (const record of parts.store.state?.records ?? []) {
     if (record.session.parentRunId !== parentRunId) continue;
+    revertUnsavedImport(parts, record.session.subAgentSessionId);
     progress.sessionIds.add(record.session.subAgentSessionId);
     for (const runId of scheduler.fenceSession(record.session.subAgentSessionId)) {
       progress.fencedRunIds.add(runId);

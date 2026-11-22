@@ -18,6 +18,7 @@ import { digestOf } from "./digest";
 import { timestamp, type SubAgentManagerParts } from "./managerParts";
 import { LOCAL_RUN_CAPACITY, type SubAgentRunScheduler } from "./runScheduler";
 import { sessionFailure } from "./SubAgentStateStore";
+import { publishedRecord } from "./unsavedImports";
 
 export type SubAgentSubmission =
   { kind: "command"; command: SubAgentCommand } | { kind: "retry"; retry: RetrySubAgentCommand };
@@ -26,7 +27,8 @@ export type SubAgentSubmission =
  * Accepts initial, follow-up, partial and retry commands under a host-derived
  * submission id. The command, its new queued run and the submission record are made
  * durable before the receipt is returned; a replay returns the same receipt and a
- * different command under the same id conflicts without creating a run.
+ * different command under the same id conflicts without creating a run. A session whose
+ * import write is still unsaved is importing and refuses new work.
  */
 export class SubAgentSubmissions {
   private readonly inFlight = new Map<string, Promise<SubAgentRunReceipt>>();
@@ -57,6 +59,7 @@ export class SubAgentSubmissions {
       }
       return this.inFlight.get(submissionId) ?? Promise.resolve(existing.receipt);
     }
+    if (publishedRecord(this.parts, record) !== record) throw sessionFailure("invalid-state");
     const runId = this.parts.context.createId("subagent-run");
     if (!isSubAgentStateId(runId)) throw sessionFailure("invalid-state");
     const at = timestamp(this.parts);

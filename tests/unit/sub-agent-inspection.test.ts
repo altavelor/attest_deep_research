@@ -472,12 +472,13 @@ describe("sub-agent user stop", () => {
       ),
     ).rejects.toBeDefined();
   });
-  it("keeps a session importing and stoppable until its import-committed write is durable", async () => {
+  it("keeps a session importing, stoppable and closable until its import-committed write is durable", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
     const inspection = harness.manager.inspection();
     const saved = await launchChild(delegator, "saved");
     const stopped = await launchChild(delegator, "stopped");
+    const closed = await launchChild(delegator, "closed");
     const holdCommit = async (index: number) => {
       harness.imports.mode = "hold";
       harness.execution.finish(index);
@@ -505,6 +506,24 @@ describe("sub-agent user stop", () => {
       stopped.receipt.runId,
     );
     expect(result.state).toBe("interrupted");
+    const releaseClosed = await holdCommit(2);
+    const followUp = await failureOf(
+      delegator.continue(
+        closed.session.subAgentSessionId,
+        { type: "follow-up", task: "More" },
+        "submit-closed-more",
+      ),
+    );
+    const closing = harness.manager.closeAll("parent-1", "completed");
+    releaseClosed();
+    await closing;
+
+    expect(followUp.error.code).toBe("invalid-state");
+    expect((await card(harness, closed.session.subAgentSessionId)).status).toBe("interrupted");
+    const state = managerParts(harness.manager).store.state!;
+    expect(
+      state.imports.find((entry) => entry.runId === closed.receipt.runId)?.tombstoneReason,
+    ).toBe("parent-terminal");
   });
 });
 
