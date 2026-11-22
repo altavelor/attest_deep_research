@@ -190,6 +190,36 @@ describe("SubAgentSessionManager queue", () => {
     expect(harness.execution.requests[4].task).toBe("Investigate e");
   });
 
+  it("U4: frees the slot of a run whose start cannot be saved and fails that run", async () => {
+    const harness = managerHarness();
+    const delegator = harness.delegator();
+    for (const name of ["a", "b", "c"]) await launchChild(delegator, name);
+    const session = await delegator.create({ createRequestId: "create-d", title: "Task d" });
+    const releaseAccept = harness.writer.holdNext();
+    const accepted = delegator.run(
+      session.subAgentSessionId,
+      { type: "initial", task: "Investigate d" },
+      "submit-d",
+    );
+    await settle();
+    harness.writer.failNext(new ChatStorageError("file-too-large", "too large"));
+    releaseAccept();
+    const { runId } = await accepted;
+    await settle();
+
+    await launchChild(delegator, "e");
+    await settle();
+
+    const failed = await delegator.getResult(session.subAgentSessionId, runId);
+    expect(failed).toMatchObject({ state: "failed" });
+    expect(harness.execution.requests.map((request) => request.task)).toEqual([
+      "Investigate a",
+      "Investigate b",
+      "Investigate c",
+      "Investigate e",
+    ]);
+  });
+
   it("U4: refuses a second command while the session still has one in flight", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
