@@ -18,6 +18,7 @@ import type {
 import { ChatSessionManager, type ChatSessionEnvironment } from "@application/use-cases/chat";
 import type { ResearchService } from "@application/use-cases/research";
 import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry";
+import { redactSensitiveText } from "@shared";
 import { MemoryFileSystem } from "./memoryFileSystem";
 
 export interface TestSessionManagerOptions {
@@ -58,7 +59,10 @@ export function createTestSessionManager(options: TestSessionManagerOptions = {}
       ...(options.createSubAgentSessionManager
         ? {
             createSubAgentSessionManager: options.createSubAgentSessionManager,
-            subAgentServices: { repository: { load: async () => null }, redact: (text) => text },
+            subAgentServices: {
+              repository: { load: async () => null },
+              redact: redactSensitiveText,
+            },
           }
         : {}),
     },

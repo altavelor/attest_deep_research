@@ -247,6 +247,34 @@ describe("chat runtime and its child host", () => {
     ]);
   });
 
+  it("saves the parent's sub-agent tool call without the credentials of its arguments", async () => {
+    const research = gatedResearch();
+    const { manager, repository } = createTestSessionManager({
+      createResearchService: research.service,
+      createSubAgentSessionManager: fakeChildHosts().factory,
+    });
+    const parent = manager.createSession(thinking);
+    await manager.start(parent.sessionId, request("First"));
+    await settle();
+    research.emit(0, {
+      type: "tool-call-start",
+      id: "call-1",
+      name: "run_subagent",
+      label: "Delegate",
+      round: 1,
+      args: { task: "Log in with password=hunter2 and compare", title: "Compare" },
+    });
+    research.emit(0, completed);
+    research.end(0);
+    await settle();
+
+    const saved = JSON.stringify(await repository.loadChat(parent.chatId!));
+    expect([saved.includes("hunter2"), saved.includes("Log in with password=")]).toEqual([
+      false,
+      true,
+    ]);
+  });
+
   it("keeps child work off a chat recovered from its previous version until a terminal save", async () => {
     const children = fakeChildHosts();
     const research = gatedResearch();
