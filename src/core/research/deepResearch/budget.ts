@@ -130,6 +130,22 @@ export class ResearchBudgetOwner {
     };
   }
 
+  /**
+   * Charges evidence items a child appends. Items beyond the total are denied, and reaching or
+   * exceeding the total closes the budget for the rest of the research.
+   */
+  chargeEvidence(items: number): boolean {
+    if (this.state.closed) return false;
+    const consumed = this.state.consumed;
+    const total = this.limits.evidenceItemsTotal;
+    const granted = consumed.evidenceItems + items <= total;
+    if (granted) this.state = { ...this.state, consumed: addUse(consumed, 0, 0, items) };
+    if (this.state.consumed.evidenceItems + (granted ? 0 : items) >= total) {
+      this.close("exhausted", "evidenceItems");
+    }
+    return granted;
+  }
+
   /** Spends finalization rounds for verification or synthesis; false when none remain. */
   spendFinalization(rounds: number): boolean {
     if (this.state.closed?.reason === "time" || this.remainingMs() <= 0) return false;

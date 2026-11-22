@@ -40,3 +40,4 @@ export {
   type ReportDecision,
 } from "./report";
 export { boundFindingText } from "./findingBounds";
+export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
