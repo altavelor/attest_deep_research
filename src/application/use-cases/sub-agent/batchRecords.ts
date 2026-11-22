@@ -13,6 +13,8 @@ import type { SubAgentManagerParts } from "./managerParts";
  * publication wakes the result listeners, so a finalize barrier sees the batch settle.
  */
 export class SubAgentBatchRecords implements SubAgentBatchStore {
+  private readonly unsaved = new Map<string, MapSourcesBatchRecord>();
+
   constructor(private readonly parts: SubAgentManagerParts) {}
 
   async load(): Promise<void> {
@@ -20,7 +22,8 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
   }
 
   get(batchId: string): MapSourcesBatchRecord | undefined {
-    return this.parts.store.batch(batchId);
+    const stored = this.parts.store.batch(batchId);
+    return stored && this.visible(stored);
   }
 
   batchOf(ref: SubAgentRunRef): string | null {
@@ -34,7 +37,8 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
 
   pendingCount(parentRunId: string): number {
     return this.all().filter(
-      (entry) => entry.parentRunId === parentRunId && !isTerminalBatchState(entry.state),
+      (entry) =>
+        entry.parentRunId === parentRunId && !isTerminalBatchState(this.visible(entry).state),
     ).length;
   }
 
@@ -43,8 +47,17 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     await store.load();
     const existing = store.batch(record.batchId);
     if (existing && isTerminalBatchState(existing.state)) return false;
+    const terminal = durable && isTerminalBatchState(record.state);
+    if (terminal) this.unsaved.set(record.batchId, existing ?? { ...record, state: "pending" });
     const revision = store.putBatch(record);
-    if (durable) await store.flush(revision);
+    try {
+      if (durable) await store.flush(revision);
+    } catch (error) {
+      if (terminal) this.restore(existing);
+      throw error;
+    } finally {
+      if (terminal) this.unsaved.delete(record.batchId);
+    }
     if (isTerminalBatchState(record.state)) this.parts.notifyResults();
     return true;
   }
@@ -56,6 +69,16 @@ export class SubAgentBatchRecords implements SubAgentBatchStore {
     for (const entry of open) {
       await this.put({ ...entry, state: "interrupted", error: { ...error } }, true);
     }
+  }
+
+  /** Returns the record readers may see: the pre-write state while a terminal write is unsaved. */
+  private visible(record: MapSourcesBatchRecord): MapSourcesBatchRecord {
+    return this.unsaved.get(record.batchId) ?? record;
+  }
+
+  /** Puts back the open record a failed terminal write replaced, so a retry or interrupt can settle it. */
+  private restore(previous: MapSourcesBatchRecord | undefined): void {
+    if (previous) this.parts.store.putBatch(previous);
   }
 
   private all(): readonly MapSourcesBatchRecord[] {

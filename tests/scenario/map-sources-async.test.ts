@@ -14,7 +14,7 @@ import { subAgentToolContext } from "@application/use-cases/research/sub-agent/s
 import { applySubAgentTimelineEvent } from "@core/chat/subAgentTimeline";
 import { researchModeRetrievalParameters, type MapSourcesBatchState } from "@core/research";
 import type { RetrievedChunk } from "@core/model";
-import { eventually } from "../support/async";
+import { eventually, settle } from "../support/async";
 import {
   childEvidence,
   delegationGrant,
@@ -227,8 +227,18 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
       { question: "Is Y true?", sourcePaths: ["Notes/a.md"] },
       "parent-1-r2-c",
     );
-    expect(batches.pendingCount("parent-1")).toBe(1);
-    await batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." });
+    const release = harness.writer.holdNext();
+    const interrupting = batches.interrupt("parent-1", {
+      code: "parent-terminal",
+      message: "Ended.",
+    });
+    await settle();
+    expect([
+      (await mapper.getResult(open.batchId)).state,
+      batches.pendingCount("parent-1"),
+    ]).toEqual(["pending", 1]);
+    release();
+    await interrupting;
     expect([batches.get(open.batchId), batches.pendingCount("parent-1")]).toEqual([
       expect.objectContaining({
         state: "interrupted",
