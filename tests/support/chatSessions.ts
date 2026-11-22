@@ -68,7 +68,8 @@ export function createTestSessionManager(options: TestSessionManagerOptions = {}
 
 /**
  * A child host that records the lifecycle calls a chat runtime makes on it, in order,
- * into a shared log. Its closeAll can be held open to model a slow archive drain.
+ * into a shared log. Its closeAll and batch interruption can be held open to model a slow
+ * archive drain or a held batch write.
  */
 class FakeChildHost implements SubAgentHost {
   readonly bindings: {
@@ -77,6 +78,7 @@ class FakeChildHost implements SubAgentHost {
     delegator: SubAgentDelegator;
   }[] = [];
   closeGate: Promise<void> = Promise.resolve();
+  interruptGate: Promise<void> = Promise.resolve();
 
   constructor(
     readonly context: SubAgentSessionManagerContext,
@@ -112,7 +114,10 @@ class FakeChildHost implements SubAgentHost {
       batchOf: () => null,
       pendingCount: () => 0,
       put: async () => true,
-      interrupt: async (parentRunId) => void this.log.push(`interrupt:${parentRunId}`),
+      interrupt: async (parentRunId) => {
+        this.log.push(`interrupt:${parentRunId}`);
+        await this.interruptGate;
+      },
     };
   }
 

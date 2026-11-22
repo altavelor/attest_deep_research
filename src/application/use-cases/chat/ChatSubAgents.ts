@@ -14,7 +14,11 @@ import {
   MapSourcesWorkerAdapter,
   type MapSourcesWorkerLimits,
 } from "@application/use-cases/map-sources";
-import { SubAgentParentCoordinator } from "@application/use-cases/sub-agent";
+import {
+  CLOSE_DEADLINE_MS,
+  settleWithin,
+  SubAgentParentCoordinator,
+} from "@application/use-cases/sub-agent";
 import type { ConversationSourceRegistry } from "@core/chat/sourceRegistry";
 import {
   mapSourcesBatchError,
@@ -162,7 +166,11 @@ export class ChatSubAgents {
     };
   }
 
-  /** Revokes and closes every child of a terminal parent run before its terminal save. */
+  /**
+   * Revokes and closes every child of a terminal parent run before its terminal save. The
+   * child close starts at once, and the batch interruption write runs within the same
+   * close deadline instead of delaying it.
+   */
   async closeParentRun(runId: string, reason: string): Promise<void> {
     if (!this.host || !this.ownedRuns.has(runId) || this.closingRuns.has(runId)) return;
     this.closingRuns.add(runId);
@@ -174,17 +182,19 @@ export class ChatSubAgents {
       this.execution = null;
       this.capacity = null;
     }
-    await this.host
+    const interrupted = this.host
       .batches?.()
       .interrupt(
         runId,
         mapSourcesBatchError("parent-terminal", "The parent run ended before the batch finished."),
-      )
-      .catch((error: unknown) => this.options.logError(error));
+      );
+    const closed = this.host.closeAll(runId, reason);
     try {
-      await this.host.closeAll(runId, reason);
-    } catch (error) {
-      this.options.logError(error);
+      const [batch] = await Promise.all([
+        settleWithin(interrupted ?? Promise.resolve(), CLOSE_DEADLINE_MS),
+        closed.catch((error: unknown) => this.options.logError(error)),
+      ]);
+      if (batch.status === "failed") this.options.logError(batch.error);
     } finally {
       this.revokeGrants(runId);
       this.ownedRuns.delete(runId);

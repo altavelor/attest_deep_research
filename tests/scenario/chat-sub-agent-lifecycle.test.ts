@@ -104,6 +104,8 @@ describe("chat runtime and its child host", () => {
     let release = (): void => undefined;
     hold = new Promise<void>((resolve) => (release = resolve));
     children.hosts[0]!.closeGate = new Promise<void>(() => undefined);
+    let releaseInterrupt = (): void => undefined;
+    children.hosts[0]!.interruptGate = new Promise<void>((resolve) => (releaseInterrupt = resolve));
     await runPastDeadline(TERMINAL_SAVE_WAIT_MS, async () => {
       research.emit(0, completed);
       research.end(0);
@@ -121,6 +123,7 @@ describe("chat runtime and its child host", () => {
     await settle();
     expect(queued.status).toBe("running");
     children.hosts[0]!.closeGate = Promise.resolve();
+    releaseInterrupt();
     hold = null;
     release();
     await settle();
