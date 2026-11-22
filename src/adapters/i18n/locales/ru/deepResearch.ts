@@ -50,5 +50,19 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.conflicted": "Противоречивые утверждения: {count}",
   "chat.deepResearch.report.unsupported": "Неподтверждённые или нерешённые утверждения: {count}",
   "chat.deepResearch.report.uncovered": "Непокрытые цели",
+  "chat.deepResearch.discovery.title": "Гипотезы",
+  "chat.deepResearch.discovery.none": "Для этого плана гипотезы не предложены.",
+  "chat.deepResearch.discovery.status":
+    "{status} · редакция {revision} · альтернатива: {alternative}",
+  "chat.deepResearch.discovery.notes": "Заметки исследования ({count})",
+  "chat.deepResearch.hypothesis.untested": "Не проверена",
+  "chat.deepResearch.hypothesis.supported": "Подтверждена литературой",
+  "chat.deepResearch.hypothesis.disconfirmed": "Опровергнута",
+  "chat.deepResearch.hypothesis.inconclusive": "Неопределённо",
+  "chat.deepResearch.observation.request": "Нужно наблюдение: {method}",
+  "chat.deepResearch.observation.hint":
+    "Опишите наблюдённый результат. Сообщение без источников записывается как независимо не проверенное.",
+  "chat.deepResearch.action.observe": "Отправить наблюдение",
+  "chat.deepResearch.turn.observe": "Отправить наблюдение",
   "chat.history.requiresAction": "Ожидает вашего решения",
 };
