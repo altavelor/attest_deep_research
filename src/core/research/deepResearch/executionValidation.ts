@@ -5,10 +5,12 @@ import {
 } from "./limits";
 import { isFindingText } from "./findingBounds";
 import { isResearchId, isRevision } from "./planValidation";
+import { isSubAgentStateId } from "../subAgent/stateIds";
 import type {
   BranchAllocation,
   BranchExecution,
   BranchFinding,
+  BranchRunRef,
   ResearchBudgetState,
   ResearchPlan,
   ResearchReport,
@@ -80,25 +82,58 @@ export function readExecutions(value: unknown): BranchExecution[] | undefined {
   return executions.includes(undefined) ? undefined : (executions as BranchExecution[]);
 }
 
+/** Reads the stored child session of each branch; a section written before sessions existed has none. */
+export function readSessionByBranch(value: unknown): Record<string, string> | undefined {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return undefined;
+  const entries = Object.entries(value);
+  if (
+    entries.length > MAX_RESEARCH_BRANCHES ||
+    !entries.every(
+      ([branchId, sessionId]) => isResearchId(branchId) && isSubAgentStateId(sessionId),
+    )
+  ) {
+    return undefined;
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
 /**
- * Checks that executions, budget and report agree with the plan: executions name distinct planned
- * branches of an approved plan, every open allocation belongs to a running execution, and an active
- * research holds no report because a written report ends it.
+ * Checks that executions, sessions, budget and report agree with the plan: executions name distinct
+ * planned branches of an approved plan, child sessions belong to distinct planned branches within
+ * the session ceiling, a run reference names its branch's session, every open allocation belongs to
+ * a running execution, and an active research holds no report because a written report ends it.
  */
 export function executionConsistent(
   plan: ResearchPlan | null,
   executions: readonly BranchExecution[],
+  sessionByBranch: Readonly<Record<string, string>>,
   budget: ResearchBudgetState | null,
   report: unknown,
 ): boolean {
   if (report !== null) return false;
   if (executions.length > 0 && !plan?.approvedAt) return false;
   const branchIds = new Set(plan?.branches.map((branch) => branch.branchId) ?? []);
+  const sessions = Object.entries(sessionByBranch);
+  if (
+    sessions.length > (plan?.approvedAt ? plan.limits.childSessions : 0) ||
+    !sessions.every(([branchId]) => branchIds.has(branchId)) ||
+    new Set(sessions.map(([, sessionId]) => sessionId)).size !== sessions.length
+  ) {
+    return false;
+  }
   const seen = new Set<string>();
   for (const execution of executions) {
     if (!branchIds.has(execution.branchId) || seen.has(execution.workId)) return false;
     seen.add(execution.workId);
     if ((execution.state === "completed") !== (execution.finding !== null)) return false;
+    const ref = execution.runRef;
+    if (
+      ref &&
+      (execution.path !== "sub-agent" || sessionByBranch[execution.branchId] !== ref.sessionId)
+    ) {
+      return false;
+    }
   }
   if (!budget) return executions.every((execution) => execution.attempts === 0);
   if (plan && !budgetConsistent(plan, executions, budget)) return false;
@@ -115,8 +150,9 @@ export function executionConsistent(
 
 /**
  * Checks the budget invariants the owner keeps: total attempts equal the per-branch counts, each
- * within its cap and at least the attempts of the branch's executions, spent and open rounds and
- * searches within the plan limits, and no open allocation on a closed budget.
+ * within its cap and at least the attempts of the branch's executions, and spent and open rounds
+ * and searches within the plan limits. A closure during a wave may leave the allocations of the
+ * works it is stopping open until each of them settles.
  */
 function budgetConsistent(
   plan: ResearchPlan,
@@ -135,8 +171,7 @@ function budgetConsistent(
       (execution) => execution.attempts <= (budget.attemptsByBranch[execution.branchId] ?? 0),
     ) &&
     budget.consumed.modelRounds + open("modelRounds") <= limits.modelRoundsTotal &&
-    budget.consumed.searches + open("searches") <= limits.searchesTotal &&
-    (budget.closed === null || budget.openAllocations.length === 0)
+    budget.consumed.searches + open("searches") <= limits.searchesTotal
   );
 }
 
@@ -218,7 +253,9 @@ function readClosed(value: unknown): ResearchBudgetState["closed"] | undefined {
 function readExecution(value: unknown): BranchExecution | undefined {
   if (!isRecord(value)) return undefined;
   const finding = value.finding === null ? null : readFinding(value.finding);
+  const runRef = value.runRef === undefined ? null : readRunRef(value.runRef);
   if (
+    runRef === undefined ||
     !isResearchId(value.workId) ||
     !isResearchId(value.branchId) ||
     !EXECUTION_STATES.includes(value.state as BranchExecution["state"]) ||
@@ -237,7 +274,20 @@ function readExecution(value: unknown): BranchExecution | undefined {
     attempts: value.attempts,
     finding,
     terminalReason: value.terminalReason as string | null,
+    ...(runRef ? { runRef } : {}),
   };
+}
+
+function readRunRef(value: unknown): BranchRunRef | undefined {
+  if (
+    !isRecord(value) ||
+    !isSubAgentStateId(value.sessionId) ||
+    !isSubAgentStateId(value.runId) ||
+    !isRevision(value.resultRevision)
+  ) {
+    return undefined;
+  }
+  return { sessionId: value.sessionId, runId: value.runId, resultRevision: value.resultRevision };
 }
 
 function readFinding(value: unknown): BranchFinding | undefined {

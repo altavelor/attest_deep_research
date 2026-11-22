@@ -11,6 +11,7 @@ import {
   readBudget,
   readExecutions,
   readReportSummary,
+  readSessionByBranch,
   reportSummary,
 } from "./executionValidation";
 import type {
@@ -122,6 +123,7 @@ function readState(value: unknown): ResearchState | undefined {
   const plan = value.plan === null ? null : readPlan(value.plan);
   const budget = readBudget(value.budget);
   const executions = readExecutions(value.executions);
+  const sessionByBranch = readSessionByBranch(value.sessionByBranch);
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||
@@ -137,7 +139,8 @@ function readState(value: unknown): ResearchState | undefined {
     !consistent(phase, pending, plan) ||
     budget === undefined ||
     executions === undefined ||
-    !executionConsistent(plan, executions, budget, value.report)
+    sessionByBranch === undefined ||
+    !executionConsistent(plan, executions, sessionByBranch, budget, value.report)
   ) {
     return undefined;
   }
@@ -154,6 +157,7 @@ function readState(value: unknown): ResearchState | undefined {
     updatedAt: value.updatedAt,
     budget,
     executions,
+    sessionByBranch,
     report: null,
   };
 }

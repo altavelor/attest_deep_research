@@ -47,6 +47,7 @@ export function startResearchState(
     updatedAt: now,
     budget: null,
     executions: [],
+    sessionByBranch: {},
     report: null,
   };
 }
