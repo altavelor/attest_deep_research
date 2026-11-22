@@ -279,6 +279,15 @@ describe("sub-agent section validation", () => {
       "Sub-agent state has an invalid field: records[0].runs[0].usage.cachedInputTokens.",
     ],
     [
+      "a fractional cache creation counter",
+      withRun(
+        subAgentSection(),
+        (run) => (run.usage = { ...(run.usage as object), cacheCreationInputTokens: 1.5 }),
+      ),
+      "invalid-state-field",
+      "Sub-agent state has an invalid field: records[0].runs[0].usage.cacheCreationInputTokens.",
+    ],
+    [
       "a non-finite usage counter",
       withRun(
         subAgentSection(),
