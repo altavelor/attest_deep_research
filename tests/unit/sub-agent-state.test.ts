@@ -412,10 +412,33 @@ describe("evictSubAgentDetails", () => {
     run.completedAt = "2026-10-26T10:01:00.000Z";
   });
 
-  it("keeps details exactly at the budget", () => {
-    const snapshot = { ...old, observation: [detail("o1", "run-1", "abcd")] };
+  it("measures details in UTF-8 bytes and keeps them exactly at the budget", () => {
+    const snapshot = { ...old, observation: [detail("o1", "run-1", "абвг")] };
 
-    expect(evictSubAgentDetails(snapshot, 6)).toEqual({ snapshot, withinBudget: true });
+    expect(evictSubAgentDetails(snapshot, 10)).toEqual({ snapshot, withinBudget: true });
+    expect(evictSubAgentDetails(snapshot, 9).snapshot.observation[0]).toMatchObject({
+      payload: null,
+    });
+  });
+
+  it("evicts the earliest completed terminal run first, whatever its record order", () => {
+    const [record] = old.records;
+    const newer = {
+      ...record,
+      session: { ...record.session, subAgentSessionId: "session-2" },
+      runs: [
+        { ...record.runs[0], subAgentRunId: "run-new", completedAt: "2026-10-26T10:05:00.000Z" },
+      ],
+    };
+    const snapshot = {
+      ...old,
+      records: [newer, record],
+      observation: [detail("n1", "run-new", "abcd"), detail("o1", "run-1", "abcd")],
+    };
+
+    const evicted = evictSubAgentDetails(snapshot, 6).snapshot.observation;
+
+    expect(evicted.map((entry) => entry.payload)).toEqual(["abcd", null]);
   });
 
   it("evicts uncited details of the oldest terminal run above the budget and keeps the rest", () => {
