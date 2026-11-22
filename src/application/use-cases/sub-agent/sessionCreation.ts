@@ -58,7 +58,9 @@ export class SubAgentSessionCreation {
     grant: SubAgentDelegationGrant,
     input: CreateSubAgentSessionInput,
   ): Promise<SubAgentSessionSummary> {
-    const normalized = normalizeCreate(binding, grant, input);
+    const normalized = normalizeCreate(binding, grant, input, (text) =>
+      this.parts.context.redact(text),
+    );
     const existing = this.parts.store.create(normalized.createRequestId);
     if (existing) {
       this.assertOwner(binding, existing);
@@ -301,6 +303,7 @@ function normalizeCreate(
   binding: ParentRunBinding,
   grant: SubAgentDelegationGrant,
   input: CreateSubAgentSessionInput,
+  redact: (text: string) => string,
 ): NormalizedCreate {
   const searches = readSubAgentSearchBudget(input.maxSearches);
   const resources = validateSubAgentResources(input.resources);
@@ -314,7 +317,8 @@ function normalizeCreate(
   }
   const policy = reduceSubAgentSourcePolicy(grant.maximumSourcePolicy, input.scopeReduction);
   if (!policy.ok) throw new SubAgentSessionFailure(policy.error);
-  const title = deriveSubAgentTitle(input.title);
+  const title = deriveSubAgentTitle(redact(input.title));
+  const safeResources = resources.value.map(redact);
   const maxSearches = Math.min(searches.value, grant.limits.maxSearches);
   const digest = digestOf({
     grant: {
@@ -326,7 +330,7 @@ function normalizeCreate(
     },
     title,
     maxSearches,
-    resources: resources.value,
+    resources: safeResources,
     scopeReduction: policy.policy,
   });
   return {
@@ -335,7 +339,7 @@ function normalizeCreate(
     createRequestId: input.createRequestId,
     title,
     maxSearches,
-    resources: resources.value,
+    resources: safeResources,
     sourcePolicy: policy.policy,
     digest,
   };

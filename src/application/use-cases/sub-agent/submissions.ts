@@ -70,7 +70,15 @@ export class SubAgentSubmissions {
     const transition: SubAgentTransition =
       submission.kind === "retry"
         ? { type: "retry", retry: submission.retry, ...launch }
-        : { type: "command", command: submission.command, origin: grant.origin, ...launch };
+        : {
+            type: "command",
+            command: {
+              ...submission.command,
+              task: this.parts.context.redact(submission.command.task),
+            },
+            origin: grant.origin,
+            ...launch,
+          };
     const result = applySubAgentTransition(record, transition);
     if (!result.ok) throw new SubAgentSessionFailure(result.error);
     const { store } = this.parts;

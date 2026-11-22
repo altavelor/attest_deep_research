@@ -73,6 +73,27 @@ async function failureOf(promise: Promise<unknown>): Promise<SubAgentSessionFail
 }
 
 describe("sub-agent inspection snapshot", () => {
+  it("stores the task, title and resources redacted and replays the same submission", async () => {
+    const harness = redactingHarness();
+    const delegator = harness.delegator();
+    const session = await delegator.create({
+      createRequestId: "create-secret",
+      title: "Audit password=hunter2",
+      resources: ["example.org", "token=hunter2"],
+    });
+    const task = { type: "initial", task: "Log in with password=hunter2" } as const;
+    const receipt = await delegator.run(session.subAgentSessionId, task, "submit-secret");
+    await settle();
+
+    await expect(delegator.run(session.subAgentSessionId, task, "submit-secret")).resolves.toEqual(
+      receipt,
+    );
+    expect(stateText(harness)).not.toContain("hunter2");
+    expect(stateText(harness)).toContain("example.org");
+    expect(JSON.stringify(harness.writer.deltas)).not.toContain("hunter2");
+    expect(harness.execution.requests[0].task).toContain("Log in with password=");
+  });
+
   it("counts only running sessions, sorts running first and derives hasAgentRuns from accepted runs", async () => {
     const harness = managerHarness();
     const delegator = harness.delegator();
