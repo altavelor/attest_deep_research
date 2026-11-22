@@ -1,4 +1,9 @@
-import { supportedClaimsSection, uncoveredRequired, verificationSections } from "./reportSections";
+import {
+  fullyAssessed,
+  supportedClaimsSection,
+  uncoveredRequired,
+  verificationSections,
+} from "./reportSections";
 import type {
   BranchExecution,
   ResearchVerification,
@@ -22,9 +27,9 @@ export type ReportDecision =
     };
 
 /**
- * Decides what a finished run yields: no completed branch, or verified claims none of which is
- * supported, fails the research. The report is complete only when its claims were verified, every
- * required objective is covered and no required branch is missing; otherwise it is partial.
+ * Decides what a finished run yields: no completed branch, or claims that were all assessed with
+ * none supported, fails the research. The report is complete only when every claim was assessed,
+ * every required objective is covered and no required branch is missing; otherwise it is partial.
  */
 export function reportDecision(
   plan: ResearchPlan,
@@ -37,7 +42,8 @@ export function reportDecision(
     return { kind: "failed", reason: `No branch completed. ${stopReason}` };
   }
   const verified = verification !== null && verification.assessments.length > 0;
-  if (verified && !verification.assessments.some((entry) => entry.verdict === "supported")) {
+  const complete = verified && fullyAssessed(verification);
+  if (complete && !verification.assessments.some((entry) => entry.verdict === "supported")) {
     return {
       kind: "failed",
       reason: `No claim of the findings is supported by its sources. ${stopReason}`,
@@ -52,7 +58,7 @@ export function reportDecision(
   return {
     kind: "report",
     quality:
-      verified &&
+      complete &&
       uncoveredRequired(plan, verification).length === 0 &&
       !missing.some((execution) => required.has(execution.branchId))
         ? "complete"

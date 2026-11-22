@@ -13,19 +13,19 @@ export interface VerifiedClaim {
   assessment: ClaimAssessment;
 }
 
-/** Pairs every claim with its assessment; a claim that was never assessed counts as unresolved. */
+/** Pairs every assessed claim with its assessment; a claim no check reached is left out. */
 export function verifiedClaims(verification: ResearchVerification): VerifiedClaim[] {
   const byId = new Map(verification.assessments.map((entry) => [entry.claimId, entry]));
-  return verification.claims.map((claim) => ({
-    claim,
-    assessment: byId.get(claim.claimId) ?? {
-      claimId: claim.claimId,
-      verdict: "unresolved",
-      quote: null,
-      contradictingTokens: [],
-      independenceGroups: [],
-    },
-  }));
+  return verification.claims.flatMap((claim) => {
+    const assessment = byId.get(claim.claimId);
+    return assessment ? [{ claim, assessment }] : [];
+  });
+}
+
+/** Tells whether every extracted claim was assessed, by the model or by the reference check. */
+export function fullyAssessed(verification: ResearchVerification): boolean {
+  const assessed = new Set(verification.assessments.map((entry) => entry.claimId));
+  return verification.claims.every((claim) => assessed.has(claim.claimId));
 }
 
 /** Counts the verdicts of a verification and names the required objectives it left uncovered. */
@@ -92,9 +92,16 @@ export function verificationSections(
         entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved",
     )
     .map((entry) => `- (${entry.assessment.verdict}) ${inline(entry.claim.text)}`);
-  const verified = new Set(verification.verifiedWorks);
+  const assessed = new Set(entries.map((entry) => entry.claim.claimId));
+  const checked = (workId: string): boolean => {
+    const own = verification.claims.filter((claim) => claim.claimId.startsWith(`c-${workId}-`));
+    return (
+      verification.verifiedWorks.includes(workId) &&
+      (own.length === 0 || own.some((claim) => assessed.has(claim.claimId)))
+    );
+  };
   const unverified = [...executions, ...verification.followUps]
-    .filter((execution) => execution.finding && !verified.has(execution.workId))
+    .filter((execution) => execution.finding && !checked(execution.workId))
     .map(
       (execution) =>
         `### ${titleOf(plan, execution.branchId)}\n\n${execution.finding!.text.trim()}`,

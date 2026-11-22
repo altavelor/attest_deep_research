@@ -53,7 +53,7 @@ const MAX_PASSAGE_CHARS = 3000;
  * Verifies branch findings on the main path with tool-free model calls in a fresh context, each
  * paid with one finalization round: claims are extracted per batch of findings, citations are
  * checked against the registry without a model, and cited passages are assessed. When no round
- * remains, the claims not yet assessed stay unresolved.
+ * remains, the claims not yet assessed get no assessment at all.
  */
 export class EvidenceVerificationService {
   constructor(private readonly options: EvidenceVerificationOptions) {}
@@ -143,9 +143,8 @@ export class EvidenceVerificationService {
           }),
         ),
       );
-      const reply = this.options.spendRound()
-        ? await this.call(ASSESS_PROMPT, assessRequest(batch, shown))
-        : "";
+      if (!this.options.spendRound()) break;
+      const reply = await this.call(ASSESS_PROMPT, assessRequest(batch, shown));
       const verdicts = parseVerdicts(reply);
       assessments.push(
         ...batch.map((claim, index) =>

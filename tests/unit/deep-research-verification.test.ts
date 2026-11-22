@@ -2,6 +2,7 @@ import { EvidenceVerificationService } from "@application/use-cases/research/dee
 import {
   acceptedAssessment,
   formatWithoutModel,
+  reportDecision,
   independenceGroups,
   objectiveCoverage,
   type ResearchClaim,
@@ -27,36 +28,88 @@ const supported = {
 };
 
 describe("deep research claim verification", () => {
-  it("settles a claim with no resolvable token as unsupported without an assessment call", async () => {
+  it("settles claims without a readable passage without an assessment call", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const snippet = {
+      ...retrieved("t1", { ...webSource("https://a.example/p"), wasContentFetched: false }, "Snip"),
+    };
+    const rows: [string, RetrievedChunk[], string][] = [
+      ["no resolvable token", [], "unsupported"],
+      ["snippet-only evidence", [snippet], "unresolved"],
+    ];
+    for (const [label, evidence, expected] of rows) {
+      const model = new FakeChatModel([
+        [
+          {
+            content: JSON.stringify({
+              claims: [{ finding: 1, text: "Claim", tokens: ["t1"], objective: 1 }],
+            }),
+            isComplete: true,
+          },
+        ],
+      ]);
+      const execution = {
+        ...gatheringResearch(plan).executions[0]!,
+        state: "completed" as const,
+        finding: { text: "Claim [t1]", citationTokens: ["t1"], partial: false },
+      };
+      const summary = await new EvidenceVerificationService({
+        chatModel: model,
+        model: "model",
+        chatOptions: {},
+        resolveEvidence: () => evidence,
+        spendRound: () => true,
+        followUpsRemaining: 0,
+        followUpCycle: 1,
+        claimAllowance: 40,
+      }).verify([execution], plan);
+
+      expect(summary.assessments, label).toMatchObject([{ verdict: expected, quote: null }]);
+      expect(model.requests, label).toHaveLength(1);
+    }
+  });
+
+  it("leaves claims without a round unassessed and reports them unverified, not failed", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
     const model = new FakeChatModel([
       [
         {
           content: JSON.stringify({
-            claims: [{ finding: 1, text: "Forged claim", tokens: ["t-forged"], objective: 1 }],
+            claims: [{ finding: 1, text: "Claim", tokens: ["t1"], objective: 1 }],
           }),
           isComplete: true,
         },
       ],
     ]);
-    const plan = researchPlan([researchBranch(1)], "balanced");
     const execution = {
       ...gatheringResearch(plan).executions[0]!,
       state: "completed" as const,
-      finding: { text: "Forged claim [t-forged]", citationTokens: ["t-forged"], partial: false },
+      finding: { text: "Claim [t1]", citationTokens: ["t1"], partial: false },
     };
+    let rounds = 1;
     const summary = await new EvidenceVerificationService({
       chatModel: model,
       model: "model",
       chatOptions: {},
-      resolveEvidence: () => [],
-      spendRound: () => true,
+      resolveEvidence: () => [retrieved("t1", markdownSource("Notes/a.md"), "A passage.")],
+      spendRound: () => rounds-- > 0,
       followUpsRemaining: 0,
       followUpCycle: 1,
       claimAllowance: 40,
     }).verify([execution], plan);
+    const verification = {
+      ...summary,
+      verifiedWorks: [execution.workId],
+      followUps: [],
+      followUpsUsed: 0,
+    };
 
-    expect(summary.assessments).toMatchObject([{ verdict: "unsupported", quote: null }]);
-    expect(model.requests).toHaveLength(1);
+    expect(summary.claims).toHaveLength(1);
+    expect(summary.assessments).toEqual([]);
+    expect(reportDecision(plan, [execution], "Stop.", verification)).toMatchObject({
+      kind: "report",
+      quality: "partial",
+    });
   });
 
   it("accepts a contradicting token only from the assessment request of the claim", async () => {
