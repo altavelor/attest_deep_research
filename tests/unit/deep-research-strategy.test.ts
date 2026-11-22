@@ -2,13 +2,17 @@ import {
   DeepResearchStrategy,
   MainBranchRunner,
 } from "@application/use-cases/research/deep-research";
-import { boundFindingText } from "@core/research/deepResearch";
+import { boundFindingText, initialExecutions } from "@core/research/deepResearch";
+import type { ReportSynthesisService } from "@application/use-cases/research/deep-research/ReportSynthesisService";
+import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
 import { markdownSource, retrieved } from "../support/factories";
 import type { ResearchExecutionContext } from "@application/use-cases/research/strategies/ResearchStrategy";
 import { collectAsync } from "../support/async";
 import {
   MemoryResearchState,
   deepResearchService,
+  researchBranch,
+  researchPlan,
   pausedResearch,
   pendingResearch,
   planReply,
@@ -226,5 +230,47 @@ describe("main branch runner findings", () => {
     const bounded = boundFindingText("\u0001".repeat(20_000));
     expect(new TextEncoder().encode(JSON.stringify(bounded)).length).toBeLessThanOrEqual(48 * 1024);
     expect(bounded.length).toBeGreaterThan(8_000);
+  });
+});
+
+describe("research report citations", () => {
+  it("removes and counts every finding token when no registry lookup is available", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const start: ResearchState = {
+      ...pendingResearch(plan),
+      phase: "gathering",
+      pending: null,
+      executions: initialExecutions(plan),
+    };
+    let seen: string[] = [];
+    const synthesis = {
+      synthesize: async (input: { executions: readonly ResearchState["executions"][number][] }) => {
+        seen = input.executions.map((execution) => execution.finding!.text);
+        return { markdown: "Report", removedTokens: 0, unverifiedTokens: 0 };
+      },
+    } as unknown as ReportSynthesisService;
+    const result = await runResearch(start, {
+      port: new MemoryResearchState(),
+      runner: {
+        path: "main",
+        run: async () => ({
+          text: "Tides [source-1:revision-1] and waves [source-2:revision-2].",
+          citationTokens: ["source-1:revision-1", "source-2:revision-2"],
+          partial: false,
+        }),
+      },
+      synthesis,
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+      setTimer: () => () => undefined,
+      createId: (prefix) => `${prefix}-1`,
+      onState: () => undefined,
+      onStatus: () => undefined,
+    });
+    expect(seen).toEqual(["Tides  and waves ."]);
+    expect(result.report!.markdown).toContain(
+      "2 citation(s) without a source in the findings were removed.",
+    );
   });
 });
