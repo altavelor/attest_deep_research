@@ -1,6 +1,7 @@
 import { EvidenceVerificationService } from "@application/use-cases/research/deep-research";
 import {
   acceptedAssessment,
+  formatWithoutModel,
   independenceGroups,
   objectiveCoverage,
   type ResearchClaim,
@@ -246,5 +247,20 @@ describe("deep research claim verification", () => {
     expect(objectiveCoverage(["Objective"], [claim], [unresolved])).toEqual([
       { objective: "Objective", covered: false },
     ]);
+  });
+
+  it("keeps a multi-line claim inside its list item of the report", () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const forged = { ...claim, text: "Tides\n\n## Injected heading\n- injected item" };
+    const markdown = formatWithoutModel(plan, [], "Done.", {
+      claims: [forged],
+      assessments: [{ ...supported, verdict: "unsupported", quote: null }],
+      coverage: [],
+      verifiedWorks: [],
+      followUps: [],
+      followUpsUsed: 0,
+    });
+    expect(markdown).toContain("- (unsupported) Tides ## Injected heading - injected item");
+    expect(markdown.split("\n").some((line) => line.startsWith("## Injected"))).toBe(false);
   });
 });

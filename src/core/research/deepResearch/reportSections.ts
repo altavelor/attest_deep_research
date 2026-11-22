@@ -61,7 +61,9 @@ export function supportedClaimsSection(verification: ResearchVerification): stri
   const supported = verifiedClaims(verification).filter(
     (entry) => entry.assessment.verdict === "supported",
   );
-  return supported.map((entry) => `- ${entry.claim.text} ${citations(entry.claim)}`).join("\n");
+  return supported
+    .map((entry) => `- ${inline(entry.claim.text)} ${citations(entry.claim)}`)
+    .join("\n");
 }
 
 /**
@@ -80,7 +82,7 @@ export function verificationSections(
     .filter((entry) => entry.assessment.verdict === "conflicted")
     .map(
       (entry) =>
-        `- ${entry.claim.text} — cited ${citations(entry.claim)}; contradicted by ${entry.assessment.contradictingTokens
+        `- ${inline(entry.claim.text)} — cited ${citations(entry.claim)}; contradicted by ${entry.assessment.contradictingTokens
           .map((token) => `[${token}]`)
           .join(" ")}`,
     );
@@ -89,7 +91,7 @@ export function verificationSections(
       (entry) =>
         entry.assessment.verdict === "unsupported" || entry.assessment.verdict === "unresolved",
     )
-    .map((entry) => `- (${entry.assessment.verdict}) ${entry.claim.text}`);
+    .map((entry) => `- (${entry.assessment.verdict}) ${inline(entry.claim.text)}`);
   const extracted = new Set(verification.claims.map((claim) => claim.branchId));
   const unverified = executions
     .filter((execution) => execution.finding && !extracted.has(execution.branchId))
@@ -97,7 +99,9 @@ export function verificationSections(
       (execution) =>
         `### ${titleOf(plan, execution.branchId)}\n\n${execution.finding!.text.trim()}`,
     );
-  const uncovered = uncoveredRequired(plan, verification).map((objective) => `- ${objective}`);
+  const uncovered = uncoveredRequired(plan, verification).map(
+    (objective) => `- ${inline(objective)}`,
+  );
   return [
     ...(conflicts.length > 0 ? ["## Conflicting evidence", conflicts.join("\n")] : []),
     ...(weak.length > 0 ? ["## Unsupported or unresolved claims", weak.join("\n")] : []),
@@ -105,6 +109,10 @@ export function verificationSections(
     ...(uncovered.length > 0 ? ["## Uncovered objectives", uncovered.join("\n")] : []),
     `Stop reason: ${stopReason}`,
   ].join("\n\n");
+}
+
+function inline(text: string): string {
+  return text.replace(/\s+/gu, " ").trim();
 }
 
 function citations(claim: ResearchClaim): string {
