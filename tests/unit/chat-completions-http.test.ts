@@ -100,15 +100,16 @@ describe("openChatCompletionsStream", () => {
     await expect(outcome).rejects.toBe(reason);
   });
 
-  it("reports a mid-stream provider error without the API key", async () => {
-    const frame = 'data: {"error":{"message":"bad key sk-test rejected"}}\n\n';
+  it("reports a mid-stream provider error without the API key the length cap cuts through", async () => {
+    const filler = "x".repeat(494);
+    const frame = `data: {"error":{"message":"${filler} sk-test rejected"}}\n\n`;
     const http = clientFor(() => new Response(chunkedStream([frame])), "sk-test");
 
     const error = await failure(collect(http));
 
     expect(error.code).toBe("MODEL_PROVIDER_UNAVAILABLE");
     expect(error.message).toBe("Provider returned an error mid-stream.");
-    expect(error.details).toEqual({ providerMessage: "bad key [redacted] rejected" });
+    expect(error.details).toEqual({ providerMessage: `${filler} [reda` });
   });
 
   it("rejects a response without a body", async () => {

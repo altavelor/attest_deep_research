@@ -248,10 +248,10 @@ async function readBoundedResponseText(response: Response, maxBytes: number): Pr
   return text + decoder.decode();
 }
 
-/** Collapses whitespace, caps the length at 500 characters and redacts the API key. */
+/** Redacts the API key, collapses whitespace and caps the length at 500 characters. */
 export function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
-  const normalized = value.replace(/\s+/g, " ").trim().slice(0, 500);
-  return apiKey ? normalized.split(apiKey).join("[redacted]") : normalized;
+  const redacted = apiKey ? value.split(apiKey).join("[redacted]") : value;
+  return redacted.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
 function providerErrorDetails(error: ProviderErrorSummary | undefined): Record<string, unknown> {
