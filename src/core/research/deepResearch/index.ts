@@ -58,6 +58,7 @@ export {
   MAX_RESEARCH_CLAIMS,
   acceptedAssessment,
   checkClaimReferences,
+  containedQuote,
   followUpWorks,
   independenceGroups,
   objectiveCoverage,

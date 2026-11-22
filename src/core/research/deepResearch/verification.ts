@@ -104,17 +104,13 @@ export function acceptedAssessment(
 ): ClaimAssessment {
   const cited = claim.citationTokens.filter((token) => passages.has(token));
   const claimGroups = [...new Set(cited.flatMap((token) => groups.get(token) ?? []))];
-  const quote = typeof verdict?.quote === "string" ? verdict.quote.trim() : "";
   if (verdict?.verdict === "supported") {
-    const needle = normalized(unescaped(quote));
-    const contained =
-      needle.length >= MIN_CLAIM_QUOTE_CHARS &&
-      cited.some((token) => normalized(passages.get(token)!).includes(needle));
-    if (!contained) return assessment(claim.claimId, "unresolved", claimGroups);
-    return {
-      ...assessment(claim.claimId, "supported", claimGroups),
-      quote: quote.slice(0, MAX_CLAIM_QUOTE_CHARS),
-    };
+    const quote = containedQuote(
+      verdict.quote,
+      cited.map((token) => passages.get(token)!),
+    );
+    if (quote === null) return assessment(claim.claimId, "unresolved", claimGroups);
+    return { ...assessment(claim.claimId, "supported", claimGroups), quote };
   }
   if (verdict?.verdict === "conflicted") {
     const contradicting = Array.isArray(verdict.contradicting)
@@ -132,6 +128,18 @@ export function acceptedAssessment(
   }
   const plain = verdict?.verdict === "unsupported" ? "unsupported" : "unresolved";
   return assessment(claim.claimId, plain, claimGroups);
+}
+
+/**
+ * Returns a model quote bounded for storage when it holds at least `MIN_CLAIM_QUOTE_CHARS`
+ * normalized characters and is contained in one of the passages, or null otherwise.
+ */
+export function containedQuote(quote: unknown, passages: readonly string[]): string | null {
+  const text = typeof quote === "string" ? quote.trim() : "";
+  const needle = normalized(unescaped(text));
+  if (needle.length < MIN_CLAIM_QUOTE_CHARS) return null;
+  if (!passages.some((passage) => normalized(passage).includes(needle))) return null;
+  return text.slice(0, MAX_CLAIM_QUOTE_CHARS);
 }
 
 /** Returns the objectives a required enabled branch serves; the report is complete only when all are covered. */
