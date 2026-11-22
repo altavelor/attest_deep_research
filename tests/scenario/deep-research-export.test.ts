@@ -10,9 +10,10 @@ import { TFile, Vault } from "../support/obsidian";
 import { finishedReport } from "../support/deepResearch";
 
 describe("deep research export composition", () => {
-  it("creates the nested folder and never writes over a racing or case-folded note", async () => {
+  it("creates the nested folder past a racing create and never writes over a racing or case-folded note", async () => {
     const vault = new Vault();
     vault.caseInsensitive = true;
+    vault.racedFolders.add("Reports");
     vault.adapter = {
       exists: async (path: string) =>
         vault.getFiles().some((file) => file.path.toLowerCase() === path.toLowerCase()),

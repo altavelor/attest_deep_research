@@ -164,6 +164,7 @@ export class Vault {
   private readonly folders: TFolder[] = [];
   readonly contents = new Map<string, string>();
   caseInsensitive = false;
+  readonly racedFolders = new Set<string>();
   readonly beforeCreate: Array<(path: string) => void> = [];
   private readonly listeners: VaultEventRef[] = [];
 
@@ -209,6 +210,7 @@ export class Vault {
     const parent = path.split("/").slice(0, -1).join("/");
     if (parent && !this.getAbstractFileByPath(parent)) throw new Error("Parent folder missing.");
     this.folders.push(new TFolder(path));
+    if (this.racedFolders.delete(path)) throw new Error("Folder already exists.");
   }
 
   async create(path: string, content: string): Promise<TFile> {
