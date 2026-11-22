@@ -58,7 +58,7 @@ const SETTINGS: SavedChatSettings = {
   researchMode: "deep-research",
 };
 
-function composedContext(): CompositionContext {
+function composedContext(parallelCalls: boolean): CompositionContext {
   const timestamp = "2026-01-01T00:00:00.000Z";
   const settings = {
     ...DEFAULT_SETTINGS,
@@ -88,7 +88,7 @@ function composedContext(): CompositionContext {
               calls: true,
               choiceRequired: true,
               choiceSpecific: true,
-              parallelCalls: false,
+              parallelCalls,
             },
           },
         },
@@ -141,7 +141,7 @@ function composedContext(): CompositionContext {
   } as unknown as CompositionContext;
 }
 
-async function composedRun(request: Partial<ResearchRequest> = {}) {
+async function composedRun(request: Partial<ResearchRequest> = {}, parallelCalls = false) {
   const registry = new ResearchRegistry();
   const rounds = new BranchModelRounds();
   edges.model = new CitingReportModel();
@@ -155,7 +155,12 @@ async function composedRun(request: Partial<ResearchRequest> = {}) {
   };
   const port = new MemoryResearchState();
   port.commits.push(state);
-  const service = createResearchService(composedContext(), "chat", undefined, "indexOnly");
+  const service = createResearchService(
+    composedContext(parallelCalls),
+    "chat",
+    undefined,
+    "indexOnly",
+  );
   await collectAsync(
     service.answer({
       question: "Continue",
@@ -172,21 +177,40 @@ async function composedRun(request: Partial<ResearchRequest> = {}) {
   return { report: final.report, sessions: Object.keys(final.sessionByBranch), rounds };
 }
 
+async function parentTurn() {
+  const chat = realSubAgentChat(new MemoryFileSystem());
+  const session = chat.manager.createSession(SETTINGS);
+  const { request } = await startResearchTurn(chat, session.sessionId, "research-1");
+  return { chat, sessionId: session.sessionId, request };
+}
+
 describe("deep research through the composition factory", () => {
   it("runs on the main path without a manager and in child sessions one round at a time with one", async () => {
     const mainPath = await composedRun();
     expect(mainPath.report?.completedBranches).toHaveLength(3);
     expect(mainPath.sessions).toEqual([]);
 
-    const parent = async () => {
-      const chat = realSubAgentChat(new MemoryFileSystem());
-      const session = chat.manager.createSession(SETTINGS);
-      const { request } = await startResearchTurn(chat, session.sessionId, "research-1");
-      return request;
-    };
-    const sequential = await composedRun(await parent());
+    const sequential = await composedRun((await parentTurn()).request);
     expect(sequential.report?.completedBranches).toHaveLength(3);
     expect(sequential.sessions).toHaveLength(3);
     expect(sequential.rounds.peakConcurrentRounds).toBe(1);
+  });
+
+  it("imports the evidence of parallel child sessions without a stalled or repaired import", async () => {
+    const { chat, sessionId, request } = await parentTurn();
+    const parallel = await composedRun(request, true);
+    const inspection = chat.manager.getSubAgentInspection(sessionId)!;
+    const runs = await Promise.all(
+      (await inspection.snapshot()).sessions.map(
+        async (card) => (await inspection.getSession(card.sessionId))!.runs,
+      ),
+    );
+
+    expect(parallel.rounds.peakConcurrentRounds).toBeGreaterThan(1);
+    expect(parallel.report?.completedBranches).toHaveLength(3);
+    expect(parallel.sessions).toHaveLength(3);
+    expect(
+      runs.flat().map((run) => [run.status, run.continuedFromRunId, run.resultRevision]),
+    ).toEqual(Array.from({ length: 3 }, () => ["completed", null, 1]));
   });
 });
