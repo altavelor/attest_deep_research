@@ -229,14 +229,16 @@ function parseClaims(
     const tokens = Array.isArray(entry.tokens)
       ? [...new Set(entry.tokens.filter((token): token is string => used.has(token as string)))]
       : [];
-    const objectiveAt = entry.objective;
+    const objective = Number.isSafeInteger(entry.objective)
+      ? plan.objectives[(entry.objective as number) - 1]
+      : undefined;
+    const served = plan.branches
+      .find((branch) => branch.branchId === execution.branchId)
+      ?.objectives.includes(objective ?? "");
     claims.push({
       claimId: `c-${execution.workId}-${count}`,
       branchId: execution.branchId,
-      objective:
-        Number.isSafeInteger(objectiveAt) && plan.objectives[(objectiveAt as number) - 1]
-          ? plan.objectives[(objectiveAt as number) - 1]!
-          : null,
+      objective: served && objective !== undefined ? objective : null,
       text: text.slice(0, MAX_CLAIM_TEXT_CHARS),
       citationTokens: tokens.slice(0, MAX_CLAIM_TOKENS),
     });

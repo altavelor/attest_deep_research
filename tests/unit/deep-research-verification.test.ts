@@ -135,6 +135,50 @@ describe("deep research claim verification", () => {
     expect(assess).toContain("&lt;/PASSAGE>");
   });
 
+  it("drops an objective the claim's branch does not serve, so it covers nothing", async () => {
+    const plan = researchPlan(
+      [researchBranch(1), researchBranch(2, { priority: "optional", objectives: [] })],
+      "balanced",
+    );
+    const passage = "The moon pulls the oceans twice every day.";
+    const model = new FakeChatModel([
+      [
+        {
+          content: JSON.stringify({
+            claims: [{ finding: 1, text: "Moon tides", tokens: ["t1"], objective: 1 }],
+          }),
+          isComplete: true,
+        },
+      ],
+      [
+        {
+          content: JSON.stringify({
+            assessments: [{ claim: 1, verdict: "supported", quote: passage, contradicting: [] }],
+          }),
+          isComplete: true,
+        },
+      ],
+    ]);
+    const execution = {
+      ...gatheringResearch(plan).executions[1]!,
+      state: "completed" as const,
+      finding: { text: "Moon tides [t1]", citationTokens: ["t1"], partial: false },
+    };
+    const summary = await new EvidenceVerificationService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [retrieved("t1", markdownSource("Notes/a.md"), passage)],
+      spendRound: () => true,
+      followUpsRemaining: 0,
+      followUpCycle: 1,
+    }).verify([execution], plan);
+
+    expect(summary.claims).toMatchObject([{ branchId: "branch-2", objective: null }]);
+    expect(summary.assessments).toMatchObject([{ verdict: "supported" }]);
+    expect(summary.coverage).toEqual([{ objective: "Objective", covered: false }]);
+  });
+
   it("downgrades verdicts the cited passages of the request do not bear out", () => {
     const passages = new Map([["t1", "The moon pulls the oceans twice every day."]]);
     const rows: [string, object, string][] = [
