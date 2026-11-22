@@ -149,7 +149,7 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
       }
       openReasoning.clear();
     };
-    for await (const raw of parseServerSentEvents(response.body)) {
+    for await (const raw of parseServerSentEvents(response.body, request.signal)) {
       if (raw === "[DONE]") {
         if (!terminal) throw protocolError("responses-done-before-terminal");
         break;

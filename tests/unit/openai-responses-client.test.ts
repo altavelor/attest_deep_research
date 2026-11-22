@@ -1,4 +1,5 @@
 import { OpenAiResponsesClient } from "@adapters/model-provider";
+import { chunkedStream } from "../support/streams";
 
 function streamResponse(events: unknown[]): Response {
   const encoder = new TextEncoder();
@@ -45,6 +46,29 @@ describe("OpenAiResponsesClient", () => {
         signal: controller.signal,
       }),
     ).rejects.toBe(reason);
+  });
+
+  it("cancels the response body when the caller aborts mid-stream", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled by user", "AbortError");
+    const onCancel = vi.fn();
+    const delta = JSON.stringify({ type: "response.output_text.delta", delta: "Hel" });
+    const client = new OpenAiResponsesClient({
+      baseUrl: "https://api.openai.com/v1",
+      fetch: vi
+        .fn()
+        .mockResolvedValue(new Response(chunkedStream([`data: ${delta}\n\n`], onCancel))),
+    });
+
+    await expect(
+      client.runRound({
+        model: "gpt-5",
+        messages: [{ role: "user", content: "Hello" }],
+        signal: controller.signal,
+        onEvent: () => controller.abort(reason),
+      }),
+    ).rejects.toBe(reason);
+    expect(onCancel).toHaveBeenCalledWith(reason);
   });
 
   it("maps native Responses payload and parses ordered text", async () => {
