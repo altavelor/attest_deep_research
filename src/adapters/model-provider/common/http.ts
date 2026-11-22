@@ -121,6 +121,11 @@ export class ProviderHttpClient {
     }
   }
 
+  /** Trims a provider-supplied message and redacts this client's API key from it. */
+  sanitizeProviderMessage(value: string): string {
+    return sanitizeProviderMessage(value, this.apiKey);
+  }
+
   async readJson(response: Response, invalidJsonMessage: string): Promise<unknown> {
     try {
       const body: unknown = await response.json();
@@ -239,7 +244,8 @@ async function readBoundedResponseText(response: Response, maxBytes: number): Pr
   return text + decoder.decode();
 }
 
-function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
+/** Collapses whitespace, caps the length at 500 characters and redacts the API key. */
+export function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
   const normalized = value.replace(/\s+/g, " ").trim().slice(0, 500);
   return apiKey ? normalized.split(apiKey).join("[redacted]") : normalized;
 }

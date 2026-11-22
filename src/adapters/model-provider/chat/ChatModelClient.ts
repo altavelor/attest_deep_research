@@ -1,24 +1,24 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type OpenAI from "openai";
 import { Ollama } from "ollama";
 
 import { ApiFormat, ChatModelProvider, ChatRequest, ChatResponseChunk } from "@core/agent";
 import { AttestError } from "@core/errors";
 import { fetchTransportOrUnavailable } from "@shared";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
+import { ProviderHttpClient } from "../common/http";
 import { withLoggedErrors } from "../common/withLoggedErrors";
 import {
   createAnthropicClient,
   createLoggingFetch,
   translateAnthropicError,
 } from "./providers/anthropicSdk";
-import { createOpenAiClient, translateOpenAiError } from "./providers/openAiSdk";
 import {
   listOllamaModels,
   normalizeOllamaHost,
   streamOllamaChat,
 } from "./streaming/ollamaChatStream";
 import { streamAnthropicChat } from "./streaming/anthropicChatStream";
+import { listOpenAiCompatibleModelIds } from "./streaming/chatCompletionsHttp";
 import { streamOpenAiCompatibleChat } from "./streaming/openAiChatStream";
 
 export interface ChatModelClientOptions {
@@ -34,7 +34,7 @@ export interface ChatModelClientOptions {
 
 export class ChatModelClient implements ChatModelProvider {
   private readonly provider: ApiFormat;
-  private readonly openai?: OpenAI;
+  private readonly http?: ProviderHttpClient;
   private readonly anthropic?: Anthropic;
   private readonly ollama?: Ollama;
   private readonly apiKey?: string;
@@ -47,7 +47,16 @@ export class ChatModelClient implements ChatModelProvider {
     this.logger = options.logger;
     this.onReasoningObserved = options.onReasoningObserved;
     if (this.provider === "openai-compatible") {
-      this.openai = createOpenAiClient(options);
+      this.http = new ProviderHttpClient({
+        apiFormat: "openai-compatible",
+        baseUrl: options.baseUrl,
+        apiKey: options.apiKey,
+        fetch: options.fetch,
+        timeoutMs: options.timeoutMs,
+        logger: options.logger,
+        unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
+        unavailableMessage: "The chat model provider is unavailable.",
+      });
     } else if (this.provider === "anthropic") {
       this.anthropic = createAnthropicClient(options);
     } else if (this.provider === "ollama") {
@@ -67,7 +76,7 @@ export class ChatModelClient implements ChatModelProvider {
           ? this.listOllamaModels()
           : this.provider === "anthropic"
             ? this.listAnthropicModels()
-            : this.listOpenAiCompatibleModels(),
+            : listOpenAiCompatibleModelIds(this.http!),
       this.logger,
     );
   }
@@ -84,9 +93,8 @@ export class ChatModelClient implements ChatModelProvider {
         });
       } else {
         yield* streamOpenAiCompatibleChat({
-          openai: this.openai!,
+          http: this.http!,
           request,
-          translateError: (error) => this.translateOpenAiError(error),
           onReasoningObserved: this.onReasoningObserved,
         });
       }
@@ -94,25 +102,6 @@ export class ChatModelClient implements ChatModelProvider {
       this.logger?.logError(error);
       throw error;
     }
-  }
-
-  private async listOpenAiCompatibleModels(): Promise<string[]> {
-    try {
-      const page = await this.openai!.models.list();
-      return page.data
-        .map((model) => model.id)
-        .filter((id): id is string => typeof id === "string" && id.length > 0);
-    } catch (error) {
-      throw this.translateOpenAiError(error);
-    }
-  }
-
-  private translateOpenAiError(error: unknown): AttestError {
-    return translateOpenAiError(error, {
-      unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
-      unavailableMessage: "The chat model provider is unavailable.",
-      apiKey: this.apiKey,
-    });
   }
 
   private async listAnthropicModels(): Promise<string[]> {

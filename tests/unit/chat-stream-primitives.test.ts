@@ -87,6 +87,14 @@ describe("parseOpenAiChatDelta", () => {
       reasoningVisibility: "text",
     });
   });
+
+  it("serializes tool-call arguments a provider sends as an object", () => {
+    const parsed = parseOpenAiChatDelta({
+      choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: { query: "x" } } }] } }],
+    });
+
+    expect(parsed.toolCallDeltas[0]?.argumentsText).toBe('{"query":"x"}');
+  });
 });
 
 describe("textFromEvents", () => {

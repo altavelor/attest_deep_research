@@ -55,7 +55,7 @@ describe("ChatModelClient", () => {
     },
   };
 
-  it("preserves the caller's abort reason when the OpenAI SDK wraps cancellation", async () => {
+  it("preserves the caller's abort reason when the request is cancelled", async () => {
     const controller = new AbortController();
     const reason = new DOMException("Cancelled by user", "AbortError");
     const fetchMock = vi.fn(async () => {

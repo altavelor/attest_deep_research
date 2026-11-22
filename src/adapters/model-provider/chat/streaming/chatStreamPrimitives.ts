@@ -124,12 +124,16 @@ function parseOpenAiToolCallDeltas(value: unknown): ToolCallDelta[] {
           isRecord(toolCall.function) && typeof toolCall.function.name === "string"
             ? toolCall.function.name
             : undefined,
-        argumentsText:
-          isRecord(toolCall.function) && typeof toolCall.function.arguments === "string"
-            ? toolCall.function.arguments
-            : undefined,
+        argumentsText: isRecord(toolCall.function)
+          ? toolCallArgumentsText(toolCall.function.arguments)
+          : undefined,
       }))
     : [];
+}
+/** Accepts arguments as a JSON string or, as llama.cpp sends them, as an already parsed object. */
+function toolCallArgumentsText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  return isRecord(value) ? JSON.stringify(value) : undefined;
 }
 function parseToolArguments(value: string): Record<string, unknown> {
   if (!value.trim()) return {};

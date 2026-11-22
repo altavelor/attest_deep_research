@@ -1,25 +1,23 @@
-import type OpenAI from "openai";
-
 import { isRecord } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
+import type { ProviderHttpClient } from "../../common/http";
 import { mapOpenAiMessage } from "../providers/messageMappers";
+import { openChatCompletionsStream } from "./chatCompletionsHttp";
 import { InlineReasoningParser } from "./InlineReasoningParser";
 import { parseOpenAiChatDelta, textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
 
 interface OpenAiChatStreamOptions {
-  openai: OpenAI;
+  http: ProviderHttpClient;
   request: ChatRequest;
-  translateError: (error: unknown) => AttestError;
   onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
 }
 
 export async function* streamOpenAiCompatibleChat({
-  openai,
+  http,
   request,
-  translateError,
   onReasoningObserved,
 }: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
   const baseBody = {
@@ -36,15 +34,10 @@ export async function* streamOpenAiCompatibleChat({
   } satisfies Record<string, unknown>;
   const reasoning = reasoningBody(request);
 
-  const open = (
-    body: Record<string, unknown>,
-  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> =>
-    openai.chat.completions.create(
-      body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
-      { signal: request.signal },
-    );
+  const open = (body: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> =>
+    openChatCompletionsStream(http, body, request.signal);
 
-  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  let stream: AsyncIterable<Record<string, unknown>>;
   let attempt = reasoning;
   let firstError: unknown;
   for (;;) {
@@ -55,7 +48,7 @@ export async function* streamOpenAiCompatibleChat({
       throwIfAborted(request.signal);
       firstError ??= error;
       if (Object.keys(attempt).length === 0 || !rejectsUnknownField(error)) {
-        throw translateError(firstError);
+        throw firstError;
       }
       attempt = withoutRejectedFields(attempt, error);
     }
@@ -149,7 +142,7 @@ export async function* streamOpenAiCompatibleChat({
     }
   } catch (error) {
     throwIfAborted(request.signal);
-    throw translateError(error);
+    throw error;
   }
 
   const events: ModelStreamEvent[] = [];
@@ -209,7 +202,8 @@ function reasoningBody(request: ChatRequest): Record<string, unknown> {
  * belongs to the caller and must not be retried.
  */
 function rejectsUnknownField(error: unknown): boolean {
-  const status: unknown = isRecord(error) ? error.status : undefined;
+  const status: unknown =
+    error instanceof AttestError && isRecord(error.details) ? error.details.status : undefined;
   return status === 400 || status === 422;
 }
 
@@ -231,10 +225,10 @@ function withoutRejectedFields(
 }
 
 function refusalText(error: unknown): string {
-  if (!isRecord(error)) {
+  if (!(error instanceof AttestError)) {
     return "";
   }
-  const nested: unknown = isRecord(error.error) ? error.error.message : undefined;
+  const nested: unknown = isRecord(error.details) ? error.details.providerMessage : undefined;
   return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
