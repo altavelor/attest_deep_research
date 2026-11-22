@@ -265,6 +265,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
         executions: [],
         sessionByBranch: {},
         verification: null,
+        discovery: null,
         budget: reopenedBudget(active, this.deps.now),
       },
       { ...regenerated, revision: plan.revision + 1 },

@@ -238,5 +238,42 @@ describe("deep research discovery", () => {
     expect(final.pending).toMatchObject({ kind: "stale-plan" });
     expect(final.discovery!.observations).toMatchObject([{ producer: "user", quote: "It held." }]);
     expect(rounds.tasks).toEqual([]);
+
+    const replan = {
+      type: "decision" as const,
+      decision: {
+        researchId,
+        decisionId: final.pending!.decisionId,
+        expectedRevision: final.revision,
+        payload: { action: "replan" },
+      },
+    };
+    await answer(
+      model,
+      registry,
+      { question: "Replan", researchState: resumed, research: replan },
+      rounds,
+      later,
+    );
+    const review = reloaded(resumed.commits.at(-1)!);
+    const pending = review.commits.at(-1)!;
+    expect(pending).toMatchObject({ phase: "awaiting-approval", discovery: null });
+    const approve = {
+      type: "decision" as const,
+      decision: {
+        researchId,
+        decisionId: pending.pending!.decisionId,
+        expectedRevision: pending.revision,
+        payload: { action: "approve" },
+      },
+    };
+    await answer(
+      model,
+      registry,
+      { question: "Approve", researchState: review, research: approve },
+      rounds,
+      later,
+    );
+    expect(review.commits.at(-1)!.phase).toBe("completed");
   });
 });
