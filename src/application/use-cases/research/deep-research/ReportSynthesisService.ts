@@ -3,6 +3,7 @@ import type { RetrievedChunk } from "@core/model";
 import {
   boundedReason,
   deepResearchRejected,
+  escapePromptText,
   type ResearchPlan,
   type VerifiedClaim,
 } from "@core/research/deepResearch";
@@ -96,12 +97,12 @@ function synthesisRequest(input: ReportSynthesisInput): string {
     const against = entry.assessment.contradictingTokens.map((token) => `[${token}]`).join(" ");
     const verdict =
       entry.assessment.verdict === "conflicted" ? `conflicted by ${against}` : "supported";
-    return `<claim verdict="${escapeAttribute(verdict)}">\n${entry.claim.text.replaceAll("</claim>", "</ claim>")} ${tokens}\n</claim>`;
+    return `<claim verdict="${escapeAttribute(verdict)}">\n${escapePromptText(entry.claim.text)} ${tokens}\n</claim>`;
   });
   return [
-    `Question: ${input.question}`,
-    `Objectives:\n${input.plan.objectives.map((objective) => `- ${objective}`).join("\n")}`,
-    `Report outline:\n${input.plan.reportOutline.map((heading) => `- ${heading}`).join("\n")}`,
+    `Question: ${escapePromptText(input.question)}`,
+    `Objectives:\n${input.plan.objectives.map((objective) => `- ${escapePromptText(objective)}`).join("\n")}`,
+    `Report outline:\n${input.plan.reportOutline.map((heading) => `- ${escapePromptText(heading)}`).join("\n")}`,
     `Verified claims:\n${claims.join("\n\n")}`,
   ].join("\n\n");
 }

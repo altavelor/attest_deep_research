@@ -72,3 +72,4 @@ export {
   verifiedClaims,
   type VerifiedClaim,
 } from "./reportSections";
+export { escapePromptText } from "./promptText";

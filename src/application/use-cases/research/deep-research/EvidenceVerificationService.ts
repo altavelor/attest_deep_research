@@ -6,6 +6,7 @@ import {
   MAX_RESEARCH_CLAIMS,
   acceptedAssessment,
   checkClaimReferences,
+  escapePromptText,
   followUpWorks,
   independenceGroups,
   objectiveCoverage,
@@ -178,10 +179,12 @@ function batches(findings: readonly BranchExecution[]): BranchExecution[][] {
 }
 
 function extractRequest(batch: readonly BranchExecution[], plan: ResearchPlan): string {
-  const objectives = plan.objectives.map((objective, index) => `${index + 1}. ${objective}`);
+  const objectives = plan.objectives.map(
+    (objective, index) => `${index + 1}. ${escapePromptText(objective)}`,
+  );
   const findings = batch.map(
     (execution, index) =>
-      `<finding id="${index + 1}">\n${untrusted(execution.finding!.text, "finding")}\n</finding>`,
+      `<finding id="${index + 1}">\n${escapePromptText(execution.finding!.text)}\n</finding>`,
   );
   return [`Objectives:\n${objectives.join("\n")}`, `Findings:\n${findings.join("\n\n")}`].join(
     "\n\n",
@@ -198,9 +201,9 @@ function assessRequest(
         .filter((token) => passages.has(token))
         .map(
           (token) =>
-            `<passage token="${token}">\n${untrusted(passages.get(token)!, "passage")}\n</passage>`,
+            `<passage token="${token}">\n${escapePromptText(passages.get(token)!)}\n</passage>`,
         );
-      return `<claim id="${index + 1}">\n<text>${untrusted(claim.text, "text")}</text>\n${cited.join("\n")}\n</claim>`;
+      return `<claim id="${index + 1}">\n<text>${escapePromptText(claim.text)}</text>\n${cited.join("\n")}\n</claim>`;
     })
     .join("\n\n");
 }
@@ -261,10 +264,6 @@ function parseVerdicts(
     });
   }
   return verdicts;
-}
-
-function untrusted(text: string, tag: string): string {
-  return text.replaceAll(`</${tag}>`, `</ ${tag}>`);
 }
 
 function firstJsonObject(text: string): Record<string, unknown> | null {

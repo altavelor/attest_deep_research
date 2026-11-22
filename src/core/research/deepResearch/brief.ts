@@ -1,3 +1,4 @@
+import { escapePromptText } from "./promptText";
 import { MAX_CLARIFICATION_QUESTIONS, MAX_RESEARCH_TEXT_CHARS } from "./limits";
 import type {
   ClarificationDecisionPayload,
@@ -124,9 +125,9 @@ export function briefText(brief: ResearchBrief | null): string {
   if (!brief) return "";
   const answered = brief.questions.flatMap((question) => {
     const answer = brief.answers[question.questionId];
-    return answer ? [`- ${question.prompt} → ${answer}`] : [];
+    return answer ? [`- ${escapePromptText(question.prompt)} → ${escapePromptText(answer)}`] : [];
   });
-  const assumptions = brief.assumptions.map((assumption) => `- ${assumption}`);
+  const assumptions = brief.assumptions.map((assumption) => `- ${escapePromptText(assumption)}`);
   return [
     answered.length > 0 ? `Clarified by the user:\n${answered.join("\n")}` : "",
     assumptions.length > 0 ? `Assumptions:\n${assumptions.join("\n")}` : "",
