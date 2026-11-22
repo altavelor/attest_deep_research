@@ -154,6 +154,8 @@ function checkRunOptions(session: Rec, path: string): void {
       invalid(`${path}.resources`);
     }
   }
+  if (session.origin !== undefined)
+    oneOf(session.origin, ["direct", "map_sources"], `${path}.origin`);
   if (session.maxSearches === undefined) return;
   const searches = readSubAgentSearchBudget(session.maxSearches);
   if (!searches.ok || searches.value !== session.maxSearches) invalid(`${path}.maxSearches`);

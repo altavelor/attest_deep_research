@@ -1,4 +1,4 @@
-import { deriveSubAgentTitle, headRun } from "./identity";
+import { deriveSubAgentTitle, headRun, subAgentSessionOrigin } from "./identity";
 import type { SubAgentSessionRecord } from "./sessionModel";
 
 export const MAX_PROMPT_SESSIONS = 20;
@@ -26,7 +26,7 @@ export function listSubAgentPromptSessions(
   return records
     .filter(
       (record) =>
-        record.session.chatSessionId === chatId && record.runs[0]?.origin !== "map_sources",
+        record.session.chatSessionId === chatId && subAgentSessionOrigin(record) !== "map_sources",
     )
     .sort((left, right) => right.session.updatedAt.localeCompare(left.session.updatedAt))
     .slice(0, MAX_PROMPT_SESSIONS)

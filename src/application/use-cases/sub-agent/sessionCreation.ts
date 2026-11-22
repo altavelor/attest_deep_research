@@ -176,6 +176,7 @@ export class SubAgentSessionCreation {
       updatedAt: at,
       resources: normalized.resources,
       maxSearches: normalized.maxSearches,
+      origin: normalized.grant.origin,
     };
     store.putRecord({ session, runs: [] });
     const revision = store.putCreate({

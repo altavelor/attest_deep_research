@@ -63,6 +63,7 @@ export interface SubAgentSessionSummary {
   updatedAt: string;
   resources?: readonly string[];
   maxSearches?: number;
+  origin?: SubAgentTaskOrigin;
 }
 
 export interface SubAgentRunSummary {

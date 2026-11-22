@@ -46,7 +46,7 @@ export {
   type SubAgentSessionError,
   type SubAgentSessionErrorCode,
 } from "./errors";
-export { deriveSubAgentTitle, findOwnRun, headRun } from "./identity";
+export { deriveSubAgentTitle, findOwnRun, headRun, subAgentSessionOrigin } from "./identity";
 export {
   intersectSubAgentSourcePolicy,
   reduceSubAgentSourcePolicy,

@@ -1,5 +1,6 @@
 import { condenseTitleText } from "@core/chat/titlePolicy";
 import type { SubAgentRunSummary, SubAgentSessionRecord } from "./sessionModel";
+import type { SubAgentTaskOrigin } from "./validation";
 
 const UNSAFE_TITLE_CHARACTERS =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
@@ -27,4 +28,11 @@ export function findOwnRun(
 /** Returns the latest run of the session, which is the only one retry or continuation may reference. */
 export function headRun(record: SubAgentSessionRecord): SubAgentRunSummary | undefined {
   return record.runs[record.runs.length - 1];
+}
+
+/** The origin a session was created for; sessions saved before it was stored take their first run's. */
+export function subAgentSessionOrigin(
+  record: SubAgentSessionRecord,
+): SubAgentTaskOrigin | undefined {
+  return record.session.origin ?? record.runs[0]?.origin;
 }

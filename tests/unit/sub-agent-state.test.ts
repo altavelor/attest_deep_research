@@ -270,6 +270,19 @@ describe("sub-agent section validation", () => {
       "Sub-agent state has an invalid field: records[0].runs[0].subAgentSessionId.",
     ],
     [
+      "an unknown session origin",
+      (() => {
+        const section = subAgentSection();
+        const [record] = section.records;
+        return {
+          ...section,
+          records: [{ ...record, session: { ...record.session, origin: "plugin" } }],
+        } as unknown as SubAgentStateSnapshot;
+      })(),
+      "invalid-state-field",
+      "Sub-agent state has an invalid field: records[0].session.origin.",
+    ],
+    [
       "a negative cached token counter",
       withRun(
         subAgentSection(),

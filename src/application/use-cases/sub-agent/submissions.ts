@@ -3,6 +3,7 @@ import {
   applySubAgentTransition,
   DEFAULT_SUB_AGENT_SEARCHES,
   isSubAgentStateId,
+  subAgentSessionOrigin,
   SubAgentSessionFailure,
   type ParentRunBinding,
   type ResearchMode,
@@ -46,7 +47,7 @@ export class SubAgentSubmissions {
     const digest = digestOf({ sessionId, submission, parentRunId: binding.parentRunId });
     const record = ownedRecord(this.parts.store, binding, sessionId);
     assertSessionBudget(record, grant);
-    const origin = record.runs[0]?.origin;
+    const origin = subAgentSessionOrigin(record);
     if (origin !== undefined && origin !== grant.origin) throw sessionFailure("not-authorized");
     const existing = this.parts.store.submission(submissionId);
     if (existing) {

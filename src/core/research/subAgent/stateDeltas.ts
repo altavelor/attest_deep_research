@@ -38,6 +38,7 @@ const SESSION_FIELDS = [
   "updatedAt",
   "resources",
   "maxSearches",
+  "origin",
 ];
 const RUN_FIELDS = [
   "subAgentRunId",

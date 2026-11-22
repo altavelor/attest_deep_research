@@ -117,6 +117,9 @@ describe("chat-scoped sub-agent sessions", () => {
     const harness = managerHarness();
     harness.grants.set("grant-map", delegationGrant(harness.binding, { origin: "map_sources" }));
     const worker = await launchChild(harness.delegator("grant-map"), "w");
+    const unstarted = await harness
+      .delegator("grant-map")
+      .create({ createRequestId: "create-unstarted", title: "Unstarted worker" });
     harness.execution.finish(0);
     await settle();
     const foreign = applyAll(readySubAgentRecord("session-foreign"), runToImport("run-x"));
@@ -130,8 +133,12 @@ describe("chat-scoped sub-agent sessions", () => {
       direct.continue(worker.session.subAgentSessionId, { type: "follow-up", task: "x" }, "s-x"),
     );
     const read = await failureOf(direct.getResult("session-foreign", "run-x"));
+    const start = await failureOf(
+      direct.run(unstarted.subAgentSessionId, { type: "initial", task: "x" }, "s-y"),
+    );
 
     expect(follow.code).toBe("not-authorized");
+    expect(start.code).toBe("not-authorized");
     expect(read.code).toBe("not-authorized");
   });
 
@@ -255,6 +262,15 @@ describe("sub-agent sessions in the parent prompt", () => {
       { ...runToImport("run-w")[0], origin: "map_sources" } as SubAgentTransition,
     ]);
     const worker = { ...queued, session: { ...queued.session, updatedAt: "2026-10-28T00:00:00Z" } };
+    const ready = readySubAgentRecord("s-unstarted-worker");
+    const unstarted = {
+      ...ready,
+      session: {
+        ...ready.session,
+        origin: "map_sources" as const,
+        updatedAt: "2026-10-29T00:00:00Z",
+      },
+    };
     const foreign = { ...hostile, session: { ...hostile.session, chatSessionId: "chat-2" } };
     const failed = applySubAgentTransition(
       applyAll(readySubAgentRecord("s-failed"), runToImport("run-f").slice(0, 2)),
@@ -267,7 +283,7 @@ describe("sub-agent sessions in the parent prompt", () => {
     );
 
     const listed = listSubAgentPromptSessions(
-      [...records, hostile, worker, foreign, failed.ok ? failed.record : hostile],
+      [...records, hostile, worker, unstarted, foreign, failed.ok ? failed.record : hostile],
       "chat-1",
     );
 
