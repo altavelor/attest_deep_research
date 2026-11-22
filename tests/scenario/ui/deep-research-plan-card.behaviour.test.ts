@@ -6,6 +6,7 @@ import { createTranslator } from "@adapters/i18n";
 import { renderResearchCard } from "@apps/obsidian/ui/chat/deep-research/researchPlanCard";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { pendingResearch } from "../../support/deepResearch";
+import { startResearchState } from "@core/research/deepResearch";
 
 const t = createTranslator("en").t;
 
@@ -51,6 +52,24 @@ describe("deep research plan card", () => {
         },
       },
       "Approve the research plan",
+    );
+  });
+
+  it("offers Cancel for a research still in planning", () => {
+    const state = startResearchState("research-1", "Question", "2026-01-01T00:00:00.000Z");
+    const onTurn = vi.fn();
+    const host = document.createElement("div");
+    renderResearchCard(
+      host,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    );
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual(["Cancel research"]);
+    buttons[0]!.click();
+    expect(onTurn).toHaveBeenCalledWith(
+      { type: "cancel", researchId: state.researchId },
+      expect.any(String),
     );
   });
 });
