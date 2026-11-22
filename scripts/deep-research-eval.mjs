@@ -19,7 +19,7 @@ function caseEvidence(entry) {
 
 function evidenceFor(entry, claim) {
   const objective = entry.objectives.find((candidate) => candidate.id === claim.objective);
-  return objective ? [...objective.evidence, ...entry.contradicting] : caseEvidence(entry);
+  return objective ? objective.evidence : caseEvidence(entry);
 }
 
 /** True when the cited excerpt comes from the gold note and contains one gold passage verbatim. */
@@ -54,9 +54,24 @@ function costOf(cost) {
   );
 }
 
+function isObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validClaims(answer) {
+  if (!Array.isArray(answer?.claims)) return null;
+  const valid = answer.claims.every(
+    (claim) =>
+      isObject(claim) &&
+      (claim.citations === undefined ||
+        (Array.isArray(claim.citations) && claim.citations.every(isObject))),
+  );
+  return valid ? answer.claims : null;
+}
+
 /** Scores one recorded answer against one gold case; a metric that cannot be computed is null. */
 export function scoreRun(entry, answer, syndicates = [], cost = undefined) {
-  const claims = Array.isArray(answer?.claims) ? answer.claims : null;
+  const claims = validClaims(answer);
   const text = typeof answer?.text === "string" ? normalize(answer.text) : null;
   const metrics = { ...costOf(cost) };
   if (claims === null) {
@@ -240,6 +255,15 @@ export function buildResult({ cases, casesText, corpus, profile, mode, runs, mea
   };
 }
 
+function readRun(path) {
+  try {
+    const run = JSON.parse(readFileSync(path, "utf8"));
+    return isObject(run) ? run : null;
+  } catch {
+    return null;
+  }
+}
+
 function main(argv) {
   const options = Object.fromEntries(
     argv.flatMap((value, index) =>
@@ -273,9 +297,16 @@ function main(argv) {
     return;
   }
   const runsDirectory = resolve(options.runs);
-  const runs = readdirSync(runsDirectory)
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => JSON.parse(readFileSync(join(runsDirectory, name), "utf8")));
+  const runs = [];
+  for (const name of readdirSync(runsDirectory).filter((file) => file.endsWith(".json"))) {
+    const run = readRun(join(runsDirectory, name));
+    if (run === null) {
+      console.error(`unreadable run file: ${name}`);
+      process.exitCode = 5;
+      return;
+    }
+    runs.push(run);
+  }
   const result = buildResult({
     cases,
     casesText,

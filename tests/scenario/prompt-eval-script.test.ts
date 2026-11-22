@@ -559,41 +559,76 @@ describe("the command line refuses a baseline it cannot match to the fixtures", 
 });
 
 describe("deep-research scorer", () => {
-  it("credits a citation only when its excerpt carries the gold passage", async () => {
-    const scorer = (await import(
-      pathToFileURL(resolve("scripts/deep-research-eval.mjs")).href
-    )) as {
-      scoreRun(
-        entry: unknown,
-        answer: unknown,
-      ): { citationSupport: number | null; unsupportedCertainty: number | null };
-    };
-    const cases = JSON.parse(readFileSync("evaluation/deep-research/cases.json", "utf8")) as {
+  interface Scorer {
+    scoreRun(
+      entry: unknown,
+      answer: unknown,
+    ): { citationSupport: number | null; unsupportedCertainty: number | null };
+    selfCheck(cases: unknown, corpus: Record<string, string>): string[];
+  }
+  const load = async () =>
+    (await import(pathToFileURL(resolve("scripts/deep-research-eval.mjs")).href)) as Scorer;
+  const realCases = () =>
+    JSON.parse(readFileSync("evaluation/deep-research/cases.json", "utf8")) as {
       cases: Array<{ id: string }>;
     };
-    const entry = cases.cases.find((candidate) => candidate.id === "conflict-budget");
-    const path = "Reports/Audit report 2024.md";
-    const answer = (excerpt: string) => ({
-      text: "",
-      claims: [
-        {
-          objective: "audited",
-          text: "47 million",
-          certainty: "asserted",
-          citations: [{ path, excerpt }],
-        },
-      ],
-    });
 
-    const off = scorer.scoreRun(entry, answer("# Independent audit, autumn 2024"));
-    const gold = scorer.scoreRun(
-      entry,
-      answer(
+  it("credits a citation only when its excerpt carries the objective's own gold passage", async () => {
+    const scorer = await load();
+    const cases = realCases();
+    const score = (caseId: string, objective: string, path: string, excerpt: string) =>
+      scorer.scoreRun(
+        cases.cases.find((candidate) => candidate.id === caseId),
+        {
+          text: "",
+          claims: [{ objective, text: "x", certainty: "asserted", citations: [{ path, excerpt }] }],
+        },
+      );
+    const audit = "Reports/Audit report 2024.md";
+    const study = "Research/Microplastics study.md";
+
+    const results = [
+      score("conflict-budget", "audited", audit, "# Independent audit, autumn 2024"),
+      score(
+        "conflict-budget",
+        "audited",
+        audit,
         "The audited budget of the reservoir upgrade is 47 million euros after the second tender round.",
       ),
-    );
+      score(
+        "disconfirm-small-particles",
+        "size-distribution",
+        study,
+        "Most microplastic particles in the Larkfield catchment are larger than 50 micrometres.",
+      ),
+      scorer.scoreRun(cases.cases[0], { text: "", claims: [null] }),
+    ].map((result) => [result.citationSupport, result.unsupportedCertainty]);
 
-    expect([off.citationSupport, off.unsupportedCertainty]).toEqual([0, 1]);
-    expect([gold.citationSupport, gold.unsupportedCertainty]).toEqual([1, 0]);
+    expect(results).toEqual([
+      [0, 1],
+      [1, 0],
+      [0, 1],
+      [null, null],
+    ]);
+  });
+
+  it("reports a negative control that the scorer would credit", async () => {
+    const scorer = await load();
+    const quote = "The budget is 47 million euros.";
+    const cases = {
+      syndicates: [],
+      cases: [
+        {
+          id: "c1",
+          objectives: [{ id: "o1", markers: ["47"], evidence: [{ path: "A.md", quote }] }],
+          contradicting: [],
+          conflicts: [],
+        },
+      ],
+    };
+
+    expect(scorer.selfCheck(cases, { "A.md": `${quote}\nbody` })).toEqual([
+      "c1: negative control is not scored as an unsupported answer",
+    ]);
   });
 });
