@@ -3,6 +3,8 @@ import {
   isOllamaTagsResponse,
   modelNamesFromOllamaTags,
 } from "@adapters/model-provider/common/models";
+import { DEFAULT_PROVIDER_TIMEOUT_MS } from "@adapters/model-provider/common/http";
+import { scheduleTimeout } from "@shared";
 import { ServerProfile } from "../types";
 import { createDiscoveryHttp, ModelDiscoveryOptions } from "./discoveryHttp";
 
@@ -27,9 +29,12 @@ export async function fetchOllamaModelNames(
   }
 
   try {
-    const http = createDiscoveryHttp({ ...serverProfile, baseUrl: nativeBaseUrl }, options);
-    const response = await http.request("/tags", { method: "GET" });
-    const body = await http.readJson(response, "Ollama returned invalid JSON.");
+    const body = await requestOllamaJson(
+      { ...serverProfile, baseUrl: nativeBaseUrl },
+      "/tags",
+      { method: "GET" },
+      options,
+    );
     return isOllamaTagsResponse(body) ? new Set(modelNamesFromOllamaTags(body)) : undefined;
   } catch {
     return undefined;
@@ -48,15 +53,39 @@ export async function fetchOllamaContextLength(
   }
 
   try {
-    const http = createDiscoveryHttp({ ...serverProfile, baseUrl: nativeBaseUrl }, options);
-    const response = await http.request("/show", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: modelName }),
-    });
-    const body = await http.readJson(response, "Ollama returned invalid metadata JSON.");
+    const body = await requestOllamaJson(
+      { ...serverProfile, baseUrl: nativeBaseUrl },
+      "/show",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: modelName }),
+      },
+      options,
+    );
     return contextLengthFromModelMetadata(body);
   } catch {
     return undefined;
+  }
+}
+
+/** Requests an Ollama native endpoint under one deadline that also covers reading the JSON body. */
+async function requestOllamaJson(
+  nativeProfile: ServerProfile,
+  path: string,
+  init: RequestInit,
+  options: ModelDiscoveryOptions,
+): Promise<unknown> {
+  const deadline = new AbortController();
+  const timer = scheduleTimeout(
+    () => deadline.abort(new DOMException("The Ollama request timed out.", "TimeoutError")),
+    options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS,
+  );
+  try {
+    const http = createDiscoveryHttp(nativeProfile, options);
+    const response = await http.request(path, { ...init, signal: deadline.signal });
+    return await http.readJson(response, "Ollama returned invalid JSON.", deadline.signal);
+  } finally {
+    timer.cancel();
   }
 }

@@ -5,6 +5,13 @@ import {
   verifyEmbeddingCapability,
 } from "@adapters/settings";
 import { ServerProfile } from "@adapters/settings";
+import { chunkedStream } from "../support/streams";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -402,6 +409,25 @@ describe("model discovery", () => {
       "http://localhost:11434/api/tags",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("keeps the listed models when the Ollama tag body never finishes before the deadline", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "bge-m3" }] }))
+      .mockResolvedValueOnce(new Response(chunkedStream(['{"models":'], onCancel)));
+
+    const result = await runPastDeadline(50, () =>
+      fetchAvailableModels(server({ baseUrl: "http://localhost:11434/v1" }), {
+        fetch: fetchMock,
+        timeoutMs: 50,
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.models.map((model) => model.id)).toEqual(["bge-m3"]);
+    expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
   });
 
   it("falls back to Ollama native model details after the LM Studio metadata", async () => {

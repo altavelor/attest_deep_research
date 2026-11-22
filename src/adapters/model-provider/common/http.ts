@@ -2,6 +2,8 @@ import { AttestError, AttestErrorCode } from "@core/errors";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
+
 export interface ProviderHttpClientOptions {
   baseUrl: string;
   apiKey?: string;
@@ -29,7 +31,7 @@ export class ProviderHttpClient {
     this.apiKey = options.apiKey;
     this.defaultHeaders = options.defaultHeaders ?? {};
     this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
-    this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     this.logger = options.logger;
     this.unavailableCode = options.unavailableCode;
     this.unavailableMessage = options.unavailableMessage;
@@ -130,9 +132,19 @@ export class ProviderHttpClient {
     return sanitizeProviderMessage(value, this.apiKey);
   }
 
-  async readJson(response: Response, invalidJsonMessage: string): Promise<unknown> {
+  /**
+   * Parses the response body as JSON and logs it. With `signal`, aborting it cancels
+   * the body read, and the invalid-JSON error carries the abort reason as its cause.
+   */
+  async readJson(
+    response: Response,
+    invalidJsonMessage: string,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     try {
-      const body: unknown = await response.json();
+      const body: unknown = signal
+        ? JSON.parse(await readTextUnlessAborted(response, signal))
+        : await response.json();
       const logContext = this.responseContexts.get(response) ?? {
         url: response.url,
         method: "UNKNOWN",
@@ -245,6 +257,26 @@ async function readBoundedResponseText(response: Response, maxBytes: number): Pr
   } finally {
     await reader.cancel().catch(() => undefined);
   }
+  return text + decoder.decode();
+}
+
+async function readTextUnlessAborted(response: Response, signal: AbortSignal): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const cancel = (): void => void reader.cancel(signal.reason).catch(() => undefined);
+  signal.addEventListener("abort", cancel, { once: true });
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
+  if (signal.aborted) throw signal.reason;
   return text + decoder.decode();
 }
 
