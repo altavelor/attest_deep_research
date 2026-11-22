@@ -68,8 +68,7 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
   "settings.serverModal.baseUrl.desc":
     "عنوان URL لنقطة نهاية المزوّد، مثل عنوان API الأساسي لـ OpenRouter أو Ollama أو Anthropic.",
   "settings.serverModal.apiKey.name": "مفتاح API",
-  "settings.serverModal.apiKey.desc":
-    "اختياري. يُستخدم كرمز حامل للمزوّدين الذين يتطلبون المصادقة.",
+  "settings.serverModal.apiKey.desc": "اختياري. يُستخدم كرمز حامل للمزوّدين الذين يتطلبون المصادقة.",
 
   "settings.modelProfileModal.editTitle.chat": "تحرير ملف نموذج المحادثة",
   "settings.modelProfileModal.editTitle.embedding": "تحرير ملف نموذج التضمين",
