@@ -1,9 +1,10 @@
 import type { SubAgentCloseResult } from "@application/ports/subAgent";
+import type { SubAgentSessionSummary } from "@core/research";
 import { scheduleTimeout } from "@shared";
 import { settleWithin } from "./deadline";
-import { timestamp, type SubAgentManagerParts } from "./managerParts";
+import { timestamp, type SubAgentManagerParts, type UnsavedImport } from "./managerParts";
 import type { SubAgentRunScheduler } from "./runScheduler";
-import { revertUnsavedImport } from "./unsavedImports";
+import { restoreUnsavedImport, takeUnsavedImport } from "./unsavedImports";
 
 export const CLOSE_DEADLINE_MS = 2_000;
 export const PRIMARY_DRAIN_MS = 1_500;
@@ -13,12 +14,13 @@ interface CloseProgress {
   sessionIds: Set<string>;
   fencedRunIds: Set<string>;
   cancelledImports: { importId: string; generation: number }[];
+  withdrawnImports: UnsavedImport[];
 }
 
 /**
  * Ends the work of a terminal parent run while its sessions stay continuable by later runs
- * of the chat. The binding is revoked, an unsaved import put back to importing and all
- * parent-owned work fenced synchronously before the first await; then the interrupting drain
+ * of the chat. The binding is revoked, an unsaved import withdrawn from publication and
+ * all parent-owned work fenced synchronously before the first await; then the interrupting drain
  * gets up to 1500 ms and a recovery marker the rest of one shared 2000 ms deadline.
  */
 export async function closeParentRun(
@@ -33,10 +35,15 @@ export async function closeParentRun(
     sessionIds: new Set(),
     fencedRunIds: new Set(),
     cancelledImports: [],
+    withdrawnImports: [],
   };
   for (const record of parts.store.state?.records ?? []) {
     if (record.session.parentRunId !== parentRunId) continue;
-    revertUnsavedImport(parts, record.session.subAgentSessionId);
+    const withdrawn = takeUnsavedImport(parts, record.session.subAgentSessionId);
+    if (withdrawn) {
+      progress.withdrawnImports.push(withdrawn);
+      cancelPendingImport(parts, progress, withdrawn.before.session);
+    }
     progress.sessionIds.add(record.session.subAgentSessionId);
     for (const runId of scheduler.fenceSession(record.session.subAgentSessionId)) {
       progress.fencedRunIds.add(runId);
@@ -106,6 +113,9 @@ async function drain(
   terminalReason: string,
   progress: CloseProgress,
 ): Promise<void> {
+  for (const withdrawn of progress.withdrawnImports.splice(0)) {
+    restoreUnsavedImport(parts, withdrawn);
+  }
   const state = await parts.store.load();
   let revision = parts.store.currentRevision;
   let closed = 0;
@@ -118,14 +128,7 @@ async function drain(
       progress.fencedRunIds.add(runId);
     }
     if (session.activeSubAgentRunId) progress.fencedRunIds.add(session.activeSubAgentRunId);
-    const importId = parts.store.state?.imports.find(
-      (entry) =>
-        entry.runId === session.pendingImportRunId &&
-        entry.generation === session.pendingImportGeneration,
-    )?.importId;
-    if (importId && session.pendingImportGeneration !== null) {
-      progress.cancelledImports.push({ importId, generation: session.pendingImportGeneration });
-    }
+    cancelPendingImport(parts, progress, session);
     const activeRunId = session.activeSubAgentRunId;
     if (activeRunId === null && session.pendingImportRunId === null) continue;
     const ended = scheduler.transition(session.subAgentSessionId, { type: "parent-closed" });
@@ -139,6 +142,20 @@ async function drain(
   for (const run of interrupted)
     parts.mainEvents.interrupted(run.sessionId, run.runId, terminalReason);
   parts.mainEvents.closed(parentRunId, closed);
+}
+
+function cancelPendingImport(
+  parts: SubAgentManagerParts,
+  progress: CloseProgress,
+  session: SubAgentSessionSummary,
+): void {
+  const generation = session.pendingImportGeneration;
+  const importId = parts.store.state?.imports.find(
+    (entry) => entry.runId === session.pendingImportRunId && entry.generation === generation,
+  )?.importId;
+  if (!importId || generation === null) return;
+  if (progress.cancelledImports.some((entry) => entry.importId === importId)) return;
+  progress.cancelledImports.push({ importId, generation });
 }
 
 async function writeMarker(

@@ -171,10 +171,12 @@ export function deferred<T>(): Deferred<T> {
 /**
  * Durable writer fake that records every staged delta. Flushes succeed at once unless
  * the test queues a failure or holds them until released; a held flush may never end.
+ * A test may also report the buffer full for the next staged deltas.
  */
 class FakeSubAgentWriter implements SubAgentDurableWriter {
   readonly deltas: SubAgentBufferedValue[] = [];
   flushes = 0;
+  fullDeltas = 0;
   private failures: Error[] = [];
   private gates: Promise<void>[] = [];
 
@@ -188,7 +190,11 @@ class FakeSubAgentWriter implements SubAgentDurableWriter {
     return () => gate.resolve();
   }
 
-  markDirty(_key: string, _revision: number, payload: SubAgentBufferedValue): "accepted" {
+  markDirty(_key: string, _revision: number, payload: SubAgentBufferedValue): "accepted" | "full" {
+    if (this.fullDeltas > 0) {
+      this.fullDeltas -= 1;
+      return "full";
+    }
     this.deltas.push(payload);
     return "accepted";
   }

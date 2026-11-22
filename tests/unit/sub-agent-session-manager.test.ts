@@ -451,6 +451,36 @@ describe("SubAgentSessionManager close barrier", () => {
     expect(harness.writer.deltas.at(-1)).toMatchObject({ entity: "marker", id: "parent-1" });
   });
 
+  it("U9: aborts every child and writes the marker when withdrawing an unsaved import overflows the buffer", async () => {
+    const harness = managerHarness();
+    const delegator = harness.delegator();
+    await launchChild(delegator, "held");
+    await launchChild(delegator, "running");
+    harness.imports.mode = "hold";
+    harness.execution.finish(0);
+    await settle();
+    const release = harness.writer.holdNext();
+    harness.imports.release();
+    await settle();
+    harness.writer.fullDeltas = 1;
+
+    const closing = harness.manager.closeAll("parent-1", "completed");
+    const aborted = harness.execution.requests[1].signal.aborted;
+    release();
+
+    expect([aborted, await closing]).toEqual([
+      true,
+      expect.objectContaining({
+        recoveryMarkerPersisted: true,
+        failures: ["primary-drain-failed"],
+      }),
+    ]);
+    expect(harness.writer.deltas.at(-1)).toMatchObject({
+      entity: "marker",
+      fields: { cancelledImports: [expect.objectContaining({ generation: 1 })] },
+    });
+  });
+
   it("U9: ends within one shared deadline when load, drain and marker all hang", async () => {
     const harness = managerHarness({ load: () => deferred<null>().promise });
     harness.writer.holdNext();
