@@ -15,8 +15,9 @@ export interface ResearchSources {
 }
 
 /**
- * Resolves the turn a Deep Research message stands for. Explicit input wins; plain text starts
- * a research when none is active and is the regeneration instruction of a pending plan decision.
+ * Resolves the turn a Deep Research message stands for. Explicit input wins; plain text starts a
+ * research when none is active, is the regeneration instruction of a pending plan decision and the
+ * free-text answer of a pending clarification.
  */
 export function resolveResearchTurn(
   input: ResearchTurnInput | undefined,
@@ -33,6 +34,17 @@ export function resolveResearchTurn(
         decisionId: active.pending.decisionId,
         expectedRevision: active.revision,
         payload: { action: "regenerate", instruction: text },
+      },
+    };
+  }
+  if (!input && active.pending?.kind === "clarification") {
+    return {
+      type: "decision",
+      decision: {
+        researchId: active.researchId,
+        decisionId: active.pending.decisionId,
+        expectedRevision: active.revision,
+        payload: { action: "reply", text },
       },
     };
   }
@@ -77,10 +89,11 @@ export function preflightScope(
 
 /** Rejects a start question or a plain-text plan instruction over its stored bound, before any commit. */
 export function checkTurnText(turn: ResearchTurnInput, text: string): void {
-  const instruction =
+  const payload =
     turn.type === "decision"
-      ? (turn.decision.payload as { instruction?: unknown }).instruction
+      ? (turn.decision.payload as { instruction?: unknown; text?: unknown })
       : null;
+  const instruction = payload?.instruction ?? payload?.text;
   if (turn.type === "start" && text.length > MAX_RESEARCH_QUESTION_CHARS) {
     throw tooLong("question", MAX_RESEARCH_QUESTION_CHARS);
   }

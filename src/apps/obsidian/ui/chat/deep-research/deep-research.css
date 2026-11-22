@@ -84,3 +84,30 @@
 .attest-research-card__branch--blocked .attest-research-card__branch-notes {
   color: var(--text-error);
 }
+
+.attest-research-card__brief,
+.attest-research-card__verification {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.attest-research-card__question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attest-research-card__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+}
+
+.attest-research-card__suggestion {
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+}

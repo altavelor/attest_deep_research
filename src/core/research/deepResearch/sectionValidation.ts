@@ -14,10 +14,12 @@ import {
   readSessionByBranch,
   reportSummary,
 } from "./executionValidation";
+import { readBrief, readVerification } from "./briefValidation";
 import type {
   DeepResearchSection,
   PendingDecision,
   ResearchBranch,
+  ResearchBrief,
   ResearchHistoryEntry,
   ResearchLimits,
   ResearchPhase,
@@ -124,6 +126,8 @@ function readState(value: unknown): ResearchState | undefined {
   const budget = readBudget(value.budget);
   const executions = readExecutions(value.executions);
   const sessionByBranch = readSessionByBranch(value.sessionByBranch);
+  const brief = readBrief(value.brief);
+  const verification = plan === undefined ? undefined : readVerification(value.verification, plan);
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||
@@ -137,10 +141,20 @@ function readState(value: unknown): ResearchState | undefined {
     !isTimestamp(value.createdAt) ||
     !isTimestamp(value.updatedAt) ||
     !consistent(phase, pending, plan) ||
+    brief === undefined ||
+    verification === undefined ||
+    !briefConsistent(phase, brief, plan) ||
     budget === undefined ||
     executions === undefined ||
     sessionByBranch === undefined ||
-    !executionConsistent(plan, executions, sessionByBranch, budget, value.report)
+    !executionConsistent(
+      plan,
+      executions,
+      sessionByBranch,
+      budget,
+      value.report,
+      verification?.followUps ?? [],
+    )
   ) {
     return undefined;
   }
@@ -159,7 +173,23 @@ function readState(value: unknown): ResearchState | undefined {
     executions,
     sessionByBranch,
     report: null,
+    brief,
+    verification,
   };
+}
+
+function briefConsistent(
+  phase: ResearchPhase,
+  brief: ResearchBrief | null,
+  plan: ResearchPlan | null,
+): boolean {
+  if (phase !== "awaiting-clarification") return true;
+  return (
+    plan === null &&
+    brief !== null &&
+    brief.questions.length > 0 &&
+    Object.keys(brief.answers).length === 0
+  );
 }
 
 function consistent(

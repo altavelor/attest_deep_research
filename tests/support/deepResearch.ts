@@ -245,8 +245,50 @@ export class BranchModelRounds implements ModelRoundProvider {
 }
 
 /**
- * A chat model that drafts a three-branch plan first and then writes a report citing the first
- * finding token and one token that no finding holds.
+ * Answers the clarification and verification calls of a research the way a cooperative model
+ * would: the question is ready, every finding yields one claim with its first citation serving the
+ * first objective, and each claim with a passage is supported by a quote copied from it. Returns
+ * null for any other call.
+ */
+export function cooperativeResearchReply(request: ChatRequest): string | null {
+  const system = String(request.messages[0]?.content);
+  const user = String(request.messages.at(-1)?.content);
+  if (system.startsWith("You decide whether")) {
+    return JSON.stringify({ status: "ready", assumptions: ["Plain reading"] });
+  }
+  if (system.startsWith("You extract")) {
+    const claims = [...user.matchAll(/<finding id="(\d+)">\n([\s\S]*?)\n<\/finding>/gu)].map(
+      (match) => ({
+        finding: Number(match[1]),
+        text: match[2]!.replace(/\s*\[[^\]]+\]/gu, "").trim(),
+        tokens: [...match[2]!.matchAll(/\[([^\]\s]+)\]/gu)].map((token) => token[1]),
+        objective: 1,
+      }),
+    );
+    return JSON.stringify({ claims });
+  }
+  if (system.startsWith("You check claims")) {
+    const assessments = [...user.matchAll(/<claim id="(\d+)">([\s\S]*?)<\/claim>/gu)].map(
+      (match) => {
+        const passage = /<passage token="[^"]+">\n([\s\S]*?)\n<\/passage>/u.exec(match[2]!)?.[1];
+        return passage
+          ? {
+              claim: Number(match[1]),
+              verdict: "supported",
+              quote: passage.slice(0, 20),
+              contradicting: [],
+            }
+          : { claim: Number(match[1]), verdict: "unsupported", quote: null, contradicting: [] };
+      },
+    );
+    return JSON.stringify({ assessments });
+  }
+  return null;
+}
+
+/**
+ * A chat model that answers clarification and verification cooperatively, drafts a three-branch
+ * plan and writes a summary citing the first verified claim token and one token no claim holds.
  */
 export class PlanAndReportModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
@@ -258,13 +300,18 @@ export class PlanAndReportModel implements ChatModelProvider {
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     this.requests.push(request);
-    if (this.requests.length === 1) {
+    const routed = cooperativeResearchReply(request);
+    if (routed !== null) {
+      yield { content: routed, isComplete: true };
+      return;
+    }
+    if (String(request.messages[0]?.content).startsWith("You plan")) {
       yield { content: planReply(3), isComplete: true };
       return;
     }
     this.onReport();
-    const findings = String(request.messages.at(-1)?.content);
-    const token = /\[([^\]\s]+)\]/u.exec(findings.slice(findings.indexOf("Findings:")))?.[1];
+    const claims = String(request.messages.at(-1)?.content);
+    const token = /\[([^\]\s]+)\]/u.exec(claims.slice(claims.indexOf("Verified claims:")))?.[1];
     yield {
       content: `# Report\n\nThe moon pulls the oceans and causes tides [${token}]. Waves exist [source-9:revision-9].`,
       isComplete: true,
@@ -332,7 +379,7 @@ export function gatheringResearch(plan: ResearchPlan): ResearchState {
   };
 }
 
-/** A report model that cites every bracketed token of the findings it receives, in order. */
+/** A report model that verifies cooperatively and cites every bracketed token of the claims it receives, in order. */
 export class CitingReportModel implements ChatModelProvider {
   readonly requests: ChatRequest[] = [];
 
@@ -342,6 +389,11 @@ export class CitingReportModel implements ChatModelProvider {
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
     this.requests.push(request);
+    const routed = cooperativeResearchReply(request);
+    if (routed !== null) {
+      yield { content: routed, isComplete: true };
+      return;
+    }
     const findings = String(request.messages.at(-1)?.content);
     const tokens = [...findings.matchAll(/\[([^\]\s]+)\]/gu)].map((match) => match[1]);
     yield {

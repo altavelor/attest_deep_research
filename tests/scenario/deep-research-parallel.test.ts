@@ -203,7 +203,7 @@ describe("deep research branches as child sessions", () => {
     const run = researchRun(request, state, new BranchModelRounds());
     await run.events;
 
-    const final = run.port.commits.find((entry) => entry.phase === "synthesizing")!;
+    const final = run.port.commits.find((entry) => entry.phase === "verifying")!;
     expect(final.executions).toMatchObject([{ state: "completed", path: "main", attempts: 1 }]);
     expect(final.budget!.consumed.branchAttempts).toBe(1);
     expect(final.budget!.consumed.modelRounds).toBe(2);

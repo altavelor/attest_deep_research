@@ -11,13 +11,15 @@ import { sessionStateFromSavedChat } from "@application/use-cases/chat/chatSessi
 import { ManualClock, chatInput } from "../support/chatDocuments";
 import { createTestSessionManager } from "../support/chatSessions";
 import {
+  BranchModelRounds,
+  PlanAndReportModel,
   StallingPlanModel,
   deepResearchService,
-  planReply,
   researchTurn,
 } from "../support/deepResearch";
 import { MemoryFileSystem } from "../support/memoryFileSystem";
-import { FakeChatModel } from "../support/researchFakes";
+import { FakeChatModel, FakeRetriever } from "../support/researchFakes";
+import { markdownSource, retrieved } from "../support/factories";
 
 const SETTINGS: SavedChatSettings = {
   chatModelProfileId: "profile",
@@ -29,7 +31,17 @@ function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: 
   const repository = new FileChatRepository({ fileSystem, folder: "chats" });
   const { manager } = createTestSessionManager({
     repository,
-    createResearchService: () => deepResearchService(model),
+    createResearchService: () =>
+      deepResearchService(model, true, {
+        retriever: new FakeRetriever({
+          chunks: [
+            retrieved("chunk-1", markdownSource("Notes/tides.md"), "The moon causes tides."),
+          ],
+          citations: [],
+          usedFallback: false,
+        }),
+        modelRound: new BranchModelRounds(),
+      }),
     logError: (error) => errors.push(error),
   });
   return { repository, manager };
@@ -38,10 +50,7 @@ function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: 
 describe("deep research turns through the chat runtime", () => {
   it("starts a research, keeps its pending plan across a reload and runs it on approval", async () => {
     const fileSystem = new MemoryFileSystem();
-    const model = new FakeChatModel([
-      { content: planReply(), isComplete: false },
-      { content: "", isComplete: true },
-    ]);
+    const model = new PlanAndReportModel();
     const first = reopen(fileSystem, model);
     const session = first.manager.createSession(SETTINGS);
     await first.manager.start(session.sessionId, researchTurn("How do tides work?"));

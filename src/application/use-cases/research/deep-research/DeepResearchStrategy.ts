@@ -1,6 +1,5 @@
 import type { ChatModelProvider, ChatRequest, ToolCallingCapabilities } from "@core/agent";
 import type { ResearchStatePort } from "@application/ports/researchState";
-import type { ResearchStreamEvent } from "@application/contracts/research";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import type { SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 import {
@@ -14,31 +13,18 @@ import {
   endResearch,
   isPlanStale,
   parsePlanDecisionPayload,
-  startResearchState,
   withPlanForReview,
+  type ResearchBrief,
   type ResearchDecision,
+  type ResearchSourceScope,
   type ResearchState,
 } from "@core/research/deepResearch";
-import type {
-  ResearchExecutionContext,
-  ResearchStrategy,
-  ResearchStrategyOutcome,
-} from "../strategies/ResearchStrategy";
-import type { ResearchAnswer } from "@core/answer";
+import type { ResearchExecutionContext, ResearchStrategy } from "../strategies/ResearchStrategy";
 import { ResearchPlanService } from "./ResearchPlanService";
-import { MainBranchRunner } from "./MainBranchRunner";
-import { SubAgentBranchRunner } from "./SubAgentBranchRunner";
-import { ReportSynthesisService } from "./ReportSynthesisService";
-import { pumpEvents } from "./eventPump";
-import { runResearch, type ResearchRunResult } from "./researchRun";
-import {
-  defaultTimer,
-  isAbort,
-  isExecuting,
-  referenceEvent,
-  reopenedBudget,
-  stale,
-} from "./strategyHelpers";
+import { ResearchClarificationService } from "./ResearchClarificationService";
+import { clarificationTurn, startTurn, type PlanningTurnContext } from "./researchPlanningTurn";
+import { finish, runApprovedTurn, type TurnEvents } from "./deepResearchRun";
+import { isAbort, isExecuting, reopenedBudget, stale } from "./strategyHelpers";
 import {
   abandonsPlanning,
   checkTurnText,
@@ -60,8 +46,6 @@ export interface DeepResearchStrategyDeps {
   branchSources: SubAgentToolSources;
   setTimer?(delayMs: number, callback: () => void): () => void;
 }
-
-type TurnEvents = AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome>;
 
 /**
  * Runs one turn of a Deep Research that spans several ordinary chat turns: start a research and
@@ -103,32 +87,31 @@ export class DeepResearchStrategy implements ResearchStrategy {
     return yield* finish(ctx, cancelled, "Research cancelled.");
   }
 
-  private async *start(ctx: ResearchExecutionContext, port: ResearchStatePort): TurnEvents {
+  private start(ctx: ResearchExecutionContext, port: ResearchStatePort): TurnEvents {
     const scope = preflightScope(ctx.searchMode, this.sources());
-    const planning = startResearchState(this.createId("research"), ctx.question, this.now());
-    await port.commit(planning, null);
-    yield { type: "status", message: "Drafting a research plan…" };
-    try {
-      const plan = await this.planService(ctx, scope, 1).generate(ctx.question, null);
-      const review = withPlanForReview(planning, plan, this.createId("decision"), this.now());
-      await port.commit(review, planning.revision);
-      return yield* finish(
-        ctx,
-        review,
-        `Research plan ready for review: ${plan.branches.length} branches.`,
-      );
-    } catch (error) {
-      const ended = isAbort(error)
-        ? endResearch(planning, "cancelled", "Stopped while drafting the plan.", this.now())
-        : endResearch(
-            planning,
-            "failed",
-            error instanceof Error ? error.message : "The plan could not be generated.",
-            this.now(),
-          );
-      await port.commit(ended, planning.revision).catch(() => undefined);
-      throw error;
-    }
+    return startTurn(this.planningTurn(ctx, port, scope));
+  }
+
+  private planningTurn(
+    ctx: ResearchExecutionContext,
+    port: ResearchStatePort,
+    scope: ResearchSourceScope,
+  ): PlanningTurnContext {
+    return {
+      ctx,
+      port,
+      now: () => this.now(),
+      createId: (prefix) => this.createId(prefix),
+      planService: (used, brief) => this.planService(ctx, scope, used, brief),
+      clarification: () =>
+        new ResearchClarificationService({
+          chatModel: this.deps.chatModel,
+          model: this.deps.chatModelName,
+          chatOptions: this.deps.chatOptions,
+          ...(ctx.request.chatHistory ? { chatHistory: ctx.request.chatHistory } : {}),
+          ...(ctx.request.signal ? { signal: ctx.request.signal } : {}),
+        }),
+    };
   }
 
   private async *decide(
@@ -140,6 +123,10 @@ export class DeepResearchStrategy implements ResearchStrategy {
     if (decisionMismatch(active, decision)) throw stale();
     if (active.pending?.kind === "stale-plan") {
       return yield* this.decideStale(ctx, port, active, decision);
+    }
+    if (active.pending?.kind === "clarification") {
+      const scope = preflightScope(ctx.searchMode, this.sources());
+      return yield* clarificationTurn(this.planningTurn(ctx, port, scope), active, decision);
     }
     const context = { now: this.now(), nextDecisionId: this.createId("decision") };
     const consumed = applyDecision(active, decision, { ...context, regenerated: null });
@@ -159,7 +146,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
     const used = consumed.state.plan!.generationsUsed;
     let regenerated;
     try {
-      regenerated = await this.planService(ctx, scope, used).generate(
+      regenerated = await this.planService(ctx, scope, used, active.brief).generate(
         active.question,
         payload.instruction,
       );
@@ -249,15 +236,18 @@ export class DeepResearchStrategy implements ResearchStrategy {
     }
     const scope = preflightScope(ctx.searchMode, this.sources());
     yield { type: "status", message: "Regenerating the research plan…" };
-    const regenerated = await this.planService(ctx, scope, plan.generationsUsed + 1).generate(
-      active.question,
-      null,
-    );
+    const regenerated = await this.planService(
+      ctx,
+      scope,
+      plan.generationsUsed + 1,
+      active.brief,
+    ).generate(active.question, null);
     const review = withPlanForReview(
       {
         ...active,
         executions: [],
         sessionByBranch: {},
+        verification: null,
         budget: reopenedBudget(active, this.deps.now),
       },
       { ...regenerated, revision: plan.revision + 1 },
@@ -268,82 +258,19 @@ export class DeepResearchStrategy implements ResearchStrategy {
     return yield* finish(ctx, review, "A new plan is ready for review.");
   }
 
-  private async *run(
+  private run(
     ctx: ResearchExecutionContext,
     port: ResearchStatePort,
     approved: ResearchState,
   ): TurnEvents {
-    const scope = preflightScope(ctx.searchMode, this.sources());
-    const signal = ctx.request.signal;
-    let finalAnswer: ResearchAnswer | null = null;
-    const result = yield* pumpEvents<ResearchStreamEvent, ResearchRunResult>((push) => {
-      const runner = new MainBranchRunner({
-        engine: this.deps.createBranchEngine(),
-        sources: this.deps.branchSources,
-        web: ctx.retrieval.web,
-        chatScope: scope,
-        branches: approved.plan!.branches,
-        ...(ctx.request.finalizeAnswer ? { registerAnswer: ctx.request.finalizeAnswer } : {}),
-        onEvent: push,
-        now: this.deps.now,
-      });
-      const delegated = ctx.request.subAgentResearch;
-      const parent = ctx.request.subAgentParent;
-      return runResearch(approved, {
-        port,
-        runner,
-        ...(delegated && parent
-          ? {
-              subAgents: {
-                attach: (permits) => delegated.attachBudget(permits),
-                createRunner: (sessionOf) =>
-                  new SubAgentBranchRunner({
-                    branches: approved.plan!.branches,
-                    delegator: (branch, allocation) => delegated.delegator(branch, allocation),
-                    resolver: parent.resolver,
-                    sessionOf,
-                    ...(parent.listSessions ? { listSessions: parent.listSessions } : {}),
-                  }),
-              },
-            }
-          : {}),
-        parallelRequests: this.deps.toolCapabilities.parallelCalls,
-        synthesis: new ReportSynthesisService({
-          chatModel: this.deps.chatModel,
-          model: this.deps.chatModelName,
-          chatOptions: this.deps.chatOptions,
-        }),
-        ...(signal ? { signal } : {}),
-        ...(ctx.request.resolveEvidence ? { resolveEvidence: ctx.request.resolveEvidence } : {}),
-        finalizeReport: (markdown) => {
-          const answer: ResearchAnswer = {
-            question: approved.question,
-            answer: markdown,
-            citations: [],
-            evidence: [],
-            followUpQuestions: [],
-            createdAt: this.now(),
-          };
-          finalAnswer = ctx.request.finalizeAnswer?.(answer) ?? answer;
-          return finalAnswer.answer;
-        },
-        now: this.deps.now,
-        setTimer: this.deps.setTimer ?? defaultTimer,
-        createId: (prefix) => this.createId(prefix),
-        onState: (state) => push(referenceEvent(state)),
-        onStatus: (message) => push({ type: "status", message }),
-      });
-    });
-    if (!result.report) {
-      return yield* finish(ctx, result.state, `Research failed: ${result.state.terminalReason}`);
-    }
-    return yield* finish(ctx, result.state, result.report.markdown, finalAnswer ?? undefined);
+    return runApprovedTurn(this.deps, ctx, port, approved, (prefix) => this.createId(prefix));
   }
 
   private planService(
     ctx: ResearchExecutionContext,
     scope: ReturnType<typeof preflightScope>,
     generationsUsed: number,
+    brief: ResearchBrief | null,
   ): ResearchPlanService {
     return new ResearchPlanService({
       chatModel: this.deps.chatModel,
@@ -354,6 +281,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
       chatScope: scope,
       preset: DEFAULT_RESEARCH_PRESET,
       generationsUsed,
+      brief,
       createId: () => this.createId("plan"),
     });
   }
@@ -373,23 +301,4 @@ export class DeepResearchStrategy implements ResearchStrategy {
   private createId(prefix: string): string {
     return `${prefix}-${this.deps.createId?.() ?? globalThis.crypto.randomUUID()}`;
   }
-}
-
-async function* finish(
-  ctx: ResearchExecutionContext,
-  state: ResearchState,
-  text: string,
-  report?: ResearchAnswer,
-): TurnEvents {
-  const answer = report ?? {
-    question: ctx.question,
-    answer: text,
-    citations: [],
-    followUpQuestions: [],
-    createdAt: state.updatedAt,
-  };
-  yield referenceEvent(state);
-  yield { type: "delta", content: answer.answer };
-  yield { type: "complete", answer };
-  return { kind: "completed" };
 }

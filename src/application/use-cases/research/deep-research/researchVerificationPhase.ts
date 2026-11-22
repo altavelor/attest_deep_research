@@ -1,0 +1,135 @@
+import {
+  followUpWorks,
+  objectiveCoverage,
+  resumeExecutions,
+  type BranchExecution,
+  type ResearchPlan,
+  type ResearchVerification,
+  type ResearchWork,
+  type VerificationSummary,
+} from "@core/research/deepResearch";
+
+export interface VerificationPhaseDeps {
+  plan: ResearchPlan;
+  executions(): readonly BranchExecution[];
+  verification: ResearchVerification | null;
+  verify(
+    findings: readonly BranchExecution[],
+    followUpsRemaining: number,
+    cycle: number,
+  ): Promise<VerificationSummary>;
+  runFollowUps(
+    followUps: readonly BranchExecution[],
+    works: readonly ResearchWork[],
+  ): Promise<readonly BranchExecution[]>;
+  commit(verification: ResearchVerification): Promise<void>;
+  budgetOpen(): boolean;
+  aborted(): boolean;
+}
+
+/**
+ * Verifies every completed finding not yet verified, then runs at most one follow-up work per
+ * affected branch while the follow-up cap and the budget allow, and re-verifies only the findings
+ * the follow-ups produced. Pending follow-ups of an interrupted turn run before anything else.
+ */
+export async function runVerificationPhase(
+  deps: VerificationPhaseDeps,
+): Promise<ResearchVerification> {
+  const { plan } = deps;
+  const cap = plan.limits.verificationFollowUps;
+  let current: ResearchVerification = deps.verification ?? {
+    claims: [],
+    assessments: [],
+    coverage: objectiveCoverage(plan.objectives, [], []),
+    verifiedWorks: [],
+    followUps: [],
+    followUpsUsed: 0,
+  };
+  const unsettled = current.followUps.filter(
+    (execution) => execution.state === "pending" || execution.state === "running",
+  );
+  if (unsettled.length > 0 && deps.budgetOpen()) {
+    const tasks = new Map(
+      followUpWorks(
+        plan,
+        current,
+        plan.branches.map((b) => b.branchId),
+        cap,
+        current.followUpsUsed,
+      ).map((work) => [work.branchId, work.task]),
+    );
+    const works = unsettled.map((execution) => followUpWork(plan, execution, tasks));
+    const settled = await deps.runFollowUps(resumeExecutions(current.followUps), works);
+    current = { ...current, followUps: [...settled] };
+  }
+  for (;;) {
+    if (deps.aborted()) return current;
+    const verified = new Set(current.verifiedWorks);
+    const changed = [...deps.executions(), ...current.followUps].filter(
+      (execution) => execution.state === "completed" && !verified.has(execution.workId),
+    );
+    if (changed.length === 0) return current;
+    const summary = await deps.verify(
+      changed,
+      cap - current.followUpsUsed,
+      current.followUpsUsed + 1,
+    );
+    if (deps.aborted()) return current;
+    current = merged(plan, current, summary, changed);
+    await deps.commit(current);
+    if (summary.followUps.length === 0 || !deps.budgetOpen()) return current;
+    const followUps = summary.followUps.map(pendingExecution);
+    current = {
+      ...current,
+      followUps: [...current.followUps, ...followUps],
+      followUpsUsed: current.followUpsUsed + followUps.length,
+    };
+    await deps.commit(current);
+    const settled = await deps.runFollowUps(current.followUps, summary.followUps);
+    current = { ...current, followUps: [...settled] };
+  }
+}
+
+function merged(
+  plan: ResearchPlan,
+  previous: ResearchVerification,
+  summary: VerificationSummary,
+  changed: readonly BranchExecution[],
+): ResearchVerification {
+  const claims = [...previous.claims, ...summary.claims];
+  const assessments = [...previous.assessments, ...summary.assessments];
+  return {
+    ...previous,
+    claims,
+    assessments,
+    coverage: objectiveCoverage(plan.objectives, claims, assessments),
+    verifiedWorks: [...previous.verifiedWorks, ...changed.map((execution) => execution.workId)],
+  };
+}
+
+function pendingExecution(work: ResearchWork): BranchExecution {
+  return {
+    workId: work.workId,
+    branchId: work.branchId,
+    state: "pending",
+    path: null,
+    attempts: 0,
+    finding: null,
+    terminalReason: null,
+  };
+}
+
+function followUpWork(
+  plan: ResearchPlan,
+  execution: BranchExecution,
+  tasks: ReadonlyMap<string, string>,
+): ResearchWork {
+  const branch = plan.branches.find((entry) => entry.branchId === execution.branchId);
+  return {
+    workId: execution.workId,
+    branchId: execution.branchId,
+    cycle: 1,
+    kind: "follow-up",
+    task: tasks.get(execution.branchId) ?? `Follow up on "${branch?.title}": ${branch?.task}`,
+  };
+}

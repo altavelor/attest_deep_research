@@ -234,7 +234,7 @@ describe("main branch runner findings", () => {
 });
 
 describe("research report citations", () => {
-  it("removes and counts every finding token when no registry lookup is available", async () => {
+  it("lists findings unverified without a model and removes tokens no registry lookup resolves", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",
     });
@@ -244,10 +244,10 @@ describe("research report citations", () => {
       pending: null,
       executions: initialExecutions(plan),
     };
-    let seen: string[] = [];
+    let synthesized = false;
     const synthesis = {
-      synthesize: async (input: { executions: readonly ResearchState["executions"][number][] }) => {
-        seen = input.executions.map((execution) => execution.finding!.text);
+      synthesize: async () => {
+        synthesized = true;
         return { markdown: "Report", removedTokens: 0, unverifiedTokens: 0 };
       },
     } as unknown as ReportSynthesisService;
@@ -268,7 +268,10 @@ describe("research report citations", () => {
       onState: () => undefined,
       onStatus: () => undefined,
     });
-    expect(seen).toEqual(["Tides  and waves ."]);
+    expect(synthesized).toBe(false);
+    expect(result.report).toMatchObject({ quality: "partial", verification: null });
+    expect(result.report!.markdown).toContain("Tides  and waves .");
+    expect(result.report!.markdown).toContain("their claims were not checked against the sources");
     expect(result.report!.markdown).toContain(
       "2 citation(s) without a source in the findings were removed.",
     );

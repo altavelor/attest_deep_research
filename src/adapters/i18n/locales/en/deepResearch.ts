@@ -37,6 +37,17 @@ export const deepResearch = {
   "chat.deepResearch.state.failed": "Failed",
   "chat.deepResearch.state.skipped": "Skipped",
   "chat.deepResearch.state.blocked": "Blocked",
+  "chat.deepResearch.brief.title": "Clarifying questions",
+  "chat.deepResearch.brief.unanswered": "Not answered",
+  "chat.deepResearch.brief.assumptions": "Assumptions: {items}",
+  "chat.deepResearch.action.answer": "Answer",
+  "chat.deepResearch.action.assume": "Continue with assumptions",
+  "chat.deepResearch.turn.answer": "Answer the clarifying questions",
+  "chat.deepResearch.turn.assume": "Continue with the assumptions",
+  "chat.deepResearch.report.supported": "Supported claims: {count}",
+  "chat.deepResearch.report.conflicted": "Conflicting claims: {count}",
+  "chat.deepResearch.report.unsupported": "Unsupported or unresolved claims: {count}",
+  "chat.deepResearch.report.uncovered": "Objectives not covered",
   "chat.history.requiresAction": "Waiting for your decision",
 };
 

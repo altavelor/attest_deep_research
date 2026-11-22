@@ -3,10 +3,12 @@ import type { ResearchChatHistoryMessage } from "@core/research";
 import {
   RESEARCH_PRESET_LIMITS,
   boundedReason,
+  briefText,
   MAX_RESEARCH_BRANCHES,
   deepResearchRejected,
   parsePlanDraft,
   planGenerationPrompt,
+  type ResearchBrief,
   type ResearchPlan,
   type ResearchPreset,
   type ResearchSourceScope,
@@ -21,6 +23,7 @@ export interface ResearchPlanServiceOptions {
   chatScope: ResearchSourceScope;
   preset: ResearchPreset;
   generationsUsed: number;
+  brief?: ResearchBrief | null;
   createId(): string;
 }
 
@@ -37,7 +40,10 @@ export class ResearchPlanService {
       MAX_RESEARCH_BRANCHES,
       RESEARCH_PRESET_LIMITS[options.preset].branches,
     );
-    const request = instruction ? `${question}\n\nRevise the plan: ${instruction}` : question;
+    const brief = briefText(options.brief ?? null);
+    const request = [question, brief, instruction ? `Revise the plan: ${instruction}` : ""]
+      .filter((part) => part !== "")
+      .join("\n\n");
     let reply = "";
     try {
       for await (const chunk of options.chatModel.streamChat({

@@ -41,3 +41,34 @@ export {
 } from "./report";
 export { boundFindingText } from "./findingBounds";
 export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
+export {
+  NO_CLARIFICATION_ASSUMPTION,
+  answeredBrief,
+  briefText,
+  clarificationPrompt,
+  parseClarification,
+  parseClarificationPayload,
+  readyBrief,
+  withClarificationQuestions,
+  type ClarificationOutcome,
+} from "./brief";
+export {
+  MAX_CLAIM_TEXT_CHARS,
+  MAX_CLAIM_TOKENS,
+  MAX_RESEARCH_CLAIMS,
+  acceptedAssessment,
+  checkClaimReferences,
+  followUpWorks,
+  independenceGroups,
+  objectiveCoverage,
+  requiredObjectives,
+  type ReferenceCheck,
+} from "./verification";
+export {
+  supportedClaimsSection,
+  uncoveredRequired,
+  verificationCounts,
+  verificationSections,
+  verifiedClaims,
+  type VerifiedClaim,
+} from "./reportSections";
