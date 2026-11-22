@@ -1,4 +1,9 @@
-import { MAX_BRANCH_FINDING_CHARS, MAX_RESEARCH_BRANCHES, MAX_RESEARCH_TEXT_CHARS } from "./limits";
+import {
+  MAX_FINDING_CITATION_TOKENS,
+  MAX_RESEARCH_BRANCHES,
+  MAX_RESEARCH_TEXT_CHARS,
+} from "./limits";
+import { isFindingText } from "./findingBounds";
 import { isResearchId, isRevision } from "./planValidation";
 import type {
   BranchAllocation,
@@ -18,8 +23,7 @@ const EXECUTION_STATES: readonly BranchExecution["state"][] = [
   "skipped",
   "blocked",
 ];
-const CLOSE_REASONS = ["exhausted", "time", "user"];
-const MAX_TOKENS = 200;
+const CLOSE_REASONS = ["exhausted", "time"];
 const MAX_TOKEN_CHARS = 200;
 const MAX_TIMESTAMP = 40;
 
@@ -96,7 +100,9 @@ export function executionConsistent(
     seen.add(execution.workId);
     if ((execution.state === "completed") !== (execution.finding !== null)) return false;
   }
-  return (budget?.openAllocations ?? []).every((allocation) =>
+  if (!budget) return executions.every((execution) => execution.attempts === 0);
+  if (plan && !budgetConsistent(plan, executions, budget)) return false;
+  return budget.openAllocations.every((allocation) =>
     executions.some(
       (execution) =>
         execution.workId === allocation.workId &&
@@ -104,6 +110,33 @@ export function executionConsistent(
         execution.state === "running" &&
         execution.attempts === allocation.attempt,
     ),
+  );
+}
+
+/**
+ * Checks the budget invariants the owner keeps: total attempts equal the per-branch counts, each
+ * within its cap and at least the attempts of the branch's executions, spent and open rounds and
+ * searches within the plan limits, and no open allocation on a closed budget.
+ */
+function budgetConsistent(
+  plan: ResearchPlan,
+  executions: readonly BranchExecution[],
+  budget: ResearchBudgetState,
+): boolean {
+  const { limits } = plan;
+  const counts = Object.values(budget.attemptsByBranch);
+  const open = (key: "modelRounds" | "searches"): number =>
+    budget.openAllocations.reduce((total, allocation) => total + allocation[key], 0);
+  return (
+    counts.reduce((total, count) => total + count, 0) === budget.consumed.branchAttempts &&
+    budget.consumed.branchAttempts <= limits.attemptsTotal &&
+    counts.every((count) => count <= limits.attemptsPerBranch) &&
+    executions.every(
+      (execution) => execution.attempts <= (budget.attemptsByBranch[execution.branchId] ?? 0),
+    ) &&
+    budget.consumed.modelRounds + open("modelRounds") <= limits.modelRoundsTotal &&
+    budget.consumed.searches + open("searches") <= limits.searchesTotal &&
+    (budget.closed === null || budget.openAllocations.length === 0)
   );
 }
 
@@ -210,10 +243,9 @@ function readExecution(value: unknown): BranchExecution | undefined {
 function readFinding(value: unknown): BranchFinding | undefined {
   if (
     !isRecord(value) ||
-    typeof value.text !== "string" ||
-    value.text.length > MAX_BRANCH_FINDING_CHARS ||
+    !isFindingText(value.text) ||
     !Array.isArray(value.citationTokens) ||
-    value.citationTokens.length > MAX_TOKENS ||
+    value.citationTokens.length > MAX_FINDING_CITATION_TOKENS ||
     !value.citationTokens.every(
       (token) => typeof token === "string" && token.length > 0 && token.length <= MAX_TOKEN_CHARS,
     ) ||

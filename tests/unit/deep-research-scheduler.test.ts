@@ -56,14 +56,21 @@ describe("deep research scheduling rules", () => {
     });
   });
 
-  it("treats a web plan approved exactly 24 hours ago as stale", () => {
+  it("treats a web plan as stale from exactly 24 hours", () => {
     const web = researchPlan([researchBranch(1, { sourceScope: "webOnly" })], "thorough", {
       approvedAt: "2026-01-01T00:00:00.000Z",
     });
+    expect(isPlanStale(web, "2026-01-01T23:59:59.999Z")).toBe(false);
     expect(isPlanStale(web, "2026-01-02T00:00:00.000Z")).toBe(true);
   });
 
-  it("keeps an index plan fresh one millisecond before seven days", () => {
-    expect(isPlanStale(plan, "2026-01-07T23:59:59.999Z")).toBe(false);
+  it("treats an index plan as stale from exactly seven days, also with a disabled web branch", () => {
+    const mixed = researchPlan(
+      [researchBranch(1), researchBranch(2, { sourceScope: "webOnly", enabled: false })],
+      "thorough",
+      { approvedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    expect(isPlanStale(mixed, "2026-01-07T23:59:59.999Z")).toBe(false);
+    expect(isPlanStale(mixed, "2026-01-08T00:00:00.000Z")).toBe(true);
   });
 });

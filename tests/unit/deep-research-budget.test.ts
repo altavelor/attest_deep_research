@@ -66,4 +66,19 @@ describe("research budget owner", () => {
       openAllocations: [],
     });
   });
+
+  it("shares the searches over the enabled branches of the plan", () => {
+    const budget = new ResearchBudgetOwner(limits, () => 0, 2);
+    budget.open(null);
+    expect(budget.allocate("w-1", "branch-1")).toMatchObject({ allocation: { searches: 30 } });
+  });
+
+  it("closes the budget for time when an attempt is asked for past the time limit", () => {
+    let now = 0;
+    const budget = new ResearchBudgetOwner(limits, () => now);
+    budget.open(null);
+    now = limits.activeExecutionMs;
+    expect(budget.allocate("w-1", "branch-1")).toEqual({ ok: false, dimension: "closed" });
+    expect(budget.snapshot().closed).toEqual({ reason: "time", dimension: null });
+  });
 });

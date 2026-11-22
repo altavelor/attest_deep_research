@@ -33,10 +33,11 @@ const approved = {
   ],
   budget: {
     ...emptyBudgetState(),
+    consumed: { branchAttempts: 2, modelRounds: 3, searches: 2, evidenceItems: 1 },
+    attemptsByBranch: { "branch-1": 1, "branch-2": 1 },
     openAllocations: [
-      { workId: "w-2", branchId: "branch-2", attempt: 1, modelRounds: 12, searches: 60 },
+      { workId: "w-2", branchId: "branch-2", attempt: 1, modelRounds: 12, searches: 10 },
     ],
-    closed: { reason: "time", dimension: null },
   },
 };
 const [done, running] = approved.executions;
@@ -56,6 +57,45 @@ const ended = {
     createdAt: "2026-01-01T00:00:00.000Z",
   },
 };
+
+function tokens(count: number, length: number): string[] {
+  return Array.from({ length: count }, (_, index) => `${index}`.padStart(length, "t"));
+}
+
+function budgetRows(): [string, unknown][] {
+  const budget = approved.budget;
+  const withBudget = (label: string, patch: Partial<typeof budget>): [string, unknown] => [
+    label,
+    section({ ...approved, budget: { ...budget, ...patch } }),
+  ];
+  return [
+    withBudget("fractional active time", { activeMs: 1.5 }),
+    withBudget("NaN active time", { activeMs: Number.NaN }),
+    withBudget("attempt total off the branch counts", {
+      consumed: { ...budget.consumed, branchAttempts: 3 },
+    }),
+    withBudget("branch count below its execution attempts", {
+      attemptsByBranch: { "branch-1": 0, "branch-2": 2 },
+    }),
+    withBudget("branch count over its cap", {
+      consumed: { ...budget.consumed, branchAttempts: 5 },
+      attemptsByBranch: { "branch-1": 4, "branch-2": 1 },
+    }),
+    withBudget("rounds over the limit with the open allocation", {
+      consumed: { ...budget.consumed, modelRounds: 270 },
+    }),
+    withBudget("searches over the limit with the open allocation", {
+      consumed: { ...budget.consumed, searches: 95 },
+    }),
+    withBudget("open allocation on a closed budget", {
+      closed: { reason: "time", dimension: null },
+    }),
+    withBudget("closure the owner never writes", {
+      openAllocations: [],
+      closed: { reason: "user", dimension: null },
+    }),
+  ];
+}
 
 function section(active: unknown, history: unknown[] = []) {
   return { schema: 1, active, history };
@@ -151,6 +191,37 @@ describe("deep research section validation", () => {
         section({
           ...approved,
           budget: { ...approved.budget, consumed: { ...approved.budget.consumed, searches: -1 } },
+        }),
+      ],
+      ...budgetRows(),
+      [
+        "more tokens than the bound",
+        section({
+          ...approved,
+          executions: [
+            { ...done, finding: { ...done!.finding!, citationTokens: tokens(201, 8) } },
+            running,
+          ],
+        }),
+      ],
+      [
+        "over-long token",
+        section({
+          ...approved,
+          executions: [
+            { ...done, finding: { ...done!.finding!, citationTokens: tokens(1, 201) } },
+            running,
+          ],
+        }),
+      ],
+      [
+        "finding over the encoded size",
+        section({
+          ...approved,
+          executions: [
+            { ...done, finding: { ...done!.finding!, text: "\u0001".repeat(10_000) } },
+            running,
+          ],
         }),
       ],
       ["report in an active research", section({ ...approved, report: ended.report })],

@@ -34,7 +34,8 @@ export function emptyBudgetState(): ResearchBudgetState {
  * The in-memory budget of one research turn and its only admission authority. It opens from the
  * stored snapshot, consumes in full every allocation a dead turn left open, grants attempts within
  * the caps outside the finalization reserve, settles actual use, and counts active time only
- * between `open` and the latest snapshot.
+ * between `open` and the latest snapshot. Each attempt gets at most an even share of the searches
+ * over the enabled branches.
  */
 export class ResearchBudgetOwner {
   private state: ResearchBudgetState = emptyBudgetState();
@@ -43,6 +44,7 @@ export class ResearchBudgetOwner {
   constructor(
     private readonly limits: ResearchLimits,
     private readonly nowMs: () => number,
+    private readonly enabledBranches: number = limits.branches,
   ) {}
 
   /** Opens the turn's budget from a snapshot and returns the allocations of a dead turn it consumed. */
@@ -60,7 +62,8 @@ export class ResearchBudgetOwner {
   /** Grants one attempt of a branch work or names the dimension that denies it. */
   allocate(workId: string, branchId: string): AllocationResult {
     const { consumed, attemptsByBranch, openAllocations } = this.state;
-    if (this.state.closed || this.remainingMs() <= 0) return { ok: false, dimension: "closed" };
+    if (!this.state.closed && this.remainingMs() <= 0) this.close("time");
+    if (this.state.closed) return { ok: false, dimension: "closed" };
     if ((attemptsByBranch[branchId] ?? 0) >= this.limits.attemptsPerBranch) {
       return { ok: false, dimension: "branch-attempts" };
     }
@@ -92,7 +95,10 @@ export class ResearchBudgetOwner {
       branchId,
       attempt,
       modelRounds: Math.min(this.limits.modelRoundsPerAttempt, rounds),
-      searches: Math.min(Math.ceil(this.limits.searchesTotal / this.limits.branches), searches),
+      searches: Math.min(
+        Math.ceil(this.limits.searchesTotal / Math.max(1, this.enabledBranches)),
+        searches,
+      ),
     };
     this.state = {
       ...this.state,

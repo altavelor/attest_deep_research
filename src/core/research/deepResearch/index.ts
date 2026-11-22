@@ -39,3 +39,4 @@ export {
   stopReasonOf,
   type ReportDecision,
 } from "./report";
+export { boundFindingText } from "./findingBounds";
