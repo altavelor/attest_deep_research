@@ -1,3 +1,11 @@
+import type {
+  ResearchCycle,
+  ResearchHypothesis,
+  ResearchNote,
+  ResearchObservation,
+  ResearchTest,
+} from "./discoveryTypes";
+
 export type ResearchPhase =
   | "planning"
   | "awaiting-approval"
@@ -32,6 +40,7 @@ export interface PendingDecision {
   decisionId: string;
   kind: "plan" | "clarification" | "observation" | "stale-plan";
   artifactRevision: number;
+  subjectId?: string;
 }
 
 export interface ResearchDecision {
@@ -91,6 +100,7 @@ export interface ResearchState {
   report: ResearchReport | null;
   brief: ResearchBrief | null;
   verification: ResearchVerification | null;
+  discovery: ResearchDiscovery | null;
 }
 
 export interface ClarificationQuestion {
@@ -112,10 +122,12 @@ export type ClarificationDecisionPayload =
 
 export interface ResearchClaim {
   claimId: string;
+  workId: string;
   branchId: string;
   objective: string | null;
   text: string;
   citationTokens: readonly string[];
+  kind?: "hypothesis";
 }
 
 export type ClaimVerdict = "supported" | "unsupported" | "conflicted" | "unresolved";
@@ -269,3 +281,13 @@ export type PlanDecisionPayload =
   | { action: "regenerate"; instruction: string | null };
 
 export type ResearchRuleResult<T> = { ok: true; value: T } | { ok: false; message: string };
+
+export interface ResearchDiscovery {
+  hypotheses: readonly ResearchHypothesis[];
+  tests: readonly ResearchTest[];
+  observations: readonly ResearchObservation[];
+  cycles: readonly ResearchCycle[];
+  notes: readonly ResearchNote[];
+  executions: readonly BranchExecution[];
+  omissions: readonly string[];
+}

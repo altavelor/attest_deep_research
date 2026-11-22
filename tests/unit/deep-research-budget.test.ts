@@ -36,6 +36,13 @@ describe("research budget owner", () => {
     expect(budget.snapshot().closed).toBeNull();
   });
 
+  it("charges a discovery round from the gather pool, never from the finalization reserve", () => {
+    const budget = owner(23);
+    expect(budget.spendDiscovery(1)).toBe(true);
+    expect(budget.spendDiscovery(1)).toBe(false);
+    expect(budget.snapshot().consumed.modelRounds).toBe(24);
+  });
+
   it("grants the single round left outside the finalization reserve", () => {
     expect(owner(23).allocate("w-1", "branch-1")).toMatchObject({
       ok: true,

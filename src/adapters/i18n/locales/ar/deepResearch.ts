@@ -49,5 +49,18 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.conflicted": "ادعاءات متعارضة: {count}",
   "chat.deepResearch.report.unsupported": "ادعاءات غير مدعومة أو غير محسومة: {count}",
   "chat.deepResearch.report.uncovered": "أهداف غير مغطاة",
+  "chat.deepResearch.discovery.title": "الفرضيات",
+  "chat.deepResearch.discovery.none": "لم تُقترح أي فرضيات لهذه الخطة.",
+  "chat.deepResearch.discovery.status": "{status} · المراجعة {revision} · البديل: {alternative}",
+  "chat.deepResearch.discovery.notes": "ملاحظات البحث ({count})",
+  "chat.deepResearch.hypothesis.untested": "لم تُختبر",
+  "chat.deepResearch.hypothesis.supported": "مدعومة بالأدبيات",
+  "chat.deepResearch.hypothesis.disconfirmed": "مدحوضة",
+  "chat.deepResearch.hypothesis.inconclusive": "غير حاسمة",
+  "chat.deepResearch.observation.request": "مطلوب رصد: {method}",
+  "chat.deepResearch.observation.hint":
+    "صف النتيجة التي رصدتها. يُسجَّل التقرير بلا مصادر على أنه غير متحقق منه بشكل مستقل.",
+  "chat.deepResearch.action.observe": "إرسال الرصد",
+  "chat.deepResearch.turn.observe": "إرسال الرصد",
   "chat.history.requiresAction": "بانتظار قرارك",
 };

@@ -51,6 +51,7 @@ describe("deep research verification phase", () => {
         rounds.push(findings.map((execution) => execution.workId));
         const claims: ResearchClaim[] = findings.map((execution) => ({
           claimId: `c-${execution.workId}-1`,
+          workId: execution.workId,
           branchId: execution.branchId,
           objective: execution.workId.includes("follow-up") ? "Second" : "Objective",
           text: "Claim",
@@ -145,6 +146,7 @@ describe("deep research verification phase", () => {
           options.onExtracted?.(findings.map((execution) => execution.workId));
           const claims = findings.map((execution) => ({
             claimId: `c-${execution.workId}-1`,
+            workId: execution.workId,
             branchId: "branch-1",
             objective: "Objective",
             text: "Claim",

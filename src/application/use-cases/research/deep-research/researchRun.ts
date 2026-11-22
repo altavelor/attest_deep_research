@@ -1,7 +1,10 @@
 import type { RetrievedChunk } from "@core/model";
 import {
   ResearchBudgetOwner,
+  boundTestExecution,
   boundedReason,
+  hypothesesSection,
+  isPlanStale,
   openWorks,
   reportDecision,
   resumeExecutions,
@@ -11,6 +14,7 @@ import {
   type BranchExecution,
   type ResearchPlan,
   type ResearchReport,
+  type ResearchDiscovery,
   type ResearchState,
   type VerificationSummary,
 } from "@core/research/deepResearch";
@@ -24,6 +28,20 @@ import type { ResearchSchedulerRunners } from "./ResearchScheduler";
 import { runSchedulingPhase } from "./researchScheduling";
 import { runVerificationPhase } from "./researchVerificationPhase";
 import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
+import { removeUnknownCitationTokens } from "../strategies/citations";
+import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
+import { runDiscoveryPhase, withObservation } from "./researchDiscoveryPhase";
+
+export interface ResearchDiscoveryFactoryOptions {
+  resolveEvidence(tokens: readonly string[]): RetrievedChunk[];
+  spendRound(): boolean;
+  signal: AbortSignal;
+}
+
+export interface SuppliedObservation {
+  testId: string;
+  text: string;
+}
 
 export type ResearchVerifierOptions = Pick<
   EvidenceVerificationOptions,
@@ -33,6 +51,7 @@ export type ResearchVerifierOptions = Pick<
   | "followUpCycle"
   | "claimAllowance"
   | "onExtracted"
+  | "hypothesisClaims"
   | "signal"
 >;
 
@@ -47,6 +66,8 @@ export interface ResearchRunDeps {
   parallelRequests?: boolean;
   synthesis: ReportSynthesisService;
   createVerifier?(options: ResearchVerifierOptions): ResearchVerifier;
+  createDiscovery?(options: ResearchDiscoveryFactoryOptions): ResearchDiscoveryService;
+  observation?: SuppliedObservation;
   signal?: AbortSignal;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
   finalizeReport?(markdown: string): string;
@@ -108,10 +129,32 @@ export async function runResearch(
     return next;
   };
   const verifying = start.phase === "verifying";
-  await commit({
-    phase: verifying ? "verifying" : "gathering",
-    executions: resumeExecutions(start.executions),
+  const discovering = start.phase === "discovering" || start.phase === "awaiting-observation";
+  const discovery = deps.createDiscovery?.({
+    resolveEvidence: deps.resolveEvidence ?? (() => []),
+    spendRound: () => owner.spendDiscovery(1),
+    signal: turn.signal,
   });
+  const observed =
+    deps.observation && discovery && start.discovery
+      ? await suppliedObservation(start, deps.observation, discovery)
+      : start.discovery;
+  await commit({
+    phase: verifying ? "verifying" : discovering ? "discovering" : "gathering",
+    pending: null,
+    executions: resumeExecutions(start.executions),
+    discovery: observed,
+  });
+  if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
+    const state = await commit({
+      pending: {
+        decisionId: deps.createId("decision"),
+        kind: "stale-plan",
+        artifactRevision: plan.revision,
+      },
+    });
+    return { state, report: null };
+  }
 
   const stopTurn = (): void => turn.abort(deps.signal?.reason);
   deps.signal?.addEventListener("abort", stopTurn);
@@ -147,6 +190,53 @@ export async function runResearch(
       barrier: async (next) => void (await commit({ executions: next })),
     });
     if (stopped()) throw new DOMException("Research stopped", "AbortError");
+    if (discovery && !verifying && !turn.signal.aborted) {
+      deps.onStatus("Testing hypotheses…");
+      const testPlan = {
+        ...plan,
+        branches: plan.branches.map((branch) => ({ ...branch, dependsOn: [] })),
+      };
+      const result = await runDiscoveryPhase({
+        question: start.question,
+        plan,
+        gathered: current.executions,
+        discovery: current.discovery,
+        service: discovery,
+        runTests: async (executions, works) =>
+          (
+            await runSchedulingPhase({
+              ...phase,
+              plan: testPlan,
+              executions,
+              works,
+              barrier: async (next) =>
+                void (await commit({
+                  discovery: {
+                    ...current.discovery!,
+                    executions: next.map(boundTestExecution),
+                  },
+                })),
+            })
+          ).map(boundTestExecution),
+        commit: async (next) => void (await commit({ phase: "discovering", discovery: next })),
+        budgetClosed: () => owner.snapshot().closed !== null,
+        aborted: () => turn.signal.aborted,
+      });
+      if (stopped()) throw new DOMException("Research stopped", "AbortError");
+      if (result.decision === "await-observation") {
+        const test = result.discovery.tests.find((entry) => entry.status === "awaiting-input")!;
+        const state = await commit({
+          phase: "awaiting-observation",
+          pending: {
+            decisionId: deps.createId("decision"),
+            kind: "observation",
+            artifactRevision: test.hypothesisRevision,
+            subjectId: test.testId,
+          },
+        });
+        return { state, report: null };
+      }
+    }
     if (!verifying) await commit({ phase: "verifying" });
     if (deps.createVerifier && !turn.signal.aborted) {
       deps.onStatus("Verifying the findings…");
@@ -158,6 +248,7 @@ export async function runResearch(
         plan,
         executions: () => current.executions,
         verification: current.verification,
+        discovery: current.discovery,
         verify: async (findings, bounds) => {
           let extractedWorks: readonly string[] = [];
           const summary = await deps.createVerifier!({
@@ -167,6 +258,7 @@ export async function runResearch(
             followUpCycle: bounds.cycle,
             claimAllowance: bounds.claimAllowance,
             onExtracted: (workIds) => (extractedWorks = workIds),
+            hypothesisClaims: bounds.hypothesisClaims,
             signal: turn.signal,
           }).verify(findings, plan);
           return { summary, extractedWorks };
@@ -229,7 +321,18 @@ async function writeReport(
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   });
-  const finalMarkdown = withMissingNote(markdown, decision.missingBranches, plan);
+  const resolve = deps.resolveEvidence ?? (() => []);
+  const hypotheses = hypothesesSection(current.discovery, (text, allowed) =>
+    removeUnknownCitationTokens(
+      text,
+      new Set([...allowed].filter((token) => resolve([token]).length > 0)),
+    ),
+  );
+  const finalMarkdown = withMissingNote(
+    hypotheses === "" ? markdown : `${markdown}\n\n${hypotheses}`,
+    decision.missingBranches,
+    plan,
+  );
   const report: ResearchReport = {
     reportId: deps.createId("report"),
     quality: decision.quality,
@@ -245,6 +348,21 @@ async function writeReport(
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };
+}
+
+async function suppliedObservation(
+  start: ResearchState,
+  supplied: SuppliedObservation,
+  service: ResearchDiscoveryService,
+): Promise<ResearchDiscovery> {
+  const discovery = start.discovery!;
+  const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
+  const hypothesis = discovery.hypotheses.find(
+    (entry) =>
+      entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
+  )!;
+  const observation = await service.assessReport(hypothesis, test, supplied.text);
+  return withObservation(discovery, observation);
 }
 
 function isAbort(error: unknown): boolean {

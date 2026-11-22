@@ -48,6 +48,20 @@ export const deepResearch = {
   "chat.deepResearch.report.conflicted": "Conflicting claims: {count}",
   "chat.deepResearch.report.unsupported": "Unsupported or unresolved claims: {count}",
   "chat.deepResearch.report.uncovered": "Objectives not covered",
+  "chat.deepResearch.discovery.title": "Hypotheses",
+  "chat.deepResearch.discovery.none": "No hypotheses were proposed for this plan.",
+  "chat.deepResearch.discovery.status":
+    "{status} · revision {revision} · alternative: {alternative}",
+  "chat.deepResearch.discovery.notes": "Research notes ({count})",
+  "chat.deepResearch.hypothesis.untested": "Untested",
+  "chat.deepResearch.hypothesis.supported": "Supported by literature",
+  "chat.deepResearch.hypothesis.disconfirmed": "Disconfirmed",
+  "chat.deepResearch.hypothesis.inconclusive": "Inconclusive",
+  "chat.deepResearch.observation.request": "Observation needed: {method}",
+  "chat.deepResearch.observation.hint":
+    "Describe the result you observed. A report without sources is recorded as not independently checked.",
+  "chat.deepResearch.action.observe": "Send observation",
+  "chat.deepResearch.turn.observe": "Send the observation",
   "chat.history.requiresAction": "Waiting for your decision",
 };
 

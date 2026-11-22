@@ -53,5 +53,19 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.conflicted": "Afirmaciones en conflicto: {count}",
   "chat.deepResearch.report.unsupported": "Afirmaciones sin respaldo o sin resolver: {count}",
   "chat.deepResearch.report.uncovered": "Objetivos no cubiertos",
+  "chat.deepResearch.discovery.title": "Hipótesis",
+  "chat.deepResearch.discovery.none": "No se propusieron hipótesis para este plan.",
+  "chat.deepResearch.discovery.status":
+    "{status} · revisión {revision} · alternativa: {alternative}",
+  "chat.deepResearch.discovery.notes": "Notas de investigación ({count})",
+  "chat.deepResearch.hypothesis.untested": "Sin probar",
+  "chat.deepResearch.hypothesis.supported": "Respaldada por la literatura",
+  "chat.deepResearch.hypothesis.disconfirmed": "Refutada",
+  "chat.deepResearch.hypothesis.inconclusive": "No concluyente",
+  "chat.deepResearch.observation.request": "Se necesita una observación: {method}",
+  "chat.deepResearch.observation.hint":
+    "Describe el resultado observado. Un informe sin fuentes se registra como no verificado de forma independiente.",
+  "chat.deepResearch.action.observe": "Enviar observación",
+  "chat.deepResearch.turn.observe": "Enviar la observación",
   "chat.history.requiresAction": "Esperando tu decisión",
 };

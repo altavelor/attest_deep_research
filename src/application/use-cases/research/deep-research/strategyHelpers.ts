@@ -1,7 +1,9 @@
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import {
   ResearchBudgetOwner,
+  currentHypotheses,
   deepResearchRejected,
+  type ResearchDecision,
   type ResearchState,
 } from "@core/research/deepResearch";
 import { scheduleTimeout } from "@shared";
@@ -17,7 +19,10 @@ export function referenceEvent(state: ResearchState): ResearchStreamEvent {
 /** Tells whether a research is in a phase a turn executes. */
 export function isExecuting(state: ResearchState): boolean {
   return (
-    state.phase === "gathering" || state.phase === "verifying" || state.phase === "synthesizing"
+    state.phase === "gathering" ||
+    state.phase === "discovering" ||
+    state.phase === "verifying" ||
+    state.phase === "synthesizing"
   );
 }
 
@@ -45,4 +50,37 @@ export function stale(): Error {
 /** Tells whether an error is an abort. */
 export function isAbort(error: unknown): boolean {
   return (error as { name?: unknown } | null)?.name === "AbortError";
+}
+
+/**
+ * Reads the free-text observation a pending observation decision carries for the test the pending
+ * decision names. A malformed payload is rejected; a payload naming another test, or a test of a
+ * superseded hypothesis revision, is stale.
+ */
+export function suppliedObservation(
+  active: ResearchState,
+  decision: ResearchDecision,
+): { testId: string; text: string } {
+  const payload = decision.payload as { text?: unknown; testId?: unknown } | null;
+  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+  if (text === "") {
+    throw deepResearchRejected("research-invalid-decision", "The decision is malformed.");
+  }
+  const pending = active.pending!;
+  if (payload?.testId !== undefined && payload.testId !== pending.subjectId) throw stale();
+  const discovery = active.discovery!;
+  const current = currentHypotheses(discovery.hypotheses);
+  const test = discovery.tests.find(
+    (entry) =>
+      entry.testId === pending.subjectId &&
+      entry.status === "awaiting-input" &&
+      entry.hypothesisRevision === pending.artifactRevision &&
+      current.some(
+        (hypothesis) =>
+          hypothesis.hypothesisId === entry.hypothesisId &&
+          hypothesis.revision === entry.hypothesisRevision,
+      ),
+  );
+  if (!test) throw stale();
+  return { testId: test.testId, text };
 }

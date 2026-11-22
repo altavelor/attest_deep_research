@@ -17,7 +17,7 @@ import {
   pendingResearch,
   planReply,
 } from "../support/deepResearch";
-import type { ResearchState } from "@core/research/deepResearch";
+import type { ResearchState, ResearchTurnInput } from "@core/research/deepResearch";
 import { FakeChatModel } from "../support/researchFakes";
 
 describe("deep research strategy", () => {
@@ -98,17 +98,39 @@ describe("deep research strategy", () => {
         assumptions: [],
       },
     };
-    const rows: [ResearchState, string][] = [
+    const observing = {
+      ...pendingResearch(),
+      phase: "awaiting-observation" as const,
+      pending: {
+        decisionId: "decision-o",
+        kind: "observation" as const,
+        artifactRevision: 1,
+        subjectId: "t-1",
+      },
+    };
+    const card: ResearchTurnInput = {
+      type: "decision",
+      decision: {
+        researchId: observing.researchId,
+        decisionId: "decision-o",
+        expectedRevision: observing.revision,
+        payload: { action: "observe", testId: "t-1", text: "i".repeat(4001) },
+      },
+    };
+    const rows: [ResearchState, string, ResearchTurnInput?][] = [
       [pendingResearch(), "The research plan instruction is too long"],
       [asking, "The research clarification reply is too long"],
+      [observing, "The research observation is too long"],
+      [observing, "The research observation is too long", card],
     ];
-    for (const [state, message] of rows) {
+    for (const [state, message, research] of rows) {
       const port = new MemoryResearchState();
       port.commits.push(state);
       const answer = deepResearchService(new FakeChatModel()).answer({
-        question: "i".repeat(4001),
+        question: research ? "Send" : "i".repeat(4001),
         mode: "deep-research",
         researchState: port,
+        ...(research ? { research } : {}),
       });
       await expect(collectAsync(answer)).rejects.toThrow(message);
       expect(port.commits).toHaveLength(1);

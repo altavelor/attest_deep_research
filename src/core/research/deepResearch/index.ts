@@ -58,6 +58,7 @@ export {
   MAX_RESEARCH_CLAIMS,
   acceptedAssessment,
   checkClaimReferences,
+  containedQuote,
   followUpWorks,
   independenceGroups,
   objectiveCoverage,
@@ -73,3 +74,38 @@ export {
   type VerifiedClaim,
 } from "./reportSections";
 export { escapePromptText } from "./promptText";
+export type * from "./discoveryTypes";
+export {
+  USER_OBSERVATION_LIMITATION,
+  acceptHypothesisDraft,
+  boundNotes,
+  currentHypotheses,
+  nextCycleDecision,
+  reduceHypothesis,
+  userObservation,
+  type CycleDecisionInput,
+  type HypothesisDraft,
+} from "./discovery";
+export {
+  MAX_DISCOVERY_BYTES,
+  MAX_NOTE_TEXT_CHARS,
+  MAX_OBSERVATION_QUOTE_CHARS,
+  MAX_OBSERVATION_TOKENS,
+  MAX_RESEARCH_HYPOTHESES,
+  MAX_RESEARCH_OBSERVATIONS,
+  MAX_RESEARCH_TESTS,
+  MAX_TEST_FINDING_CHARS,
+  MAX_TEST_FINDING_TOKENS,
+  boundDiscovery,
+  boundTestExecution,
+  discoveryText,
+} from "./discoveryBounds";
+export {
+  parseHypothesisProposals,
+  parseObservationVerdict,
+  parseReportVerdict,
+  testWorkTask,
+  type HypothesisProposal,
+  type ParsedProposals,
+} from "./discoveryDraft";
+export { hypothesesSection, hypothesisClaims } from "./discoveryReport";

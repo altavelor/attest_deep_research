@@ -86,6 +86,8 @@
 }
 
 .attest-research-card__brief,
+.attest-research-card__discovery,
+.attest-research-card__observation,
 .attest-research-card__verification {
   display: flex;
   flex-direction: column;
@@ -110,4 +112,13 @@
   max-width: 100%;
   white-space: normal;
   text-align: start;
+}
+
+.attest-research-card__notes {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attest-research-card__hypothesis--disconfirmed .attest-research-card__branch-notes {
+  color: var(--text-error);
 }

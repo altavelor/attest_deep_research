@@ -235,7 +235,7 @@ export class BranchModelRounds implements ModelRoundProvider {
           call: {
             id: `call-${this.tasks.length}`,
             name: "search_index",
-            arguments: { query: task },
+            arguments: { query: task.slice(0, 200) },
           },
         },
       ],
@@ -400,5 +400,64 @@ export class CitingReportModel implements ChatModelProvider {
       content: `# Report\n\n${tokens.map((token) => `Fact [${token}].`).join(" ")}`,
       isComplete: true,
     };
+  }
+}
+
+/**
+ * A research model that answers planning, verification and the report like `PlanAndReportModel`
+ * and replies to hypothesis proposals and assessments from scripted queues. A proposal revises the
+ * first open hypothesis it is shown; an assessment quotes the first passage.
+ */
+export class DiscoveryModel implements ChatModelProvider {
+  readonly requests: ChatRequest[] = [];
+  private readonly report = new PlanAndReportModel();
+
+  constructor(
+    readonly proposals: ("literature" | "observation")[],
+    readonly verdicts: ("supports" | "contradicts" | "inconclusive")[],
+  ) {}
+
+  async listModels(): Promise<string[]> {
+    return ["model"];
+  }
+
+  async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    this.requests.push(request);
+    const system = String(request.messages[0]?.content);
+    const user = String(request.messages.at(-1)?.content);
+    if (system.startsWith("You turn research findings")) {
+      const kind = this.proposals.shift();
+      const revises = /<hypothesis id="([^"]+)"/u.exec(user)?.[1] ?? null;
+      const hypotheses = kind
+        ? [
+            {
+              branch: 1,
+              revises,
+              claim: "The moon causes tides",
+              alternative: "Wind causes tides [source-8:revision-8]",
+              prediction: "Tides follow the moon",
+              disconfirmation: "Tides ignore the moon",
+              test: { kind, method: "Compare tide times with the moon" },
+            },
+          ]
+        : [];
+      yield { content: JSON.stringify({ hypotheses }), isComplete: true };
+      return;
+    }
+    if (system.startsWith("You classify one result")) {
+      const verdict = this.verdicts.shift() ?? "inconclusive";
+      yield { content: JSON.stringify({ verdict }), isComplete: true };
+      return;
+    }
+    if (system.startsWith("You judge one hypothesis")) {
+      const passage = /<passage token="[^"]+">\n([\s\S]*?)\n<\/passage>/u.exec(user)?.[1] ?? "";
+      const verdict = this.verdicts.shift() ?? "inconclusive";
+      yield {
+        content: JSON.stringify({ verdict, quote: passage.slice(0, 40) }),
+        isComplete: true,
+      };
+      return;
+    }
+    yield* this.report.streamChat(request);
   }
 }

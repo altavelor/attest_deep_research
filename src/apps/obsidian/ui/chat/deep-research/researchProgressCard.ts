@@ -8,6 +8,7 @@ import type {
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
 import { cancelAction, renderActions, type CardAction } from "./researchCardActions";
+import { renderDiscovery } from "./researchDiscoveryCard";
 
 /**
  * Renders the progress of an approved research: every branch with its execution state and reason,
@@ -54,7 +55,8 @@ export function renderProgress(
       }),
     });
   }
-  if (context.running) return;
+  if (state.discovery) renderDiscovery(cardEl, state, state.discovery, context);
+  if (context.running || state.pending?.kind === "observation") return;
   if (state.pending?.kind === "stale-plan") {
     renderStaleChoices(cardEl, state, context);
     return;

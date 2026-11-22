@@ -27,6 +27,7 @@ export interface EvidenceVerificationOptions {
   followUpCycle: number;
   claimAllowance: number;
   onExtracted?(workIds: readonly string[]): void;
+  hypothesisClaims?: readonly ResearchClaim[];
   signal?: AbortSignal;
 }
 
@@ -62,7 +63,12 @@ export class EvidenceVerificationService {
     findings: readonly BranchExecution[],
     plan: ResearchPlan,
   ): Promise<VerificationSummary> {
-    const extracted = await this.extract(findings, plan);
+    const limit = Math.min(this.options.claimAllowance, MAX_RESEARCH_CLAIMS);
+    const hypotheses = (this.options.hypothesisClaims ?? []).slice(0, Math.max(0, limit));
+    const extracted = [
+      ...hypotheses,
+      ...(await this.extract(findings, plan, limit - hypotheses.length)),
+    ];
     const evidence = this.options.resolveEvidence([
       ...new Set(extracted.flatMap((claim) => claim.citationTokens)),
     ]);
@@ -101,16 +107,17 @@ export class EvidenceVerificationService {
   private async extract(
     findings: readonly BranchExecution[],
     plan: ResearchPlan,
+    limit: number,
   ): Promise<ResearchClaim[]> {
     const claims: ResearchClaim[] = [];
     const extracted: string[] = [];
-    let allowance = Math.min(this.options.claimAllowance, MAX_RESEARCH_CLAIMS);
+    let allowance = limit;
     for (const batch of batches(findings.filter((execution) => execution.finding))) {
       if (allowance <= 0 || !this.options.spendRound()) break;
       const reply = await this.call(EXTRACT_PROMPT, extractRequest(batch, plan));
       const parsed = parseClaims(reply, batch, plan);
       for (const execution of batch) {
-        const own = parsed.filter((claim) => claim.claimId.startsWith(`c-${execution.workId}-`));
+        const own = parsed.filter((claim) => claim.workId === execution.workId);
         if (own.length > allowance) {
           allowance = 0;
           break;
@@ -256,6 +263,7 @@ function parseClaims(
       ?.objectives.includes(objective ?? "");
     claims.push({
       claimId: `c-${execution.workId}-${count}`,
+      workId: execution.workId,
       branchId: execution.branchId,
       objective: served && objective !== undefined ? objective : null,
       text: text.slice(0, MAX_CLAIM_TEXT_CHARS),

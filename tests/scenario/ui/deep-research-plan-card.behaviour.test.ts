@@ -105,6 +105,79 @@ describe("deep research plan card", () => {
     );
   });
 
+  it("asks for a supplied observation under the hypothesis list and sends it as the decision", () => {
+    const pending = pendingResearch();
+    const hypothesis = {
+      hypothesisId: "h-1",
+      revision: 1,
+      previousRevision: null,
+      branchId: "branch-1",
+      claim: "<b>Moon</b> drives tides",
+      alternative: "Wind",
+      prediction: "Lunar cycle",
+      disconfirmation: "No cycle",
+      status: "untested" as const,
+      observationIds: [],
+    };
+    const state = {
+      ...pending,
+      phase: "awaiting-observation" as const,
+      pending: {
+        decisionId: "decision-o",
+        kind: "observation" as const,
+        artifactRevision: 1,
+        subjectId: "t-1",
+      },
+      plan: { ...pending.plan!, approvedAt: "2026-01-01T00:00:00.000Z" },
+      discovery: {
+        hypotheses: [hypothesis],
+        tests: [
+          {
+            testId: "t-1",
+            hypothesisId: "h-1",
+            hypothesisRevision: 1,
+            kind: "supplied-observation" as const,
+            method: "Log tide times",
+            status: "awaiting-input" as const,
+          },
+        ],
+        observations: [],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
+      },
+    };
+    const onTurn = vi.fn();
+    const host = document.createElement("div");
+    renderResearchCard(
+      host,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    );
+    expect(host.querySelector("b")).toBeNull();
+    expect(host.textContent).toContain("<b>Moon</b> drives tides");
+    expect(host.textContent).toContain("Observation needed: Log tide times");
+    const buttons = [...host.querySelectorAll("button")].map((button) => button.textContent);
+    expect(buttons).not.toContain("Continue");
+    host.querySelector("textarea")!.value = " Tides followed the moon ";
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "Send observation")!
+      .click();
+    expect(onTurn).toHaveBeenCalledWith(
+      {
+        type: "decision",
+        decision: {
+          researchId: state.researchId,
+          decisionId: "decision-o",
+          expectedRevision: state.revision,
+          payload: { action: "observe", testId: "t-1", text: "Tides followed the moon" },
+        },
+      },
+      "Send the observation",
+    );
+  });
+
   it("renders a finished partial report with its verification sections from the history", () => {
     const host = document.createElement("div");
     const entry = {

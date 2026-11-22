@@ -1,9 +1,12 @@
 import {
   MAX_RESEARCH_CLAIMS,
   followUpWorks,
+  hypothesisClaims,
   objectiveCoverage,
   resumeExecutions,
   type BranchExecution,
+  type ResearchClaim,
+  type ResearchDiscovery,
   type ResearchPlan,
   type ResearchVerification,
   type ResearchWork,
@@ -14,12 +17,14 @@ export interface VerificationBounds {
   followUpsRemaining: number;
   cycle: number;
   claimAllowance: number;
+  hypothesisClaims: readonly ResearchClaim[];
 }
 
 export interface VerificationPhaseDeps {
   plan: ResearchPlan;
   executions(): readonly BranchExecution[];
   verification: ResearchVerification | null;
+  discovery?: ResearchDiscovery | null;
   verify(
     findings: readonly BranchExecution[],
     bounds: VerificationBounds,
@@ -79,6 +84,9 @@ export async function runVerificationPhase(
       followUpsRemaining: cap - current.followUpsUsed,
       cycle: current.followUpsUsed + 1,
       claimAllowance: MAX_RESEARCH_CLAIMS - current.claims.length,
+      hypothesisClaims: current.claims.some((claim) => claim.kind === "hypothesis")
+        ? []
+        : hypothesisClaims(deps.discovery ?? null, MAX_RESEARCH_CLAIMS - current.claims.length),
     });
     if (deps.aborted()) return current;
     current = merged(plan, current, summary, extractedWorks);

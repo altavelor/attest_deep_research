@@ -49,5 +49,18 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.report.conflicted": "相互矛盾的论断：{count}",
   "chat.deepResearch.report.unsupported": "无依据或未定的论断：{count}",
   "chat.deepResearch.report.uncovered": "未覆盖的目标",
+  "chat.deepResearch.discovery.title": "假设",
+  "chat.deepResearch.discovery.none": "此计划未提出任何假设。",
+  "chat.deepResearch.discovery.status": "{status} · 修订 {revision} · 替代解释：{alternative}",
+  "chat.deepResearch.discovery.notes": "研究笔记（{count}）",
+  "chat.deepResearch.hypothesis.untested": "未检验",
+  "chat.deepResearch.hypothesis.supported": "有文献支持",
+  "chat.deepResearch.hypothesis.disconfirmed": "已被否定",
+  "chat.deepResearch.hypothesis.inconclusive": "无定论",
+  "chat.deepResearch.observation.request": "需要观察结果：{method}",
+  "chat.deepResearch.observation.hint":
+    "请描述你观察到的结果。没有来源的报告将记录为未经独立核查。",
+  "chat.deepResearch.action.observe": "发送观察结果",
+  "chat.deepResearch.turn.observe": "发送观察结果",
   "chat.history.requiresAction": "等待您的决定",
 };

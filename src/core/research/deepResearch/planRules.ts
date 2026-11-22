@@ -51,6 +51,7 @@ export function startResearchState(
     report: null,
     brief: null,
     verification: null,
+    discovery: null,
   };
 }
 

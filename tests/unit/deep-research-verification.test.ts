@@ -14,6 +14,7 @@ import { FakeChatModel } from "../support/researchFakes";
 
 const claim: ResearchClaim = {
   claimId: "c-1",
+  workId: "w-1",
   branchId: "branch-1",
   objective: "Objective",
   text: "The moon causes tides.",
@@ -110,6 +111,47 @@ describe("deep research claim verification", () => {
       kind: "report",
       quality: "partial",
     });
+  });
+
+  it("attributes each claim of one batch to the work that produced it", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const base = {
+      ...gatheringResearch(plan).executions[0]!,
+      state: "completed" as const,
+      finding: { text: "Claim", citationTokens: [], partial: false },
+    };
+    const executions = [
+      { ...base, workId: "w-1" },
+      { ...base, workId: "w-1-2" },
+    ];
+    const model = new FakeChatModel([
+      [
+        {
+          content: JSON.stringify({
+            claims: [
+              { finding: 1, text: "First" },
+              { finding: 2, text: "Second" },
+            ],
+          }),
+          isComplete: true,
+        },
+      ],
+    ]);
+    const summary = await new EvidenceVerificationService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [],
+      spendRound: () => true,
+      followUpsRemaining: 0,
+      followUpCycle: 1,
+      claimAllowance: 40,
+    }).verify(executions, plan);
+
+    expect(summary.claims.map((entry) => [entry.workId, entry.text])).toEqual([
+      ["w-1", "First"],
+      ["w-1-2", "Second"],
+    ]);
   });
 
   it("accepts a contradicting token only from the assessment request of the claim", async () => {
