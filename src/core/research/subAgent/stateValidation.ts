@@ -182,7 +182,14 @@ function checkRun(run: Rec, path: string): string {
   for (const key of ["requestCount", "modelRounds", "toolCalls", "durationMs"]) {
     count(usage[key], `${path}.usage.${key}`);
   }
-  for (const key of ["inputTokens", "outputTokens", "totalTokens", "reasoningTokens"]) {
+  for (const key of [
+    "inputTokens",
+    "outputTokens",
+    "totalTokens",
+    "reasoningTokens",
+    "cachedInputTokens",
+    "cacheCreationInputTokens",
+  ]) {
     if (usage[key] !== undefined) count(usage[key], `${path}.usage.${key}`);
   }
   oneOf(usage.source, ["provider", "estimated", "unavailable"], `${path}.usage.source`);
