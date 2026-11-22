@@ -9,7 +9,7 @@ describe("provider dialect resolution", () => {
 
     expect(resolved).toEqual({
       openai: "openai",
-      anthropic: "openai-compatible",
+      anthropic: "anthropic",
       openrouter: "openrouter",
       mistral: "mistral",
       groq: "groq",

@@ -1,12 +1,13 @@
 import { AttestError, AttestErrorCode } from "@core/errors";
-import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
+
 export interface ProviderHttpClientOptions {
-  apiFormat: ApiFormat;
   baseUrl: string;
   apiKey?: string;
+  defaultHeaders?: Readonly<Record<string, string>>;
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
@@ -23,12 +24,14 @@ export class ProviderHttpClient {
   private readonly unavailableCode: ProviderHttpClientOptions["unavailableCode"];
   private readonly unavailableMessage: string;
   private readonly apiKey?: string;
+  private readonly defaultHeaders: Readonly<Record<string, string>>;
 
   constructor(options: ProviderHttpClientOptions) {
-    this.baseUrl = normalizeProviderBaseUrl(options.apiFormat, options.baseUrl);
+    this.baseUrl = normalizeProviderBaseUrl(options.baseUrl);
     this.apiKey = options.apiKey;
+    this.defaultHeaders = options.defaultHeaders ?? {};
     this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
-    this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     this.logger = options.logger;
     this.unavailableCode = options.unavailableCode;
     this.unavailableMessage = options.unavailableMessage;
@@ -51,7 +54,10 @@ export class ProviderHttpClient {
     }, this.timeoutMs);
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
-    const requestInit = withAuthorization(init, this.apiKey);
+    const requestInit = withAuthorization(
+      withDefaultHeaders(init, this.defaultHeaders),
+      this.apiKey,
+    );
     const logContext = createLogContext(url, method, requestInit, logging.redactBody === true);
 
     try {
@@ -121,9 +127,24 @@ export class ProviderHttpClient {
     }
   }
 
-  async readJson(response: Response, invalidJsonMessage: string): Promise<unknown> {
+  /** Trims a provider-supplied message and redacts this client's API key from it. */
+  sanitizeProviderMessage(value: string): string {
+    return sanitizeProviderMessage(value, this.apiKey);
+  }
+
+  /**
+   * Parses the response body as JSON and logs it. With `signal`, aborting it cancels
+   * the body read, and the invalid-JSON error carries the abort reason as its cause.
+   */
+  async readJson(
+    response: Response,
+    invalidJsonMessage: string,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     try {
-      const body: unknown = await response.json();
+      const body: unknown = signal
+        ? JSON.parse(await readTextUnlessAborted(response, signal))
+        : await response.json();
       const logContext = this.responseContexts.get(response) ?? {
         url: response.url,
         method: "UNKNOWN",
@@ -239,9 +260,32 @@ async function readBoundedResponseText(response: Response, maxBytes: number): Pr
   return text + decoder.decode();
 }
 
-function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
-  const normalized = value.replace(/\s+/g, " ").trim().slice(0, 500);
-  return apiKey ? normalized.split(apiKey).join("[redacted]") : normalized;
+async function readTextUnlessAborted(response: Response, signal: AbortSignal): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const cancel = (): void => void reader.cancel(signal.reason).catch(() => undefined);
+  if (signal.aborted) cancel();
+  else signal.addEventListener("abort", cancel, { once: true });
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    reader.releaseLock();
+  }
+  if (signal.aborted) throw signal.reason;
+  return text + decoder.decode();
+}
+
+/** Redacts the API key, collapses whitespace and caps the length at 500 characters. */
+export function sanitizeProviderMessage(value: string, apiKey: string | undefined): string {
+  const redacted = apiKey ? value.split(apiKey).join("[redacted]") : value;
+  return redacted.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
 function providerErrorDetails(error: ProviderErrorSummary | undefined): Record<string, unknown> {
@@ -251,14 +295,20 @@ function providerErrorDetails(error: ProviderErrorSummary | undefined): Record<s
   };
 }
 
-function normalizeProviderBaseUrl(apiFormat: ApiFormat, baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+function normalizeProviderBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "");
+}
 
-  if (apiFormat === "ollama" && !trimmed.endsWith("/api")) {
-    return `${trimmed}/api`;
+/** Places the client's default headers under the headers the request sets itself. */
+function withDefaultHeaders(
+  init: RequestInit,
+  defaultHeaders: Readonly<Record<string, string>>,
+): RequestInit {
+  if (Object.keys(defaultHeaders).length === 0) {
+    return init;
   }
 
-  return trimmed;
+  return { ...init, headers: { ...defaultHeaders, ...headersToRecord(init.headers) } };
 }
 
 function withAuthorization(init: RequestInit, apiKey: string | undefined): RequestInit {

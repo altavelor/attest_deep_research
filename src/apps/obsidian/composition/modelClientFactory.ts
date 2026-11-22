@@ -25,7 +25,6 @@ export function createChatModelClient(
   profile?: ChatModelProfile,
 ): ChatModelClient {
   return new ChatModelClient({
-    apiFormat: server.apiFormat,
     baseUrl: server.baseUrl,
     apiKey: server.apiKey,
     logger: ctx.logger,

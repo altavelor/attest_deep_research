@@ -55,10 +55,12 @@ function completionRound(id: string): Response {
 function abortingFetch(options: {
   responses: (() => Response)[];
   abortAfterCall?: number;
+  abortBeforeCall?: number;
   controller: AbortController;
 }) {
   const state = { networkCalls: 0 };
   const fetchMock = vi.fn(async (_input: unknown, init?: { signal?: AbortSignal | null }) => {
+    if (state.networkCalls + 1 === options.abortBeforeCall) options.controller.abort();
     if (init?.signal?.aborted) {
       throw new DOMException("The operation was aborted.", "AbortError");
     }
@@ -152,7 +154,7 @@ describe("Responses capability probe cancellation", () => {
     const controller = new AbortController();
     const { fetchMock, state } = abortingFetch({
       responses: [() => completionRound("1"), () => completionRound("2")],
-      abortAfterCall: 1,
+      abortBeforeCall: 2,
       controller,
     });
 

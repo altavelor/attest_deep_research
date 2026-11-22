@@ -1,4 +1,5 @@
 import { OpenAiResponsesClient } from "@adapters/model-provider";
+import { chunkedStream } from "../support/streams";
 
 function streamResponse(events: unknown[]): Response {
   const encoder = new TextEncoder();
@@ -47,6 +48,29 @@ describe("OpenAiResponsesClient", () => {
     ).rejects.toBe(reason);
   });
 
+  it("cancels the response body when the caller aborts mid-stream", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Cancelled by user", "AbortError");
+    const onCancel = vi.fn();
+    const delta = JSON.stringify({ type: "response.output_text.delta", delta: "Hel" });
+    const client = new OpenAiResponsesClient({
+      baseUrl: "https://api.openai.com/v1",
+      fetch: vi
+        .fn()
+        .mockResolvedValue(new Response(chunkedStream([`data: ${delta}\n\n`], onCancel))),
+    });
+
+    await expect(
+      client.runRound({
+        model: "gpt-5",
+        messages: [{ role: "user", content: "Hello" }],
+        signal: controller.signal,
+        onEvent: () => controller.abort(reason),
+      }),
+    ).rejects.toBe(reason);
+    expect(onCancel).toHaveBeenCalledWith(reason);
+  });
+
   it("maps native Responses payload and parses ordered text", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       streamResponse([
@@ -79,6 +103,7 @@ describe("OpenAiResponsesClient", () => {
             ],
             usage: {
               input_tokens: 10,
+              input_tokens_details: { cached_tokens: 7 },
               output_tokens: 4,
               output_tokens_details: { reasoning_tokens: 2 },
             },
@@ -107,7 +132,12 @@ describe("OpenAiResponsesClient", () => {
       items: [{ type: "text", text: "Hello" }],
       stopReason: "complete",
     });
-    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 4, reasoningTokens: 2 });
+    expect(result.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      reasoningTokens: 2,
+      cachedInputTokens: 7,
+    });
     expect(deltas).toEqual([
       "reasoningSummary:Inspect the labels. ",
       "reasoningSummary:Plan",

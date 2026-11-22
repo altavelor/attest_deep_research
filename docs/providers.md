@@ -21,8 +21,8 @@ by hand.
 | Nebius AI Studio                                         | `https://api.studio.nebius.com/v1`      | `openai-compatible` | model ID                                                             |
 | Novita AI                                                | `https://api.novita.ai/v3/openai`       | `openai-compatible` | model ID                                                             |
 | LM Studio, vLLM, llama.cpp and other self-hosted servers | local URL                               | `openai-compatible` | model ID                                                             |
-| Ollama                                                   | local URL                               | `ollama`            | every model is offered for both roles                                |
-| Anthropic                                                | `https://api.anthropic.com/v1`          | `anthropic`         | chat only; embeddings are not supported                              |
+| Ollama                                                   | `http://localhost:11434/v1`             | `openai-compatible` | every model listed by `/api/tags` is offered for both roles          |
+| Anthropic                                                | `https://api.anthropic.com/v1`          | `openai-compatible` | chat only; embeddings are not supported                              |
 
 The embedding profile is still verified with a real embedding request when it is saved, so a model
 that the provider lists but cannot embed is suspended with an explanation.

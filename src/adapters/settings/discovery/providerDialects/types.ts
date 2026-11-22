@@ -10,6 +10,8 @@ export interface ProviderDialect {
   readonly label: string;
   readonly hosts: readonly string[];
   readonly modelListPaths: readonly string[];
+  readonly requestHeaders?: Readonly<Record<string, string>>;
+  readonly embeddingsUnavailable?: true;
   extractEntries(body: unknown): Record<string, unknown>[] | null;
   detectKinds(entry: Record<string, unknown>): ProviderModelKinds;
 }

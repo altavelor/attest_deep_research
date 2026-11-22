@@ -8,7 +8,6 @@ import {
   normalizeProfileName,
   normalizeUrl,
   readActiveIndexProfileId,
-  readApiFormat,
   readIndexDescription,
   readNonNegativeIntegerOrUndefined,
   readOptionalNumber,
@@ -33,8 +32,6 @@ describe("settings parsers", () => {
   });
 
   it("accepts only supported protocols, profile ids, and finite numeric values", () => {
-    expect(readApiFormat("openai-compatible")).toBe("openai-compatible");
-    expect(readApiFormat("unknown")).toBeNull();
     expect(
       readActiveIndexProfileId(" secondary ", [
         { ...DEFAULT_INDEX_PROFILE, id: "primary" },

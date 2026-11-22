@@ -1,11 +1,17 @@
 import {
-  apiFormatLabel,
   fetchAvailableModels,
   fetchModelContextLength,
   modelRoleCountMessage,
   verifyEmbeddingCapability,
 } from "@adapters/settings";
 import { ServerProfile } from "@adapters/settings";
+import { chunkedStream } from "../support/streams";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -28,12 +34,6 @@ function server(overrides: Partial<ServerProfile>): ServerProfile {
 }
 
 describe("model discovery", () => {
-  it("formats API format labels", () => {
-    expect(apiFormatLabel("openai-compatible")).toBe("OpenAI-compatible");
-    expect(apiFormatLabel("ollama")).toBe("Ollama");
-    expect(apiFormatLabel("anthropic")).toBe("Anthropic");
-  });
-
   it("fetches OpenAI-compatible chat models with default capabilities", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "qwen3" }] }));
 
@@ -72,26 +72,6 @@ describe("model discovery", () => {
     expect(result.models[0]?.capabilities).toMatchObject({
       contextLength: 32768,
       detectionSource: "metadata",
-    });
-  });
-
-  it("fetches Ollama models as chat and embedding capable by default", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ models: [{ name: "embeddinggemma" }] }));
-
-    const result = await fetchAvailableModels(
-      server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-      { fetch: fetchMock },
-    );
-
-    expect(result.models[0]).toMatchObject({
-      id: "embeddinggemma",
-      capabilities: { chat: true, embeddings: true },
-    });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
-      method: "GET",
-      signal: expect.any(AbortSignal),
     });
   });
 
@@ -268,8 +248,6 @@ describe("model discovery", () => {
 
   it("names the recognised provider in the connection message", async () => {
     const openAiCompatible = vi.fn(async () => jsonResponse({ data: [{ id: "qwen3" }] }));
-    const ollama = vi.fn(async () => jsonResponse({ models: [{ name: "gemma" }] }));
-    const anthropic = vi.fn(async () => jsonResponse({ data: [{ id: "claude" }] }));
 
     await expect(
       fetchAvailableModels(server({ baseUrl: "https://api.groq.com/openai/v1" }), {
@@ -280,15 +258,9 @@ describe("model discovery", () => {
       fetchAvailableModels(server({}), { fetch: openAiCompatible }),
     ).resolves.toMatchObject({ message: "Connected to OpenAI-compatible. Found 1 model." });
     await expect(
-      fetchAvailableModels(server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }), {
-        fetch: ollama,
+      fetchAvailableModels(server({ baseUrl: "https://api.anthropic.com/v1" }), {
+        fetch: openAiCompatible,
       }),
-    ).resolves.toMatchObject({ message: "Connected to Ollama. Found 1 model." });
-    await expect(
-      fetchAvailableModels(
-        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-        { fetch: anthropic },
-      ),
     ).resolves.toMatchObject({ message: "Connected to Anthropic. Found 1 model." });
   });
 
@@ -361,20 +333,6 @@ describe("model discovery", () => {
     expect(result.models[0]?.capabilities).toMatchObject({ chat: false, embeddings: true });
   });
 
-  it("fetches Anthropic models as chat-only", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "claude-sonnet" }] }));
-
-    const result = await fetchAvailableModels(
-      server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-      { fetch: fetchMock },
-    );
-
-    expect(result.models[0]).toMatchObject({
-      id: "claude-sonnet",
-      capabilities: { chat: true, embeddings: false, maxTokens: true },
-    });
-  });
-
   it("reports fetch failures without returning models", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
 
@@ -405,39 +363,6 @@ describe("model discovery", () => {
     );
   });
 
-  it("does not verify Anthropic embedding capability", async () => {
-    const fetchMock = vi.fn();
-
-    await expect(
-      verifyEmbeddingCapability(
-        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-        "claude-sonnet",
-        { fetch: fetchMock },
-      ),
-    ).resolves.toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("fetches context metadata for a selected Ollama model", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ model_info: { "llama.context_length": 131072 } }));
-
-    await expect(
-      fetchModelContextLength(
-        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-        "qwen3:latest",
-        { fetch: fetchMock },
-      ),
-    ).resolves.toBe(131072);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/show", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "qwen3:latest" }),
-      signal: expect.any(AbortSignal),
-    });
-  });
-
   it("fetches context metadata from an OpenAI-compatible model resource", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ context_window: 65536 }));
 
@@ -465,15 +390,128 @@ describe("model discovery", () => {
     });
   });
 
-  it("returns no context metadata when an Ollama detail request fails", async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+  it.each([
+    [jsonResponse({ models: [{ name: "bge-m3" }] }), true],
+    [jsonResponse({}, { status: 404 }), false],
+  ])("marks Ollama models behind /v1 by the native tag listing %#", async (tags, embeddings) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "bge-m3" }, { id: "other-model" }] }))
+      .mockResolvedValueOnce(tags);
+
+    const result = await fetchAvailableModels(server({ baseUrl: "http://localhost:11434/v1" }), {
+      fetch: fetchMock,
+    });
+
+    expect(result.models[0]?.capabilities).toMatchObject({ chat: true, embeddings });
+    expect(result.models[1]?.capabilities).toMatchObject({ chat: true, embeddings: false });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://localhost:11434/api/tags",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("keeps the listed models when the Ollama tag body never finishes before the deadline", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "bge-m3" }] }))
+      .mockResolvedValueOnce(new Response(chunkedStream(['{"models":'], onCancel)));
+
+    const result = await runPastDeadline(50, () =>
+      fetchAvailableModels(server({ baseUrl: "http://localhost:11434/v1" }), {
+        fetch: fetchMock,
+        timeoutMs: 50,
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.models.map((model) => model.id)).toEqual(["bge-m3"]);
+    expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
+  });
+
+  it("cancels an open Ollama tag body that arrives after the deadline", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "bge-m3" }] }))
+      .mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((resolve) =>
+            init.signal?.addEventListener("abort", () =>
+              resolve(new Response(chunkedStream([], onCancel))),
+            ),
+          ),
+      );
+
+    const result = await runPastDeadline(50, () =>
+      fetchAvailableModels(server({ baseUrl: "http://localhost:11434/v1" }), {
+        fetch: fetchMock,
+        timeoutMs: 50,
+      }),
+    );
+
+    expect(result.models.map((model) => model.id)).toEqual(["bge-m3"]);
+    expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
+  });
+
+  it("falls back to Ollama native model details after the LM Studio metadata", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "qwen3" }))
+      .mockResolvedValueOnce(jsonResponse({}, { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ model_info: { "llama.context_length": 40960 } }));
 
     await expect(
-      fetchModelContextLength(
-        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-        "qwen3:latest",
-        { fetch: fetchMock },
-      ),
+      fetchModelContextLength(server({ baseUrl: "http://localhost:11434/v1" }), "qwen3", {
+        fetch: fetchMock,
+      }),
+    ).resolves.toBe(40960);
+    expect(fetchMock).toHaveBeenLastCalledWith("http://localhost:11434/api/show", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "qwen3" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("skips the local metadata fallbacks on a recognised provider host", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, { status: 404 }));
+
+    await expect(
+      fetchModelContextLength(server({ baseUrl: "https://api.anthropic.com/v1" }), "claude", {
+        fetch: fetchMock,
+      }),
     ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not probe embeddings on the Anthropic host of an OpenAI-compatible profile", async () => {
+    const fetchMock = vi.fn();
+
+    await expect(
+      verifyEmbeddingCapability(server({ baseUrl: "https://api.anthropic.com/v1" }), "claude", {
+        fetch: fetchMock,
+      }),
+    ).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns no context metadata when an Ollama detail request fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "qwen3" }))
+      .mockResolvedValueOnce(jsonResponse({}, { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ error: "boom" }, { status: 500 }));
+
+    await expect(
+      fetchModelContextLength(server({ baseUrl: "http://localhost:11434/v1" }), "qwen3", {
+        fetch: fetchMock,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://localhost:11434/api/show",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

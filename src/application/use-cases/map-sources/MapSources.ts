@@ -229,6 +229,6 @@ function exceptionTelemetry(durationMs: number, aborted: boolean): SubAgentTelem
     searchBudgetRejections: 0,
     usedSynthesisFallback: false,
     answerChars: 0,
-    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 },
   };
 }
