@@ -36,9 +36,13 @@ export function hypothesisClaims(
 /**
  * Renders the hypotheses section of a report. Support only from sources is labelled "supported by
  * literature" and never as validated; user observations carry their limitations; disconfirmed
- * revisions and the alternatives of surviving hypotheses are always listed.
+ * revisions and the alternatives of surviving hypotheses are always listed. Every model- or
+ * user-written text passes `clean` with the citation tokens of that hypothesis's own observations.
  */
-export function hypothesesSection(discovery: ResearchDiscovery | null): string {
+export function hypothesesSection(
+  discovery: ResearchDiscovery | null,
+  clean: (text: string, allowed: ReadonlySet<string>) => string = (text) => text,
+): string {
   if (!discovery || discovery.hypotheses.length === 0) return "";
   const current = new Set(
     currentHypotheses(discovery.hypotheses).map(
@@ -51,12 +55,18 @@ export function hypothesesSection(discovery: ResearchDiscovery | null): string {
         entry.status === "disconfirmed" || current.has(`${entry.hypothesisId}#${entry.revision}`),
     )
     .map((entry) => {
-      const label = labelOf(discovery, entry);
+      const allowed = new Set(
+        discovery.observations
+          .filter((observation) => entry.observationIds.includes(observation.observationId))
+          .flatMap((observation) => observation.citationTokens),
+      );
+      const text = (value: string): string => inline(clean(value, allowed));
+      const label = text(labelOf(discovery, entry));
       const alternative =
-        entry.status === "disconfirmed" ? "" : ` Alternative: ${inline(entry.alternative)}.`;
-      return `- (${label}) ${inline(entry.claim)} (revision ${entry.revision}).${alternative}`;
+        entry.status === "disconfirmed" ? "" : ` Alternative: ${text(entry.alternative)}.`;
+      return `- (${label}) ${text(entry.claim)} (revision ${entry.revision}).${alternative}`;
     });
-  const omissions = discovery.omissions.map((entry) => `- ${inline(entry)}`);
+  const omissions = discovery.omissions.map((entry) => `- ${inline(clean(entry, new Set()))}`);
   return [
     "## Hypotheses",
     lines.join("\n"),

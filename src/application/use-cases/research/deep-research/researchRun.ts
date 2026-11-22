@@ -28,6 +28,7 @@ import type { ResearchSchedulerRunners } from "./ResearchScheduler";
 import { runSchedulingPhase } from "./researchScheduling";
 import { runVerificationPhase } from "./researchVerificationPhase";
 import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
+import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { runDiscoveryPhase, withObservation } from "./researchDiscoveryPhase";
 
@@ -320,7 +321,13 @@ async function writeReport(
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   });
-  const hypotheses = hypothesesSection(current.discovery);
+  const resolve = deps.resolveEvidence ?? (() => []);
+  const hypotheses = hypothesesSection(current.discovery, (text, allowed) =>
+    removeUnknownCitationTokens(
+      text,
+      new Set([...allowed].filter((token) => resolve([token]).length > 0)),
+    ),
+  );
   const finalMarkdown = withMissingNote(
     hypotheses === "" ? markdown : `${markdown}\n\n${hypotheses}`,
     decision.missingBranches,

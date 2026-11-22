@@ -98,6 +98,7 @@ describe("deep research discovery", () => {
     expect(final.phase).toBe("completed");
     expect(final.budget!.attemptsByBranch).toEqual({ "branch-1": 3 });
     expect(final.report!.markdown).toContain("(supported by literature) The moon causes tides");
+    expect(final.report!.markdown).toContain("Alternative: Wind causes tides.");
     const verification = [...port.commits].reverse().find((state) => state.verification)!;
     expect(
       verification.verification!.claims.filter((claim) => claim.kind === "hypothesis"),

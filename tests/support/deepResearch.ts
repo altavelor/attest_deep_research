@@ -434,7 +434,7 @@ export class DiscoveryModel implements ChatModelProvider {
               branch: 1,
               revises,
               claim: "The moon causes tides",
-              alternative: "Wind causes tides",
+              alternative: "Wind causes tides [source-8:revision-8]",
               prediction: "Tides follow the moon",
               disconfirmation: "Tides ignore the moon",
               test: { kind, method: "Compare tide times with the moon" },
