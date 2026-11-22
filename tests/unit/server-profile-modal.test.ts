@@ -92,7 +92,7 @@ describe("ServerProfileModal", () => {
     choose(modal.contentEl, "Provider", "anthropic");
 
     expect(inputFor(modal.contentEl, "Base URL").value).toBe("https://api.anthropic.com/v1");
-    expect(selectFor(modal.contentEl, "API format").value).toBe("anthropic");
+    expect(selectFor(modal.contentEl, "API format").value).toBe("openai-compatible");
     expect(inputFor(modal.contentEl, "Name").value).toBe("Anthropic");
 
     save(modal.contentEl);
@@ -100,7 +100,7 @@ describe("ServerProfileModal", () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Anthropic",
-        apiFormat: "anthropic",
+        apiFormat: "openai-compatible",
         baseUrl: "https://api.anthropic.com/v1",
       }),
     );
@@ -117,8 +117,8 @@ describe("ServerProfileModal", () => {
     choose(modal.contentEl, "Provider", "ollama");
 
     expect(inputFor(modal.contentEl, "Name").value).toBe("My box");
-    expect(inputFor(modal.contentEl, "Base URL").value).toBe("http://localhost:11434");
-    expect(selectFor(modal.contentEl, "API format").value).toBe("ollama");
+    expect(inputFor(modal.contentEl, "Base URL").value).toBe("http://localhost:11434/v1");
+    expect(selectFor(modal.contentEl, "API format").value).toBe("openai-compatible");
   });
 
   it("leaves every field untouched when Custom is selected", () => {

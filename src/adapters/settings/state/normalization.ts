@@ -10,11 +10,13 @@ import {
   INVALID_BASE_URL_SUSPENSION_REASON,
   UNVERIFIED_EMBEDDING_SUSPENSION_REASON,
 } from "./constants";
+import { migrateLegacyApiFormats } from "./legacyApiFormats";
 import { normalizeNewChatDefaults } from "./newChatDefaults";
 import { normalizeIndexProfileNumbers, normalizeVaultFolder } from "./parsers";
 import { AttestSettings, ServerProfile } from "../types";
 
 export function normalizeSettingsState(settings: AttestSettings): void {
+  migrateLegacyApiFormats(settings);
   markInvalidProfilesSuspended(settings);
   normalizeActiveEmbeddingModel(settings);
   normalizeIndexProfiles(settings);
