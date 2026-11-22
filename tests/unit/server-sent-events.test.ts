@@ -34,6 +34,19 @@ describe("parseServerSentEvents", () => {
     expect(onCancel).toHaveBeenCalledWith(reason);
   });
 
+  it("rejects instead of yielding a buffered event once the signal aborts", async () => {
+    const controller = new AbortController();
+    const reason = new Error("stopped");
+    const iterator = parseServerSentEvents(
+      chunkedStream(["data: a\n\ndata: [DONE]\n\n"], vi.fn()),
+      controller.signal,
+    )[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: "a" });
+    controller.abort(reason);
+    await expect(iterator.next()).rejects.toBe(reason);
+  });
+
   it("rejects with an AbortError and cancels with the raw reason when aborted before reading", async () => {
     const controller = new AbortController();
     const onCancel = vi.fn();

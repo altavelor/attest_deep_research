@@ -1,6 +1,6 @@
 /**
  * Yields the `data` payload of each server-sent event, accepting any line ending and skipping comments.
- * Aborting `signal` cancels the body and rejects with its reason; an early consumer exit cancels the body.
+ * Aborting `signal` cancels the body and rejects with its reason, even between buffered events.
  */
 export async function* parseServerSentEvents(
   body: ReadableStream<Uint8Array>,
@@ -22,7 +22,9 @@ export async function* parseServerSentEvents(
 
       for (const event of events) {
         const data = parseServerSentEventData(event);
-        if (data) yield data;
+        if (!data) continue;
+        if (signal?.aborted) throw abortReason(signal);
+        yield data;
       }
     }
 
