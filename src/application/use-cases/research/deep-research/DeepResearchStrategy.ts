@@ -1,13 +1,19 @@
 import type { ChatModelProvider, ChatRequest, ToolCallingCapabilities } from "@core/agent";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { ResearchStreamEvent } from "@application/contracts/research";
+import type { SubAgentPort } from "@application/research/subAgentPort";
+import type { SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 import {
   DEFAULT_RESEARCH_PRESET,
   MAX_PLAN_GENERATIONS,
+  ResearchBudgetOwner,
   applyDecision,
+  canRegenerate,
+  parseStalePlanPayload,
   decisionMismatch,
   deepResearchRejected,
   endResearch,
+  isPlanStale,
   parsePlanDecisionPayload,
   startResearchState,
   withPlanForReview,
@@ -19,7 +25,13 @@ import type {
   ResearchStrategy,
   ResearchStrategyOutcome,
 } from "../strategies/ResearchStrategy";
+import type { ResearchAnswer } from "@core/answer";
+import { scheduleTimeout } from "@shared";
 import { ResearchPlanService } from "./ResearchPlanService";
+import { MainBranchRunner } from "./MainBranchRunner";
+import { ReportSynthesisService } from "./ReportSynthesisService";
+import { pumpEvents } from "./eventPump";
+import { runResearch, type ResearchRunResult } from "./researchRun";
 import {
   abandonsPlanning,
   checkTurnText,
@@ -37,6 +49,9 @@ export interface DeepResearchStrategyDeps {
   hasWeb: boolean;
   now(): Date;
   createId?(): string;
+  createBranchEngine(): SubAgentPort;
+  branchSources: SubAgentToolSources;
+  setTimer?(delayMs: number, callback: () => void): () => void;
 }
 
 type TurnEvents = AsyncGenerator<ResearchStreamEvent, ResearchStrategyOutcome>;
@@ -75,12 +90,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
       return yield* this.decide(ctx, port, active, turn.decision);
     }
     if (!active || active.researchId !== turn.researchId) throw stale();
-    if (turn.type === "continue") {
-      throw deepResearchRejected(
-        "research-continue-unavailable",
-        "Continuing an approved research is not available yet.",
-      );
-    }
+    if (turn.type === "continue") return yield* this.resume(ctx, port, active);
     const cancelled = endResearch(active, "cancelled", "Cancelled by the user.", this.now());
     await port.commit(cancelled, active.revision);
     return yield* finish(ctx, cancelled, "Research cancelled.");
@@ -121,17 +131,21 @@ export class DeepResearchStrategy implements ResearchStrategy {
     decision: ResearchDecision,
   ): TurnEvents {
     if (decisionMismatch(active, decision)) throw stale();
+    if (active.pending?.kind === "stale-plan") {
+      return yield* this.decideStale(ctx, port, active, decision);
+    }
     const context = { now: this.now(), nextDecisionId: this.createId("decision") };
     const consumed = applyDecision(active, decision, { ...context, regenerated: null });
     if (!consumed.ok) throw deepResearchRejected(consumed.code, consumed.message);
     const payload = parsePlanDecisionPayload(decision.payload)!;
     if (payload.action !== "regenerate") {
       await port.commit(consumed.state, active.revision);
-      const text =
-        payload.action === "approve"
-          ? "Plan approved. Running the research is not available yet in this preview."
-          : `Plan updated to revision ${consumed.state.plan!.revision}.`;
-      return yield* finish(ctx, consumed.state, text);
+      if (payload.action === "approve") return yield* this.run(ctx, port, consumed.state);
+      return yield* finish(
+        ctx,
+        consumed.state,
+        `Plan updated to revision ${consumed.state.plan!.revision}.`,
+      );
     }
     const scope = preflightScope(ctx.searchMode, this.sources());
     yield { type: "status", message: "Regenerating the research plan…" };
@@ -154,6 +168,131 @@ export class DeepResearchStrategy implements ResearchStrategy {
       next.state,
       `Plan regenerated (generation ${used} of ${MAX_PLAN_GENERATIONS}).`,
     );
+  }
+
+  private async *resume(
+    ctx: ResearchExecutionContext,
+    port: ResearchStatePort,
+    active: ResearchState,
+  ): TurnEvents {
+    if (!isExecuting(active) || active.pending !== null) {
+      throw deepResearchRejected(
+        "research-continue-unavailable",
+        "This research is not paused; answer its pending decision or cancel it.",
+      );
+    }
+    if (isPlanStale(active.plan!, this.now())) {
+      const asked: ResearchState = {
+        ...active,
+        revision: active.revision + 1,
+        pending: {
+          decisionId: this.createId("decision"),
+          kind: "stale-plan",
+          artifactRevision: active.plan!.revision,
+        },
+        updatedAt: this.now(),
+      };
+      await port.commit(asked, active.revision);
+      return yield* finish(
+        ctx,
+        asked,
+        "The approved plan is old; continue anyway, replan or cancel the research.",
+      );
+    }
+    return yield* this.run(ctx, port, active);
+  }
+
+  private async *decideStale(
+    ctx: ResearchExecutionContext,
+    port: ResearchStatePort,
+    active: ResearchState,
+    decision: ResearchDecision,
+  ): TurnEvents {
+    const action = parseStalePlanPayload(decision.payload);
+    if (action === "cancel") {
+      const cancelled = endResearch(active, "cancelled", "Cancelled by the user.", this.now());
+      await port.commit(cancelled, active.revision);
+      return yield* finish(ctx, cancelled, "Research cancelled.");
+    }
+    if (action === "continue") {
+      const resumed = {
+        ...active,
+        revision: active.revision + 1,
+        pending: null,
+        updatedAt: this.now(),
+      };
+      await port.commit(resumed, active.revision);
+      return yield* this.run(ctx, port, resumed);
+    }
+    const plan = active.plan!;
+    if (!canRegenerate(plan)) {
+      throw deepResearchRejected(
+        "research-generation-limit",
+        "No plan generations remain; continue the old plan or cancel the research.",
+      );
+    }
+    const scope = preflightScope(ctx.searchMode, this.sources());
+    yield { type: "status", message: "Regenerating the research plan…" };
+    const regenerated = await this.planService(ctx, scope, plan.generationsUsed + 1).generate(
+      active.question,
+      null,
+    );
+    const review = withPlanForReview(
+      { ...active, executions: [], budget: reopenedBudget(active, this.deps.now) },
+      { ...regenerated, revision: plan.revision + 1 },
+      this.createId("decision"),
+      this.now(),
+    );
+    await port.commit(review, active.revision);
+    return yield* finish(ctx, review, "A new plan is ready for review.");
+  }
+
+  private async *run(
+    ctx: ResearchExecutionContext,
+    port: ResearchStatePort,
+    approved: ResearchState,
+  ): TurnEvents {
+    const scope = preflightScope(ctx.searchMode, this.sources());
+    const signal = ctx.request.signal;
+    const result = yield* pumpEvents<ResearchStreamEvent, ResearchRunResult>((push) => {
+      const runner = new MainBranchRunner({
+        engine: this.deps.createBranchEngine(),
+        sources: this.deps.branchSources,
+        web: ctx.retrieval.web,
+        chatScope: scope,
+        branches: approved.plan!.branches,
+        ...(ctx.request.finalizeAnswer ? { registerAnswer: ctx.request.finalizeAnswer } : {}),
+        onEvent: push,
+        now: this.deps.now,
+      });
+      return runResearch(approved, {
+        port,
+        runner,
+        synthesis: new ReportSynthesisService({
+          chatModel: this.deps.chatModel,
+          model: this.deps.chatModelName,
+          chatOptions: this.deps.chatOptions,
+        }),
+        ...(signal ? { signal } : {}),
+        now: this.deps.now,
+        setTimer: this.deps.setTimer ?? defaultTimer,
+        createId: (prefix) => this.createId(prefix),
+        onState: (state) => push(referenceEvent(state)),
+        onStatus: (message) => push({ type: "status", message }),
+      });
+    });
+    if (!result.report) {
+      return yield* finish(ctx, result.state, `Research failed: ${result.state.terminalReason}`);
+    }
+    const answer: ResearchAnswer = {
+      question: approved.question,
+      answer: result.report.markdown,
+      citations: [],
+      evidence: [],
+      followUpQuestions: [],
+      createdAt: result.report.createdAt,
+    };
+    return yield* finish(ctx, result.state, "", ctx.request.finalizeAnswer?.(answer) ?? answer);
   }
 
   private planService(
@@ -195,23 +334,41 @@ async function* finish(
   ctx: ResearchExecutionContext,
   state: ResearchState,
   text: string,
+  report?: ResearchAnswer,
 ): TurnEvents {
-  yield {
+  const answer = report ?? {
+    question: ctx.question,
+    answer: text,
+    citations: [],
+    followUpQuestions: [],
+    createdAt: state.updatedAt,
+  };
+  yield referenceEvent(state);
+  yield { type: "delta", content: answer.answer };
+  yield { type: "complete", answer };
+  return { kind: "completed" };
+}
+
+function referenceEvent(state: ResearchState): ResearchStreamEvent {
+  return {
     type: "research",
     reference: { researchId: state.researchId, artifact: "plan", revision: state.revision },
   };
-  yield { type: "delta", content: text };
-  yield {
-    type: "complete",
-    answer: {
-      question: ctx.question,
-      answer: text,
-      citations: [],
-      followUpQuestions: [],
-      createdAt: state.updatedAt,
-    },
-  };
-  return { kind: "completed" };
+}
+
+function isExecuting(state: ResearchState): boolean {
+  return state.phase === "gathering" || state.phase === "synthesizing";
+}
+
+function reopenedBudget(state: ResearchState, now: () => Date): ResearchState["budget"] {
+  if (!state.budget) return null;
+  const owner = new ResearchBudgetOwner(state.plan!.limits, () => now().getTime());
+  owner.open(state.budget);
+  return { ...owner.snapshot(), activeMs: state.budget.activeMs };
+}
+
+function defaultTimer(delayMs: number, callback: () => void): () => void {
+  return scheduleTimeout(callback, delayMs).cancel;
 }
 
 function stale(): Error {

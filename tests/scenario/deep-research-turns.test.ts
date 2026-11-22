@@ -35,7 +35,7 @@ function reopen(fileSystem: MemoryFileSystem, model: ChatModelProvider, errors: 
 }
 
 describe("deep research turns through the chat runtime", () => {
-  it("starts a research, keeps its pending plan across a reload and approves it", async () => {
+  it("starts a research, keeps its pending plan across a reload and runs it on approval", async () => {
     const fileSystem = new MemoryFileSystem();
     const model = new FakeChatModel([
       { content: planReply(), isComplete: false },
@@ -72,10 +72,11 @@ describe("deep research turns through the chat runtime", () => {
     const approved = await reopen(fileSystem, model).repository.loadChat(session.chatId!);
     const finalSection =
       approved?.deepResearch?.status === "ready" ? approved.deepResearch.section : null;
-    expect(finalSection?.active).toMatchObject({ phase: "gathering", pending: null });
-    expect(finalSection?.active?.plan?.approvedAt).not.toBeNull();
+    expect(finalSection).toMatchObject({
+      active: null,
+      history: [{ researchId: active.researchId, phase: "completed" }],
+    });
     expect(approved?.messages.at(-3)?.research?.researchId).toBe(active.researchId);
-    expect(model.requests).toHaveLength(1);
   });
 
   it("ends a research stopped or abandoned while drafting and lets a plain message start anew", async () => {

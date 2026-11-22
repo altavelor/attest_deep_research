@@ -1,4 +1,10 @@
-import type { BranchExecution, ResearchBudgetState, ResearchPlan, ResearchReport } from "./types";
+import type {
+  BranchExecution,
+  ResearchBudgetState,
+  ResearchPlan,
+  ResearchReport,
+  StalePlanDecisionPayload,
+} from "./types";
 
 const HOUR_MS = 3_600_000;
 const WEB_STALE_MS = 24 * HOUR_MS;
@@ -95,4 +101,11 @@ export function isPlanStale(plan: ResearchPlan, now: string): boolean {
   const web = plan.branches.some((branch) => branch.enabled && branch.sourceScope !== "indexOnly");
   const age = Date.parse(now) - Date.parse(plan.approvedAt);
   return age >= (web ? WEB_STALE_MS : INDEX_STALE_MS);
+}
+
+/** Reads the untrusted payload of a stale-plan decision, or returns null when it is malformed. */
+export function parseStalePlanPayload(value: unknown): StalePlanDecisionPayload["action"] | null {
+  const action =
+    typeof value === "object" && value !== null ? (value as { action?: unknown }).action : null;
+  return action === "continue" || action === "replan" || action === "cancel" ? action : null;
 }

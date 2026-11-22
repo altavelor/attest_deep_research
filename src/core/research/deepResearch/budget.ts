@@ -92,7 +92,7 @@ export class ResearchBudgetOwner {
       branchId,
       attempt,
       modelRounds: Math.min(this.limits.modelRoundsPerAttempt, rounds),
-      searches,
+      searches: Math.min(Math.ceil(this.limits.searchesTotal / this.limits.branches), searches),
     };
     this.state = {
       ...this.state,

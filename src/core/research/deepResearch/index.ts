@@ -26,6 +26,7 @@ export {
 export {
   blockDependants,
   initialExecutions,
+  intersectScope,
   nextReadyExecution,
   openWorks,
   resumeExecutions,
@@ -33,6 +34,7 @@ export {
 export {
   formatWithoutModel,
   isPlanStale,
+  parseStalePlanPayload,
   reportDecision,
   stopReasonOf,
   type ReportDecision,

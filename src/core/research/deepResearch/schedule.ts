@@ -2,6 +2,7 @@ import type {
   BranchExecution,
   ResearchBranch,
   ResearchPlan,
+  ResearchSourceScope,
   ResearchState,
   ResearchWork,
 } from "./types";
@@ -124,4 +125,16 @@ function branchOf(plan: ResearchPlan, branchId: string): ResearchBranch | undefi
 
 function gatherWorkId(branchId: string): string {
   return `${branchId}-gather-1`;
+}
+
+/** Intersects a branch source scope with the chat's scope; null when they share no source. */
+export function intersectScope(
+  branch: ResearchSourceScope,
+  chat: ResearchSourceScope,
+): ResearchSourceScope | null {
+  const index = branch !== "webOnly" && chat !== "webOnly";
+  const web = branch !== "indexOnly" && chat !== "indexOnly";
+  if (index && web) return "indexAndWeb";
+  if (index) return "indexOnly";
+  return web ? "webOnly" : null;
 }
