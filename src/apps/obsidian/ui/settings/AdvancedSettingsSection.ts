@@ -1,6 +1,7 @@
 import { Setting } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
+import { checkExportFolder } from "@core/research/deepResearch";
 
 export interface AdvancedSettingsSectionOptions {
   t: Translate;
@@ -38,14 +39,18 @@ export class AdvancedSettingsSection {
           this.options.refreshChatViews();
         }),
       );
-    new Setting(contentEl)
+    const folderSetting = new Setting(contentEl)
       .setName(t("settings.advanced.researchExportFolder.name"))
-      .setDesc(t("settings.advanced.researchExportFolder.desc"))
-      .addText((text) =>
-        text.setValue(this.options.getResearchExportFolder()).onChange(async (value) => {
-          this.options.setResearchExportFolder(value.trim());
-          await this.options.saveSettings();
-        }),
-      );
+      .setDesc(t("settings.advanced.researchExportFolder.desc"));
+    const errorEl = folderSetting.descEl.createDiv({ cls: "attest-settings-error" });
+    folderSetting.addText((text) =>
+      text.setValue(this.options.getResearchExportFolder()).onChange(async (value) => {
+        const checked = checkExportFolder(value);
+        errorEl.setText(checked.ok ? "" : checked.reason);
+        if (!checked.ok) return;
+        this.options.setResearchExportFolder(checked.folder);
+        await this.options.saveSettings();
+      }),
+    );
   }
 }

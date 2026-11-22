@@ -72,6 +72,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.retryExport": "Повторить экспорт",
   "settings.advanced.researchExportFolder.name": "Папка экспорта исследований",
   "settings.advanced.researchExportFolder.desc":
-    "Папка хранилища для экспортированных отчётов. Пути вне хранилища или внутри .attest отклоняются.",
+    "Папка хранилища для экспортированных отчётов. Отклоняются абсолютные пути, обратные слэши и сегменты пустые, с пробелами по краям или начинающиеся либо заканчивающиеся точкой (например, .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Папка экспорта; пусто — папка по умолчанию",
 };

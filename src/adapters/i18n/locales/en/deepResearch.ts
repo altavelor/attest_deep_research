@@ -70,7 +70,7 @@ export const deepResearch = {
   "chat.deepResearch.action.retryExport": "Retry export",
   "settings.advanced.researchExportFolder.name": "Research export folder",
   "settings.advanced.researchExportFolder.desc":
-    "Vault folder for exported research reports. Paths outside the vault or inside .attest are rejected.",
+    "Vault folder for exported research reports. Absolute paths, backslashes, and segments that are empty, padded with spaces, or start or end with a dot (such as .., .attest, .obsidian) are rejected.",
   "chat.deepResearch.export.folder": "Export folder; empty uses the default",
 };
 

@@ -73,6 +73,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.retryExport": "Export wiederholen",
   "settings.advanced.researchExportFolder.name": "Ordner für Recherche-Exporte",
   "settings.advanced.researchExportFolder.desc":
-    "Tresorordner für exportierte Rechercheberichte. Pfade außerhalb des Tresors oder in .attest werden abgelehnt.",
+    "Tresorordner für exportierte Rechercheberichte. Abgelehnt werden absolute Pfade, Backslashes und Segmente, die leer sind, von Leerzeichen umgeben sind oder mit einem Punkt beginnen oder enden (etwa .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Exportordner; leer verwendet den Standard",
 };

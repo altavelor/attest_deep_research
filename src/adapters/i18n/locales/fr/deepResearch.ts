@@ -73,6 +73,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.retryExport": "Réessayer l’exportation",
   "settings.advanced.researchExportFolder.name": "Dossier d’export des recherches",
   "settings.advanced.researchExportFolder.desc":
-    "Dossier du coffre pour les rapports exportés. Les chemins hors du coffre ou dans .attest sont refusés.",
+    "Dossier du coffre pour les rapports exportés. Sont refusés les chemins absolus, les barres obliques inverses et les segments vides, entourés d’espaces ou qui commencent ou finissent par un point (comme .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Dossier d’export ; vide utilise celui par défaut",
 };
