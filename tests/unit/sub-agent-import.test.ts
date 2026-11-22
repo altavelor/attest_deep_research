@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { sha256Hex } from "@shared";
 
 import type { SubAgentPreparedImport } from "@application/ports";
 import { ChatSubAgentEvidenceBridge } from "@application/use-cases/chat";
@@ -557,6 +558,10 @@ describe("sub-agent evidence import", () => {
       }),
       (item) => ({ ...item, calls: [{ callId: "c", tool: "write_note" }] }),
       (item) => ({ ...item, attempt: 1.5 }),
+      (item) => ({
+        ...item,
+        chunk: { ...item.chunk, text: "Forged text", contentHash: sha256Hex("Forged text") },
+      }),
       (item) => ({
         ...item,
         conversationEvidenceId: "subagent:import-other:1",

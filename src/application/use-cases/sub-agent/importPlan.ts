@@ -1,6 +1,7 @@
 import type { SubAgentExecutionResult, SubAgentPreparedImport } from "@application/ports/subAgent";
 import { validatePublicWebUrl } from "@application/sources/WebUrlPolicy";
 import { canonicalSourceKey } from "@core/chat/sourceRegistry";
+import type { SourceReference } from "@core/model";
 import {
   admitSubAgentEvidence,
   MAX_IMPORTED_ANSWER_CHARS,
@@ -11,6 +12,7 @@ import {
   subAgentAllowedHosts,
   type SubAgentChildEvidence,
   type SubAgentImportItem,
+  type SubAgentImportRecord,
   type SubAgentRunSummary,
   type SubAgentSourcePolicy,
 } from "@core/research";
@@ -69,15 +71,10 @@ export function planSubAgentImport(input: SubAgentImportPlanInput): SubAgentImpo
     input.webCapacity,
   );
   const keyed = admitted
-    .map((item) => ({ item, key: identityKey(item) }))
+    .map((item) => ({ item, key: identityKey(item.source, item.text, item.id) }))
     .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0));
   const evidenceDigest = digestOf(keyed.map((entry) => entry.key));
-  const importId = `import-${digestOf({
-    chatId: input.chatId,
-    sessionId: input.sessionId,
-    runId: input.runId,
-    evidenceDigest,
-  }).slice(0, 32)}`;
+  const importId = importIdOf({ ...input, evidenceDigest });
   const prefix = subAgentAliasPrefix(importId);
   const replacements = new Map<string, string>();
   const items = keyed.map(({ item }, index): SubAgentImportItem => {
@@ -135,8 +132,39 @@ function importItem(
   };
 }
 
-function identityKey(item: SubAgentChildEvidence): string {
-  return `${item.source.kind}|${canonicalSourceKey(item.source)}|${sha256Hex(item.text)}|${item.id}`;
+/**
+ * True when stored import items still give the digest and import id they were staged
+ * under, so an edited or truncated saved import is never registered under its old aliases.
+ */
+export function matchesImportDigest(
+  entry: Pick<
+    SubAgentImportRecord,
+    "importId" | "chatId" | "sessionId" | "runId" | "evidenceDigest"
+  >,
+  items: readonly SubAgentImportItem[],
+): boolean {
+  const keys = items
+    .map((item) => identityKey(item.chunk.source, item.chunk.text, item.subAgentEvidenceId))
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  const evidenceDigest = digestOf(keys);
+  return (
+    evidenceDigest === entry.evidenceDigest &&
+    importIdOf({ ...entry, evidenceDigest }) === entry.importId
+  );
+}
+
+function importIdOf(input: {
+  chatId: string;
+  sessionId: string;
+  runId: string;
+  evidenceDigest: string;
+}): string {
+  const { chatId, sessionId, runId, evidenceDigest } = input;
+  return `import-${digestOf({ chatId, sessionId, runId, evidenceDigest }).slice(0, 32)}`;
+}
+
+function identityKey(source: SourceReference, text: string, evidenceId: string): string {
+  return `${source.kind}|${canonicalSourceKey(source)}|${sha256Hex(text)}|${evidenceId}`;
 }
 
 /** Returns the canonical public form of a web URL, or null when it is unsafe or invalid. */

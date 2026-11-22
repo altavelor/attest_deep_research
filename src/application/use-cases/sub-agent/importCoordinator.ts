@@ -18,6 +18,7 @@ import { settleWithin } from "./deadline";
 import { checkedAliases } from "./importAliases";
 import {
   importedRunSummary,
+  matchesImportDigest,
   normalizeWebUrl,
   planSubAgentImport,
   type SubAgentImportPlan,
@@ -325,7 +326,7 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
     const run = this.parts.store
       .record(entry.sessionId)
       ?.runs.find((row) => row.subAgentRunId === entry.runId);
-    if (!items || !run) return null;
+    if (!items || !run || !matchesImportDigest(entry, items)) return null;
     return {
       importId: entry.importId,
       chatId: entry.chatId,
