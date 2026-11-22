@@ -264,7 +264,8 @@ async function readTextUnlessAborted(response: Response, signal: AbortSignal): P
   if (!response.body) return "";
   const reader = response.body.getReader();
   const cancel = (): void => void reader.cancel(signal.reason).catch(() => undefined);
-  signal.addEventListener("abort", cancel, { once: true });
+  if (signal.aborted) cancel();
+  else signal.addEventListener("abort", cancel, { once: true });
   const decoder = new TextDecoder();
   let text = "";
   try {
@@ -275,6 +276,7 @@ async function readTextUnlessAborted(response: Response, signal: AbortSignal): P
     }
   } finally {
     signal.removeEventListener("abort", cancel);
+    reader.releaseLock();
   }
   if (signal.aborted) throw signal.reason;
   return text + decoder.decode();

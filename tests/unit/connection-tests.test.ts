@@ -430,6 +430,31 @@ describe("model discovery", () => {
     expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
   });
 
+  it("cancels an open Ollama tag body that arrives after the deadline", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "bge-m3" }] }))
+      .mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((resolve) =>
+            init.signal?.addEventListener("abort", () =>
+              resolve(new Response(chunkedStream([], onCancel))),
+            ),
+          ),
+      );
+
+    const result = await runPastDeadline(50, () =>
+      fetchAvailableModels(server({ baseUrl: "http://localhost:11434/v1" }), {
+        fetch: fetchMock,
+        timeoutMs: 50,
+      }),
+    );
+
+    expect(result.models.map((model) => model.id)).toEqual(["bge-m3"]);
+    expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
+  });
+
   it("falls back to Ollama native model details after the LM Studio metadata", async () => {
     const fetchMock = vi
       .fn()
