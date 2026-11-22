@@ -27,6 +27,7 @@ export interface EvidenceVerificationOptions {
   followUpCycle: number;
   claimAllowance: number;
   onExtracted?(workIds: readonly string[]): void;
+  hypothesisClaims?: readonly ResearchClaim[];
   signal?: AbortSignal;
 }
 
@@ -62,7 +63,12 @@ export class EvidenceVerificationService {
     findings: readonly BranchExecution[],
     plan: ResearchPlan,
   ): Promise<VerificationSummary> {
-    const extracted = await this.extract(findings, plan);
+    const limit = Math.min(this.options.claimAllowance, MAX_RESEARCH_CLAIMS);
+    const hypotheses = (this.options.hypothesisClaims ?? []).slice(0, Math.max(0, limit));
+    const extracted = [
+      ...hypotheses,
+      ...(await this.extract(findings, plan, limit - hypotheses.length)),
+    ];
     const evidence = this.options.resolveEvidence([
       ...new Set(extracted.flatMap((claim) => claim.citationTokens)),
     ]);
@@ -101,10 +107,11 @@ export class EvidenceVerificationService {
   private async extract(
     findings: readonly BranchExecution[],
     plan: ResearchPlan,
+    limit: number,
   ): Promise<ResearchClaim[]> {
     const claims: ResearchClaim[] = [];
     const extracted: string[] = [];
-    let allowance = Math.min(this.options.claimAllowance, MAX_RESEARCH_CLAIMS);
+    let allowance = limit;
     for (const batch of batches(findings.filter((execution) => execution.finding))) {
       if (allowance <= 0 || !this.options.spendRound()) break;
       const reply = await this.call(EXTRACT_PROMPT, extractRequest(batch, plan));

@@ -82,6 +82,11 @@ describe("deep research discovery", () => {
     const final = port.commits.at(-1)!;
     expect(final.phase).toBe("completed");
     expect(final.budget!.attemptsByBranch).toEqual({ "branch-1": 3 });
+    expect(final.report!.markdown).toContain("(supported by literature) The moon causes tides");
+    const verification = [...port.commits].reverse().find((state) => state.verification)!;
+    expect(
+      verification.verification!.claims.filter((claim) => claim.kind === "hypothesis"),
+    ).toHaveLength(1);
     const rounds = port.commits.map((state) => state.budget?.consumed.modelRounds ?? 0);
     expect(rounds.every((value, index) => index === 0 || value >= rounds[index - 1]!)).toBe(true);
     expect(final.budget!.consumed.modelRounds).toBeGreaterThanOrEqual(3 * 2 + 4);

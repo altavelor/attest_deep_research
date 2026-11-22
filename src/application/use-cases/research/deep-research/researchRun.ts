@@ -2,6 +2,7 @@ import type { RetrievedChunk } from "@core/model";
 import {
   ResearchBudgetOwner,
   boundedReason,
+  hypothesesSection,
   openWorks,
   reportDecision,
   resumeExecutions,
@@ -48,6 +49,7 @@ export type ResearchVerifierOptions = Pick<
   | "followUpCycle"
   | "claimAllowance"
   | "onExtracted"
+  | "hypothesisClaims"
   | "signal"
 >;
 
@@ -228,6 +230,7 @@ export async function runResearch(
         plan,
         executions: () => current.executions,
         verification: current.verification,
+        discovery: current.discovery,
         verify: async (findings, bounds) => {
           let extractedWorks: readonly string[] = [];
           const summary = await deps.createVerifier!({
@@ -237,6 +240,7 @@ export async function runResearch(
             followUpCycle: bounds.cycle,
             claimAllowance: bounds.claimAllowance,
             onExtracted: (workIds) => (extractedWorks = workIds),
+            hypothesisClaims: bounds.hypothesisClaims,
             signal: turn.signal,
           }).verify(findings, plan);
           return { summary, extractedWorks };
@@ -299,7 +303,12 @@ async function writeReport(
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   });
-  const finalMarkdown = withMissingNote(markdown, decision.missingBranches, plan);
+  const hypotheses = hypothesesSection(current.discovery);
+  const finalMarkdown = withMissingNote(
+    hypotheses === "" ? markdown : `${markdown}\n\n${hypotheses}`,
+    decision.missingBranches,
+    plan,
+  );
   const report: ResearchReport = {
     reportId: deps.createId("report"),
     quality: decision.quality,

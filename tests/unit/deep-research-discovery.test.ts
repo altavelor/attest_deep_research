@@ -1,6 +1,7 @@
 import {
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
+  hypothesesSection,
   nextCycleDecision,
   reduceHypothesis,
   userObservation,
@@ -102,5 +103,38 @@ describe("deep research discovery rules", () => {
     });
     expect(reported).toMatchObject({ producer: "user", citationTokens: [] });
     expect(reported.limitations).toEqual([USER_OBSERVATION_LIMITATION]);
+  });
+
+  it("labels user support with its limitations and always lists disconfirmed revisions", () => {
+    const reported = userObservation({
+      observationId: "o-1",
+      testId: "t-1",
+      verdict: "supports",
+      quote: null,
+      citationTokens: [],
+      receivedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const section = hypothesesSection({
+      hypotheses: [
+        { ...hypothesis, status: "disconfirmed", observationIds: [] },
+        {
+          ...hypothesis,
+          revision: 2,
+          previousRevision: 1,
+          status: "supported",
+          observationIds: ["o-1"],
+        },
+      ],
+      tests: [],
+      observations: [reported],
+      cycles: [],
+      notes: [],
+      executions: [],
+      omissions: [],
+    });
+    expect(section).toContain("(disconfirmed) The moon drives tides. (revision 1)");
+    expect(section).toContain(
+      `(supported by a user observation, ${USER_OBSERVATION_LIMITATION}) The moon drives tides. (revision 2). Alternative: Wind drives tides.`,
+    );
   });
 });

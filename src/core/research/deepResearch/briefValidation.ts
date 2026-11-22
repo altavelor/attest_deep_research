@@ -159,7 +159,8 @@ function readClaim(value: unknown, plan: ResearchPlan): ResearchClaim | undefine
       )
     ) ||
     !isText(value.text, MAX_CLAIM_TEXT_CHARS) ||
-    !isTextList(value.citationTokens, MAX_CLAIM_TOKENS, MAX_TOKEN_CHARS)
+    !isTextList(value.citationTokens, MAX_CLAIM_TOKENS, MAX_TOKEN_CHARS) ||
+    !(value.kind === undefined || value.kind === "hypothesis")
   ) {
     return undefined;
   }
@@ -170,6 +171,7 @@ function readClaim(value: unknown, plan: ResearchPlan): ResearchClaim | undefine
     objective: value.objective as string | null,
     text: value.text,
     citationTokens: [...value.citationTokens],
+    ...(value.kind === "hypothesis" ? { kind: value.kind } : {}),
   };
 }
 

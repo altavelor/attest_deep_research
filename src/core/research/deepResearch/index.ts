@@ -107,3 +107,4 @@ export {
   type HypothesisProposal,
   type ParsedProposals,
 } from "./discoveryDraft";
+export { hypothesesSection, hypothesisClaims } from "./discoveryReport";

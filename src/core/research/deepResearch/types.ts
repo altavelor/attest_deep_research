@@ -120,6 +120,7 @@ export interface ResearchClaim {
   objective: string | null;
   text: string;
   citationTokens: readonly string[];
+  kind?: "hypothesis";
 }
 
 export type ClaimVerdict = "supported" | "unsupported" | "conflicted" | "unresolved";
