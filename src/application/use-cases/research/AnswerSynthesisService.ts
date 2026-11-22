@@ -1,4 +1,4 @@
-import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
+import { ChatModelProvider, ChatRequest, ModelRoundProvider, ModelRoundResult } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
 import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { buildAnswerDiagnostics } from "./strategies/answerDiagnostics";
@@ -254,6 +254,7 @@ export class AnswerSynthesisService {
         }),
       });
     } else {
+      let usage: ModelRoundResult["usage"];
       for await (const chunk of this.chatModel.streamChat({
         model: this.chatModelName,
         temperature: this.chatOptions.temperature,
@@ -261,6 +262,16 @@ export class AnswerSynthesisService {
         messages,
         signal: input.signal,
       })) {
+        for (const event of chunk.events ?? []) {
+          if (event.type === "usage") {
+            usage = {
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+              reasoningTokens: event.reasoningTokens,
+              cachedInputTokens: event.cachedInputTokens,
+            };
+          }
+        }
         if (chunk.content) {
           answerText += chunk.content;
           yield { type: "delta", content: chunk.content };
@@ -269,6 +280,13 @@ export class AnswerSynthesisService {
         if (chunk.isComplete) {
           break;
         }
+      }
+      if (usage) {
+        this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
+          reasoningItemCount: 0,
+          continuationRounds: 0,
+          ...usage,
+        });
       }
     }
 
