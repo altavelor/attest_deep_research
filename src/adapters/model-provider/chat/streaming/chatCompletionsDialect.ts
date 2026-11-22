@@ -4,6 +4,7 @@ export interface ChatCompletionsDialect {
   readonly id: "anthropic" | "generic";
   readonly defaultMaxTokens?: number;
   readonly sendsReasoningFields: boolean;
+  readonly requestsStreamUsage: boolean;
   readonly supportsForcedToolChoice: boolean;
   readonly requestHeaders: Readonly<Record<string, string>>;
 }
@@ -14,6 +15,7 @@ const anthropicChatDialect: ChatCompletionsDialect = {
   id: "anthropic",
   defaultMaxTokens: 4096,
   sendsReasoningFields: false,
+  requestsStreamUsage: true,
   supportsForcedToolChoice: false,
   requestHeaders: ANTHROPIC_REQUEST_HEADERS,
 };
@@ -21,6 +23,7 @@ const anthropicChatDialect: ChatCompletionsDialect = {
 const genericChatDialect: ChatCompletionsDialect = {
   id: "generic",
   sendsReasoningFields: true,
+  requestsStreamUsage: true,
   supportsForcedToolChoice: true,
   requestHeaders: {},
 };

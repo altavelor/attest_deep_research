@@ -659,7 +659,7 @@ describe("SubAgentTool telemetry", () => {
       searchBudgetRejections: 0,
       usedSynthesisFallback: false,
       answerChars: 7,
-      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0 },
+      usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 0, cachedInputTokens: 0 },
       ...overrides,
     };
   }
@@ -711,7 +711,7 @@ describe("SubAgentTool telemetry", () => {
       usedSynthesisFallback: false,
       answerChars: 0,
       sourceCount: 0,
-      usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+      usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 },
     });
     expect(result.diagnostic?.durationMs).toBeGreaterThan(0);
   });

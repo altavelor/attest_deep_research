@@ -219,14 +219,14 @@ describe("core runAgentLoop", () => {
             stopReason: "tool_calls",
             continuation,
             reasoningItemCount: 1,
-            usage: { inputTokens: 10, outputTokens: 2, reasoningTokens: 3 },
+            usage: { inputTokens: 10, outputTokens: 2, reasoningTokens: 3, cachedInputTokens: 6 },
           };
         }
         return {
           items: [{ type: "text", text: "Answer" }],
           stopReason: "complete",
           continuation,
-          usage: { inputTokens: 4, outputTokens: 5, reasoningTokens: 0 },
+          usage: { inputTokens: 4, outputTokens: 5, reasoningTokens: 0, cachedInputTokens: 2 },
         };
       },
     };
@@ -250,7 +250,7 @@ describe("core runAgentLoop", () => {
       reasoningSummaries: ["Plan"],
       reasoningItemCount: 1,
       continuationRounds: 2,
-      usage: { inputTokens: 14, outputTokens: 7, reasoningTokens: 3 },
+      usage: { inputTokens: 14, outputTokens: 7, reasoningTokens: 3, cachedInputTokens: 8 },
     });
     expect(events).toContainEqual({
       type: "reasoning",

@@ -1,5 +1,6 @@
 import { ChatModelClient } from "@adapters/model-provider";
 import { AttestError } from "@core/errors";
+import { chunkedStream } from "../support/streams";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -484,6 +485,107 @@ describe("ChatModelClient", () => {
       }),
     ]);
     expect(body).not.toHaveProperty("tool_choice");
+  });
+
+  it("reads the trailing usage chunk after a tool_calls finish before completing", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          chunkedStream(
+            [
+              'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_note","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+              'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":60}}}\n\n',
+            ],
+            onCancel,
+          ),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      );
+    const client = new ChatModelClient({ baseUrl: "http://localhost:1234/v1", fetch: fetchMock });
+
+    const events = [];
+    for await (const chunk of client.streamChat({
+      model: "local-chat",
+      messages: [{ role: "user", content: "Read note" }],
+    })) {
+      events.push(...(chunk.events ?? []));
+    }
+
+    expect(events.map((event) => event.type)).toEqual(["tool-call-delta", "usage", "complete"]);
+    expect(events[1]).toEqual({
+      type: "usage",
+      inputTokens: 100,
+      outputTokens: 5,
+      reasoningTokens: 0,
+      cachedInputTokens: 60,
+    });
+    expect(events[2]).toEqual({ type: "complete", stopReason: "tool_calls" });
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("completes a tool_calls finish at once when the retry dropped stream_options", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unknown field: stream_options" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          chunkedStream(
+            [
+              'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_note","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+            ],
+            onCancel,
+          ),
+          {
+            headers: { "content-type": "text/event-stream" },
+          },
+        ),
+      );
+    const client = new ChatModelClient({ baseUrl: "http://localhost:1234/v1", fetch: fetchMock });
+
+    const events = [];
+    for await (const chunk of client.streamChat({
+      model: "local-chat",
+      messages: [{ role: "user", content: "Read note" }],
+    })) {
+      events.push(...(chunk.events ?? []));
+    }
+
+    expect(events.map((event) => event.type)).toEqual(["tool-call-delta", "complete"]);
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("asks for stream usage and drops only that field when the provider rejects it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: "unknown field: stream_options" } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+      );
+    const client = new ChatModelClient({ baseUrl: "http://localhost:1234/v1", fetch: fetchMock });
+
+    for await (const chunk of client.streamChat({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "classify" }],
+      reasoningEnabled: false,
+    })) {
+      expect(chunk).toBeDefined();
+    }
+
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)));
+    expect(bodies[0].stream_options).toEqual({ include_usage: true });
+    expect(bodies[1]).not.toHaveProperty("stream_options");
+    expect(bodies[1].reasoning).toEqual({ enabled: false });
+    expect(bodies[1].chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
   it("recovers OpenAI-compatible tool calls when the stream finishes with finish_reason stop", async () => {

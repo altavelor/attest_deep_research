@@ -27,6 +27,7 @@ export interface ModelRoundResult {
     inputTokens: number;
     outputTokens: number;
     reasoningTokens: number;
+    cachedInputTokens: number;
   };
   reasoningItemCount?: number;
 }
@@ -53,6 +54,7 @@ export type ModelStreamEvent =
       inputTokens: number;
       outputTokens: number;
       reasoningTokens: number;
+      cachedInputTokens: number;
     }
   | { type: "complete"; stopReason: "complete" | "tool_calls" | "length" | "error" };
 

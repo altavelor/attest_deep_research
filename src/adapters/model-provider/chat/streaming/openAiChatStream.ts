@@ -1,12 +1,17 @@
 import { isRecord } from "@shared";
-import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
+import { ChatRequest, ChatResponseChunk, ModelRoundResult, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import type { ProviderHttpClient } from "../../common/http";
 import { mapOpenAiMessage } from "../providers/messageMappers";
 import type { ChatCompletionsDialect } from "./chatCompletionsDialect";
 import { openChatCompletionsStream } from "./chatCompletionsHttp";
 import { InlineReasoningParser } from "./InlineReasoningParser";
-import { parseOpenAiChatDelta, textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
+import {
+  parseChatCompletionsUsage,
+  parseOpenAiChatDelta,
+  textFromEvents,
+  ToolCallBuilder,
+} from "./chatStreamPrimitives";
 import { RepetitionDetector } from "./repetitionDetector";
 import { parseTextToolCalls } from "./textToolCalls";
 
@@ -35,13 +40,16 @@ export async function* streamOpenAiCompatibleChat({
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
-  const reasoning = dialect.sendsReasoningFields ? reasoningBody(request) : {};
+  const optionalFields = {
+    ...(dialect.sendsReasoningFields ? reasoningBody(request) : {}),
+    ...(dialect.requestsStreamUsage ? { stream_options: { include_usage: true } } : {}),
+  };
 
   const open = (body: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> =>
     openChatCompletionsStream(http, body, request.signal);
 
   let stream: AsyncIterable<Record<string, unknown>>;
-  let attempt = reasoning;
+  let attempt: Record<string, unknown> = optionalFields;
   let firstError: unknown;
   for (;;) {
     try {
@@ -65,6 +73,9 @@ export async function* streamOpenAiCompatibleChat({
   const reasoningSegmentId = "reasoning-0";
   const inlineReasoning = new InlineReasoningParser();
   let terminalStopReason: "complete" | "length" | "error" = "complete";
+  let finishedWithToolCalls = false;
+  const awaitsUsageChunk = "stream_options" in attempt;
+  let usage: ModelRoundResult["usage"];
   const observedDialects = new Set<string>();
   const observe = (dialect: string): void => {
     if (observedDialects.has(dialect)) return;
@@ -74,6 +85,8 @@ export async function* streamOpenAiCompatibleChat({
 
   try {
     for await (const chunk of stream) {
+      usage = parseChatCompletionsUsage(chunk) ?? usage;
+      if (finishedWithToolCalls) break;
       const parsed = parseOpenAiChatDelta(chunk);
       if (parsed.finishReason === "length") terminalStopReason = "length";
       else if (
@@ -126,20 +139,12 @@ export async function* streamOpenAiCompatibleChat({
           ...(delta.argumentsText ? { argumentsText: delta.argumentsText } : {}),
         });
       }
-      if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
-        if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
-        events.push(...inlineReasoning.finish());
-        events.push({ type: "complete", stopReason: "tool_calls" });
-        yield {
-          content: textFromEvents(events),
-          isComplete: true,
-          toolCalls: toolCallBuilder.build(),
-          events,
-        };
-        return;
-      }
       if (events.length > 0) {
         yield { content: textFromEvents(events), isComplete: false, events };
+      }
+      if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
+        finishedWithToolCalls = true;
+        if (!awaitsUsageChunk) break;
       }
       if (repetition.isRepeating()) break;
     }
@@ -151,6 +156,17 @@ export async function* streamOpenAiCompatibleChat({
   const events: ModelStreamEvent[] = [];
   if (reasoningOpen) events.push({ type: "reasoning-end", segmentId: reasoningSegmentId });
   events.push(...inlineReasoning.finish());
+  if (usage) events.push({ type: "usage", ...usage });
+  if (finishedWithToolCalls) {
+    events.push({ type: "complete", stopReason: "tool_calls" });
+    yield {
+      content: textFromEvents(events),
+      isComplete: true,
+      toolCalls: toolCallBuilder.build(),
+      events,
+    };
+    return;
+  }
   events.push({ type: "complete", stopReason: terminalStopReason });
 
   let toolCalls = toolCallBuilder.build();
@@ -213,7 +229,7 @@ function rejectsUnknownField(error: unknown): boolean {
 /**
  * Drops only the dialects the provider named in its refusal, so a gateway that
  * understands one of them still receives it on the retry. A refusal that names
- * none of them costs the whole reasoning body, which is the previous behaviour
+ * none of them costs every optional field, which is the previous behaviour
  * and keeps the retry loop finite.
  */
 function withoutRejectedFields(

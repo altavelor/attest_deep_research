@@ -103,6 +103,7 @@ describe("OpenAiResponsesClient", () => {
             ],
             usage: {
               input_tokens: 10,
+              input_tokens_details: { cached_tokens: 7 },
               output_tokens: 4,
               output_tokens_details: { reasoning_tokens: 2 },
             },
@@ -131,7 +132,12 @@ describe("OpenAiResponsesClient", () => {
       items: [{ type: "text", text: "Hello" }],
       stopReason: "complete",
     });
-    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 4, reasoningTokens: 2 });
+    expect(result.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      reasoningTokens: 2,
+      cachedInputTokens: 7,
+    });
     expect(deltas).toEqual([
       "reasoningSummary:Inspect the labels. ",
       "reasoningSummary:Plan",

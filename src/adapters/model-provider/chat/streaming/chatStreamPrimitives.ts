@@ -1,5 +1,5 @@
 import { isRecord } from "@shared";
-import { ChatToolCall, ModelStreamEvent } from "@core/agent";
+import { ChatToolCall, ModelRoundResult, ModelStreamEvent } from "@core/agent";
 
 export interface ToolCallDelta {
   index?: number;
@@ -143,4 +143,29 @@ function parseToolArguments(value: string): Record<string, unknown> {
   } catch {
     return { raw: value };
   }
+}
+
+/**
+ * Reads the token usage a Chat Completions chunk reports, or undefined when the
+ * chunk carries none. Missing or invalid counts become 0, and cached prompt tokens
+ * never exceed the prompt tokens they are part of.
+ */
+export function parseChatCompletionsUsage(chunk: unknown): ModelRoundResult["usage"] {
+  if (!isRecord(chunk) || !isRecord(chunk.usage)) return undefined;
+  const usage = chunk.usage;
+  const completionDetails = isRecord(usage.completion_tokens_details)
+    ? usage.completion_tokens_details
+    : {};
+  const promptDetails = isRecord(usage.prompt_tokens_details) ? usage.prompt_tokens_details : {};
+  const inputTokens = countOrZero(usage.prompt_tokens);
+  return {
+    inputTokens,
+    outputTokens: countOrZero(usage.completion_tokens),
+    reasoningTokens: countOrZero(completionDetails.reasoning_tokens),
+    cachedInputTokens: Math.min(countOrZero(promptDetails.cached_tokens), inputTokens),
+  };
+}
+
+function countOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 }

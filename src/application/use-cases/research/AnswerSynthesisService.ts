@@ -246,7 +246,12 @@ export class AnswerSynthesisService {
       this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
         reasoningItemCount: result.reasoningItemCount ?? 0,
         continuationRounds: 0,
-        ...(result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }),
+        ...(result.usage ?? {
+          inputTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+        }),
       });
     } else {
       for await (const chunk of this.chatModel.streamChat({
@@ -400,6 +405,7 @@ export class AnswerSynthesisService {
       | "inputTokens"
       | "outputTokens"
       | "reasoningTokens"
+      | "cachedInputTokens"
     >,
   ): void {
     if (!diagnostics || !this.reasoningDiagnostics) return;

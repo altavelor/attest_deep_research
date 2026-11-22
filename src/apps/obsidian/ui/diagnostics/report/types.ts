@@ -175,7 +175,12 @@ export interface ReasoningSection {
   }>;
   stream: ContextDiagnostics["stream"] | null;
   thinkingLoop: ThinkingLoopSection | null;
-  tokens: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  tokens: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
   reasoningItemCount: number;
   continuationRounds: number;
 }
