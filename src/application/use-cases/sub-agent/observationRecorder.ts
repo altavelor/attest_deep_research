@@ -41,8 +41,8 @@ export class SubAgentObservationRecorder {
 
   constructor(private readonly parts: SubAgentManagerParts) {}
 
-  redact(text: string): string {
-    return this.parts.context.redact(text);
+  redact(text: string, key?: string): string {
+    return this.parts.context.redact(text, key);
   }
 
   begin(runId: string): void {
@@ -161,7 +161,7 @@ export class SubAgentObservationRecorder {
     const used = (this.payloadChars.get(runId) ?? 0) - (this.itemChars.get(observationId) ?? 0);
     const args = item.args ?? (previous?.args as SubAgentWorkflowItem["args"]);
     const capture = sanitizeSubAgentToolItem(args ? { ...item, args } : item, {
-      redact: (text) => this.redact(text),
+      redact: (text, key) => this.redact(text, key),
       debug: this.parts.context.isDebugCapture?.() === true,
       remainingRunChars: MAX_RUN_PAYLOAD_CHARS - used,
     });

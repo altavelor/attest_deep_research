@@ -2,7 +2,7 @@ import { ChatDocumentSubAgentRepository } from "@adapters/filesystem/sub-agent/C
 import { ChatSessionManager } from "@application/use-cases/chat";
 import type { ChatRepository } from "@application/ports";
 import { createSubAgentSessionManager } from "@application/use-cases/sub-agent";
-import { redactSensitiveData, scheduleTimeout } from "@shared";
+import { redactSensitiveText, scheduleTimeout } from "@shared";
 import type { ResearchService, ResearchSearchMode } from "@application/use-cases/research";
 import type { SavedChatSettings } from "@core/chat/savedChat";
 import { selectConversationRegistryPromptView } from "@core/chat/sourceRegistry";
@@ -47,7 +47,7 @@ export function createChatSessionManager(options: ChatSessionFactoryOptions): Ch
       createSubAgentSessionManager,
       subAgentServices: {
         repository: new ChatDocumentSubAgentRepository(options.repository),
-        redact: (text) => redactSensitiveData(text),
+        redact: redactSensitiveText,
         isDebugCapture: options.isDebugCapture,
         monotonicNow: () => performance.now(),
       },

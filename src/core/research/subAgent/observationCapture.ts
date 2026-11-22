@@ -8,7 +8,7 @@ import {
   type SubAgentWorkflowItem,
 } from "./observationModel";
 
-export type SubAgentRedactor = (text: string) => string;
+export type SubAgentRedactor = (text: string, key?: string) => string;
 
 const ROLES = new Set(["system", "user", "assistant", "tool"]);
 const MAX_LABEL_CHARS = 200;
@@ -67,7 +67,8 @@ export function sanitizeSubAgentToolItem(
   options: { redact: SubAgentRedactor; debug: boolean; remainingRunChars: number },
 ): SubAgentToolCapture {
   const { redact } = options;
-  const resultJson = typeof item.resultJson === "string" ? redact(item.resultJson) : undefined;
+  const resultJson =
+    typeof item.resultJson === "string" ? redactJsonText(item.resultJson, redact) : undefined;
   const args = isPlainRecord(item.args) ? redactSubAgentJson(item.args, redact) : undefined;
   const payloadChars = (args ? JSON.stringify(args).length : 0) + (resultJson?.length ?? 0);
   const status = item.status === "complete" || item.status === "failed" ? item.status : "pending";
@@ -122,9 +123,9 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Redacts every string of an untrusted JSON-like value, ids included. Nesting deeper
- * than 64 levels, cycles, non-finite numbers and functions become null, and a
- * `__proto__` key is dropped, so the copy is plain, bounded JSON.
+ * Redacts every string of an untrusted JSON-like value, ids included, and replaces the whole
+ * value of a key the redactor marks (a non-empty result for empty text under that key).
+ * Deep nesting, cycles, non-finite numbers and functions become null and `__proto__` is dropped.
  */
 export function redactSubAgentJson<T>(value: T, redact: SubAgentRedactor): T {
   return redactJson(value, redact, 0, new Set()) as T;
@@ -148,10 +149,22 @@ function redactJson(
     const copy: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       if (key === "__proto__") continue;
-      copy[key] = redactJson(entry, redact, depth + 1, seen);
+      const keyMarker = redact("", key);
+      copy[key] = keyMarker !== "" ? keyMarker : redactJson(entry, redact, depth + 1, seen);
     }
     result = copy;
   }
   seen.delete(value);
   return result;
+}
+
+/** Redacts a JSON text key-aware when it parses, and as plain text otherwise. */
+function redactJsonText(text: string, redact: SubAgentRedactor): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return redact(text);
+  }
+  return JSON.stringify(redactSubAgentJson(parsed, redact));
 }

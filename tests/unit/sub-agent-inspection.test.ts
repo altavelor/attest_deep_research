@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { redactSensitiveData } from "@shared";
+import { redactSensitiveData, redactSensitiveText } from "@shared";
 import {
   deriveSubAgentTitle,
   redactSubAgentJson,
@@ -30,7 +30,7 @@ const MODEL_A: SubAgentModelSnapshot = {
 };
 
 function redactingHarness() {
-  return managerHarness({ redact: (text) => redactSensitiveData(text) });
+  return managerHarness({ redact: redactSensitiveText });
 }
 
 function observe(harness: Harness, index: number, event: SubAgentObservationEvent): void {
@@ -300,6 +300,27 @@ describe("sub-agent inspection snapshot", () => {
     const hidden = await harness.manager.inspection().getSession(session.subAgentSessionId);
     expect(hidden!.lifetime[0]).toMatchObject({ payloadState: "disabled" });
     expect(hidden!.lifetime[0].args).toBeUndefined();
+  });
+
+  it("captures no credential stored under a sensitive key in tool arguments or result JSON", async () => {
+    const harness = redactingHarness();
+    const { session } = await launchChild(harness.delegator(), "alpha");
+    harness.probes.debug = true;
+    observe(harness, 0, {
+      type: "tool-end",
+      item: toolItem(harness, 0, "c1", {
+        status: "complete",
+        args: { apiKey: "abc123", headers: { "x-auth": 7, password: 12345 }, q: "news" },
+        resultJson: '{"access_token":"tok-xyz","password":987654,"items":[1]}',
+      }),
+    });
+
+    const detail = await harness.manager.inspection().getSession(session.subAgentSessionId);
+    expect(detail!.lifetime[0]).toMatchObject({
+      args: { apiKey: "[redacted]", headers: { password: "[redacted]" }, q: "news" },
+      resultJson: '{"access_token":"[redacted]","password":"[redacted]","items":[1]}',
+    });
+    expect(stateText(harness)).not.toMatch(/abc123|12345|tok-xyz|987654/);
   });
 });
 

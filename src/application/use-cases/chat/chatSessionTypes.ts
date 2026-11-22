@@ -62,7 +62,7 @@ export interface ChatRunRequest {
 
 export interface ChatSubAgentServices {
   repository: SubAgentSessionRepository;
-  redact(text: string): string;
+  redact(text: string, key?: string): string;
   isDebugCapture?(): boolean;
   monotonicNow?(): number;
 }

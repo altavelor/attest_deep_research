@@ -370,7 +370,7 @@ export interface SubAgentSessionManagerContext {
   resolveGrant(id: string): SubAgentDelegationGrant | null;
   now(): Date;
   createId(prefix: string): string;
-  redact(text: string): string;
+  redact(text: string, key?: string): string;
   monotonicNow?(): number;
   isDebugCapture?(): boolean;
   mainEvents?: SubAgentMainEventSink;

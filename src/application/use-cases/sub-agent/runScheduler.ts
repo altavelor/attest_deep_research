@@ -220,7 +220,7 @@ export class SubAgentRunScheduler implements SubAgentImportCommitter {
 
   private redacted(result: SubAgentExecutionResult): SubAgentExecutionResult | null {
     try {
-      return redactExecutionResult(result, (text) => this.parts.observation.redact(text));
+      return redactExecutionResult(result, (text, key) => this.parts.observation.redact(text, key));
     } catch {
       return null;
     }
