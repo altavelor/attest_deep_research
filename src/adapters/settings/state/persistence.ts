@@ -114,6 +114,7 @@ function dropUnknownSettings(settings: AttestSettings): AttestSettings {
     useWebWhenFreshnessNeeded: settings.useWebWhenFreshnessNeeded,
     expandSearchQuery: settings.expandSearchQuery,
     downloadFolder: settings.downloadFolder,
+    researchExportFolder: settings.researchExportFolder,
     debugMode: settings.debugMode,
     deepResearchPreview: settings.deepResearchPreview === true,
     onboardingCompleted: settings.onboardingCompleted === true,

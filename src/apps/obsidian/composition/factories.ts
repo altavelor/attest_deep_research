@@ -51,6 +51,7 @@ import {
 } from "./indexingFactory";
 
 export type { CompositionContext } from "./CompositionContext";
+export { createResearchExportService } from "./researchExportFactory";
 export {
   createChatModelClient,
   createQueryExpansionService,

@@ -66,4 +66,12 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "Beobachtung senden",
   "chat.deepResearch.turn.observe": "Die Beobachtung senden",
   "chat.history.requiresAction": "Wartet auf Ihre Entscheidung",
+  "chat.deepResearch.action.export": "Als Notiz exportieren",
+  "chat.deepResearch.export.running": "Wird exportiert…",
+  "chat.deepResearch.export.done": "Exportiert nach {path}",
+  "chat.deepResearch.export.failed": "Export fehlgeschlagen: {reason}",
+  "chat.deepResearch.action.retryExport": "Export wiederholen",
+  "settings.advanced.researchExportFolder.name": "Ordner für Recherche-Exporte",
+  "settings.advanced.researchExportFolder.desc":
+    "Tresorordner für exportierte Rechercheberichte. Pfade außerhalb des Tresors oder in .attest werden abgelehnt.",
 };

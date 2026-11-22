@@ -8,6 +8,11 @@ import {
 } from "@core/chat/savedChat";
 import type { ResearchMode } from "@core/research";
 import { ResearchService } from "@application/use-cases/research";
+import {
+  finishedResearchReport,
+  type ResearchExportContext,
+} from "@application/use-cases/research/deep-research";
+import type { ResearchReport } from "@core/research/deepResearch";
 import type {
   ChatRunRequest,
   ChatRunStartResult,
@@ -112,6 +117,10 @@ export interface AttestChatViewServices {
   logError?(error: unknown): void;
   isDebugMode(): boolean;
   isDeepResearchEnabled?(): boolean;
+  exportResearchReport?(
+    report: ResearchReport,
+    context: ResearchExportContext,
+  ): Promise<{ path: string }>;
   shouldIncludeActiveFileContext(): boolean;
 }
 
@@ -689,6 +698,9 @@ export class AttestChatView extends ItemView {
         sentTurns: this.sentResearchTurns,
         running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
+        ...(this.services.exportResearchReport
+          ? { onExport: (researchId: string) => this.exportResearch(researchId) }
+          : {}),
       },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
@@ -1111,6 +1123,25 @@ export class AttestChatView extends ItemView {
       status: item.status,
       args: item.args,
       resultJson: item.resultJson,
+    });
+  }
+
+  private async exportResearch(researchId: string): Promise<{ path: string }> {
+    const view = researchSectionView(this.session.deepResearch);
+    const report = finishedResearchReport(view, this.messages, researchId);
+    const chatId = this.session.chatId;
+    if (!report || !chatId || !this.services.exportResearchReport) {
+      throw new Error(this.t("chat.deepResearch.ended"));
+    }
+    const title =
+      view.status === "ready"
+        ? (view.history.find((entry) => entry.researchId === researchId)?.question ?? "")
+        : "";
+    return this.services.exportResearchReport(report, {
+      chatId,
+      researchId,
+      title,
+      registry: this.sourceRegistry,
     });
   }
 

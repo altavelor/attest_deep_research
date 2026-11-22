@@ -78,6 +78,7 @@ export function renderEndedResearch(
   cardEl: HTMLElement,
   entry: ResearchHistoryEntry | undefined,
   t: Translate,
+  onExport?: ResearchCardContext["onExport"],
 ): void {
   const report = entry?.report;
   if (!report) {
@@ -117,6 +118,46 @@ export function renderEndedResearch(
   }
   if (report.verification) renderVerification(cardEl, report.verification, t);
   cardEl.createDiv({ cls: "attest-research-card__meta", text: report.stopReason });
+  if (onExport && entry) renderExport(cardEl, entry.researchId, t, onExport);
+}
+
+/**
+ * Renders the export action of a finished report. The button is disabled while an export runs; a
+ * success shows the note path, and a failure shows its reason and turns the button into a retry.
+ */
+function renderExport(
+  cardEl: HTMLElement,
+  researchId: string,
+  t: Translate,
+  onExport: NonNullable<ResearchCardContext["onExport"]>,
+): void {
+  const actionsEl = cardEl.createDiv({ cls: "attest-research-card__actions" });
+  const button = actionsEl.createEl("button", {
+    cls: "attest-research-card__action",
+    text: t("chat.deepResearch.action.export"),
+  });
+  const statusEl = cardEl.createDiv({ cls: "attest-research-card__meta" });
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    statusEl.removeClass("attest-research-card__notice--error");
+    statusEl.setText(t("chat.deepResearch.export.running"));
+    onExport(researchId).then(
+      ({ path }) => {
+        button.disabled = false;
+        statusEl.setText(t("chat.deepResearch.export.done", { path }));
+      },
+      (error: unknown) => {
+        button.disabled = false;
+        button.setText(t("chat.deepResearch.action.retryExport"));
+        statusEl.addClass("attest-research-card__notice--error");
+        statusEl.setText(
+          t("chat.deepResearch.export.failed", {
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      },
+    );
+  });
 }
 
 function renderVerification(

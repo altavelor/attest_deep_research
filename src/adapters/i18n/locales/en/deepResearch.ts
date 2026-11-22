@@ -63,6 +63,14 @@ export const deepResearch = {
   "chat.deepResearch.action.observe": "Send observation",
   "chat.deepResearch.turn.observe": "Send the observation",
   "chat.history.requiresAction": "Waiting for your decision",
+  "chat.deepResearch.action.export": "Export to note",
+  "chat.deepResearch.export.running": "Exporting…",
+  "chat.deepResearch.export.done": "Exported to {path}",
+  "chat.deepResearch.export.failed": "Export failed: {reason}",
+  "chat.deepResearch.action.retryExport": "Retry export",
+  "settings.advanced.researchExportFolder.name": "Research export folder",
+  "settings.advanced.researchExportFolder.desc":
+    "Vault folder for exported research reports. Paths outside the vault or inside .attest are rejected.",
 };
 
 export type EnDeepResearchMessages = Record<keyof typeof deepResearch, string>;

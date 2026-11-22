@@ -161,6 +161,9 @@ export class Vault {
   configDir = ".obsidian";
   adapter: unknown = new MemoryDataAdapter();
   private files: TFile[] = [];
+  private readonly folders: TFolder[] = [];
+  readonly contents = new Map<string, string>();
+  readonly beforeCreate: Array<(path: string) => void> = [];
   private readonly listeners: VaultEventRef[] = [];
 
   on(event: string, handler: (...args: unknown[]) => void): VaultEventRef {
@@ -193,7 +196,25 @@ export class Vault {
   }
 
   getAbstractFileByPath(path: string): TAbstractFile | null {
-    return this.files.find((file) => file.path === path) ?? null;
+    return (
+      this.files.find((file) => file.path === path) ??
+      this.folders.find((folder) => folder.path === path) ??
+      null
+    );
+  }
+
+  async createFolder(path: string): Promise<void> {
+    if (this.getAbstractFileByPath(path)) throw new Error("Folder already exists.");
+    this.folders.push(new TFolder(path));
+  }
+
+  async create(path: string, content: string): Promise<TFile> {
+    for (const hook of this.beforeCreate) hook(path);
+    if (this.getAbstractFileByPath(path)) throw new Error("File already exists.");
+    const file = new TFile(path);
+    this.files.push(file);
+    this.contents.set(path, content);
+    return file;
   }
 }
 

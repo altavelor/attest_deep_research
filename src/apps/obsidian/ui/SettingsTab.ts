@@ -217,6 +217,10 @@ export class AttestSettingTab extends PluginSettingTab {
       setDebugMode: (value) => {
         this.plugin.settings.debugMode = value;
       },
+      getResearchExportFolder: () => this.plugin.settings.researchExportFolder,
+      setResearchExportFolder: (value) => {
+        this.plugin.settings.researchExportFolder = value;
+      },
       saveSettings: () => this.saveSettings(),
       refreshChatViews: () => this.plugin.refreshChatViews(),
     }).render(containerEl);

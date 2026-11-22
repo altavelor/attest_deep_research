@@ -291,6 +291,8 @@ describe("debug-mode toggle in advanced settings", () => {
       setDebugMode: (value) => {
         state.debugMode = value;
       },
+      getResearchExportFolder: () => "Attest/Research",
+      setResearchExportFolder: () => {},
       saveSettings,
       refreshChatViews,
     }).render(container);

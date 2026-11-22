@@ -7,4 +7,5 @@ export interface ResearchCardContext {
   sentTurns: Set<string>;
   running?: boolean;
   onTurn(input: ResearchTurnInput, label: string): void;
+  onExport?(researchId: string): Promise<{ path: string }>;
 }

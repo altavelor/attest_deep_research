@@ -44,6 +44,7 @@ import {
   createEnrichmentService,
   createIndexingService,
   createQueryExpansionService,
+  createResearchExportService,
   createResearchService,
   createRetrieverForProfile,
   createVectorIndexStoreForProfile,
@@ -239,6 +240,8 @@ export default class AttestPlugin extends Plugin {
           getDefaultSearchMode: () => this.settings.newChatDefaults.searchMode,
           getDefaultResearchMode: () => this.settings.newChatDefaults.researchMode,
           isDeepResearchEnabled: () => this.settings.deepResearchPreview,
+          exportResearchReport: (report, context) =>
+            createResearchExportService(this.composition, context).export(report),
           getIndexProfiles: () =>
             this.settings.indexProfiles.map((profile) => ({
               id: profile.id,
