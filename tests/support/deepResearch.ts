@@ -174,18 +174,32 @@ export class MemoryResearchState implements ResearchStatePort {
 /**
  * Model rounds of branch attempts: a first round searches the index for the branch task and the
  * next one answers with a finding citing the evidence id from the tool result. A task listed in
- * `hang` waits until its request is aborted, after calling `onHang`.
+ * `hang` waits until its request is aborted, after calling `onHang`. The peak number of rounds in
+ * flight at once is recorded.
  */
 export class BranchModelRounds implements ModelRoundProvider {
   readonly tasks: string[] = [];
   readonly hang = new Set<string>();
   onHang: () => void = () => undefined;
+  peakConcurrentRounds = 0;
+  private activeRounds = 0;
 
   async listModels(): Promise<string[]> {
     return ["model"];
   }
 
   async runRound(request: ModelRoundRequest): Promise<ModelRoundResult> {
+    this.activeRounds += 1;
+    this.peakConcurrentRounds = Math.max(this.peakConcurrentRounds, this.activeRounds);
+    try {
+      await Promise.resolve();
+      return await this.reply(request);
+    } finally {
+      this.activeRounds -= 1;
+    }
+  }
+
+  private async reply(request: ModelRoundRequest): Promise<ModelRoundResult> {
     const last = request.messages.at(-1);
     if (last?.role === "tool") {
       const id = /"evidenceId"\s*:\s*"([^"]+)"/u.exec(String(last.content))?.[1] ?? "missing";
@@ -297,4 +311,34 @@ export function pausedResearch(
       attemptsByBranch: { "branch-1": 1 },
     },
   };
+}
+
+/** Builds an approved research of the given plan that is gathering and has spent nothing yet. */
+export function gatheringResearch(plan: ResearchPlan): ResearchState {
+  const approved = { ...plan, approvedAt: "2026-01-01T00:00:00.000Z" };
+  return {
+    ...pendingResearch(approved),
+    phase: "gathering",
+    pending: null,
+    executions: initialExecutions(approved),
+  };
+}
+
+/** A report model that cites every bracketed token of the findings it receives, in order. */
+export class CitingReportModel implements ChatModelProvider {
+  readonly requests: ChatRequest[] = [];
+
+  async listModels(): Promise<string[]> {
+    return ["model"];
+  }
+
+  async *streamChat(request: ChatRequest): AsyncIterable<ChatResponseChunk> {
+    this.requests.push(request);
+    const findings = String(request.messages.at(-1)?.content);
+    const tokens = [...findings.matchAll(/\[([^\]\s]+)\]/gu)].map((match) => match[1]);
+    yield {
+      content: `# Report\n\n${tokens.map((token) => `Fact [${token}].`).join(" ")}`,
+      isComplete: true,
+    };
+  }
 }

@@ -30,6 +30,7 @@ import type {
 } from "@core/research";
 import type { ResearchEvidenceSnapshot } from "@application/sources/evidence";
 import type { SourceReference } from "@core/model";
+import type { BranchAllocation, ResearchBranch } from "@core/research/deepResearch";
 import type {
   SubAgentInspectionDetail,
   SubAgentInspectionSnapshot,
@@ -379,3 +380,13 @@ export interface SubAgentSessionManagerContext {
 export type SubAgentSessionManagerFactory = (
   context: SubAgentSessionManagerContext,
 ) => SubAgentHost;
+
+/**
+ * What a Deep Research turn gets from its chat for delegated branches: a delegator per branch
+ * attempt bound to that branch's budget scope, and the hook that attaches the research's permit
+ * port to the chat manager's budget router for the turn.
+ */
+export interface ResearchSubAgentContext {
+  delegator(branch: ResearchBranch, allocation: BranchAllocation): SubAgentDelegator;
+  attachBudget(port: SubAgentBudgetPermitPort & { readonly researchId: string }): () => void;
+}

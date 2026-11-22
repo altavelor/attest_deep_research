@@ -10,6 +10,10 @@ import type {
   SubAgentSessionManagerFactory,
 } from "@application/ports/subAgent";
 import type { MapSourcesRunContext } from "@application/ports/mapSources";
+import type { ResearchSubAgentContext } from "@application/ports/subAgent";
+import { ResearchScopeRouter } from "@application/use-cases/research/deep-research";
+import type { BranchAllocation, ResearchBranch } from "@core/research/deepResearch";
+import { researchGrant } from "./researchGrant";
 import {
   MapSourcesWorkerAdapter,
   type MapSourcesWorkerLimits,
@@ -47,6 +51,7 @@ export interface ChatSubAgentParentRun {
   delegator: SubAgentDelegator;
   parent: SubAgentParentRun;
   mapSources?: MapSourcesRunContext;
+  research?: ResearchSubAgentContext;
 }
 
 const CHILD_MAX_ROUNDS = 12;
@@ -65,6 +70,8 @@ export class ChatSubAgents {
   private readonly ownedRuns = new Set<string>();
   private readonly closingRuns = new Set<string>();
   private readonly coordinators = new Map<string, SubAgentParentCoordinator>();
+  private readonly router = new ResearchScopeRouter();
+  private readonly requests = new Map<string, ChatRunRequest>();
   private binding: ParentRunBinding | null = null;
   private generation = 0;
   private epoch = 0;
@@ -92,6 +99,7 @@ export class ChatSubAgents {
     this.host =
       options.createManager && options.services
         ? options.createManager({
+            budget: this.router,
             getChatId: () => state.chatId,
             repository: options.services.repository,
             writer: options.writer,
@@ -115,8 +123,9 @@ export class ChatSubAgents {
   }
 
   /**
-   * Binds a Thinking parent run of a durable chat: a new binding generation, delivery
-   * epoch and grant whose source policy and active file come from the run request.
+   * Binds a Thinking or Deep Research parent run of a durable chat: a new binding generation
+   * and delivery epoch. A Thinking run gets its grant from the run request; a Deep Research
+   * run gets no general grant, only per-branch grants through its research context.
    */
   beginParentRun(
     runId: string,
@@ -125,7 +134,9 @@ export class ChatSubAgents {
   ): ChatSubAgentParentRun | null {
     const chatId = this.options.state.chatId;
     const { recoveredFromPrevious } = this.options.state;
-    if (!this.host || mode !== "thinking" || chatId === null || recoveredFromPrevious) return null;
+    const research = mode === "deep-research";
+    if (!this.host || chatId === null || recoveredFromPrevious) return null;
+    if (mode !== "thinking" && !research) return null;
     this.generation += 1;
     this.epoch += 1;
     const binding = {
@@ -136,10 +147,11 @@ export class ChatSubAgents {
     const grantId = `grant-${runId}`;
     this.binding = binding;
     this.ownedRuns.add(runId);
-    this.grants.set(grantId, this.grant(binding, request));
+    if (!research) this.grants.set(grantId, this.grant(binding, request));
+    this.requests.set(runId, request);
     const host = this.host;
     const delegator = this.host.delegatorFor(binding, { deliveryEpoch: this.epoch, grantId });
-    const batches = this.host.batches?.();
+    const batches = research ? undefined : this.host.batches?.();
     const coordinator = new SubAgentParentCoordinator({
       delegator,
       host: this.host,
@@ -150,6 +162,14 @@ export class ChatSubAgents {
     this.coordinators.set(runId, coordinator);
     return {
       ...(batches ? { mapSources: this.mapSourcesContext(binding, request, batches) } : {}),
+      ...(research
+        ? {
+            research: {
+              delegator: (branch, allocation) => this.researchDelegator(branch, allocation),
+              attachBudget: (port) => this.router.attach(port),
+            },
+          }
+        : {}),
       delegator,
       parent: {
         parentRunId: runId,
@@ -203,11 +223,40 @@ export class ChatSubAgents {
   }
 
   private revokeGrants(runId: string): void {
+    this.requests.delete(runId);
     for (const grantId of [...this.grants.keys()]) {
-      if (grantId === `grant-${runId}` || grantId.startsWith(`grant-${runId}-map-`)) {
+      if (
+        grantId === `grant-${runId}` ||
+        grantId.startsWith(`grant-${runId}-map-`) ||
+        grantId.startsWith(`grant-${runId}-research-`)
+      ) {
         this.grants.delete(grantId);
       }
     }
+  }
+
+  /**
+   * Returns the delegator of one branch attempt of the current Deep Research parent run. Its
+   * grant is bound to the branch's budget scope of the attached research, searches the branch
+   * scope within the chat's sources without active file or note mutation, and takes its round
+   * and search limits from the allocation.
+   */
+  researchDelegator(branch: ResearchBranch, allocation: BranchAllocation): SubAgentDelegator {
+    const binding = this.binding;
+    const researchId = this.router.activeResearchId();
+    const request = binding ? this.requests.get(binding.parentRunId) : undefined;
+    if (!this.host || !binding || !request || researchId === null) {
+      throw new Error("No Deep Research parent run can delegate this branch.");
+    }
+    const { parentRunId } = binding;
+    const grantId = `grant-${parentRunId}-research-${branch.branchId}-${allocation.attempt}`;
+    if (!this.closingRuns.has(parentRunId)) {
+      this.grants.set(
+        grantId,
+        researchGrant(binding, this.sourcePolicy(request, false), branch, allocation, researchId),
+      );
+    }
+    return this.host.delegatorFor(binding, { deliveryEpoch: this.epoch, grantId });
   }
 
   inspection(): SubAgentInspectionPort | null {
@@ -218,6 +267,7 @@ export class ChatSubAgents {
     for (const coordinator of this.coordinators.values()) coordinator.dispose();
     this.coordinators.clear();
     this.grants.clear();
+    this.requests.clear();
     this.ownedRuns.clear();
     this.closingRuns.clear();
     this.binding = null;

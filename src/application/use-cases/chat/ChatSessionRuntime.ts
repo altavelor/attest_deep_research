@@ -228,6 +228,7 @@ export class ChatSessionRuntime {
               subAgentDelegator: subAgents.delegator,
               subAgentParent: subAgents.parent,
               ...(subAgents.mapSources ? { subAgentMapSources: subAgents.mapSources } : {}),
+              ...(subAgents.research ? { subAgentResearch: subAgents.research } : {}),
             }
           : {}),
       })) {

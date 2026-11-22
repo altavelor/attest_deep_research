@@ -10,3 +10,6 @@ export {
   type SynthesizedReport,
 } from "./ReportSynthesisService";
 export { finishedResearchReport } from "./researchReportLookup";
+export { SubAgentBranchRunner, type SubAgentBranchRunnerDeps } from "./SubAgentBranchRunner";
+export { ResearchBudgetPermits, type ResearchBudgetPermitsOptions } from "./ResearchBudgetPermits";
+export { ResearchScopeRouter, type AttachedResearchBudget } from "./ResearchScopeRouter";

@@ -66,3 +66,25 @@ export async function endTurn(chat: ReturnType<typeof realSubAgentChat>, index: 
   chat.research.end(index);
   await settle();
 }
+
+/** Starts a Deep Research continue turn of the chat; the returned request carries its research context. */
+export async function startResearchTurn(
+  chat: ReturnType<typeof realSubAgentChat>,
+  sessionId: string,
+  researchId: string,
+): Promise<{ request: ResearchRequest; index: number }> {
+  const run: ChatRunRequest = {
+    question: "Continue",
+    chatHistory: [],
+    appendQuestion: true,
+    contextPaths: [],
+    includeActiveFile: false,
+    includeContextDiagnostics: false,
+    modelLabel: "Model",
+    research: { type: "continue", researchId },
+  };
+  await chat.manager.start(sessionId, run);
+  await settle();
+  const index = chat.research.requests.length - 1;
+  return { request: chat.research.requests[index]!, index };
+}
