@@ -252,6 +252,8 @@ function renderSettingsSurfaces(host: HTMLElement): void {
     t,
     isDebugMode: () => true,
     setDebugMode: () => {},
+    getResearchExportFolder: () => "Attest/Research",
+    setResearchExportFolder: () => {},
     saveSettings: async () => {},
     refreshChatViews: () => {},
   }).render(host.createDiv());

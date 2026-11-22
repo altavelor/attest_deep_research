@@ -65,4 +65,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "Отправить наблюдение",
   "chat.deepResearch.turn.observe": "Отправить наблюдение",
   "chat.history.requiresAction": "Ожидает вашего решения",
+  "chat.deepResearch.action.export": "Экспортировать в заметку",
+  "chat.deepResearch.export.running": "Экспорт…",
+  "chat.deepResearch.export.done": "Экспортировано в {path}",
+  "chat.deepResearch.export.failed": "Экспорт не удался: {reason}",
+  "chat.deepResearch.action.retryExport": "Повторить экспорт",
+  "settings.advanced.researchExportFolder.name": "Папка экспорта исследований",
+  "settings.advanced.researchExportFolder.desc":
+    "Папка хранилища для экспортированных отчётов. Отклоняются абсолютные пути, обратные слэши и сегменты пустые, с пробелами по краям или начинающиеся либо заканчивающиеся точкой (например, .., .attest, .obsidian).",
+  "chat.deepResearch.export.folder": "Папка экспорта; пусто — папка по умолчанию",
 };

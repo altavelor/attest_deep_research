@@ -1,11 +1,14 @@
 import { Setting } from "obsidian";
 
 import type { Translate } from "@adapters/i18n";
+import { checkExportFolder } from "@core/research/deepResearch";
 
 export interface AdvancedSettingsSectionOptions {
   t: Translate;
   isDebugMode(): boolean;
   setDebugMode(value: boolean): void;
+  getResearchExportFolder(): string;
+  setResearchExportFolder(value: string): void;
   saveSettings(): Promise<void>;
   refreshChatViews(): void;
 }
@@ -25,7 +28,8 @@ export class AdvancedSettingsSection {
       cls: "attest-settings-advanced__summary",
       text: t("common.advanced"),
     });
-    new Setting(details.createDiv({ cls: "attest-settings-advanced__content" }))
+    const contentEl = details.createDiv({ cls: "attest-settings-advanced__content" });
+    new Setting(contentEl)
       .setName(t("settings.advanced.debugMode.name"))
       .setDesc(t("settings.advanced.debugMode.desc"))
       .addToggle((toggle) =>
@@ -35,5 +39,18 @@ export class AdvancedSettingsSection {
           this.options.refreshChatViews();
         }),
       );
+    const folderSetting = new Setting(contentEl)
+      .setName(t("settings.advanced.researchExportFolder.name"))
+      .setDesc(t("settings.advanced.researchExportFolder.desc"));
+    const errorEl = folderSetting.descEl.createDiv({ cls: "attest-settings-error" });
+    folderSetting.addText((text) =>
+      text.setValue(this.options.getResearchExportFolder()).onChange(async (value) => {
+        const checked = checkExportFolder(value);
+        errorEl.setText(checked.ok ? "" : checked.reason);
+        if (!checked.ok) return;
+        this.options.setResearchExportFolder(checked.folder);
+        await this.options.saveSettings();
+      }),
+    );
   }
 }

@@ -66,4 +66,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "Envoyer l’observation",
   "chat.deepResearch.turn.observe": "Envoyer l’observation",
   "chat.history.requiresAction": "En attente de votre décision",
+  "chat.deepResearch.action.export": "Exporter vers une note",
+  "chat.deepResearch.export.running": "Exportation…",
+  "chat.deepResearch.export.done": "Exporté vers {path}",
+  "chat.deepResearch.export.failed": "Échec de l’exportation : {reason}",
+  "chat.deepResearch.action.retryExport": "Réessayer l’exportation",
+  "settings.advanced.researchExportFolder.name": "Dossier d’export des recherches",
+  "settings.advanced.researchExportFolder.desc":
+    "Dossier du coffre pour les rapports exportés. Sont refusés les chemins absolus, les barres obliques inverses et les segments vides, entourés d’espaces ou qui commencent ou finissent par un point (comme .., .attest, .obsidian).",
+  "chat.deepResearch.export.folder": "Dossier d’export ; vide utilise celui par défaut",
 };

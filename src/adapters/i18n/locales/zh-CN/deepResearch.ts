@@ -63,4 +63,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "发送观察结果",
   "chat.deepResearch.turn.observe": "发送观察结果",
   "chat.history.requiresAction": "等待您的决定",
+  "chat.deepResearch.action.export": "导出为笔记",
+  "chat.deepResearch.export.running": "正在导出…",
+  "chat.deepResearch.export.done": "已导出到 {path}",
+  "chat.deepResearch.export.failed": "导出失败：{reason}",
+  "chat.deepResearch.action.retryExport": "重试导出",
+  "settings.advanced.researchExportFolder.name": "研究导出文件夹",
+  "settings.advanced.researchExportFolder.desc":
+    "用于保存导出研究报告的库文件夹。绝对路径、反斜杠，以及为空、首尾带空格或以点开头或结尾的路径段（如 ..、.attest、.obsidian）会被拒绝。",
+  "chat.deepResearch.export.folder": "导出文件夹；留空则使用默认文件夹",
 };

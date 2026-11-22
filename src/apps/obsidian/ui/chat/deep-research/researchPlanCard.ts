@@ -44,6 +44,7 @@ export function renderResearchCard(
       cardEl,
       view.history.find((entry) => entry.researchId === reference.researchId),
       t,
+      context.exports,
     );
     return;
   }

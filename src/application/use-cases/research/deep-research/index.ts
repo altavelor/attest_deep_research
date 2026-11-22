@@ -30,3 +30,8 @@ export {
   type PlannedTests,
   type ResearchDiscoveryOptions,
 } from "./ResearchDiscoveryService";
+export {
+  ResearchExportService,
+  type ResearchExportContext,
+  type ResearchExportDeps,
+} from "./ResearchExportService";

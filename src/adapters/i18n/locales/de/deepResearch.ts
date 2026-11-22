@@ -66,4 +66,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "Beobachtung senden",
   "chat.deepResearch.turn.observe": "Die Beobachtung senden",
   "chat.history.requiresAction": "Wartet auf Ihre Entscheidung",
+  "chat.deepResearch.action.export": "Als Notiz exportieren",
+  "chat.deepResearch.export.running": "Wird exportiert…",
+  "chat.deepResearch.export.done": "Exportiert nach {path}",
+  "chat.deepResearch.export.failed": "Export fehlgeschlagen: {reason}",
+  "chat.deepResearch.action.retryExport": "Export wiederholen",
+  "settings.advanced.researchExportFolder.name": "Ordner für Recherche-Exporte",
+  "settings.advanced.researchExportFolder.desc":
+    "Tresorordner für exportierte Rechercheberichte. Abgelehnt werden absolute Pfade, Backslashes und Segmente, die leer sind, von Leerzeichen umgeben sind oder mit einem Punkt beginnen oder enden (etwa .., .attest, .obsidian).",
+  "chat.deepResearch.export.folder": "Exportordner; leer verwendet den Standard",
 };

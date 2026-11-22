@@ -68,4 +68,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "Enviar observación",
   "chat.deepResearch.turn.observe": "Enviar la observación",
   "chat.history.requiresAction": "Esperando tu decisión",
+  "chat.deepResearch.action.export": "Exportar a nota",
+  "chat.deepResearch.export.running": "Exportando…",
+  "chat.deepResearch.export.done": "Exportado a {path}",
+  "chat.deepResearch.export.failed": "La exportación falló: {reason}",
+  "chat.deepResearch.action.retryExport": "Reintentar exportación",
+  "settings.advanced.researchExportFolder.name": "Carpeta de exportación de investigaciones",
+  "settings.advanced.researchExportFolder.desc":
+    "Carpeta de la bóveda para los informes exportados. Se rechazan rutas absolutas, barras invertidas y segmentos vacíos, con espacios en los extremos o que empiezan o terminan con un punto (como .., .attest, .obsidian).",
+  "chat.deepResearch.export.folder": "Carpeta de exportación; vacía usa la predeterminada",
 };

@@ -109,3 +109,12 @@ export {
   type ParsedProposals,
 } from "./discoveryDraft";
 export { hypothesesSection, hypothesisClaims } from "./discoveryReport";
+export {
+  DEFAULT_RESEARCH_EXPORT_FOLDER,
+  MAX_EXPORT_NAME_ATTEMPTS,
+  checkExportFolder,
+  exportFileName,
+  serializeResearchExport,
+  type ExportFolderCheck,
+  type ResearchExportInput,
+} from "./reportExport";

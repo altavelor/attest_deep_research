@@ -161,6 +161,11 @@ export class Vault {
   configDir = ".obsidian";
   adapter: unknown = new MemoryDataAdapter();
   private files: TFile[] = [];
+  private readonly folders: TFolder[] = [];
+  readonly contents = new Map<string, string>();
+  caseInsensitive = false;
+  readonly racedFolders = new Set<string>();
+  readonly beforeCreate: Array<(path: string) => void> = [];
   private readonly listeners: VaultEventRef[] = [];
 
   on(event: string, handler: (...args: unknown[]) => void): VaultEventRef {
@@ -193,7 +198,31 @@ export class Vault {
   }
 
   getAbstractFileByPath(path: string): TAbstractFile | null {
-    return this.files.find((file) => file.path === path) ?? null;
+    return (
+      this.files.find((file) => file.path === path) ??
+      this.folders.find((folder) => folder.path === path) ??
+      null
+    );
+  }
+
+  async createFolder(path: string): Promise<void> {
+    if (this.getAbstractFileByPath(path)) throw new Error("Folder already exists.");
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent && !this.getAbstractFileByPath(parent)) throw new Error("Parent folder missing.");
+    this.folders.push(new TFolder(path));
+    if (this.racedFolders.delete(path)) throw new Error("Folder already exists.");
+  }
+
+  async create(path: string, content: string): Promise<TFile> {
+    for (const hook of this.beforeCreate) hook(path);
+    const taken = this.caseInsensitive
+      ? this.files.some((file) => file.path.toLowerCase() === path.toLowerCase())
+      : this.getAbstractFileByPath(path) !== null;
+    if (taken) throw new Error("File already exists.");
+    const file = new TFile(path);
+    this.files.push(file);
+    this.contents.set(path, content);
+    return file;
   }
 }
 

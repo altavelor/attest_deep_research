@@ -656,3 +656,7 @@
 .attest-settings__test-capabilities-action.is-testing {
   color: var(--color-red);
 }
+
+.attest-settings-error {
+  color: var(--text-error);
+}

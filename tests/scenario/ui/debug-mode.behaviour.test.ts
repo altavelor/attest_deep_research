@@ -16,6 +16,7 @@ import {
 import type { SubAgentWorkflowItem } from "@core/research";
 import type { ChatDisplayMessage } from "@core/conversation";
 import { createContainer, resetDom } from "../../support/domHarness";
+import { settle } from "../../support/async";
 
 const t = createTranslator("en").t;
 
@@ -283,6 +284,7 @@ describe("untrusted sub-agent payloads", () => {
 describe("debug-mode toggle in advanced settings", () => {
   function renderToggle(initial: boolean) {
     const state = { debugMode: initial };
+    const folders: string[] = [];
     const saveSettings = vi.fn(async () => {});
     const refreshChatViews = vi.fn();
     new AdvancedSettingsSection({
@@ -291,11 +293,13 @@ describe("debug-mode toggle in advanced settings", () => {
       setDebugMode: (value) => {
         state.debugMode = value;
       },
+      getResearchExportFolder: () => "Attest/Research",
+      setResearchExportFolder: (value) => folders.push(value),
       saveSettings,
       refreshChatViews,
     }).render(container);
     const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]");
-    return { state, saveSettings, refreshChatViews, toggle };
+    return { state, saveSettings, refreshChatViews, toggle, folders };
   }
 
   it("reflects the persisted value", () => {
@@ -316,6 +320,24 @@ describe("debug-mode toggle in advanced settings", () => {
     expect(saveSettings.mock.invocationCallOrder[0]).toBeLessThan(
       refreshChatViews.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("saves only a valid research export folder and shows why another is refused", async () => {
+    const { saveSettings, folders } = renderToggle(false);
+    const input = container.querySelector<HTMLInputElement>("input[type=text]")!;
+    const type = async (value: string) => {
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+      await settle();
+    };
+
+    await type("a/ .. /b");
+    expect(container.textContent).toContain("leaves the vault or enters a hidden folder: a/ .. /b");
+    expect(saveSettings).not.toHaveBeenCalled();
+    await type(" Notes/Reports/ ");
+    expect(folders).toEqual(["Notes/Reports"]);
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("hidden folder");
   });
 
   it("keeps the advanced block collapsed by default", () => {

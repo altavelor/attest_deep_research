@@ -63,4 +63,13 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.observe": "إرسال الرصد",
   "chat.deepResearch.turn.observe": "إرسال الرصد",
   "chat.history.requiresAction": "بانتظار قرارك",
+  "chat.deepResearch.action.export": "تصدير إلى ملاحظة",
+  "chat.deepResearch.export.running": "جارٍ التصدير…",
+  "chat.deepResearch.export.done": "تم التصدير إلى {path}",
+  "chat.deepResearch.export.failed": "فشل التصدير: {reason}",
+  "chat.deepResearch.action.retryExport": "إعادة محاولة التصدير",
+  "settings.advanced.researchExportFolder.name": "مجلد تصدير الأبحاث",
+  "settings.advanced.researchExportFolder.desc":
+    "مجلد في الخزنة للتقارير المصدَّرة. تُرفض المسارات المطلقة والشرطات المائلة العكسية والمقاطع الفارغة أو المحاطة بمسافات أو التي تبدأ أو تنتهي بنقطة (مثل ‎..‎ و‎.attest‎ و‎.obsidian‎).",
+  "chat.deepResearch.export.folder": "مجلد التصدير؛ يُستخدم الافتراضي إذا تُرك فارغًا",
 };
