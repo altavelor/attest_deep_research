@@ -92,6 +92,14 @@ describe("sub-agent inspection snapshot", () => {
     expect(stateText(harness)).toContain("example.org");
     expect(JSON.stringify(harness.writer.deltas)).not.toContain("hunter2");
     expect(harness.execution.requests[0].task).toContain("Log in with password=");
+    const conflicting = await failureOf(
+      delegator.create({
+        createRequestId: "create-secret",
+        title: "Audit password=other",
+        resources: ["example.org", "token=hunter2"],
+      }),
+    );
+    expect(conflicting.code).toBe("idempotency-conflict");
     const grown = await failureOf(
       delegator.create({
         createRequestId: "create-grown",

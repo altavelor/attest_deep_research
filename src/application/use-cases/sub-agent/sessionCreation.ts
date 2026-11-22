@@ -329,9 +329,9 @@ function normalizeCreate(
       budgetPolicy: grant.budgetPolicy,
       maximumSourcePolicy: grant.maximumSourcePolicy,
     },
-    title,
+    title: deriveSubAgentTitle(input.title),
     maxSearches,
-    resources: safeResources.value,
+    resources: resources.value,
     scopeReduction: policy.policy,
   });
   return {
