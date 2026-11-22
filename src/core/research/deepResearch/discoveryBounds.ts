@@ -1,5 +1,5 @@
 import type { ResearchNote } from "./discoveryTypes";
-import type { ResearchDiscovery } from "./types";
+import type { BranchExecution, ResearchDiscovery } from "./types";
 import { boundNotes, currentHypotheses } from "./discovery";
 
 export const MAX_RESEARCH_HYPOTHESES = 10;
@@ -48,4 +48,21 @@ export function boundDiscovery(discovery: ResearchDiscovery): ResearchDiscovery 
     bounded = { ...discovery, notes };
   }
   return bounded;
+}
+
+/**
+ * Bounds the finding of a test work to the discovery bounds before it is stored: the text is cut
+ * to `MAX_TEST_FINDING_CHARS` without splitting a surrogate pair, and only the first
+ * `MAX_TEST_FINDING_TOKENS` finding tokens still cited in the cut text are kept.
+ */
+export function boundTestExecution(execution: BranchExecution): BranchExecution {
+  const finding = execution.finding;
+  if (!finding) return execution;
+  let text = finding.text.slice(0, MAX_TEST_FINDING_CHARS);
+  const last = text.charCodeAt(text.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1);
+  const citationTokens = finding.citationTokens
+    .filter((token) => text.includes(`[${token}]`))
+    .slice(0, MAX_TEST_FINDING_TOKENS);
+  return { ...execution, finding: { ...finding, text, citationTokens } };
 }

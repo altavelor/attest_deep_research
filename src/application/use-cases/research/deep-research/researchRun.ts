@@ -1,6 +1,7 @@
 import type { RetrievedChunk } from "@core/model";
 import {
   ResearchBudgetOwner,
+  boundTestExecution,
   boundedReason,
   hypothesesSection,
   openWorks,
@@ -190,17 +191,22 @@ export async function runResearch(
         gathered: current.executions,
         discovery: current.discovery,
         service: discovery,
-        runTests: (executions, works) =>
-          runSchedulingPhase({
-            ...phase,
-            plan: testPlan,
-            executions,
-            works,
-            barrier: async (next) =>
-              void (await commit({
-                discovery: { ...current.discovery!, executions: [...next] },
-              })),
-          }),
+        runTests: async (executions, works) =>
+          (
+            await runSchedulingPhase({
+              ...phase,
+              plan: testPlan,
+              executions,
+              works,
+              barrier: async (next) =>
+                void (await commit({
+                  discovery: {
+                    ...current.discovery!,
+                    executions: next.map(boundTestExecution),
+                  },
+                })),
+            })
+          ).map(boundTestExecution),
         commit: async (next) => void (await commit({ phase: "discovering", discovery: next })),
         budgetClosed: () => owner.snapshot().closed !== null,
         aborted: () => turn.signal.aborted,

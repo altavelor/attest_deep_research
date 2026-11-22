@@ -131,17 +131,14 @@ export function executionConsistent(
     if (!branchIds.has(execution.branchId) || seen.has(execution.workId)) return false;
     seen.add(execution.workId);
     if ((execution.state === "completed") !== (execution.finding !== null)) return false;
-    const ref = execution.runRef;
-    if (
-      ref &&
-      (execution.path !== "sub-agent" || sessionByBranch[execution.branchId] !== ref.sessionId)
-    ) {
-      return false;
-    }
+    if (!runRefConsistent(execution, sessionByBranch)) return false;
   }
   if (
     !followUps.every(
-      (execution) => branchIds.has(execution.branchId) && !seen.has(execution.workId),
+      (execution) =>
+        branchIds.has(execution.branchId) &&
+        !seen.has(execution.workId) &&
+        runRefConsistent(execution, sessionByBranch),
     )
   ) {
     return false;
@@ -157,6 +154,17 @@ export function executionConsistent(
         execution.state === "running" &&
         execution.attempts === allocation.attempt,
     ),
+  );
+}
+
+function runRefConsistent(
+  execution: BranchExecution,
+  sessionByBranch: Readonly<Record<string, string>>,
+): boolean {
+  const ref = execution.runRef;
+  return (
+    !ref ||
+    (execution.path === "sub-agent" && sessionByBranch[execution.branchId] === ref.sessionId)
   );
 }
 

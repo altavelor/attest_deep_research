@@ -13,11 +13,18 @@ import {
 } from "../support/deepResearch";
 import { fixedNow, markdownSource, retrieved } from "../support/factories";
 import { FakeRetriever } from "../support/researchFakes";
+import {
+  ReportSynthesisService,
+  ResearchDiscoveryService,
+  type BranchRunner,
+} from "@application/use-cases/research/deep-research";
+import { runResearch } from "@application/use-cases/research/deep-research/researchRun";
 
 function answer(
   model: DiscoveryModel,
   registry: ResearchRegistry,
   request: Omit<ResearchRequest, "mode">,
+  rounds = new BranchModelRounds(),
 ) {
   return collectAsync(
     deepResearchService(model, true, {
@@ -32,7 +39,7 @@ function answer(
         citations: [],
         usedFallback: false,
       }),
-      modelRound: new BranchModelRounds(),
+      modelRound: rounds,
     }).answer({
       ...request,
       mode: "deep-research",
@@ -63,11 +70,13 @@ describe("deep research discovery", () => {
     const model = new DiscoveryModel(["literature", "literature"], ["inconclusive", "supports"]);
     const port = stored("thorough");
     const researchId = port.commits[0]!.researchId;
-    await answer(model, new ResearchRegistry(), {
-      question: "Continue",
-      researchState: port,
-      research: { type: "continue", researchId },
-    });
+    const rounds = new BranchModelRounds();
+    await answer(
+      model,
+      new ResearchRegistry(),
+      { question: "Continue", researchState: port, research: { type: "continue", researchId } },
+      rounds,
+    );
 
     const discovery = [...port.commits].reverse().find((state) => state.discovery)!.discovery!;
     expect(discovery.hypotheses).toMatchObject([
@@ -87,8 +96,8 @@ describe("deep research discovery", () => {
     expect(
       verification.verification!.claims.filter((claim) => claim.kind === "hypothesis"),
     ).toHaveLength(1);
-    const rounds = port.commits.map((state) => state.budget?.consumed.modelRounds ?? 0);
-    expect(rounds.every((value, index) => index === 0 || value >= rounds[index - 1]!)).toBe(true);
+    const spent = port.commits.map((state) => state.budget?.consumed.modelRounds ?? 0);
+    expect(spent.every((value, index) => index === 0 || value >= spent[index - 1]!)).toBe(true);
     expect(final.budget!.consumed.modelRounds).toBeGreaterThanOrEqual(3 * 2 + 4);
   });
 
@@ -138,5 +147,65 @@ describe("deep research discovery", () => {
         String(request.messages[0]?.content).startsWith("You turn research findings"),
       ),
     ).toHaveLength(1);
+  });
+
+  it("stores a long sub-agent test finding within the discovery bounds so it reloads", async () => {
+    const tokens = Array.from({ length: 6 }, (_, index) => `source-${index}:revision-1`);
+    const long = `${tokens.map((token) => `The moon pulls the oceans [${token}].`).join(" ")} ${"x".repeat(2000)}`;
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: async () => ({ text: long, citationTokens: tokens, partial: false }),
+      runRef: () => ({ sessionId: "session-1", runId: "run-1", resultRevision: 1 }),
+      usage: () => ({ modelRounds: 1, searches: 1, evidenceItems: 0 }),
+    };
+    const model = new DiscoveryModel(["literature"], ["supports"]);
+    const start = {
+      ...gatheringResearch(researchPlan([researchBranch(1)], "balanced")),
+      sessionByBranch: { "branch-1": "session-1" },
+    };
+    const port = new MemoryResearchState();
+    let id = 0;
+    const evidence = (ids: readonly string[]) =>
+      ids.map((token) =>
+        retrieved(
+          token,
+          markdownSource("Notes/tides.md"),
+          "The moon pulls the oceans and causes tides.",
+        ),
+      );
+    await runResearch(start, {
+      port,
+      runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+      subAgents: { attach: () => () => undefined, createRunner: () => child },
+      synthesis: new ReportSynthesisService({ chatModel: model, model: "model", chatOptions: {} }),
+      createDiscovery: (options) =>
+        new ResearchDiscoveryService({
+          chatModel: model,
+          model: "model",
+          chatOptions: {},
+          createId: (prefix) => `${prefix}-${(id += 1)}`,
+          now: () => "2026-01-01T01:00:00.000Z",
+          ...options,
+        }),
+      resolveEvidence: evidence,
+      now: () => new Date("2026-01-01T01:00:00.000Z"),
+      setTimer: () => () => undefined,
+      createId: (prefix) => `${prefix}-${(id += 1)}`,
+      onState: () => undefined,
+      onStatus: () => undefined,
+    });
+
+    const test = port.commits.at(-1)!.discovery!.executions[0]!;
+    expect(test).toMatchObject({ path: "sub-agent", runRef: { sessionId: "session-1" } });
+    expect(test.finding!.text.length).toBeLessThanOrEqual(600);
+    expect(test.finding!.citationTokens).toEqual(tokens.slice(0, 4));
+    for (const state of port.commits.slice(0, -1)) {
+      expect(
+        validateResearchSection(
+          JSON.parse(JSON.stringify({ schema: 1, active: state, history: [] })),
+        ).ok,
+        state.phase,
+      ).toBe(true);
+    }
   });
 });

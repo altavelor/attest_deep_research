@@ -99,6 +99,7 @@ export {
   MAX_TEST_FINDING_CHARS,
   MAX_TEST_FINDING_TOKENS,
   boundDiscovery,
+  boundTestExecution,
   discoveryText,
 } from "./discoveryBounds";
 export {

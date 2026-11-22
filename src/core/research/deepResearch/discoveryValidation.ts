@@ -303,7 +303,7 @@ function readNote(value: unknown): ResearchNote | undefined {
 
 function readTestExecution(value: unknown): BranchExecution | undefined {
   const execution = readExecution(value);
-  if (!execution || execution.runRef) return undefined;
+  if (!execution) return undefined;
   const finding = execution.finding;
   if (
     finding &&
