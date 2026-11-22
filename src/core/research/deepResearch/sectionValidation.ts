@@ -5,8 +5,10 @@ import type {
   PendingDecision,
   ResearchBranch,
   ResearchHistoryEntry,
+  ResearchLimits,
   ResearchPhase,
   ResearchPlan,
+  ResearchPreset,
   ResearchRuleResult,
   ResearchState,
 } from "./types";
@@ -24,31 +26,55 @@ const PHASES: readonly ResearchPhase[] = [
   "failed",
   "cancelled",
 ];
-const DECISION_KINDS = ["plan", "clarification", "observation", "stale-plan"];
-const SCOPES = ["indexOnly", "webOnly", "indexAndWeb"];
-const PRESETS = ["conservative", "balanced", "thorough"];
+const EXECUTING: readonly ResearchPhase[] = [
+  "gathering",
+  "verifying",
+  "synthesizing",
+  "discovering",
+];
+const REQUIRED_DECISION: Partial<Record<ResearchPhase, PendingDecision["kind"]>> = {
+  "awaiting-approval": "plan",
+  "awaiting-clarification": "clarification",
+  "awaiting-observation": "observation",
+};
+const APPROVED_PHASES: readonly ResearchPhase[] = [...EXECUTING, "awaiting-observation"];
+const DECISION_KINDS: readonly PendingDecision["kind"][] = [
+  "plan",
+  "clarification",
+  "observation",
+  "stale-plan",
+];
+const SCOPES: readonly ResearchBranch["sourceScope"][] = ["indexOnly", "webOnly", "indexAndWeb"];
+const PRESETS: readonly ResearchPreset[] = ["conservative", "balanced", "thorough"];
 const MAX_QUESTION = 20_000;
+const MAX_TEXT = 4000;
+const MAX_TIMESTAMP = 40;
 
 /**
- * Validates a stored Deep Research section. Any unknown schema, malformed field or invalid
+ * Validates a stored Deep Research section and rebuilds it from its validated fields only. Any
+ * unknown schema, malformed field, invalid plan or inconsistent combination of phase, decision and
  * plan makes the whole section unreadable; it is never replaced by an empty default.
  */
 export function validateResearchSection(value: unknown): ResearchRuleResult<DeepResearchSection> {
   if (!isRecord(value) || value.schema !== DEEP_RESEARCH_SCHEMA) {
     return { ok: false, message: "The research state has an unknown schema." };
   }
-  const { active, history } = value;
-  if (active !== null && !isResearchState(active)) {
+  const active = value.active === null ? null : readState(value.active);
+  if (active === undefined) {
     return { ok: false, message: "The active research state is malformed." };
   }
-  if (
-    !Array.isArray(history) ||
-    history.length > MAX_RESEARCH_HISTORY ||
-    !history.every(isHistoryEntry)
-  ) {
+  const history = Array.isArray(value.history) ? value.history.map(readHistoryEntry) : null;
+  if (!history || history.length > MAX_RESEARCH_HISTORY || history.includes(null)) {
     return { ok: false, message: "The research history is malformed." };
   }
-  return { ok: true, value: value as unknown as DeepResearchSection };
+  return {
+    ok: true,
+    value: {
+      schema: DEEP_RESEARCH_SCHEMA,
+      active,
+      history: history as ResearchHistoryEntry[],
+    },
+  };
 }
 
 /** Builds the section that follows a committed state; a finished research moves into history. */
@@ -75,80 +101,167 @@ export function nextResearchSection(
   };
 }
 
-function isResearchState(value: unknown): value is ResearchState {
-  if (!isRecord(value)) return false;
-  return (
-    value.schema === DEEP_RESEARCH_SCHEMA &&
-    isResearchId(value.researchId) &&
-    isRevision(value.revision) &&
-    isText(value.question, MAX_QUESTION) &&
-    PHASES.includes(value.phase as ResearchPhase) &&
-    !isTerminalResearchPhase(value.phase as ResearchPhase) &&
-    (value.pending === null || isPending(value.pending)) &&
-    (value.plan === null || isPlan(value.plan)) &&
-    (value.terminalReason === null || isText(value.terminalReason, MAX_QUESTION)) &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
+function readState(value: unknown): ResearchState | undefined {
+  if (!isRecord(value)) return undefined;
+  const phase = value.phase as ResearchPhase;
+  const pending = value.pending === null ? null : readPending(value.pending);
+  const plan = value.plan === null ? null : readPlan(value.plan);
+  if (
+    value.schema !== DEEP_RESEARCH_SCHEMA ||
+    !isResearchId(value.researchId) ||
+    !isRevision(value.revision) ||
+    !isText(value.question, MAX_QUESTION) ||
+    !PHASES.includes(phase) ||
+    isTerminalResearchPhase(phase) ||
+    pending === undefined ||
+    plan === undefined ||
+    !(value.terminalReason === null || isText(value.terminalReason, MAX_TEXT)) ||
+    !isTimestamp(value.createdAt) ||
+    !isTimestamp(value.updatedAt) ||
+    !consistent(phase, pending, plan)
+  ) {
+    return undefined;
+  }
+  return {
+    schema: DEEP_RESEARCH_SCHEMA,
+    researchId: value.researchId,
+    revision: value.revision,
+    question: value.question,
+    phase,
+    pending,
+    plan,
+    terminalReason: value.terminalReason as string | null,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
 }
 
-function isPending(value: unknown): value is PendingDecision {
-  return (
-    isRecord(value) &&
-    isResearchId(value.decisionId) &&
-    DECISION_KINDS.includes(value.kind as string) &&
-    isRevision(value.artifactRevision)
-  );
+function consistent(
+  phase: ResearchPhase,
+  pending: PendingDecision | null,
+  plan: ResearchPlan | null,
+): boolean {
+  const required = REQUIRED_DECISION[phase];
+  if (required !== undefined && pending?.kind !== required) return false;
+  if (required === undefined && pending !== null) {
+    if (pending.kind !== "stale-plan" || !EXECUTING.includes(phase)) return false;
+  }
+  if (pending?.kind === "plan" || pending?.kind === "stale-plan") {
+    if (!plan || pending.artifactRevision !== plan.revision) return false;
+  }
+  if (pending?.kind === "plan" && plan?.approvedAt !== null) return false;
+  if (APPROVED_PHASES.includes(phase) && !plan?.approvedAt) return false;
+  return true;
 }
 
-function isPlan(value: unknown): value is ResearchPlan {
-  if (!isRecord(value)) return false;
-  const shaped =
-    isResearchId(value.planId) &&
-    isRevision(value.revision) &&
-    isTextList(value.objectives) &&
-    isTextList(value.reportOutline) &&
-    isTextList(value.knownOmissions) &&
-    Array.isArray(value.branches) &&
-    value.branches.every(isBranch) &&
-    PRESETS.includes(value.preset as string) &&
-    isRecord(value.limits) &&
-    Object.values(value.limits).every(isRevision) &&
-    isRevision(value.generationsUsed) &&
-    (value.approvedAt === null || typeof value.approvedAt === "string");
-  return shaped && validatePlan(value as unknown as ResearchPlan) === null;
+function readPending(value: unknown): PendingDecision | undefined {
+  if (
+    !isRecord(value) ||
+    !isResearchId(value.decisionId) ||
+    !DECISION_KINDS.includes(value.kind as PendingDecision["kind"]) ||
+    !isRevision(value.artifactRevision)
+  ) {
+    return undefined;
+  }
+  return {
+    decisionId: value.decisionId,
+    kind: value.kind as PendingDecision["kind"],
+    artifactRevision: value.artifactRevision,
+  };
 }
 
-function isBranch(value: unknown): value is ResearchBranch {
-  return (
-    isRecord(value) &&
-    isResearchId(value.branchId) &&
-    isText(value.title, MAX_QUESTION) &&
-    isText(value.task, MAX_QUESTION) &&
-    isText(value.expectedOutput, MAX_QUESTION) &&
-    (value.priority === "required" || value.priority === "optional") &&
-    typeof value.enabled === "boolean" &&
-    isTextList(value.objectives) &&
-    SCOPES.includes(value.sourceScope as string) &&
-    Array.isArray(value.dependsOn) &&
-    value.dependsOn.every(isResearchId)
-  );
+function readPlan(value: unknown): ResearchPlan | undefined {
+  if (!isRecord(value) || !isRecord(value.limits)) return undefined;
+  const branches = Array.isArray(value.branches) ? value.branches.map(readBranch) : null;
+  const preset = value.preset as ResearchPreset;
+  if (
+    !isResearchId(value.planId) ||
+    !isRevision(value.revision) ||
+    !isTextList(value.objectives) ||
+    !isTextList(value.reportOutline) ||
+    !isTextList(value.knownOmissions) ||
+    !branches ||
+    branches.includes(undefined) ||
+    !PRESETS.includes(preset) ||
+    !Object.values(value.limits).every(isRevision) ||
+    !isRevision(value.generationsUsed) ||
+    !(value.approvedAt === null || isTimestamp(value.approvedAt))
+  ) {
+    return undefined;
+  }
+  const plan: ResearchPlan = {
+    planId: value.planId,
+    revision: value.revision,
+    objectives: [...value.objectives],
+    reportOutline: [...value.reportOutline],
+    branches: branches as ResearchBranch[],
+    knownOmissions: [...value.knownOmissions],
+    preset,
+    limits: { ...(value.limits as unknown as ResearchLimits) },
+    generationsUsed: value.generationsUsed,
+    approvedAt: value.approvedAt as string | null,
+  };
+  return validatePlan(plan) === null ? plan : undefined;
 }
 
-function isHistoryEntry(value: unknown): value is ResearchHistoryEntry {
-  return (
-    isRecord(value) &&
-    isResearchId(value.researchId) &&
-    isText(value.question, MAX_QUESTION) &&
-    PHASES.includes(value.phase as ResearchPhase) &&
-    (value.terminalReason === null || isText(value.terminalReason, MAX_QUESTION)) &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
+function readBranch(value: unknown): ResearchBranch | undefined {
+  if (
+    !isRecord(value) ||
+    !isResearchId(value.branchId) ||
+    !isText(value.title, MAX_TEXT) ||
+    !isText(value.task, MAX_TEXT) ||
+    !isText(value.expectedOutput, MAX_TEXT) ||
+    (value.priority !== "required" && value.priority !== "optional") ||
+    typeof value.enabled !== "boolean" ||
+    !isTextList(value.objectives) ||
+    !SCOPES.includes(value.sourceScope as ResearchBranch["sourceScope"]) ||
+    !Array.isArray(value.dependsOn) ||
+    !value.dependsOn.every(isResearchId)
+  ) {
+    return undefined;
+  }
+  return {
+    branchId: value.branchId,
+    title: value.title,
+    task: value.task,
+    expectedOutput: value.expectedOutput,
+    priority: value.priority,
+    enabled: value.enabled,
+    objectives: [...value.objectives],
+    sourceScope: value.sourceScope as ResearchBranch["sourceScope"],
+    dependsOn: [...(value.dependsOn as string[])],
+  };
+}
+
+function readHistoryEntry(value: unknown): ResearchHistoryEntry | null {
+  if (
+    !isRecord(value) ||
+    !isResearchId(value.researchId) ||
+    !isText(value.question, MAX_QUESTION) ||
+    !PHASES.includes(value.phase as ResearchPhase) ||
+    !isTerminalResearchPhase(value.phase as ResearchPhase) ||
+    !(value.terminalReason === null || isText(value.terminalReason, MAX_TEXT)) ||
+    !isTimestamp(value.createdAt) ||
+    !isTimestamp(value.updatedAt)
+  ) {
+    return null;
+  }
+  return {
+    researchId: value.researchId,
+    question: value.question,
+    phase: value.phase as ResearchPhase,
+    terminalReason: value.terminalReason as string | null,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
+function isTimestamp(value: unknown): value is string {
+  return isText(value, MAX_TIMESTAMP) && !Number.isNaN(Date.parse(value));
 }
 
 function isTextList(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => isText(entry, MAX_QUESTION));
+  return Array.isArray(value) && value.every((entry) => isText(entry, MAX_TEXT));
 }
 
 function isText(value: unknown, max: number): value is string {

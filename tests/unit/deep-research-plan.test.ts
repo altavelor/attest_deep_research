@@ -1,4 +1,11 @@
-import { applyDecision, validatePlan } from "@core/research/deepResearch";
+import {
+  applyDecision,
+  applyPlanEdit,
+  parsePlanDecisionPayload,
+  parsePlanDraft,
+  presetLimits,
+  validatePlan,
+} from "@core/research/deepResearch";
 import { pendingResearch, researchBranch, researchPlan } from "../support/deepResearch";
 
 const CONTEXT = { now: "2026-01-02T00:00:00.000Z", nextDecisionId: "decision-2" };
@@ -72,6 +79,71 @@ describe("deep research decisions", () => {
       ok: false,
       code: "research-generation-limit",
       message: "All plan generations are used; edit the plan manually.",
+    });
+  });
+});
+
+describe("deep research untrusted plan input", () => {
+  const draftContext = {
+    planId: "plan-1",
+    preset: "balanced" as const,
+    chatScope: "indexOnly" as const,
+    generationsUsed: 1,
+  };
+
+  it("keeps host scope, limits and identifiers and bounds the text of a model plan", () => {
+    const reply = JSON.stringify({
+      objectives: ["Goal"],
+      limits: { searchesTotal: 999 },
+      branches: [
+        {
+          branchId: "evil",
+          title: "T".repeat(500),
+          task: "Do",
+          sourceScope: "webOnly",
+          objectives: [1],
+          limits: {},
+        },
+      ],
+    });
+    const parsed = parsePlanDraft(reply, draftContext);
+    if (!parsed.ok) throw new Error(parsed.message);
+    expect(parsed.value.limits).toEqual(presetLimits("balanced"));
+    expect(parsed.value.branches[0]).toMatchObject({
+      branchId: "branch-1",
+      sourceScope: "indexOnly",
+    });
+    expect(parsed.value.branches[0]!.title).toHaveLength(200);
+  });
+
+  it("resolves objective positions against the list the model sent", () => {
+    const reply = JSON.stringify({
+      objectives: ["", "First", "First", "Second"],
+      branches: [{ title: "T", task: "Do", objectives: [4] }],
+    });
+    const parsed = parsePlanDraft(reply, draftContext);
+    expect(parsed.ok && parsed.value.branches[0]!.objectives).toEqual(["Second"]);
+  });
+
+  it("rejects malformed decision payloads and ignores extra fields", () => {
+    for (const payload of [
+      { action: "launch" },
+      { action: "edit", edit: { branches: [{ branchId: "branch-1", enabled: "yes" }] } },
+      { action: "regenerate", instruction: "x".repeat(4001) },
+    ]) {
+      expect(parsePlanDecisionPayload(payload), JSON.stringify(payload).slice(0, 40)).toBeNull();
+    }
+    expect(
+      parsePlanDecisionPayload({
+        action: "edit",
+        limits: { searchesTotal: 999 },
+        edit: { branches: [{ branchId: "branch-1", enabled: false, limits: {} }] },
+      }),
+    ).toEqual({ action: "edit", edit: { branches: [{ branchId: "branch-1", enabled: false }] } });
+    expect(applyPlanEdit(researchPlan(), { branches: [{ branchId: "branch-9" }] })).toEqual({
+      ok: false,
+      code: "research-invalid-plan",
+      message: "The edit names an unknown branch.",
     });
   });
 });

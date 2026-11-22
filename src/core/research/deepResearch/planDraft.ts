@@ -1,4 +1,4 @@
-import { MAX_RESEARCH_BRANCHES, presetLimits } from "./limits";
+import { MAX_PLAN_LIST_ITEMS, MAX_RESEARCH_BRANCHES, presetLimits } from "./limits";
 import { validatePlan } from "./planValidation";
 import type {
   ResearchBranch,
@@ -17,7 +17,6 @@ export interface PlanDraftContext {
 
 const MAX_TITLE = 200;
 const MAX_TEXT = 2000;
-const MAX_LIST = 12;
 
 /** Builds the system prompt asking the model for a reviewable research plan as JSON. */
 export function planGenerationPrompt(maxBranches: number): string {
@@ -42,7 +41,8 @@ export function parsePlanDraft(
 ): ResearchRuleResult<ResearchPlan> {
   const raw = firstJsonObject(text);
   if (!raw) return { ok: false, message: "The model did not return a plan." };
-  const objectives = textList(raw.objectives, MAX_TEXT);
+  const rawObjectives = rawTexts(raw.objectives, MAX_TEXT);
+  const objectives = distinct(rawObjectives);
   const branchValues = Array.isArray(raw.branches)
     ? raw.branches.slice(0, MAX_RESEARCH_BRANCHES + 1)
     : [];
@@ -56,7 +56,9 @@ export function parsePlanDraft(
       expectedOutput: boundedText(value.expectedOutput, MAX_TEXT),
       priority: value.priority === "optional" ? "optional" : "required",
       enabled: true,
-      objectives: positions(value.objectives, objectives.length).map((at) => objectives[at]!),
+      objectives: distinct(
+        positions(value.objectives, rawObjectives.length).map((at) => rawObjectives[at]!),
+      ),
       sourceScope: clampScope(value.sourceScope, context.chatScope),
       dependsOn: positions(value.dependsOn, branchValues.length).map((at) => `branch-${at + 1}`),
     });
@@ -103,10 +105,16 @@ function positions(value: unknown, length: number): number[] {
   return [...seen];
 }
 
+function rawTexts(value: unknown, max: number): string[] {
+  return Array.isArray(value) ? value.map((entry) => boundedText(entry, max)) : [];
+}
+
+function distinct(items: readonly string[]): string[] {
+  return [...new Set(items.filter((entry) => entry !== ""))].slice(0, MAX_PLAN_LIST_ITEMS);
+}
+
 function textList(value: unknown, max: number): string[] {
-  if (!Array.isArray(value)) return [];
-  const items = value.map((entry) => boundedText(entry, max)).filter((entry) => entry !== "");
-  return [...new Set(items)].slice(0, MAX_LIST);
+  return distinct(rawTexts(value, max));
 }
 
 function boundedText(value: unknown, max: number): string {

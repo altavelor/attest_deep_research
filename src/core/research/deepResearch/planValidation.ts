@@ -1,4 +1,9 @@
-import { MAX_PLAN_GENERATIONS, MAX_RESEARCH_BRANCHES, RESEARCH_PRESET_LIMITS } from "./limits";
+import {
+  MAX_PLAN_GENERATIONS,
+  MAX_PLAN_LIST_ITEMS,
+  MAX_RESEARCH_BRANCHES,
+  RESEARCH_PRESET_LIMITS,
+} from "./limits";
 import type { ResearchBranch, ResearchLimits, ResearchPlan } from "./types";
 
 const RESEARCH_ID = /^[A-Za-z0-9_-]{1,64}$/u;
@@ -26,6 +31,13 @@ export function validatePlan(plan: ResearchPlan): string | null {
   if (!isRevision(plan.generationsUsed) || plan.generationsUsed > MAX_PLAN_GENERATIONS) {
     return "The plan used more generations than allowed.";
   }
+  if (
+    [plan.objectives, plan.reportOutline, plan.knownOmissions].some(
+      (list) => list.length > MAX_PLAN_LIST_ITEMS,
+    )
+  ) {
+    return `A plan list holds at most ${MAX_PLAN_LIST_ITEMS} entries.`;
+  }
   const maxBranches = Math.min(MAX_RESEARCH_BRANCHES, plan.limits.branches);
   if (branches.length === 0 || branches.length > maxBranches) {
     return `A plan needs between one and ${maxBranches} branches.`;
@@ -42,6 +54,12 @@ export function validatePlan(plan: ResearchPlan): string | null {
   }
   const objectives = new Set(plan.objectives);
   for (const branch of branches) {
+    if (
+      branch.objectives.length > MAX_PLAN_LIST_ITEMS ||
+      branch.dependsOn.length > branches.length
+    ) {
+      return `Branch "${branch.title}" lists too many objectives or dependencies.`;
+    }
     if (branch.objectives.some((objective) => !objectives.has(objective))) {
       return `Branch "${branch.title}" refers to an unknown objective.`;
     }
