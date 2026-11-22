@@ -12,7 +12,8 @@ export type DeepResearchRejectionReason =
   | "research-preflight"
   | "research-generation-failed"
   | "research-continue-unavailable"
-  | "research-disabled";
+  | "research-disabled"
+  | "research-input-too-long";
 
 const MAX_REASON_CHARS = 500;
 

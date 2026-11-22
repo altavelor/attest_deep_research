@@ -1,7 +1,7 @@
 import { DeepResearchStrategy } from "@application/use-cases/research/deep-research";
 import type { ResearchExecutionContext } from "@application/use-cases/research/strategies/ResearchStrategy";
 import { collectAsync } from "../support/async";
-import { MemoryResearchState, deepResearchService } from "../support/deepResearch";
+import { MemoryResearchState, deepResearchService, pendingResearch } from "../support/deepResearch";
 import { FakeChatModel } from "../support/researchFakes";
 
 describe("deep research strategy", () => {
@@ -51,5 +51,32 @@ describe("deep research strategy", () => {
       details: { reason: "research-disabled" },
     });
     expect(model.requests).toHaveLength(0);
+  });
+
+  it("rejects an over-long question readably before any state commit", async () => {
+    const port = new MemoryResearchState();
+    const model = new FakeChatModel();
+    const answer = deepResearchService(model).answer({
+      question: "q".repeat(20_001),
+      mode: "deep-research",
+      researchState: port,
+    });
+    await expect(collectAsync(answer)).rejects.toMatchObject({
+      message: "The research question is too long; keep it under 20,000 characters.",
+      details: { reason: "research-input-too-long" },
+    });
+    expect(port.commits).toHaveLength(0);
+  });
+
+  it("rejects an over-long plain-text plan instruction readably", async () => {
+    const port = new MemoryResearchState();
+    port.commits.push(pendingResearch());
+    const answer = deepResearchService(new FakeChatModel()).answer({
+      question: "i".repeat(4001),
+      mode: "deep-research",
+      researchState: port,
+    });
+    await expect(collectAsync(answer)).rejects.toThrow("plan instruction is too long");
+    expect(port.commits).toHaveLength(1);
   });
 });

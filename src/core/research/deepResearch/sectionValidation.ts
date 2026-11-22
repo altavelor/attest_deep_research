@@ -1,4 +1,10 @@
-import { DEEP_RESEARCH_SCHEMA, MAX_RESEARCH_HISTORY, isTerminalResearchPhase } from "./limits";
+import {
+  DEEP_RESEARCH_SCHEMA,
+  MAX_RESEARCH_HISTORY,
+  MAX_RESEARCH_QUESTION_CHARS,
+  MAX_RESEARCH_TEXT_CHARS,
+  isTerminalResearchPhase,
+} from "./limits";
 import { isResearchId, isRevision, validatePlan } from "./planValidation";
 import type {
   DeepResearchSection,
@@ -46,8 +52,8 @@ const DECISION_KINDS: readonly PendingDecision["kind"][] = [
 ];
 const SCOPES: readonly ResearchBranch["sourceScope"][] = ["indexOnly", "webOnly", "indexAndWeb"];
 const PRESETS: readonly ResearchPreset[] = ["conservative", "balanced", "thorough"];
-const MAX_QUESTION = 20_000;
-const MAX_TEXT = 4000;
+const MAX_QUESTION = MAX_RESEARCH_QUESTION_CHARS;
+const MAX_TEXT = MAX_RESEARCH_TEXT_CHARS;
 const MAX_TIMESTAMP = 40;
 
 /**

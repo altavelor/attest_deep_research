@@ -1,5 +1,7 @@
 import type { ResearchSearchMode } from "@core/research";
 import {
+  MAX_RESEARCH_QUESTION_CHARS,
+  MAX_RESEARCH_TEXT_CHARS,
   deepResearchRejected,
   type ResearchSourceScope,
   type ResearchState,
@@ -70,5 +72,26 @@ export function preflightScope(
   throw deepResearchRejected(
     "research-preflight",
     "Deep Research needs a readable source for this chat's search mode.",
+  );
+}
+
+/** Rejects a start question or a plain-text plan instruction over its stored bound, before any commit. */
+export function checkTurnText(turn: ResearchTurnInput, text: string): void {
+  const instruction =
+    turn.type === "decision"
+      ? (turn.decision.payload as { instruction?: unknown }).instruction
+      : null;
+  if (turn.type === "start" && text.length > MAX_RESEARCH_QUESTION_CHARS) {
+    throw tooLong("question", MAX_RESEARCH_QUESTION_CHARS);
+  }
+  if (typeof instruction === "string" && instruction.length > MAX_RESEARCH_TEXT_CHARS) {
+    throw tooLong("plan instruction", MAX_RESEARCH_TEXT_CHARS);
+  }
+}
+
+function tooLong(subject: string, max: number): Error {
+  return deepResearchRejected(
+    "research-input-too-long",
+    `The research ${subject} is too long; keep it under ${max.toLocaleString("en-US")} characters.`,
   );
 }

@@ -22,6 +22,7 @@ import type {
 import { ResearchPlanService } from "./ResearchPlanService";
 import {
   abandonsPlanning,
+  checkTurnText,
   preflightScope,
   resolveResearchTurn,
   type ResearchSources,
@@ -67,6 +68,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
       active = null;
     }
     const turn = resolveResearchTurn(ctx.request.research, active, ctx.question);
+    checkTurnText(turn, ctx.question);
     if (turn.type === "start") return yield* this.start(ctx, port);
     if (turn.type === "decision") {
       if (!active) throw stale();

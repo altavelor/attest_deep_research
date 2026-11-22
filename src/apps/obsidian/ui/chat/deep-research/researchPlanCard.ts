@@ -1,6 +1,7 @@
 import type { Translate } from "@adapters/i18n";
 import {
   MAX_PLAN_GENERATIONS,
+  MAX_RESEARCH_TEXT_CHARS,
   canRegenerate,
   isResearchId,
   isRevision,
@@ -167,7 +168,10 @@ function renderEditor(
     const rowEl = editorEl.createDiv({ cls: "attest-research-card__editor-row" });
     const enabled = rowEl.createEl("input", { attr: { type: "checkbox" } });
     enabled.checked = branch.enabled;
-    const task = rowEl.createEl("textarea", { cls: "attest-research-card__editor-task" });
+    const task = rowEl.createEl("textarea", {
+      cls: "attest-research-card__editor-task",
+      attr: { maxlength: String(MAX_RESEARCH_TEXT_CHARS) },
+    });
     task.value = branch.task;
     return { branchId: branch.branchId, enabled, task };
   });

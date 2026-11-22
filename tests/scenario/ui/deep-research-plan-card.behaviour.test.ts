@@ -34,6 +34,8 @@ describe("deep research plan card", () => {
 
     const first = render();
     expect(first.textContent).toContain("Investigate aspect 1");
+    [...first.querySelectorAll("button")].find((button) => button.textContent === "Edit")!.click();
+    expect(first.querySelector("textarea")!.getAttribute("maxlength")).toBe("4000");
     approve(first).click();
     approve(first).click();
     const rerendered = render();
