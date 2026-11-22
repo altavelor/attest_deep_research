@@ -114,13 +114,21 @@ export class EvidenceVerificationService {
     const assessments: ClaimAssessment[] = [];
     for (let start = 0; start < claims.length; start += MAX_ASSESS_BATCH) {
       const batch = claims.slice(start, start + MAX_ASSESS_BATCH);
+      const shown = new Map(
+        batch.flatMap((claim) =>
+          claim.citationTokens.flatMap((token) => {
+            const passage = passages.get(token);
+            return passage === undefined ? [] : [[token, passage] as const];
+          }),
+        ),
+      );
       const reply = this.options.spendRound()
-        ? await this.call(ASSESS_PROMPT, assessRequest(batch, passages))
+        ? await this.call(ASSESS_PROMPT, assessRequest(batch, shown))
         : "";
       const verdicts = parseVerdicts(reply);
       assessments.push(
         ...batch.map((claim, index) =>
-          acceptedAssessment(claim, verdicts.get(index + 1) ?? null, passages, groups),
+          acceptedAssessment(claim, verdicts.get(index + 1) ?? null, shown, groups),
         ),
       );
     }

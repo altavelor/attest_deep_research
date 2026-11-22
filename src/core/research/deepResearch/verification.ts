@@ -14,6 +14,7 @@ export const MAX_RESEARCH_CLAIMS = 40;
 export const MAX_CLAIM_TEXT_CHARS = 1000;
 export const MAX_CLAIM_TOKENS = 8;
 export const MAX_CLAIM_QUOTE_CHARS = 500;
+export const MIN_CLAIM_QUOTE_CHARS = 20;
 
 export interface ReferenceCheck {
   checkable: ResearchClaim[];
@@ -90,9 +91,10 @@ export function objectiveCoverage(
 }
 
 /**
- * Turns one untrusted verdict into an assessment: a `supported` verdict whose quote is not
- * contained in a cited passage is downgraded to `unresolved`, and a conflict needs at least one
- * contradicting token among the passages shown to the model.
+ * Turns one untrusted verdict into an assessment; `passages` are exactly the passages of the
+ * request that carried the claim. A `supported` verdict needs a quote of at least
+ * `MIN_CLAIM_QUOTE_CHARS` normalized characters inside a passage of the claim's own tokens, and a
+ * conflict needs a contradicting token among the request's passages; otherwise it is `unresolved`.
  */
 export function acceptedAssessment(
   claim: ResearchClaim,
@@ -104,9 +106,10 @@ export function acceptedAssessment(
   const claimGroups = [...new Set(cited.flatMap((token) => groups.get(token) ?? []))];
   const quote = typeof verdict?.quote === "string" ? verdict.quote.trim() : "";
   if (verdict?.verdict === "supported") {
+    const needle = normalized(unescaped(quote));
     const contained =
-      quote !== "" &&
-      cited.some((token) => normalized(passages.get(token)!).includes(normalized(quote)));
+      needle.length >= MIN_CLAIM_QUOTE_CHARS &&
+      cited.some((token) => normalized(passages.get(token)!).includes(needle));
     if (!contained) return assessment(claim.claimId, "unresolved", claimGroups);
     return {
       ...assessment(claim.claimId, "supported", claimGroups),
@@ -233,6 +236,10 @@ function normalizeUrl(url: string): string {
     .join("&");
   const path = (match[2] ?? "").replace(/\/+$/u, "");
   return `${match[1]!.toLowerCase()}${path}${query ? `?${query}` : ""}`;
+}
+
+function unescaped(text: string): string {
+  return text.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 }
 
 function normalized(text: string): string {

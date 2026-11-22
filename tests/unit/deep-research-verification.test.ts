@@ -56,10 +56,84 @@ describe("deep research claim verification", () => {
     expect(model.requests).toHaveLength(1);
   });
 
-  it("downgrades a supported verdict whose quote is not in the cited passage", () => {
-    const passages = new Map([["t1", "The moon pulls the oceans."]]);
-    const verdict = { verdict: "supported", quote: "The sun causes tides", contradicting: [] };
-    expect(acceptedAssessment(claim, verdict, passages, new Map()).verdict).toBe("unresolved");
+  it("accepts a contradicting token only from the assessment request of the claim", async () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const claims = Array.from({ length: 11 }, (_, index) => ({
+      finding: 1,
+      text: `Claim ${index + 1}`,
+      tokens: [index === 10 ? "t2" : "t1"],
+      objective: 1,
+    }));
+    const conflicted = JSON.stringify({
+      assessments: Array.from({ length: 10 }, (_, index) => ({
+        claim: index + 1,
+        verdict: "conflicted",
+        contradicting: ["t2"],
+      })),
+    });
+    const model = new FakeChatModel([
+      [{ content: JSON.stringify({ claims }), isComplete: true }],
+      [{ content: conflicted, isComplete: true }],
+      [{ content: conflicted, isComplete: true }],
+    ]);
+    const execution = {
+      ...gatheringResearch(plan).executions[0]!,
+      state: "completed" as const,
+      finding: { text: "Claims [t1] [t2]", citationTokens: ["t1", "t2"], partial: false },
+    };
+    const summary = await new EvidenceVerificationService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: () => [
+        retrieved("t1", markdownSource("Notes/a.md"), "First passage text."),
+        retrieved("t2", markdownSource("Notes/b.md"), "Second passage text."),
+      ],
+      spendRound: () => true,
+      followUpsRemaining: 0,
+      followUpCycle: 1,
+    }).verify([execution], plan);
+
+    expect(summary.assessments.map((entry) => entry.verdict)).toEqual([
+      ...Array.from({ length: 10 }, () => "unresolved"),
+      "conflicted",
+    ]);
+  });
+
+  it("downgrades verdicts the cited passages of the request do not bear out", () => {
+    const passages = new Map([["t1", "The moon pulls the oceans twice every day."]]);
+    const rows: [string, object, string][] = [
+      [
+        "quote outside the passage",
+        { verdict: "supported", quote: "The sun causes tides here" },
+        "unresolved",
+      ],
+      [
+        "quote under twenty characters",
+        { verdict: "supported", quote: "the oceans" },
+        "unresolved",
+      ],
+      [
+        "contained quote",
+        { verdict: "supported", quote: "pulls the  OCEANS twice every" },
+        "supported",
+      ],
+      ["conflict without a token", { verdict: "conflicted", contradicting: [] }, "unresolved"],
+      [
+        "conflict from another request",
+        { verdict: "conflicted", contradicting: ["t9"] },
+        "unresolved",
+      ],
+      [
+        "conflict from this request",
+        { verdict: "conflicted", contradicting: ["t1"] },
+        "conflicted",
+      ],
+    ];
+    for (const [label, verdict, expected] of rows) {
+      const raw = { verdict: undefined, quote: undefined, contradicting: undefined, ...verdict };
+      expect(acceptedAssessment(claim, raw, passages, new Map()).verdict, label).toBe(expected);
+    }
   });
 
   it("groups syndicated copies of one text as one source", () => {
