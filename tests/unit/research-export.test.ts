@@ -41,13 +41,17 @@ describe("research export", () => {
       "C:/Notes",
       "Notes\\Deep",
       ".attest/chats",
+      "a/ .. /b",
+      ".attest /x",
+      ".obsidian/x",
+      "x./y",
     ]) {
       await expect(service.export(finishedReport("Body"), folder)).rejects.toMatchObject({
         details: { reason: "research-export-folder" },
       });
     }
     await expect(service.export(finishedReport("Body"), ".Attest/x")).rejects.toThrow(
-      "The export folder is reserved for Attest: .Attest/x",
+      "The export folder leaves the vault or enters a hidden folder: .Attest/x",
     );
   });
 

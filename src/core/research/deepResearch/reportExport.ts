@@ -7,7 +7,6 @@ export const MAX_EXPORT_NAME_CHARS = 80;
 export const MAX_EXPORT_NAME_ATTEMPTS = 20;
 export const FALLBACK_EXPORT_NAME = "Research report";
 
-const RESERVED_FOLDER = ".attest";
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/gu;
 const HAS_CONTROL_CHAR = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 const RESERVED_NAME_CHARS = /[\\/:*?"<>|#^[\]]/gu;
@@ -22,8 +21,9 @@ export interface ResearchExportInput {
 }
 
 /**
- * Normalises an untrusted vault folder for an export and rejects one that is empty, absolute,
- * uses backslashes, has empty or relative segments, or enters the plugin's `.attest` folder.
+ * Checks an untrusted vault folder for an export; only the whole value is trimmed and trailing
+ * slashes are dropped. It rejects an empty, absolute or backslashed path and any segment that is
+ * empty, padded with whitespace, or starts or ends with a dot, which covers `..` and hidden folders.
  */
 export function checkExportFolder(value: string): ExportFolderCheck {
   const folder = value.trim().replace(/\/+$/u, "");
@@ -32,16 +32,22 @@ export function checkExportFolder(value: string): ExportFolderCheck {
     return { ok: false, reason: `The export folder must be a relative vault path: ${folder}` };
   }
   const segments = folder.split("/");
-  if (
-    HAS_CONTROL_CHAR.test(folder) ||
-    segments.some((segment) => segment.trim() === "" || segment === "." || segment === "..")
-  ) {
-    return { ok: false, reason: `The export folder leaves the vault: ${folder}` };
+  if (HAS_CONTROL_CHAR.test(folder) || segments.some(unsafeSegment)) {
+    return {
+      ok: false,
+      reason: `The export folder leaves the vault or enters a hidden folder: ${folder}`,
+    };
   }
-  if (segments[0]!.toLowerCase() === RESERVED_FOLDER) {
-    return { ok: false, reason: `The export folder is reserved for Attest: ${folder}` };
-  }
-  return { ok: true, folder: segments.map((segment) => segment.trim()).join("/") };
+  return { ok: true, folder };
+}
+
+function unsafeSegment(segment: string): boolean {
+  return (
+    segment === "" ||
+    segment.trim() !== segment ||
+    segment.startsWith(".") ||
+    segment.endsWith(".")
+  );
 }
 
 /**
