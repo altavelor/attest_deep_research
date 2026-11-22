@@ -23,6 +23,7 @@ import {
 import { isIndexProfileSelectable } from "@adapters/settings";
 import { createToolCapabilitySettings, withProbeResults } from "@adapters/settings";
 import { AttestSettings } from "@adapters/settings";
+import { normalizeSettingsState } from "@adapters/settings/state/normalization";
 
 describe("Attest settings", () => {
   it("uses local-first safe defaults when saved data is absent or not current", () => {
@@ -473,6 +474,80 @@ describe("index profile suspension", () => {
     expect(settings.indexProfiles[0]).toMatchObject({
       isSuspended: true,
       suspendedReason: "Embedding capability could not be verified.",
+    });
+  });
+});
+
+describe("legacy API format migration", () => {
+  const timestamps = {
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T00:00:00.000Z",
+  };
+
+  function legacySettings(apiFormat: string, baseUrl: string): AttestSettings {
+    return readSettings(
+      currentSettings({
+        serverProfiles: [
+          {
+            id: "server-legacy",
+            name: "Legacy",
+            apiFormat: apiFormat as AttestSettings["serverProfiles"][number]["apiFormat"],
+            baseUrl,
+            apiKey: "sk-legacy",
+            ...timestamps,
+          },
+        ],
+        chatModelProfiles: [
+          {
+            id: "chat-legacy",
+            name: "Chat",
+            serverProfileId: "server-legacy",
+            modelName: "model",
+            toolsEnabled: true,
+            noteMutationAccess: false,
+            reasoning: { mode: "on", summary: "off" },
+            ...timestamps,
+          },
+        ],
+      }),
+    );
+  }
+
+  it.each([
+    ["ollama", "http://localhost:11434", "http://localhost:11434/v1"],
+    ["ollama", "http://h:11434/api/", "http://h:11434/v1"],
+    ["ollama", "http://h:11434/v1/", "http://h:11434/v1"],
+    ["anthropic", "https://api.anthropic.com/v1", "https://api.anthropic.com/v1"],
+    ["anthropic", "https://api.anthropic.com", "https://api.anthropic.com/v1"],
+    ["bogus", "http://h/v1", "http://h/v1"],
+  ])("moves a %s profile at %s to the OpenAI-compatible %s", (apiFormat, baseUrl, expected) => {
+    expect(legacySettings(apiFormat, baseUrl).serverProfiles[0]).toMatchObject({
+      apiFormat: "openai-compatible",
+      baseUrl: expected,
+    });
+  });
+
+  it("keeps the identity, key and edit time of a migrated profile and is idempotent", () => {
+    const settings = legacySettings("ollama", "http://localhost:11434");
+    const migrated = structuredClone(settings.serverProfiles);
+
+    normalizeSettingsState(settings);
+
+    expect(migrated[0]).toMatchObject({
+      id: "server-legacy",
+      apiFormat: "openai-compatible",
+      baseUrl: "http://localhost:11434/v1",
+      apiKey: "sk-legacy",
+      updatedAt: timestamps.updatedAt,
+    });
+    expect(settings.serverProfiles).toEqual(migrated);
+  });
+
+  it("keeps reasoning on a chat profile whose server used a legacy format", () => {
+    expect(
+      legacySettings("anthropic", "https://api.anthropic.com").chatModelProfiles[0],
+    ).toMatchObject({
+      reasoning: { mode: "on" },
     });
   });
 });

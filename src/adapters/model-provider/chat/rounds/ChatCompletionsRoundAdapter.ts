@@ -88,6 +88,7 @@ export class ChatCompletionsRoundAdapter implements ModelRoundProvider {
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
               reasoningTokens: usage.reasoningTokens,
+              cachedInputTokens: usage.cachedInputTokens,
             },
           }
         : {}),

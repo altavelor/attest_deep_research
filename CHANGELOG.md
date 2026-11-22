@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-22
+
+### Added
+
+- The diagnostic report shows cached input tokens and their share of input tokens, read from
+  Chat Completions `stream_options` usage and from the Responses API.
+
+### Changed
+
+- An in-house OpenAI-compatible client replaces the `openai`, `@anthropic-ai/sdk` and `ollama`
+  SDKs for chat, embeddings and model discovery; every provider now uses the OpenAI-compatible
+  format.
+- Saved Ollama profiles migrate to `http://localhost:11434/v1` (or their host with `/v1`), and
+  saved Anthropic profiles migrate to Anthropic's OpenAI-compatible endpoint with the same key.
+  Anthropic models are also available through OpenRouter.
+- The server profile dialog no longer offers an API format choice.
+- The plugin bundle is about 64% smaller: PDF parsing uses Obsidian's built-in PDF.js, and the
+  provider SDKs are no longer bundled.
+- Ollama servers on a LAN or remote host are reachable on Obsidian Mobile; only loopback
+  endpoints stay blocked there.
+- Code blocks in chat answers, reasoning and tool output use Obsidian's reading-view styling, with
+  the copy button in the top-right corner.
+
+### Fixed
+
+- Desktop requests to a local Ollama server (connection test, model listing, indexing
+  embeddings) no longer fail with "Local model providers are not available on Obsidian Mobile".
+- Server-sent event streams stop promptly on cancel and accept CRLF, CR and comment lines.
+- Provider error messages are redacted before truncation, so an API key cannot leak through a
+  cut-off message.
+
+### Upgrade notes
+
+- Migrated Ollama profiles keep tool calling off until you run the connection test again.
+- Anthropic's OpenAI-compatible endpoint does not return thinking or support prompt caching; use
+  OpenRouter for those features.
+
 ## [0.4.5] - 2026-08-31
 
 ### Changed
@@ -204,7 +241,8 @@ First public release for Obsidian Desktop.
 - Deep Research (planned plan → gather → verify → synthesize → export mode) is not part of this
   release.
 
-[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.4.5...HEAD
+[unreleased]: https://github.com/altavelor/attest_deep_research/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/altavelor/attest_deep_research/compare/0.4.5...0.5.0
 [0.4.5]: https://github.com/altavelor/attest_deep_research/compare/0.4.4...0.4.5
 [0.4.4]: https://github.com/altavelor/attest_deep_research/compare/0.4.3...0.4.4
 [0.4.3]: https://github.com/altavelor/attest_deep_research/compare/0.4.2...0.4.3

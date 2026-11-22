@@ -1,4 +1,5 @@
 import { isRecord } from "@shared";
+import { AttestError } from "@core/errors";
 
 const REMEMBERED_REFUSAL_LIMIT = 64;
 const GENERIC_UNKNOWN_FIELD =
@@ -44,14 +45,15 @@ export function fieldsAfterRefusal(
 }
 
 function rejectsBody(error: unknown): boolean {
-  const status: unknown = isRecord(error) ? error.status : undefined;
+  const status: unknown =
+    error instanceof AttestError && isRecord(error.details) ? error.details.status : undefined;
   return status === 400 || status === 422;
 }
 
 function refusalText(error: unknown): string {
-  if (!isRecord(error)) {
+  if (!(error instanceof AttestError)) {
     return "";
   }
-  const nested: unknown = isRecord(error.error) ? error.error.message : undefined;
+  const nested: unknown = isRecord(error.details) ? error.details.providerMessage : undefined;
   return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }

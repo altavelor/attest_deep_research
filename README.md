@@ -6,9 +6,6 @@
 [![License](https://img.shields.io/github/license/altavelor/attest_deep_research?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/altavelor/attest_deep_research?style=flat-square)](https://github.com/altavelor/attest_deep_research/stargazers)
 
-Downloads count `main.js` downloads across releases as an approximation of installations and
-updates; companion files are excluded. This is not a count of unique users or verified installations.
-
 **Ask your Obsidian vault a question and open the exact source behind every answer.**
 
 Attest turns your vault and optional web sources into cited answers. Instead of searching for the

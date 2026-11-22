@@ -28,12 +28,6 @@ describe("resolveResponsesProviderPolicy", () => {
     });
   });
 
-  it("rejects non-openai-compatible servers", () => {
-    expect(() => resolveResponsesProviderPolicy(input({ apiFormat: "ollama" }))).toThrow(
-      /OpenAI-compatible/,
-    );
-  });
-
   it("rejects when capability detection is missing", () => {
     expect(() => resolveResponsesProviderPolicy(input({ capabilities: undefined }))).toThrow(
       /capability detection/,
@@ -42,7 +36,10 @@ describe("resolveResponsesProviderPolicy", () => {
 
   it("rejects a stale capability probe", () => {
     expect(() => resolveResponsesProviderPolicy(input({ isCapabilityCurrent: false }))).toThrow(
-      /stale/,
+      expect.objectContaining({
+        code: "UNSUPPORTED_CAPABILITY",
+        message: expect.stringContaining("stale"),
+      }),
     );
   });
 

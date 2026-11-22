@@ -261,8 +261,8 @@ export class InstantResearchStrategy implements ResearchStrategy {
 
   /**
    * Record the thinking section only when a thinking attempt actually happened
-   * or the mode was substituted by policy. A deliberately selected Instant run
-   * produces no thinking artifacts, so it leaves the section absent.
+   * or the mode was substituted by policy, seeding a failed attempt's usage for synthesis to add to.
+   * A deliberately selected Instant run produces no thinking artifacts, so it leaves the section absent.
    */
   private applyThinkingDiagnostics(
     diagnostics: ContextDiagnostics,
@@ -290,6 +290,15 @@ export class InstantResearchStrategy implements ResearchStrategy {
           failedThinkingAttempt.maxResultChars,
         ),
       };
+      if (this.deps.reasoningDiagnostics) {
+        diagnostics.reasoning = {
+          ...this.deps.reasoningDiagnostics,
+          summaryRequested: this.deps.reasoning?.summary === "auto",
+          reasoningItemCount: failedThinkingAttempt.reasoningItemCount,
+          continuationRounds: failedThinkingAttempt.continuationRounds,
+          ...failedThinkingAttempt.usage,
+        };
+      }
     } else if (policy.strategy === "instant-fallback") {
       diagnostics.thinking = {
         policyReason: policy.reason,

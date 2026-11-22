@@ -29,7 +29,12 @@ export interface ThinkingModelRound {
   stopReason: "complete" | "tool_calls" | "length" | "error";
   reasoningItemCount: number;
   reasoningSegments: { segmentId: string; chars: number }[];
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
   reportedUsage?: { input: boolean; output: boolean; reasoning: boolean };
   streamedText: boolean;
 }
@@ -105,7 +110,12 @@ export async function collectThinkingModelRound(
     stopReason: result.stopReason,
     reasoningItemCount: result.reasoningItemCount ?? 0,
     reasoningSegments: [...segmentChars].map(([segmentId, chars]) => ({ segmentId, chars })),
-    usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    usage: result.usage ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cachedInputTokens: 0,
+    },
     ...(result.usage
       ? {
           reportedUsage: {

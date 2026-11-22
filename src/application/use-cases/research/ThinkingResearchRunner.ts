@@ -90,7 +90,12 @@ export interface ThinkingResearchSuccess {
   reasoningItemCount: number;
   reasoningSegments: ReasoningSegmentAttribution[];
   continuationRounds: number;
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
 }
 
 export interface ThinkingResearchFailure {
@@ -110,7 +115,12 @@ export interface ThinkingResearchFailure {
   reasoningItemCount: number;
   reasoningSegments: ReasoningSegmentAttribution[];
   continuationRounds: number;
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
 }
 
 const DEFAULT_MAX_ROUNDS = 30;
@@ -171,7 +181,7 @@ export class ThinkingResearchRunner {
     let reasoningItemCount = 0;
     const reasoningSegments: ReasoningSegmentAttribution[] = [];
     let continuationRounds = 0;
-    const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+    const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 };
 
     const failure = (reason: ThinkingFallbackReason): ThinkingResearchFailure => ({
       ok: false,
@@ -249,6 +259,7 @@ export class ThinkingResearchRunner {
         usage.inputTokens += response.usage.inputTokens;
         usage.outputTokens += response.usage.outputTokens;
         usage.reasoningTokens += response.usage.reasoningTokens;
+        usage.cachedInputTokens += response.usage.cachedInputTokens;
         toolOutputs = undefined;
         stopReasons.push(response.stopReason);
         if (response.stopReason === "length" || response.stopReason === "error") {

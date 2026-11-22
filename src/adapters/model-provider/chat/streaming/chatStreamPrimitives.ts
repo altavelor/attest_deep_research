@@ -1,5 +1,5 @@
 import { isRecord } from "@shared";
-import { ChatToolCall, ModelStreamEvent } from "@core/agent";
+import { ChatToolCall, ModelRoundResult, ModelStreamEvent } from "@core/agent";
 
 export interface ToolCallDelta {
   index?: number;
@@ -124,12 +124,16 @@ function parseOpenAiToolCallDeltas(value: unknown): ToolCallDelta[] {
           isRecord(toolCall.function) && typeof toolCall.function.name === "string"
             ? toolCall.function.name
             : undefined,
-        argumentsText:
-          isRecord(toolCall.function) && typeof toolCall.function.arguments === "string"
-            ? toolCall.function.arguments
-            : undefined,
+        argumentsText: isRecord(toolCall.function)
+          ? toolCallArgumentsText(toolCall.function.arguments)
+          : undefined,
       }))
     : [];
+}
+/** Accepts arguments as a JSON string or, as llama.cpp sends them, as an already parsed object. */
+function toolCallArgumentsText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  return isRecord(value) ? JSON.stringify(value) : undefined;
 }
 function parseToolArguments(value: string): Record<string, unknown> {
   if (!value.trim()) return {};
@@ -141,43 +145,26 @@ function parseToolArguments(value: string): Record<string, unknown> {
   }
 }
 
-export type UsageEvent = Extract<ModelStreamEvent, { type: "usage" }>;
-
 /**
- * Reads the token usage an OpenAI-compatible server reports on a stream chunk,
- * with or without choices. Returns undefined when the chunk carries no usable
- * input or output count, so a provider that reports nothing stays unreported.
+ * Reads the token usage a Chat Completions chunk reports. A count counts only as a non-negative safe
+ * integer, digit strings included, and a chunk without a usable prompt or completion count yields
+ * undefined so an earlier report stands; cached prompt tokens never exceed the prompt tokens.
  */
-export function parseOpenAiChatUsage(chunk: unknown): UsageEvent | undefined {
+export function parseChatCompletionsUsage(chunk: unknown): ModelRoundResult["usage"] {
   if (!isRecord(chunk) || !isRecord(chunk.usage)) return undefined;
-  const details = isRecord(chunk.usage.completion_tokens_details)
-    ? chunk.usage.completion_tokens_details
-    : {};
-  return usageEvent(
-    chunk.usage.prompt_tokens,
-    chunk.usage.completion_tokens,
-    details.reasoning_tokens,
-  );
-}
-
-/**
- * Builds a usage event from untrusted provider counts. Counts that are not
- * finite non-negative safe integers are ignored, and the event is withheld
- * when neither the input nor the output count is usable.
- */
-export function usageEvent(
-  input: unknown,
-  output: unknown,
-  reasoning?: unknown,
-): UsageEvent | undefined {
-  const inputTokens = tokenCount(input);
-  const outputTokens = tokenCount(output);
+  const usage = chunk.usage;
+  const inputTokens = tokenCount(usage.prompt_tokens);
+  const outputTokens = tokenCount(usage.completion_tokens);
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  const completionDetails = isRecord(usage.completion_tokens_details)
+    ? usage.completion_tokens_details
+    : {};
+  const promptDetails = isRecord(usage.prompt_tokens_details) ? usage.prompt_tokens_details : {};
   return {
-    type: "usage",
     inputTokens: inputTokens ?? 0,
     outputTokens: outputTokens ?? 0,
-    reasoningTokens: tokenCount(reasoning) ?? 0,
+    reasoningTokens: tokenCount(completionDetails.reasoning_tokens) ?? 0,
+    cachedInputTokens: Math.min(tokenCount(promptDetails.cached_tokens) ?? 0, inputTokens ?? 0),
   };
 }
 

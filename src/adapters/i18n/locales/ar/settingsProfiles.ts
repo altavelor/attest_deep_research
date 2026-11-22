@@ -59,17 +59,11 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
   "settings.serverModal.name.name": "الاسم",
   "settings.serverModal.name.desc":
     "اسم مقروء يظهر في الإعدادات ومحددات النماذج. بحد أقصى {max} حرفًا.",
-  "settings.serverModal.apiFormat.name": "صيغة API",
-  "settings.serverModal.apiFormat.desc": "صيغة الطلب والاستجابة التي يستخدمها هذا المزوّد.",
-  "settings.serverModal.apiFormat.openaiCompatible": "متوافق مع OpenAI",
-  "settings.serverModal.apiFormat.ollama": "Ollama",
-  "settings.serverModal.apiFormat.anthropic": "Anthropic",
   "settings.serverModal.baseUrl.name": "عنوان URL الأساسي",
   "settings.serverModal.baseUrl.desc":
     "عنوان URL لنقطة نهاية المزوّد، مثل عنوان API الأساسي لـ OpenRouter أو Ollama أو Anthropic.",
   "settings.serverModal.apiKey.name": "مفتاح API",
-  "settings.serverModal.apiKey.desc":
-    "اختياري. يُستخدم كرمز حامل للمزوّدين الذين يتطلبون المصادقة.",
+  "settings.serverModal.apiKey.desc": "اختياري. يُستخدم كرمز حامل للمزوّدين الذين يتطلبون المصادقة.",
 
   "settings.modelProfileModal.editTitle.chat": "تحرير ملف نموذج المحادثة",
   "settings.modelProfileModal.editTitle.embedding": "تحرير ملف نموذج التضمين",

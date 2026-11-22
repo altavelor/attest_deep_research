@@ -19,15 +19,16 @@ function server(apiFormat: ServerProfile["apiFormat"], baseUrl: string): ServerP
 describe("model provider runtime", () => {
   it("uses native fetch only for desktop streaming and requestUrl for buffered requests", () => {
     const cloud = server("openai-compatible", "https://api.example.test/v1");
+    const ollama = server("openai-compatible", "http://localhost:11434");
 
     expect(resolveProviderFetch(cloud, "streaming", true)).toBe(obsidianRequestFetch);
     expect(resolveProviderFetch(cloud, "buffered", true)).toBe(obsidianRequestFetch);
     expect(resolveProviderFetch(cloud, "streaming", false)).not.toBe(obsidianRequestFetch);
     expect(resolveProviderFetch(cloud, "buffered", false)).toBe(obsidianRequestFetch);
+    expect(resolveProviderFetch(ollama, "buffered", false)).toBe(obsidianRequestFetch);
   });
 
   it.each([
-    server("ollama", "https://remote-ollama.example.test"),
     server("openai-compatible", "http://localhost:1234/v1"),
     server("openai-compatible", "http://127.23.4.5:1234/v1"),
     server("openai-compatible", "http://[::1]:1234/v1"),
@@ -43,7 +44,10 @@ describe("model provider runtime", () => {
     );
   });
 
-  it("does not classify LAN or cloud OpenAI-compatible endpoints as local", () => {
+  it("does not classify LAN or cloud endpoints as local regardless of API format", () => {
+    expect(isMobileLocalProvider(server("openai-compatible", "http://192.168.1.10:11434"))).toBe(
+      false,
+    );
     expect(isMobileLocalProvider(server("openai-compatible", "http://192.168.1.10:1234/v1"))).toBe(
       false,
     );

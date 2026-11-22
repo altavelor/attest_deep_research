@@ -28,7 +28,9 @@ export class TimelineResources {
     return this.listeners.signal;
   }
 
+  /** Renders Markdown off-screen and moves it into `targetEl`, which gets Obsidian's reading-view styling. */
   renderMarkdown(markdown: string, targetEl: HTMLElement): void {
+    targetEl.addClass("markdown-rendered");
     const stagingEl = targetEl.ownerDocument.createElement("div");
     const adopt = (): void => {
       if (this.disposed) return;

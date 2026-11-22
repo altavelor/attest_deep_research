@@ -21,12 +21,12 @@ describe("sub-agent observation through the execution adapter", () => {
               },
             ],
             stopReason: "tool_calls",
-            usage: { inputTokens: 100, outputTokens: 20, reasoningTokens: 5 },
+            usage: { inputTokens: 100, outputTokens: 20, reasoningTokens: 5, cachedInputTokens: 0 },
           }
         : {
             items: [{ type: "text", text: "Final answer." }],
             stopReason: "complete",
-            usage: { inputTokens: 300, outputTokens: 40, reasoningTokens: 0 },
+            usage: { inputTokens: 300, outputTokens: 40, reasoningTokens: 0, cachedInputTokens: 0 },
           },
     );
     const searchProvider = new FakeSearchProvider([

@@ -66,12 +66,6 @@ export const settingsProfiles: EnSettingsProfilesMessages = {
   "settings.serverModal.name.name": "Nom",
   "settings.serverModal.name.desc":
     "Nom lisible affiché dans les paramètres et les sélecteurs de modèle. {max} caractères maximum.",
-  "settings.serverModal.apiFormat.name": "Format d’API",
-  "settings.serverModal.apiFormat.desc":
-    "Format de requête et de réponse utilisé par ce fournisseur.",
-  "settings.serverModal.apiFormat.openaiCompatible": "Compatible OpenAI",
-  "settings.serverModal.apiFormat.ollama": "Ollama",
-  "settings.serverModal.apiFormat.anthropic": "Anthropic",
   "settings.serverModal.baseUrl.name": "URL de base",
   "settings.serverModal.baseUrl.desc":
     "URL du point d’accès du fournisseur, par exemple une base d’API OpenRouter, Ollama ou Anthropic.",

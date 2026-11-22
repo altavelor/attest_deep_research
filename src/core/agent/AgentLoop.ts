@@ -72,7 +72,12 @@ export interface AgentLoopResult {
   reasoningSummaries: string[];
   reasoningItemCount: number;
   continuationRounds: number;
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
 }
 
 const DEFAULT_MAX_ROUNDS = 30;
@@ -93,7 +98,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
   const reasoningSummaries: string[] = [];
   let reasoningItemCount = 0;
   let continuationRounds = 0;
-  const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+  const usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0 };
   const modelRound = options.modelRound;
   let continuation: ProviderContinuationState | undefined;
   let toolOutputs: ModelToolOutput[] | undefined;
@@ -121,6 +126,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
       usage.inputTokens += roundResult.usage.inputTokens;
       usage.outputTokens += roundResult.usage.outputTokens;
       usage.reasoningTokens += roundResult.usage.reasoningTokens;
+      usage.cachedInputTokens += roundResult.usage.cachedInputTokens;
       toolOutputs = continuation ? [] : undefined;
 
       answerText = roundResult.content;
@@ -270,7 +276,12 @@ async function collectModelRound(options: {
   continuation?: ProviderContinuationState;
   reasoningSummaries: string[];
   reasoningItemCount: number;
-  usage: { inputTokens: number; outputTokens: number; reasoningTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedInputTokens: number;
+  };
   stopReason: "complete" | "tool_calls" | "length" | "error";
   streamedText: boolean;
 }> {
@@ -346,7 +357,12 @@ async function collectModelRound(options: {
     continuation: result.continuation,
     reasoningSummaries,
     reasoningItemCount: result.reasoningItemCount ?? 0,
-    usage: result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    usage: result.usage ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cachedInputTokens: 0,
+    },
     stopReason: result.stopReason,
     streamedText: streamedText.length > 0 || content.length > 0,
   };

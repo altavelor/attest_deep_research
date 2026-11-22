@@ -42,6 +42,7 @@ describe("resolveResearchExecutionPolicy", () => {
       const policy = resolveResearchExecutionPolicy({
         mode: "thinking",
         capabilities,
+        apiFormat: "openai-compatible",
       });
       expect(policy).toMatchObject({ strategy: "thinking", reason: "thinking-eligible" });
       expect(policy.bootstrapChoice).toEqual({ type: "auto" });
@@ -61,19 +62,6 @@ describe("resolveResearchExecutionPolicy", () => {
         capabilities: { ...fullCapabilities, parallelCalls: false },
       }).parallelToolCalls,
     ).toBe(false);
-  });
-
-  it("keeps Ollama on deterministic fallback even with manual-looking flags", () => {
-    expect(
-      resolveResearchExecutionPolicy({
-        mode: "thinking",
-        capabilities: fullCapabilities,
-        apiFormat: "ollama",
-      }),
-    ).toMatchObject({
-      strategy: "instant-fallback",
-      reason: "provider-tool-control-unsupported",
-    });
   });
 
   it("describes Deep Research without selecting an implementation", () => {

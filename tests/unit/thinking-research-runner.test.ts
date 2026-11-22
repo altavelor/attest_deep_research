@@ -442,6 +442,57 @@ describe("ThinkingResearchRunner", () => {
     ).toBe(true);
   });
 
+  it("only appends to the prompt prefix and keeps one tool set across rounds", async () => {
+    const search = tool(
+      "search_web",
+      vi.fn().mockResolvedValue({ ok: true, value: { results: [{ text: "y".repeat(40) }] } }),
+    );
+    const seen: Array<Pick<ModelRoundRequest, "messages" | "tools">> = [];
+    const roundProvider: ModelRoundProvider = {
+      listModels: async () => ["m"],
+      runRound: vi.fn(async (request: ModelRoundRequest) => {
+        seen.push(structuredClone({ messages: request.messages, tools: request.tools }));
+        return seen.length < 3
+          ? {
+              items: [
+                {
+                  type: "toolCall" as const,
+                  call: {
+                    id: `c${seen.length}`,
+                    name: "search_web",
+                    arguments: { q: seen.length },
+                  },
+                },
+              ],
+              stopReason: "tool_calls" as const,
+            }
+          : { items: [{ type: "text" as const, text: "final" }], stopReason: "complete" as const };
+      }),
+    };
+    const result = await new ThinkingResearchRunner({
+      modelRound: roundProvider,
+      model: "m",
+      messages: [
+        { role: "system", content: "sys" },
+        { role: "user", content: "q" },
+      ],
+      tools: new ToolManager([search.handler, tool("read_note").handler]),
+      policy: policy(["search_web"]),
+      maxResultChars: 100,
+    }).run();
+
+    expect(result).toMatchObject({ ok: true, answerText: "final" });
+    expect(seen).toHaveLength(3);
+    expect(seen[0].tools).toHaveLength(2);
+    expect(seen[2].messages.at(-1)?.content).toMatch(/stop calling tools/i);
+    for (let index = 1; index < seen.length; index += 1) {
+      const previous = seen[index - 1].messages;
+      expect(seen[index].messages.length).toBeGreaterThan(previous.length);
+      expect(seen[index].messages.slice(0, previous.length)).toEqual(previous);
+      expect(seen[index].tools).toEqual(seen[0].tools);
+    }
+  });
+
   it("treats consecutive fetch_web_page reads as progress, not a loop", async () => {
     const search = tool(
       "search_index",

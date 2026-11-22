@@ -94,7 +94,7 @@ describe("MapSourcesTool", () => {
       searchBudgetRejections: 0,
       usedSynthesisFallback: false,
       answerChars: 16,
-      usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0 },
+      usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0, cachedInputTokens: 0 },
     };
     const completed: MapSourcesBatchState = {
       state: "completed",

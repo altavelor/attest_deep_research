@@ -1,4 +1,4 @@
-import { ChatModelProvider, ChatRequest, ModelRoundProvider } from "@core/agent";
+import { ChatModelProvider, ChatRequest, ModelRoundProvider, ModelRoundResult } from "@core/agent";
 import { ResearchAnswer } from "@core/answer";
 import type { ConversationRegistryPromptView } from "@core/chat/sourceRegistry";
 import { buildAnswerDiagnostics } from "./strategies/answerDiagnostics";
@@ -251,9 +251,15 @@ export class AnswerSynthesisService {
       this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
         reasoningItemCount: result.reasoningItemCount ?? 0,
         continuationRounds: 0,
-        ...(result.usage ?? { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }),
+        ...(result.usage ?? {
+          inputTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+        }),
       });
     } else {
+      let usage: ModelRoundResult["usage"];
       for await (const chunk of this.chatModel.streamChat({
         model: this.chatModelName,
         temperature: this.chatOptions.temperature,
@@ -261,6 +267,16 @@ export class AnswerSynthesisService {
         messages,
         signal: input.signal,
       })) {
+        for (const event of chunk.events ?? []) {
+          if (event.type === "usage") {
+            usage = {
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+              reasoningTokens: event.reasoningTokens,
+              cachedInputTokens: event.cachedInputTokens,
+            };
+          }
+        }
         if (chunk.content) {
           answerText += chunk.content;
           yield { type: "delta", content: chunk.content };
@@ -269,6 +285,13 @@ export class AnswerSynthesisService {
         if (chunk.isComplete) {
           break;
         }
+      }
+      if (usage) {
+        this.applyReasoningDiagnostics(input.contextDiagnostics, reasoning, {
+          reasoningItemCount: 0,
+          continuationRounds: 0,
+          ...usage,
+        });
       }
     }
 
@@ -402,6 +425,7 @@ export class AnswerSynthesisService {
     });
   }
 
+  /** Writes the synthesis reasoning diagnostics, adding its counters to those an earlier attempt of the same run already recorded. */
   private applyReasoningDiagnostics(
     diagnostics: ContextDiagnostics | undefined,
     reasoning: AnswerSynthesisServiceOptions["reasoning"],
@@ -412,14 +436,22 @@ export class AnswerSynthesisService {
       | "inputTokens"
       | "outputTokens"
       | "reasoningTokens"
+      | "cachedInputTokens"
     >,
   ): void {
     if (!diagnostics || !this.reasoningDiagnostics) return;
+    const previous = diagnostics.reasoning;
+    const total = (key: keyof typeof counts): number => counts[key] + (previous?.[key] ?? 0);
     diagnostics.reasoning = {
       ...this.reasoningDiagnostics,
       ...(reasoning?.effort ? { configuredEffort: reasoning.effort } : {}),
       summaryRequested: reasoning?.summary === "auto",
-      ...counts,
+      reasoningItemCount: total("reasoningItemCount"),
+      continuationRounds: total("continuationRounds"),
+      inputTokens: total("inputTokens"),
+      outputTokens: total("outputTokens"),
+      reasoningTokens: total("reasoningTokens"),
+      cachedInputTokens: total("cachedInputTokens"),
     };
   }
 }

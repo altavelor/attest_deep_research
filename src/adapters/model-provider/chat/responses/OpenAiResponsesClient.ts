@@ -53,7 +53,6 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
   constructor(options: OpenAiResponsesClientOptions) {
     this.http = new ProviderHttpClient({
       ...options,
-      apiFormat: "openai-compatible",
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
       unavailableMessage: "The Responses provider is unavailable.",
     });
@@ -150,7 +149,7 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
       }
       openReasoning.clear();
     };
-    for await (const raw of parseServerSentEvents(response.body)) {
+    for await (const raw of parseServerSentEvents(response.body, request.signal)) {
       if (raw === "[DONE]") {
         if (!terminal) throw protocolError("responses-done-before-terminal");
         break;

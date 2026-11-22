@@ -25,6 +25,16 @@ import { FakeChatModel, FakeRetriever, FakeSearchProvider } from "../support/res
 import type { SearchProvider, SearchProviderResult } from "@application/ports/web";
 import { ChatModelProvider } from "@core/agent";
 import { MemoryContextFiles } from "../support/noteFakes";
+function usageEvent(inputTokens: number, cachedInputTokens: number) {
+  return {
+    type: "usage" as const,
+    inputTokens,
+    outputTokens: 1,
+    reasoningTokens: 0,
+    cachedInputTokens,
+  };
+}
+
 describe("buildResearchPrompt", () => {
   it("includes the claim-sensitive citation policy exactly once in the instant prompt pair", () => {
     const system = buildResearchSystemPrompt();
@@ -660,9 +670,22 @@ describe("ResearchService", () => {
       async *streamChat() {
         calls += 1;
         if (calls === 1) {
+          yield {
+            content: "",
+            isComplete: true,
+            toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
+            events: [usageEvent(500, 300), { type: "complete", stopReason: "tool_calls" }],
+          };
+          return;
+        }
+        if (calls === 2) {
           throw new Error("provider exploded during tool round");
         }
-        yield { content: "Deterministic fallback answer", isComplete: true };
+        yield {
+          content: "Deterministic fallback answer",
+          isComplete: true,
+          events: [usageEvent(100, 60), { type: "complete", stopReason: "complete" }],
+        };
       },
     };
     const service = new ResearchService({
@@ -672,6 +695,7 @@ describe("ResearchService", () => {
       retriever: new FakeRetriever(emptyRetrieval()),
       chatModel,
       chatModelName: "qwen",
+      reasoningDiagnostics: { protocol: "chat-completions", summaryAvailable: false },
       toolCapabilities: {
         calls: true,
         choiceRequired: true,
@@ -697,6 +721,7 @@ describe("ResearchService", () => {
     expect(complete.answer.contextDiagnostics).toMatchObject({
       executionStrategy: "instant-fallback",
       thinking: { fallbackReason: "provider-error" },
+      reasoning: { inputTokens: 600, cachedInputTokens: 360 },
     });
   });
 
@@ -714,13 +739,18 @@ describe("ResearchService", () => {
             content: "",
             isComplete: true,
             toolCalls: [{ id: "c1", name: "search_index", arguments: { query: "q" } }],
+            events: [usageEvent(500, 300), { type: "complete", stopReason: "tool_calls" }],
           };
           return;
         }
         if (calls === 2) {
           throw new Error("provider exploded after gathering evidence");
         }
-        yield { content: "Best-effort answer from partial results [idx-1]", isComplete: true };
+        yield {
+          content: "Best-effort answer from partial results [idx-1]",
+          isComplete: true,
+          events: [usageEvent(100, 60), { type: "complete", stopReason: "complete" }],
+        };
       },
     };
     const service = new ResearchService({
@@ -734,6 +764,7 @@ describe("ResearchService", () => {
       }),
       chatModel,
       chatModelName: "qwen",
+      reasoningDiagnostics: { protocol: "chat-completions", summaryAvailable: false },
       toolCapabilities: {
         calls: true,
         choiceRequired: true,
@@ -767,6 +798,10 @@ describe("ResearchService", () => {
     expect(complete.answer).toMatchObject({
       isFallback: true,
       fallbackReason: "provider-error",
+    });
+    expect(complete.answer.contextDiagnostics?.reasoning).toMatchObject({
+      inputTokens: 600,
+      cachedInputTokens: 360,
     });
 
     expect(complete.answer.evidence?.map((chunk) => chunk.id)).toContain("idx-1");
@@ -883,7 +918,7 @@ describe("ResearchService", () => {
       chatModel,
       chatModelName: "qwen",
 
-      apiFormat: "ollama",
+      apiFormat: "openai-compatible",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({ "Tools/note.md": "Tool-provided context" }),
@@ -1190,7 +1225,7 @@ describe("ResearchService", () => {
       chatModel,
       chatModelName: "qwen",
 
-      apiFormat: "ollama",
+      apiFormat: "openai-compatible",
       toolsEnabled: true,
       noteTools: new NoteToolService({
         files: new MemoryContextFiles({

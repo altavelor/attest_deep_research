@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseChatCompletionsUsage,
   parseOpenAiChatDelta,
   textFromEvents,
   ToolCallBuilder,
@@ -87,6 +88,14 @@ describe("parseOpenAiChatDelta", () => {
       reasoningVisibility: "text",
     });
   });
+
+  it("serializes tool-call arguments a provider sends as an object", () => {
+    const parsed = parseOpenAiChatDelta({
+      choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: { query: "x" } } }] } }],
+    });
+
+    expect(parsed.toolCallDeltas[0]?.argumentsText).toBe('{"query":"x"}');
+  });
 });
 
 describe("textFromEvents", () => {
@@ -98,5 +107,21 @@ describe("textFromEvents", () => {
         { type: "text-delta", text: " world" },
       ]),
     ).toBe("Hello world");
+  });
+});
+
+describe("parseChatCompletionsUsage", () => {
+  it("clamps cached tokens to the prompt tokens and zeroes invalid counts", () => {
+    expect(
+      parseChatCompletionsUsage({
+        choices: [],
+        usage: {
+          prompt_tokens: 40,
+          completion_tokens: "many",
+          completion_tokens_details: { reasoning_tokens: 3 },
+          prompt_tokens_details: { cached_tokens: 90 },
+        },
+      }),
+    ).toEqual({ inputTokens: 40, outputTokens: 0, reasoningTokens: 3, cachedInputTokens: 40 });
   });
 });

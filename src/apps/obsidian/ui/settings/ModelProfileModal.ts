@@ -178,11 +178,7 @@ export class ModelProfileModal<TProfile extends ModelProfile> extends Modal {
           this.modelName = "";
           this.reasoningCapabilities = undefined;
           this.toolCapabilitySettings = createToolCapabilitySettings(false);
-          if (this.selectedServer()?.apiFormat !== "openai-compatible") {
-            this.reasoningMode = "off";
-          } else {
-            this.reasoningMode = "auto";
-          }
+          this.reasoningMode = "auto";
           this.refreshModelControl();
         });
       });

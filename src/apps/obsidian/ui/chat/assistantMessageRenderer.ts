@@ -38,7 +38,7 @@ export function renderAssistantMessageContent(
   if (message.isFallback) {
     renderFallbackBanner(contentEl, options.t, message.fallbackReason);
   }
-  const answerEl = contentEl.createDiv({ cls: "attest-chat__answer-content" });
+  const answerEl = contentEl.createDiv({ cls: "attest-chat__answer-content markdown-rendered" });
   renderAssistantAnswer(answerEl, message, options, hasWorkflow);
 }
 

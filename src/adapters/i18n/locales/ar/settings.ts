@@ -29,8 +29,7 @@ export const settings: EnSettingsMessages = {
   "settings.retrieval.includeBacklinks.name": "تضمين الروابط العكسية",
   "settings.retrieval.includeBacklinks.desc":
     "استخدام الروابط العكسية بخطوة واحدة كمرشحات في الرسم البياني. لا يتم تتبع ملاحظات الروابط العكسية أبعد من ذلك.",
-  "settings.retrieval.expandFilteredContextThroughLinks.name":
-    "توسيع الملفات المُرشَّحة عبر الروابط",
+  "settings.retrieval.expandFilteredContextThroughLinks.name": "توسيع الملفات المُرشَّحة عبر الروابط",
   "settings.retrieval.expandFilteredContextThroughLinks.desc":
     "عندما تكون الملفات المرفقة في وضع التصفية، ابحث أيضًا في جيرانها المرتبطين في الرسم البياني.",
   "settings.retrieval.graphDepth.name": "عمق الرسم البياني",

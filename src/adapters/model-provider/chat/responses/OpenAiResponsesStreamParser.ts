@@ -105,11 +105,14 @@ export function parseResponsesTerminalEvent(value: unknown): ParsedResponsesRoun
 function parseUsage(value: unknown): ModelRoundResult["usage"] {
   const usage = asRecord(value);
   const details = asRecord(usage?.output_tokens_details);
+  const inputDetails = asRecord(usage?.input_tokens_details);
   if (!usage) return undefined;
+  const inputTokens = numberOrZero(usage.input_tokens);
   return {
-    inputTokens: numberOrZero(usage.input_tokens),
+    inputTokens,
     outputTokens: numberOrZero(usage.output_tokens),
     reasoningTokens: numberOrZero(details?.reasoning_tokens),
+    cachedInputTokens: Math.min(numberOrZero(inputDetails?.cached_tokens), inputTokens),
   };
 }
 
