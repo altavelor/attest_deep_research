@@ -1,5 +1,3 @@
-import type { BranchExecution } from "./types";
-
 export type HypothesisStatus = "untested" | "supported" | "disconfirmed" | "inconclusive";
 
 export interface ResearchHypothesis {
@@ -57,16 +55,6 @@ export interface ResearchNote {
   citationTokens: readonly string[];
   decision: string;
   nextAction: string;
-}
-
-export interface ResearchDiscovery {
-  hypotheses: readonly ResearchHypothesis[];
-  tests: readonly ResearchTest[];
-  observations: readonly ResearchObservation[];
-  cycles: readonly ResearchCycle[];
-  notes: readonly ResearchNote[];
-  executions: readonly BranchExecution[];
-  omissions: readonly string[];
 }
 
 export interface ObservationDecisionPayload {

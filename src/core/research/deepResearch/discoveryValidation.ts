@@ -1,12 +1,11 @@
 import type {
   ResearchCycle,
-  ResearchDiscovery,
   ResearchHypothesis,
   ResearchNote,
   ResearchObservation,
   ResearchTest,
 } from "./discoveryTypes";
-import type { BranchExecution, ResearchPlan } from "./types";
+import type { BranchExecution, ResearchDiscovery, ResearchPlan } from "./types";
 import { MAX_RESEARCH_NOTES } from "./limits";
 import { isResearchId, isRevision } from "./planValidation";
 import { readExecution } from "./executionValidation";

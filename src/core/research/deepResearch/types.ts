@@ -1,4 +1,10 @@
-import type { ResearchDiscovery } from "./discoveryTypes";
+import type {
+  ResearchCycle,
+  ResearchHypothesis,
+  ResearchNote,
+  ResearchObservation,
+  ResearchTest,
+} from "./discoveryTypes";
 
 export type ResearchPhase =
   | "planning"
@@ -274,3 +280,13 @@ export type PlanDecisionPayload =
   | { action: "regenerate"; instruction: string | null };
 
 export type ResearchRuleResult<T> = { ok: true; value: T } | { ok: false; message: string };
+
+export interface ResearchDiscovery {
+  hypotheses: readonly ResearchHypothesis[];
+  tests: readonly ResearchTest[];
+  observations: readonly ResearchObservation[];
+  cycles: readonly ResearchCycle[];
+  notes: readonly ResearchNote[];
+  executions: readonly BranchExecution[];
+  omissions: readonly string[];
+}

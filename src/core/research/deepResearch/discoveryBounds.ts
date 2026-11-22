@@ -1,4 +1,5 @@
-import type { ResearchDiscovery, ResearchNote } from "./discoveryTypes";
+import type { ResearchNote } from "./discoveryTypes";
+import type { ResearchDiscovery } from "./types";
 import { boundNotes, currentHypotheses } from "./discovery";
 
 export const MAX_RESEARCH_HYPOTHESES = 10;

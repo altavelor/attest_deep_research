@@ -1,5 +1,5 @@
-import type { ResearchDiscovery, ResearchHypothesis } from "./discoveryTypes";
-import type { ResearchClaim } from "./types";
+import type { ResearchHypothesis } from "./discoveryTypes";
+import type { ResearchClaim, ResearchDiscovery } from "./types";
 import { currentHypotheses } from "./discovery";
 import { MAX_CLAIM_TOKENS } from "./verification";
 

@@ -16,12 +16,12 @@ import {
 } from "./executionValidation";
 import { readBrief, readVerification } from "./briefValidation";
 import { readDiscovery } from "./discoveryValidation";
-import type { ResearchDiscovery } from "./discoveryTypes";
 import type {
   DeepResearchSection,
   PendingDecision,
   ResearchBranch,
   ResearchBrief,
+  ResearchDiscovery,
   ResearchHistoryEntry,
   ResearchLimits,
   ResearchPhase,
