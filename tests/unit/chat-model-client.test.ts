@@ -1,6 +1,12 @@
 import { ChatModelClient } from "@adapters/model-provider";
 import { AttestError } from "@core/errors";
 import { chunkedStream } from "../support/streams";
+import { runPastDeadline } from "../support/timers";
+
+vi.mock("@shared", async (importOriginal) => {
+  const { withGlobalTimers } = await import("../support/timers");
+  return withGlobalTimers(await importOriginal<typeof import("@shared")>());
+});
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -487,7 +493,7 @@ describe("ChatModelClient", () => {
     expect(body).not.toHaveProperty("tool_choice");
   });
 
-  it("reads the trailing usage chunk after a tool_calls finish before completing", async () => {
+  it("reads past a frame without usage to the usage trailer after a tool_calls finish", async () => {
     const onCancel = vi.fn();
     const fetchMock = vi
       .fn()
@@ -496,6 +502,7 @@ describe("ChatModelClient", () => {
           chunkedStream(
             [
               'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_note","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+              'data: {"choices":[{"delta":{"content":"late"}}]}\n\n',
               'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":60}}}\n\n',
             ],
             onCancel,
@@ -523,6 +530,42 @@ describe("ChatModelClient", () => {
     });
     expect(events[2]).toEqual({ type: "complete", stopReason: "tool_calls" });
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("gives up on a missing usage trailer and cancels the open stream", async () => {
+    const onCancel = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          chunkedStream(
+            [
+              'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_note","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+            ],
+            onCancel,
+          ),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      );
+    const client = new ChatModelClient({ baseUrl: "http://localhost:1234/v1", fetch: fetchMock });
+
+    const chunks = await runPastDeadline(2_000, async () => {
+      const received = [];
+      for await (const chunk of client.streamChat({
+        model: "local-chat",
+        messages: [{ role: "user", content: "Read note" }],
+      })) {
+        received.push(chunk);
+      }
+      return received;
+    });
+
+    expect(chunks.flatMap((chunk) => chunk.events ?? []).map((event) => event.type)).toEqual([
+      "tool-call-delta",
+      "complete",
+    ]);
+    expect(chunks.at(-1)?.toolCalls).toHaveLength(1);
+    expect(onCancel).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }));
   });
 
   it("completes a tool_calls finish at once when the retry dropped stream_options", async () => {

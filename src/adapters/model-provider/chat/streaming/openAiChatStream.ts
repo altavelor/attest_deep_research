@@ -1,4 +1,4 @@
-import { isRecord } from "@shared";
+import { isRecord, scheduleTimeout, type ScheduledTimeout } from "@shared";
 import { ChatRequest, ChatResponseChunk, ModelRoundResult, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import type { ProviderHttpClient } from "../../common/http";
@@ -22,12 +22,27 @@ interface OpenAiChatStreamOptions {
   onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
 }
 
-export async function* streamOpenAiCompatibleChat({
-  http,
-  request,
-  dialect,
-  onReasoningObserved,
-}: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
+const USAGE_TRAILER_TIMEOUT_MS = 2_000;
+
+/**
+ * Streams one Chat Completions round as chat chunks. The stream is read under its own
+ * abort signal, linked to the request's, so a missing usage trailer can be given up on.
+ */
+export async function* streamOpenAiCompatibleChat(
+  options: OpenAiChatStreamOptions,
+): AsyncIterable<ChatResponseChunk> {
+  const streamAbort = linkedAbortController(options.request.signal);
+  try {
+    yield* readChatCompletionsRound(options, streamAbort.controller);
+  } finally {
+    streamAbort.dispose();
+  }
+}
+
+async function* readChatCompletionsRound(
+  { http, request, dialect, onReasoningObserved }: OpenAiChatStreamOptions,
+  streamAbort: AbortController,
+): AsyncIterable<ChatResponseChunk> {
   const baseBody = {
     model: request.model,
     messages: request.messages.map(mapOpenAiMessage),
@@ -46,7 +61,7 @@ export async function* streamOpenAiCompatibleChat({
   };
 
   const open = (body: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> =>
-    openChatCompletionsStream(http, body, request.signal);
+    openChatCompletionsStream(http, body, streamAbort.signal);
 
   let stream: AsyncIterable<Record<string, unknown>>;
   let attempt: Record<string, unknown> = optionalFields;
@@ -76,6 +91,8 @@ export async function* streamOpenAiCompatibleChat({
   let finishedWithToolCalls = false;
   const awaitsUsageChunk = "stream_options" in attempt;
   let usage: ModelRoundResult["usage"];
+  let usageTrailerDeadline: ScheduledTimeout | undefined;
+  let usageTrailerExpired = false;
   const observedDialects = new Set<string>();
   const observe = (dialect: string): void => {
     if (observedDialects.has(dialect)) return;
@@ -86,7 +103,10 @@ export async function* streamOpenAiCompatibleChat({
   try {
     for await (const chunk of stream) {
       usage = parseChatCompletionsUsage(chunk) ?? usage;
-      if (finishedWithToolCalls) break;
+      if (finishedWithToolCalls) {
+        if (usage) break;
+        continue;
+      }
       const parsed = parseOpenAiChatDelta(chunk);
       if (parsed.finishReason === "length") terminalStopReason = "length";
       else if (
@@ -145,12 +165,18 @@ export async function* streamOpenAiCompatibleChat({
       if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
         finishedWithToolCalls = true;
         if (!awaitsUsageChunk) break;
+        usageTrailerDeadline = scheduleTimeout(() => {
+          usageTrailerExpired = true;
+          streamAbort.abort(new DOMException("The usage trailer did not arrive.", "TimeoutError"));
+        }, USAGE_TRAILER_TIMEOUT_MS);
       }
       if (repetition.isRepeating()) break;
     }
   } catch (error) {
     throwIfAborted(request.signal);
-    throw error;
+    if (!usageTrailerExpired) throw error;
+  } finally {
+    usageTrailerDeadline?.cancel();
   }
 
   const events: ModelStreamEvent[] = [];
@@ -187,6 +213,18 @@ export async function* streamOpenAiCompatibleChat({
     events,
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
   };
+}
+
+/** Creates a controller that also aborts with the reason of `signal`, until `dispose` detaches it. */
+function linkedAbortController(signal: AbortSignal | undefined): {
+  controller: AbortController;
+  dispose(): void;
+} {
+  const controller = new AbortController();
+  const forward = (): void => controller.abort(signal?.reason);
+  if (signal?.aborted) forward();
+  else signal?.addEventListener("abort", forward, { once: true });
+  return { controller, dispose: () => signal?.removeEventListener("abort", forward) };
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
