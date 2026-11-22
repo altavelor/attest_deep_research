@@ -127,7 +127,10 @@ function readState(value: unknown): ResearchState | undefined {
   const executions = readExecutions(value.executions);
   const sessionByBranch = readSessionByBranch(value.sessionByBranch);
   const brief = readBrief(value.brief);
-  const verification = plan === undefined ? undefined : readVerification(value.verification, plan);
+  const verification =
+    plan === undefined || executions === undefined
+      ? undefined
+      : readVerification(value.verification, plan, executions);
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||

@@ -10,10 +10,12 @@ import {
   MAX_CLAIM_TEXT_CHARS,
   MAX_CLAIM_TOKENS,
   MAX_RESEARCH_CLAIMS,
+  objectiveCoverage,
 } from "./verification";
 import { isResearchId, isRevision } from "./planValidation";
 import { readExecutions } from "./executionValidation";
 import type {
+  BranchExecution,
   ClaimAssessment,
   ClarificationQuestion,
   ResearchBrief,
@@ -58,11 +60,13 @@ export function readBrief(value: unknown): ResearchBrief | null | undefined {
 
 /**
  * Reads the stored verification of an approved plan, or returns undefined when any field is
- * malformed or names a branch, objective or claim the research does not have.
+ * malformed, names a branch, objective, claim or work the research does not have, or stores a
+ * coverage that differs from the one its claims and assessments give.
  */
 export function readVerification(
   value: unknown,
   plan: ResearchPlan | null,
+  executions: readonly BranchExecution[],
 ): ResearchVerification | null | undefined {
   if (value === undefined || value === null) return null;
   if (!isRecord(value) || !plan?.approvedAt) return undefined;
@@ -95,6 +99,18 @@ export function readVerification(
     !isRevision(value.followUpsUsed) ||
     value.followUpsUsed > plan.limits.verificationFollowUps ||
     followUps.length > value.followUpsUsed
+  ) {
+    return undefined;
+  }
+  const works = new Set([...executions, ...followUps].map((execution) => execution.workId));
+  const coverage = objectiveCoverage(
+    plan.objectives,
+    claims as ResearchClaim[],
+    assessments as ClaimAssessment[],
+  );
+  if (
+    !value.verifiedWorks.every((workId) => works.has(workId as string)) ||
+    JSON.stringify(coverage) !== JSON.stringify(value.coverage)
   ) {
     return undefined;
   }
@@ -132,7 +148,14 @@ function readClaim(value: unknown, plan: ResearchPlan): ResearchClaim | undefine
     !isRecord(value) ||
     !isResearchId(value.claimId) ||
     !plan.branches.some((branch) => branch.branchId === value.branchId) ||
-    !(value.objective === null || plan.objectives.includes(value.objective as string)) ||
+    !(
+      value.objective === null ||
+      plan.branches.some(
+        (branch) =>
+          branch.branchId === value.branchId &&
+          branch.objectives.includes(value.objective as string),
+      )
+    ) ||
     !isText(value.text, MAX_CLAIM_TEXT_CHARS) ||
     !isTextList(value.citationTokens, MAX_CLAIM_TOKENS, MAX_TOKEN_CHARS)
   ) {
@@ -152,7 +175,9 @@ function readAssessment(value: unknown): ClaimAssessment | undefined {
     !isRecord(value) ||
     !isResearchId(value.claimId) ||
     !VERDICTS.includes(value.verdict as ClaimAssessment["verdict"]) ||
-    !(value.quote === null || isText(value.quote, MAX_CLAIM_QUOTE_CHARS)) ||
+    !(value.verdict === "supported"
+      ? isText(value.quote, MAX_CLAIM_QUOTE_CHARS)
+      : value.quote === null) ||
     !isTextList(value.contradictingTokens, MAX_CLAIM_TOKENS, MAX_TOKEN_CHARS) ||
     !isTextList(value.independenceGroups, MAX_CLAIM_TOKENS, MAX_GROUP_CHARS)
   ) {

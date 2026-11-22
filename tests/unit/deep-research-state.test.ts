@@ -223,6 +223,31 @@ function briefAndVerificationRows(): [string, unknown][] {
     }),
     withVerification("over-long claim", { claims: [{ ...claim, text: "x".repeat(1001) }] }),
     withVerification("follow-ups over the cap", { followUpsUsed: 3 }),
+    withVerification("supported without a quote", {
+      assessments: [{ ...verification.assessments[0], quote: null }],
+    }),
+    withVerification("quote on an unresolved claim", {
+      assessments: [{ ...verification.assessments[0], verdict: "unresolved" }],
+      coverage: [{ objective: "Objective", covered: false }],
+    }),
+    withVerification("claim assessed twice", {
+      assessments: [verification.assessments[0], verification.assessments[0]],
+    }),
+    withVerification("verified work that does not exist", { verifiedWorks: ["w-1", "w-9"] }),
+    withVerification("coverage the claims do not give", {
+      coverage: [{ objective: "Objective", covered: false }],
+    }),
+    [
+      "objective the claim's branch does not serve",
+      section({
+        ...verifying,
+        plan: {
+          ...verifying.plan,
+          branches: [verifying.plan.branches[0], { ...verifying.plan.branches[1], objectives: [] }],
+        },
+        verification: { ...verification, claims: [{ ...claim, branchId: "branch-2" }] },
+      }),
+    ],
     withVerification("follow-up allocation without its execution", { followUps: [] }),
   ];
 }
