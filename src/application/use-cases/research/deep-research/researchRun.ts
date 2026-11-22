@@ -31,6 +31,7 @@ import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
 import { runDiscoveryPhase, withObservation } from "./researchDiscoveryPhase";
+import { researchResumeEntry } from "./researchResume";
 
 export interface ResearchDiscoveryFactoryOptions {
   resolveEvidence(tokens: readonly string[]): RetrievedChunk[];
@@ -128,8 +129,8 @@ export async function runResearch(
     deps.onState(next);
     return next;
   };
-  const verifying = start.phase === "verifying";
-  const discovering = start.phase === "discovering" || start.phase === "awaiting-observation";
+  const entry = researchResumeEntry(start);
+  const { verifying } = entry;
   const discovery = deps.createDiscovery?.({
     resolveEvidence: deps.resolveEvidence ?? (() => []),
     spendRound: () => owner.spendDiscovery(1),
@@ -140,7 +141,7 @@ export async function runResearch(
       ? await suppliedObservation(start, deps.observation, discovery)
       : start.discovery;
   await commit({
-    phase: verifying ? "verifying" : discovering ? "discovering" : "gathering",
+    phase: entry.phase,
     pending: null,
     executions: resumeExecutions(start.executions),
     discovery: observed,
