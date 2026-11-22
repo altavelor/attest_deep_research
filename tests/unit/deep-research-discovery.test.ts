@@ -14,6 +14,7 @@ import { ResearchDiscoveryService } from "@application/use-cases/research/deep-r
 import { suppliedObservation } from "@application/use-cases/research/deep-research/strategyHelpers";
 import { runDiscoveryPhase } from "@application/use-cases/research/deep-research/researchDiscoveryPhase";
 import { FakeChatModel } from "../support/researchFakes";
+import { markdownSource, retrieved } from "../support/factories";
 import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 
 const hypothesis: ResearchHypothesis = {
@@ -271,5 +272,35 @@ describe("deep research discovery rules", () => {
     }));
     const noRoom = await phase(start, full);
     expect(noRoom.discovery.cycles.at(-1)!.reason).toBe("No room for more hypotheses.");
+  });
+
+  it("disconfirms only on a contradicting quote found in a passage of the test's own tokens", async () => {
+    const passage = "Tides kept their times when the moon was hidden for weeks.";
+    const rows: [string, ResearchObservation["verdict"]][] = [
+      ["Tides kept their times when the moon was hidden", "contradicts"],
+      ["Tides were measured by wind gauges on the coast", "inconclusive"],
+    ];
+    for (const [quote, expected] of rows) {
+      const model = new FakeChatModel([
+        [{ content: JSON.stringify({ verdict: "contradicts", quote }), isComplete: true }],
+      ]);
+      const observed = await new ResearchDiscoveryService({
+        chatModel: model,
+        model: "model",
+        chatOptions: {},
+        resolveEvidence: (tokens) =>
+          tokens.map((token) => retrieved(token, markdownSource("Notes/tides.md"), passage)),
+        spendRound: () => true,
+        createId: (prefix) => `${prefix}-1`,
+        now: () => "2026-01-01T00:00:00.000Z",
+      }).assess(hypothesis, proposed, { text: "F [e1]", citationTokens: ["e1"], partial: false });
+      expect(observed!.verdict, quote).toBe(expected);
+      const reduced = reduceHypothesis({ ...hypothesis, observationIds: ["observation-1"] }, [
+        observed!,
+      ]);
+      expect(reduced.status, quote).toBe(
+        expected === "contradicts" ? "disconfirmed" : "inconclusive",
+      );
+    }
   });
 });

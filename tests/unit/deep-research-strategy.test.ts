@@ -101,6 +101,19 @@ describe("deep research strategy", () => {
     const rows: [ResearchState, string][] = [
       [pendingResearch(), "The research plan instruction is too long"],
       [asking, "The research clarification reply is too long"],
+      [
+        {
+          ...pendingResearch(),
+          phase: "awaiting-observation" as const,
+          pending: {
+            decisionId: "decision-o",
+            kind: "observation" as const,
+            artifactRevision: 1,
+            subjectId: "t-1",
+          },
+        },
+        "The research observation is too long",
+      ],
     ];
     for (const [state, message] of rows) {
       const port = new MemoryResearchState();
