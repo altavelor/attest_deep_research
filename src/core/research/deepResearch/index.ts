@@ -101,3 +101,9 @@ export {
   boundDiscovery,
   discoveryText,
 } from "./discoveryBounds";
+export {
+  parseHypothesisProposals,
+  parseObservationVerdict,
+  type HypothesisProposal,
+  type ParsedProposals,
+} from "./discoveryDraft";
