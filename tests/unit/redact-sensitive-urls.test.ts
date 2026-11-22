@@ -1,4 +1,4 @@
-import { redactSensitiveData } from "@shared/redactSensitiveData";
+import { redactSensitiveData, redactSensitiveText } from "@shared/redactSensitiveData";
 
 describe("redactSensitiveData URL boundaries", () => {
   it("leaves a quoted URL intact instead of swallowing the closing quote", () => {
@@ -41,5 +41,14 @@ describe("redactSensitiveData with apostrophes in URLs", () => {
     expect(redacted).not.toContain("SECRET");
     expect(redacted).toContain("%27brien");
     expect(decodeURIComponent(redacted)).toContain("q=o'brien");
+  });
+});
+
+describe("redactSensitiveText", () => {
+  it.each([
+    ['{"api_key":"sk-live-\\"abc","ok":true}', '{"api_key":"[redacted]","ok":true}'],
+    ["Authorization: Basic dXNlcjpwYXNz", "Authorization=[redacted]"],
+  ])("removes the credential of %s", (text, redacted) => {
+    expect(redactSensitiveText(text)).toBe(redacted);
   });
 });

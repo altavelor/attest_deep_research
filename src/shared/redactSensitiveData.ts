@@ -1,11 +1,18 @@
 const SENSITIVE_KEY =
   /(^|[_-])(api[_-]?key|access[_-]?token|token|secret|password|authorization)($|[_-])/i;
 const SENSITIVE_ASSIGNMENT =
-  /\b((?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization))\s*[:=]\s*(?:Bearer\s+)?([^\s,;&]+)/gi;
+  /\b((?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization))\s*[:=]\s*(?:(?:Bearer|Basic|Token|Digest)\s+)?([^\s,;&]+)/gi;
+const SENSITIVE_JSON_FIELD =
+  /("(?:[a-z0-9]+[_-])?(?:api[_ -]?key|access[_ -]?token|token|secret|password|authorization)"\s*:\s*"(?:(?:Bearer|Basic|Token|Digest)\s+)?)(?:\\.|[^"\\])*"/gi;
 
 /** Remove credential values from values that may be written to logs or diagnostics. */
 export function redactSensitiveData<T>(value: T): T {
   return redactValue(value) as T;
+}
+
+/** Redacts credentials in `text`; a value stored under a credential-like `key` is replaced whole. */
+export function redactSensitiveText(text: string, key?: string): string {
+  return key !== undefined && SENSITIVE_KEY.test(key) ? "[redacted]" : redactSensitiveString(text);
 }
 
 function redactValue(value: unknown): unknown {
@@ -30,6 +37,7 @@ function redactSensitiveString(value: string): string {
   const redactedUrl = value.replace(/https?:\/\/[^\s,;"<>`\\]+/gi, redactUrlQuerySecrets);
   return redactedUrl
     .replace(/\bBearer\s+[^\s,;"'<>`\\]+/gi, "Bearer [redacted]")
+    .replace(SENSITIVE_JSON_FIELD, '$1[redacted]"')
     .replace(SENSITIVE_ASSIGNMENT, "$1=[redacted]");
 }
 
