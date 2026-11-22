@@ -28,7 +28,8 @@ describe("deep research section validation", () => {
       ["unsafe revision", section({ ...pending, revision: 2 ** 53 })],
       ["negative revision", section({ ...pending, revision: -1 })],
       ["fractional revision", section({ ...pending, revision: 1.5 })],
-      ["unknown phase", section({ ...pending, phase: "dreaming" })],
+      ["unknown phase", section({ ...pending, phase: "dreaming", pending: null })],
+      ["inner schema", section({ ...pending, schema: 2 })],
       ["terminal phase as active", section({ ...pending, phase: "completed", pending: null })],
       [
         "history over ten",
@@ -55,7 +56,16 @@ describe("deep research section validation", () => {
         section({ ...pending, plan: { ...pending.plan!, approvedAt: "2026-01-02T00:00:00.000Z" } }),
       ],
       ["gathering without approval", section({ ...approved, plan: pending.plan })],
-      ["unbounded timestamp", section({ ...pending, createdAt: "2026".repeat(20) })],
+      [
+        "unbounded timestamp",
+        section({
+          ...pending,
+          createdAt: "Thursday, January 1, 2026 00:00:00 GMT+0000 (Coordinated Universal Time)",
+        }),
+      ],
+      ["non-terminal phase in history", section(null, [{ ...ended, phase: "gathering" }])],
+      ["bad timestamp in history", section(null, [{ ...ended, updatedAt: "yesterday" }])],
+      ["over-long history reason", section(null, [{ ...ended, terminalReason: "r".repeat(4001) }])],
       [
         "too many objectives",
         section({
