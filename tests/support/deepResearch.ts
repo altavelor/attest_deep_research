@@ -7,6 +7,7 @@ import {
   type ResearchBranch,
   type ResearchPlan,
   type ResearchPreset,
+  type ResearchReport,
   type ResearchState,
   type ResearchTurnInput,
 } from "@core/research/deepResearch";
@@ -24,7 +25,7 @@ import type {
   ModelRoundRequest,
   ModelRoundResult,
 } from "@core/agent";
-import type { ResearchStatePort } from "@application/ports";
+import type { ResearchNoteWriter, ResearchStatePort } from "@application/ports";
 import type { ResearchSectionView } from "@core/research/deepResearch";
 import type { ResearchAnswer } from "@core/answer";
 import type { RetrievedChunk } from "@core/model";
@@ -460,4 +461,48 @@ export class DiscoveryModel implements ChatModelProvider {
     }
     yield* this.report.streamChat(request);
   }
+}
+
+/**
+ * In-memory research note writer. A path listed in `raced` gets a file just before its create, as
+ * if another writer won the race, and `failures` makes the next creates throw.
+ */
+export class MemoryResearchNotes implements ResearchNoteWriter {
+  readonly files = new Map<string, string>();
+  readonly folders: string[] = [];
+  raced = new Set<string>();
+  failures = 0;
+
+  async exists(path: string): Promise<boolean> {
+    return this.files.has(path);
+  }
+
+  async ensureFolder(path: string): Promise<void> {
+    this.folders.push(path);
+  }
+
+  async createNew(path: string, content: string): Promise<boolean> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      throw new Error("Disk is full.");
+    }
+    if (this.raced.delete(path)) this.files.set(path, "other writer");
+    if (this.files.has(path)) return false;
+    this.files.set(path, content);
+    return true;
+  }
+}
+
+/** Builds a finished research report with the given markdown. */
+export function finishedReport(markdown: string): ResearchReport {
+  return {
+    reportId: "report-1",
+    quality: "partial",
+    markdown,
+    completedBranches: ["branch-1"],
+    missingBranches: [],
+    stopReason: "All branches settled.",
+    createdAt: "2026-03-04T05:06:07.000Z",
+    verification: null,
+  };
 }
