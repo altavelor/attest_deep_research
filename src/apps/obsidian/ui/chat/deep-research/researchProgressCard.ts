@@ -1,6 +1,7 @@
 import type { Translate } from "@adapters/i18n";
 import type {
   BranchExecution,
+  ReportVerificationCounts,
   ResearchHistoryEntry,
   ResearchPlan,
   ResearchState,
@@ -112,7 +113,43 @@ export function renderEndedResearch(
       });
     }
   }
+  if (report.verification) renderVerification(cardEl, report.verification, t);
   cardEl.createDiv({ cls: "attest-research-card__meta", text: report.stopReason });
+}
+
+function renderVerification(
+  cardEl: HTMLElement,
+  counts: ReportVerificationCounts,
+  t: Translate,
+): void {
+  const sectionEl = cardEl.createDiv({ cls: "attest-research-card__verification" });
+  sectionEl.createDiv({
+    cls: "attest-research-card__meta",
+    text: t("chat.deepResearch.report.supported", { count: counts.supported }),
+  });
+  if (counts.conflicted > 0) {
+    sectionEl.createDiv({
+      cls: "attest-research-card__notice",
+      text: t("chat.deepResearch.report.conflicted", { count: counts.conflicted }),
+    });
+  }
+  const weak = counts.unsupported + counts.unresolved;
+  if (weak > 0) {
+    sectionEl.createDiv({
+      cls: "attest-research-card__notice",
+      text: t("chat.deepResearch.report.unsupported", { count: weak }),
+    });
+  }
+  if (counts.uncoveredObjectives.length > 0) {
+    sectionEl.createDiv({
+      cls: "attest-research-card__branch-title",
+      text: t("chat.deepResearch.report.uncovered"),
+    });
+    const listEl = sectionEl.createEl("ul", { cls: "attest-research-card__branches" });
+    for (const objective of counts.uncoveredObjectives) {
+      listEl.createEl("li", { cls: "attest-research-card__branch-notes", text: objective });
+    }
+  }
 }
 
 function renderStaleChoices(

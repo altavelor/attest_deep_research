@@ -101,6 +101,7 @@ describe("deep research run", () => {
       "Researching: Background",
       "Researching: Details",
       "Researching: Context",
+      "Verifying the findings…",
       "Writing the research report…",
     ]);
     const lastSettle = port.commits.findIndex(
@@ -205,6 +206,6 @@ describe("deep research run", () => {
     expect(completeAnswer(events)?.answer).toContain(
       "The active execution time limit was reached.",
     );
-    expect(run.model.requests).toHaveLength(1);
+    expect(run.model.requests).toHaveLength(2);
   });
 });

@@ -55,6 +55,66 @@ const ended = {
     missingBranches: [{ branchId: "branch-2", reason: "Time" }],
     stopReason: "Time",
     createdAt: "2026-01-01T00:00:00.000Z",
+    verification: {
+      supported: 1,
+      conflicted: 0,
+      unsupported: 1,
+      unresolved: 0,
+      uncoveredObjectives: [],
+    },
+  },
+};
+const clarifying = {
+  ...pending,
+  phase: "awaiting-clarification",
+  plan: null,
+  pending: { decisionId: "decision-c", kind: "clarification", artifactRevision: 1 },
+  brief: {
+    questions: [{ questionId: "question-1", prompt: "Which tides?", suggestions: ["Ocean"] }],
+    answers: {},
+    assumptions: ["Ocean tides"],
+  },
+};
+const claim = {
+  claimId: "c-w-1-1",
+  branchId: "branch-1",
+  objective: "Objective",
+  text: "Found",
+  citationTokens: ["s1r1"],
+};
+const verifying = {
+  ...approved,
+  phase: "verifying",
+  executions: [done, { ...running, state: "completed", finding: done!.finding }],
+  verification: {
+    claims: [claim],
+    assessments: [
+      {
+        claimId: claim.claimId,
+        verdict: "supported",
+        quote: "Found",
+        contradictingTokens: [],
+        independenceGroups: ["g-0000abcd"],
+      },
+    ],
+    coverage: [{ objective: "Objective", covered: true }],
+    verifiedWorks: ["w-1", "w-2"],
+    followUps: [{ ...running, workId: "branch-2-follow-up-1", attempts: 2 }],
+    followUpsUsed: 1,
+  },
+  budget: {
+    ...approved.budget,
+    consumed: { ...approved.budget.consumed, branchAttempts: 3 },
+    attemptsByBranch: { "branch-1": 1, "branch-2": 2 },
+    openAllocations: [
+      {
+        workId: "branch-2-follow-up-1",
+        branchId: "branch-2",
+        attempt: 2,
+        modelRounds: 12,
+        searches: 10,
+      },
+    ],
   },
 };
 
@@ -119,6 +179,76 @@ function sessionRows(): [string, unknown][] {
     withSessions("malformed run ref", {
       executions: [{ ...child, runRef: { ...ref, resultRevision: -1 } }, running],
     }),
+  ];
+}
+
+function briefAndVerificationRows(): [string, unknown][] {
+  const brief = clarifying.brief;
+  const verification = verifying.verification;
+  const withVerification = (label: string, patch: object): [string, unknown] => [
+    label,
+    section({ ...verifying, verification: { ...verification, ...patch } }),
+  ];
+  return [
+    [
+      "clarification without questions",
+      section({ ...clarifying, brief: { ...brief, questions: [] } }),
+    ],
+    ["clarification with a plan", section({ ...clarifying, plan: pending.plan })],
+    [
+      "answer to an unasked question",
+      section({ ...pending, brief: { ...brief, answers: { "question-9": "Yes" } } }),
+    ],
+    [
+      "four questions",
+      section({
+        ...pending,
+        brief: {
+          ...brief,
+          questions: [1, 2, 3, 4].map((n) => ({
+            ...brief.questions[0],
+            questionId: `question-${n}`,
+          })),
+        },
+      }),
+    ],
+    ["verification before approval", section({ ...pending, verification })],
+    withVerification("claim of an unplanned branch", { claims: [{ ...claim, branchId: "x" }] }),
+    withVerification("claim of an unplanned objective", { claims: [{ ...claim, objective: "Z" }] }),
+    withVerification("assessment of an unknown claim", {
+      assessments: [{ ...verification.assessments[0], claimId: "c-x" }],
+    }),
+    withVerification("unknown verdict", {
+      assessments: [{ ...verification.assessments[0], verdict: "plausible" }],
+    }),
+    withVerification("over-long claim", { claims: [{ ...claim, text: "x".repeat(1001) }] }),
+    withVerification("follow-ups over the cap", { followUpsUsed: 3 }),
+    withVerification("supported without a quote", {
+      assessments: [{ ...verification.assessments[0], quote: null }],
+    }),
+    withVerification("quote on an unresolved claim", {
+      assessments: [{ ...verification.assessments[0], verdict: "unresolved" }],
+      coverage: [{ objective: "Objective", covered: false }],
+    }),
+    withVerification("claim assessed twice", {
+      assessments: [verification.assessments[0], verification.assessments[0]],
+    }),
+    withVerification("verified work that does not exist", { verifiedWorks: ["w-1", "w-9"] }),
+    withVerification("coverage the claims do not give", {
+      coverage: [{ objective: "Objective", covered: false }],
+    }),
+    [
+      "objective the claim's branch does not serve",
+      section({
+        ...verifying,
+        plan: {
+          ...verifying.plan,
+          branches: [verifying.plan.branches[0], { ...verifying.plan.branches[1], objectives: [] }],
+        },
+        verification: { ...verification, claims: [{ ...claim, branchId: "branch-2" }] },
+      }),
+    ],
+    withVerification("follow-up allocation without its execution", { followUps: [] }),
   ];
 }
 
@@ -220,6 +350,7 @@ describe("deep research section validation", () => {
       ],
       ...budgetRows(),
       ...sessionRows(),
+      ...briefAndVerificationRows(),
       [
         "more tokens than the bound",
         section({
@@ -281,7 +412,17 @@ describe("deep research section validation", () => {
     expect(midWave.ok && midWave.value).toEqual(section(wave));
     const legacy = { ...approved } as Partial<typeof approved>;
     delete (legacy as { sessionByBranch?: unknown }).sessionByBranch;
+    delete (legacy as { brief?: unknown }).brief;
+    delete (legacy as { verification?: unknown }).verification;
     expect(validateResearchSection(section(legacy)).ok).toBe(true);
+    const { verification: _counts, ...legacyReport } = ended.report;
+    expect(validateResearchSection(section(null, [{ ...ended, report: legacyReport }])).ok).toBe(
+      true,
+    );
+    for (const state of [clarifying, verifying]) {
+      const read = validateResearchSection(section(state));
+      expect(read.ok && read.value, state.phase).toEqual(section(state));
+    }
     const result = validateResearchSection({
       ...section({ ...pending, extra: 1, plan: { ...pending.plan!, extra: 2 } }, [
         { ...ended, extra: 3 },

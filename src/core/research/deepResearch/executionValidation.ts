@@ -1,9 +1,11 @@
 import {
   MAX_FINDING_CITATION_TOKENS,
+  MAX_PLAN_LIST_ITEMS,
   MAX_RESEARCH_BRANCHES,
   MAX_RESEARCH_TEXT_CHARS,
 } from "./limits";
 import { isFindingText } from "./findingBounds";
+import { MAX_RESEARCH_CLAIMS } from "./verification";
 import { isResearchId, isRevision } from "./planValidation";
 import { isSubAgentStateId } from "../subAgent/stateIds";
 import type {
@@ -15,6 +17,7 @@ import type {
   ResearchPlan,
   ResearchReport,
   ResearchReportSummary,
+  ReportVerificationCounts,
 } from "./types";
 
 const EXECUTION_STATES: readonly BranchExecution["state"][] = [
@@ -110,6 +113,7 @@ export function executionConsistent(
   sessionByBranch: Readonly<Record<string, string>>,
   budget: ResearchBudgetState | null,
   report: unknown,
+  followUps: readonly BranchExecution[] = [],
 ): boolean {
   if (report !== null) return false;
   if (executions.length > 0 && !plan?.approvedAt) return false;
@@ -135,10 +139,18 @@ export function executionConsistent(
       return false;
     }
   }
-  if (!budget) return executions.every((execution) => execution.attempts === 0);
-  if (plan && !budgetConsistent(plan, executions, budget)) return false;
+  if (
+    !followUps.every(
+      (execution) => branchIds.has(execution.branchId) && !seen.has(execution.workId),
+    )
+  ) {
+    return false;
+  }
+  const all = [...executions, ...followUps];
+  if (!budget) return all.every((execution) => execution.attempts === 0);
+  if (plan && !budgetConsistent(plan, all, budget)) return false;
   return budget.openAllocations.every((allocation) =>
-    executions.some(
+    all.some(
       (execution) =>
         execution.workId === allocation.workId &&
         execution.branchId === allocation.branchId &&
@@ -178,7 +190,9 @@ function budgetConsistent(
 /** Reads the report summary of a history entry, or returns undefined when it is malformed. */
 export function readReportSummary(value: unknown): ResearchReportSummary | null | undefined {
   if (value === null) return null;
+  const verification = isRecord(value) ? readReportCounts(value.verification) : undefined;
   if (
+    verification === undefined ||
     !isRecord(value) ||
     !isResearchId(value.reportId) ||
     (value.quality !== "complete" && value.quality !== "partial") ||
@@ -203,6 +217,30 @@ export function readReportSummary(value: unknown): ResearchReportSummary | null 
     })),
     stopReason: value.stopReason,
     createdAt: value.createdAt,
+    verification,
+  };
+}
+
+/** Reads the verification counts of a report summary; a summary written before verification has none. */
+export function readReportCounts(value: unknown): ReportVerificationCounts | null | undefined {
+  if (value === undefined || value === null) return null;
+  if (
+    !isRecord(value) ||
+    !["supported", "conflicted", "unsupported", "unresolved"].every(
+      (key) => isRevision(value[key]) && (value[key] as number) <= MAX_RESEARCH_CLAIMS,
+    ) ||
+    !Array.isArray(value.uncoveredObjectives) ||
+    value.uncoveredObjectives.length > MAX_PLAN_LIST_ITEMS ||
+    !value.uncoveredObjectives.every(isText)
+  ) {
+    return undefined;
+  }
+  return {
+    supported: value.supported as number,
+    conflicted: value.conflicted as number,
+    unsupported: value.unsupported as number,
+    unresolved: value.unresolved as number,
+    uncoveredObjectives: [...(value.uncoveredObjectives as string[])],
   };
 }
 

@@ -2,23 +2,43 @@ import type { RetrievedChunk } from "@core/model";
 import {
   ResearchBudgetOwner,
   boundedReason,
-  formatWithoutModel,
   openWorks,
   reportDecision,
   resumeExecutions,
   stopReasonOf,
+  verificationCounts,
   waveSize,
   type BranchExecution,
+  type ResearchPlan,
   type ResearchReport,
   type ResearchState,
+  type VerificationSummary,
 } from "@core/research/deepResearch";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { BranchRunner } from "./branchRunner";
 import type { ReportSynthesisService } from "./ReportSynthesisService";
-import { ResearchScheduler } from "./ResearchScheduler";
+import type { EvidenceVerificationOptions } from "./EvidenceVerificationService";
 import { ResearchBudgetPermits } from "./ResearchBudgetPermits";
 import type { AttachedResearchBudget } from "./ResearchScopeRouter";
-import { removeUnknownCitationTokens } from "../strategies/citations";
+import type { ResearchSchedulerRunners } from "./ResearchScheduler";
+import { runSchedulingPhase } from "./researchScheduling";
+import { runVerificationPhase } from "./researchVerificationPhase";
+import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
+
+export type ResearchVerifierOptions = Pick<
+  EvidenceVerificationOptions,
+  | "resolveEvidence"
+  | "spendRound"
+  | "followUpsRemaining"
+  | "followUpCycle"
+  | "claimAllowance"
+  | "onExtracted"
+  | "signal"
+>;
+
+export interface ResearchVerifier {
+  verify(findings: readonly BranchExecution[], plan: ResearchPlan): Promise<VerificationSummary>;
+}
 
 export interface ResearchRunDeps {
   port: ResearchStatePort;
@@ -26,6 +46,7 @@ export interface ResearchRunDeps {
   subAgents?: ResearchRunSubAgents;
   parallelRequests?: boolean;
   synthesis: ReportSynthesisService;
+  createVerifier?(options: ResearchVerifierOptions): ResearchVerifier;
   signal?: AbortSignal;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
   finalizeReport?(markdown: string): string;
@@ -48,9 +69,9 @@ export interface ResearchRunResult {
 
 /**
  * Executes an approved research from its last barrier to its end within one turn: it reopens the
- * budget, runs every unsettled work through the scheduler under the active time limit, and writes
- * the report with the model while finalization rounds remain or without it otherwise. A user stop
- * rethrows and leaves the research paused at its last committed barrier.
+ * budget, gathers every unsettled work, verifies the findings with follow-ups on the main path,
+ * and writes the report from verified claims while finalization rounds remain. The time limit
+ * covers the whole turn; a user stop rethrows and leaves the research at its last barrier.
  */
 export async function runResearch(
   start: ResearchState,
@@ -63,7 +84,7 @@ export async function runResearch(
     plan.branches.filter((branch) => branch.enabled).length,
   );
   owner.open(start.budget);
-  const work = new AbortController();
+  const turn = new AbortController();
   const permits = new ResearchBudgetPermits({
     researchId: start.researchId,
     owner,
@@ -86,77 +107,128 @@ export async function runResearch(
     deps.onState(next);
     return next;
   };
-  await commit({ phase: "gathering", executions: resumeExecutions(start.executions) });
+  const verifying = start.phase === "verifying";
+  await commit({
+    phase: verifying ? "verifying" : "gathering",
+    executions: resumeExecutions(start.executions),
+  });
 
-  const stopWork = (): void => work.abort(deps.signal?.reason);
-  deps.signal?.addEventListener("abort", stopWork);
+  const stopTurn = (): void => turn.abort(deps.signal?.reason);
+  deps.signal?.addEventListener("abort", stopTurn);
   const closeOnTime = (): void => {
     owner.close("time");
-    work.abort(new DOMException("Research time limit reached", "AbortError"));
+    turn.abort(new DOMException("Research time limit reached", "AbortError"));
   };
   const cancelTimer = deps.setTimer(Math.max(0, owner.remainingMs()), closeOnTime);
   const detach = deps.subAgents?.attach(permits);
   const subAgent = deps.subAgents?.createRunner(
     (branchId) => permits.sessionByBranch()[branchId] ?? null,
   );
-  const scheduler = new ResearchScheduler({
-    plan,
-    executions: current.executions,
+  const runners: ResearchSchedulerRunners = {
+    main: deps.runner,
+    ...(subAgent ? { subAgent } : {}),
+    sessionByBranch: () => permits.sessionByBranch(),
+  };
+  const phase = {
     owner,
-    runners: {
-      main: deps.runner,
-      ...(subAgent ? { subAgent } : {}),
-      sessionByBranch: () => permits.sessionByBranch(),
-    },
+    runners,
     waveSize: waveSize(plan.limits, deps.parallelRequests === true),
-    signal: work.signal,
-    barrier: async (next) => void (await commit({ executions: next })),
+    turnSignal: turn.signal,
     onStatus: deps.onStatus,
-  });
-  let executions;
+  };
+  const stopped = (): boolean => deps.signal?.aborted === true;
   try {
     if (owner.remainingMs() <= 0) closeOnTime();
-    executions = await scheduler.run(openWorks(current));
+    await runSchedulingPhase({
+      ...phase,
+      plan,
+      executions: current.executions,
+      works: openWorks(current),
+      barrier: async (next) => void (await commit({ executions: next })),
+    });
+    if (stopped()) throw new DOMException("Research stopped", "AbortError");
+    if (!verifying) await commit({ phase: "verifying" });
+    if (deps.createVerifier && !turn.signal.aborted) {
+      deps.onStatus("Verifying the findings…");
+      const followUpPlan = {
+        ...plan,
+        branches: plan.branches.map((branch) => ({ ...branch, dependsOn: [] })),
+      };
+      const verification = await runVerificationPhase({
+        plan,
+        executions: () => current.executions,
+        verification: current.verification,
+        verify: async (findings, bounds) => {
+          let extractedWorks: readonly string[] = [];
+          const summary = await deps.createVerifier!({
+            resolveEvidence: deps.resolveEvidence ?? (() => []),
+            spendRound: () => owner.spendFinalization(1),
+            followUpsRemaining: bounds.followUpsRemaining,
+            followUpCycle: bounds.cycle,
+            claimAllowance: bounds.claimAllowance,
+            onExtracted: (workIds) => (extractedWorks = workIds),
+            signal: turn.signal,
+          }).verify(findings, plan);
+          return { summary, extractedWorks };
+        },
+        runFollowUps: (followUps, works) =>
+          runSchedulingPhase({
+            ...phase,
+            plan: followUpPlan,
+            executions: followUps,
+            works,
+            barrier: async (next) =>
+              void (await commit({
+                verification: { ...current.verification!, followUps: [...next] },
+              })),
+          }),
+        commit: async (next) => void (await commit({ verification: next })),
+        budgetOpen: () => owner.snapshot().closed === null,
+        aborted: () => turn.signal.aborted,
+      });
+      if (stopped()) throw new DOMException("Research stopped", "AbortError");
+      await commit({ verification });
+    }
+  } catch (error) {
+    if (stopped() || !isAbort(error)) throw error;
   } finally {
-    if (!work.signal.aborted)
-      work.abort(new DOMException("Research scheduling ended", "AbortError"));
-    await scheduler.drain();
     detach?.();
     cancelTimer();
-    deps.signal?.removeEventListener("abort", stopWork);
+    deps.signal?.removeEventListener("abort", stopTurn);
   }
-  if (deps.signal?.aborted) throw new DOMException("Research stopped", "AbortError");
+  if (stopped()) throw new DOMException("Research stopped", "AbortError");
+  return writeReport(start, current, owner, deps, commit);
+}
 
+async function writeReport(
+  start: ResearchState,
+  current: ResearchState,
+  owner: ResearchBudgetOwner,
+  deps: ResearchRunDeps,
+  commit: (patch: Partial<ResearchState>) => Promise<ResearchState>,
+): Promise<ResearchRunResult> {
+  const plan = start.plan!;
   await commit({ phase: "synthesizing" });
   const stopReason = stopReasonOf(owner.snapshot());
-  const decision = reportDecision(plan, executions, stopReason);
+  const executions = current.executions;
+  const verification = current.verification;
+  const decision = reportDecision(plan, executions, stopReason, verification);
   if (decision.kind === "failed") {
     const state = await commit({ phase: "failed", terminalReason: boundedReason(decision.reason) });
     return { state, report: null };
   }
   deps.onStatus("Writing the research report…");
-  const cited = registryCitedFindings(executions, deps.resolveEvidence);
-  let markdown = withCitationNotes(formatWithoutModel(plan, cited.executions, stopReason), {
-    removedTokens: cited.removedTokens,
-    unverifiedTokens: 0,
+  const markdown = await writeReportMarkdown({
+    question: start.question,
+    plan,
+    executions,
+    verification,
+    stopReason,
+    synthesis: deps.synthesis,
+    spendRound: () => owner.spendFinalization(1),
+    ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
+    ...(deps.signal ? { signal: deps.signal } : {}),
   });
-  if (owner.spendFinalization(1)) {
-    try {
-      const synthesized = await deps.synthesis.synthesize({
-        question: start.question,
-        plan,
-        executions: cited.executions,
-        evidence: cited.evidence,
-        ...(deps.signal ? { signal: deps.signal } : {}),
-      });
-      markdown = withCitationNotes(synthesized.markdown, {
-        removedTokens: synthesized.removedTokens + cited.removedTokens,
-        unverifiedTokens: synthesized.unverifiedTokens,
-      });
-    } catch (error) {
-      if (deps.signal?.aborted) throw error;
-    }
-  }
   const finalMarkdown = withMissingNote(markdown, decision.missingBranches, plan);
   const report: ResearchReport = {
     reportId: deps.createId("report"),
@@ -166,69 +238,15 @@ export async function runResearch(
     missingBranches: decision.missingBranches,
     stopReason,
     createdAt: deps.now().toISOString(),
+    verification:
+      verification && verification.assessments.length > 0
+        ? verificationCounts(plan, verification)
+        : null,
   };
   const state = await commit({ phase: "completed", report });
   return { state, report };
 }
 
-/**
- * Keeps only the finding citations that resolve in the conversation source registry: unresolved
- * tokens leave the finding text and its listed sources and are counted, and the resolved revisions
- * become the evidence the report is verified against.
- */
-function registryCitedFindings(
-  executions: readonly BranchExecution[],
-  resolve: ResearchRunDeps["resolveEvidence"],
-): { executions: BranchExecution[]; evidence: RetrievedChunk[]; removedTokens: number } {
-  const stored = executions.flatMap((execution) => execution.finding?.citationTokens ?? []);
-  const evidence = resolve?.(stored) ?? [];
-  const known = new Set(evidence.map((chunk) => chunk.id));
-  let removedTokens = 0;
-  const cited = executions.map((execution) => {
-    const finding = execution.finding;
-    if (!finding) return execution;
-    const unknown = new Set(finding.citationTokens.filter((token) => !known.has(token)));
-    removedTokens += unknown.size;
-    return {
-      ...execution,
-      finding: {
-        ...finding,
-        text: removeUnknownCitationTokens(finding.text, known),
-        citationTokens: finding.citationTokens.filter((token) => known.has(token)),
-      },
-    };
-  });
-  return { executions: cited, evidence, removedTokens };
-}
-
-function withCitationNotes(
-  markdown: string,
-  counts: { removedTokens: number; unverifiedTokens: number },
-): string {
-  const notes = [
-    counts.removedTokens > 0
-      ? `${counts.removedTokens} citation(s) without a source in the findings were removed.`
-      : "",
-    counts.unverifiedTokens > 0
-      ? `${counts.unverifiedTokens} citation(s) could not be verified against the cited source text.`
-      : "",
-  ].filter((note) => note !== "");
-  return notes.length > 0 ? `${markdown}\n\n> ${notes.join(" ")}` : markdown;
-}
-
-function withMissingNote(
-  markdown: string,
-  missing: readonly { branchId: string; reason: string }[],
-  plan: NonNullable<ResearchState["plan"]>,
-): string {
-  const required = missing.filter(
-    (entry) =>
-      plan.branches.find((branch) => branch.branchId === entry.branchId)?.priority === "required",
-  );
-  if (required.length === 0) return markdown;
-  const names = required.map(
-    (entry) =>
-      plan.branches.find((branch) => branch.branchId === entry.branchId)?.title ?? entry.branchId,
-  );
-  return `> Partial report: required branches are missing (${names.join(", ")}).\n\n${markdown}`;
+function isAbort(error: unknown): boolean {
+  return (error as { name?: unknown } | null)?.name === "AbortError";
 }

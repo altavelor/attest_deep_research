@@ -17,3 +17,11 @@ export { finishedResearchReport } from "./researchReportLookup";
 export { SubAgentBranchRunner, type SubAgentBranchRunnerDeps } from "./SubAgentBranchRunner";
 export { ResearchBudgetPermits, type ResearchBudgetPermitsOptions } from "./ResearchBudgetPermits";
 export { ResearchScopeRouter, type AttachedResearchBudget } from "./ResearchScopeRouter";
+export {
+  ResearchClarificationService,
+  type ResearchClarificationOptions,
+} from "./ResearchClarificationService";
+export {
+  EvidenceVerificationService,
+  type EvidenceVerificationOptions,
+} from "./EvidenceVerificationService";

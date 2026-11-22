@@ -1,4 +1,12 @@
 import {
+  UnusableBranchSessionError,
+  ResearchScheduler,
+  SubAgentBranchRunner,
+  type BranchRunner,
+} from "@application/use-cases/research/deep-research";
+import type { SubAgentDelegator } from "@application/ports/subAgent";
+import {
+  ResearchBudgetOwner,
   blockDependants,
   initialExecutions,
   isPlanStale,
@@ -6,6 +14,7 @@ import {
   reportDecision,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
+import { settle } from "../support/async";
 
 const plan = researchPlan(
   [
@@ -72,5 +81,152 @@ describe("deep research scheduling rules", () => {
     );
     expect(isPlanStale(mixed, "2026-01-07T23:59:59.999Z")).toBe(false);
     expect(isPlanStale(mixed, "2026-01-08T00:00:00.000Z")).toBe(true);
+  });
+});
+
+describe("deep research main-path fallback", () => {
+  it("queues a refused session behind a running main-path work and charges its allocation once", async () => {
+    const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const limits = { ...fallbackPlan.limits, childSessions: 1 };
+    const owner = new ResearchBudgetOwner(limits, () => 0, 2);
+    owner.open(null);
+    let release: () => void = () => undefined;
+    const mainRuns: string[] = [];
+    const main: BranchRunner = {
+      path: "main",
+      run: (work) => {
+        mainRuns.push(work.branchId);
+        const finding = { text: "F", citationTokens: [], partial: false };
+        if (work.branchId === "branch-2") return Promise.resolve(finding);
+        return new Promise((resolve) => (release = () => resolve(finding)));
+      },
+      usage: () => ({ modelRounds: 3, searches: 1, evidenceItems: 0 }),
+    };
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: () => Promise.reject(new UnusableBranchSessionError("s-2")),
+    };
+    const running = new ResearchScheduler({
+      plan: { ...fallbackPlan, limits },
+      executions: initialExecutions(fallbackPlan),
+      owner,
+      runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
+      waveSize: 2,
+      signal: new AbortController().signal,
+      barrier: async () => undefined,
+    }).run(
+      ["branch-1", "branch-2"].map((branchId) => ({
+        workId: `${branchId}-gather-1`,
+        branchId,
+        cycle: 1,
+        kind: "gather" as const,
+        task: "T",
+      })),
+    );
+    await settle();
+    expect(mainRuns).toEqual(["branch-1"]);
+    release();
+    const executions = await running;
+
+    expect(mainRuns).toEqual(["branch-1", "branch-2"]);
+    expect(executions.map((entry) => [entry.state, entry.path, entry.attempts])).toEqual([
+      ["completed", "main", 1],
+      ["completed", "main", 1],
+    ]);
+    expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 2, modelRounds: 6 });
+    expect(owner.snapshot().openAllocations).toEqual([]);
+  });
+
+  it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {
+    const fallbackPlan = researchPlan([researchBranch(1), researchBranch(2)], "balanced", {
+      approvedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const limits = { ...fallbackPlan.limits, childSessions: 1 };
+    const owner = new ResearchBudgetOwner(limits, () => 0, 2);
+    owner.open(null);
+    const stop = new AbortController();
+    const main: BranchRunner = {
+      path: "main",
+      run: (_work, _allocation, signal) =>
+        new Promise((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError"))),
+        ),
+    };
+    const child: BranchRunner = {
+      path: "sub-agent",
+      run: () => Promise.reject(new UnusableBranchSessionError("s-2")),
+    };
+    const running = new ResearchScheduler({
+      plan: { ...fallbackPlan, limits },
+      executions: initialExecutions(fallbackPlan),
+      owner,
+      runners: { main, subAgent: child, sessionByBranch: () => ({ "branch-2": "s-2" }) },
+      waveSize: 2,
+      signal: stop.signal,
+      barrier: async () => undefined,
+    }).run(
+      ["branch-1", "branch-2"].map((branchId) => ({
+        workId: `${branchId}-gather-1`,
+        branchId,
+        cycle: 1,
+        kind: "gather" as const,
+        task: "T",
+      })),
+    );
+    await settle();
+    stop.abort();
+    await expect(running).rejects.toMatchObject({ name: "AbortError" });
+
+    const snapshot = owner.snapshot();
+    expect(snapshot.openAllocations.map((entry) => entry.branchId)).toEqual([
+      "branch-1",
+      "branch-2",
+    ]);
+    expect(snapshot.consumed).toMatchObject({ branchAttempts: 2, modelRounds: 0 });
+    const next = new ResearchBudgetOwner(limits, () => 0, 2);
+    next.open(snapshot);
+    expect(next.snapshot().consumed.modelRounds).toBe(
+      snapshot.openAllocations.reduce((total, entry) => total + entry.modelRounds, 0),
+    );
+  });
+
+  it("refuses a mapped session that the chat lists as stopped without contacting it", async () => {
+    const calls: string[] = [];
+    const delegator = new Proxy({} as SubAgentDelegator, {
+      get: (_target, name) => () => {
+        calls.push(String(name));
+        return Promise.reject(new Error("unexpected"));
+      },
+    });
+    const runner = new SubAgentBranchRunner({
+      branches: [researchBranch(1)],
+      delegator: () => delegator,
+      resolver: { resolve: () => Promise.reject(new Error("unused")) },
+      sessionOf: () => "s-1",
+      listSessions: async () => [
+        { sessionId: "s-1", title: "B", state: "stopped", lastRunId: "r-1", attempt: 1 },
+      ],
+    });
+    const work = {
+      workId: "w-1",
+      branchId: "branch-1",
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    };
+    const allocation = {
+      workId: "w-1",
+      branchId: "branch-1",
+      attempt: 1,
+      modelRounds: 3,
+      searches: 1,
+    };
+
+    await expect(runner.run(work, allocation, new AbortController().signal)).rejects.toBeInstanceOf(
+      UnusableBranchSessionError,
+    );
+    expect(calls).toEqual([]);
   });
 });

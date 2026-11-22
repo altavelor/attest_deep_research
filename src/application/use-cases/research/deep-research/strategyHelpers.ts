@@ -16,7 +16,9 @@ export function referenceEvent(state: ResearchState): ResearchStreamEvent {
 
 /** Tells whether a research is in a phase a turn executes. */
 export function isExecuting(state: ResearchState): boolean {
-  return state.phase === "gathering" || state.phase === "synthesizing";
+  return (
+    state.phase === "gathering" || state.phase === "verifying" || state.phase === "synthesizing"
+  );
 }
 
 /** Returns the stored budget with the allocations of a dead turn consumed, keeping its active time. */

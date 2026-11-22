@@ -1,5 +1,12 @@
+import {
+  fullyAssessed,
+  supportedClaimsSection,
+  uncoveredRequired,
+  verificationSections,
+} from "./reportSections";
 import type {
   BranchExecution,
+  ResearchVerification,
   ResearchBudgetState,
   ResearchPlan,
   ResearchReport,
@@ -20,17 +27,27 @@ export type ReportDecision =
     };
 
 /**
- * Decides what a finished run yields: no completed branch fails the research, a missing required
- * branch makes the report partial, otherwise it is complete. Missing branches keep their reason.
+ * Decides what a finished run yields: no completed branch, or claims that were all assessed with
+ * none supported, fails the research. The report is complete only when every claim was assessed,
+ * every required objective is covered and no required branch is missing; otherwise it is partial.
  */
 export function reportDecision(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
+  verification: ResearchVerification | null = null,
 ): ReportDecision {
   const completed = executions.filter((execution) => execution.state === "completed");
   if (completed.length === 0) {
     return { kind: "failed", reason: `No branch completed. ${stopReason}` };
+  }
+  const verified = verification !== null && verification.assessments.length > 0;
+  const complete = verified && fullyAssessed(verification);
+  if (complete && !verification.assessments.some((entry) => entry.verdict === "supported")) {
+    return {
+      kind: "failed",
+      reason: `No claim of the findings is supported by its sources. ${stopReason}`,
+    };
   }
   const missing = executions.filter((execution) => execution.state !== "completed");
   const required = new Set(
@@ -40,7 +57,12 @@ export function reportDecision(
   );
   return {
     kind: "report",
-    quality: missing.some((execution) => required.has(execution.branchId)) ? "partial" : "complete",
+    quality:
+      complete &&
+      uncoveredRequired(plan, verification).length === 0 &&
+      !missing.some((execution) => required.has(execution.branchId))
+        ? "complete"
+        : "partial",
     completedBranches: completed.map((execution) => execution.branchId),
     missingBranches: missing.map((execution) => ({
       branchId: execution.branchId,
@@ -59,14 +81,25 @@ export function stopReasonOf(budget: ResearchBudgetState | null): string {
 }
 
 /**
- * Formats the report without any model or tool call: the findings of every completed branch with
- * their citations, the branches that are missing and the stop reason.
+ * Formats the report without any model or tool call. With assessments it lists the supported
+ * claims and the verification sections; without them it lists the findings of every completed
+ * branch with their citations, labelled unverified, then the missing branches and stop reason.
  */
 export function formatWithoutModel(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
+  verification: ResearchVerification | null = null,
 ): string {
+  if (verification && verification.assessments.length > 0) {
+    const supported = supportedClaimsSection(verification);
+    return [
+      "# Research findings",
+      "Verified claims are listed without a synthesized summary.",
+      ...(supported ? ["## Supported claims", supported] : []),
+      verificationSections(plan, executions, verification, stopReason),
+    ].join("\n\n");
+  }
   const titleOf = (branchId: string): string =>
     plan.branches.find((branch) => branch.branchId === branchId)?.title ?? branchId;
   const sections = executions
@@ -86,7 +119,7 @@ export function formatWithoutModel(
     );
   return [
     "# Research findings",
-    `Findings are listed per branch without a synthesized summary. ${stopReason}`,
+    `Unverified findings are listed per branch without a synthesized summary; their claims were not checked against the sources. ${stopReason}`,
     ...sections,
     ...(missing.length > 0 ? ["## Missing branches", missing.join("\n")] : []),
   ].join("\n\n");

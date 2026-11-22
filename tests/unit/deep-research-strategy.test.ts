@@ -86,16 +86,33 @@ describe("deep research strategy", () => {
     expect(port.commits).toHaveLength(0);
   });
 
-  it("rejects an over-long plain-text plan instruction readably", async () => {
-    const port = new MemoryResearchState();
-    port.commits.push(pendingResearch());
-    const answer = deepResearchService(new FakeChatModel()).answer({
-      question: "i".repeat(4001),
-      mode: "deep-research",
-      researchState: port,
-    });
-    await expect(collectAsync(answer)).rejects.toThrow("plan instruction is too long");
-    expect(port.commits).toHaveLength(1);
+  it("rejects an over-long plain-text decision readably, named by its pending decision", async () => {
+    const asking = {
+      ...pendingResearch(),
+      phase: "awaiting-clarification" as const,
+      plan: null,
+      pending: { decisionId: "decision-c", kind: "clarification" as const, artifactRevision: 1 },
+      brief: {
+        questions: [{ questionId: "question-1", prompt: "Q?", suggestions: [] }],
+        answers: {},
+        assumptions: [],
+      },
+    };
+    const rows: [ResearchState, string][] = [
+      [pendingResearch(), "The research plan instruction is too long"],
+      [asking, "The research clarification reply is too long"],
+    ];
+    for (const [state, message] of rows) {
+      const port = new MemoryResearchState();
+      port.commits.push(state);
+      const answer = deepResearchService(new FakeChatModel()).answer({
+        question: "i".repeat(4001),
+        mode: "deep-research",
+        researchState: port,
+      });
+      await expect(collectAsync(answer)).rejects.toThrow(message);
+      expect(port.commits).toHaveLength(1);
+    }
   });
 });
 
@@ -234,7 +251,7 @@ describe("main branch runner findings", () => {
 });
 
 describe("research report citations", () => {
-  it("removes and counts every finding token when no registry lookup is available", async () => {
+  it("lists findings unverified without a model and removes tokens no registry lookup resolves", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced", {
       approvedAt: "2026-01-01T00:00:00.000Z",
     });
@@ -244,10 +261,10 @@ describe("research report citations", () => {
       pending: null,
       executions: initialExecutions(plan),
     };
-    let seen: string[] = [];
+    let synthesized = false;
     const synthesis = {
-      synthesize: async (input: { executions: readonly ResearchState["executions"][number][] }) => {
-        seen = input.executions.map((execution) => execution.finding!.text);
+      synthesize: async () => {
+        synthesized = true;
         return { markdown: "Report", removedTokens: 0, unverifiedTokens: 0 };
       },
     } as unknown as ReportSynthesisService;
@@ -268,7 +285,10 @@ describe("research report citations", () => {
       onState: () => undefined,
       onStatus: () => undefined,
     });
-    expect(seen).toEqual(["Tides  and waves ."]);
+    expect(synthesized).toBe(false);
+    expect(result.report).toMatchObject({ quality: "partial", verification: null });
+    expect(result.report!.markdown).toContain("Tides  and waves .");
+    expect(result.report!.markdown).toContain("their claims were not checked against the sources");
     expect(result.report!.markdown).toContain(
       "2 citation(s) without a source in the findings were removed.",
     );

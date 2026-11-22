@@ -89,6 +89,72 @@ export interface ResearchState {
   executions: readonly BranchExecution[];
   sessionByBranch: Readonly<Record<string, string>>;
   report: ResearchReport | null;
+  brief: ResearchBrief | null;
+  verification: ResearchVerification | null;
+}
+
+export interface ClarificationQuestion {
+  questionId: string;
+  prompt: string;
+  suggestions: readonly string[];
+}
+
+export interface ResearchBrief {
+  questions: readonly ClarificationQuestion[];
+  answers: Readonly<Record<string, string>>;
+  assumptions: readonly string[];
+}
+
+export type ClarificationDecisionPayload =
+  | { action: "answer"; answers: Readonly<Record<string, string>> }
+  | { action: "assume" }
+  | { action: "reply"; text: string };
+
+export interface ResearchClaim {
+  claimId: string;
+  branchId: string;
+  objective: string | null;
+  text: string;
+  citationTokens: readonly string[];
+}
+
+export type ClaimVerdict = "supported" | "unsupported" | "conflicted" | "unresolved";
+
+export interface ClaimAssessment {
+  claimId: string;
+  verdict: ClaimVerdict;
+  quote: string | null;
+  contradictingTokens: readonly string[];
+  independenceGroups: readonly string[];
+}
+
+export interface ObjectiveCoverage {
+  objective: string;
+  covered: boolean;
+}
+
+export interface VerificationSummary {
+  claims: readonly ResearchClaim[];
+  assessments: readonly ClaimAssessment[];
+  coverage: readonly ObjectiveCoverage[];
+  followUps: readonly ResearchWork[];
+}
+
+export interface ResearchVerification {
+  claims: readonly ResearchClaim[];
+  assessments: readonly ClaimAssessment[];
+  coverage: readonly ObjectiveCoverage[];
+  verifiedWorks: readonly string[];
+  followUps: readonly BranchExecution[];
+  followUpsUsed: number;
+}
+
+export interface ReportVerificationCounts {
+  supported: number;
+  conflicted: number;
+  unsupported: number;
+  unresolved: number;
+  uncoveredObjectives: readonly string[];
 }
 
 export type BudgetDimension = "branchAttempts" | "modelRounds" | "searches" | "evidenceItems";
@@ -152,6 +218,7 @@ export interface ResearchReport {
   missingBranches: readonly { branchId: string; reason: string }[];
   stopReason: string;
   createdAt: string;
+  verification: ReportVerificationCounts | null;
 }
 
 export type ResearchReportSummary = Omit<ResearchReport, "markdown">;

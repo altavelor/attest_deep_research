@@ -49,6 +49,8 @@ export function startResearchState(
     executions: [],
     sessionByBranch: {},
     report: null,
+    brief: null,
+    verification: null,
   };
 }
 

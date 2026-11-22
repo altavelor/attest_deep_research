@@ -14,6 +14,7 @@ import {
 import type { ResearchCardContext } from "./researchCardContext";
 import { cancelAction, renderActions, turnKey } from "./researchCardActions";
 import { renderEndedResearch, renderProgress } from "./researchProgressCard";
+import { renderBrief } from "./researchBriefCard";
 
 export type { ResearchCardContext } from "./researchCardContext";
 
@@ -53,6 +54,8 @@ export function renderResearchCard(
     });
     return;
   }
+  if (active.brief) renderBrief(cardEl, active, active.brief, context);
+  if (active.pending?.kind === "clarification") return;
   if (active.plan) renderPlan(cardEl, active.plan, t);
   if (active.pending?.kind === "plan" && active.plan) {
     renderPlanControls(cardEl, active, active.plan, context);

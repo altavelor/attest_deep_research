@@ -105,7 +105,7 @@ describe("deep research plan card", () => {
     );
   });
 
-  it("renders a finished partial report from the research history", () => {
+  it("renders a finished partial report with its verification sections from the history", () => {
     const host = document.createElement("div");
     const entry = {
       researchId: "research-1",
@@ -121,6 +121,13 @@ describe("deep research plan card", () => {
         missingBranches: [{ branchId: "branch-2", reason: "Time" }],
         stopReason: "The active execution time limit was reached.",
         createdAt: "2026-01-01T00:00:00.000Z",
+        verification: {
+          supported: 2,
+          conflicted: 1,
+          unsupported: 1,
+          unresolved: 2,
+          uncoveredObjectives: ["Explain neap tides"],
+        },
       },
     };
     renderResearchCard(
@@ -135,6 +142,9 @@ describe("deep research plan card", () => {
     );
     expect(host.textContent).toContain("Partial: 1 of 2 branches");
     expect(host.textContent).toContain("Missing branch-2: Time");
+    expect(host.textContent).toContain("Conflicting claims: 1");
+    expect(host.textContent).toContain("Unsupported or unresolved claims: 3");
+    expect(host.textContent).toContain("Explain neap tides");
     expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 });
