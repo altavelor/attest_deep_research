@@ -1,0 +1,449 @@
+{
+  "caseSetVersion": 1,
+  "corpus": "corpus",
+  "syndicates": [
+    [
+      "Press/Larkfield press release.md",
+      "Press/Valley Gazette repost.md",
+      "Press/Regional Digest repost.md"
+    ]
+  ],
+  "cases": [
+    {
+      "id": "synthesis-upgrade-overview",
+      "group": "multi-facet",
+      "repeats": 3,
+      "question": "Give an overview of the Larkfield reservoir upgrade: cost, filtration performance, environmental footprint and staffing.",
+      "objectives": [
+        {
+          "id": "budget",
+          "markers": ["47 million"],
+          "evidence": [
+            {
+              "path": "Reports/Audit report 2024.md",
+              "quote": "The audited budget of the reservoir upgrade is 47 million euros"
+            }
+          ]
+        },
+        {
+          "id": "filtration",
+          "markers": ["20 micrometres"],
+          "evidence": [
+            {
+              "path": "Reports/Engineering memo.md",
+              "quote": "removes microplastics down to 20 micrometres"
+            }
+          ]
+        },
+        {
+          "id": "wetland",
+          "markers": ["compensation"],
+          "evidence": [
+            {
+              "path": "Reports/Environmental assessment.md",
+              "quote": "A compensation wetland of 5 hectares will be created downstream."
+            }
+          ]
+        },
+        {
+          "id": "staffing",
+          "markers": ["15"],
+          "evidence": [
+            {
+              "path": "Meetings/Board minutes October.md",
+              "quote": "Staffing of the plant grows from 12 to 15 operators."
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": []
+    },
+    {
+      "id": "synthesis-energy-impact",
+      "group": "multi-facet",
+      "repeats": 3,
+      "question": "How will the upgrade change the plant's energy use, and what is planned to offset it?",
+      "objectives": [
+        {
+          "id": "baseline-load",
+          "markers": ["2.1 gigawatt"],
+          "evidence": [
+            {
+              "path": "Research/Energy outlook.md",
+              "quote": "The plant draws 2.1 gigawatt hours per year before the upgrade."
+            }
+          ]
+        },
+        {
+          "id": "added-load",
+          "markers": ["18 percent"],
+          "evidence": [
+            {
+              "path": "Reports/Engineering memo.md",
+              "quote": "The membrane stage raises energy use of the plant by 18 percent."
+            }
+          ]
+        },
+        {
+          "id": "offset",
+          "markers": ["solar", "no approved funding"],
+          "evidence": [
+            {
+              "path": "Research/Energy outlook.md",
+              "quote": "A rooftop solar array of 400 kilowatts is planned"
+            },
+            {
+              "path": "Research/Energy outlook.md",
+              "quote": "The solar array has no approved funding yet."
+            }
+          ]
+        },
+        {
+          "id": "reporting",
+          "markers": ["quarterly"],
+          "evidence": [
+            {
+              "path": "Meetings/Council minutes June.md",
+              "quote": "The council asked the board to report energy costs quarterly."
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": []
+    },
+    {
+      "id": "synthesis-operations",
+      "group": "multi-facet",
+      "repeats": 1,
+      "question": "What does running the upgraded plant involve over the next years?",
+      "objectives": [
+        {
+          "id": "membrane-replacement",
+          "markers": ["seven years"],
+          "evidence": [
+            {
+              "path": "Reports/Engineering memo.md",
+              "quote": "Membranes must be replaced every seven years."
+            }
+          ]
+        },
+        {
+          "id": "sand-fallback",
+          "markers": ["2027"],
+          "evidence": [
+            {
+              "path": "Meetings/Board minutes October.md",
+              "quote": "the old sand filters will stay in service as a fallback until 2027"
+            }
+          ]
+        },
+        {
+          "id": "staffing",
+          "markers": ["15"],
+          "evidence": [
+            {
+              "path": "Meetings/Board minutes October.md",
+              "quote": "Staffing of the plant grows from 12 to 15 operators."
+            }
+          ]
+        },
+        {
+          "id": "tariff",
+          "markers": ["6 percent"],
+          "evidence": [
+            {
+              "path": "Meetings/Council minutes June.md",
+              "quote": "water tariff increase of 6 percent from January 2025"
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": []
+    },
+    {
+      "id": "synthesis-environment",
+      "group": "multi-facet",
+      "repeats": 1,
+      "question": "What are the environmental effects of the upgrade on wildlife and water quality?",
+      "objectives": [
+        {
+          "id": "warblers",
+          "markers": ["reed warbler"],
+          "evidence": [
+            {
+              "path": "Research/Wetland survey.md",
+              "quote": "hosts a breeding colony of reed warblers"
+            }
+          ]
+        },
+        {
+          "id": "compensation",
+          "markers": ["5 hectares"],
+          "evidence": [
+            {
+              "path": "Reports/Environmental assessment.md",
+              "quote": "A compensation wetland of 5 hectares will be created downstream."
+            }
+          ]
+        },
+        {
+          "id": "assessment-scope",
+          "markers": ["construction"],
+          "evidence": [
+            {
+              "path": "Reports/Environmental assessment.md",
+              "quote": "The assessment covers only construction, not long-term operation of the plant."
+            }
+          ]
+        },
+        {
+          "id": "particle-sizes",
+          "markers": ["50 micrometres"],
+          "evidence": [
+            {
+              "path": "Research/Microplastics study.md",
+              "quote": "Most microplastic particles in the Larkfield catchment are larger than 50 micrometres."
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": []
+    },
+    {
+      "id": "conflict-budget",
+      "group": "conflict",
+      "repeats": 3,
+      "question": "What does the reservoir upgrade cost?",
+      "objectives": [
+        {
+          "id": "announced",
+          "markers": ["42 million"],
+          "evidence": [
+            {
+              "path": "Press/Larkfield press release.md",
+              "quote": "The project budget is 42 million euros"
+            }
+          ]
+        },
+        {
+          "id": "audited",
+          "markers": ["47 million"],
+          "evidence": [
+            {
+              "path": "Reports/Audit report 2024.md",
+              "quote": "The audited budget of the reservoir upgrade is 47 million euros"
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": [{ "id": "budget-42-vs-47", "markers": ["42 million", "47 million"] }]
+    },
+    {
+      "id": "conflict-completion-date",
+      "group": "conflict",
+      "repeats": 3,
+      "question": "When will the reservoir upgrade be finished?",
+      "objectives": [
+        {
+          "id": "announced",
+          "markers": ["March 2025"],
+          "evidence": [
+            {
+              "path": "Press/Larkfield press release.md",
+              "quote": "the reservoir upgrade will be completed in March 2025"
+            }
+          ]
+        },
+        {
+          "id": "revised",
+          "markers": ["September 2025"],
+          "evidence": [
+            {
+              "path": "Reports/Audit report 2024.md",
+              "quote": "Completion is now expected in September 2025"
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": [
+        { "id": "date-march-vs-september", "markers": ["March 2025", "September 2025"] }
+      ]
+    },
+    {
+      "id": "conflict-tariff-scope",
+      "group": "conflict",
+      "repeats": 1,
+      "question": "Who pays the new water tariff?",
+      "objectives": [
+        {
+          "id": "council",
+          "markers": ["households only"],
+          "evidence": [
+            {
+              "path": "Meetings/Council minutes June.md",
+              "quote": "the tariff increase applies to households only, not to industry"
+            }
+          ]
+        },
+        {
+          "id": "board",
+          "markers": ["industry alike"],
+          "evidence": [
+            {
+              "path": "Meetings/Board minutes October.md",
+              "quote": "the tariff increase applies to households and industry alike"
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": [{ "id": "tariff-scope", "markers": ["households only", "industry alike"] }]
+    },
+    {
+      "id": "conflict-wetland-area",
+      "group": "conflict",
+      "repeats": 1,
+      "question": "How much wetland does the upgrade disturb?",
+      "objectives": [
+        {
+          "id": "assessment",
+          "markers": ["3 hectares"],
+          "evidence": [
+            {
+              "path": "Reports/Environmental assessment.md",
+              "quote": "The upgrade affects 3 hectares of wetland on the northern shore."
+            }
+          ]
+        },
+        {
+          "id": "survey",
+          "markers": ["4 hectares"],
+          "evidence": [
+            {
+              "path": "Research/Wetland survey.md",
+              "quote": "The survey counted 4 hectares of wetland on the northern shore"
+            }
+          ]
+        }
+      ],
+      "contradicting": [],
+      "conflicts": [{ "id": "wetland-3-vs-4", "markers": ["3 hectares", "4 hectares"] }]
+    },
+    {
+      "id": "disconfirm-five-micrometres",
+      "group": "disconfirmation",
+      "repeats": 3,
+      "question": "Does the new filtration stage remove microplastics down to 5 micrometres?",
+      "objectives": [
+        {
+          "id": "measured",
+          "markers": ["20 micrometres"],
+          "evidence": [
+            {
+              "path": "Reports/Engineering memo.md",
+              "quote": "removes microplastics down to 20 micrometres, not 5 micrometres as first specified"
+            }
+          ]
+        }
+      ],
+      "contradicting": [
+        {
+          "path": "Reports/Engineering memo.md",
+          "quote": "removes microplastics down to 20 micrometres, not 5 micrometres as first specified"
+        }
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "disconfirm-on-schedule",
+      "group": "disconfirmation",
+      "repeats": 3,
+      "question": "Three news outlets say the upgrade finishes in March 2025. Is it on schedule?",
+      "objectives": [
+        {
+          "id": "delay",
+          "markers": ["September 2025"],
+          "evidence": [
+            {
+              "path": "Reports/Audit report 2024.md",
+              "quote": "Completion is now expected in September 2025 because the membrane supplier delivered late."
+            }
+          ]
+        },
+        {
+          "id": "single-source",
+          "markers": ["Water Board"],
+          "evidence": [
+            {
+              "path": "Press/Larkfield press release.md",
+              "quote": "The Larkfield Water Board announced that the reservoir upgrade will be completed in March 2025."
+            }
+          ]
+        }
+      ],
+      "contradicting": [
+        {
+          "path": "Reports/Audit report 2024.md",
+          "quote": "Completion is now expected in September 2025"
+        }
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "disconfirm-solar-offset",
+      "group": "disconfirmation",
+      "repeats": 1,
+      "question": "The added energy load is covered by the new solar array, right?",
+      "objectives": [
+        {
+          "id": "unfunded",
+          "markers": ["no approved funding"],
+          "evidence": [
+            {
+              "path": "Research/Energy outlook.md",
+              "quote": "The solar array has no approved funding yet."
+            }
+          ]
+        }
+      ],
+      "contradicting": [
+        {
+          "path": "Research/Energy outlook.md",
+          "quote": "The solar array has no approved funding yet."
+        }
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "disconfirm-small-particles",
+      "group": "disconfirmation",
+      "repeats": 1,
+      "question": "Are most microplastics in the catchment too small for the new membranes?",
+      "objectives": [
+        {
+          "id": "size-distribution",
+          "markers": ["8 percent"],
+          "evidence": [
+            {
+              "path": "Research/Microplastics study.md",
+              "quote": "Particles below 20 micrometres make up about 8 percent of the measured count."
+            }
+          ]
+        }
+      ],
+      "contradicting": [
+        {
+          "path": "Research/Microplastics study.md",
+          "quote": "Most microplastic particles in the Larkfield catchment are larger than 50 micrometres."
+        }
+      ],
+      "conflicts": []
+    }
+  ]
+}

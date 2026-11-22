@@ -1,0 +1,32 @@
+{
+  "mode": "thinking",
+  "profile": "local",
+  "model": "granite4.1:8b",
+  "measuredAt": "1970-01-01T00:00:00.000Z",
+  "fingerprints": {
+    "model": "unavailable",
+    "prompt": "unavailable",
+    "policy": "unavailable",
+    "corpus": "f2295131f9e0cfcda2f9432c55b8086f85522e3b9029998848f0e7cfd1036815",
+    "cases": "9e6f61df17cec497ef3ad18acc7438849630f4d2ee116aae222b209561800d1d"
+  },
+  "missing": [],
+  "perCase": {
+    "conflict-budget": {
+      "group": "conflict",
+      "repeats": 0,
+      "aggregate": {
+        "objectiveCoverage": null,
+        "citationSupport": null,
+        "unreportedConflicts": null,
+        "copiedSourcesAsIndependent": null,
+        "unsupportedCertainty": null,
+        "rounds": null,
+        "searches": null,
+        "tokens": null,
+        "activeMs": null
+      }
+    }
+  },
+  "notes": "Template only: shape of a result file, no measured values."
+}
