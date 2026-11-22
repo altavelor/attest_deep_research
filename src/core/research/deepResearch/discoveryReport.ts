@@ -75,16 +75,15 @@ export function hypothesesSection(
 }
 
 function labelOf(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): string {
-  if (hypothesis.status !== "supported") return hypothesis.status;
   const own = discovery.observations.filter((entry) =>
     hypothesis.observationIds.includes(entry.observationId),
   );
   const user = own.filter((entry) => entry.producer === "user");
-  if (user.length === 0) return "supported by literature";
+  if (user.length === 0) {
+    return hypothesis.status === "supported" ? "supported by literature" : hypothesis.status;
+  }
   const limitations = [...new Set(user.flatMap((entry) => entry.limitations))];
-  return limitations.length === 0
-    ? "supported by a user observation"
-    : `supported by a user observation — ${limitations.join("; ")}`;
+  return `${hypothesis.status} by a user observation — ${limitations.join("; ")}`;
 }
 
 function sourceObservations(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis) {
