@@ -341,4 +341,25 @@ describe("deep research discovery rules", () => {
     };
     expect(validateResearchSection({ schema: 1, active: state, history: [] }).ok).toBe(true);
   });
+
+  it("never cites or quotes registry sources a user report names", async () => {
+    const model = new FakeChatModel([
+      [{ content: JSON.stringify({ verdict: "supports" }), isComplete: true }],
+    ]);
+    const observation = await new ResearchDiscoveryService({
+      chatModel: model,
+      model: "model",
+      chatOptions: {},
+      resolveEvidence: (tokens) =>
+        tokens.map((token) => retrieved(token, markdownSource("Notes/a.md"), "Registry passage.")),
+      spendRound: () => true,
+      createId: (prefix) => `${prefix}-1`,
+      now: () => "2026-01-01T00:00:00.000Z",
+    }).assessReport(hypothesis, proposed, "It held [source-1:revision-1].");
+    expect(observation).toMatchObject({
+      citationTokens: [],
+      limitations: [USER_OBSERVATION_LIMITATION],
+    });
+    expect(JSON.stringify(model.requests)).not.toContain("Registry passage");
+  });
 });
