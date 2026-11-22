@@ -413,6 +413,7 @@ export class AnswerSynthesisService {
     });
   }
 
+  /** Writes the synthesis reasoning diagnostics, adding its counters to those an earlier attempt of the same run already recorded. */
   private applyReasoningDiagnostics(
     diagnostics: ContextDiagnostics | undefined,
     reasoning: AnswerSynthesisServiceOptions["reasoning"],
@@ -427,11 +428,18 @@ export class AnswerSynthesisService {
     >,
   ): void {
     if (!diagnostics || !this.reasoningDiagnostics) return;
+    const previous = diagnostics.reasoning;
+    const total = (key: keyof typeof counts): number => counts[key] + (previous?.[key] ?? 0);
     diagnostics.reasoning = {
       ...this.reasoningDiagnostics,
       ...(reasoning?.effort ? { configuredEffort: reasoning.effort } : {}),
       summaryRequested: reasoning?.summary === "auto",
-      ...counts,
+      reasoningItemCount: total("reasoningItemCount"),
+      continuationRounds: total("continuationRounds"),
+      inputTokens: total("inputTokens"),
+      outputTokens: total("outputTokens"),
+      reasoningTokens: total("reasoningTokens"),
+      cachedInputTokens: total("cachedInputTokens"),
     };
   }
 }
