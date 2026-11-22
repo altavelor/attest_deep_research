@@ -12,6 +12,7 @@ import {
 } from "@core/research/deepResearch";
 import { ResearchDiscoveryService } from "@application/use-cases/research/deep-research";
 import { suppliedObservation } from "@application/use-cases/research/deep-research/strategyHelpers";
+import { runDiscoveryPhase } from "@application/use-cases/research/deep-research/researchDiscoveryPhase";
 import { FakeChatModel } from "../support/researchFakes";
 import { gatheringResearch, researchBranch, researchPlan } from "../support/deepResearch";
 
@@ -221,5 +222,54 @@ describe("deep research discovery rules", () => {
     expect(hypothesisClaims(discovery("supported"), 40)).toMatchObject([
       { kind: "hypothesis", workId: "t-1", citationTokens: ["e1"] },
     ]);
+  });
+
+  it("ends the cycle as exhausted with a note when an assessment round is refused", async () => {
+    const plan = researchPlan([researchBranch(1)], "thorough");
+    const execution = {
+      workId: "t-1",
+      branchId: "branch-1",
+      state: "completed" as const,
+      path: "main" as const,
+      attempts: 2,
+      finding: { text: "F", citationTokens: [], partial: false },
+      terminalReason: null,
+    };
+    const start = {
+      hypotheses: [hypothesis],
+      tests: [proposed],
+      observations: [],
+      cycles: [{ ordinal: 1, workIds: [], decision: "continue" as const, reason: "Gathered" }],
+      notes: [],
+      executions: [execution],
+      omissions: [],
+    };
+    const phase = (discovery: typeof start, tests = discovery.tests) =>
+      runDiscoveryPhase({
+        question: "Q",
+        plan,
+        gathered: [],
+        discovery: { ...discovery, tests },
+        service: { assess: async () => null } as unknown as ResearchDiscoveryService,
+        runTests: async (executions) => executions,
+        commit: async () => undefined,
+        budgetClosed: () => false,
+        aborted: () => false,
+      });
+
+    const refused = await phase(start);
+    expect(refused.decision).toBe("exhausted");
+    expect(refused.discovery.cycles.at(-1)).toMatchObject({
+      reason: "No discovery round remains.",
+    });
+    expect(refused.discovery.tests[0]!.status).toBe("unavailable");
+    expect(refused.discovery.notes).toHaveLength(1);
+    const full = Array.from({ length: 8 }, (_, index) => ({
+      ...proposed,
+      testId: `t-${index + 9}`,
+      status: "unavailable" as const,
+    }));
+    const noRoom = await phase(start, full);
+    expect(noRoom.discovery.cycles.at(-1)!.reason).toBe("No room for more hypotheses.");
   });
 });

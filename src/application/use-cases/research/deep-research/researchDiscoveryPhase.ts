@@ -73,6 +73,10 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
         MAX_RESEARCH_HYPOTHESES - discovery.hypotheses.length,
         MAX_RESEARCH_TESTS - discovery.tests.length,
       );
+      if (room <= 0) {
+        await commit(decided(deps, discovery, ordinal, false, "No room for more hypotheses."));
+        continue;
+      }
       const proposed = await deps.service.propose(
         deps.question,
         deps.plan,
@@ -110,6 +114,10 @@ export async function runDiscoveryPhase(deps: DiscoveryPhaseDeps): Promise<Disco
     if (deps.aborted()) return { discovery, decision: null };
     const observed = await assessTests(deps, discovery, ordinal);
     discovery = observed.discovery;
+    if (observed.refused) {
+      await commit(withCycle(discovery, ordinal, "exhausted", "No discovery round remains."));
+      continue;
+    }
     await commit(decided(deps, discovery, ordinal, observed.progressed || revised, null));
   }
 }
@@ -196,7 +204,7 @@ async function assessTests(
   deps: DiscoveryPhaseDeps,
   start: ResearchDiscovery,
   ordinal: number,
-): Promise<{ discovery: ResearchDiscovery; progressed: boolean }> {
+): Promise<{ discovery: ResearchDiscovery; progressed: boolean; refused: boolean }> {
   let discovery = start;
   let progressed = false;
   for (const test of start.tests) {
@@ -216,7 +224,15 @@ async function assessTests(
         entry.hypothesisId === test.hypothesisId && entry.revision === test.hypothesisRevision,
     )!;
     const observation = await deps.service.assess(hypothesis, test, execution.finding);
-    if (observation === null) break;
+    if (observation === null) {
+      const left = discovery.tests.filter(
+        (entry) => entry.status === "proposed" && entry.kind === "literature-check",
+      );
+      for (const entry of left) {
+        discovery = unavailable(discovery, entry.testId, ordinal, "No discovery round remains");
+      }
+      return { discovery, progressed, refused: true };
+    }
     discovery = withObservation(discovery, observation);
     progressed = true;
     const status = discovery.hypotheses.find(
@@ -231,7 +247,7 @@ async function assessTests(
       nextAction: status === "supported" || status === "disconfirmed" ? "Settled" : "Revise",
     });
   }
-  return { discovery, progressed };
+  return { discovery, progressed, refused: false };
 }
 
 function unavailable(
