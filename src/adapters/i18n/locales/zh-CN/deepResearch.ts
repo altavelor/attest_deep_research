@@ -71,4 +71,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "研究导出文件夹",
   "settings.advanced.researchExportFolder.desc":
     "用于保存导出研究报告的库文件夹。库外或 .attest 内的路径会被拒绝。",
+  "chat.deepResearch.export.folder": "导出文件夹；留空则使用默认文件夹",
 };

@@ -73,4 +73,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "Папка экспорта исследований",
   "settings.advanced.researchExportFolder.desc":
     "Папка хранилища для экспортированных отчётов. Пути вне хранилища или внутри .attest отклоняются.",
+  "chat.deepResearch.export.folder": "Папка экспорта; пусто — папка по умолчанию",
 };

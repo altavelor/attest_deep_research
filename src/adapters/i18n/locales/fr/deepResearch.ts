@@ -74,4 +74,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "Dossier d’export des recherches",
   "settings.advanced.researchExportFolder.desc":
     "Dossier du coffre pour les rapports exportés. Les chemins hors du coffre ou dans .attest sont refusés.",
+  "chat.deepResearch.export.folder": "Dossier d’export ; vide utilise celui par défaut",
 };

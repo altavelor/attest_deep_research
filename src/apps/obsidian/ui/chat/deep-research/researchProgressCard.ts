@@ -7,6 +7,7 @@ import type {
   ResearchState,
 } from "@core/research/deepResearch";
 import type { ResearchCardContext } from "./researchCardContext";
+import type { ResearchExportController } from "./researchExportController";
 import { cancelAction, renderActions, type CardAction } from "./researchCardActions";
 import { renderDiscovery } from "./researchDiscoveryCard";
 
@@ -78,7 +79,7 @@ export function renderEndedResearch(
   cardEl: HTMLElement,
   entry: ResearchHistoryEntry | undefined,
   t: Translate,
-  onExport?: ResearchCardContext["onExport"],
+  exports?: ResearchCardContext["exports"],
 ): void {
   const report = entry?.report;
   if (!report) {
@@ -118,46 +119,50 @@ export function renderEndedResearch(
   }
   if (report.verification) renderVerification(cardEl, report.verification, t);
   cardEl.createDiv({ cls: "attest-research-card__meta", text: report.stopReason });
-  if (onExport && entry) renderExport(cardEl, entry.researchId, t, onExport);
+  if (exports && entry) renderExport(cardEl, entry.researchId, t, exports);
 }
 
 /**
- * Renders the export action of a finished report. The button is disabled while an export runs; a
- * success shows the note path, and a failure shows its reason and turns the button into a retry.
+ * Renders the export control of a finished report from the view's export state: an optional
+ * folder override, the action, and the pending, exported or failed status. The action is disabled
+ * while an export runs and turns into a retry after a failure.
  */
 function renderExport(
   cardEl: HTMLElement,
   researchId: string,
   t: Translate,
-  onExport: NonNullable<ResearchCardContext["onExport"]>,
+  exports: ResearchExportController,
 ): void {
+  const state = exports.state(researchId);
   const actionsEl = cardEl.createDiv({ cls: "attest-research-card__actions" });
+  const folderEl = actionsEl.createEl("input", {
+    cls: "attest-research-card__export-folder",
+    attr: {
+      type: "text",
+      placeholder: exports.defaultFolder(),
+      "aria-label": t("chat.deepResearch.export.folder"),
+    },
+  });
   const button = actionsEl.createEl("button", {
     cls: "attest-research-card__action",
-    text: t("chat.deepResearch.action.export"),
+    text: t(
+      state.kind === "failed"
+        ? "chat.deepResearch.action.retryExport"
+        : "chat.deepResearch.action.export",
+    ),
   });
+  button.disabled = state.kind === "pending";
+  button.addEventListener("click", () => exports.start(researchId, folderEl.value));
+  if (state.kind === "idle") return;
   const statusEl = cardEl.createDiv({ cls: "attest-research-card__meta" });
-  button.addEventListener("click", () => {
-    button.disabled = true;
-    statusEl.removeClass("attest-research-card__notice--error");
-    statusEl.setText(t("chat.deepResearch.export.running"));
-    onExport(researchId).then(
-      ({ path }) => {
-        button.disabled = false;
-        statusEl.setText(t("chat.deepResearch.export.done", { path }));
-      },
-      (error: unknown) => {
-        button.disabled = false;
-        button.setText(t("chat.deepResearch.action.retryExport"));
-        statusEl.addClass("attest-research-card__notice--error");
-        statusEl.setText(
-          t("chat.deepResearch.export.failed", {
-            reason: error instanceof Error ? error.message : String(error),
-          }),
-        );
-      },
-    );
-  });
+  if (state.kind === "pending") statusEl.setText(t("chat.deepResearch.export.running"));
+  if (state.kind === "done") {
+    statusEl.setText(t("chat.deepResearch.export.done", { path: state.path }));
+  }
+  if (state.kind === "failed") {
+    statusEl.addClass("attest-research-card__notice--error");
+    statusEl.setText(t("chat.deepResearch.export.failed", { reason: state.reason }));
+  }
 }
 
 function renderVerification(

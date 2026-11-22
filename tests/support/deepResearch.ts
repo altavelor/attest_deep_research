@@ -465,13 +465,25 @@ export class DiscoveryModel implements ChatModelProvider {
 
 /**
  * In-memory research note writer. A path listed in `raced` gets a file just before its create, as
- * if another writer won the race, and `failures` makes the next creates throw.
+ * if another writer won the race, `failures` makes the next creates throw, and `hold` pauses them.
  */
 export class MemoryResearchNotes implements ResearchNoteWriter {
   readonly files = new Map<string, string>();
   readonly folders: string[] = [];
   raced = new Set<string>();
   failures = 0;
+  creates = 0;
+  private gate: Promise<void> | null = null;
+
+  /** Holds every create until the returned release is called. */
+  hold(): () => void {
+    let release = () => {};
+    this.gate = new Promise((resolve) => (release = resolve));
+    return () => {
+      this.gate = null;
+      release();
+    };
+  }
 
   async exists(path: string): Promise<boolean> {
     return this.files.has(path);
@@ -482,6 +494,8 @@ export class MemoryResearchNotes implements ResearchNoteWriter {
   }
 
   async createNew(path: string, content: string): Promise<boolean> {
+    this.creates += 1;
+    if (this.gate) await this.gate;
     if (this.failures > 0) {
       this.failures -= 1;
       throw new Error("Disk is full.");

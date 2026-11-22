@@ -74,4 +74,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "Ordner für Recherche-Exporte",
   "settings.advanced.researchExportFolder.desc":
     "Tresorordner für exportierte Rechercheberichte. Pfade außerhalb des Tresors oder in .attest werden abgelehnt.",
+  "chat.deepResearch.export.folder": "Exportordner; leer verwendet den Standard",
 };

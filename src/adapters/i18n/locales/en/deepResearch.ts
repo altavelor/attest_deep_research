@@ -71,6 +71,7 @@ export const deepResearch = {
   "settings.advanced.researchExportFolder.name": "Research export folder",
   "settings.advanced.researchExportFolder.desc":
     "Vault folder for exported research reports. Paths outside the vault or inside .attest are rejected.",
+  "chat.deepResearch.export.folder": "Export folder; empty uses the default",
 };
 
 export type EnDeepResearchMessages = Record<keyof typeof deepResearch, string>;

@@ -55,6 +55,7 @@ import {
   IndexSearchResult,
 } from "@apps/obsidian/ui/index/IndexSearchController";
 import { ResearchQuestionController } from "./research/ResearchQuestionController";
+import { ResearchExportController } from "./deep-research/researchExportController";
 import {
   availableResearchMode,
   chatModelProfileLabel,
@@ -120,7 +121,9 @@ export interface AttestChatViewServices {
   exportResearchReport?(
     report: ResearchReport,
     context: ResearchExportContext,
+    folder?: string,
   ): Promise<{ path: string }>;
+  getResearchExportFolder?(): string;
   shouldIncludeActiveFileContext(): boolean;
 }
 
@@ -143,6 +146,7 @@ export class AttestChatView extends ItemView {
   private selectedSessionId: string | null = null;
   private toolbarEl: HTMLElement | null = null;
   private readonly sentResearchTurns = new Set<string>();
+  private readonly researchExports: ResearchExportController | null;
 
   private transcriptEl: HTMLElement | null = null;
   private followUpsEl: HTMLElement | null = null;
@@ -242,6 +246,13 @@ export class AttestChatView extends ItemView {
       hasSubAgentRuns: () => this.subAgents.hasAgentRuns,
       onOpenSubAgents: (sessionId) => this.subAgents.open(sessionId),
     });
+    this.researchExports = services.exportResearchReport
+      ? new ResearchExportController({
+          exportReport: (researchId, folder) => this.exportResearch(researchId, folder),
+          defaultFolder: () => services.getResearchExportFolder?.() ?? "",
+          requestRedisplay: () => this.renderMessages(),
+        })
+      : null;
     this.researchController = new ResearchQuestionController({
       getSessionId: () => this.session.sessionId,
       isSessionDisplayed: (sessionId) => this.isSessionDisplayed(sessionId),
@@ -698,9 +709,7 @@ export class AttestChatView extends ItemView {
         sentTurns: this.sentResearchTurns,
         running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
-        ...(this.services.exportResearchReport
-          ? { onExport: (researchId: string) => this.exportResearch(researchId) }
-          : {}),
+        ...(this.researchExports ? { exports: this.researchExports } : {}),
       },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
@@ -1126,7 +1135,7 @@ export class AttestChatView extends ItemView {
     });
   }
 
-  private async exportResearch(researchId: string): Promise<{ path: string }> {
+  private async exportResearch(researchId: string, folder?: string): Promise<{ path: string }> {
     const view = researchSectionView(this.session.deepResearch);
     const report = finishedResearchReport(view, this.messages, researchId);
     const chatId = this.session.chatId;
@@ -1137,12 +1146,16 @@ export class AttestChatView extends ItemView {
       view.status === "ready"
         ? (view.history.find((entry) => entry.researchId === researchId)?.question ?? "")
         : "";
-    return this.services.exportResearchReport(report, {
-      chatId,
-      researchId,
-      title,
-      registry: this.sourceRegistry,
-    });
+    return this.services.exportResearchReport(
+      report,
+      {
+        chatId,
+        researchId,
+        title,
+        registry: this.sourceRegistry,
+      },
+      folder,
+    );
   }
 
   private async saveAnswerToNewNote(answer: ResearchAnswer): Promise<void> {

@@ -76,4 +76,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "Carpeta de exportación de investigaciones",
   "settings.advanced.researchExportFolder.desc":
     "Carpeta de la bóveda para los informes exportados. Se rechazan rutas fuera de la bóveda o dentro de .attest.",
+  "chat.deepResearch.export.folder": "Carpeta de exportación; vacía usa la predeterminada",
 };

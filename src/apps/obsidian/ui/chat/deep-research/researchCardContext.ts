@@ -1,4 +1,5 @@
 import type { Translate } from "@adapters/i18n";
+import type { ResearchExportController } from "./researchExportController";
 import type { ResearchSectionView, ResearchTurnInput } from "@core/research/deepResearch";
 
 export interface ResearchCardContext {
@@ -7,5 +8,5 @@ export interface ResearchCardContext {
   sentTurns: Set<string>;
   running?: boolean;
   onTurn(input: ResearchTurnInput, label: string): void;
-  onExport?(researchId: string): Promise<{ path: string }>;
+  exports?: ResearchExportController;
 }

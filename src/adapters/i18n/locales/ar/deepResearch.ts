@@ -71,4 +71,5 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.name": "مجلد تصدير الأبحاث",
   "settings.advanced.researchExportFolder.desc":
     "مجلد في الخزنة للتقارير المصدَّرة. تُرفض المسارات خارج الخزنة أو داخل ‎.attest.",
+  "chat.deepResearch.export.folder": "مجلد التصدير؛ يُستخدم الافتراضي إذا تُرك فارغًا",
 };
