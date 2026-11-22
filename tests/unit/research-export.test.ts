@@ -98,7 +98,7 @@ describe("research export", () => {
       "",
     ]);
     expect(text).toContain("A [[Notes/tides.md|Tides x]] B");
-    expect(text).toContain("B [Site \\](x)](https://example.org/a%20b%28c%29) C");
+    expect(text).toContain("B [Site \\]\\(x)](https://example.org/a%20b%28c%29) C");
     expect(text).toContain("C Bad D [unknown-token-1]");
   });
 
@@ -114,6 +114,8 @@ describe("research export", () => {
       ["[x][r]\n\n[r]: file:///etc/passwd", "[x][r]\n\n\\[r]: file:///etc/passwd"],
       ["> [r]: obsidian://x", "> \\[r]: obsidian://x"],
       ["[w]: https://example.org", "[w]: https://example.org"],
+      ["[m]:\n  obsidian://next-line", "\\[m]:\n  obsidian://next-line"],
+      ["[e\\\\](obsidian://x)", "[e\\\\]\\(obsidian://x)"],
       ["Claim [source-1](2019)", "Claim [[Notes/a.md|A]]\\(2019)"],
       ["<https://example.org> <obsidian://x>", "<https://example.org> &lt;obsidian://x>"],
       ["> ```dataviewjs\n> app\n> ```", "> ```text\n> app\n> ```"],
