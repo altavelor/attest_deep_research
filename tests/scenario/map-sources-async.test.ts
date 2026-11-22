@@ -12,7 +12,11 @@ import {
 } from "@application/use-cases/map-sources";
 import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 import { applySubAgentTimelineEvent } from "@core/chat/subAgentTimeline";
-import { researchModeRetrievalParameters, type MapSourcesBatchState } from "@core/research";
+import {
+  researchModeRetrievalParameters,
+  type MapSourcesBatchRecord,
+  type MapSourcesBatchState,
+} from "@core/research";
 import type { RetrievedChunk } from "@core/model";
 import { eventually, settle } from "../support/async";
 import {
@@ -263,28 +267,44 @@ describe("map_sources batches over the chat's sub-agent manager", () => {
     );
   });
 
-  it("S2: interrupts a batch whose terminal write was held across the parent interrupt and failed", async () => {
+  it("S2: settles a batch whose terminal write fails or is held across the parent interrupt", async () => {
     const harness = importHarness();
     const batches = (harness.manager as unknown as SubAgentSessionManager).batches();
-    const unsaved = batchRecord({ batchId: "batch-unsaved", refs: [], state: "completed" });
-    harness.writer.failNext(new Error("disk full"));
-    await expect(batches.put(unsaved, true)).rejects.toThrow();
-    expect(batches.get(unsaved.batchId)?.state).toBe("pending");
+    const diagnostics = { selection: "explicit" as const, requested: 0, completed: 0, failed: 0 };
+    const finished = (record: MapSourcesBatchRecord): MapSourcesBatchRecord => ({
+      ...record,
+      state: "completed",
+      result: { question: record.question, rows: [], diagnostics },
+    });
     const open = batchRecord({ refs: [] });
-    await batches.put(open, true);
+    harness.writer.failNext(new Error("disk full"));
+    await expect(batches.put(finished(open), true)).rejects.toThrow();
+    expect(batches.get(open.batchId)).toEqual(open);
     const release = harness.writer.holdNext();
     harness.writer.failNext(new Error("disk full"));
-    const finishing = batches.put({ ...open, state: "completed" }, true);
+    const failing = batches.put(finished(open), true);
     await settle();
-
     await batches.interrupt("parent-1", { code: "parent-terminal", message: "Ended." });
     release();
-    await expect(finishing).rejects.toThrow();
+    await expect(failing).rejects.toThrow();
+    const held = batchRecord({ batchId: "batch-2", parentRunId: "parent-2", refs: [] });
+    await batches.put(held, true);
+    const releaseHeld = harness.writer.holdNext();
+    const succeeding = batches.put(finished(held), true);
+    await settle();
+    await batches.interrupt("parent-2", { code: "parent-terminal", message: "Ended." });
+    releaseHeld();
+    await succeeding;
     await settle();
 
-    expect([batches.get(open.batchId)?.state, batches.pendingCount("parent-1")]).toEqual([
-      "interrupted",
-      0,
+    expect(
+      [open, held].map((record) => {
+        const settled = batches.get(record.batchId);
+        return [settled?.state, settled?.result, batches.pendingCount(record.parentRunId)];
+      }),
+    ).toEqual([
+      ["interrupted", undefined, 0],
+      ["interrupted", undefined, 0],
     ]);
   });
 });

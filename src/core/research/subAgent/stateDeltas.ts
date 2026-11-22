@@ -172,8 +172,8 @@ export function checkSubAgentDelta(delta: SubAgentBufferedValue): string | null 
 /**
  * Applies one checked delta to an immutable section and returns the new section, or
  * null when the delta refers to a missing parent entity. A set merges the given
- * fields into the entity or creates it; a delete removes it together with the
- * map_sources batches that refer to a deleted session or run.
+ * fields into the entity or creates it, and replaces a map_sources batch whole; a delete
+ * removes it together with the batches that refer to a deleted session or run.
  */
 export function applySubAgentDelta(
   snapshot: SubAgentStateSnapshot,
@@ -189,7 +189,8 @@ export function applySubAgentDelta(
   const rows = (snapshot[target.list] ?? []) as unknown as readonly Row[];
   const rest = rows.filter((row) => row[target.idField] !== delta.id);
   if (delta.op === "delete") return { ...snapshot, [target.list]: rest };
-  const existing = rows.find((row) => row[target.idField] === delta.id) ?? {};
+  const existing =
+    delta.entity === "batch" ? {} : (rows.find((row) => row[target.idField] === delta.id) ?? {});
   const next = { ...existing, ...delta.fields, [target.idField]: delta.id };
   const index = rows.findIndex((row) => row[target.idField] === delta.id);
   const updated = index < 0 ? [...rows, next] : rows.map((row, at) => (at === index ? next : row));
