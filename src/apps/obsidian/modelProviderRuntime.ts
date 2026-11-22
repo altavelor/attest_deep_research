@@ -13,12 +13,11 @@ export function resolveProviderFetch(
   if (!isMobile && requestKind === "streaming") {
     return nativeWindowFetch;
   }
-  if (isMobileLocalProvider(server)) return unavailableMobileLocalFetch;
+  if (isMobile && isMobileLocalProvider(server)) return unavailableMobileLocalFetch;
   return obsidianRequestFetch;
 }
 
 export function isMobileLocalProvider(server: ServerProfile): boolean {
-  if (server.apiFormat === "ollama") return true;
   try {
     const hostname = new URL(server.baseUrl).hostname.toLowerCase();
     return (
