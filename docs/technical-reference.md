@@ -44,8 +44,30 @@ Attest separates the stable `instant` and `thinking` strategies:
   selected model cannot satisfy the tool/reasoning policy. A call to a tool the run does not offer
   or permit fails with `tool-unavailable`; the model receives the offered tool names and the
   timeline row shows a localized reason.
-- **Deep Research** is intentionally not part of the current release flow. Its future lifecycle is
-  `plan → user review → gather → verify → synthesize → export`.
+- **Deep Research** runs only behind the hidden developer flag `deepResearchPreview`; it is not
+  offered in the composer or in new-chat defaults without it, and the run is rejected with
+  `research-disabled` when the flag is off. Its lifecycle is
+  `plan → user review → gather → verify → synthesize → export`. The composer disables the item
+  with the same readable reason as Thinking when the model has no verified tool calling.
+  The flag stays until every activation condition holds; all of them are open:
+  - Deep Research beats the recorded Thinking baseline on objective coverage and citation support
+    on the frozen corpus for one local and one remote profile (no baseline is recorded yet);
+  - unsupported-certainty and uncounted-conflict rates are not worse than that baseline;
+  - the preset limits are confirmed or changed in one reviewed commit with the measurements;
+  - every Deep Research UI surface has recorded live Obsidian observations;
+  - old chats, `instant`, `thinking` and `map_sources` pass their existing suites unchanged.
+- **Research export** writes a finished report as a new Markdown note on the report card's
+  explicit Export action, independent of any running turn. The folder comes from the
+  `researchExportFolder` setting (default `Attest/Research`) or a per-export override; both are
+  untrusted and rejected with `research-export-folder` when empty, absolute, using backslashes or
+  empty, `.` or `..` segments, or inside `.attest/`. The note is named
+  `<sanitized question> - YYYY-MM-DD.md` by the local date; a taken name, also one taken between
+  the check and the create, moves to ` (2)`, ` (3)` and so on up to 20 attempts
+  (`research-export-name`), and no existing note is ever replaced. Front matter holds quoted
+  `type`, `chat_id`, `research_id`, `created` (UTC) and `quality`. Citation tokens resolved by the
+  conversation registry become wikilinks for vault sources and Markdown links for http(s) web
+  sources; other tokens stay as written. A failed export changes nothing and the card offers a
+  retry.
 
 Application dependencies flow inward: `apps → adapters → application → core`. Ports are declared in
 `src/application`; Obsidian, filesystem, HTTP, and provider implementations remain in adapters or
