@@ -8,12 +8,14 @@ import {
   novitaDialect,
   openAiDialect,
 } from "./flatDialects";
+import { anthropicDialect } from "./anthropic";
 import { deepInfraDialect, mistralDialect, togetherDialect } from "./metadataDialects";
 import { openRouterDialect } from "./openRouter";
 import { ProviderDialect } from "./types";
 
 export const providerDialects: readonly ProviderDialect[] = [
   openRouterDialect,
+  anthropicDialect,
   deepInfraDialect,
   togetherDialect,
   mistralDialect,

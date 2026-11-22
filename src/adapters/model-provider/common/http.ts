@@ -7,6 +7,7 @@ export interface ProviderHttpClientOptions {
   apiFormat: ApiFormat;
   baseUrl: string;
   apiKey?: string;
+  defaultHeaders?: Readonly<Record<string, string>>;
   fetch?: typeof fetch;
   timeoutMs?: number;
   logger?: PluginRequestLogger;
@@ -23,10 +24,12 @@ export class ProviderHttpClient {
   private readonly unavailableCode: ProviderHttpClientOptions["unavailableCode"];
   private readonly unavailableMessage: string;
   private readonly apiKey?: string;
+  private readonly defaultHeaders: Readonly<Record<string, string>>;
 
   constructor(options: ProviderHttpClientOptions) {
     this.baseUrl = normalizeProviderBaseUrl(options.apiFormat, options.baseUrl);
     this.apiKey = options.apiKey;
+    this.defaultHeaders = options.defaultHeaders ?? {};
     this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.logger = options.logger;
@@ -51,7 +54,10 @@ export class ProviderHttpClient {
     }, this.timeoutMs);
     const url = `${this.baseUrl}${path}`;
     const method = init.method ?? "GET";
-    const requestInit = withAuthorization(init, this.apiKey);
+    const requestInit = withAuthorization(
+      withDefaultHeaders(init, this.defaultHeaders),
+      this.apiKey,
+    );
     const logContext = createLogContext(url, method, requestInit, logging.redactBody === true);
 
     try {
@@ -265,6 +271,18 @@ function normalizeProviderBaseUrl(apiFormat: ApiFormat, baseUrl: string): string
   }
 
   return trimmed;
+}
+
+/** Places the client's default headers under the headers the request sets itself. */
+function withDefaultHeaders(
+  init: RequestInit,
+  defaultHeaders: Readonly<Record<string, string>>,
+): RequestInit {
+  if (Object.keys(defaultHeaders).length === 0) {
+    return init;
+  }
+
+  return { ...init, headers: { ...defaultHeaders, ...headersToRecord(init.headers) } };
 }
 
 function withAuthorization(init: RequestInit, apiKey: string | undefined): RequestInit {

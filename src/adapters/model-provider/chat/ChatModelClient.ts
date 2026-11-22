@@ -18,6 +18,10 @@ import {
   streamOllamaChat,
 } from "./streaming/ollamaChatStream";
 import { streamAnthropicChat } from "./streaming/anthropicChatStream";
+import {
+  ChatCompletionsDialect,
+  resolveChatCompletionsDialect,
+} from "./streaming/chatCompletionsDialect";
 import { listOpenAiCompatibleModelIds } from "./streaming/chatCompletionsHttp";
 import { streamOpenAiCompatibleChat } from "./streaming/openAiChatStream";
 
@@ -35,6 +39,7 @@ export interface ChatModelClientOptions {
 export class ChatModelClient implements ChatModelProvider {
   private readonly provider: ApiFormat;
   private readonly http?: ProviderHttpClient;
+  private readonly dialect: ChatCompletionsDialect;
   private readonly anthropic?: Anthropic;
   private readonly ollama?: Ollama;
   private readonly apiKey?: string;
@@ -46,11 +51,13 @@ export class ChatModelClient implements ChatModelProvider {
     this.apiKey = options.apiKey;
     this.logger = options.logger;
     this.onReasoningObserved = options.onReasoningObserved;
+    this.dialect = resolveChatCompletionsDialect(options.baseUrl);
     if (this.provider === "openai-compatible") {
       this.http = new ProviderHttpClient({
         apiFormat: "openai-compatible",
         baseUrl: options.baseUrl,
         apiKey: options.apiKey,
+        defaultHeaders: this.dialect.requestHeaders,
         fetch: options.fetch,
         timeoutMs: options.timeoutMs,
         logger: options.logger,
@@ -95,6 +102,7 @@ export class ChatModelClient implements ChatModelProvider {
         yield* streamOpenAiCompatibleChat({
           http: this.http!,
           request,
+          dialect: this.dialect,
           onReasoningObserved: this.onReasoningObserved,
         });
       }

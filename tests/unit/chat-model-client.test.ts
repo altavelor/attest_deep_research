@@ -632,6 +632,54 @@ describe("ChatModelClient", () => {
     expect(body.parallel_tool_calls).toBe(true);
   });
 
+  it.each([
+    ["https://api.anthropic.com/v1", undefined, 4096],
+    ["https://EU.API.Anthropic.com/v1", 512, 512],
+  ] as const)(
+    "applies the Anthropic host rules to Chat Completions on %s with maxTokens %o",
+    async (baseUrl, maxTokens, expected) => {
+      const fetchMock = vi.fn().mockResolvedValue(streamResponse(["data: [DONE]\n\n"]));
+      const client = new ChatModelClient({
+        apiFormat: "openai-compatible",
+        baseUrl,
+        fetch: fetchMock,
+      });
+      for await (const _ of client.streamChat({
+        model: "claude",
+        messages: [{ role: "user", content: "hi" }],
+        maxTokens,
+        reasoningEnabled: true,
+      })) {
+      }
+      const init = fetchMock.mock.calls[0][1];
+      const body = JSON.parse(String(init?.body));
+      expect(body.max_tokens).toBe(expected);
+      expect(body).not.toHaveProperty("reasoning");
+      expect(body).not.toHaveProperty("chat_template_kwargs");
+      expect(init?.headers).toMatchObject({ "anthropic-version": "2023-06-01" });
+    },
+  );
+
+  it.each([{ type: "required" }, { type: "specific", name: "synthetic_probe" }] as const)(
+    "downgrades the forced tool choice %o to auto on the Anthropic host",
+    async (toolChoice) => {
+      const fetchMock = vi.fn().mockResolvedValue(streamResponse(["data: [DONE]\n\n"]));
+      const client = new ChatModelClient({
+        apiFormat: "openai-compatible",
+        baseUrl: "https://api.anthropic.com/v1",
+        fetch: fetchMock,
+      });
+      for await (const _ of client.streamChat({
+        model: "claude",
+        messages: [{ role: "user", content: "probe" }],
+        tools: [tool],
+        toolChoice,
+      })) {
+      }
+      expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).tool_choice).toBe("auto");
+    },
+  );
+
   it("posts Anthropic chat to the SDK /v1/messages endpoint", async () => {
     const fetchMock = vi
       .fn()
@@ -832,6 +880,25 @@ describe("ChatModelClient", () => {
         [Symbol.asyncIterator]()
         .next(),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
+    const anthropicHost = new ChatModelClient({
+      apiFormat: "openai-compatible",
+      baseUrl: "https://api.anthropic.com/v1",
+      fetch: fetchMock,
+    });
+    await expect(
+      anthropicHost
+        .streamChat({
+          model: "m",
+          messages: [],
+          tools: [tool],
+          toolChoice: { type: "specific", name: "missing" },
+        })
+        [Symbol.asyncIterator]()
+        .next(),
+    ).rejects.toMatchObject({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Specific tool is not defined: missing.",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

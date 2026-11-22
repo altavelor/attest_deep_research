@@ -3,6 +3,7 @@ import { ChatRequest, ChatResponseChunk, ModelStreamEvent } from "@core/agent";
 import { AttestError } from "@core/errors";
 import type { ProviderHttpClient } from "../../common/http";
 import { mapOpenAiMessage } from "../providers/messageMappers";
+import type { ChatCompletionsDialect } from "./chatCompletionsDialect";
 import { openChatCompletionsStream } from "./chatCompletionsHttp";
 import { InlineReasoningParser } from "./InlineReasoningParser";
 import { parseOpenAiChatDelta, textFromEvents, ToolCallBuilder } from "./chatStreamPrimitives";
@@ -12,27 +13,29 @@ import { parseTextToolCalls } from "./textToolCalls";
 interface OpenAiChatStreamOptions {
   http: ProviderHttpClient;
   request: ChatRequest;
+  dialect: ChatCompletionsDialect;
   onReasoningObserved?: (observation: { protocol: "chat-completions"; dialect: string }) => void;
 }
 
 export async function* streamOpenAiCompatibleChat({
   http,
   request,
+  dialect,
   onReasoningObserved,
 }: OpenAiChatStreamOptions): AsyncIterable<ChatResponseChunk> {
   const baseBody = {
     model: request.model,
     messages: request.messages.map(mapOpenAiMessage),
     temperature: request.temperature,
-    max_tokens: request.maxTokens,
+    max_tokens: request.maxTokens ?? dialect.defaultMaxTokens,
     stream: true,
     ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
-    ...(request.toolChoice ? { tool_choice: mapOpenAiToolChoice(request) } : {}),
+    ...(request.toolChoice ? { tool_choice: mapOpenAiToolChoice(request, dialect) } : {}),
     ...(request.parallelToolCalls !== undefined
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
   } satisfies Record<string, unknown>;
-  const reasoning = reasoningBody(request);
+  const reasoning = dialect.sendsReasoningFields ? reasoningBody(request) : {};
 
   const open = (body: Record<string, unknown>): Promise<AsyncIterable<Record<string, unknown>>> =>
     openChatCompletionsStream(http, body, request.signal);
@@ -232,10 +235,15 @@ function refusalText(error: unknown): string {
   return [error.message, nested].filter((part) => typeof part === "string").join(" ");
 }
 
-function mapOpenAiToolChoice(request: ChatRequest): unknown {
+/**
+ * Maps the requested tool choice to the Chat Completions field, downgrading a
+ * forced choice to `auto` on hosts that reject it after the named tool is validated.
+ */
+function mapOpenAiToolChoice(request: ChatRequest, dialect: ChatCompletionsDialect): unknown {
   const choice = request.toolChoice!;
+  if (choice.type === "specific") validateSpecificTool(request, choice.name);
+  if (!dialect.supportsForcedToolChoice && choice.type !== "none") return "auto";
   if (choice.type !== "specific") return choice.type;
-  validateSpecificTool(request, choice.name);
   return { type: "function", function: { name: choice.name } };
 }
 

@@ -1,5 +1,4 @@
 import { EmbeddingClient } from "@adapters/model-provider/embeddings/EmbeddingClient";
-import { ProviderHttpClient } from "@adapters/model-provider/common/http";
 import {
   contextLengthFromModelMetadata,
   isOllamaTagsResponse,
@@ -9,12 +8,16 @@ import {
 } from "@adapters/model-provider/common/models";
 import { toUserMessage } from "@core/errors";
 import { ApiFormat } from "@core/agent";
-import type { PluginRequestLogger } from "../debugLogger";
 import { ModelCapability, ServerProfile } from "../types";
 import type { ModelCapabilitySnapshot } from "../capabilities";
 import { resolveCapabilityMetadata } from "../capabilities";
 import { capabilityFromKinds, resolveProviderDialect } from "./providerDialects";
 import type { ProviderDialect } from "./providerDialects";
+import { genericOpenAiDialect } from "./providerDialects/flatDialects";
+import { createDiscoveryHttp, ModelDiscoveryOptions } from "./discoveryHttp";
+import { fetchOllamaContextLength, fetchOllamaModelNames } from "./ollamaMetadata";
+
+export type { ModelDiscoveryOptions } from "./discoveryHttp";
 
 export interface DiscoveredModel {
   id: string;
@@ -27,12 +30,6 @@ export interface ModelDiscoveryResult {
   ok: boolean;
   message: string;
   models: DiscoveredModel[];
-}
-
-export interface ModelDiscoveryOptions {
-  fetch?: typeof fetch;
-  logger?: PluginRequestLogger;
-  timeoutMs?: number;
 }
 
 export function apiFormatLabel(apiFormat: ApiFormat): string {
@@ -100,7 +97,10 @@ export async function verifyEmbeddingCapability(
   modelName: string,
   options: ModelDiscoveryOptions = {},
 ): Promise<boolean> {
-  if (serverProfile.apiFormat === "anthropic") {
+  if (
+    serverProfile.apiFormat === "anthropic" ||
+    resolveProviderDialect(serverProfile.baseUrl).embeddingsUnavailable
+  ) {
     return false;
   }
 
@@ -144,21 +144,23 @@ export async function fetchModelContextLength(
     options,
     { method: "GET" },
   );
-  if (standardMetadata !== undefined) {
+  if (
+    standardMetadata !== undefined ||
+    resolveProviderDialect(serverProfile.baseUrl) !== genericOpenAiDialect
+  ) {
     return standardMetadata;
   }
 
   const lmStudioBaseUrl = lmStudioMetadataBaseUrl(serverProfile.baseUrl);
-  if (!lmStudioBaseUrl) {
-    return undefined;
-  }
-
-  return tryFetchContextLength(
-    { ...serverProfile, baseUrl: lmStudioBaseUrl },
-    `/models/${encodedModelName}`,
-    options,
-    { method: "GET" },
-  );
+  const lmStudioMetadata = lmStudioBaseUrl
+    ? await tryFetchContextLength(
+        { ...serverProfile, baseUrl: lmStudioBaseUrl },
+        `/models/${encodedModelName}`,
+        options,
+        { method: "GET" },
+      )
+    : undefined;
+  return lmStudioMetadata ?? fetchOllamaContextLength(serverProfile, modelName, options);
 }
 
 async function tryFetchContextLength(
@@ -225,7 +227,31 @@ async function fetchOpenAiCompatibleModels(
     }
   }
 
-  return [...discovered.values()];
+  return dialect === genericOpenAiDialect
+    ? withOllamaKinds([...discovered.values()], await fetchOllamaModelNames(serverProfile, options))
+    : [...discovered.values()];
+}
+
+/** Marks every model the Ollama tag listing names as chat and embedding capable, as the native listing does. */
+function withOllamaKinds(
+  models: DiscoveredModel[],
+  ollamaNames: Set<string> | undefined,
+): DiscoveredModel[] {
+  if (!ollamaNames) {
+    return models;
+  }
+
+  return models.map((model) =>
+    ollamaNames.has(model.id)
+      ? {
+          ...model,
+          capabilities: {
+            ...model.capabilities,
+            ...capabilityFromKinds({ chat: true, embeddings: true }),
+          },
+        }
+      : model,
+  );
 }
 
 function discoveredModelFrom(
@@ -326,22 +352,6 @@ async function fetchOllamaModels(
       detectionSource: "format-default",
     },
   }));
-}
-
-function createDiscoveryHttp(
-  serverProfile: ServerProfile,
-  options: ModelDiscoveryOptions,
-): ProviderHttpClient {
-  return new ProviderHttpClient({
-    apiFormat: serverProfile.apiFormat,
-    baseUrl: serverProfile.baseUrl,
-    apiKey: serverProfile.apiKey,
-    fetch: options.fetch,
-    logger: options.logger,
-    timeoutMs: options.timeoutMs,
-    unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
-    unavailableMessage: "The model provider is unavailable.",
-  });
 }
 
 function modelCountMessage(providerLabel: string, count: number): string {

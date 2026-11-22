@@ -53,3 +53,26 @@ describe("ProviderHttpClient cancellation", () => {
     }
   });
 });
+
+describe("ProviderHttpClient headers", () => {
+  it("sends default headers under request headers and keeps the key authorization on top", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    const http = new ProviderHttpClient({
+      apiFormat: "openai-compatible",
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-test",
+      defaultHeaders: { "x-default": "default", "x-shared": "default", Authorization: "default" },
+      fetch: fetchMock,
+      unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
+      unavailableMessage: "Provider unavailable.",
+    });
+
+    await http.request("/models", { method: "GET", headers: { "x-shared": "request" } });
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+      "x-default": "default",
+      "x-shared": "request",
+      Authorization: "Bearer sk-test",
+    });
+  });
+});
