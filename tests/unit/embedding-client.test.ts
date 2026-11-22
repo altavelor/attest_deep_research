@@ -29,25 +29,6 @@ describe("EmbeddingClient", () => {
     });
   });
 
-  it("lists Ollama model names", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        models: [{ name: "embeddinggemma" }, { model: "qwen3-embedding" }],
-      }),
-    );
-    const client = new EmbeddingClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
-      fetch: fetchMock,
-    });
-
-    await expect(client.listModels()).resolves.toEqual(["embeddinggemma", "qwen3-embedding"]);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
-      method: "GET",
-      signal: expect.any(AbortSignal),
-    });
-  });
-
   it("requests LM Studio OpenAI-compatible embeddings", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -73,43 +54,6 @@ describe("EmbeddingClient", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:1234/v1/embeddings",
       expect.objectContaining({ method: "POST" }),
-    );
-  });
-
-  it("requests Ollama batch embeddings", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        model: "embeddinggemma",
-        embeddings: [
-          [0.1, 0.2],
-          [0.3, 0.4],
-        ],
-      }),
-    );
-    const client = new EmbeddingClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434/api/",
-      fetch: fetchMock,
-    });
-
-    await expect(
-      client.embed({ model: "embeddinggemma", input: ["first", "second"] }),
-    ).resolves.toEqual({
-      model: "embeddinggemma",
-      embeddings: [
-        [0.1, 0.2],
-        [0.3, 0.4],
-      ],
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:11434/api/embed",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          model: "embeddinggemma",
-          input: ["first", "second"],
-        }),
-      }),
     );
   });
 

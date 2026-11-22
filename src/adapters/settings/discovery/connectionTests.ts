@@ -1,11 +1,5 @@
 import { EmbeddingClient } from "@adapters/model-provider/embeddings/EmbeddingClient";
-import {
-  contextLengthFromModelMetadata,
-  isOllamaTagsResponse,
-  isOpenAiModelsResponse,
-  modelNamesFromOllamaTags,
-  modelNamesFromOpenAiModels,
-} from "@adapters/model-provider/common/models";
+import { contextLengthFromModelMetadata } from "@adapters/model-provider/common/models";
 import { toUserMessage } from "@core/errors";
 import { ApiFormat } from "@core/agent";
 import { ModelCapability, ServerProfile } from "../types";
@@ -71,12 +65,7 @@ export async function fetchAvailableModels(
   options: ModelDiscoveryOptions = {},
 ): Promise<ModelDiscoveryResult> {
   try {
-    const models =
-      serverProfile.apiFormat === "ollama"
-        ? await fetchOllamaModels(serverProfile, options)
-        : serverProfile.apiFormat === "anthropic"
-          ? await fetchAnthropicModels(serverProfile, options)
-          : await fetchOpenAiCompatibleModels(serverProfile, options);
+    const models = await fetchOpenAiCompatibleModels(serverProfile, options);
 
     return {
       ok: true,
@@ -97,16 +86,12 @@ export async function verifyEmbeddingCapability(
   modelName: string,
   options: ModelDiscoveryOptions = {},
 ): Promise<boolean> {
-  if (
-    serverProfile.apiFormat === "anthropic" ||
-    resolveProviderDialect(serverProfile.baseUrl).embeddingsUnavailable
-  ) {
+  if (resolveProviderDialect(serverProfile.baseUrl).embeddingsUnavailable) {
     return false;
   }
 
   try {
     const client = new EmbeddingClient({
-      apiFormat: serverProfile.apiFormat,
       baseUrl: serverProfile.baseUrl,
       apiKey: serverProfile.apiKey,
       fetch: options.fetch,
@@ -125,18 +110,6 @@ export async function fetchModelContextLength(
   modelName: string,
   options: ModelDiscoveryOptions = {},
 ): Promise<number | undefined> {
-  if (serverProfile.apiFormat === "anthropic") {
-    return undefined;
-  }
-
-  if (serverProfile.apiFormat === "ollama") {
-    return tryFetchContextLength(serverProfile, "/show", options, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: modelName }),
-    });
-  }
-
   const encodedModelName = encodeURIComponent(modelName);
   const standardMetadata = await tryFetchContextLength(
     serverProfile,
@@ -299,59 +272,6 @@ function mergeDiscoveredModels(
     },
     capabilitySnapshot: existing.capabilitySnapshot ?? incoming.capabilitySnapshot,
   };
-}
-
-async function fetchAnthropicModels(
-  serverProfile: ServerProfile,
-  options: ModelDiscoveryOptions,
-): Promise<DiscoveredModel[]> {
-  const http = createDiscoveryHttp(serverProfile, options);
-  const response = await http.request("/models", {
-    method: "GET",
-    headers: { "anthropic-version": "2023-06-01" },
-  });
-  const body = await http.readJson(response, "Anthropic returned invalid JSON.");
-
-  if (!isOpenAiModelsResponse(body)) {
-    throw new Error("Anthropic returned an invalid models response.");
-  }
-
-  return modelNamesFromOpenAiModels(body).map((name) => ({
-    id: name,
-    name,
-    capabilities: {
-      chat: true,
-      embeddings: false,
-      temperature: true,
-      maxTokens: true,
-      detectionSource: "format-default",
-    },
-  }));
-}
-
-async function fetchOllamaModels(
-  serverProfile: ServerProfile,
-  options: ModelDiscoveryOptions,
-): Promise<DiscoveredModel[]> {
-  const http = createDiscoveryHttp(serverProfile, options);
-  const response = await http.request("/tags", { method: "GET" });
-  const body = await http.readJson(response, "Ollama returned invalid JSON.");
-
-  if (!isOllamaTagsResponse(body)) {
-    throw new Error("Ollama returned an invalid tags response.");
-  }
-
-  return modelNamesFromOllamaTags(body).map((name) => ({
-    id: name,
-    name,
-    capabilities: {
-      chat: true,
-      embeddings: true,
-      temperature: true,
-      maxTokens: true,
-      detectionSource: "format-default",
-    },
-  }));
 }
 
 function modelCountMessage(providerLabel: string, count: number): string {

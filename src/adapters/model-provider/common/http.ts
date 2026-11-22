@@ -1,10 +1,8 @@
 import { AttestError, AttestErrorCode } from "@core/errors";
-import { ApiFormat } from "@core/agent";
 import type { PluginRequestLogger } from "@adapters/settings/debugLogger";
 import { fetchTransportOrUnavailable, scheduleTimeout } from "@shared";
 
 export interface ProviderHttpClientOptions {
-  apiFormat: ApiFormat;
   baseUrl: string;
   apiKey?: string;
   defaultHeaders?: Readonly<Record<string, string>>;
@@ -27,7 +25,7 @@ export class ProviderHttpClient {
   private readonly defaultHeaders: Readonly<Record<string, string>>;
 
   constructor(options: ProviderHttpClientOptions) {
-    this.baseUrl = normalizeProviderBaseUrl(options.apiFormat, options.baseUrl);
+    this.baseUrl = normalizeProviderBaseUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.defaultHeaders = options.defaultHeaders ?? {};
     this.fetchImpl = fetchTransportOrUnavailable(options.fetch);
@@ -263,14 +261,8 @@ function providerErrorDetails(error: ProviderErrorSummary | undefined): Record<s
   };
 }
 
-function normalizeProviderBaseUrl(apiFormat: ApiFormat, baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
-
-  if (apiFormat === "ollama" && !trimmed.endsWith("/api")) {
-    return `${trimmed}/api`;
-  }
-
-  return trimmed;
+function normalizeProviderBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "");
 }
 
 /** Places the client's default headers under the headers the request sets itself. */

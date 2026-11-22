@@ -26,12 +26,6 @@ function streamResponse(lines: string[], contentType = "text/event-stream"): Res
   });
 }
 
-function anthropicStream(events: Array<{ event: string; data: unknown }>): Response {
-  return streamResponse(
-    events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
-  );
-}
-
 async function collectStream(client: ChatModelClient): Promise<string[]> {
   const chunks: string[] = [];
 
@@ -174,22 +168,6 @@ describe("ChatModelClient", () => {
 
     const headers = new Headers(fetchMock.mock.calls[0][1]?.headers as HeadersInit);
     expect(headers.get("authorization")).toBe("Bearer secret-key");
-  });
-
-  it("lists Ollama model names", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        models: [{ name: "gemma3" }, { model: "qwen3:latest" }],
-      }),
-    );
-    const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
-      fetch: fetchMock,
-    });
-
-    await expect(client.listModels()).resolves.toEqual(["gemma3", "qwen3:latest"]);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:11434/api/tags");
   });
 
   it("streams LM Studio chat completion deltas", async () => {
@@ -680,195 +658,13 @@ describe("ChatModelClient", () => {
     },
   );
 
-  it("posts Anthropic chat to the SDK /v1/messages endpoint", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
-      );
-    const client = new ChatModelClient({
-      provider: "anthropic",
-      baseUrl: "https://api.anthropic.com/v1",
-      apiKey: "sk-ant",
-      fetch: fetchMock,
-    });
-    for await (const _ of client.streamChat({
-      model: "claude-opus-4-8",
-      messages: [{ role: "user", content: "hi" }],
-    })) {
-    }
-
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.anthropic.com/v1/messages");
-    expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
-  });
-
-  it("enables adaptive thinking and streams Anthropic reasoning then tool calls", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      anthropicStream([
-        { event: "message_start", data: { type: "message_start", message: { content: [] } } },
-        {
-          event: "content_block_start",
-          data: {
-            type: "content_block_start",
-            index: 0,
-            content_block: { type: "thinking", thinking: "" },
-          },
-        },
-        {
-          event: "content_block_delta",
-          data: {
-            type: "content_block_delta",
-            index: 0,
-            delta: { type: "thinking_delta", thinking: "Plan" },
-          },
-        },
-        { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
-        {
-          event: "content_block_start",
-          data: {
-            type: "content_block_start",
-            index: 1,
-            content_block: { type: "tool_use", id: "toolu_1", name: "synthetic_probe", input: {} },
-          },
-        },
-        {
-          event: "content_block_delta",
-          data: {
-            type: "content_block_delta",
-            index: 1,
-            delta: { type: "input_json_delta", partial_json: '{"q":1}' },
-          },
-        },
-        { event: "content_block_stop", data: { type: "content_block_stop", index: 1 } },
-        {
-          event: "message_delta",
-          data: {
-            type: "message_delta",
-            delta: { stop_reason: "tool_use" },
-            usage: { output_tokens: 1 },
-          },
-        },
-        { event: "message_stop", data: { type: "message_stop" } },
-      ]),
-    );
-    const client = new ChatModelClient({
-      provider: "anthropic",
-      baseUrl: "https://api.anthropic.com/v1",
-      apiKey: "sk-ant",
-      fetch: fetchMock,
-    });
-    const chunks = [];
-    for await (const chunk of client.streamChat({
-      model: "claude-opus-4-8",
-      messages: [{ role: "user", content: "probe" }],
-      tools: [tool],
-      reasoningEnabled: true,
-    })) {
-      chunks.push(chunk);
-    }
-
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(body).not.toHaveProperty("temperature");
-
-    const events = chunks.flatMap((chunk) => chunk.events ?? []);
-    expect(events).toContainEqual({
-      type: "reasoning-start",
-      segmentId: "reasoning-0",
-      visibility: "text",
-    });
-    expect(events).toContainEqual({
-      type: "reasoning-delta",
-      segmentId: "reasoning-0",
-      text: "Plan",
-    });
-    expect(events).toContainEqual({ type: "reasoning-end", segmentId: "reasoning-0" });
-    expect(chunks.at(-1)).toMatchObject({
-      isComplete: true,
-      toolCalls: [{ id: "toolu_1", name: "synthetic_probe", arguments: { q: 1 } }],
-    });
-    expect(events.at(-1)).toEqual({ type: "complete", stopReason: "tool_calls" });
-  });
-
-  it("maps Anthropic required and specific choices", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
-      );
-    const client = new ChatModelClient({
-      provider: "anthropic",
-      baseUrl: "https://api.anthropic.com/v1",
-      apiKey: "sk-ant",
-      fetch: fetchMock,
-    });
-    for await (const _ of client.streamChat({
-      model: "m",
-      messages: [{ role: "user", content: "probe" }],
-      tools: [tool],
-      toolChoice: { type: "specific", name: "synthetic_probe" },
-    })) {
-    }
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.tool_choice).toEqual({ type: "tool", name: "synthetic_probe" });
-  });
-
-  it("groups parallel Anthropic tool results into one immediate user message", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        anthropicStream([{ event: "message_stop", data: { type: "message_stop" } }]),
-      );
-    const client = new ChatModelClient({
-      provider: "anthropic",
-      baseUrl: "https://api.anthropic.com/v1",
-      fetch: fetchMock,
-    });
-    for await (const _ of client.streamChat({
-      model: "m",
-      messages: [
-        {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            { id: "a", name: "synthetic_probe", arguments: {} },
-            { id: "b", name: "synthetic_probe", arguments: {} },
-          ],
-        },
-        { role: "tool", content: "one", toolCallId: "a" },
-        { role: "tool", content: "two", toolCallId: "b" },
-      ],
-      tools: [tool],
-    })) {
-    }
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.messages[1]).toEqual({
-      role: "user",
-      content: [
-        { type: "tool_result", tool_use_id: "a", content: "one" },
-        { type: "tool_result", tool_use_id: "b", content: "two" },
-      ],
-    });
-  });
-
   it("rejects unsupported or invalid choices before HTTP", async () => {
     const fetchMock = vi.fn();
-    const ollama = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
-      fetch: fetchMock,
-    });
     const invalid = new ChatModelClient({
       provider: "lmStudio",
       baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
-    await expect(
-      ollama
-        .streamChat({ model: "m", messages: [], tools: [tool], toolChoice: { type: "required" } })
-        [Symbol.asyncIterator]()
-        .next(),
-    ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
     await expect(
       invalid
         .streamChat({
@@ -902,150 +698,6 @@ describe("ChatModelClient", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("streams Ollama chat JSON lines", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        streamResponse(
-          [
-            '{"message":{"role":"assistant","content":"Hel"},"done":false}\n',
-            '{"message":{"role":"assistant","content":"lo"},"done":false}\n',
-            '{"message":{"role":"assistant","content":""},"done":true}\n',
-          ],
-          "application/x-ndjson",
-        ),
-      );
-    const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434/api",
-      fetch: fetchMock,
-    });
-
-    await expect(collectStream(client)).resolves.toEqual(["Hel:false", "lo:false", ":true"]);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:11434/api/chat");
-    expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body).toMatchObject({
-      model: "local-chat",
-      messages: [{ role: "user", content: "Hello" }],
-      stream: true,
-    });
-  });
-
-  it("requests Ollama thinking when reasoning is enabled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        streamResponse(
-          [
-            '{"message":{"role":"assistant","thinking":"Plan","content":""},"done":false}\n',
-            '{"message":{"role":"assistant","content":"Answer"},"done":true}\n',
-          ],
-          "application/x-ndjson",
-        ),
-      );
-    const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434/api",
-      fetch: fetchMock,
-    });
-    const events: unknown[] = [];
-    for await (const chunk of client.streamChat({
-      model: "gpt-oss",
-      messages: [{ role: "user", content: "think" }],
-      reasoningEnabled: true,
-    })) {
-      events.push(...(chunk.events ?? []));
-    }
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.think).toBe(true);
-    expect(events).toContainEqual({
-      type: "reasoning-delta",
-      segmentId: "reasoning-0",
-      text: "Plan",
-    });
-    expect(events).toContainEqual({ type: "text-delta", text: "Answer" });
-  });
-
-  it("recovers a tool call leaked as text in the Ollama content stream", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        streamResponse(
-          [
-            '{"message":{"role":"assistant","content":"<|tool_call>call:attest.list_notes(path=\\"\\")<tool_call|>"},"done":false}\n',
-            '{"message":{"role":"assistant","content":""},"done":true}\n',
-          ],
-          "application/x-ndjson",
-        ),
-      );
-    const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434/api",
-      fetch: fetchMock,
-    });
-
-    const toolCalls: unknown[] = [];
-    for await (const chunk of client.streamChat({
-      model: "gemma",
-      messages: [{ role: "user", content: "show list of notes" }],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "list_notes",
-            description: "List notes",
-            parameters: { type: "object", properties: {} },
-          },
-        },
-      ],
-    })) {
-      if (chunk.toolCalls) toolCalls.push(...chunk.toolCalls);
-    }
-
-    expect(toolCalls).toEqual([{ id: "text_call_0", name: "list_notes", arguments: { path: "" } }]);
-  });
-
-  it("does not synthesize tool calls from native Ollama tool_calls", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        streamResponse(
-          [
-            '{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"list_notes","arguments":{"prefix":"Daily"}}}]},"done":false}\n',
-            '{"message":{"role":"assistant","content":""},"done":true}\n',
-          ],
-          "application/x-ndjson",
-        ),
-      );
-    const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434/api",
-      fetch: fetchMock,
-    });
-
-    const toolCalls: Array<{ name: string }> = [];
-    for await (const chunk of client.streamChat({
-      model: "gemma",
-      messages: [{ role: "user", content: "list daily notes" }],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "list_notes",
-            description: "List notes",
-            parameters: { type: "object", properties: {} },
-          },
-        },
-      ],
-    })) {
-      if (chunk.toolCalls) toolCalls.push(...(chunk.toolCalls as Array<{ name: string }>));
-    }
-
-    expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0].name).toBe("list_notes");
-  });
-
   it("maps unavailable chat providers to recoverable errors", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const client = new ChatModelClient({
@@ -1064,8 +716,8 @@ describe("ChatModelClient", () => {
       .fn()
       .mockResolvedValue(jsonResponse({ error: "not found" }, { status: 404 }));
     const client = new ChatModelClient({
-      provider: "ollama",
-      baseUrl: "http://localhost:11434",
+      apiFormat: "openai-compatible",
+      baseUrl: "http://localhost:1234/v1",
       fetch: fetchMock,
     });
     const stream = client.streamChat({

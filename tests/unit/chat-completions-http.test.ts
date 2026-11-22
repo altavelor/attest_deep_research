@@ -10,7 +10,6 @@ import { chunkedStream } from "../support/streams";
 
 function clientFor(response: () => Response, apiKey?: string): ProviderHttpClient {
   return new ProviderHttpClient({
-    apiFormat: "openai-compatible",
     baseUrl: "http://localhost:1234/v1",
     apiKey,
     fetch: () => Promise.resolve(response()),

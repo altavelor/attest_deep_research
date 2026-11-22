@@ -13,18 +13,6 @@ const srcAliases = {
   "@manifest": resolve("manifest.json"),
 };
 
-/*
- * Dependencies may import Node built-ins on code paths this plugin never
- * reaches (the Anthropic SDK loads credentials from disk only when no API key
- * is supplied). Aliasing them keeps `require("fs")` out of the mobile bundle.
- */
-const nodeShims = {
-  fs: resolve("shims/nodeUnavailable.mjs"),
-  "node:fs": resolve("shims/nodeUnavailable.mjs"),
-  path: resolve("shims/nodeUnavailable.mjs"),
-  "node:path": resolve("shims/nodeUnavailable.mjs"),
-};
-
 const production = process.argv[2] === "production";
 const watch = process.argv.includes("--watch");
 const analyze = process.argv.includes("--analyze");
@@ -46,7 +34,7 @@ async function copyPluginAssets() {
 await mkdir(pluginOutputDir, { recursive: true });
 
 const context = await esbuild.context({
-  alias: { ...srcAliases, ...nodeShims },
+  alias: srcAliases,
   banner: {
     js: banner,
   },

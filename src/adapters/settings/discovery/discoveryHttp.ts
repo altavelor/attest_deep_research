@@ -15,7 +15,6 @@ export function createDiscoveryHttp(
   options: ModelDiscoveryOptions,
 ): ProviderHttpClient {
   return new ProviderHttpClient({
-    apiFormat: serverProfile.apiFormat,
     baseUrl: serverProfile.baseUrl,
     apiKey: serverProfile.apiKey,
     defaultHeaders: resolveProviderDialect(serverProfile.baseUrl).requestHeaders,

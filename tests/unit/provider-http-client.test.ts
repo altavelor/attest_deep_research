@@ -2,7 +2,6 @@ import { ProviderHttpClient } from "@adapters/model-provider/common/http";
 
 function client(fetchImpl: typeof fetch, timeoutMs = 30_000): ProviderHttpClient {
   return new ProviderHttpClient({
-    apiFormat: "openai-compatible",
     baseUrl: "https://api.example.test/v1",
     fetch: fetchImpl,
     timeoutMs,
@@ -58,7 +57,6 @@ describe("ProviderHttpClient headers", () => {
   it("sends default headers under request headers and keeps the key authorization on top", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     const http = new ProviderHttpClient({
-      apiFormat: "openai-compatible",
       baseUrl: "https://api.example.test/v1",
       apiKey: "sk-test",
       defaultHeaders: { "x-default": "default", "x-shared": "default", Authorization: "default" },

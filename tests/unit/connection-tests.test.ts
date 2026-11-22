@@ -75,26 +75,6 @@ describe("model discovery", () => {
     });
   });
 
-  it("fetches Ollama models as chat and embedding capable by default", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ models: [{ name: "embeddinggemma" }] }));
-
-    const result = await fetchAvailableModels(
-      server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-      { fetch: fetchMock },
-    );
-
-    expect(result.models[0]).toMatchObject({
-      id: "embeddinggemma",
-      capabilities: { chat: true, embeddings: true },
-    });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
-      method: "GET",
-      signal: expect.any(AbortSignal),
-    });
-  });
-
   it("discovers OpenRouter embedding models from the modality-filtered listing", async () => {
     const fetchMock = vi.fn(async (url: URL | RequestInfo) =>
       String(url).includes("output_modalities=embeddings")
@@ -268,8 +248,6 @@ describe("model discovery", () => {
 
   it("names the recognised provider in the connection message", async () => {
     const openAiCompatible = vi.fn(async () => jsonResponse({ data: [{ id: "qwen3" }] }));
-    const ollama = vi.fn(async () => jsonResponse({ models: [{ name: "gemma" }] }));
-    const anthropic = vi.fn(async () => jsonResponse({ data: [{ id: "claude" }] }));
 
     await expect(
       fetchAvailableModels(server({ baseUrl: "https://api.groq.com/openai/v1" }), {
@@ -281,13 +259,13 @@ describe("model discovery", () => {
     ).resolves.toMatchObject({ message: "Connected to OpenAI-compatible. Found 1 model." });
     await expect(
       fetchAvailableModels(server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }), {
-        fetch: ollama,
+        fetch: openAiCompatible,
       }),
     ).resolves.toMatchObject({ message: "Connected to Ollama. Found 1 model." });
     await expect(
       fetchAvailableModels(
         server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-        { fetch: anthropic },
+        { fetch: openAiCompatible },
       ),
     ).resolves.toMatchObject({ message: "Connected to Anthropic. Found 1 model." });
   });
@@ -361,20 +339,6 @@ describe("model discovery", () => {
     expect(result.models[0]?.capabilities).toMatchObject({ chat: false, embeddings: true });
   });
 
-  it("fetches Anthropic models as chat-only", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "claude-sonnet" }] }));
-
-    const result = await fetchAvailableModels(
-      server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-      { fetch: fetchMock },
-    );
-
-    expect(result.models[0]).toMatchObject({
-      id: "claude-sonnet",
-      capabilities: { chat: true, embeddings: false, maxTokens: true },
-    });
-  });
-
   it("reports fetch failures without returning models", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
 
@@ -403,39 +367,6 @@ describe("model discovery", () => {
       "http://localhost:1234/v1/embeddings",
       expect.objectContaining({ method: "POST" }),
     );
-  });
-
-  it("does not verify Anthropic embedding capability", async () => {
-    const fetchMock = vi.fn();
-
-    await expect(
-      verifyEmbeddingCapability(
-        server({ apiFormat: "anthropic", baseUrl: "https://api.anthropic.com/v1" }),
-        "claude-sonnet",
-        { fetch: fetchMock },
-      ),
-    ).resolves.toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("fetches context metadata for a selected Ollama model", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ model_info: { "llama.context_length": 131072 } }));
-
-    await expect(
-      fetchModelContextLength(
-        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-        "qwen3:latest",
-        { fetch: fetchMock },
-      ),
-    ).resolves.toBe(131072);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/show", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "qwen3:latest" }),
-      signal: expect.any(AbortSignal),
-    });
   });
 
   it("fetches context metadata from an OpenAI-compatible model resource", async () => {
@@ -529,14 +460,20 @@ describe("model discovery", () => {
   });
 
   it("returns no context metadata when an Ollama detail request fails", async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "qwen3" }))
+      .mockResolvedValueOnce(jsonResponse({}, { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ error: "boom" }, { status: 500 }));
 
     await expect(
-      fetchModelContextLength(
-        server({ apiFormat: "ollama", baseUrl: "http://localhost:11434" }),
-        "qwen3:latest",
-        { fetch: fetchMock },
-      ),
+      fetchModelContextLength(server({ baseUrl: "http://localhost:11434/v1" }), "qwen3", {
+        fetch: fetchMock,
+      }),
     ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://localhost:11434/api/show",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

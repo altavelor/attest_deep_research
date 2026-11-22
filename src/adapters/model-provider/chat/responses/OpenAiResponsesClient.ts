@@ -53,7 +53,6 @@ export class OpenAiResponsesClient implements ModelRoundProvider {
   constructor(options: OpenAiResponsesClientOptions) {
     this.http = new ProviderHttpClient({
       ...options,
-      apiFormat: "openai-compatible",
       unavailableCode: "MODEL_PROVIDER_UNAVAILABLE",
       unavailableMessage: "The Responses provider is unavailable.",
     });
