@@ -93,4 +93,27 @@ describe("deep research brief", () => {
       "Which body of water? → The Atlantic",
     );
   });
+
+  it("takes plain text sent while questions are pending as the user's clarification", async () => {
+    const model = new ClarifyingModel();
+    const port = new MemoryResearchState();
+    const send = (question: string) =>
+      collectAsync(
+        deepResearchService(model).answer({ question, mode: "deep-research", researchState: port }),
+      );
+    await send("How do tides work?");
+    await send("Only the North Sea, please");
+
+    expect(port.commits.at(-1)).toMatchObject({
+      phase: "awaiting-approval",
+      brief: {
+        answers: {},
+        assumptions: ["Ocean tides", "The user clarified: Only the North Sea, please"],
+      },
+    });
+    expect(String(model.requests.at(-1)?.messages.at(-1)?.content)).toContain(
+      "The user clarified: Only the North Sea, please",
+    );
+    expect(model.requests).toHaveLength(2);
+  });
 });
