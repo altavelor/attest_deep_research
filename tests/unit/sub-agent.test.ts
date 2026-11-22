@@ -1,6 +1,7 @@
 import {
   isSubAgentStateId,
   parseSubAgentDirective,
+  researchModeRetrievalParameters,
   subAgentSessionError,
   SubAgentSessionFailure,
 } from "@core/research";
@@ -20,7 +21,8 @@ import type {
 } from "@core/agent";
 import { SUB_AGENT_PHASE, SUB_AGENT_TOOL_END, SUB_AGENT_TOOL_START } from "@application/research";
 import { SYNTHESIS_TOOL_STUB } from "@application/use-cases/research/ThinkingToolRoundExecutor";
-import { fakeParentRun, recordingDelegator } from "../support/subAgentSessions";
+import { fakeParentRun, recordingDelegator, sourcePolicy } from "../support/subAgentSessions";
+import { subAgentToolContext } from "@application/use-cases/research/sub-agent/subAgentToolContext";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -506,6 +508,34 @@ describe("createResearchToolRegistry run_subagent gating", () => {
     expect(webOnly.tools.has("run_subagent")).toBe(true);
     expect(webOnly.tools.has("get_subagent_result")).toBe(true);
     expect(indexOnly.tools.has("wait_subagents")).toBe(true);
+  });
+
+  it("gives a child run read tools only, with no delegation, note mutation or active note", () => {
+    const child = createResearchToolRegistry(
+      subAgentToolContext(
+        {
+          noteTools: { setCitationProvider: () => undefined } as never,
+          retriever: { search: async () => ({ chunks: [], citations: [], usedFallback: false }) },
+          searchProvider: new FakeSearchProvider([]),
+        },
+        sourcePolicy({ indexScope: "all-allowed" }),
+        researchModeRetrievalParameters("thinking").web,
+      ),
+    );
+    const names = child.tools.definitions().map((definition) => definition.function.name);
+
+    expect(names).toEqual(expect.arrayContaining(["read_note", "search_index", "search_web"]));
+    for (const forbidden of [
+      "run_subagent",
+      "map_sources",
+      "get_subagent_result",
+      "create_note",
+      "update_note",
+      "delete_note",
+      "get_active_note",
+    ]) {
+      expect(names).not.toContain(forbidden);
+    }
   });
 
   it("omits run_subagent in a fully empty profile (no web/index/notes)", () => {
