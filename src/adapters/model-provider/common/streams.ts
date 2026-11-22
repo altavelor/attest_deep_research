@@ -16,6 +16,7 @@ export async function* parseServerSentEvents(
     while (true) {
       if (signal?.aborted) throw abortReason(signal);
       const { done, value } = await readUnlessAborted(reader, signal);
+      if (signal?.aborted) throw abortReason(signal);
       if (done) break;
 
       const text = decoder.decode(value, { stream: true });

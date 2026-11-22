@@ -1,4 +1,5 @@
 import { parseServerSentEvents } from "@adapters/model-provider/common/streams";
+import { settle } from "../support/async";
 import { chunkedStream } from "../support/streams";
 
 async function collect(stream: ReadableStream<Uint8Array>): Promise<string[]> {
@@ -54,6 +55,25 @@ describe("parseServerSentEvents", () => {
     await expect(iterator.next()).resolves.toEqual({ done: false, value: "a" });
     controller.abort(reason);
     await expect(iterator.next()).rejects.toBe(reason);
+  });
+
+  it("rejects instead of flushing the last buffered event when the abort follows EOF", async () => {
+    const controller = new AbortController();
+    const reason = new Error("stopped");
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        body = streamController;
+        streamController.enqueue(new TextEncoder().encode("data: last"));
+      },
+    });
+    const next = parseServerSentEvents(stream, controller.signal)[Symbol.asyncIterator]().next();
+    await settle();
+
+    body.close();
+    queueMicrotask(() => controller.abort(reason));
+
+    await expect(next).rejects.toBe(reason);
   });
 
   it("rejects with an AbortError and cancels with the raw reason when aborted before reading", async () => {
