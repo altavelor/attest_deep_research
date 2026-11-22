@@ -557,3 +557,43 @@ describe("the command line refuses a baseline it cannot match to the fixtures", 
     expect(status).toBe(3);
   });
 });
+
+describe("deep-research scorer", () => {
+  it("credits a citation only when its excerpt carries the gold passage", async () => {
+    const scorer = (await import(
+      pathToFileURL(resolve("scripts/deep-research-eval.mjs")).href
+    )) as {
+      scoreRun(
+        entry: unknown,
+        answer: unknown,
+      ): { citationSupport: number | null; unsupportedCertainty: number | null };
+    };
+    const cases = JSON.parse(readFileSync("evaluation/deep-research/cases.json", "utf8")) as {
+      cases: Array<{ id: string }>;
+    };
+    const entry = cases.cases.find((candidate) => candidate.id === "conflict-budget");
+    const path = "Reports/Audit report 2024.md";
+    const answer = (excerpt: string) => ({
+      text: "",
+      claims: [
+        {
+          objective: "audited",
+          text: "47 million",
+          certainty: "asserted",
+          citations: [{ path, excerpt }],
+        },
+      ],
+    });
+
+    const off = scorer.scoreRun(entry, answer("# Independent audit, autumn 2024"));
+    const gold = scorer.scoreRun(
+      entry,
+      answer(
+        "The audited budget of the reservoir upgrade is 47 million euros after the second tender round.",
+      ),
+    );
+
+    expect([off.citationSupport, off.unsupportedCertainty]).toEqual([0, 1]);
+    expect([gold.citationSupport, gold.unsupportedCertainty]).toEqual([1, 0]);
+  });
+});
