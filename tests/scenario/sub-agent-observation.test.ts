@@ -21,12 +21,22 @@ describe("sub-agent observation through the execution adapter", () => {
               },
             ],
             stopReason: "tool_calls",
-            usage: { inputTokens: 100, outputTokens: 20, reasoningTokens: 5, cachedInputTokens: 0 },
+            usage: {
+              inputTokens: 100,
+              outputTokens: 20,
+              reasoningTokens: 5,
+              cachedInputTokens: 30,
+            },
           }
         : {
             items: [{ type: "text", text: "Final answer." }],
             stopReason: "complete",
-            usage: { inputTokens: 300, outputTokens: 40, reasoningTokens: 0, cachedInputTokens: 0 },
+            usage: {
+              inputTokens: 300,
+              outputTokens: 40,
+              reasoningTokens: 0,
+              cachedInputTokens: 10,
+            },
           },
     );
     const searchProvider = new FakeSearchProvider([
@@ -77,6 +87,7 @@ describe("sub-agent observation through the execution adapter", () => {
       outputTokens: 60,
       totalTokens: 460,
       reasoningTokens: 5,
+      cachedInputTokens: 40,
       requestCount: 2,
     });
     expect(detail.lifetime).toHaveLength(1);

@@ -274,7 +274,12 @@ describe("MapSources batches", () => {
     const [a, b, c, d] = ["a.pdf", "b.pdf", "c.pdf", "d.pdf"].map((path) =>
       run.workers.runIdOf(path),
     );
-    run.workers.states.set(a!, workerState(a!, "completed", "STANCE: SUPPORTS"));
+    const cached = workerState(a!, "completed", "STANCE: SUPPORTS");
+    if (cached.state === "completed") {
+      const { usage } = cached.outcome.run;
+      cached.outcome.run.usage = { ...usage, inputTokens: 12, cachedInputTokens: 8 };
+    }
+    run.workers.states.set(a!, cached);
     run.workers.states.set(c!, workerState(c!, "interrupted", "Stopped", "stopped"));
     run.workers.states.set(d!, workerState(d!, "completed", "STANCE: MIXED"));
     const early = workerState(b!, "failed", "denied", "execution-denied");
@@ -297,11 +302,17 @@ describe("MapSources batches", () => {
     expect(
       run.mapper
         .telemetryOf(receipt.batchId)
-        .map((entry) => [entry.runId, entry.rounds, entry.failureReason, entry.usage.inputTokens]),
+        .map((entry) => [
+          entry.runId,
+          entry.rounds,
+          entry.failureReason,
+          entry.usage.inputTokens,
+          entry.usage.cachedInputTokens,
+        ]),
     ).toEqual([
-      [a, 2, undefined, 0],
-      [b, 0, "provider-error", 0],
-      [c, 2, "cancelled", 0],
+      [a, 2, undefined, 12, 8],
+      [b, 0, "provider-error", 0, 0],
+      [c, 2, "cancelled", 0, 0],
     ]);
     expect(run.imported).toHaveLength(1);
   });

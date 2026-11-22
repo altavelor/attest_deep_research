@@ -124,7 +124,7 @@ export function workerTelemetry(state: SubAgentResultState): SubAgentTelemetry {
       inputTokens: usage?.inputTokens ?? 0,
       outputTokens: usage?.outputTokens ?? 0,
       reasoningTokens: usage?.reasoningTokens ?? 0,
-      cachedInputTokens: 0,
+      cachedInputTokens: usage?.cachedInputTokens ?? 0,
     },
   };
 }

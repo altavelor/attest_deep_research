@@ -179,6 +179,7 @@ function requestUsage(result: ModelRoundResult): NormalizedUsage {
     inputTokens: result.usage.inputTokens,
     outputTokens: result.usage.outputTokens,
     reasoningTokens: result.usage.reasoningTokens,
+    cachedInputTokens: result.usage.cachedInputTokens,
     source: "provider",
   };
 }
