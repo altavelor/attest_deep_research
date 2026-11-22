@@ -687,6 +687,7 @@ export class AttestChatView extends ItemView {
         view: researchSectionView(this.session.deepResearch),
         t: this.t,
         sentTurns: this.sentResearchTurns,
+        running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
       },
       onHighlightCitation: (key, highlighted) =>

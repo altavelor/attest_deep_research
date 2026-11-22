@@ -75,3 +75,12 @@
   min-height: 4em;
   resize: vertical;
 }
+
+.attest-research-card__branch--running .attest-research-card__branch-notes {
+  color: var(--text-accent);
+}
+
+.attest-research-card__branch--failed .attest-research-card__branch-notes,
+.attest-research-card__branch--blocked .attest-research-card__branch-notes {
+  color: var(--text-error);
+}

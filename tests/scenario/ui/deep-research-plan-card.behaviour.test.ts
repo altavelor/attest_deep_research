@@ -6,7 +6,7 @@ import { createTranslator } from "@adapters/i18n";
 import { renderResearchCard } from "@apps/obsidian/ui/chat/deep-research/researchPlanCard";
 import { installObsidianDomHelpers, resetDom } from "../../support/domHarness";
 import { pendingResearch } from "../../support/deepResearch";
-import { startResearchState } from "@core/research/deepResearch";
+import { initialExecutions, startResearchState } from "@core/research/deepResearch";
 
 const t = createTranslator("en").t;
 
@@ -73,5 +73,68 @@ describe("deep research plan card", () => {
       { type: "cancel", researchId: state.researchId },
       expect.any(String),
     );
+  });
+
+  it("shows a paused research with its branch states and sends Continue", () => {
+    const pending = pendingResearch();
+    const state = {
+      ...pending,
+      phase: "gathering" as const,
+      pending: null,
+      plan: { ...pending.plan!, approvedAt: "2026-01-01T00:00:00.000Z" },
+      executions: initialExecutions(pending.plan!).map((execution, index) =>
+        index === 0
+          ? { ...execution, state: "failed" as const, terminalReason: "Provider down" }
+          : execution,
+      ),
+    };
+    const onTurn = vi.fn();
+    const host = document.createElement("div");
+    renderResearchCard(
+      host,
+      { researchId: state.researchId, artifact: "plan", revision: state.revision },
+      { view: { status: "ready", active: state, history: [] }, t, sentTurns: new Set(), onTurn },
+    );
+    expect(host.textContent).toContain("Failed · Provider down");
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "Continue")!
+      .click();
+    expect(onTurn).toHaveBeenCalledWith(
+      { type: "continue", researchId: state.researchId },
+      "Continue the research",
+    );
+  });
+
+  it("renders a finished partial report from the research history", () => {
+    const host = document.createElement("div");
+    const entry = {
+      researchId: "research-1",
+      question: "Q",
+      phase: "completed" as const,
+      terminalReason: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      report: {
+        reportId: "report-1",
+        quality: "partial" as const,
+        completedBranches: ["branch-1"],
+        missingBranches: [{ branchId: "branch-2", reason: "Time" }],
+        stopReason: "The active execution time limit was reached.",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    renderResearchCard(
+      host,
+      { researchId: "research-1", artifact: "plan", revision: 9 },
+      {
+        view: { status: "ready", active: null, history: [entry] },
+        t,
+        sentTurns: new Set(),
+        onTurn: vi.fn(),
+      },
+    );
+    expect(host.textContent).toContain("Partial: 1 of 2 branches");
+    expect(host.textContent).toContain("Missing branch-2: Time");
+    expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 });
