@@ -87,3 +87,17 @@ export {
   type CycleDecisionInput,
   type HypothesisDraft,
 } from "./discovery";
+export {
+  MAX_DISCOVERY_BYTES,
+  MAX_DISCOVERY_TEXT_CHARS,
+  MAX_NOTE_TEXT_CHARS,
+  MAX_OBSERVATION_QUOTE_CHARS,
+  MAX_OBSERVATION_TOKENS,
+  MAX_RESEARCH_HYPOTHESES,
+  MAX_RESEARCH_OBSERVATIONS,
+  MAX_RESEARCH_TESTS,
+  MAX_TEST_FINDING_CHARS,
+  MAX_TEST_FINDING_TOKENS,
+  boundDiscovery,
+  discoveryText,
+} from "./discoveryBounds";

@@ -119,6 +119,252 @@ const verifying = {
   },
 };
 
+const gathered = [done!, { ...running!, state: "completed", finding: done!.finding }];
+const hypothesis = {
+  hypothesisId: "h-1",
+  revision: 1,
+  previousRevision: null,
+  branchId: "branch-1",
+  claim: "Moon drives tides",
+  alternative: "Wind drives tides",
+  prediction: "Lunar cycle",
+  disconfirmation: "No lunar cycle",
+  status: "untested",
+  observationIds: [] as string[],
+};
+const literature = {
+  testId: "t-1",
+  hypothesisId: "h-1",
+  hypothesisRevision: 1,
+  kind: "literature-check",
+  method: "Check tables",
+  status: "proposed",
+};
+const supplied = {
+  ...literature,
+  testId: "t-2",
+  kind: "supplied-observation",
+  status: "awaiting-input",
+};
+const testWork = {
+  ...running!,
+  workId: "t-1",
+  branchId: "branch-1",
+  state: "pending",
+  attempts: 0,
+};
+const sourceObservation = {
+  observationId: "o-1",
+  testId: "t-1",
+  producer: "source",
+  citationTokens: ["s1r1"],
+  verdict: "supports",
+  quote: "Tides follow the moon closely",
+  limitations: [],
+  observedAt: null,
+  receivedAt: "2026-01-02T00:00:00.000Z",
+};
+const firstCycle = {
+  ordinal: 1,
+  workIds: ["w-1", "w-2"],
+  decision: "continue",
+  reason: "Gathered",
+};
+const proposedDiscovery = {
+  hypotheses: [hypothesis],
+  tests: [],
+  observations: [],
+  cycles: [firstCycle],
+  notes: [],
+  executions: [],
+  omissions: [],
+};
+const discovering = {
+  ...approved,
+  phase: "discovering",
+  executions: gathered,
+  budget: { ...approved.budget, openAllocations: [] },
+  discovery: proposedDiscovery,
+};
+const assessedDiscovery = {
+  ...proposedDiscovery,
+  hypotheses: [{ ...hypothesis, status: "supported", observationIds: ["o-1"] }],
+  tests: [{ ...literature, status: "observed" }, supplied],
+  observations: [sourceObservation],
+  executions: [{ ...testWork, state: "completed", attempts: 1, finding: done!.finding }],
+};
+const assessedBudget = {
+  ...discovering.budget,
+  consumed: { ...approved.budget.consumed, branchAttempts: 3 },
+  attemptsByBranch: { "branch-1": 2, "branch-2": 1 },
+};
+
+function discoveryStages(): unknown[] {
+  const userObservation = {
+    ...sourceObservation,
+    observationId: "o-2",
+    testId: "t-2",
+    producer: "user",
+    citationTokens: [],
+    quote: null,
+    verdict: "contradicts",
+    limitations: ["reported, not independently checked"],
+  };
+  const received = {
+    ...assessedDiscovery,
+    hypotheses: [{ ...hypothesis, status: "disconfirmed", observationIds: ["o-1", "o-2"] }],
+    tests: [
+      { ...literature, status: "observed" },
+      { ...supplied, status: "observed" },
+    ],
+    observations: [sourceObservation, userObservation],
+  };
+  const revised = {
+    ...received,
+    hypotheses: [...received.hypotheses, { ...hypothesis, revision: 2, previousRevision: 1 }],
+  };
+  const note = {
+    sequence: 1,
+    cycle: 2,
+    attempted: "Checked tables",
+    outcome: "Supported",
+    citationTokens: ["s1r1"],
+    decision: "continue",
+    nextAction: "Revise",
+  };
+  return [
+    discovering,
+    {
+      ...discovering,
+      discovery: {
+        ...proposedDiscovery,
+        tests: [literature, supplied],
+        executions: [testWork],
+      },
+    },
+    {
+      ...discovering,
+      budget: {
+        ...assessedBudget,
+        openAllocations: [
+          { workId: "t-1", branchId: "branch-1", attempt: 2, modelRounds: 12, searches: 10 },
+        ],
+      },
+      discovery: {
+        ...proposedDiscovery,
+        tests: [literature, supplied],
+        executions: [{ ...testWork, state: "running", attempts: 2 }],
+      },
+    },
+    { ...discovering, budget: assessedBudget, discovery: assessedDiscovery },
+    {
+      ...discovering,
+      phase: "awaiting-observation",
+      pending: { decisionId: "decision-o", kind: "observation", artifactRevision: 1 },
+      budget: assessedBudget,
+      discovery: assessedDiscovery,
+    },
+    { ...discovering, budget: assessedBudget, discovery: received },
+    { ...discovering, budget: assessedBudget, discovery: revised },
+    {
+      ...discovering,
+      budget: assessedBudget,
+      discovery: {
+        ...revised,
+        cycles: [
+          firstCycle,
+          { ordinal: 2, workIds: ["t-1"], decision: "continue", reason: "Revised" },
+        ],
+        notes: [note],
+      },
+    },
+  ];
+}
+
+function discoveryRows(): [string, unknown][] {
+  const withDiscovery = (label: string, patch: object): [string, unknown] => [
+    label,
+    section({
+      ...discovering,
+      budget: assessedBudget,
+      discovery: { ...assessedDiscovery, ...patch },
+    }),
+  ];
+  const heavy = "\u0001".repeat(200);
+  return [
+    ["discovering without discovery", section({ ...discovering, discovery: null })],
+    [
+      "awaiting an observation no test needs",
+      section({
+        ...discovering,
+        phase: "awaiting-observation",
+        pending: { decisionId: "decision-o", kind: "observation", artifactRevision: 1 },
+        discovery: proposedDiscovery,
+      }),
+    ],
+    withDiscovery("status its observations do not give", {
+      hypotheses: [{ ...hypothesis, status: "disconfirmed", observationIds: ["o-1"] }],
+    }),
+    withDiscovery("revision without its predecessor", {
+      hypotheses: [{ ...hypothesis, revision: 2, previousRevision: 1 }],
+      tests: [],
+      observations: [],
+      executions: [],
+    }),
+    withDiscovery("hypothesis without an alternative", {
+      hypotheses: [
+        { ...hypothesis, alternative: "", status: "supported", observationIds: ["o-1"] },
+      ],
+    }),
+    withDiscovery("source observation of a supplied test", {
+      observations: [{ ...sourceObservation, testId: "t-2" }],
+    }),
+    withDiscovery("supporting source observation without a quote", {
+      observations: [{ ...sourceObservation, quote: null }],
+    }),
+    withDiscovery("test work reusing a gather work id", {
+      executions: [{ ...assessedDiscovery.executions[0], workId: "w-1" }],
+    }),
+    withDiscovery("cycle naming an unknown work", {
+      cycles: [{ ...firstCycle, workIds: ["w-9"] }],
+    }),
+    withDiscovery("notes over fifty", {
+      notes: Array.from({ length: 51 }, (_, index) => ({
+        sequence: index,
+        cycle: 1,
+        attempted: "a",
+        outcome: "o",
+        citationTokens: [],
+        decision: "d",
+        nextAction: "n",
+      })),
+    }),
+    withDiscovery("discovery over its encoded size", {
+      notes: Array.from({ length: 50 }, (_, index) => ({
+        sequence: index,
+        cycle: 1,
+        attempted: heavy.slice(0, 80),
+        outcome: heavy.slice(0, 80),
+        citationTokens: [],
+        decision: heavy.slice(0, 80),
+        nextAction: heavy.slice(0, 80),
+      })),
+      omissions: Array.from({ length: 8 }, () => heavy),
+      hypotheses: [
+        { ...hypothesis, status: "supported", observationIds: ["o-1"] },
+        ...Array.from({ length: 9 }, (_, index) => ({
+          ...hypothesis,
+          hypothesisId: `h-${index + 2}`,
+          claim: heavy,
+          alternative: heavy,
+          prediction: heavy,
+          disconfirmation: heavy,
+        })),
+      ],
+    }),
+  ];
+}
+
 function tokens(count: number, length: number): string[] {
   return Array.from({ length: count }, (_, index) => `${index}`.padStart(length, "t"));
 }
@@ -353,6 +599,7 @@ describe("deep research section validation", () => {
       ...budgetRows(),
       ...sessionRows(),
       ...briefAndVerificationRows(),
+      ...discoveryRows(),
       [
         "more tokens than the bound",
         section({
@@ -421,6 +668,10 @@ describe("deep research section validation", () => {
     expect(validateResearchSection(section(null, [{ ...ended, report: legacyReport }])).ok).toBe(
       true,
     );
+    for (const state of discoveryStages()) {
+      const read = validateResearchSection(section(state));
+      expect(read.ok && read.value).toEqual(section(state));
+    }
     for (const state of [clarifying, verifying]) {
       const read = validateResearchSection(section(state));
       expect(read.ok && read.value, state.phase).toEqual(section(state));

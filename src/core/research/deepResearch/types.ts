@@ -1,3 +1,5 @@
+import type { ResearchDiscovery } from "./discoveryTypes";
+
 export type ResearchPhase =
   | "planning"
   | "awaiting-approval"
@@ -91,6 +93,7 @@ export interface ResearchState {
   report: ResearchReport | null;
   brief: ResearchBrief | null;
   verification: ResearchVerification | null;
+  discovery: ResearchDiscovery | null;
 }
 
 export interface ClarificationQuestion {

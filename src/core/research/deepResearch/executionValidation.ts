@@ -288,7 +288,8 @@ function readClosed(value: unknown): ResearchBudgetState["closed"] | undefined {
   };
 }
 
-function readExecution(value: unknown): BranchExecution | undefined {
+/** Reads one stored branch execution, or returns undefined when any field is malformed. */
+export function readExecution(value: unknown): BranchExecution | undefined {
   if (!isRecord(value)) return undefined;
   const finding = value.finding === null ? null : readFinding(value.finding);
   const runRef = value.runRef === undefined ? null : readRunRef(value.runRef);

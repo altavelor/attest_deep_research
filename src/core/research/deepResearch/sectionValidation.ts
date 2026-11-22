@@ -15,6 +15,8 @@ import {
   reportSummary,
 } from "./executionValidation";
 import { readBrief, readVerification } from "./briefValidation";
+import { readDiscovery } from "./discoveryValidation";
+import type { ResearchDiscovery } from "./discoveryTypes";
 import type {
   DeepResearchSection,
   PendingDecision,
@@ -127,10 +129,18 @@ function readState(value: unknown): ResearchState | undefined {
   const executions = readExecutions(value.executions);
   const sessionByBranch = readSessionByBranch(value.sessionByBranch);
   const brief = readBrief(value.brief);
-  const verification =
+  const discovery =
     plan === undefined || executions === undefined
       ? undefined
-      : readVerification(value.verification, plan, executions);
+      : readDiscovery(value.discovery, plan, executions);
+  const verification =
+    plan === undefined || executions === undefined || discovery === undefined
+      ? undefined
+      : readVerification(value.verification, plan, [
+          ...executions,
+          ...(discovery?.executions ?? []),
+        ]);
+  const extraWorks = [...(verification?.followUps ?? []), ...(discovery?.executions ?? [])];
   if (
     value.schema !== DEEP_RESEARCH_SCHEMA ||
     !isResearchId(value.researchId) ||
@@ -146,18 +156,14 @@ function readState(value: unknown): ResearchState | undefined {
     !consistent(phase, pending, plan) ||
     brief === undefined ||
     verification === undefined ||
+    discovery === undefined ||
+    !discoveryPhaseConsistent(phase, pending, discovery) ||
+    new Set(extraWorks.map((execution) => execution.workId)).size !== extraWorks.length ||
     !briefConsistent(phase, brief, plan) ||
     budget === undefined ||
     executions === undefined ||
     sessionByBranch === undefined ||
-    !executionConsistent(
-      plan,
-      executions,
-      sessionByBranch,
-      budget,
-      value.report,
-      verification?.followUps ?? [],
-    )
+    !executionConsistent(plan, executions, sessionByBranch, budget, value.report, extraWorks)
   ) {
     return undefined;
   }
@@ -178,7 +184,23 @@ function readState(value: unknown): ResearchState | undefined {
     report: null,
     brief,
     verification,
+    discovery,
   };
+}
+
+function discoveryPhaseConsistent(
+  phase: ResearchPhase,
+  pending: PendingDecision | null,
+  discovery: ResearchDiscovery | null,
+): boolean {
+  if (phase === "discovering") return discovery !== null;
+  if (phase !== "awaiting-observation") return true;
+  return (
+    discovery?.tests.some(
+      (test) =>
+        test.status === "awaiting-input" && test.hypothesisRevision === pending?.artifactRevision,
+    ) === true
+  );
 }
 
 function briefConsistent(
