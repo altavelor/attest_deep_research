@@ -164,7 +164,7 @@ async function* readChatCompletionsRound(
       }
       if (parsed.finishReason === "tool_calls" || parsed.finishReason === "function_call") {
         finishedWithToolCalls = true;
-        if (!awaitsUsageChunk) break;
+        if (!awaitsUsageChunk || usage) break;
         usageTrailerDeadline = scheduleTimeout(() => {
           usageTrailerExpired = true;
           streamAbort.abort(new DOMException("The usage trailer did not arrive.", "TimeoutError"));

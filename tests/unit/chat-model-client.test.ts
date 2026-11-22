@@ -532,6 +532,33 @@ describe("ChatModelClient", () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
+  it("completes at once when the tool_calls finish frame already carries usage", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          chunkedStream(
+            [
+              'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_note","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":1}}\n\n',
+            ],
+            vi.fn(),
+          ),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      );
+    const client = new ChatModelClient({ baseUrl: "http://localhost:1234/v1", fetch: fetchMock });
+
+    const events = [];
+    for await (const chunk of client.streamChat({
+      model: "local-chat",
+      messages: [{ role: "user", content: "Read note" }],
+    })) {
+      events.push(...(chunk.events ?? []));
+    }
+
+    expect(events.map((event) => event.type)).toEqual(["tool-call-delta", "usage", "complete"]);
+  });
+
   it("gives up on a missing usage trailer and cancels the open stream", async () => {
     const onCancel = vi.fn();
     const fetchMock = vi
