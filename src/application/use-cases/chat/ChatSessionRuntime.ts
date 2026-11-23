@@ -36,7 +36,7 @@ import type { SaveChatInput } from "@core/chat/savedChat";
 import { scheduleTimeout } from "@shared";
 import { stampRunChain } from "./chainStamping";
 import { ChatSubAgents } from "./ChatSubAgents";
-import { ChatResearchState } from "./ChatResearchState";
+import { ChatResearchState, type ResearchPlanEditRequest } from "./ChatResearchState";
 import { ChatWriteBuffer } from "./ChatWriteBuffer";
 import { redactToolEvent } from "./toolEventRedaction";
 import type {
@@ -124,6 +124,15 @@ export class ChatSessionRuntime {
     } catch (error) {
       this.host.environment.logError?.(error);
     }
+  }
+
+  /** Commits a manual edit of the pending research plan of this chat without a run. */
+  editResearchPlan(request: ResearchPlanEditRequest): Promise<void> {
+    const { environment } = this.host;
+    return this.research.editPlan(request, {
+      now: environment.now().toISOString(),
+      nextDecisionId: `decision-${environment.createRunId()}`,
+    });
   }
 
   /** Closes the children of a terminal parent run before its terminal save. */

@@ -1,12 +1,15 @@
 import type { ResearchStatePort } from "@application/ports/researchState";
 import {
+  applyDecision,
   deepResearchRejected,
   fitResearchSection,
   nextResearchSection,
   validateResearchSection,
+  type PlanBranchEdit,
   type ResearchSectionView,
   type ResearchState,
 } from "@core/research/deepResearch";
+import type { ChatDisplayMessage } from "@core/conversation";
 import { researchSectionView } from "@core/chat/savedChat";
 import type { ChatSessionState } from "./chatSessionTypes";
 
@@ -14,6 +17,13 @@ export interface ChatResearchStateOptions {
   state: ChatSessionState;
   persist(): Promise<void>;
   persistLater(): void;
+}
+
+export interface ResearchPlanEditRequest {
+  researchId: string;
+  decisionId: string;
+  expectedRevision: number;
+  branches: readonly PlanBranchEdit[];
 }
 
 /**
@@ -29,7 +39,52 @@ export class ChatResearchState implements ResearchStatePort {
     return researchSectionView(this.options.state.deepResearch);
   }
 
-  async commit(next: ResearchState, expectedRevision: number | null): Promise<void> {
+  commit(next: ResearchState, expectedRevision: number | null): Promise<void> {
+    return this.commitWith(next, expectedRevision, this.options.state.messages);
+  }
+
+  /**
+   * Commits a manual edit of the pending plan as a new plan revision without a chat turn. The edit
+   * passes the same stale-decision and plan validation as an edit decision, and the latest card
+   * reference of the edited revision moves to the new revision in the same save.
+   */
+  async editPlan(
+    request: ResearchPlanEditRequest,
+    context: { now: string; nextDecisionId: string },
+  ): Promise<void> {
+    const view = this.read();
+    const current = view.status === "ready" ? view.active : null;
+    const transition = current
+      ? applyDecision(
+          current,
+          {
+            researchId: request.researchId,
+            decisionId: request.decisionId,
+            expectedRevision: request.expectedRevision,
+            payload: { action: "edit", edit: { branches: request.branches } },
+          },
+          context,
+        )
+      : null;
+    if (!current || !transition) {
+      throw deepResearchRejected(
+        "research-stale-decision",
+        "This decision no longer matches the research; review the current plan.",
+      );
+    }
+    if (!transition.ok) throw deepResearchRejected(transition.code, transition.message);
+    await this.commitWith(
+      transition.state,
+      current.revision,
+      advanceReference(this.options.state.messages, current, transition.state.revision),
+    );
+  }
+
+  private async commitWith(
+    next: ResearchState,
+    expectedRevision: number | null,
+    messages: ChatDisplayMessage[],
+  ): Promise<void> {
     const view = this.read();
     if (view.status === "unreadable") {
       throw deepResearchRejected(
@@ -60,13 +115,36 @@ export class ChatResearchState implements ResearchStatePort {
     }
     const validation = validateResearchSection(section);
     if (!validation.ok) throw deepResearchRejected("research-invalid-plan", validation.message);
+    const previousMessages = this.options.state.messages;
     this.options.state.deepResearch = { status: "ready", section };
+    this.options.state.messages = messages;
     try {
       await this.options.persist();
     } catch (error) {
       this.options.state.deepResearch = previous;
+      this.options.state.messages = previousMessages;
       this.options.persistLater();
       throw error;
     }
   }
+}
+
+function advanceReference(
+  messages: ChatDisplayMessage[],
+  state: ResearchState,
+  revision: number,
+): ChatDisplayMessage[] {
+  const index = messages
+    .map((message) => message.research)
+    .map(
+      (research) =>
+        research?.researchId === state.researchId && research.revision === state.revision,
+    )
+    .lastIndexOf(true);
+  if (index < 0) return messages;
+  return messages.map((message, at) =>
+    at === index && message.research
+      ? { ...message, research: { ...message.research, revision } }
+      : message,
+  );
 }

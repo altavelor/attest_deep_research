@@ -10,6 +10,8 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.action.approve": "Aprobar",
   "chat.deepResearch.action.edit": "Editar",
   "chat.deepResearch.action.save": "Guardar cambios",
+  "chat.deepResearch.action.cancelEdit": "Cancelar la edición",
+  "chat.deepResearch.editFailed": "El plan no se guardó: {reason}",
   "chat.deepResearch.action.regenerate": "Regenerar",
   "chat.deepResearch.action.cancel": "Cancelar investigación",
   "chat.deepResearch.superseded":
@@ -18,7 +20,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.deepResearch.unreadable":
     "El estado de investigación de este chat no se puede leer: {reason}",
   "chat.deepResearch.turn.approve": "Aprobar el plan de investigación",
-  "chat.deepResearch.turn.edit": "Editar el plan de investigación",
   "chat.deepResearch.turn.regenerate": "Regenerar el plan de investigación",
   "chat.deepResearch.turn.cancel": "Cancelar la investigación",
   "chat.deepResearch.progress.title": "Progreso de la investigación",

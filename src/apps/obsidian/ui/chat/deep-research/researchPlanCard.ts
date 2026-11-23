@@ -5,8 +5,8 @@ import {
   canRegenerate,
   isResearchId,
   isRevision,
-  type PlanBranchEdit,
   type ResearchArtifactReference,
+  type ResearchBranch,
   type ResearchPlan,
   type ResearchState,
   type ResearchTurnInput,
@@ -57,11 +57,11 @@ export function renderResearchCard(
   }
   if (active.brief) renderBrief(cardEl, active, active.brief, context);
   if (active.pending?.kind === "clarification") return;
-  if (active.plan) renderPlan(cardEl, active.plan, t);
   if (active.pending?.kind === "plan" && active.plan) {
-    renderPlanControls(cardEl, active, active.plan, context);
+    renderPendingPlan(cardEl, active, active.plan, context);
     return;
   }
+  if (active.plan) renderPlan(cardEl, active.plan, t);
   if (active.plan?.approvedAt) {
     renderProgress(cardEl, active, active.plan, context);
     return;
@@ -69,7 +69,12 @@ export function renderResearchCard(
   renderActions(cardEl, active, context, [cancelAction(active, t)]);
 }
 
-function renderPlan(cardEl: HTMLElement, plan: ResearchPlan, t: Translate): void {
+function renderPlan(
+  cardEl: HTMLElement,
+  plan: ResearchPlan,
+  t: Translate,
+  renderBranch: (itemEl: HTMLElement, branch: ResearchBranch) => void = renderBranchText,
+): void {
   cardEl.createDiv({ cls: "attest-research-card__title", text: t("chat.deepResearch.card.title") });
   cardEl.createDiv({
     cls: "attest-research-card__meta",
@@ -85,8 +90,7 @@ function renderPlan(cardEl: HTMLElement, plan: ResearchPlan, t: Translate): void
     const itemEl = listEl.createEl("li", {
       cls: `attest-research-card__branch${branch.enabled ? "" : " attest-research-card__branch--disabled"}`,
     });
-    itemEl.createDiv({ cls: "attest-research-card__branch-title", text: branch.title });
-    itemEl.createDiv({ cls: "attest-research-card__branch-task", text: branch.task });
+    renderBranch(itemEl, branch);
     const notes = [
       branch.priority === "optional" ? t("chat.deepResearch.card.optional") : "",
       branch.dependsOn.length > 0
@@ -107,11 +111,36 @@ function renderPlan(cardEl: HTMLElement, plan: ResearchPlan, t: Translate): void
   }
 }
 
-function renderPlanControls(
+function renderBranchText(itemEl: HTMLElement, branch: ResearchBranch): void {
+  itemEl.createDiv({ cls: "attest-research-card__branch-title", text: branch.title });
+  itemEl.createDiv({ cls: "attest-research-card__branch-task", text: branch.task });
+}
+
+function renderPendingPlan(
   cardEl: HTMLElement,
   state: ResearchState,
   plan: ResearchPlan,
   context: ResearchCardContext,
+): void {
+  const bodyEl = cardEl.createDiv({ cls: "attest-research-card__plan" });
+  const show = (editing: boolean): void => {
+    bodyEl.empty();
+    if (editing) {
+      renderPlanEditor(bodyEl, state, plan, context, () => show(false));
+      return;
+    }
+    renderPlan(bodyEl, plan, context.t);
+    renderPlanControls(bodyEl, state, plan, context, () => show(true));
+  };
+  show(false);
+}
+
+function renderPlanControls(
+  parentEl: HTMLElement,
+  state: ResearchState,
+  plan: ResearchPlan,
+  context: ResearchCardContext,
+  onEdit: () => void,
 ): void {
   const { t } = context;
   const decide = (payload: unknown): ResearchTurnInput => ({
@@ -123,7 +152,7 @@ function renderPlanControls(
       payload,
     },
   });
-  const actionsEl = renderActions(cardEl, state, context, [
+  const actionsEl = renderActions(parentEl, state, context, [
     {
       label: t("chat.deepResearch.action.approve"),
       turnLabel: t("chat.deepResearch.turn.approve"),
@@ -138,50 +167,76 @@ function renderPlanControls(
     },
     cancelAction(state, t),
   ]);
+  if (!context.onEditPlan) return;
   const editButton = actionsEl.createEl("button", {
     cls: "attest-research-card__action",
     text: t("chat.deepResearch.action.edit"),
   });
-  editButton.disabled = context.sentTurns.has(turnKey(state));
+  editButton.disabled = context.running === true || context.sentTurns.has(turnKey(state));
   editButton.addEventListener("click", () => {
-    editButton.disabled = true;
-    renderEditor(cardEl, state, plan, context, (edits) =>
-      decide({ action: "edit", edit: { branches: edits } }),
-    );
+    if (!context.sentTurns.has(turnKey(state))) onEdit();
   });
 }
 
-function renderEditor(
-  cardEl: HTMLElement,
+function renderPlanEditor(
+  parentEl: HTMLElement,
   state: ResearchState,
   plan: ResearchPlan,
   context: ResearchCardContext,
-  decide: (edits: PlanBranchEdit[]) => ResearchTurnInput,
+  onCancel: () => void,
 ): void {
-  const editorEl = cardEl.createDiv({ cls: "attest-research-card__editor" });
-  const fields = plan.branches.map((branch) => {
-    const rowEl = editorEl.createDiv({ cls: "attest-research-card__editor-row" });
-    const enabled = rowEl.createEl("input", { attr: { type: "checkbox" } });
+  const fields: { branchId: string; enabled: HTMLInputElement; task: HTMLTextAreaElement }[] = [];
+  renderPlan(parentEl, plan, context.t, (itemEl, branch) => {
+    const labelEl = itemEl.createEl("label", { cls: "attest-research-card__branch-title" });
+    const enabled = labelEl.createEl("input", { attr: { type: "checkbox" } });
     enabled.checked = branch.enabled;
-    const task = rowEl.createEl("textarea", {
+    labelEl.appendText(` ${branch.title}`);
+    const task = itemEl.createEl("textarea", {
       cls: "attest-research-card__editor-task",
       attr: { maxlength: String(MAX_RESEARCH_TEXT_CHARS) },
     });
     task.value = branch.task;
-    return { branchId: branch.branchId, enabled, task };
+    fields.push({ branchId: branch.branchId, enabled, task });
   });
-  renderActions(editorEl, state, context, [], () => ({
-    label: context.t("chat.deepResearch.action.save"),
-    turnLabel: context.t("chat.deepResearch.turn.edit"),
-    input: decide(
-      fields.map((field) => ({
-        branchId: field.branchId,
-        enabled: field.enabled.checked,
-        task: field.task.value,
-      })),
-    ),
-    primary: true,
-  }));
+  let errorEl: HTMLElement | null = null;
+  const actionsEl = parentEl.createDiv({ cls: "attest-research-card__actions" });
+  const save = actionsEl.createEl("button", {
+    cls: "attest-research-card__action mod-cta",
+    text: context.t("chat.deepResearch.action.save"),
+  });
+  const cancel = actionsEl.createEl("button", {
+    cls: "attest-research-card__action",
+    text: context.t("chat.deepResearch.action.cancelEdit"),
+  });
+  cancel.addEventListener("click", onCancel);
+  save.addEventListener("click", () => {
+    if (save.disabled || !context.onEditPlan) return;
+    save.disabled = true;
+    cancel.disabled = true;
+    void context
+      .onEditPlan({
+        researchId: state.researchId,
+        decisionId: state.pending!.decisionId,
+        expectedRevision: state.revision,
+        branches: fields.map((field) => ({
+          branchId: field.branchId,
+          enabled: field.enabled.checked,
+          task: field.task.value,
+        })),
+      })
+      .then((result) => {
+        if (result.ok) return;
+        if (!errorEl) {
+          errorEl = parentEl.createDiv({
+            cls: "attest-research-card__notice attest-research-card__notice--error",
+          });
+          parentEl.insertBefore(errorEl, actionsEl);
+        }
+        errorEl.setText(context.t("chat.deepResearch.editFailed", { reason: result.message }));
+        save.disabled = false;
+        cancel.disabled = false;
+      });
+  });
 }
 
 function isReference(value: unknown): value is ResearchArtifactReference {

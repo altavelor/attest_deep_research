@@ -707,6 +707,7 @@ export class AttestChatView extends ItemView {
         sentTurns: this.sentResearchTurns,
         running: this.isRunning,
         onTurn: (input, label) => void this.researchController.submitResearchTurn(input, label),
+        onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),
         ...(this.researchExports ? { exports: this.researchExports } : {}),
       },
       onHighlightCitation: (key, highlighted) =>

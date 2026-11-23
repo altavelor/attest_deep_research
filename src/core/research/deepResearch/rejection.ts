@@ -9,6 +9,7 @@ export type DeepResearchRejectionReason =
   | "research-revision-conflict"
   | "research-section-too-large"
   | "research-active"
+  | "research-run-active"
   | "research-preflight"
   | "research-generation-failed"
   | "research-continue-unavailable"
