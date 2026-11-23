@@ -41,7 +41,7 @@ export function renderDeepResearch(research: DeepResearchDiagnostics | null): st
         const runs = work.runs
           .map(
             (run) =>
-              `#${h(run.attempt)} ${h(run.path)} rounds ${text(run.rounds)}/${h(run.allocatedRounds)} searches ${text(run.searches)}/${h(run.allocatedSearches)} evidence ${text(run.evidenceItems)}${run.error ? ` · ${h(run.error)}` : ""}`,
+              `#${h(run.attempt)} ${h(run.path)} rounds ${text(run.rounds)}/${h(run.allocatedRounds)} searches ${text(run.searches)}/${h(run.allocatedSearches)} evidence ${text(run.evidenceItems)}${run.childOutcome ? ` · child ${h(run.childOutcome)}, ${h(run.childEvidence)} evidence` : ""}${run.error ? ` · ${h(run.error)}` : ""}`,
           )
           .join("<br>");
         return `<tr><td>${h(work.workId)}</td><td>${h(work.kind)}</td><td>${h(work.branchId)}</td><td>${h(work.runner)}</td><td>${h(work.state)}</td><td>${text(work.terminalReason)}</td><td>${h(work.attempts)}</td><td>${h(work.findingChars)} chars · ${h(work.citationTokens)} cites${work.partial ? " · partial" : ""}</td><td>${runs}</td></tr>`;

@@ -9,7 +9,7 @@ import type {
 /**
  * Runs one attempt of a research work within its allocation. Implementations differ only in where
  * the attempt runs; a runner that measured its use reports it through `usage` after the attempt, and
- * a runner that delegated it names the child run through `runRef`.
+ * a runner that delegated it names the child run through `runRef` and its outcome through `childRun`.
  */
 export interface BranchRunner {
   readonly path: "main" | "sub-agent";
@@ -20,6 +20,12 @@ export interface BranchRunner {
   ): Promise<BranchFinding>;
   usage?(workId: string): BranchUsage | null;
   runRef?(workId: string): BranchRunRef | null;
+  childRun?(workId: string): BranchChildRun | null;
+}
+
+export interface BranchChildRun {
+  outcome: string;
+  evidenceCount: number;
 }
 
 /** A branch attempt that cannot succeed on retry, such as a branch sharing no source with the chat. */

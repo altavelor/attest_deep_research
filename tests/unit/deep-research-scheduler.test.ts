@@ -15,6 +15,7 @@ import {
   SOURCE_READING_INSTRUCTION,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
+import { runSummary } from "../support/subAgentInspection";
 import { settle } from "../support/async";
 import { runPastDeadline } from "../support/timers";
 import { STOP_SETTLE_MS } from "@application/use-cases/research/deep-research/ResearchScheduler";
@@ -294,5 +295,44 @@ describe("deep research main-path fallback", () => {
       UnusableBranchSessionError,
     );
     expect(calls).toEqual([]);
+  });
+
+  it("reports the child's import outcome and evidence count after a failed import", async () => {
+    const run = runSummary("r-1", "s-1", { status: "failed", evidenceCount: 2 });
+    const delegator = {
+      create: async () => ({ subAgentSessionId: "s-1" }),
+      run: async () => ({ sessionId: "s-1", runId: "r-1" }),
+      getResult: async () => ({
+        state: "failed",
+        resultRevision: 1,
+        run,
+        error: { code: "import-failed", message: "Import failed." },
+      }),
+    } as unknown as SubAgentDelegator;
+    const runner = new SubAgentBranchRunner({
+      branches: [researchBranch(1)],
+      delegator: () => delegator,
+      resolver: { resolve: () => Promise.reject(new Error("unused")) },
+      sessionOf: () => null,
+    });
+    const work = {
+      workId: "w-1",
+      branchId: "branch-1",
+      cycle: 1,
+      kind: "gather" as const,
+      task: "T",
+    };
+    const allocation = {
+      workId: "w-1",
+      branchId: "branch-1",
+      attempt: 1,
+      modelRounds: 3,
+      searches: 1,
+    };
+
+    await expect(runner.run(work, allocation, new AbortController().signal)).rejects.toThrow(
+      "The child session failed: Import failed.",
+    );
+    expect(runner.childRun("w-1")).toEqual({ outcome: "import-failed", evidenceCount: 2 });
   });
 });
