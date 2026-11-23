@@ -61,6 +61,7 @@ export interface ChatRunRequest {
   includeContextDiagnostics: boolean;
   modelLabel: string;
   research?: ResearchTurnInput;
+  thinking?: true;
 }
 
 export interface ChatSubAgentServices {

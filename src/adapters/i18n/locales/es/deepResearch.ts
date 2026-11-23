@@ -78,4 +78,12 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "Carpeta de la bóveda para los informes exportados. Se rechazan rutas absolutas, barras invertidas y segmentos vacíos, con espacios en los extremos o que empiezan o terminan con un punto (como .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Carpeta de exportación; vacía usa la predeterminada",
+  "chat.clarification.title": "Preguntas aclaratorias",
+  "chat.clarification.unanswered": "Sin respuesta",
+  "chat.clarification.send": "Enviar respuestas",
+  "chat.clarification.skip": "Responder sin aclarar",
+  "chat.clarification.skipMessage":
+    "Responde sin aclaración: sigue con la pregunta tal como está y enuncia las suposiciones que hagas.",
+  "chat.clarification.reply.heading": "Respuestas a las preguntas aclaratorias:",
+  "chat.clarification.reply.answer": "Respuesta",
 };

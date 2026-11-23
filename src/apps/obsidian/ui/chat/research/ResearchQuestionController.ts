@@ -199,6 +199,19 @@ export class ResearchQuestionController {
     });
   }
 
+  /** Sends a reply to clarifying questions as an ordinary user message of a Thinking turn. */
+  async submitClarificationReply(reply: string): Promise<void> {
+    const sessionId = this.options.getSessionId();
+    if (this.isRunning() || this.options.getSearchUnavailableMessage() !== null) return;
+    await this.runQuestion(sessionId, reply, this.options.getModelInputValue(), {
+      appendQuestion: true,
+      chatHistory: this.options.getMessages(sessionId),
+      activeFilePath: undefined,
+      includeActiveFile: false,
+      thinking: true,
+    });
+  }
+
   stopRunningQuestion(): void {
     this.options.stopRun();
   }
@@ -214,6 +227,7 @@ export class ResearchQuestionController {
       activeFilePath: string | undefined;
       includeActiveFile: boolean;
       research?: ResearchTurnInput;
+      thinking?: true;
     },
   ): Promise<void> {
     const contextPaths = options.contextPaths ?? this.options.getContextPaths(sessionId);
@@ -230,6 +244,7 @@ export class ResearchQuestionController {
       includeContextDiagnostics: this.options.shouldIncludeContextDiagnostics(),
       modelLabel: this.options.getCurrentModelLabel(sessionId),
       ...(options.research ? { research: options.research } : {}),
+      ...(options.thinking ? { thinking: true as const } : {}),
     });
 
     if (!result.started) {

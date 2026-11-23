@@ -73,6 +73,14 @@ export const deepResearch = {
   "settings.advanced.researchExportFolder.desc":
     "Vault folder for exported research reports. Absolute paths, backslashes, and segments that are empty, padded with spaces, or start or end with a dot (such as .., .attest, .obsidian) are rejected.",
   "chat.deepResearch.export.folder": "Export folder; empty uses the default",
+  "chat.clarification.title": "Clarifying questions",
+  "chat.clarification.unanswered": "Not answered",
+  "chat.clarification.send": "Send answers",
+  "chat.clarification.skip": "Answer without clarification",
+  "chat.clarification.skipMessage":
+    "Answer without clarification: proceed with the question as asked and state the assumptions you make.",
+  "chat.clarification.reply.heading": "Answers to the clarifying questions:",
+  "chat.clarification.reply.answer": "Answer",
 };
 
 export type EnDeepResearchMessages = Record<keyof typeof deepResearch, string>;

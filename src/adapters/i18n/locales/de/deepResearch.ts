@@ -76,4 +76,12 @@ export const deepResearch: EnDeepResearchMessages = {
   "settings.advanced.researchExportFolder.desc":
     "Tresorordner für exportierte Rechercheberichte. Abgelehnt werden absolute Pfade, Backslashes und Segmente, die leer sind, von Leerzeichen umgeben sind oder mit einem Punkt beginnen oder enden (etwa .., .attest, .obsidian).",
   "chat.deepResearch.export.folder": "Exportordner; leer verwendet den Standard",
+  "chat.clarification.title": "Rückfragen",
+  "chat.clarification.unanswered": "Nicht beantwortet",
+  "chat.clarification.send": "Antworten senden",
+  "chat.clarification.skip": "Ohne Rückfragen antworten",
+  "chat.clarification.skipMessage":
+    "Ohne Rückfragen antworten: Beantworte die Frage wie gestellt und nenne die getroffenen Annahmen.",
+  "chat.clarification.reply.heading": "Antworten auf die Rückfragen:",
+  "chat.clarification.reply.answer": "Antwort",
 };

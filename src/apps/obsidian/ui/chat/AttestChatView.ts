@@ -710,6 +710,11 @@ export class AttestChatView extends ItemView {
         onEditPlan: (request) => this.sessions.editResearchPlan(this.session.sessionId, request),
         ...(this.researchExports ? { exports: this.researchExports } : {}),
       },
+      clarification: {
+        t: this.t,
+        running: this.isRunning,
+        onReply: (reply) => void this.researchController.submitClarificationReply(reply),
+      },
       onHighlightCitation: (key, highlighted) =>
         this.citationPopover.setHighlight(key, highlighted),
       onOpenDiagnosticReport: (diagnostics) => this.diagnosticModal.open(diagnostics),
