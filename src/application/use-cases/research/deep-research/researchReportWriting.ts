@@ -1,9 +1,11 @@
 import type { RetrievedChunk } from "@core/model";
 import {
   formatWithoutModel,
+  label,
   verificationSections,
   verifiedClaims,
   type BranchExecution,
+  type ResearchLabels,
   type ResearchPlan,
   type ResearchVerification,
 } from "@core/research/deepResearch";
@@ -16,6 +18,7 @@ export interface ReportWritingInput {
   executions: readonly BranchExecution[];
   verification: ResearchVerification | null;
   stopReason: string;
+  labels: ResearchLabels;
   synthesis: ReportSynthesisService;
   spendRound(): boolean;
   resolveEvidence?(revisionIds: readonly string[]): RetrievedChunk[];
@@ -29,13 +32,17 @@ export interface ReportWritingInput {
  * claim the findings are listed unverified with their unresolvable citations removed.
  */
 export async function writeReportMarkdown(input: ReportWritingInput): Promise<string> {
-  const { plan, verification, stopReason } = input;
+  const { plan, verification, stopReason, labels } = input;
   if (!verification || verification.assessments.length === 0) {
     const cited = registryCitedFindings(input.executions, input.resolveEvidence);
-    return withCitationNotes(formatWithoutModel(plan, cited.executions, stopReason), {
-      removedTokens: cited.removedTokens,
-      unverifiedTokens: 0,
-    });
+    return withCitationNotes(
+      formatWithoutModel(plan, cited.executions, stopReason, null, labels),
+      {
+        removedTokens: cited.removedTokens,
+        unverifiedTokens: 0,
+      },
+      labels,
+    );
   }
   const cited = registryCitedFindings(input.executions, input.resolveEvidence);
   const removedTokens = cited.removedTokens;
@@ -44,14 +51,19 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
       entry.assessment.verdict === "supported" || entry.assessment.verdict === "conflicted",
   );
   if (!claims.some((entry) => entry.assessment.verdict === "supported")) {
-    return withCitationNotes(formatWithoutModel(plan, cited.executions, stopReason, verification), {
-      removedTokens,
-      unverifiedTokens: 0,
-    });
+    return withCitationNotes(
+      formatWithoutModel(plan, cited.executions, stopReason, verification, labels),
+      {
+        removedTokens,
+        unverifiedTokens: 0,
+      },
+      labels,
+    );
   }
   const fallback = withCitationNotes(
-    formatWithoutModel(plan, input.executions, stopReason, verification),
+    formatWithoutModel(plan, input.executions, stopReason, verification, labels),
     { removedTokens, unverifiedTokens: 0 },
+    labels,
   );
   if (!input.spendRound()) return fallback;
   const tokens = claims.flatMap((entry) => [
@@ -66,11 +78,15 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
       evidence: input.resolveEvidence?.([...new Set(tokens)]) ?? [],
       ...(input.signal ? { signal: input.signal } : {}),
     });
-    const sections = verificationSections(plan, input.executions, verification, stopReason);
-    return withCitationNotes(`${synthesized.markdown}\n\n${sections}`, {
-      removedTokens: synthesized.removedTokens + removedTokens,
-      unverifiedTokens: synthesized.unverifiedTokens,
-    });
+    const sections = verificationSections(plan, input.executions, verification, stopReason, labels);
+    return withCitationNotes(
+      `${synthesized.markdown}\n\n${sections}`,
+      {
+        removedTokens: synthesized.removedTokens + removedTokens,
+        unverifiedTokens: synthesized.unverifiedTokens,
+      },
+      labels,
+    );
   } catch (error) {
     if (input.signal?.aborted) throw error;
     return fallback;
@@ -82,6 +98,7 @@ export function withMissingNote(
   markdown: string,
   missing: readonly { branchId: string; reason: string }[],
   plan: ResearchPlan,
+  labels: ResearchLabels,
 ): string {
   const titleOf = (branchId: string): string =>
     plan.branches.find((branch) => branch.branchId === branchId)?.title ?? branchId;
@@ -91,7 +108,7 @@ export function withMissingNote(
   );
   if (required.length === 0) return markdown;
   const names = required.map((entry) => titleOf(entry.branchId));
-  return `> Partial report: required branches are missing (${names.join(", ")}).\n\n${markdown}`;
+  return `> ${label(labels, "partialReport", { branches: names.join(", ") })}\n\n${markdown}`;
 }
 
 /**
@@ -125,13 +142,14 @@ function registryCitedFindings(
 function withCitationNotes(
   markdown: string,
   counts: { removedTokens: number; unverifiedTokens: number },
+  labels: ResearchLabels,
 ): string {
   const notes = [
     counts.removedTokens > 0
-      ? `${counts.removedTokens} citation(s) without a source in the findings were removed.`
+      ? label(labels, "removedCitations", { count: counts.removedTokens })
       : "",
     counts.unverifiedTokens > 0
-      ? `${counts.unverifiedTokens} citation(s) could not be verified against the cited source text.`
+      ? label(labels, "unverifiedCitations", { count: counts.unverifiedTokens })
       : "",
   ].filter((note) => note !== "");
   return notes.length > 0 ? `${markdown}\n\n> ${notes.join(" ")}` : markdown;

@@ -8,6 +8,7 @@ import {
   openWorks,
   reportDecision,
   resumeExecutions,
+  researchLanguageOf,
   stopReasonOf,
   verificationCounts,
   waveSize,
@@ -15,6 +16,7 @@ import {
   type ResearchPlan,
   type ResearchReport,
   type ResearchDiscovery,
+  type ResearchLabels,
   type ResearchState,
   type VerificationSummary,
 } from "@core/research/deepResearch";
@@ -70,6 +72,7 @@ export interface ResearchRunDeps {
   subAgents?: ResearchRunSubAgents;
   parallelRequests?: boolean;
   synthesis: ReportSynthesisService;
+  labels: ResearchLabels;
   createVerifier?(options: ResearchVerifierOptions): ResearchVerifier;
   createDiscovery?(options: ResearchDiscoveryFactoryOptions): ResearchDiscoveryService;
   observation?: SuppliedObservation;
@@ -162,6 +165,8 @@ export async function runResearch(
     sessionByBranch: () => permits.sessionByBranch(),
   };
   const phase = {
+    language: researchLanguageOf(start),
+    labels: deps.labels,
     owner,
     runners,
     waveSize: waveSize(plan.limits, deps.parallelRequests === true),
@@ -312,10 +317,10 @@ async function writeReport(
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
   if (current.phase !== "synthesizing") await commit({ phase: "synthesizing" });
-  const stopReason = stopReasonOf(owner.snapshot());
+  const stopReason = stopReasonOf(owner.snapshot(), deps.labels);
   const executions = current.executions;
   const verification = current.verification;
-  const decision = reportDecision(plan, executions, stopReason, verification);
+  const decision = reportDecision(plan, executions, stopReason, verification, deps.labels);
   if (decision.kind === "failed") {
     const state = await commit({ phase: "failed", terminalReason: boundedReason(decision.reason) });
     return { state, report: null };
@@ -327,13 +332,14 @@ async function writeReport(
     executions,
     verification,
     stopReason,
+    labels: deps.labels,
     synthesis: deps.synthesis,
     spendRound: () => owner.spendFinalization(1),
     ...(deps.resolveEvidence ? { resolveEvidence: deps.resolveEvidence } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   });
   const resolve = deps.resolveEvidence ?? (() => []);
-  const hypotheses = hypothesesSection(current.discovery, (text, allowed) =>
+  const hypotheses = hypothesesSection(current.discovery, deps.labels, (text, allowed) =>
     removeUnknownCitationTokens(
       text,
       new Set([...allowed].filter((token) => resolve([token]).length > 0)),
@@ -343,6 +349,7 @@ async function writeReport(
     hypotheses === "" ? markdown : `${markdown}\n\n${hypotheses}`,
     decision.missingBranches,
     plan,
+    deps.labels,
   );
   const report: ResearchReport = {
     reportId: deps.createId("report"),

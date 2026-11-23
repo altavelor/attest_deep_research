@@ -1,3 +1,4 @@
+import { RESEARCH_LANGUAGE_RULE } from "./researchLanguage";
 import { MAX_PLAN_LIST_ITEMS, MAX_RESEARCH_BRANCHES, presetLimits } from "./limits";
 import { validatePlan } from "./planValidation";
 import type {
@@ -28,6 +29,7 @@ export function planGenerationPrompt(maxBranches: number): string {
     '"sourceScope": "indexOnly" | "webOnly" | "indexAndWeb"}]}.',
     "Objective and dependency numbers are 1-based positions in their lists.",
     `Use between 1 and ${maxBranches} branches; tasks must be self-contained instructions.`,
+    RESEARCH_LANGUAGE_RULE,
   ].join("\n");
 }
 

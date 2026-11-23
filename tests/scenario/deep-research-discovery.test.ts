@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import type { ResearchRequest } from "@application/contracts/research";
 import {
   nextResearchSection,
@@ -236,6 +237,7 @@ describe("deep research discovery", () => {
         port: resumed,
         runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
         synthesis: {} as ReportSynthesisService,
+        labels: ENGLISH_RESEARCH_LABELS,
         createDiscovery: (options) =>
           ({
             assessReport: () => assessing(options.signal),
@@ -277,6 +279,7 @@ describe("deep research discovery", () => {
       port: resumed,
       runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
       synthesis: {} as ReportSynthesisService,
+      labels: ENGLISH_RESEARCH_LABELS,
       createDiscovery: (options) =>
         new ResearchDiscoveryService({
           chatModel: judge as unknown as DiscoveryModel,
@@ -338,6 +341,7 @@ describe("deep research discovery", () => {
       runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
       subAgents: { attach: () => () => undefined, createRunner: () => child },
       synthesis: new ReportSynthesisService({ chatModel: model, model: "model", chatOptions: {} }),
+      labels: ENGLISH_RESEARCH_LABELS,
       createDiscovery: (options) =>
         new ResearchDiscoveryService({
           chatModel: model,

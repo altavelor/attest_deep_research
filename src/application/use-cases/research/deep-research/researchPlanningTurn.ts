@@ -2,7 +2,9 @@ import type { ResearchStatePort } from "@application/ports/researchState";
 import {
   answeredBrief,
   deepResearchRejected,
+  detectResearchLanguage,
   endResearch,
+  label,
   parseClarificationPayload,
   readyBrief,
   startResearchState,
@@ -10,6 +12,7 @@ import {
   withPlanForReview,
   type ResearchBrief,
   type ResearchDecision,
+  type ResearchLabels,
   type ResearchState,
 } from "@core/research/deepResearch";
 import type { ResearchExecutionContext } from "../strategies/ResearchStrategy";
@@ -23,6 +26,7 @@ export interface PlanningTurnContext {
   port: ResearchStatePort;
   now(): string;
   createId(prefix: string): string;
+  labels(state: Pick<ResearchState, "question" | "language">): ResearchLabels;
   planService(generationsUsed: number, brief: ResearchBrief | null): ResearchPlanService;
   clarification(): ResearchClarificationService;
 }
@@ -34,16 +38,20 @@ export interface PlanningTurnContext {
  */
 export async function* startTurn(turn: PlanningTurnContext): TurnEvents {
   const { ctx, port } = turn;
-  const planning = startResearchState(turn.createId("research"), ctx.question, turn.now());
-  await port.commit(planning, null);
+  const started = startResearchState(turn.createId("research"), ctx.question, turn.now());
+  await port.commit(started, null);
   yield { type: "status", message: "Checking whether the question needs clarification…" };
   let outcome;
   try {
     outcome = await turn.clarification().decide(ctx.question);
   } catch (error) {
-    await endPlanning(turn, planning, error);
+    await endPlanning(turn, started, error);
     throw error;
   }
+  const planning: ResearchState = {
+    ...started,
+    language: outcome.language ?? detectResearchLanguage(ctx.question),
+  };
   if (outcome.kind === "questions") {
     const asked = withClarificationQuestions(
       planning,
@@ -55,7 +63,7 @@ export async function* startTurn(turn: PlanningTurnContext): TurnEvents {
     return yield* finish(
       ctx,
       asked,
-      `The research needs clarification: ${outcome.questions.length} question(s).`,
+      label(turn.labels(asked), "turnNeedsClarification", { count: outcome.questions.length }),
     );
   }
   const briefed = { ...planning, brief: readyBrief(outcome.assumptions) };
@@ -113,7 +121,7 @@ async function* draftPlan(
     return yield* finish(
       turn.ctx,
       review,
-      `Research plan ready for review: ${plan.branches.length} branches.`,
+      label(turn.labels(review), "turnPlanReady", { count: plan.branches.length }),
     );
   } catch (error) {
     await endPlanning(turn, { ...planning, revision: committedRevision }, error);
@@ -126,13 +134,9 @@ async function endPlanning(
   planning: ResearchState,
   error: unknown,
 ): Promise<void> {
+  const labels = turn.labels(planning);
   const ended = isAbort(error)
-    ? endResearch(planning, "cancelled", "Stopped while drafting the plan.", turn.now())
-    : endResearch(
-        planning,
-        "failed",
-        error instanceof Error ? error.message : "The plan could not be generated.",
-        turn.now(),
-      );
+    ? endResearch(planning, "cancelled", labels.stoppedDrafting, turn.now())
+    : endResearch(planning, "failed", labels.planFailed, turn.now());
   await turn.port.commit(ended, planning.revision).catch(() => undefined);
 }

@@ -371,6 +371,7 @@ function discoveryRows(): [string, unknown][] {
     withDiscovery("test work reusing a gather work id", {
       executions: [{ ...assessedDiscovery.executions[0], workId: "w-1" }],
     }),
+    withDiscovery("non-boolean skipped observations", { observationsSkipped: "yes" }),
     withDiscovery("cycle naming an unknown work", {
       cycles: [{ ...firstCycle, workIds: ["w-9"] }],
     }),

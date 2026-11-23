@@ -42,7 +42,12 @@ export class ResearchClarificationService {
       }
     } catch (error) {
       if ((error as { name?: unknown }).name === "AbortError") throw error;
-      return { kind: "ready", assumptions: [NO_CLARIFICATION_ASSUMPTION], failed: true };
+      return {
+        kind: "ready",
+        assumptions: [NO_CLARIFICATION_ASSUMPTION],
+        failed: true,
+        language: null,
+      };
     }
     return parseClarification(reply);
   }

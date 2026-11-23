@@ -6,6 +6,7 @@ import { settingsIndexing } from "./settingsIndexing";
 import { settingsProfiles } from "./settingsProfiles";
 import { subAgents } from "./subAgents";
 import { deepResearch } from "./deepResearch";
+import { researchAnswer } from "./researchAnswer";
 
 export const de = {
   ...common,
@@ -15,5 +16,6 @@ export const de = {
   ...chat,
   ...subAgents,
   ...deepResearch,
+  ...researchAnswer,
   ...onboarding,
 };

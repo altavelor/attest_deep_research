@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import { runVerificationPhase } from "@application/use-cases/research/deep-research/researchVerificationPhase";
 import {
   emptyBudgetState,
@@ -141,6 +142,7 @@ describe("deep research verification phase", () => {
         usage: () => ({ modelRounds: 3, searches: 1, evidenceItems: 0 }),
       },
       synthesis: {} as ReportSynthesisService,
+      labels: ENGLISH_RESEARCH_LABELS,
       createVerifier: (options) => ({
         verify: async (findings) => {
           options.onExtracted?.(findings.map((execution) => execution.workId));
@@ -185,6 +187,7 @@ describe("deep research verification phase", () => {
         port,
         runner: { path: "main", run: vi.fn(), usage: vi.fn() },
         synthesis: {} as ReportSynthesisService,
+        labels: ENGLISH_RESEARCH_LABELS,
         createVerifier,
         now: () => new Date("2026-01-01T01:00:00.000Z"),
         setTimer: () => () => undefined,

@@ -25,7 +25,12 @@ import {
 } from "@core/research";
 import { citationIdsFromText, removeUnknownCitationTokens } from "../strategies/citations";
 import { MAX_WAIT_MS } from "@application/use-cases/sub-agent";
-import { UnusableBranchSessionError, type BranchChildRun, type BranchRunner } from "./branchRunner";
+import {
+  BranchNoFindingsError,
+  UnusableBranchSessionError,
+  type BranchChildRun,
+  type BranchRunner,
+} from "./branchRunner";
 
 export interface SubAgentBranchRunnerDeps {
   branches: readonly ResearchBranch[];
@@ -183,7 +188,7 @@ export class SubAgentBranchRunner implements BranchRunner {
       removeUnknownCitationTokens(outcome.answerText, new Set(revisionOf.keys())),
       revisionOf,
     ).trim();
-    if (text === "") throw new Error("The branch produced no findings.");
+    if (text === "") throw new BranchNoFindingsError();
     const bounded = boundFindingText(text);
     const cited = citationIdsFromText(bounded);
     return {

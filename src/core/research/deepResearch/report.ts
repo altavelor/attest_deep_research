@@ -4,6 +4,7 @@ import {
   uncoveredRequired,
   verificationSections,
 } from "./reportSections";
+import { label, type ResearchLabels } from "./reportLabels";
 import type {
   BranchExecution,
   ResearchVerification,
@@ -35,11 +36,12 @@ export function reportDecision(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
-  verification: ResearchVerification | null = null,
+  verification: ResearchVerification | null,
+  labels: ResearchLabels,
 ): ReportDecision {
   const completed = executions.filter((execution) => execution.state === "completed");
   if (completed.length === 0) {
-    return { kind: "failed", reason: `No branch completed. ${stopReason}` };
+    return { kind: "failed", reason: label(labels, "noBranchCompleted", { reason: stopReason }) };
   }
   const verified = verification !== null && verification.assessments.length > 0;
   const complete = verified && fullyAssessed(verification) && hasSupportedClaim(verification);
@@ -66,12 +68,20 @@ export function reportDecision(
 }
 
 /** Names why the run stopped, from the budget closure or the normal end of the plan. */
-export function stopReasonOf(budget: ResearchBudgetState | null): string {
+export function stopReasonOf(budget: ResearchBudgetState | null, labels: ResearchLabels): string {
   const closed = budget?.closed;
-  if (!closed) return "All scheduled branches settled.";
-  if (closed.reason === "time") return "The active execution time limit was reached.";
-  if (closed.reason === "user") return "Stopped by the user.";
-  return `The research budget is exhausted (${closed.dimension ?? "budget"}).`;
+  if (!closed) return labels.stopSettled;
+  if (closed.reason === "time") return labels.stopTime;
+  if (closed.reason === "user") return labels.stopUser;
+  return label(labels, "stopBudget", { dimension: dimensionName(closed.dimension, labels) });
+}
+
+function dimensionName(dimension: string | null, labels: ResearchLabels): string {
+  if (dimension === "branchAttempts") return labels.dimensionBranchAttempts;
+  if (dimension === "modelRounds") return labels.dimensionModelRounds;
+  if (dimension === "searches") return labels.dimensionSearches;
+  if (dimension === "evidenceItems") return labels.dimensionEvidenceItems;
+  return dimension ?? labels.dimensionBudget;
 }
 
 /**
@@ -84,15 +94,16 @@ export function formatWithoutModel(
   plan: ResearchPlan,
   executions: readonly BranchExecution[],
   stopReason: string,
-  verification: ResearchVerification | null = null,
+  verification: ResearchVerification | null,
+  labels: ResearchLabels,
 ): string {
   if (verification && hasSupportedClaim(verification)) {
     const supported = supportedClaimsSection(verification);
     return [
-      "# Research findings",
-      "Verified claims are listed without a synthesized summary.",
-      ...(supported ? ["## Supported claims", supported] : []),
-      verificationSections(plan, executions, verification, stopReason),
+      `# ${labels.findingsTitle}`,
+      labels.verifiedIntro,
+      ...(supported ? [`## ${labels.supportedClaims}`, supported] : []),
+      verificationSections(plan, executions, verification, stopReason, labels),
     ].join("\n\n");
   }
   const titleOf = (branchId: string): string =>
@@ -103,7 +114,7 @@ export function formatWithoutModel(
       const finding = execution.finding!;
       const citations =
         finding.citationTokens.length > 0
-          ? `\n\nSources: ${finding.citationTokens.map((token) => `[${token}]`).join(" ")}`
+          ? `\n\n${label(labels, "sources", { tokens: finding.citationTokens.map((token) => `[${token}]`).join(" ") })}`
           : "";
       return `## ${titleOf(execution.branchId)}\n\n${finding.text.trim()}${citations}`;
     });
@@ -113,12 +124,12 @@ export function formatWithoutModel(
       (execution) => `- ${titleOf(execution.branchId)}: ${execution.terminalReason ?? stopReason}`,
     );
   return [
-    "# Research findings",
-    `Unverified findings are listed per branch without a synthesized summary; their claims were not checked against the sources. ${stopReason}`,
+    `# ${labels.findingsTitle}`,
+    `${labels.unverifiedIntro} ${stopReason}`,
     ...sections,
-    ...(missing.length > 0 ? ["## Missing branches", missing.join("\n")] : []),
+    ...(missing.length > 0 ? [`## ${labels.missingBranches}`, missing.join("\n")] : []),
     ...(verification && verification.assessments.length > 0
-      ? [verificationSections(plan, executions, verification, stopReason)]
+      ? [verificationSections(plan, executions, verification, stopReason, labels)]
       : []),
   ].join("\n\n");
 }

@@ -101,6 +101,7 @@ export interface ResearchState {
   brief: ResearchBrief | null;
   verification: ResearchVerification | null;
   discovery: ResearchDiscovery | null;
+  language?: string;
 }
 
 export interface ClarificationQuestion {

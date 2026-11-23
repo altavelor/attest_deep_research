@@ -125,3 +125,18 @@ export {
   deepResearchTurnDiagnostics,
   type DeepResearchTurnRecord,
 } from "./turnDiagnostics";
+export {
+  ENGLISH_RESEARCH_LABELS,
+  RESEARCH_LABEL_KEYS,
+  label,
+  type ResearchLabelKey,
+  type ResearchLabels,
+} from "./reportLabels";
+export {
+  DEFAULT_RESEARCH_LANGUAGE,
+  RESEARCH_LANGUAGE_RULE,
+  branchLanguageInstruction,
+  detectResearchLanguage,
+  normalizeResearchLanguage,
+  researchLanguageOf,
+} from "./researchLanguage";
