@@ -2,6 +2,7 @@ import {
   blockDependants,
   boundedReason,
   branchPath,
+  branchTaskText,
   nextReadyExecution,
   type BranchAllocation,
   type BranchExecution,
@@ -174,14 +175,16 @@ export class ResearchScheduler {
       flight.abandon = () =>
         resolve({ flight, finding: null, error: this.deps.signal.reason, abandoned: true });
     });
-    const ran = runner.run(work, allocation, this.deps.signal).then(
-      (finding): FlightResult => ({ flight, finding, error: null }),
-      (error: unknown): FlightResult => ({
-        flight,
-        finding: null,
-        error: error ?? new Error("failed"),
-      }),
-    );
+    const ran = runner
+      .run({ ...work, task: branchTaskText(work.task) }, allocation, this.deps.signal)
+      .then(
+        (finding): FlightResult => ({ flight, finding, error: null }),
+        (error: unknown): FlightResult => ({
+          flight,
+          finding: null,
+          error: error ?? new Error("failed"),
+        }),
+      );
     flight.done = Promise.race([ran, abandoned]);
     this.flights.set(work.workId, flight);
   }
