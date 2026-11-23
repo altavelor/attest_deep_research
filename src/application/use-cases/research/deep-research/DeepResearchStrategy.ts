@@ -5,6 +5,7 @@ import type {
   ToolCallingCapabilities,
 } from "@core/agent";
 import type { ResearchStatePort } from "@application/ports/researchState";
+import type { ResearchLabelsPort } from "@application/ports/researchLabels";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import type { SubAgentToolSources } from "../sub-agent/subAgentToolContext";
 import {
@@ -16,11 +17,14 @@ import {
   decisionMismatch,
   deepResearchRejected,
   endResearch,
+  label,
+  researchLanguageOf,
   isPlanStale,
   parsePlanDecisionPayload,
   withPlanForReview,
   type ResearchBrief,
   type ResearchDecision,
+  type ResearchLabels,
   type ResearchSourceScope,
   type ResearchState,
 } from "@core/research/deepResearch";
@@ -62,6 +66,7 @@ export interface DeepResearchStrategyDeps {
   createBranchEngine(): SubAgentPort;
   branchSources: SubAgentToolSources;
   setTimer?(delayMs: number, callback: () => void): () => void;
+  researchLabels: ResearchLabelsPort;
 }
 
 /**
@@ -99,7 +104,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
     }
     let active = view.active;
     if (active && abandonsPlanning(ctx.request.research, active)) {
-      const reason = "Interrupted during planning.";
+      const reason = this.labels(active).interruptedPlanning;
       await port.commit(endResearch(active, "failed", reason, this.now()), active.revision);
       active = null;
     }
@@ -113,9 +118,10 @@ export class DeepResearchStrategy implements ResearchStrategy {
     }
     if (!active || active.researchId !== turn.researchId) throw stale();
     if (turn.type === "continue") return yield* this.resume(ctx, port, active);
-    const cancelled = endResearch(active, "cancelled", "Cancelled by the user.", this.now());
+    const labels = this.labels(active);
+    const cancelled = endResearch(active, "cancelled", labels.cancelledByUser, this.now());
     await port.commit(cancelled, active.revision);
-    return yield* finish(ctx, cancelled, "Research cancelled.");
+    return yield* finish(ctx, cancelled, labels.turnCancelled);
   }
 
   private start(ctx: ResearchExecutionContext, port: ResearchStatePort): TurnEvents {
@@ -133,6 +139,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
       port,
       now: () => this.now(),
       createId: (prefix) => this.createId(prefix),
+      labels: (state) => this.labels(state),
       planService: (used, brief) => this.planService(ctx, scope, used, brief),
       clarification: () =>
         new ResearchClarificationService({
@@ -180,7 +187,9 @@ export class DeepResearchStrategy implements ResearchStrategy {
       return yield* finish(
         ctx,
         consumed.state,
-        `Plan updated to revision ${consumed.state.plan!.revision}.`,
+        label(this.labels(active), "turnPlanUpdated", {
+          revision: consumed.state.plan!.revision,
+        }),
       );
     }
     const scope = preflightScope(ctx.searchMode, this.sources());
@@ -202,7 +211,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
     return yield* finish(
       ctx,
       next.state,
-      `Plan regenerated (generation ${used} of ${MAX_PLAN_GENERATIONS}).`,
+      label(this.labels(active), "turnPlanRegenerated", { used, max: MAX_PLAN_GENERATIONS }),
     );
   }
 
@@ -229,11 +238,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
         updatedAt: this.now(),
       };
       await port.commit(asked, active.revision);
-      return yield* finish(
-        ctx,
-        asked,
-        "The approved plan is old; continue anyway, replan or cancel the research.",
-      );
+      return yield* finish(ctx, asked, this.labels(active).turnPlanStale);
     }
     return yield* this.run(ctx, port, active);
   }
@@ -249,9 +254,10 @@ export class DeepResearchStrategy implements ResearchStrategy {
       throw deepResearchRejected("research-invalid-decision", "The decision is malformed.");
     }
     if (action === "cancel") {
-      const cancelled = endResearch(active, "cancelled", "Cancelled by the user.", this.now());
+      const labels = this.labels(active);
+      const cancelled = endResearch(active, "cancelled", labels.cancelledByUser, this.now());
       await port.commit(cancelled, active.revision);
-      return yield* finish(ctx, cancelled, "Research cancelled.");
+      return yield* finish(ctx, cancelled, labels.turnCancelled);
     }
     if (action === "continue") {
       const resumed = {
@@ -298,7 +304,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
       this.now(),
     );
     await port.commit(review, active.revision);
-    return yield* finish(ctx, review, "A new plan is ready for review.");
+    return yield* finish(ctx, review, this.labels(active).turnNewPlan);
   }
 
   private run(
@@ -335,6 +341,10 @@ export class DeepResearchStrategy implements ResearchStrategy {
       index: this.deps.hasIndex,
       web: this.deps.hasWeb,
     };
+  }
+
+  private labels(state: Pick<ResearchState, "question" | "language">): ResearchLabels {
+    return this.deps.researchLabels.labelsFor(researchLanguageOf(state));
   }
 
   private now(): string {

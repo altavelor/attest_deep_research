@@ -16,6 +16,7 @@ import type { ChatRunRequest } from "@application/use-cases/chat";
 import type { NoteToolService } from "@application/research";
 import { createResearchToolRegistry, runToolLoop } from "@adapters/research-tools";
 import { ChatCompletionsRoundAdapter } from "@adapters/model-provider";
+import { createResearchLabelCatalogue } from "@adapters/i18n";
 import { emptyRetrieval, fixedNow, markdownSource } from "./factories";
 import { FakeRetriever } from "./researchFakes";
 import type {
@@ -118,6 +119,7 @@ export function deepResearchService(
       parallelCalls: false,
     },
     now: fixedNow,
+    researchLabels: createResearchLabelCatalogue(),
     ...overrides,
   });
 }

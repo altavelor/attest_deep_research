@@ -6,6 +6,7 @@ import type {
 } from "@core/diagnostics";
 import type { BranchExecution, BudgetDimension, ResearchLimits, ResearchState } from "./types";
 import { stopReasonOf } from "./report";
+import { ENGLISH_RESEARCH_LABELS } from "./reportLabels";
 
 export const MAX_DIAGNOSTIC_TEXT_CHARS = 200;
 export const MAX_DIAGNOSTIC_WORKS = 60;
@@ -53,7 +54,7 @@ export function deepResearchTurnDiagnostics(
     phaseBefore: record.before?.phase ?? null,
     phaseAfter: record.after?.phase ?? null,
     terminalReason: optionalText(state?.terminalReason ?? null),
-    stopReason: state?.budget ? stopReasonOf(state.budget) : null,
+    stopReason: state?.budget ? stopReasonOf(state.budget, ENGLISH_RESEARCH_LABELS) : null,
     plan: plan && {
       revision: plan.revision,
       preset: plan.preset,

@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   BranchUnavailableError,
   ResearchBudgetPermits,
@@ -143,6 +144,7 @@ describe("deep research waves", () => {
       subAgents: { attach: () => () => undefined, createRunner: () => child },
       parallelRequests: true,
       synthesis: {} as ReportSynthesisService,
+      labels: ENGLISH_RESEARCH_LABELS,
       now: () => new Date("2026-01-01T01:00:00.000Z"),
       setTimer: () => () => undefined,
       createId: (prefix) => `${prefix}-1`,

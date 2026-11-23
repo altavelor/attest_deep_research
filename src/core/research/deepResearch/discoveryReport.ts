@@ -1,6 +1,7 @@
 import type { ResearchHypothesis } from "./discoveryTypes";
 import type { ResearchClaim, ResearchDiscovery } from "./types";
-import { currentHypotheses } from "./discovery";
+import { USER_OBSERVATION_LIMITATION, currentHypotheses } from "./discovery";
+import { label, type ResearchLabels } from "./reportLabels";
 import { MAX_CLAIM_TOKENS } from "./verification";
 
 /**
@@ -41,6 +42,7 @@ export function hypothesisClaims(
  */
 export function hypothesesSection(
   discovery: ResearchDiscovery | null,
+  labels: ResearchLabels,
   clean: (text: string, allowed: ReadonlySet<string>) => string = (text) => text,
 ): string {
   if (!discovery || discovery.hypotheses.length === 0) return "";
@@ -61,32 +63,52 @@ export function hypothesesSection(
           .flatMap((observation) => observation.citationTokens),
       );
       const text = (value: string): string => inline(clean(value, allowed));
-      const label = text(labelOf(discovery, entry));
       const alternative =
-        entry.status === "disconfirmed" ? "" : ` Alternative: ${text(entry.alternative)}.`;
-      return `- (${label}) ${text(entry.claim)} (revision ${entry.revision}).${alternative}`;
+        entry.status === "disconfirmed"
+          ? ""
+          : ` ${label(labels, "alternative", { text: text(entry.alternative) })}`;
+      const line = label(labels, "hypothesisLine", {
+        label: text(labelOf(discovery, entry, labels)),
+        claim: text(entry.claim),
+        revision: entry.revision,
+      });
+      return `- ${line}${alternative}`;
     });
   const omissions = discovery.omissions.map((entry) => `- ${inline(clean(entry, new Set()))}`);
   return [
-    "## Hypotheses",
+    `## ${labels.hypotheses}`,
     lines.join("\n"),
-    ...(omissions.length > 0 ? ["Known omissions:", omissions.join("\n")] : []),
+    ...(omissions.length > 0 ? [labels.knownOmissions, omissions.join("\n")] : []),
   ].join("\n\n");
 }
 
-function labelOf(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): string {
+function labelOf(
+  discovery: ResearchDiscovery,
+  hypothesis: ResearchHypothesis,
+  labels: ResearchLabels,
+): string {
   const own = discovery.observations.filter((entry) =>
     hypothesis.observationIds.includes(entry.observationId),
   );
   const user = own.filter((entry) => entry.producer === "user");
+  const status = statusLabel(hypothesis.status, labels);
   if (user.length === 0) {
     if (hypothesis.status !== "supported" && skippedTest(discovery, hypothesis)) {
-      return `${hypothesis.status} — the user skipped the observation`;
+      return label(labels, "skippedObservation", { status });
     }
-    return hypothesis.status === "supported" ? "supported by literature" : hypothesis.status;
+    return hypothesis.status === "supported" ? labels.supportedByLiterature : status;
   }
-  const limitations = [...new Set(user.flatMap((entry) => entry.limitations))];
-  return `${hypothesis.status} by a user observation — ${limitations.join("; ")}`;
+  const limitations = [...new Set(user.flatMap((entry) => entry.limitations))].map((entry) =>
+    entry === USER_OBSERVATION_LIMITATION ? labels.observationLimitation : entry,
+  );
+  return label(labels, "byUserObservation", { status, limitations: limitations.join("; ") });
+}
+
+function statusLabel(status: ResearchHypothesis["status"], labels: ResearchLabels): string {
+  if (status === "supported") return labels.statusSupported;
+  if (status === "disconfirmed") return labels.statusDisconfirmed;
+  if (status === "inconclusive") return labels.statusInconclusive;
+  return labels.statusUntested;
 }
 
 function skippedTest(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): boolean {

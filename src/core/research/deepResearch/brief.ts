@@ -1,4 +1,5 @@
 import { escapePromptText } from "./promptText";
+import { RESEARCH_LANGUAGE_RULE, normalizeResearchLanguage } from "./researchLanguage";
 import { MAX_CLARIFICATION_QUESTIONS, MAX_RESEARCH_TEXT_CHARS } from "./limits";
 import type {
   ClarificationDecisionPayload,
@@ -16,17 +17,24 @@ export const NO_CLARIFICATION_ASSUMPTION =
 const REPLY_PREFIX = "The user clarified: ";
 
 export type ClarificationOutcome =
-  | { kind: "ready"; assumptions: string[]; failed: boolean }
-  | { kind: "questions"; questions: ClarificationQuestion[]; assumptions: string[] };
+  | { kind: "ready"; assumptions: string[]; failed: boolean; language: string | null }
+  | {
+      kind: "questions";
+      questions: ClarificationQuestion[];
+      assumptions: string[];
+      language: string | null;
+    };
 
 /** Builds the system prompt of the one structured clarification call before planning. */
 export function clarificationPrompt(): string {
   return [
     "You decide whether a research question is clear enough to plan. Reply with one JSON object only.",
-    'Shape: {"status": "ready" | "questions", "assumptions": string[],',
+    'Shape: {"status": "ready" | "questions", "language": string, "assumptions": string[],',
     '"questions": [{"prompt": string, "suggestions": string[]}]}.',
     `Ask at most ${MAX_CLARIFICATION_QUESTIONS} questions, only when the answer changes the research.`,
     "Assumptions state what the plan assumes when the user does not answer.",
+    "language is the BCP 47 tag of the language the question is written in, such as en, ru or zh-CN.",
+    RESEARCH_LANGUAGE_RULE,
   ].join("\n");
 }
 
@@ -41,10 +49,12 @@ export function parseClarification(text: string): ClarificationOutcome {
     kind: "ready",
     assumptions: [NO_CLARIFICATION_ASSUMPTION],
     failed: true,
+    language: null,
   };
   if (!raw || (raw.status !== "ready" && raw.status !== "questions")) return failed;
   const assumptions = boundedList(raw.assumptions, MAX_BRIEF_ASSUMPTIONS, MAX_BRIEF_PROMPT_CHARS);
-  if (raw.status === "ready") return { kind: "ready", assumptions, failed: false };
+  const language = normalizeResearchLanguage(raw.language);
+  if (raw.status === "ready") return { kind: "ready", assumptions, failed: false, language };
   const questions = (Array.isArray(raw.questions) ? raw.questions : [])
     .filter(isRecord)
     .map((entry) => ({
@@ -59,7 +69,7 @@ export function parseClarification(text: string): ClarificationOutcome {
     .slice(0, MAX_CLARIFICATION_QUESTIONS)
     .map((entry, index) => ({ questionId: `question-${index + 1}`, ...entry }));
   if (questions.length === 0) return failed;
-  return { kind: "questions", questions, assumptions };
+  return { kind: "questions", questions, assumptions, language };
 }
 
 /** Records the questions of the clarification round and waits for the user's clarification decision. */

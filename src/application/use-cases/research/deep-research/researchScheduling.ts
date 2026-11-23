@@ -7,6 +7,7 @@ import type {
 import { ResearchScheduler, type ResearchSchedulerRunners } from "./ResearchScheduler";
 
 export interface SchedulingPhase {
+  language?: string;
   plan: ResearchPlan;
   executions: readonly BranchExecution[];
   works: readonly ResearchWork[];
@@ -32,6 +33,7 @@ export async function runSchedulingPhase(
   if (phase.turnSignal.aborted) follow();
   phase.turnSignal.addEventListener("abort", follow);
   const scheduler = new ResearchScheduler({
+    ...(phase.language ? { language: phase.language } : {}),
     plan: phase.plan,
     executions: phase.executions,
     owner: phase.owner,

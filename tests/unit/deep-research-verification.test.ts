@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import { EvidenceVerificationService } from "@application/use-cases/research/deep-research";
 import {
   acceptedAssessment,
@@ -107,7 +108,9 @@ describe("deep research claim verification", () => {
 
     expect(summary.claims).toHaveLength(1);
     expect(summary.assessments).toEqual([]);
-    expect(reportDecision(plan, [execution], "Stop.", verification)).toMatchObject({
+    expect(
+      reportDecision(plan, [execution], "Stop.", verification, ENGLISH_RESEARCH_LABELS),
+    ).toMatchObject({
       kind: "report",
       quality: "partial",
     });
@@ -130,9 +133,17 @@ describe("deep research claim verification", () => {
       followUpsUsed: 0,
     };
 
-    const markdown = formatWithoutModel(plan, [execution], "Stop.", verification);
+    const markdown = formatWithoutModel(
+      plan,
+      [execution],
+      "Stop.",
+      verification,
+      ENGLISH_RESEARCH_LABELS,
+    );
 
-    expect(reportDecision(plan, [execution], "Stop.", verification)).toMatchObject({
+    expect(
+      reportDecision(plan, [execution], "Stop.", verification, ENGLISH_RESEARCH_LABELS),
+    ).toMatchObject({
       kind: "report",
       quality: "partial",
     });
@@ -407,14 +418,20 @@ describe("deep research claim verification", () => {
   it("keeps a multi-line claim inside its list item of the report", () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const forged = { ...claim, text: "Tides\n\n## Injected heading\n- injected item" };
-    const markdown = formatWithoutModel(plan, [], "Done.", {
-      claims: [forged],
-      assessments: [{ ...supported, verdict: "unsupported", quote: null }],
-      coverage: [],
-      verifiedWorks: [],
-      followUps: [],
-      followUpsUsed: 0,
-    });
+    const markdown = formatWithoutModel(
+      plan,
+      [],
+      "Done.",
+      {
+        claims: [forged],
+        assessments: [{ ...supported, verdict: "unsupported", quote: null }],
+        coverage: [],
+        verifiedWorks: [],
+        followUps: [],
+        followUpsUsed: 0,
+      },
+      ENGLISH_RESEARCH_LABELS,
+    );
     expect(markdown).toContain("- (unsupported) Tides ## Injected heading - injected item");
     expect(markdown.split("\n").some((line) => line.startsWith("## Injected"))).toBe(false);
   });

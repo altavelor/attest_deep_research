@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   USER_OBSERVATION_LIMITATION,
   acceptHypothesisDraft,
@@ -139,25 +140,28 @@ describe("deep research discovery rules", () => {
       quote: "Tides followed the moon",
       receivedAt: "2026-01-01T00:00:00.000Z",
     });
-    const section = hypothesesSection({
-      hypotheses: [
-        { ...hypothesis, hypothesisId: "h-0", status: "disconfirmed", observationIds: ["o-2"] },
-        { ...hypothesis, status: "disconfirmed", observationIds: [] },
-        {
-          ...hypothesis,
-          revision: 2,
-          previousRevision: 1,
-          status: "supported",
-          observationIds: ["o-1"],
-        },
-      ],
-      tests: [],
-      observations: [reported, { ...reported, observationId: "o-2", verdict: "contradicts" }],
-      cycles: [],
-      notes: [],
-      executions: [],
-      omissions: [],
-    });
+    const section = hypothesesSection(
+      {
+        hypotheses: [
+          { ...hypothesis, hypothesisId: "h-0", status: "disconfirmed", observationIds: ["o-2"] },
+          { ...hypothesis, status: "disconfirmed", observationIds: [] },
+          {
+            ...hypothesis,
+            revision: 2,
+            previousRevision: 1,
+            status: "supported",
+            observationIds: ["o-1"],
+          },
+        ],
+        tests: [],
+        observations: [reported, { ...reported, observationId: "o-2", verdict: "contradicts" }],
+        cycles: [],
+        notes: [],
+        executions: [],
+        omissions: [],
+      },
+      ENGLISH_RESEARCH_LABELS,
+    );
     expect(section).toContain("(disconfirmed) The moon drives tides. (revision 1)");
     expect(section).toContain(
       `(disconfirmed by a user observation — ${USER_OBSERVATION_LIMITATION}) The moon drives tides.`,

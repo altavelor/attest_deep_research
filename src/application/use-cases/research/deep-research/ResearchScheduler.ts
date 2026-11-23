@@ -2,6 +2,7 @@ import {
   blockDependants,
   boundedReason,
   branchPath,
+  DEFAULT_RESEARCH_LANGUAGE,
   branchTaskText,
   nextReadyExecution,
   type BranchAllocation,
@@ -23,6 +24,7 @@ export interface ResearchSchedulerRunners {
 }
 
 export interface ResearchSchedulerDeps {
+  language?: string;
   plan: ResearchPlan;
   executions: readonly BranchExecution[];
   owner: ResearchBudgetOwner;
@@ -176,7 +178,14 @@ export class ResearchScheduler {
         resolve({ flight, finding: null, error: this.deps.signal.reason, abandoned: true });
     });
     const ran = runner
-      .run({ ...work, task: branchTaskText(work.task) }, allocation, this.deps.signal)
+      .run(
+        {
+          ...work,
+          task: branchTaskText(work.task, this.deps.language ?? DEFAULT_RESEARCH_LANGUAGE),
+        },
+        allocation,
+        this.deps.signal,
+      )
       .then(
         (finding): FlightResult => ({ flight, finding, error: null }),
         (error: unknown): FlightResult => ({

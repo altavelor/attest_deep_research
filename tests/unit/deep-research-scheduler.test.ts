@@ -1,3 +1,4 @@
+import { ENGLISH_RESEARCH_LABELS } from "@core/research/deepResearch";
 import {
   UnusableBranchSessionError,
   ResearchScheduler,
@@ -13,6 +14,7 @@ import {
   nextReadyExecution,
   reportDecision,
   SOURCE_READING_INSTRUCTION,
+  branchLanguageInstruction,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
 import { runSummary } from "../support/subAgentInspection";
@@ -57,13 +59,27 @@ describe("deep research scheduling rules", () => {
 
   it("reports partial when a required branch is missing and failed when none completed", () => {
     expect(
-      reportDecision(plan, settled({ "branch-1": "completed", "branch-3": "completed" }), "Stop."),
+      reportDecision(
+        plan,
+        settled({ "branch-1": "completed", "branch-3": "completed" }),
+        "Stop.",
+        null,
+        ENGLISH_RESEARCH_LABELS,
+      ),
     ).toMatchObject({
       kind: "report",
       quality: "partial",
       completedBranches: ["branch-1", "branch-3"],
     });
-    expect(reportDecision(plan, settled({ "branch-1": "failed" }), "Stop.")).toEqual({
+    expect(
+      reportDecision(
+        plan,
+        settled({ "branch-1": "failed" }),
+        "Stop.",
+        null,
+        ENGLISH_RESEARCH_LABELS,
+      ),
+    ).toEqual({
       kind: "failed",
       reason: "No branch completed. Stop.",
     });
@@ -147,7 +163,9 @@ describe("deep research main-path fallback", () => {
     ]);
     expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 2, modelRounds: 6 });
     expect(owner.snapshot().openAllocations).toEqual([]);
-    expect(tasks).toEqual(Array(3).fill(`T\n\n${SOURCE_READING_INSTRUCTION}`));
+    expect(tasks).toEqual(
+      Array(3).fill(`T\n\n${SOURCE_READING_INSTRUCTION}\n\n${branchLanguageInstruction("en")}`),
+    );
   });
 
   it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {

@@ -7,3 +7,4 @@ export type {
   Translate,
   UiTranslator,
 } from "./messages";
+export { createResearchLabelCatalogue } from "./ResearchLabelCatalogue";
