@@ -84,4 +84,6 @@ export const deepResearch: EnDeepResearchMessages = {
     "Réponds sans clarification : traite la question telle quelle et indique les hypothèses retenues.",
   "chat.clarification.reply.heading": "Réponses aux questions de clarification :",
   "chat.clarification.reply.answer": "Réponse",
+  "chat.clarification.reply.summary": "Réponses aux questions de clarification ({count})",
+  "chat.clarification.reply.skipped": "Poursuivi sans clarification",
 };

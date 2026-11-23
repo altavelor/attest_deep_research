@@ -81,6 +81,8 @@ export const deepResearch = {
     "Answer without clarification: proceed with the question as asked and state the assumptions you make.",
   "chat.clarification.reply.heading": "Answers to the clarifying questions:",
   "chat.clarification.reply.answer": "Answer",
+  "chat.clarification.reply.summary": "Answered the clarifying questions ({count})",
+  "chat.clarification.reply.skipped": "Continued without clarification",
 };
 
 export type EnDeepResearchMessages = Record<keyof typeof deepResearch, string>;

@@ -80,4 +80,6 @@ export const deepResearch: EnDeepResearchMessages = {
   "chat.clarification.skipMessage": "不澄清直接回答：按原问题作答，并说明你所做的假设。",
   "chat.clarification.reply.heading": "对澄清问题的回答：",
   "chat.clarification.reply.answer": "回答",
+  "chat.clarification.reply.summary": "已回答澄清问题（{count}）",
+  "chat.clarification.reply.skipped": "未澄清，直接继续",
 };

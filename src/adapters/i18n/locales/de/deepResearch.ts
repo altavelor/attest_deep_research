@@ -84,4 +84,6 @@ export const deepResearch: EnDeepResearchMessages = {
     "Ohne Rückfragen antworten: Beantworte die Frage wie gestellt und nenne die getroffenen Annahmen.",
   "chat.clarification.reply.heading": "Antworten auf die Rückfragen:",
   "chat.clarification.reply.answer": "Antwort",
+  "chat.clarification.reply.summary": "Rückfragen beantwortet ({count})",
+  "chat.clarification.reply.skipped": "Ohne Klärung fortgesetzt",
 };

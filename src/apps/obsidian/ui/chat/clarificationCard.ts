@@ -1,8 +1,8 @@
-import type { AnswerClarification } from "@core/answer";
+import type { AnswerClarification, ClarificationReply } from "@core/answer";
 import { ChatDisplayMessage } from "@core/conversation";
 import { MAX_RESEARCH_TEXT_CHARS } from "@core/research/deepResearch";
 import {
-  clarificationAnswersFromReply,
+  clarificationReplyOf,
   formatClarificationReply,
   type ClarificationReplyLabels,
 } from "@core/research";
@@ -11,10 +11,10 @@ import type { Translate } from "@adapters/i18n";
 export interface ClarificationCardContext {
   t: Translate;
   running: boolean;
-  onReply(reply: string): void;
+  onReply(text: string, reply: ClarificationReply): void;
 }
 
-/** Builds the localized labels of the reply message the card sends and reads back. */
+/** Builds the localized labels of the reply message text the card sends to the model. */
 export function clarificationReplyLabels(t: Translate): ClarificationReplyLabels {
   return {
     heading: t("chat.clarification.reply.heading"),
@@ -44,8 +44,7 @@ export function renderClarificationCard(
   briefEl.createDiv({ cls: "attest-research-card__title", text: t("chat.clarification.title") });
   const labels = clarificationReplyLabels(t);
   const next = index >= 0 ? messages[index + 1] : undefined;
-  const given =
-    next?.role === "user" ? clarificationAnswersFromReply(clarification, next.content, labels) : {};
+  const given = next?.role === "user" ? (next.clarificationReply?.answers ?? {}) : {};
   const fields = new Map<string, HTMLTextAreaElement>();
   for (const question of clarification.questions) {
     const rowEl = briefEl.createDiv({ cls: "attest-research-card__question" });
@@ -84,9 +83,9 @@ function renderReplyActions(
   const { t } = context;
   const actionsEl = parentEl.createDiv({ cls: "attest-research-card__actions" });
   const buttons: HTMLButtonElement[] = [];
-  const send = (reply: string): void => {
+  const send = (text: string, reply: ClarificationReply): void => {
     for (const button of buttons) button.disabled = true;
-    context.onReply(reply);
+    context.onReply(text, reply);
   };
   const add = (label: string, primary: boolean, onClick: () => void): void => {
     const button = actionsEl.createEl("button", {
@@ -96,11 +95,14 @@ function renderReplyActions(
     button.addEventListener("click", onClick);
     buttons.push(button);
   };
-  add(t("chat.clarification.skip"), false, () => send(t("chat.clarification.skipMessage")));
+  add(t("chat.clarification.skip"), false, () =>
+    send(t("chat.clarification.skipMessage"), { answers: {}, skipped: true }),
+  );
   add(t("chat.clarification.send"), true, () => {
     const answers = Object.fromEntries(
       [...fields].map(([questionId, field]) => [questionId, field.value] as const),
     );
-    send(formatClarificationReply(clarification, answers, labels));
+    const reply = clarificationReplyOf(clarification, answers);
+    send(formatClarificationReply(clarification, reply, labels), reply);
   });
 }

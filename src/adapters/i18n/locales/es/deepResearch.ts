@@ -86,4 +86,6 @@ export const deepResearch: EnDeepResearchMessages = {
     "Responde sin aclaración: sigue con la pregunta tal como está y enuncia las suposiciones que hagas.",
   "chat.clarification.reply.heading": "Respuestas a las preguntas aclaratorias:",
   "chat.clarification.reply.answer": "Respuesta",
+  "chat.clarification.reply.summary": "Respuestas a las preguntas aclaratorias ({count})",
+  "chat.clarification.reply.skipped": "Continuado sin aclaración",
 };

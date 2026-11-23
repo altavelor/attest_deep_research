@@ -226,5 +226,7 @@ export function buildClarificationSection(): string {
     "- Decide before spending searches: ask first instead of researching a guessed reading of " +
       "the question. Otherwise answer and state the assumptions you made.",
     "- The call ends this turn; the user's answers arrive as the next message.",
+    `- Put the questions only in the ${ASK_CLARIFICATION_TOOL} arguments: the user sees them as ` +
+      "a card, so do not repeat, list, or ask them in your message text.",
   ].join("\n");
 }
