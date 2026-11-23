@@ -118,7 +118,9 @@ export async function* runApprovedTurn(
     );
   }
   if (result.state.phase === "awaiting-observation") {
-    const test = result.state.discovery!.tests.find((entry) => entry.status === "awaiting-input")!;
+    const test = result.state.discovery!.tests.find(
+      (entry) => entry.testId === result.state.pending?.subjectId,
+    )!;
     return yield* finish(
       ctx,
       result.state,
