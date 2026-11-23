@@ -16,6 +16,7 @@ export {
 } from "./planRules";
 export { parsePlanDraft, planGenerationPrompt, type PlanDraftContext } from "./planDraft";
 export { nextResearchSection, validateResearchSection } from "./sectionValidation";
+export { fitResearchSection } from "./sectionSize";
 export { boundedReason, deepResearchRejected, type DeepResearchRejectionReason } from "./rejection";
 export {
   ResearchBudgetOwner,
