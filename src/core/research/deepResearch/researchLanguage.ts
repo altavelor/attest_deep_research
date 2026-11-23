@@ -7,6 +7,7 @@ export const RESEARCH_LANGUAGE_RULE =
 
 const LANGUAGE_TAG = /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/iu;
 const MAX_LANGUAGE_TAG_CHARS = 35;
+const MIN_STOP_WORD_MARGIN = 2;
 
 const SCRIPT_LANGUAGES: readonly [RegExp, string][] = [
   [/\p{Script=Cyrillic}/u, "ru"],
@@ -59,8 +60,8 @@ export function normalizeResearchLanguage(value: unknown): string | null {
 
 /**
  * Guesses the language of a question without a model: the dominant non-Latin script decides first,
- * then the most frequent stop words of English, German, Spanish or French. Without a signal it is
- * English.
+ * then the stop words of English, German, Spanish or French when one language has at least two
+ * more hits than any other. A weak or ambiguous signal, such as Portuguese or Italian, is English.
  */
 export function detectResearchLanguage(text: string): string {
   const letters = [...text].filter((char) => /\p{L}/u.test(char));
@@ -71,10 +72,10 @@ export function detectResearchLanguage(text: string): string {
   const script = counts.sort((a, b) => b[1] - a[1])[0];
   if (script && script[1] >= latin) return script[0];
   const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
-  const best = Object.entries(STOP_WORDS)
+  const [best, runnerUp] = Object.entries(STOP_WORDS)
     .map(([language, stop]) => [language, words.filter((word) => stop.has(word)).length] as const)
-    .sort((a, b) => b[1] - a[1])[0]!;
-  return best[1] > 0 ? best[0] : DEFAULT_RESEARCH_LANGUAGE;
+    .sort((a, b) => b[1] - a[1]);
+  return best![1] >= runnerUp![1] + MIN_STOP_WORD_MARGIN ? best![0] : DEFAULT_RESEARCH_LANGUAGE;
 }
 
 /** Returns the stored language of a research, or the language guessed from its question. */

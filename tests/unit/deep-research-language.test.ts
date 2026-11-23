@@ -21,7 +21,12 @@ describe("deep research language", () => {
   it("detects the language of a question by script, then by Latin stop words, then English", () => {
     expect(detectResearchLanguage("Почему бывают приливы? (tides)")).toBe("ru");
     expect(detectResearchLanguage("Wie entstehen die Gezeiten?")).toBe("de");
-    expect(detectResearchLanguage("Tides 2026?")).toBe("en");
+    expect(detectResearchLanguage("Por que as marés do oceano mudam com a lua e o sol?")).toBe(
+      "en",
+    );
+    expect(
+      detectResearchLanguage("Come le maree del mare e la luna sono legate in una legge?"),
+    ).toBe("en");
   });
 
   it("keeps the reported language of a clarification only when it is a language tag", () => {
