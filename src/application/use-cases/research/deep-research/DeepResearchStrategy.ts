@@ -38,6 +38,11 @@ import {
   resolveResearchTurn,
   type ResearchSources,
 } from "./deepResearchTurns";
+import {
+  DeepResearchTurnRecorder,
+  turnRecorderOf,
+  withTurnDiagnostics,
+} from "./DeepResearchTurnRecorder";
 
 export interface DeepResearchStrategyDeps {
   chatModel: ChatModelProvider;
@@ -63,6 +68,15 @@ export class DeepResearchStrategy implements ResearchStrategy {
 
   async *execute(ctx: ResearchExecutionContext): TurnEvents {
     const port = ctx.request.researchState;
+    if (!port || ctx.request.includeContextDiagnostics !== true) return yield* this.turn(ctx);
+    const observed: ResearchExecutionContext = { ...ctx };
+    const recorder = new DeepResearchTurnRecorder(observed, port);
+    observed.request = { ...ctx.request, researchState: recorder.observePort(port) };
+    return yield* withTurnDiagnostics(this.turn(observed), recorder);
+  }
+
+  private async *turn(ctx: ResearchExecutionContext): TurnEvents {
+    const port = ctx.request.researchState;
     if (!port) {
       throw deepResearchRejected("research-state-unreadable", "Deep Research needs a saved chat.");
     }
@@ -81,6 +95,7 @@ export class DeepResearchStrategy implements ResearchStrategy {
     }
     const turn = resolveResearchTurn(ctx.request.research, active, ctx.question);
     checkTurnText(turn, ctx.question);
+    turnRecorderOf(ctx)?.setTurnKind(turn.type);
     if (turn.type === "start") return yield* this.start(ctx, port);
     if (turn.type === "decision") {
       if (!active) throw stale();

@@ -32,5 +32,6 @@ export function buildDiagnosticReportV3(saved: ContextDiagnostics): DiagnosticRe
     reasoning,
     answer,
     stats,
+    deepResearch: diagnostics.deepResearch ?? null,
   });
 }

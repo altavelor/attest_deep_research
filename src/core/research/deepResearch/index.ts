@@ -120,3 +120,8 @@ export {
   type ExportFolderCheck,
   type ResearchExportInput,
 } from "./reportExport";
+export {
+  boundDiagnosticText,
+  deepResearchTurnDiagnostics,
+  type DeepResearchTurnRecord,
+} from "./turnDiagnostics";

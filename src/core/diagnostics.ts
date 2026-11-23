@@ -156,6 +156,77 @@ export interface ContextDiagnostics {
   projection?: ProjectionDiagnostics;
   delivery?: DeliveryDiagnostics;
   answer?: AnswerDiagnostics;
+  deepResearch?: DeepResearchDiagnostics;
+}
+
+export type DeepResearchTurnKind = "start" | "decision" | "continue" | "cancel";
+
+export interface DeepResearchBranchDiagnostic {
+  branchId: string;
+  title: string;
+  sourceScope: string;
+  enabled: boolean;
+  priority: string;
+}
+
+export interface DeepResearchChildRunDiagnostic {
+  attempt: number;
+  path: "main" | "sub-agent";
+  rounds: number | null;
+  searches: number | null;
+  evidenceItems: number | null;
+  allocatedRounds: number;
+  allocatedSearches: number;
+  error?: string;
+}
+
+export interface DeepResearchWorkDiagnostic {
+  workId: string;
+  kind: "gather" | "test" | "follow-up";
+  branchId: string;
+  runner: string;
+  state: string;
+  terminalReason: string | null;
+  attempts: number;
+  findingChars: number;
+  citationTokens: number;
+  partial: boolean;
+  runs: DeepResearchChildRunDiagnostic[];
+}
+
+export interface DeepResearchDiagnostics {
+  researchId: string | null;
+  turnKind: DeepResearchTurnKind;
+  phaseBefore: string | null;
+  phaseAfter: string | null;
+  terminalReason: string | null;
+  stopReason: string | null;
+  plan: {
+    revision: number;
+    preset: string;
+    limits: Record<string, number>;
+    branches: DeepResearchBranchDiagnostic[];
+  } | null;
+  budget: {
+    consumed: Array<{ dimension: string; used: number; limit: number }>;
+    activeMs: number;
+    activeLimitMs: number | null;
+    closedReason: string | null;
+    closedDimension: string | null;
+    openAllocations: number;
+  } | null;
+  works: DeepResearchWorkDiagnostic[];
+  omittedWorks: number;
+  verification: {
+    claims: number;
+    supported: number;
+    unsupported: number;
+    conflicted: number;
+    unresolved: number;
+    followUpsUsed: number;
+  } | null;
+  hypotheses: Array<{ hypothesisId: string; status: string }>;
+  cycleDecisions: Array<{ ordinal: number; decision: string; reason: string }>;
 }
 
 export interface AnswerDiagnostics {
