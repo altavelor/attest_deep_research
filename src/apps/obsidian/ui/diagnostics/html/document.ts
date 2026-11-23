@@ -4,6 +4,7 @@ import { DiagnosticReportV3 } from "../report/types";
 import { h } from "./primitives";
 import { renderFindings, renderHeader, renderInput, renderInternals, renderNav } from "./sections";
 import { renderRunTrace } from "./trace";
+import { renderDeepResearch } from "./deepResearch";
 import { CSS } from "./styles";
 
 export function formatDiagnosticReportHtml(diagnostics: ContextDiagnostics): string {
@@ -21,6 +22,7 @@ export function diagnosticReportBodyHtml(report: DiagnosticReportV3): string {
     renderHeader(report),
     renderFindings(report.findings),
     renderRunTrace(report),
+    renderDeepResearch(report.deepResearch),
     renderInput(report),
     renderInternals(report),
     `</main>`,
