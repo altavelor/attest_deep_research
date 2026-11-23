@@ -50,6 +50,11 @@ Attest separates the stable `instant` and `thinking` strategies:
   The `searches` limit bounds searching; the evidence limit (`evidenceItemsTotal`) counts only
   documents a branch read — pages opened with `fetch_web_page` and notes read with `read_note`
   or `get_active_note` — while `search_web` and `search_index` results are not charged.
+  The user can skip either wait with one button: **Skip questions** plans with the recorded
+  assumptions, and **Skip observations** marks every open supplied-observation test unavailable,
+  stores `observationsSkipped` in the discovery state (absent in older states means not skipped)
+  so no later cycle asks again, and continues to verification and the report, which labels the
+  affected hypotheses as untested because the observation was skipped.
   New-chat defaults still offer only Instant and Thinking. The quality gates of the
   specification remain open and are tracked separately from availability:
   - Deep Research beats the recorded Thinking baseline on objective coverage and citation support
