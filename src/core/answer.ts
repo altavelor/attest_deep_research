@@ -19,6 +19,17 @@ export function isWebReferenceId(id: string): boolean {
   return id.startsWith(WEB_REFERENCE_ID_PREFIX);
 }
 
+export interface AnswerClarificationQuestion {
+  questionId: string;
+  prompt: string;
+  suggestions: readonly string[];
+}
+
+/** Clarifying questions a Thinking turn asked instead of answering. */
+export interface AnswerClarification {
+  questions: readonly AnswerClarificationQuestion[];
+}
+
 export interface ResearchAnswer {
   question: string;
   answer: string;
@@ -30,6 +41,8 @@ export interface ResearchAnswer {
   webReferences?: AnswerWebReference[];
 
   artifacts?: AnswerArtifact[];
+
+  clarification?: AnswerClarification;
   createdAt: string;
   isFallback?: true;
   fallbackReason?: string;

@@ -1,6 +1,7 @@
 import { CATALOGUE_TOOL_NAMES, ChatModelProvider } from "@core/agent";
 import { sourceLabel } from "@core/retrieval";
 import {
+  clarificationHistoryText,
   estimateResearchRequestTokens,
   ResearchChatHistoryMessage,
   stripPseudoToolCalls,
@@ -135,6 +136,7 @@ export function chatHistoryForPrompt(messages: ChatDisplayMessage[]): ResearchCh
         message.kind === "compact-summary" && message.compactSummary
           ? formatCompactionSummaryForPrompt(message.compactSummary)
           : formatMessageContentForPrompt(message),
+      ...(message.answer?.clarification ? { clarification: true as const } : {}),
     }));
 }
 
@@ -321,7 +323,12 @@ function existingCompactionSummary(
 
 function formatMessageContentForPrompt(message: ChatDisplayMessage): string {
   if (message.role !== "assistant") return message.content;
-  const content = stripPseudoToolCalls(message.content, CATALOGUE_TOOL_NAMES).text;
+  const stripped = stripPseudoToolCalls(message.content, CATALOGUE_TOOL_NAMES).text;
+  const content = message.answer?.clarification
+    ? [stripped, clarificationHistoryText(message.answer.clarification)]
+        .filter(Boolean)
+        .join("\n\n")
+    : stripped;
   const trace = message.researchProgress ? researchTraceForPrompt(message.researchProgress) : [];
 
   if (trace.length === 0) {

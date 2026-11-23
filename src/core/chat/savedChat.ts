@@ -2,6 +2,7 @@ import { ChatDisplayMessage } from "@core/conversation/model";
 import { ResearchAnswer } from "@core/answer";
 import { ResearchSearchMode } from "@core/research/searchMode";
 import { ResearchMode } from "@core/research/researchMode";
+import { readAnswerClarification } from "@core/research/thinkingClarification";
 import { ContextMode } from "@core/diagnostics";
 import { parseSavedChatRunState, type SavedChatRunState } from "./chatSession";
 import { condenseTitleText } from "./titlePolicy";
@@ -168,6 +169,7 @@ export function parseSavedChat(value: unknown): SavedChat | null {
       SavedChat,
       "schemaVersion" | "sourceRegistry" | "unreadCompletion" | "lastRun"
     >),
+    messages: chat.messages!.map(withValidClarification),
     schemaVersion: CHAT_SCHEMA_VERSION,
     sourceRegistry:
       schemaVersion === 2
@@ -250,6 +252,18 @@ export function researchSectionView(saved: SavedChatDeepResearch | undefined): R
   if (!saved) return { status: "ready", active: null, history: [] };
   if (saved.status === "unreadable") return { status: "unreadable", reason: saved.reason };
   return { status: "ready", active: saved.section.active, history: saved.section.history };
+}
+
+/** Drops a malformed clarification from a stored answer and keeps the rest of the message. */
+function withValidClarification(message: ChatDisplayMessage): ChatDisplayMessage {
+  const answer: unknown = isRecord(message) ? message.answer : undefined;
+  if (!isRecord(answer) || answer.clarification === undefined) return message;
+  const clarification = readAnswerClarification(answer.clarification);
+  const { clarification: _stored, ...rest } = answer as unknown as ResearchAnswer;
+  return {
+    ...message,
+    answer: clarification ? { ...rest, clarification } : rest,
+  };
 }
 
 function hasSavedChatBase(chat: Partial<SavedChat>): boolean {
