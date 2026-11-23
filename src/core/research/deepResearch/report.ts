@@ -27,9 +27,9 @@ export type ReportDecision =
     };
 
 /**
- * Decides what a finished run yields: no completed branch, or claims that were all assessed with
- * none supported, fails the research. The report is complete only when every claim was assessed,
- * every required objective is covered and no required branch is missing; otherwise it is partial.
+ * Decides what a finished run yields: only a run without a completed branch fails. The report is
+ * complete only when every claim was assessed, at least one is supported, every required objective
+ * is covered and no required branch is missing; otherwise it is partial.
  */
 export function reportDecision(
   plan: ResearchPlan,
@@ -42,13 +42,7 @@ export function reportDecision(
     return { kind: "failed", reason: `No branch completed. ${stopReason}` };
   }
   const verified = verification !== null && verification.assessments.length > 0;
-  const complete = verified && fullyAssessed(verification);
-  if (complete && !verification.assessments.some((entry) => entry.verdict === "supported")) {
-    return {
-      kind: "failed",
-      reason: `No claim of the findings is supported by its sources. ${stopReason}`,
-    };
-  }
+  const complete = verified && fullyAssessed(verification) && hasSupportedClaim(verification);
   const missing = executions.filter((execution) => execution.state !== "completed");
   const required = new Set(
     plan.branches
@@ -81,9 +75,10 @@ export function stopReasonOf(budget: ResearchBudgetState | null): string {
 }
 
 /**
- * Formats the report without any model or tool call. With assessments it lists the supported
- * claims and the verification sections; without them it lists the findings of every completed
- * branch with their citations, labelled unverified, then the missing branches and stop reason.
+ * Formats the report without any model or tool call. With a supported claim it lists the supported
+ * claims and the verification sections; otherwise it lists the findings of every completed branch
+ * with their citations, labelled unverified, then the missing branches, stop reason and, when claims
+ * were assessed, the verification sections.
  */
 export function formatWithoutModel(
   plan: ResearchPlan,
@@ -91,7 +86,7 @@ export function formatWithoutModel(
   stopReason: string,
   verification: ResearchVerification | null = null,
 ): string {
-  if (verification && verification.assessments.length > 0) {
+  if (verification && hasSupportedClaim(verification)) {
     const supported = supportedClaimsSection(verification);
     return [
       "# Research findings",
@@ -122,7 +117,14 @@ export function formatWithoutModel(
     `Unverified findings are listed per branch without a synthesized summary; their claims were not checked against the sources. ${stopReason}`,
     ...sections,
     ...(missing.length > 0 ? ["## Missing branches", missing.join("\n")] : []),
+    ...(verification && verification.assessments.length > 0
+      ? [verificationSections(plan, executions, verification, stopReason)]
+      : []),
   ].join("\n\n");
+}
+
+function hasSupportedClaim(verification: ResearchVerification): boolean {
+  return verification.assessments.some((entry) => entry.verdict === "supported");
 }
 
 /**
