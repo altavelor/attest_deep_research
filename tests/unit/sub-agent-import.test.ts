@@ -32,6 +32,7 @@ import {
 } from "../support/subAgentSessions";
 import { IMPORT_TIMEOUT_MS, SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
 import { scriptedModelRounds } from "../support/researchFakes";
+import { retrieved, webSource } from "../support/factories";
 import { runPastDeadline } from "../support/timers";
 
 vi.mock("@shared", async (importOriginal) => {
@@ -208,6 +209,45 @@ describe("sub-agent evidence import", () => {
     expect(run.evidence).toEqual([
       expect.objectContaining({ id: state.outcome.evidence[0]!.conversationEvidenceId }),
     ]);
+  });
+
+  it("reports a page fetched after its search as fetched child evidence", async () => {
+    const harness = importHarness();
+    await launchWith(harness, ["example.com"]);
+    const page = retrieved(
+      "web:p",
+      { ...webSource("https://example.com/p"), wasContentFetched: true },
+      "Page body",
+    );
+    const adapter = new SubAgentExecutionAdapter({
+      selectModel: () => ({
+        model: { profileId: "p", providerId: "openai", modelId: "m", label: "M" },
+        modelRound: scriptedModelRounds(() => ({ items: [], stopReason: "complete" })),
+      }),
+      createRunner: () => ({
+        run: async () => ({
+          answerText: "Done",
+          snapshot: {
+            evidence: [page],
+            citations: [],
+            provenance: [
+              {
+                evidenceId: page.id,
+                calls: [
+                  { callId: "c1", query: "q", tool: "search_web" as const },
+                  { callId: "c2", tool: "fetch_web_page" as const },
+                ],
+              },
+            ],
+          },
+        }),
+      }),
+      now: () => new Date(AT),
+    });
+
+    const run = await adapter.run(harness.execution.requests[0]!);
+
+    expect(run.evidence).toEqual([expect.objectContaining({ tool: "fetch_web_page" })]);
   });
 
   it("U2: replays a prepare with the same importId and registers its source once", async () => {

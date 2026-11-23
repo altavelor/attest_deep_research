@@ -113,6 +113,35 @@ describe("deep research claim verification", () => {
     });
   });
 
+  it("reports findings unverified in a partial report when no assessed claim is supported", () => {
+    const plan = researchPlan([researchBranch(1)], "balanced");
+    const execution = {
+      ...gatheringResearch(plan).executions[0]!,
+      workId: "w-1",
+      state: "completed" as const,
+      finding: { text: "The moon causes tides [t1].", citationTokens: ["t1"], partial: false },
+    };
+    const verification = {
+      claims: [claim],
+      assessments: [{ ...supported, verdict: "unresolved" as const, quote: null }],
+      coverage: [],
+      verifiedWorks: ["w-1"],
+      followUps: [],
+      followUpsUsed: 0,
+    };
+
+    const markdown = formatWithoutModel(plan, [execution], "Stop.", verification);
+
+    expect(reportDecision(plan, [execution], "Stop.", verification)).toMatchObject({
+      kind: "report",
+      quality: "partial",
+    });
+    expect(markdown).toContain("Unverified findings are listed per branch");
+    expect(markdown).toContain("The moon causes tides [t1].\n\nSources: [t1]");
+    expect(markdown).toContain("- (unresolved) The moon causes tides.");
+    expect(markdown).toContain("Stop reason: Stop.");
+  });
+
   it("attributes each claim of one batch to the work that produced it", async () => {
     const plan = researchPlan([researchBranch(1)], "balanced");
     const base = {

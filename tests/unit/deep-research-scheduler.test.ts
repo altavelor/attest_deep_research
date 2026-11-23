@@ -12,6 +12,7 @@ import {
   isPlanStale,
   nextReadyExecution,
   reportDecision,
+  SOURCE_READING_INSTRUCTION,
 } from "@core/research/deepResearch";
 import { researchBranch, researchPlan } from "../support/deepResearch";
 import { settle } from "../support/async";
@@ -96,10 +97,12 @@ describe("deep research main-path fallback", () => {
     owner.open(null);
     let release: () => void = () => undefined;
     const mainRuns: string[] = [];
+    const tasks: string[] = [];
     const main: BranchRunner = {
       path: "main",
       run: (work) => {
         mainRuns.push(work.branchId);
+        tasks.push(work.task);
         const finding = { text: "F", citationTokens: [], partial: false };
         if (work.branchId === "branch-2") return Promise.resolve(finding);
         return new Promise((resolve) => (release = () => resolve(finding)));
@@ -108,7 +111,10 @@ describe("deep research main-path fallback", () => {
     };
     const child: BranchRunner = {
       path: "sub-agent",
-      run: () => Promise.reject(new UnusableBranchSessionError("s-2")),
+      run: (work) => {
+        tasks.push(work.task);
+        return Promise.reject(new UnusableBranchSessionError("s-2"));
+      },
     };
     const running = new ResearchScheduler({
       plan: { ...fallbackPlan, limits },
@@ -140,6 +146,7 @@ describe("deep research main-path fallback", () => {
     ]);
     expect(owner.snapshot().consumed).toMatchObject({ branchAttempts: 2, modelRounds: 6 });
     expect(owner.snapshot().openAllocations).toEqual([]);
+    expect(tasks).toEqual(Array(3).fill(`T\n\n${SOURCE_READING_INSTRUCTION}`));
   });
 
   it("leaves a queued fallback's allocation open exactly once when the user stops", async () => {

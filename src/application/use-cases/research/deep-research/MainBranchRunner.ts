@@ -1,5 +1,5 @@
 import type { ResearchAnswer } from "@core/answer";
-import type { ResearchModeWebParameters } from "@core/research";
+import { isDocumentReadTool, type ResearchModeWebParameters } from "@core/research";
 import {
   MAX_FINDING_CITATION_TOKENS,
   boundFindingText,
@@ -81,7 +81,9 @@ export class MainBranchRunner implements BranchRunner {
     this.usages.set(work.workId, {
       modelRounds: telemetry?.rounds ?? allocation.modelRounds,
       searches: telemetry?.searchCalls ?? allocation.searches,
-      evidenceItems: evidence.length,
+      evidenceItems: result.snapshot.provenance.filter((entry) =>
+        entry.calls.some((call) => isDocumentReadTool(call.tool)),
+      ).length,
       ...(telemetry
         ? { inputTokens: telemetry.usage.inputTokens, outputTokens: telemetry.usage.outputTokens }
         : {}),

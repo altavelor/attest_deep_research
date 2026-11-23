@@ -12,6 +12,7 @@ import {
   MemoryResearchState,
   deepResearchService,
   gatheringResearch,
+  tidesNoteTools,
 } from "../support/deepResearch";
 import { markdownSource, retrieved } from "../support/factories";
 import { MemoryFileSystem } from "../support/memoryFileSystem";
@@ -164,8 +165,12 @@ describe("deep research branches as child sessions", () => {
     const state = gatheringResearch({ ...plan, limits: { ...plan.limits, evidenceItemsTotal: 1 } });
     const rounds = new BranchModelRounds();
     rounds.hang.add("aspect 2");
+    rounds.tool = "read_note";
     const { request } = await startResearchTurn(chat, session.sessionId, state.researchId);
-    const run = researchRun(request, state, rounds, undefined, { toolCapabilities: PARALLEL });
+    const run = researchRun(request, state, rounds, undefined, {
+      toolCapabilities: PARALLEL,
+      noteTools: tidesNoteTools(),
+    });
     await eventually(() => expect(run.port.commits.at(-1)!.executions[0]!.state).toBe("completed"));
     const startedAtClosure = rounds.startedRounds;
     rounds.releaseHangs();

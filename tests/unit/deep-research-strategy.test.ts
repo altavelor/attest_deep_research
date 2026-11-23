@@ -217,14 +217,21 @@ describe("deep research stale plan", () => {
 });
 
 describe("main branch runner findings", () => {
-  it("lists only the citations left in the finding after it is cut to its bound", async () => {
+  it("lists only the citations left after the cut and charges only the notes it read", async () => {
     const kept = retrieved("chunk-kept-1", markdownSource("a.md"), "Kept");
     const cut = retrieved("chunk-cut-2", markdownSource("b.md"), "Cut");
     const runner = new MainBranchRunner({
       engine: {
         run: async () => ({
           answerText: `Kept [${kept.id}]. ${"x".repeat(30_000)} Cut [${cut.id}].`,
-          snapshot: { evidence: [kept, cut], citations: [], provenance: [] },
+          snapshot: {
+            evidence: [kept, cut],
+            citations: [],
+            provenance: [
+              { evidenceId: kept.id, calls: [{ callId: "c1", tool: "read_note" as const }] },
+              { evidenceId: cut.id, calls: [{ callId: "c2", tool: "search_index" as const }] },
+            ],
+          },
         }),
       },
       sources: {},
@@ -250,6 +257,7 @@ describe("main branch runner findings", () => {
     const finding = await runner.run(work, allocation, new AbortController().signal);
     expect(finding.text).toHaveLength(30_000);
     expect(finding.citationTokens).toEqual([kept.id]);
+    expect(runner.usage("w-1")?.evidenceItems).toBe(1);
   });
 
   it("cuts a finding whose stored encoding would exceed the byte bound", () => {

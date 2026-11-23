@@ -8,6 +8,7 @@ import type {
   SubAgentPreparedImportRequest,
 } from "@application/ports/subAgent";
 import {
+  isDocumentReadTool,
   readSubAgentImportItems,
   subAgentAliasPrefix,
   toValidatedJson,
@@ -123,7 +124,15 @@ export class SubAgentImportCoordinator implements SubAgentEvidenceImportPort, Su
               attempt: prepared.attempt,
               scopeId,
             },
-            { action: "evidence-append", units: { evidenceItems: prepared.items.length } },
+            {
+              action: "evidence-append",
+              units: {
+                evidenceItems: prepared.items.length,
+                documentReads: prepared.items.filter((item) =>
+                  item.calls.some((call) => isDocumentReadTool(call.tool)),
+                ).length,
+              },
+            },
             () => this.isCurrent(prepared),
             register,
           );

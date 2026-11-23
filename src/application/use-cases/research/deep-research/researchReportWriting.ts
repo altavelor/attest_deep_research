@@ -25,8 +25,8 @@ export interface ReportWritingInput {
 /**
  * Writes the report markdown. Verified claims are synthesized with the model when a finalization
  * round remains and at least one claim is supported, and the verification sections follow; without
- * a round the assessments are formatted without a model, and without assessments the findings are
- * listed unverified with their unresolvable citations removed.
+ * a round the assessments are formatted without a model. Without assessments or without a supported
+ * claim the findings are listed unverified with their unresolvable citations removed.
  */
 export async function writeReportMarkdown(input: ReportWritingInput): Promise<string> {
   const { plan, verification, stopReason } = input;
@@ -37,18 +37,23 @@ export async function writeReportMarkdown(input: ReportWritingInput): Promise<st
       unverifiedTokens: 0,
     });
   }
-  const { removedTokens } = registryCitedFindings(input.executions, input.resolveEvidence);
-  const fallback = withCitationNotes(
-    formatWithoutModel(plan, input.executions, stopReason, verification),
-    { removedTokens, unverifiedTokens: 0 },
-  );
+  const cited = registryCitedFindings(input.executions, input.resolveEvidence);
+  const removedTokens = cited.removedTokens;
   const claims = verifiedClaims(verification).filter(
     (entry) =>
       entry.assessment.verdict === "supported" || entry.assessment.verdict === "conflicted",
   );
-  if (!claims.some((entry) => entry.assessment.verdict === "supported") || !input.spendRound()) {
-    return fallback;
+  if (!claims.some((entry) => entry.assessment.verdict === "supported")) {
+    return withCitationNotes(formatWithoutModel(plan, cited.executions, stopReason, verification), {
+      removedTokens,
+      unverifiedTokens: 0,
+    });
   }
+  const fallback = withCitationNotes(
+    formatWithoutModel(plan, input.executions, stopReason, verification),
+    { removedTokens, unverifiedTokens: 0 },
+  );
+  if (!input.spendRound()) return fallback;
   const tokens = claims.flatMap((entry) => [
     ...entry.claim.citationTokens,
     ...entry.assessment.contradictingTokens,

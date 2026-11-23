@@ -31,8 +31,8 @@ interface Closure {
 /**
  * The permit port of one research, backed by its in-memory budget owner as the only ledger. Session
  * registration records the branch's child session within the ceiling, an execution permit binds to
- * the branch's open allocation that the scheduler already charged, evidence appends are charged to
- * the owner, and the first cleanup claim of each scope and closure wins.
+ * the branch's open allocation that the scheduler already charged, the documents an evidence append
+ * read are charged to the owner, and the first cleanup claim of each scope and closure wins.
  */
 export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
   private readonly sessions: Record<string, string>;
@@ -118,7 +118,7 @@ export class ResearchBudgetPermits implements SubAgentBudgetPermitPort {
     this.branchOf(scopeId);
     const replay = this.reserved.get(request.actionKey);
     if (replay) return { type: "granted", permit: replay };
-    const items = request.action === "evidence-append" ? (request.units.evidenceItems ?? 0) : 0;
+    const items = request.action === "evidence-append" ? (request.units.documentReads ?? 0) : 0;
     const granted = this.options.owner.chargeEvidence(items);
     if (!granted)
       return { type: "denied", actionKey: request.actionKey, ...this.currentClosure()! };

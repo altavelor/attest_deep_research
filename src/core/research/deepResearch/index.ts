@@ -41,6 +41,7 @@ export {
   type ReportDecision,
 } from "./report";
 export { boundFindingText } from "./findingBounds";
+export { SOURCE_READING_INSTRUCTION, branchTaskText } from "./branchTask";
 export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
 export {
   NO_CLARIFICATION_ASSUMPTION,
