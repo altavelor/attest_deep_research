@@ -159,6 +159,45 @@ describe("deep research discovery", () => {
     ).toHaveLength(1);
   });
 
+  it("stops a turn while its supplied observation is assessed without recording it", async () => {
+    const model = new DiscoveryModel(["observation"], ["supports"]);
+    const port = stored("balanced");
+    const researchId = port.commits[0]!.researchId;
+    await answer(model, new ResearchRegistry(), {
+      question: "Continue",
+      researchState: port,
+      research: { type: "continue", researchId },
+    });
+    const waiting = port.commits.at(-1)!;
+    const resumed = reloaded(waiting);
+    const stop = new AbortController();
+    const assessing = (signal: AbortSignal) =>
+      new Promise<never>((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason));
+        stop.abort(new DOMException("Stopped", "AbortError"));
+      });
+
+    await expect(
+      runResearch(resumed.commits[0]!, {
+        port: resumed,
+        runner: { path: "main", run: () => Promise.reject(new Error("unused")) },
+        synthesis: {} as ReportSynthesisService,
+        createDiscovery: (options) =>
+          ({
+            assessReport: () => assessing(options.signal),
+          }) as unknown as ResearchDiscoveryService,
+        observation: { testId: waiting.pending!.subjectId!, text: "It held." },
+        signal: stop.signal,
+        now: fixedNow,
+        setTimer: () => () => undefined,
+        createId: (prefix) => `${prefix}-1`,
+        onState: () => undefined,
+        onStatus: () => undefined,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(resumed.commits).toEqual([waiting]);
+  });
+
   it("stores a long sub-agent test finding within the discovery bounds so it reloads", async () => {
     const tokens = Array.from({ length: 6 }, (_, index) => `source-${index}:revision-1`);
     const long = `${tokens.map((token) => `The moon pulls the oceans [${token}].`).join(" ")} ${"x".repeat(2000)}`;

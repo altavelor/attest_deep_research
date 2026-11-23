@@ -136,26 +136,9 @@ export async function runResearch(
     spendRound: () => owner.spendDiscovery(1),
     signal: turn.signal,
   });
-  const observed =
-    deps.observation && discovery && start.discovery
-      ? await suppliedObservation(start, deps.observation, discovery)
-      : start.discovery;
-  await commit({
-    phase: entry.phase,
-    pending: null,
-    executions: resumeExecutions(start.executions),
-    discovery: observed,
-  });
-  if (entry.synthesizing) return writeReport(start, current, owner, deps, commit);
-  if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
-    const state = await commit({
-      pending: {
-        decisionId: deps.createId("decision"),
-        kind: "stale-plan",
-        artifactRevision: plan.revision,
-      },
-    });
-    return { state, report: null };
+  if (entry.synthesizing) {
+    await commit({ pending: null, executions: resumeExecutions(start.executions) });
+    return writeReport(start, current, owner, deps, commit);
   }
 
   const stopTurn = (): void => turn.abort(deps.signal?.reason);
@@ -183,7 +166,28 @@ export async function runResearch(
   };
   const stopped = (): boolean => deps.signal?.aborted === true;
   try {
+    if (stopped()) throw new DOMException("Research stopped", "AbortError");
     if (owner.remainingMs() <= 0) closeOnTime();
+    const observed =
+      deps.observation && discovery && start.discovery
+        ? await suppliedObservation(start, deps.observation, discovery)
+        : start.discovery;
+    await commit({
+      phase: entry.phase,
+      pending: null,
+      executions: resumeExecutions(start.executions),
+      discovery: observed,
+    });
+    if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
+      const state = await commit({
+        pending: {
+          decisionId: deps.createId("decision"),
+          kind: "stale-plan",
+          artifactRevision: plan.revision,
+        },
+      });
+      return { state, report: null };
+    }
     await runSchedulingPhase({
       ...phase,
       plan,
