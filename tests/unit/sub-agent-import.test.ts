@@ -32,7 +32,7 @@ import {
 } from "../support/subAgentSessions";
 import { IMPORT_TIMEOUT_MS, SubAgentExecutionAdapter } from "@application/use-cases/sub-agent";
 import { scriptedModelRounds } from "../support/researchFakes";
-import { retrieved, webSource } from "../support/factories";
+import { markdownSource, retrieved, webSource } from "../support/factories";
 import { runPastDeadline } from "../support/timers";
 
 vi.mock("@shared", async (importOriginal) => {
@@ -211,7 +211,7 @@ describe("sub-agent evidence import", () => {
     ]);
   });
 
-  it("reports a page fetched after its search as fetched child evidence", async () => {
+  it("reports a page fetched or a note read after its search as the document read", async () => {
     const harness = importHarness();
     await launchWith(harness, ["example.com"]);
     const page = retrieved(
@@ -219,6 +219,7 @@ describe("sub-agent evidence import", () => {
       { ...webSource("https://example.com/p"), wasContentFetched: true },
       "Page body",
     );
+    const note = retrieved("note:n", markdownSource("n.md"), "Note body");
     const adapter = new SubAgentExecutionAdapter({
       selectModel: () => ({
         model: { profileId: "p", providerId: "openai", modelId: "m", label: "M" },
@@ -228,7 +229,7 @@ describe("sub-agent evidence import", () => {
         run: async () => ({
           answerText: "Done",
           snapshot: {
-            evidence: [page],
+            evidence: [page, note],
             citations: [],
             provenance: [
               {
@@ -236,6 +237,13 @@ describe("sub-agent evidence import", () => {
                 calls: [
                   { callId: "c1", query: "q", tool: "search_web" as const },
                   { callId: "c2", tool: "fetch_web_page" as const },
+                ],
+              },
+              {
+                evidenceId: note.id,
+                calls: [
+                  { callId: "c3", query: "q", tool: "search_index" as const },
+                  { callId: "c4", tool: "read_note" as const },
                 ],
               },
             ],
@@ -247,7 +255,10 @@ describe("sub-agent evidence import", () => {
 
     const run = await adapter.run(harness.execution.requests[0]!);
 
-    expect(run.evidence).toEqual([expect.objectContaining({ tool: "fetch_web_page" })]);
+    expect(run.evidence).toEqual([
+      expect.objectContaining({ tool: "fetch_web_page" }),
+      expect.objectContaining({ tool: "read_note" }),
+    ]);
   });
 
   it("U2: replays a prepare with the same importId and registers its source once", async () => {

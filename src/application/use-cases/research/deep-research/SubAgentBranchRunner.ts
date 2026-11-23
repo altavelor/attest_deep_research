@@ -25,7 +25,7 @@ import {
 } from "@core/research";
 import { citationIdsFromText, removeUnknownCitationTokens } from "../strategies/citations";
 import { MAX_WAIT_MS } from "@application/use-cases/sub-agent";
-import { UnusableBranchSessionError, type BranchRunner } from "./branchRunner";
+import { UnusableBranchSessionError, type BranchChildRun, type BranchRunner } from "./branchRunner";
 
 export interface SubAgentBranchRunnerDeps {
   branches: readonly ResearchBranch[];
@@ -45,6 +45,7 @@ export class SubAgentBranchRunner implements BranchRunner {
   readonly path = "sub-agent" as const;
   private readonly refs = new Map<string, BranchRunRef>();
   private readonly usages = new Map<string, BranchUsage>();
+  private readonly childRuns = new Map<string, BranchChildRun>();
 
   constructor(private readonly deps: SubAgentBranchRunnerDeps) {}
 
@@ -57,6 +58,7 @@ export class SubAgentBranchRunner implements BranchRunner {
     if (!branch) throw new Error("The branch is not part of the plan.");
     this.refs.delete(work.workId);
     this.usages.delete(work.workId);
+    this.childRuns.delete(work.workId);
     const delegator = this.deps.delegator(branch, allocation);
     const receipt = await this.submit(delegator, branch, work, allocation);
     const result = await this.waitForResult(delegator, receipt, signal);
@@ -65,8 +67,13 @@ export class SubAgentBranchRunner implements BranchRunner {
       runId: receipt.runId,
       resultRevision: result.resultRevision,
     });
-    const usage = measuredUsage(result.state === "completed" ? result.outcome.run : result.run);
+    const run = result.state === "completed" ? result.outcome.run : result.run;
+    const usage = measuredUsage(run);
     if (usage) this.usages.set(work.workId, usage);
+    this.childRuns.set(work.workId, {
+      outcome: result.state === "completed" ? "imported" : result.error.code,
+      evidenceCount: run.evidenceCount,
+    });
     if (result.state !== "completed") {
       throw new Error(boundedReason(`The child session ${result.state}: ${result.error.message}`));
     }
@@ -79,6 +86,10 @@ export class SubAgentBranchRunner implements BranchRunner {
 
   runRef(workId: string): BranchRunRef | null {
     return this.refs.get(workId) ?? null;
+  }
+
+  childRun(workId: string): BranchChildRun | null {
+    return this.childRuns.get(workId) ?? null;
   }
 
   private async submit(

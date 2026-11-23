@@ -177,6 +177,8 @@ export interface DeepResearchChildRunDiagnostic {
   evidenceItems: number | null;
   allocatedRounds: number;
   allocatedSearches: number;
+  childOutcome?: string;
+  childEvidence?: number;
   error?: string;
 }
 

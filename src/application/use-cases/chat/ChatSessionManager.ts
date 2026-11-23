@@ -43,6 +43,8 @@ import type {
   ChatSessionViewProbe,
 } from "./chatSessionTypes";
 
+const RUN_ACTIVE = "The plan cannot be edited while this chat is running.";
+
 export interface ChatSessionManagerOptions {
   repository: ChatRepository;
   environment: ChatSessionEnvironment;
@@ -212,19 +214,12 @@ export class ChatSessionManager {
   ): Promise<ResearchPlanEditResult> {
     const runtime = this.sessions.get(sessionId);
     const state = runtime?.state;
-    if (
-      !runtime ||
-      !state ||
-      isNonTerminalChatSessionStatus(state.status) ||
-      this.starting.has(sessionId) ||
-      this.editingPlans.has(sessionId) ||
-      (state.chatId !== null && this.deleting.has(state.chatId))
-    ) {
-      const refusal = deepResearchRejected(
-        "research-run-active",
-        "The plan cannot be edited while this chat is running.",
-      );
-      return { ok: false, message: refusal.message };
+    const refusal = !runtime || !state ? RUN_ACTIVE : this.planEditRefusal(sessionId, state);
+    if (refusal || !runtime) {
+      return {
+        ok: false,
+        message: deepResearchRejected("research-run-active", refusal ?? RUN_ACTIVE).message,
+      };
     }
     this.editingPlans.add(sessionId);
     try {
@@ -236,6 +231,17 @@ export class ChatSessionManager {
     }
     this.emit(sessionId, "messages");
     return { ok: true };
+  }
+
+  private planEditRefusal(sessionId: string, state: ChatSessionState): string | null {
+    if (this.editingPlans.has(sessionId)) return "The plan is already being saved.";
+    if (state.chatId !== null && this.deleting.has(state.chatId)) {
+      return "The plan cannot be edited while this chat is being deleted.";
+    }
+    if (isNonTerminalChatSessionStatus(state.status) || this.starting.has(sessionId)) {
+      return RUN_ACTIVE;
+    }
+    return null;
   }
 
   /** Returns the read and user-stop port of one chat's child sessions, or null. */
