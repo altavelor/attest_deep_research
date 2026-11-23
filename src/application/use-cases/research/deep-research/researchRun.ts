@@ -146,6 +146,7 @@ export async function runResearch(
     executions: resumeExecutions(start.executions),
     discovery: observed,
   });
+  if (entry.synthesizing) return writeReport(start, current, owner, deps, commit);
   if (deps.observation && isPlanStale(plan, deps.now().toISOString())) {
     const state = await commit({
       pending: {
@@ -301,7 +302,7 @@ async function writeReport(
   commit: (patch: Partial<ResearchState>) => Promise<ResearchState>,
 ): Promise<ResearchRunResult> {
   const plan = start.plan!;
-  await commit({ phase: "synthesizing" });
+  if (current.phase !== "synthesizing") await commit({ phase: "synthesizing" });
   const stopReason = stopReasonOf(owner.snapshot());
   const executions = current.executions;
   const verification = current.verification;
