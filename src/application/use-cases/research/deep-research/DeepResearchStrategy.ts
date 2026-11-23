@@ -1,4 +1,9 @@
-import type { ChatModelProvider, ChatRequest, ToolCallingCapabilities } from "@core/agent";
+import type {
+  ApiFormat,
+  ChatModelProvider,
+  ChatRequest,
+  ToolCallingCapabilities,
+} from "@core/agent";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type { SubAgentPort } from "@application/research/subAgentPort";
 import type { SubAgentToolSources } from "../sub-agent/subAgentToolContext";
@@ -47,6 +52,7 @@ import {
 export interface DeepResearchStrategyDeps {
   chatModel: ChatModelProvider;
   chatModelName: string;
+  apiFormat?: ApiFormat;
   chatOptions: Pick<ChatRequest, "temperature" | "maxTokens">;
   toolCapabilities: ToolCallingCapabilities;
   hasIndex: boolean;
@@ -70,7 +76,11 @@ export class DeepResearchStrategy implements ResearchStrategy {
     const port = ctx.request.researchState;
     if (!port || ctx.request.includeContextDiagnostics !== true) return yield* this.turn(ctx);
     const observed: ResearchExecutionContext = { ...ctx };
-    const recorder = new DeepResearchTurnRecorder(observed, port);
+    const recorder = new DeepResearchTurnRecorder(observed, port, {
+      name: this.deps.chatModelName,
+      ...(this.deps.apiFormat ? { apiFormat: this.deps.apiFormat } : {}),
+      toolCapabilities: this.deps.toolCapabilities,
+    });
     observed.request = { ...ctx.request, researchState: recorder.observePort(port) };
     return yield* withTurnDiagnostics(this.turn(observed), recorder);
   }

@@ -233,6 +233,7 @@ export class ResearchService implements ConversationEngine {
     this.deep = new DeepResearchStrategy({
       chatModel: options.chatModel,
       chatModelName: options.chatModelName,
+      ...(options.apiFormat ? { apiFormat: options.apiFormat } : {}),
       chatOptions,
       toolCapabilities,
       hasIndex: options.retriever !== undefined,

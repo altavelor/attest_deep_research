@@ -45,6 +45,8 @@ describe("deep research turn diagnostics", () => {
     const replanned = await turn("Tides?", { includeContextDiagnostics: true });
     const plan = completed(replanned)!.contextDiagnostics!;
     expect(plan.executionStrategy).toBe("deep-research");
+    expect(plan.toolCapabilities?.calls).toBe(true);
+    expect(plan.modelName).toBe("model");
     expect(plan.deepResearch).toMatchObject({
       turnKind: "start",
       phaseBefore: null,

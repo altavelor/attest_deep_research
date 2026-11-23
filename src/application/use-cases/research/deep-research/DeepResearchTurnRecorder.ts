@@ -1,3 +1,4 @@
+import type { ApiFormat, ToolCallingCapabilities } from "@core/agent";
 import type { ResearchStreamEvent } from "@application/contracts/research";
 import type { ResearchStatePort } from "@application/ports/researchState";
 import type {
@@ -18,6 +19,12 @@ import type { ResearchExecutionContext } from "../strategies/ResearchStrategy";
 import type { BranchRunner } from "./branchRunner";
 
 const MAX_TOOL_CALLS = 100;
+
+export interface DeepResearchTurnModel {
+  name: string;
+  apiFormat?: ApiFormat;
+  toolCapabilities: ToolCallingCapabilities;
+}
 const recorders = new WeakMap<ResearchExecutionContext, DeepResearchTurnRecorder>();
 
 /** Returns the recorder of a turn context, present only when the request asked for diagnostics. */
@@ -40,6 +47,7 @@ export class DeepResearchTurnRecorder {
   constructor(
     readonly ctx: ResearchExecutionContext,
     port: ResearchStatePort,
+    private readonly model: DeepResearchTurnModel,
   ) {
     const view = port.read();
     this.before = view.status === "ready" ? view.active : null;
@@ -127,6 +135,9 @@ export class DeepResearchTurnRecorder {
       "deep-research",
     );
     diagnostics.question = this.ctx.question;
+    diagnostics.modelName = this.model.name;
+    if (this.model.apiFormat) diagnostics.modelApiFormat = this.model.apiFormat;
+    diagnostics.toolCapabilities = this.model.toolCapabilities;
     diagnostics.searchMode = this.ctx.searchMode;
     diagnostics.tools = [...this.tools.values()];
     if (this.omittedTools > 0) {
