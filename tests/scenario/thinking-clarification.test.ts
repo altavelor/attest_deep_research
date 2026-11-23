@@ -83,6 +83,7 @@ describe("Thinking clarification tool", () => {
 
     expect(modelRound.requests).toHaveLength(1);
     expect(modelRound.requests[0]!.messages[0]!.content).toContain(`(${ASK})`);
+    expect(modelRound.requests[0]!.messages[0]!.content).toContain(`only in the ${ASK} arguments`);
     expect(all.filter((event) => event.type === "tool-call-end")).toHaveLength(2);
     expect(complete).toMatchObject({
       answer: {
