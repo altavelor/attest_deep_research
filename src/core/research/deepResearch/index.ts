@@ -44,8 +44,12 @@ export { boundFindingText } from "./findingBounds";
 export { SOURCE_READING_INSTRUCTION, branchTaskText } from "./branchTask";
 export { branchPath, parseResearchScope, researchScopeId, waveSize } from "./waves";
 export {
+  MAX_BRIEF_PROMPT_CHARS,
+  MAX_BRIEF_SUGGESTION_CHARS,
+  MAX_BRIEF_SUGGESTIONS,
   NO_CLARIFICATION_ASSUMPTION,
   answeredBrief,
+  boundedClarificationQuestions,
   briefText,
   clarificationPrompt,
   parseClarification,
@@ -54,6 +58,7 @@ export {
   withClarificationQuestions,
   type ClarificationOutcome,
 } from "./brief";
+export { readClarificationQuestion } from "./briefValidation";
 export {
   MAX_CLAIM_TEXT_CHARS,
   MAX_CLAIM_TOKENS,
