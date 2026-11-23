@@ -55,15 +55,16 @@ export function isAbort(error: unknown): boolean {
 /**
  * Reads the free-text observation a pending observation decision carries for the test the pending
  * decision names. A malformed payload is rejected; a payload naming another test, or a test of a
- * superseded hypothesis revision, is stale.
+ * superseded hypothesis revision, is stale. A skip carries no text and ends the observation stage.
  */
 export function suppliedObservation(
   active: ResearchState,
   decision: ResearchDecision,
-): { testId: string; text: string } {
-  const payload = decision.payload as { text?: unknown; testId?: unknown } | null;
-  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
-  if (text === "") {
+): { testId: string; text: string | null } {
+  const payload = decision.payload as { action?: unknown; text?: unknown; testId?: unknown } | null;
+  const skip = payload?.action === "skip-observations";
+  const text = !skip && typeof payload?.text === "string" ? payload.text.trim() : "";
+  if (!skip && text === "") {
     throw deepResearchRejected("research-invalid-decision", "The decision is malformed.");
   }
   const pending = active.pending!;
@@ -82,5 +83,5 @@ export function suppliedObservation(
       ),
   );
   if (!test) throw stale();
-  return { testId: test.testId, text };
+  return { testId: test.testId, text: skip ? null : text };
 }

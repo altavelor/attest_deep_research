@@ -80,10 +80,26 @@ function labelOf(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): 
   );
   const user = own.filter((entry) => entry.producer === "user");
   if (user.length === 0) {
+    if (hypothesis.status !== "supported" && skippedTest(discovery, hypothesis)) {
+      return `${hypothesis.status} — the user skipped the observation`;
+    }
     return hypothesis.status === "supported" ? "supported by literature" : hypothesis.status;
   }
   const limitations = [...new Set(user.flatMap((entry) => entry.limitations))];
   return `${hypothesis.status} by a user observation — ${limitations.join("; ")}`;
+}
+
+function skippedTest(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis): boolean {
+  return (
+    discovery.observationsSkipped === true &&
+    discovery.tests.some(
+      (test) =>
+        test.kind === "supplied-observation" &&
+        test.status === "unavailable" &&
+        test.hypothesisId === hypothesis.hypothesisId &&
+        test.hypothesisRevision === hypothesis.revision,
+    )
+  );
 }
 
 function sourceObservations(discovery: ResearchDiscovery, hypothesis: ResearchHypothesis) {

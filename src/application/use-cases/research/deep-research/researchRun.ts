@@ -30,7 +30,11 @@ import { runVerificationPhase } from "./researchVerificationPhase";
 import { withMissingNote, writeReportMarkdown } from "./researchReportWriting";
 import { removeUnknownCitationTokens } from "../strategies/citations";
 import type { ResearchDiscoveryService } from "./ResearchDiscoveryService";
-import { runDiscoveryPhase, withObservation } from "./researchDiscoveryPhase";
+import {
+  runDiscoveryPhase,
+  withObservation,
+  withObservationsSkipped,
+} from "./researchDiscoveryPhase";
 import { researchResumeEntry } from "./researchResume";
 
 export interface ResearchDiscoveryFactoryOptions {
@@ -41,7 +45,7 @@ export interface ResearchDiscoveryFactoryOptions {
 
 export interface SuppliedObservation {
   testId: string;
-  text: string;
+  text: string | null;
 }
 
 export type ResearchVerifierOptions = Pick<
@@ -357,7 +361,10 @@ async function writeReport(
   return { state, report };
 }
 
-/** Assesses a supplied observation; when the time limit interrupts the judgement, it is kept as inconclusive. */
+/**
+ * Assesses a supplied observation; when the time limit interrupts the judgement, it is kept as
+ * inconclusive. An observation without text skips the observation stage of the research.
+ */
 async function suppliedObservation(
   start: ResearchState,
   supplied: SuppliedObservation,
@@ -365,6 +372,9 @@ async function suppliedObservation(
   stopped: () => boolean,
 ): Promise<ResearchDiscovery> {
   const discovery = start.discovery!;
+  if (supplied.text === null) {
+    return withObservationsSkipped(discovery, discovery.cycles.at(-1)!.ordinal);
+  }
   const test = discovery.tests.find((entry) => entry.testId === supplied.testId)!;
   const hypothesis = discovery.hypotheses.find(
     (entry) =>

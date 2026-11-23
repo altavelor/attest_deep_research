@@ -97,6 +97,24 @@ describe("deep research discovery rules", () => {
     expect(decide(3, true)).toBe("exhausted");
   });
 
+  it("never waits for a user observation once the user skipped observations", () => {
+    const awaiting = {
+      ...proposed,
+      kind: "supplied-observation" as const,
+      status: "awaiting-input" as const,
+    };
+    const input = {
+      cycle: 2,
+      researchCycles: 3,
+      budgetClosed: false,
+      hypotheses: [hypothesis],
+      tests: [awaiting],
+      progressed: true,
+    };
+    expect(nextCycleDecision(input)).toBe("await-observation");
+    expect(nextCycleDecision({ ...input, observationsSkipped: true })).toBe("continue");
+  });
+
   it("finishes a cycle without progress instead of continuing", () => {
     expect(decide(2, false)).toBe("finish");
   });

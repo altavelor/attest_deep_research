@@ -163,6 +163,56 @@ describe("deep research discovery", () => {
     ).toHaveLength(1);
   });
 
+  it("skips every observation across a reload and reaches a report without asking again", async () => {
+    const model = new DiscoveryModel(["observation", "observation"], []);
+    const registry = new ResearchRegistry();
+    const port = stored("thorough");
+    const researchId = port.commits[0]!.researchId;
+    await answer(model, registry, {
+      question: "Continue",
+      researchState: port,
+      research: { type: "continue", researchId },
+    });
+    const waiting = reloaded(port.commits.at(-1)!);
+    const asked = waiting.commits[0]!;
+    const skip = (expectedRevision: number) => ({
+      type: "decision" as const,
+      decision: {
+        researchId,
+        decisionId: asked.pending!.decisionId,
+        expectedRevision,
+        payload: { action: "skip-observations" },
+      },
+    });
+    await expect(
+      answer(model, registry, {
+        question: "Skip",
+        researchState: waiting,
+        research: skip(asked.revision - 1),
+      }),
+    ).rejects.toThrow("no longer matches the research");
+    expect(waiting.commits).toHaveLength(1);
+    await answer(model, registry, {
+      question: "Skip",
+      researchState: waiting,
+      research: skip(asked.revision),
+    });
+
+    const discovering = waiting.commits.filter((state) => state.phase === "discovering").at(-1)!;
+    expect(reloaded(discovering).commits[0]!.discovery!.observationsSkipped).toBe(true);
+    const final = waiting.commits.at(-1)!;
+    expect(waiting.commits.slice(1).some((state) => state.phase === "awaiting-observation")).toBe(
+      false,
+    );
+    expect(final.phase).toBe("completed");
+    expect(final.discovery!.observationsSkipped).toBe(true);
+    expect(final.discovery!.tests.every((test) => test.status === "unavailable")).toBe(true);
+    expect(final.discovery!.notes.map((note) => note.outcome)).toContain(
+      "Observation skipped by the user",
+    );
+    expect(final.report!.markdown).toContain("(untested — the user skipped the observation)");
+  });
+
   it("stops a turn while its supplied observation is assessed without recording it", async () => {
     const model = new DiscoveryModel(["observation"], ["supports"]);
     const port = stored("balanced");

@@ -290,4 +290,5 @@ export interface ResearchDiscovery {
   notes: readonly ResearchNote[];
   executions: readonly BranchExecution[];
   omissions: readonly string[];
+  observationsSkipped?: boolean;
 }
