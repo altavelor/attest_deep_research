@@ -1,5 +1,6 @@
 import { ChatMessage } from "@core/agent/protocol";
 import {
+  ASK_CLARIFICATION_TOOL,
   CHECK_URLS_TOOL,
   CREATE_NOTE_TOOL,
   DELETE_NOTE_TOOL,
@@ -71,6 +72,7 @@ import {
   buildCompileKnowledgeSection,
   buildFindClaimsSection,
   buildMapSourcesSection,
+  buildClarificationSection,
   buildRichMediaSection,
   buildSubAgentSection,
   buildVaultNavigationSection,
@@ -181,6 +183,13 @@ function policySections(
 
 function workflowSections(capabilities: PromptCapabilities, intent: PromptIntent): PromptSection[] {
   return [
+    optionalSection(
+      "clarification",
+      "workflow",
+      capabilities.clarification,
+      buildClarificationSection,
+      [ASK_CLARIFICATION_TOOL],
+    ),
     optionalSection(
       "vault-navigation",
       "workflow",

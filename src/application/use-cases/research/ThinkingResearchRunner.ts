@@ -69,6 +69,8 @@ export interface ThinkingResearchRunnerOptions {
   onToolEvent?: (callId: string, event: ToolEvent) => void;
 
   roundHooks?: ThinkingRoundHooks;
+
+  endingTool?: string;
 }
 
 export type ThinkingResearchResult = ThinkingResearchSuccess | ThinkingResearchFailure;
@@ -145,6 +147,17 @@ export class ThinkingResearchRunner {
     return hooks ? hooks.beforeFinalize(this.options.signal) : "ready";
   }
 
+  /** Tells whether a successful call of the turn-ending tool happened in this round. */
+  private endedByTool(executor: ThinkingToolRoundExecutor, round: number): boolean {
+    const name = this.options.endingTool;
+    return (
+      name !== undefined &&
+      executor.diagnostics.some(
+        (call) => call.round === round && call.name === name && call.status === "success",
+      )
+    );
+  }
+
   async run(): Promise<ThinkingResearchResult> {
     const messages = this.options.messages.map((message) => ({ ...message }));
     const required = new Set(this.options.policy.requiredTools);
@@ -202,6 +215,11 @@ export class ThinkingResearchRunner {
       continuationRounds,
       usage,
     });
+
+    const success = (answerText: string): ThinkingResearchSuccess => {
+      const { ok: _ok, reason: _reason, ...stats } = failure("cancelled");
+      return { ...stats, ok: true, answerText };
+    };
 
     try {
       for (let round = 1; round <= maxRounds; round += 1) {
@@ -282,25 +300,7 @@ export class ThinkingResearchRunner {
           }
           if (missing.length === 0 && phase !== "repair") {
             this.options.onRoundClassified?.(round, "final");
-            return {
-              ok: true,
-              answerText: response.content,
-              diagnostics: toolExecutor.diagnostics,
-              satisfiedTools: [...satisfied],
-              repairedTools: [...repaired],
-              rounds,
-              totalCalls: toolExecutor.totalCalls,
-              duplicateCalls: toolExecutor.duplicateCalls,
-              phases,
-              promptRounds,
-              stopReasons,
-              maxResultChars,
-              totalResultChars: toolExecutor.totalResultChars,
-              reasoningItemCount,
-              reasoningSegments,
-              continuationRounds,
-              usage,
-            };
+            return success(response.content);
           }
           if (phase === "bootstrap" && missing.length === 1) {
             this.options.onRoundClassified?.(round, "intermediate");
@@ -340,6 +340,7 @@ export class ThinkingResearchRunner {
         } else {
           messages.push(...toolRound.toolMessages);
         }
+        if (this.endedByTool(toolExecutor, round)) return success("");
 
         if (toolRound.noProgress) {
           consecutiveNoProgressRounds += 1;

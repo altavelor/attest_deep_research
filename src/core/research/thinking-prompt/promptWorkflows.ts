@@ -1,4 +1,5 @@
 import {
+  ASK_CLARIFICATION_TOOL,
   CREATE_NOTE_TOOL,
   FIND_CLAIMS_TOOL,
   GET_ACTIVE_NOTE_TOOL,
@@ -214,4 +215,16 @@ export function buildRichMediaSection(capabilities: PromptCapabilities, wanted: 
     );
   }
   return lines.join("\n");
+}
+
+/** When the agent asks the user instead of guessing what the question means. */
+export function buildClarificationSection(): string {
+  return [
+    `## Asking the user (${ASK_CLARIFICATION_TOOL})`,
+    `- Call ${ASK_CLARIFICATION_TOOL} only when information that only the user has would ` +
+      "materially change the answer and searching the vault or the web cannot find it.",
+    "- Decide before spending searches: ask first instead of researching a guessed reading of " +
+      "the question. Otherwise answer and state the assumptions you made.",
+    "- The call ends this turn; the user's answers arrive as the next message.",
+  ].join("\n");
 }
